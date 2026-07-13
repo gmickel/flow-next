@@ -31,9 +31,8 @@ Own ALL scoring architecture in one place: pillars.md rewrite.
 - [ ] SV6/DE4/BS3 pass conditions comply with the non-mutating execution policy (check-mode formatters, DE4 static+cross-ref only, BS3 evidence = boot probe)
 
 ## Done summary
-TBD
-
+Rewrote pillars.md as the single scoring source: substance pass-conditions for SV3/SV4 (layer-agnostic deterministic feedback gate with the three warn flags)/SV5/SV6/BS2/BS3/TS5/DC2 (one published scale)/DE1/DE4/DE5, each stating its executed or cross-referenced evidence requirement. Added the agent-readiness tier GROUP tables (AO 5 rows, DR 7, TO 4, DT informational, HP with scored-core HP1/2/5/7/9/12, gap-diff FH1-FH6) with the criterion-to-score map carrying group/taxonomy/denominator/aggregate/remediation/gate-impact/probe-owner columns (resolution 21a); groups are scored fix-offered but excluded from the maturity-level formula (resolution 1). DR-core named as the four-ID QA-readiness set with the all-four rule. Single N/A whitelist table (resolution 11) including classification-driven entries; floor checks skip all-excluded pillars/groups. All 48 legacy criteria retained (R13); census sentence updated; hard-gate Level-2 cap stated in Scoring Summary. Codex mirror regenerated.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: ca1c1dfda6cc946e9ad06cc4d811245006472b6c
+- Tests: python3 -m unittest discover plugins/flow-next/tests (OK, skipped=2), bash scripts/sync-codex.sh (validators green)
 - PRs:

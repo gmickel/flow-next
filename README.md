@@ -298,7 +298,7 @@ Scope honesty, because the architecture depends on it:
 | `/flow-next:resolve-pr` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve via GraphQL) |
 | `/flow-next:audit` | Agent-native review of `.flow/memory/` entries against current code (Keep / Update / Consolidate / Replace / Delete) |
 | `/flow-next:memory-migrate` | Lift legacy flat memory files into the categorized schema |
-| `/flow-next:prime` | 8-pillar agent-readiness assessment with parallel scouts; remediation via consent prompts |
+| `/flow-next:prime` | **Opinionated agent-readiness assessment** - classifies the project (lifecycle / topology / size / stack / delivery shape), judges substance over existence, verifies commands actually run, leads with an operability verdict + ranked next-actions; fixes agent readiness with consent. `--classify-only` gives a cheap portfolio-triage sweep across many repos |
 | `/flow-next:pilot` | **Single-tick build-loop conductor** — advances one ready spec by one pipeline stage (plan → plan-review → work → make-pr, plus an optional `qa` stage when `pipeline.qa==on`) per tick, ends with a `PILOT_VERDICT` line; drive it with `/loop` or `/goal` |
 | `/flow-next:land` | **Cadence-tick ship loop** — babysits the build loop's draft PRs: CI tri-state fix loop, reviewer patience window, resolve-pr convergence, gated explicit merge, spec close, release-follow; ends with a `LAND_VERDICT` line; drive it with `/loop 30m /flow-next:land` |
 | `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) |

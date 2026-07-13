@@ -24,9 +24,8 @@ workflow.md Phase 3 synthesis: AO/DR/TO/HP inline groups + scoring integration +
 - [ ] Every host-owned row of the resolution-21a matrix has prose-contract coverage; emitter-owned signals consumed, never recomputed inline
 
 ## Done summary
-TBD
-
+Built out workflow.md Phase 3 synthesis for /flow-next:prime: host-inline AO/DR/TO/HP group evaluation (consuming Phase 2 boot/CLI evidence + harness.md rows, emitter-owned FH1-FH6 consumed not recomputed), DR-core four-ID QA-readiness determination, group pass-count aggregates excluded from the maturity level, FH8 latency + locally-derived CI-median lines, FH9 gh-CLI informational host line, SV4 topology-judgment prose contract, and verdict-headline assembly. N/A whitelist referenced from pillars.md only; SKILL.md phase index + codex mirror synced.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3441810e3f2d75fce9175a0c9feffae3e7aaa388
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (Ran 1615 tests, OK skipped=2), bash scripts/sync-codex.sh (exit 0, mirror regenerated)
 - PRs:

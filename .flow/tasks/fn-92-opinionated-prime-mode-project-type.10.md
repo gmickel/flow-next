@@ -19,9 +19,8 @@ Docs finalization + CHANGELOG + cross-spec edit.
 - [ ] CLAUDE.md where-to-look row added
 
 ## Done summary
-TBD
-
+Finalized all in-repo prime documentation for fn-92: rewrote the prime one-liners (README, docs/skills.md) to the verdict/classification framing and removed the stale 8-pillar/48-criteria census (including both plugin.json manifests); added a prime SKILL.md workflow-reference row to docs/README.md (with the deliberate no-docs/prime.md decision recorded), documented the new `flowctl prime classify` emitter in flowctl.md, nuanced the self-improving once-per-repo framing against re-runnable `--classify-only`, added the CLAUDE.md where-to-look row, added four GLOSSARY terms (Operability ladder, Hard gate, Delivery shape, Classification (prime)), touched up the optimizing-skills prime-scout framing, wrote the CHANGELOG Unreleased entry (naming the flow-next.dev prime page + both navbars as pending downstream per amended R14), and dropped prime from fn-85's Tier-C list (resolution 16; the fn-92 dependency was already recorded). No version bump (batched releases); no skill files touched so no Codex mirror regen needed. Full test suite green (1655 tests).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 50551e3a723a8728d35e2b2986cc164606f3f23a
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' -> Ran 1655 tests, OK (skipped=2), exit 0 (green baseline), flowctl glossary list --json -> parses; 4 new terms present with correct avoid/relates, flowctl prime classify --json -> emits pinned schema, glossary_smoke_test.sh -> exit 1 by-design safety refusal (declines to run inside main plugin repo); glossary correctness verified via flowctl list instead
 - PRs:

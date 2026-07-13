@@ -24,9 +24,8 @@ workflow.md Phase 2 extensions: execution evidence + operability ladder + hard g
 - [ ] Substance executions per R6 wired, each quoting evidence, ALL compliant with the non-mutating policy (worktree snapshot guard present; DE4/setup never executed; BS3 via boot probe)
 
 ## Done summary
-TBD
-
+Extended prime `workflow.md` Phase 2 into the full execution-evidence + operability-ladder + hard-gate stage: a non-mutating execution policy (static resolution always; execution only for allowlisted check-mode/discovery/bounded-build/gated-boot classes; setup/migrate/seed/deploy/destructive/network never run; pre/post worktree snapshot guard; G3 resolves-vs-safe-execution split), tier-1 build (G1/BS2), test discovery (G2/TS4), tier-3 boot probe with ready-signal + external-SaaS + not-probed-on-host gates (BS3/AO3), per-surface/member sampling (deployable-first, ~5 execs, ~10 min cap, affected-command substitution, NOT ASSESSED listing + progress lines), agent-file quoted-command extraction/execute (G3/DC2) with extraction-failure flag, HP7 hook reads (never execute), DE1 per-member env cross-ref, the operability ladder (per-surface tiers, shape ceilings with sideways moves, min-deployable aggregation), and the G1-G3 Level-2 cap. Codex mirror regenerated; em-dash-free; fenced blocks re-declare vars.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: efb96015292efac8c89c5818e3ffdfb3ef1d960b
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1615 OK, 2 skipped), python3 -m py_compile plugins/flow-next/scripts/flowctl.py (OK), map_smoke_test.sh (75/75), glossary_smoke_test.sh (80/80), scripts/sync-codex.sh (all mirror guards pass)
 - PRs:

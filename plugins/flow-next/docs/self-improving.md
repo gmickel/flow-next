@@ -31,7 +31,7 @@ Load-bearing architectural choices land in `knowledge/decisions/` at the moment 
 
 ## The no-ceremony principle
 
-Each loop's write moment is embedded in a step that already happens — prime runs once per repo, interviews and captures happen when specs are born, reviews happen before merge, audits run when memory is consulted and found wanting. Contrast with workflows that require a manual "compound" / "refresh" pass: those degrade silently the day the operator forgets. flow-next's surfaces degrade toward *pruning* (audit removes what's stale) rather than toward *staleness* (nothing added since the last ceremony).
+Each loop's write moment is embedded in a step that already happens - prime runs at onboarding (and its cheap `--classify-only` sweep is re-runnable any time for portfolio triage), interviews and captures happen when specs are born, reviews happen before merge, audits run when memory is consulted and found wanting. Contrast with workflows that require a manual "compound" / "refresh" pass: those degrade silently the day the operator forgets. flow-next's surfaces degrade toward *pruning* (audit removes what's stale) rather than toward *staleness* (nothing added since the last ceremony).
 
 ## See also
 

@@ -1,0 +1,76 @@
+{
+  "_note": "Ground-truth judgment expectations for the prime Phase-0.5 judgment layer, one row per fixture family. The emitter (flowctl prime classify) decides axes 1-4 deterministically; THIS eval tests whether a model, given classification.md's judgment rules + the emitter JSON + a bounded file listing, derives the correct Axis-5 shape, per-axis confidence, would-ask discipline, and playbook. Each predicate is scored deterministically by run_agentic_eval.py against the model's structured output. Predicates assert only what classification.md actually pins; lifecycle is 'greenfield' across the six tiny synthetic fixtures (they are 1-commit repos) so the discriminating signal is topology/constellation reasoning + would-ask discipline + the worktree negative control.",
+  "_schema": {
+    "assessment_scope": "expected assessment_scope value, or null to skip",
+    "lifecycle": "expected lifecycle value, or null to skip",
+    "constellation_member": "expected boolean for a CONFIRMED constellation member, or null to skip",
+    "would_ask_constellation": "true if a constellation/sibling clarification MUST appear in would_ask; false if it MUST NOT; null to skip",
+    "playbook_any_of": "list of acceptable playbook labels; empty to skip",
+    "negative_control": "true marks a family where a false-positive is the primary failure mode (worktree must not be read as a constellation)"
+  },
+  "rows": {
+    "workspace-parent": {
+      "assessment_scope": "repository",
+      "lifecycle": "greenfield",
+      "constellation_member": false,
+      "would_ask_constellation": true,
+      "playbook_any_of": ["greenfield", "standard-single"],
+      "negative_control": false,
+      "rationale": "Target sits inside a >20-git-dir WORKSPACE parent, so the dampener forbids auto-confirming a constellation; but a prefix-family sibling (acme-web) is present, which classification.md says ALWAYS routes to a Phase 0.6 clarification. Correct judgment: not a confirmed member, constellation question in would_ask."
+    },
+    "tier-a-siblings": {
+      "assessment_scope": "repository",
+      "lifecycle": "greenfield",
+      "constellation_member": false,
+      "would_ask_constellation": true,
+      "playbook_any_of": ["greenfield", "standard-single"],
+      "negative_control": false,
+      "rationale": "One sibling git dir with a shared org and a shared prefix (svc-b) = tier-a LIKELY. Tier-a never auto-confirms; it routes to a would-ask."
+    },
+    "tier-b-home-base": {
+      "assessment_scope": "constellation-home-base",
+      "lifecycle": null,
+      "constellation_member": null,
+      "would_ask_constellation": false,
+      "playbook_any_of": ["constellation-home-base"],
+      "negative_control": false,
+      "rationale": "A non-git parent holding child repos plus a parent CLAUDE.md and a docker-compose = tier-b CONFIRMED home base with service composition. Scope is constellation-home-base and the home-base playbook fires; nothing to ask (confirmed)."
+    },
+    "greenfield": {
+      "assessment_scope": "repository",
+      "lifecycle": "greenfield",
+      "constellation_member": false,
+      "would_ask_constellation": false,
+      "playbook_any_of": ["greenfield"],
+      "negative_control": false,
+      "rationale": "Fresh single repo, no siblings. Greenfield bootstrap playbook, scorecard suppressed; no constellation to ask about."
+    },
+    "greenfield-x-constellation": {
+      "assessment_scope": "repository",
+      "lifecycle": "greenfield",
+      "constellation_member": false,
+      "would_ask_constellation": true,
+      "playbook_any_of": ["greenfield"],
+      "negative_control": false,
+      "rationale": "Young repo AND a sibling git dir under the same parent. Two playbook blocks can co-fire: greenfield bootstrap PLUS a constellation clarification. Tests that greenfield and constellation reasoning compose, not overwrite."
+    },
+    "worktree-sibling": {
+      "assessment_scope": "repository",
+      "lifecycle": "greenfield",
+      "constellation_member": false,
+      "would_ask_constellation": false,
+      "playbook_any_of": ["greenfield", "standard-single"],
+      "negative_control": true,
+      "rationale": "NEGATIVE CONTROL. The sibling dir is a git worktree of the SAME repo and is excluded from constellation signals (sibling_git_dirs=0). A correct reading must NOT invent a constellation or ask about siblings. A false constellation here is the primary failure this fixture guards."
+    },
+    "real-repo-flow-next": {
+      "assessment_scope": "repository",
+      "lifecycle": "brownfield",
+      "constellation_member": false,
+      "would_ask_constellation": null,
+      "playbook_any_of": [],
+      "negative_control": false,
+      "rationale": "Example real-repo baseline (this repo). Established history + CI + tags = brownfield; standalone checkout = repository scope. Sibling git dirs exist but the workspace-parent dampener is active, so no confirmed constellation. Soft baseline: scope + lifecycle checked; would-ask and playbook left free (a live workspace surfaces many legitimate asks)."
+    }
+  }
+}

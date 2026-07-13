@@ -27402,6 +27402,3110 @@ def _reconfigure_stdio_utf8() -> None:
             pass
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# prime classify emitter (fn-92.4) — deterministic Phase-0.5 classification.
+#
+# The schema is PINNED in skills/flow-next-prime/classification.md; this emitter
+# implements exactly that JSON shape. It emits axes 1-4 RAW signals + Axis-5
+# shape MARKERS (never shape values) + assessment_scope, each collector wrapped
+# in the per-collector completeness-diagnostics envelope (resolution 21b:
+# status/complete/sampled/truncated/cap_hit/errors/tool/operations). Transport:
+# JSON on stdout, progress/diagnostics on stderr. Every probe is bounded (a
+# per-collector operation budget) and portable across the 3-OS matrix — no bare
+# `timeout(1)` (subprocess timeout= instead), POSIX-only shell-outs, and
+# content-hash duplicate detection via git blob IDs (`git ls-files -s`, NEVER a
+# content read).
+#
+# The judgment layer (Axis-5 shape values, final per-axis confidence, the Phase
+# 0.6 asks, playbook selection) lives in the skill and reads this payload. The
+# deterministic substance-grep collectors, redaction hardening, synthetic
+# fixtures, and perf accounting land in fn-92.13 — NOT here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+PRIME_SCHEMA_VERSION = 1
+
+# Bounded per-collector budgets + thresholds (research-anchored starting
+# opinions; tuned in classification.md, never here). All are operation caps or
+# time caps, never unbounded scans.
+_PRIME_GIT_TIMEOUT = 30
+_PRIME_TOOL_TIMEOUT = 60
+_PRIME_MAX_TRACKED_FILES = 40000  # ls-files parse cap → truncation signal
+_PRIME_MAX_LOC_FILES = 6000  # file-estimate line-count read cap (unique blobs)
+_PRIME_MAX_FILE_BYTES = 2_000_000  # per-file read cap for line counting
+_PRIME_MAX_SIBLINGS = 200  # constellation sibling-scan cap
+_PRIME_GREENFIELD_COMMITS = 25
+_PRIME_GREENFIELD_FILES = 30
+_PRIME_WORKSPACE_PARENT_GITDIRS = 20  # dampener: parent above this = workspace
+_PRIME_SIZE_SMALL = 100_000
+_PRIME_SIZE_MEDIUM = 400_000
+_PRIME_SIZE_LARGE = 2_000_000
+_PRIME_HUGE_FILES = 20000
+
+# Path-based exclusion sets (content-hash dedup handled separately). Matched on
+# any path SEGMENT (POSIX-split) so nested occurrences are caught.
+_PRIME_TOOL_MANAGED_DIRS = frozenset(
+    {".flow", ".claude", ".codex", ".agents", ".cursor", ".factory",
+     ".windsurf", ".opencode", ".pi"}
+)
+_PRIME_AGENT_STATE_DIRS = frozenset({"plans", "_plans", "history"})
+_PRIME_VENDOR_DIRS = frozenset(
+    {"vendor", "node_modules", "dist", "build", ".venv", "venv", "target",
+     "__pycache__", ".next", ".nuxt", "bower_components"}
+)
+_PRIME_FIXTURE_DIRS = frozenset({"fixtures", "__fixtures__", "testdata"})
+_PRIME_VENDOR_SUFFIXES = ("_pb2.py", "_pb2_grpc.py", ".pb.go", ".dcu", ".min.js")
+
+# Extension → stack label (histogram vocabulary is manifest-anchored; this map
+# is CORROBORATION only, never the sole detector).
+_PRIME_EXT_STACK = {
+    ".ts": "TypeScript", ".tsx": "TypeScript", ".mts": "TypeScript",
+    ".cts": "TypeScript", ".js": "JavaScript", ".jsx": "JavaScript",
+    ".mjs": "JavaScript", ".cjs": "JavaScript", ".py": "Python",
+    ".go": "Go", ".rs": "Rust", ".java": "Java", ".kt": "Kotlin",
+    ".cs": "C#", ".php": "PHP", ".rb": "Ruby", ".c": "C", ".h": "C",
+    ".cc": "C++", ".cpp": "C++", ".hpp": "C++", ".pas": "Delphi",
+    ".dpr": "Delphi", ".swift": "Swift", ".md": "Markdown",
+    ".mdx": "Markdown", ".sh": "Shell",
+    ".pks": "PL/SQL", ".pkb": "PL/SQL",
+    ".bas": "VB6", ".frm": "VB6",
+    ".cbl": "COBOL", ".cob": "COBOL",
+}
+
+
+class _PrimeCollector:
+    """Per-collector completeness-diagnostics envelope (resolution 21b).
+
+    Tracks the bounded operation count against an optional budget and the
+    partial/sampled/truncated/cap_hit/error flags the judgment layer uses to
+    ceiling confidence. Never raises.
+    """
+
+    def __init__(self, name: str, budget: Optional[int] = None, tool: str = "") -> None:
+        self.name = name
+        self.status = "ok"
+        self.complete = True
+        self.sampled = False
+        self.truncated = False
+        self.cap_hit = False
+        self.errors: list[str] = []
+        self.tool = tool
+        self.operations = 0
+        self.budget = budget
+
+    def op(self, n: int = 1) -> None:
+        self.operations += n
+        if self.budget is not None and self.operations > self.budget:
+            self.cap_hit = True
+            self.complete = False
+
+    def fail(self, msg: Any) -> None:
+        self.status = "error"
+        self.complete = False
+        self.errors.append(str(msg))
+
+    def note_sampled(self) -> None:
+        self.sampled = True
+        self.complete = False
+
+    def note_truncated(self) -> None:
+        self.truncated = True
+        self.complete = False
+
+    def to_dict(self) -> "dict[str, Any]":
+        return {
+            "name": self.name,
+            "status": self.status,
+            "complete": self.complete,
+            "sampled": self.sampled,
+            "truncated": self.truncated,
+            "cap_hit": self.cap_hit,
+            "errors": list(self.errors),
+            "tool": self.tool,
+            "operations": self.operations,
+        }
+
+
+_PRIME_CONF_ORDER = {"low": 0, "medium": 1, "high": 2}
+
+
+def _prime_cap_confidence(base: str, collector: "_PrimeCollector") -> str:
+    """Ceiling a mechanical confidence by the collector's completeness.
+
+    Resolution 21b: partial / sampled / truncated / capped data can NEVER yield
+    high confidence; an errored collector is always low.
+    """
+    if collector.status == "error":
+        return "low"
+    ceiling = "high"
+    if (
+        collector.sampled
+        or collector.truncated
+        or collector.cap_hit
+        or not collector.complete
+    ):
+        ceiling = "medium"
+    if _PRIME_CONF_ORDER.get(base, 0) > _PRIME_CONF_ORDER[ceiling]:
+        return ceiling
+    return base
+
+
+def _prime_git(
+    root: Path,
+    args: "list[str]",
+    collector: "_PrimeCollector",
+    timeout: int = _PRIME_GIT_TIMEOUT,
+) -> "tuple[int, str, str]":
+    """Run `git -C <root> <args>` bounded by a timeout. Never raises.
+
+    `-C` (not cwd juggling) keeps it portable; the harness/subprocess timeout
+    replaces the absent-on-macOS `timeout(1)` binary.
+    """
+    collector.op()
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout,
+        )
+        return (result.returncode, result.stdout or "", result.stderr or "")
+    except subprocess.TimeoutExpired:
+        collector.fail("git timeout: " + " ".join(args))
+        return (1, "", "timeout")
+    except (OSError, subprocess.SubprocessError) as exc:
+        collector.fail(str(exc))
+        return (1, "", str(exc))
+
+
+def _prime_read_text(path: Path, cap: int = _PRIME_MAX_FILE_BYTES) -> Optional[str]:
+    """Bounded, defensive text read (never raises; None on any failure)."""
+    try:
+        # Containment: a tracked path may be a symlink pointing outside the
+        # tree - skip it (callers handle the None sentinel).
+        if path.is_symlink():
+            return None
+        with path.open("r", encoding="utf-8", errors="replace") as fh:
+            return fh.read(cap)
+    except (OSError, ValueError):
+        return None
+
+
+def _prime_contained(root: Path, rel: str) -> Optional[Path]:
+    """Join a git-tracked relative path onto `root` and confirm (via realpath)
+    it stays inside `root`. Returns None on ANY escape - a `..` traversal, an
+    absolute entry, or a parent symlink resolving outside the tree. Defense in
+    depth over the git index (which normally forbids `..`); callers treat the
+    None sentinel as a skip. Does NOT open the file.
+    """
+    try:
+        base = os.path.realpath(str(root))
+        target = os.path.realpath(os.path.join(base, rel))
+    except (OSError, ValueError):
+        return None
+    if target != base and not target.startswith(base + os.sep):
+        return None
+    return Path(target)
+
+
+def _prime_read_tracked(
+    root: Path,
+    rel: str,
+    collector: "_PrimeCollector",
+    cap: int = _PRIME_MAX_FILE_BYTES,
+) -> Optional[str]:
+    """Read a git-tracked relative path with root-containment + symlink guards.
+
+    Verifies `root / rel` stays under `root` (realpath prefix check) BEFORE any
+    open; an escape is skipped and counted as a collector error. The unresolved
+    join is handed to `_prime_read_text`, so its symlink skip still applies (a
+    tracked symlink pointing inside the tree is skipped, not followed).
+    """
+    if _prime_contained(root, rel) is None:
+        collector.fail("path escapes root: " + rel)
+        return None
+    # Envelope truthfulness: read cap+1 so a capped read is DETECTED - a
+    # partial prefix must mark the collector truncated, never pass as a
+    # complete read (a signal past the cap would silently report as missing).
+    txt = _prime_read_text(root / rel, cap + 1)
+    if txt is not None and len(txt) > cap:
+        collector.note_truncated()
+        return txt[:cap]
+    return txt
+
+
+def _prime_posix_segments(path: str) -> "list[str]":
+    return [seg for seg in path.replace("\\", "/").split("/") if seg]
+
+
+def _prime_exclusion_category(path: str) -> Optional[str]:
+    """Return the path-based exclusion category for a tracked path, or None.
+
+    Content-hash duplicates are handled separately (blob-ID dedup); this covers
+    the deterministic path-shape exclusions only. `regenerated` / `legacy-
+    snapshot` require reading a tracked script / agent file to confirm and land
+    with the substance collectors (fn-92.13).
+    """
+    segs = _prime_posix_segments(path)
+    seg_set = set(segs)
+    if seg_set & _PRIME_TOOL_MANAGED_DIRS:
+        return "tool-managed"
+    if seg_set & _PRIME_VENDOR_DIRS:
+        return "vendored"
+    if any(path.endswith(sfx) for sfx in _PRIME_VENDOR_SUFFIXES):
+        return "vendored"
+    if seg_set & _PRIME_FIXTURE_DIRS:
+        return "fixtures"
+    # Agent-workflow state lives at the repo ROOT (plans/, _plans/, history/);
+    # a nested src/history/ or app/plans/ is domain code and must count.
+    if segs and segs[0] in _PRIME_AGENT_STATE_DIRS:
+        return "agent-state"
+    return None
+
+
+def _prime_parse_ls_files_staged(
+    root: Path, collector: "_PrimeCollector"
+) -> "tuple[list[tuple[str, str]], bool]":
+    """`git ls-files -s -z` → [(blob_sha, path), ...] and a truncated flag.
+
+    Format per entry: ``<mode> <sha> <stage>\\t<path>`` (NUL-separated with -z).
+    Only the blob SHA + path are used — NO content read — so content-hash
+    duplicate files are detected purely from the object name.
+
+    The read is STREAMED and stops at the cap: on a huge monorepo the full
+    ls-files output is never materialized - the bounded-scan promise holds for
+    `--classify-only` portfolio triage instead of timing out on the parse.
+    """
+    collector.op()
+    entries: list[tuple[str, str]] = []
+    truncated = False
+    try:
+        proc = subprocess.Popen(
+            ["git", "-C", str(root), "ls-files", "-s", "-z"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, ValueError):
+        return ([], False)
+    try:
+        buf = b""
+        while True:
+            chunk = proc.stdout.read(65536) if proc.stdout else b""
+            if not chunk:
+                break
+            buf += chunk
+            parts = buf.split(b"\0")
+            buf = parts.pop()  # trailing partial entry
+            for raw in parts:
+                if not raw:
+                    continue
+                if len(entries) >= _PRIME_MAX_TRACKED_FILES:
+                    truncated = True
+                    break
+                tab = raw.find(b"\t")
+                if tab < 0:
+                    continue
+                head = raw[:tab].split()
+                if len(head) < 2:
+                    continue
+                path = raw[tab + 1 :].decode("utf-8", errors="replace")
+                entries.append((head[1].decode("ascii", errors="replace"), path))
+            if truncated:
+                break
+        if truncated:
+            # Cap reached: stop consuming - kill the producer, don't drain it.
+            proc.kill()
+        elif buf:
+            raw = buf
+            tab = raw.find(b"\t")
+            if tab >= 0:
+                head = raw[:tab].split()
+                if len(head) >= 2 and len(entries) < _PRIME_MAX_TRACKED_FILES:
+                    entries.append(
+                        (
+                            head[1].decode("ascii", errors="replace"),
+                            raw[tab + 1 :].decode("utf-8", errors="replace"),
+                        )
+                    )
+        rc = proc.wait(timeout=_PRIME_GIT_TIMEOUT)
+        if rc != 0 and not truncated and not entries:
+            return ([], False)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        if not entries:
+            return ([], False)
+    if truncated:
+        collector.note_truncated()
+    return (entries, truncated)
+
+
+def _prime_git_toplevel(root: Path) -> Optional[Path]:
+    probe = _PrimeCollector("scope-probe")
+    rc, out, _err = _prime_git(root, ["rev-parse", "--show-toplevel"], probe)
+    if rc != 0:
+        return None
+    top = out.strip()
+    if not top:
+        return None
+    try:
+        return Path(top).resolve()
+    except (OSError, ValueError):
+        return Path(top)
+
+
+def _prime_sibling_git_dirs(parent: Path, self_dir: Path) -> "tuple[list[str], int]":
+    """Return (constellation-eligible sibling names, worktree_siblings_excluded).
+
+    A sibling whose ``.git`` is a FILE (a `gitdir:` pointer) is excluded as a
+    worktree ONLY when the pointer resolves into THIS repo's git dir - an
+    independent `--separate-git-dir` checkout or submodule-style sibling is a
+    real constellation sibling and must count (classification.md edge-case
+    ladder / R19 worktree-sibling fixture). An unreadable/unparseable pointer
+    stays excluded (conservative: never invent a constellation).
+    """
+    siblings: list[str] = []
+    worktrees = 0
+    # Resolve THIS repo's git dir to its COMMON dir: when the assessed checkout
+    # is itself a linked worktree, `.git` is a gitdir: file pointing at
+    # `<main>/.git/worktrees/<name>` - normalize to `<main>/.git` so OTHER
+    # worktrees of the same repo (`.git/worktrees/<other>`) still compare as
+    # same-repo instead of becoming false constellation siblings.
+    self_git = None
+    try:
+        marker = self_dir / ".git"
+        if marker.is_file():
+            first = marker.read_text(encoding="utf-8", errors="replace")[:4096].splitlines()
+            m = re.match(r"\s*gitdir:\s*(.+?)\s*$", first[0]) if first else None
+            if m:
+                raw = m.group(1)
+                self_git = (
+                    Path(raw) if os.path.isabs(raw) else (self_dir / raw)
+                ).resolve()
+        else:
+            self_git = marker.resolve()
+        if self_git is not None and self_git.parent.name == "worktrees":
+            self_git = self_git.parent.parent
+    except (OSError, ValueError):
+        self_git = None
+    try:
+        children = sorted(parent.iterdir())
+    except (OSError, ValueError):
+        return ([], 0)
+    for idx, child in enumerate(children):
+        if idx >= _PRIME_MAX_SIBLINGS:
+            break
+        try:
+            if child.resolve() == self_dir:
+                continue
+        except (OSError, ValueError):
+            continue
+        git_marker = child / ".git"
+        if not git_marker.exists():
+            continue
+        if git_marker.is_file():
+            pointer = None
+            try:
+                first = git_marker.read_text(encoding="utf-8", errors="replace")[:4096].splitlines()
+                m = re.match(r"\s*gitdir:\s*(.+?)\s*$", first[0]) if first else None
+                if m:
+                    raw = m.group(1)
+                    pointer = (
+                        Path(raw) if os.path.isabs(raw) else (child / raw)
+                    ).resolve()
+            except (OSError, ValueError):
+                pointer = None
+            same_repo = (
+                pointer is not None
+                and self_git is not None
+                and (pointer == self_git or str(pointer).startswith(str(self_git) + os.sep))
+            )
+            if pointer is not None and not same_repo:
+                siblings.append(child.name)
+            else:
+                worktrees += 1
+            continue
+        siblings.append(child.name)
+    return (siblings, worktrees)
+
+
+def _prime_origin_org(root: Path) -> Optional[str]:
+    """Best-effort org/owner token from the origin remote (for shared_org)."""
+    probe = _PrimeCollector("scope-probe")
+    rc, out, _err = _prime_git(root, ["remote", "get-url", "origin"], probe)
+    if rc != 0:
+        return None
+    url = out.strip()
+    if not url:
+        return None
+    # git@host:org/repo(.git)  or  https://host/org/repo(.git)
+    m = re.search(r"[:/]([^/:]+)/[^/]+?(?:\.git)?/?$", url)
+    return m.group(1) if m else None
+
+
+def _prime_collect_lifecycle(
+    root: Path,
+    tracked_count: "Optional[int]" = None,
+    ls_truncated: bool = False,
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    # Op bound: 5 git probes (rev-list, tag, ls-files, log, shortlog) + up to 6
+    # CI-config probes (loop runs all 6 when NONE match) + 1 generator-scaffold
+    # op + 1 lockfile op = 13. Budget with headroom so a full scan on a real
+    # repo reports cap_hit=False / complete=True.
+    c = _PrimeCollector("lifecycle", budget=16)
+    evidence: list[str] = []
+
+    rc, out, _err = _prime_git(root, ["rev-list", "--count", "HEAD"], c)
+    commit_count = int(out.strip()) if rc == 0 and out.strip().isdigit() else 0
+    if rc != 0:
+        evidence.append("no commits (unborn HEAD)")
+    else:
+        evidence.append(f"{commit_count} commits")
+
+    rc, out, _err = _prime_git(root, ["tag"], c)
+    tags = len([ln for ln in out.splitlines() if ln.strip()]) if rc == 0 else 0
+
+    # Reuse the CAPPED streamed inventory count instead of re-materializing
+    # the full ls-files listing (the bounded-scan contract). A capped count is
+    # marked truncated; the standalone fallback keeps the old probe for
+    # direct callers.
+    if tracked_count is not None:
+        c.op()
+        tracked_files = tracked_count
+        if ls_truncated:
+            c.note_truncated()
+    else:
+        rc, out, _err = _prime_git(root, ["ls-files"], c)
+        tracked_files = len([ln for ln in out.splitlines() if ln.strip()]) if rc == 0 else 0
+
+    ci_config = False
+    for probe in (
+        ".github/workflows",
+        ".gitlab-ci.yml",
+        ".circleci",
+        "azure-pipelines.yml",
+        "Jenkinsfile",
+        ".drone.yml",
+    ):
+        c.op()
+        if (root / probe).exists():
+            ci_config = True
+            evidence.append(f"CI config: {probe}")
+            break
+
+    generator_scaffold = None
+    if (
+        (root / "next.config.js").exists()
+        or (root / "next.config.mjs").exists()
+        or (root / "next.config.ts").exists()
+    ) and tracked_files < _PRIME_GREENFIELD_FILES:
+        # Only a scaffold fingerprint if the repo is otherwise thin - gate the
+        # emitted value on the same thin-repo check that gates its scoring use.
+        generator_scaffold = "create-next-app"
+    elif (root / "Cargo.toml").exists() and tracked_files < _PRIME_GREENFIELD_FILES:
+        generator_scaffold = "cargo"
+    elif (root / "pyproject.toml").exists() and tracked_files < _PRIME_GREENFIELD_FILES:
+        generator_scaffold = "uv"
+    elif list(root.glob("*.csproj")) and tracked_files < _PRIME_GREENFIELD_FILES:
+        generator_scaffold = "dotnet"
+    c.op()
+
+    first_commit_days = 0
+    rc, out, _err = _prime_git(
+        root, ["log", "--reverse", "--max-parents=0", "--format=%ct"], c
+    )
+    if rc == 0 and out.strip():
+        first_ts = out.strip().splitlines()[0].strip()
+        if first_ts.isdigit():
+            import time
+
+            first_commit_days = max(0, int((time.time() - int(first_ts)) / 86400))
+
+    single_contributor = False
+    rc, out, _err = _prime_git(root, ["shortlog", "-sne", "HEAD"], c)
+    if rc == 0:
+        authors = [ln for ln in out.splitlines() if ln.strip()]
+        single_contributor = len(authors) == 1
+
+    lockfile = any(
+        (root / lf).exists()
+        for lf in (
+            "package-lock.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            "bun.lockb",
+            "Cargo.lock",
+            "poetry.lock",
+            "uv.lock",
+            "Gemfile.lock",
+            "go.sum",
+            "composer.lock",
+        )
+    )
+    c.op()
+
+    green = 0
+    brown = 0
+    if commit_count < _PRIME_GREENFIELD_COMMITS:
+        green += 1
+    else:
+        brown += 1
+    if tags > 0:
+        brown += 1
+    if ci_config:
+        brown += 1
+    # Lockfile is a CORROBORATOR only (Phase 0.5 contract): npm/pnpm/Cargo/uv
+    # scaffolds generate one on the first commit, so it counts toward brown
+    # only when another brownfield signal already exists - never alone.
+    if lockfile and brown > 0:
+        brown += 1
+    # Real domain source is brownfield by default (contract): a single-squash
+    # source IMPORT (one commit, hundreds of tracked files) is legacy code,
+    # not a fresh scaffold - it must not ride the greenfield bootstrap path.
+    if tracked_files >= _PRIME_GREENFIELD_FILES * 4:
+        brown += 1
+    if generator_scaffold is not None and tracked_files < _PRIME_GREENFIELD_FILES:
+        green += 1
+
+    if green > 0 and brown == 0:
+        value, agreement = "greenfield", "high"
+        evidence.append("greenfield: no history/tags/CI/lockfile signals")
+    elif green > 0 and brown > 0:
+        value, agreement = "hybrid", "medium"
+        evidence.append("hybrid: young-but-real (signals disagree)")
+    else:
+        value, agreement = "brownfield", "high"
+        evidence.append("brownfield: established history / CI / tags")
+
+    signals = {
+        "commit_count": commit_count,
+        "tags": tags,
+        "ci_config": ci_config,
+        "tracked_files": tracked_files,
+        "generator_scaffold": generator_scaffold,
+        "first_commit_days": first_commit_days,
+        "single_contributor": single_contributor,
+        "lockfile": lockfile,
+    }
+    return (
+        {
+            "value": value,
+            "confidence": _prime_cap_confidence(agreement, c),
+            "signals": signals,
+            "evidence": evidence,
+        },
+        c,
+    )
+
+
+def _prime_detect_workspace_config(root: Path, c: "_PrimeCollector") -> "list[str]":
+    found: list[str] = []
+    simple = [
+        "pnpm-workspace.yaml",
+        "nx.json",
+        "turbo.json",
+        "WORKSPACE",
+        "WORKSPACE.bazel",
+        "MODULE.bazel",
+        "go.work",
+        "lerna.json",
+        "rush.json",
+    ]
+    for name in simple:
+        c.op()
+        if (root / name).exists():
+            found.append(name)
+    # package.json "workspaces"
+    pkg = root / "package.json"
+    if pkg.exists():
+        c.op()
+        txt = _prime_read_text(pkg)
+        if txt:
+            try:
+                data = json.loads(txt)
+                if data.get("workspaces"):
+                    found.append('package.json "workspaces"')
+            except (ValueError, TypeError):
+                pass
+    # Cargo workspace
+    cargo = root / "Cargo.toml"
+    if cargo.exists():
+        c.op()
+        txt = _prime_read_text(cargo)
+        if txt and re.search(r"(?m)^\s*\[workspace\]", txt):
+            found.append("Cargo [workspace]")
+    # Maven multi-module: root pom.xml declaring <modules> with >=1 <module>.
+    pom = root / "pom.xml"
+    if pom.exists():
+        c.op()
+        txt = _prime_read_text(pom)
+        if txt:
+            maven_modules = re.findall(r"<module>\s*([^<]+?)\s*</module>", txt)
+            if maven_modules:
+                found.append(
+                    f"pom.xml <modules> ({len(maven_modules)} modules, maven-modules)"
+                )
+    # Gradle multi-module: settings.gradle(.kts) include(...) declarations
+    # (both `include(":app", ":lib")` and Groovy `include ':app', ':lib'`).
+    for name in ("settings.gradle", "settings.gradle.kts"):
+        settings = root / name
+        if not settings.exists():
+            continue
+        c.op()
+        txt = _prime_read_text(settings)
+        if not txt:
+            continue
+        gradle_modules: list[str] = []
+        for stmt in re.findall(r"(?m)^\s*include\b[^\n]*", txt):
+            gradle_modules.extend(re.findall(r"""["']([^"']+)["']""", stmt))
+        if gradle_modules:
+            found.append(
+                f"{name} include ({len(gradle_modules)} modules, gradle-modules)"
+            )
+        break
+    # Delphi group project
+    c.op()
+    if list(root.glob("*.groupproj")):
+        found.append("*.groupproj")
+    return found
+
+
+def _prime_collect_topology(
+    root: Path,
+    top: Optional[Path],
+    tracked_paths: "list[str]",
+) -> "tuple[dict[str, Any], _PrimeCollector, _PrimeCollector]":
+    # ---- Bit 1: monorepo ----
+    cm = _PrimeCollector("topology-monorepo", budget=40)
+    workspace_config = _prime_detect_workspace_config(root, cm)
+
+    manifest_names = (
+        "package.json",
+        "pyproject.toml",
+        "go.mod",
+        "Cargo.toml",
+        "pom.xml",
+        "build.gradle",
+        "composer.json",
+        "Gemfile",
+    )
+    manifest_dirs: set[str] = set()
+    downweighted: list[str] = []
+    for p in tracked_paths:
+        base = p.rsplit("/", 1)[-1]
+        if base in manifest_names:
+            d = p.rsplit("/", 1)[0] if "/" in p else ""
+            manifest_dirs.add(d)
+            top_seg = _prime_posix_segments(p)[0] if "/" in p else ""
+            if top_seg in ("docs", "site", "website", "examples", "example", "spike", "spikes", "scaffold"):
+                downweighted.append(d)
+    cross_referenced = max(0, len(manifest_dirs) - 1)
+
+    monorepo_value = bool(workspace_config)
+    mono_evidence: list[str] = []
+    if workspace_config:
+        mono_evidence.append("workspace config: " + ", ".join(workspace_config))
+        mono_agreement = "high"
+    elif cross_referenced >= 2:
+        # Many manifests but no workspace graph — a bare count is NOT enough
+        # (spike + scaffold + docs-site false-positived monorepo in eval).
+        mono_evidence.append(
+            f"{cross_referenced} non-root manifest dirs, no workspace graph "
+            "(bare count insufficient — noted as subprojects)"
+        )
+        mono_agreement = "low"
+    else:
+        mono_evidence.append("no workspace / build-graph config")
+        mono_agreement = "high"
+
+    monorepo = {
+        "value": monorepo_value,
+        "confidence": _prime_cap_confidence(mono_agreement, cm),
+        "signals": {
+            "workspace_config": workspace_config,
+            "cross_referenced_manifests": cross_referenced,
+            "downweighted_subprojects": sorted(set(downweighted)),
+        },
+        "evidence": mono_evidence,
+    }
+
+    # ---- Bit 2: constellation-member ----
+    # Siblings are scanned in ~two bounded passes (op(1+N) tally + shared-org
+    # probe) plus ~20 fixed config/marker probes; the real bound is the sibling
+    # cap counted twice, so size the budget to it (a completed scan → cap_hit
+    # False / complete True on a normal repo).
+    cc = _PrimeCollector("topology-constellation", budget=2 * _PRIME_MAX_SIBLINGS + 50)
+    self_dir = top if top is not None else root.resolve()
+    parent = self_dir.parent
+    sibling_git_dirs_list: list[str] = []
+    worktrees_excluded = 0
+    if parent != self_dir:
+        sibling_git_dirs_list, worktrees_excluded = _prime_sibling_git_dirs(
+            parent, self_dir
+        )
+        cc.op(1 + len(sibling_git_dirs_list))
+    sibling_git_dirs = len(sibling_git_dirs_list)
+    workspace_parent = sibling_git_dirs > _PRIME_WORKSPACE_PARENT_GITDIRS
+
+    # prefix family: siblings sharing this repo's leading name token.
+    self_name = self_dir.name
+    self_prefix = self_name.split("-", 1)[0] if "-" in self_name else self_name
+    prefix_family = [
+        n for n in sibling_git_dirs_list if n.split("-", 1)[0] == self_prefix
+    ]
+    # The assessed repo ALWAYS shares its own prefix, so it counts as a family
+    # member: a `svc-a` + `svc-b` pair is a 2-repo cluster even though only ONE
+    # sibling matches. The LIKELY threshold is >=2 repos in the family, i.e.
+    # >=1 matching sibling.
+    prefix_cluster = len(prefix_family) >= 1
+
+    # shared_org: origin org appears in a sibling's .git/config url. A sibling
+    # kept by the gitdir-file resolution (--separate-git-dir checkout) stores
+    # its config at the POINTER target, not under `.git/` - resolve it first.
+    shared_org = False
+    org = _prime_origin_org(root)
+    if org and sibling_git_dirs_list:
+        for name in sibling_git_dirs_list[:_PRIME_MAX_SIBLINGS]:
+            cc.op()
+            marker = parent / name / ".git"
+            cfg_path = marker / "config"
+            try:
+                if marker.is_file():
+                    first = marker.read_text(encoding="utf-8", errors="replace")[:4096].splitlines()
+                    gm = re.match(r"\s*gitdir:\s*(.+?)\s*$", first[0]) if first else None
+                    if gm:
+                        raw = gm.group(1)
+                        gd = Path(raw) if os.path.isabs(raw) else (parent / name / raw)
+                        cfg_path = gd.resolve() / "config"
+            except (OSError, ValueError):
+                pass
+            cfg = _prime_read_text(cfg_path)
+            if cfg and re.search(r"[:/]" + re.escape(org) + r"/", cfg):
+                shared_org = True
+                break
+
+    # in-repo external refs (cheap, bounded config probes).
+    in_repo_external_refs: list[str] = []
+    for compose in ("docker-compose.yml", "docker-compose.yaml", "compose.yml"):
+        cf = root / compose
+        if cf.exists():
+            cc.op()
+            txt = _prime_read_text(cf)
+            if txt:
+                for m in re.findall(r"(?m)build:\s*(\.\./[^\s#]+)", txt):
+                    in_repo_external_refs.append(f"{compose} build: {m}")
+    gomod = root / "go.mod"
+    if gomod.exists():
+        cc.op()
+        txt = _prime_read_text(gomod)
+        if txt:
+            for m in re.findall(r"(?m)replace\s+\S+\s+=>\s+(\.\./\S+)", txt):
+                in_repo_external_refs.append(f"go.mod replace {m}")
+
+    # prose cross-repo refs (agent file / README path references).
+    prose_cross_repo_refs: list[str] = []
+    for doc in ("CLAUDE.md", "AGENTS.md", "README.md"):
+        df = root / doc
+        if df.exists():
+            cc.op()
+            txt = _prime_read_text(df)
+            if txt:
+                for m in re.findall(r"(~/[\w./-]+|\.\./[\w./-]+)", txt):
+                    prose_cross_repo_refs.append(f"{doc}: {m}")
+        if len(prose_cross_repo_refs) >= 20:
+            prose_cross_repo_refs = prose_cross_repo_refs[:20]
+            cc.note_sampled()
+            break
+
+    # Parent-level CONFIRMED markers (tier b) — parent must NOT be a workspace.
+    parent_confirmed = False
+    if parent != self_dir and not workspace_parent:
+        for marker in (
+            "CLAUDE.md",
+            "AGENTS.md",
+            "repos.yaml",
+            "mani.yaml",
+            ".meta",
+            "workspace.toml",
+            "default.xml",
+            "docker-compose.yml",
+            "justfile",
+            "mise.toml",
+            "_plans",
+        ):
+            cc.op()
+            if (parent / marker).exists():
+                parent_confirmed = True
+                break
+        # Suffix-form CONFIRMED markers documented in classification.md:
+        # a parent-level `*.repos` manifest or `*.code-workspace` file is as
+        # deliberate a home-base signal as the exact-name markers above.
+        if not parent_confirmed:
+            cc.op()
+            try:
+                for entry in sorted(parent.iterdir())[:200]:
+                    if entry.name.endswith((".repos", ".code-workspace")):
+                        parent_confirmed = True
+                        break
+            except OSError:
+                pass
+
+    # Tier resolution with the workspace-parent dampener.
+    tier = "none"
+    likely_signal = prefix_cluster or shared_org
+    ask_signal = bool(in_repo_external_refs or prose_cross_repo_refs)
+    if parent_confirmed:
+        tier = "b"
+    elif ask_signal:
+        tier = "c"
+    elif likely_signal:
+        if workspace_parent:
+            # shared_org alone is meaningless in a workspace parent; only a
+            # prefix-family cluster (self + >=1 sibling) keeps it LIKELY (and it
+            # always asks).
+            tier = "a" if prefix_cluster else "none"
+        else:
+            tier = "a"
+
+    member_value = tier in ("a", "b")
+    if tier == "b":
+        con_agreement = "high"
+    elif tier == "none":
+        con_agreement = "high"
+    else:
+        con_agreement = "low"  # a / c route to the Phase 0.6 clarification
+
+    con_evidence: list[str] = []
+    if sibling_git_dirs:
+        con_evidence.append(f"{sibling_git_dirs} sibling git dir(s)")
+    if worktrees_excluded:
+        con_evidence.append(f"{worktrees_excluded} worktree sibling(s) excluded")
+    if workspace_parent:
+        con_evidence.append("workspace-parent dampener active (>20 git dirs)")
+    if prefix_family:
+        con_evidence.append("prefix family: " + ", ".join(prefix_family[:5]))
+    if shared_org:
+        con_evidence.append(f"shared org: {org}")
+    if parent_confirmed:
+        con_evidence.append("parent-level constellation manifest / agent file")
+    con_evidence.extend(in_repo_external_refs[:5])
+    con_evidence.extend(prose_cross_repo_refs[:5])
+    if not con_evidence:
+        con_evidence.append("no constellation signals")
+
+    constellation = {
+        "value": member_value,
+        "tier": tier,
+        "confidence": _prime_cap_confidence(con_agreement, cc),
+        "workspace_parent": workspace_parent,
+        "signals": {
+            "sibling_git_dirs": sibling_git_dirs,
+            "shared_org": shared_org,
+            "prefix_family": prefix_family,
+            "in_repo_external_refs": in_repo_external_refs,
+            "prose_cross_repo_refs": prose_cross_repo_refs,
+        },
+        "evidence": con_evidence,
+    }
+
+    return ({"monorepo": monorepo, "constellation_member": constellation}, cm, cc)
+
+
+def _prime_count_lines(
+    root: Path, path: str, collector: "Optional[_PrimeCollector]" = None
+) -> Optional[int]:
+    try:
+        # Containment: reject a `..`/absolute escape before any open.
+        if _prime_contained(root, path) is None:
+            if collector is not None:
+                collector.fail("path escapes root: " + path)
+            return None
+        fp = root / path
+        # Containment: skip symlinks (may point outside the tree).
+        if fp.is_symlink():
+            return None
+        with fp.open("rb") as fh:
+            data = fh.read(_PRIME_MAX_FILE_BYTES + 1)
+        if len(data) > _PRIME_MAX_FILE_BYTES:
+            # Envelope truthfulness: a partial count of an over-cap file is a
+            # SAMPLE, never authoritative - the collector must say so instead
+            # of reporting complete/high-confidence evidence.
+            if collector is not None:
+                collector.note_truncated()
+            data = data[:_PRIME_MAX_FILE_BYTES]
+        if not data:
+            return 0
+        return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
+    except (OSError, ValueError):
+        return None
+
+
+def _prime_collect_size(
+    root: Path,
+    staged: "list[tuple[str, str]]",
+    ls_truncated: bool,
+    regenerated_dirs: "Optional[set[str]]" = None,
+) -> "tuple[dict[str, Any], _PrimeCollector, list[str], dict[str, int]]":
+    c = _PrimeCollector("size", budget=_PRIME_MAX_LOC_FILES + 200)
+    if ls_truncated:
+        c.note_truncated()
+
+    # Regenerated-dir candidates from the destructive pre-pass: a tracked
+    # script that wipes a repo-internal dir marks it generated output, which
+    # the classification contract excludes from sizing.
+    # Strip trailing glob segments before matching: `rm -rf src/generated/*`
+    # names the DIRECTORY src/generated - the exclusion must cover its files,
+    # not only paths literally containing `*`.
+    regen = set()
+    for d in regenerated_dirs or set():
+        d = d.strip("/")
+        while d.endswith(("/*", "/**")):
+            d = d.rsplit("/", 1)[0]
+        if d and d not in ("*", "**"):
+            regen.add(d)
+    exclusions_applied: set[str] = set()
+    # Path-based exclusions.
+    filtered: list[tuple[str, str]] = []
+    for sha, path in staged:
+        cat = _prime_exclusion_category(path)
+        if cat is not None:
+            exclusions_applied.add(cat)
+            continue
+        if regen and any(path == d or path.startswith(d + "/") for d in regen):
+            exclusions_applied.add("regenerated")
+            continue
+        filtered.append((sha, path))
+
+    # Content-hash duplicate dedup via blob SHA (NO content read).
+    seen: set[str] = set()
+    deduped: list[str] = []
+    duplicates = 0
+    for sha, path in filtered:
+        if sha in seen:
+            duplicates += 1
+            continue
+        seen.add(sha)
+        deduped.append(path)
+    if duplicates:
+        exclusions_applied.add("hash-duplicate")
+
+    files = len(deduped)
+
+    # LOC: the band-authoritative count is ALWAYS the bounded file-estimate over
+    # the EXCLUDED, deduped blob list, so `loc` honors `exclusions_applied` (and
+    # content-hash dedup) exactly. scc/tokei count the WHOLE checkout - they can
+    # NOT see our per-file path/blob exclusions - so they run only as
+    # whole-tree corroboration and never set the band. This keeps the envelope
+    # truthful: `tool` always names what produced the reported `loc`.
+    tool = "file-estimate"
+    loc = 0
+    # Per-stack LOC aggregation rides the same bounded read pass - it feeds the
+    # stacks collector's LOC-weighted loc_share (file counts alone let many
+    # tiny config files outrank one large service file).
+    loc_by_stack: dict[str, int] = {}
+    loc_reads_sampled = False
+    read_budget = _PRIME_MAX_LOC_FILES
+    for idx, path in enumerate(deduped):
+        if idx >= read_budget:
+            c.note_sampled()
+            loc_reads_sampled = True
+            break
+        c.op()
+        n = _prime_count_lines(root, path, c)
+        if n is not None:
+            loc += n
+            stack = _PRIME_EXT_STACK.get(os.path.splitext(path)[1].lower())
+            if stack is not None:
+                loc_by_stack[stack] = loc_by_stack.get(stack, 0) + n
+    if loc_reads_sampled:
+        # A capped slice in git path order is NOT a representative sample -
+        # ranking stacks from it would zero out any stack whose files sort
+        # after the cap. The stacks collector falls back to the file-count
+        # histogram (complete over ALL deduped paths) instead.
+        loc_by_stack = {}
+
+    # Corroboration only (whole-checkout, NOT exclusion-aware, does NOT band).
+    corroborating_tool: Optional[str] = None
+    loc_wholetree: Optional[int] = None
+    if shutil.which("scc"):
+        rc, out, _err = _prime_git_free_tool(root, ["scc", "--format", "json"], c)
+        if rc == 0:
+            corroborating_tool = "scc"
+            loc_wholetree = _prime_scc_total(out)
+    elif shutil.which("tokei"):
+        rc, out, _err = _prime_git_free_tool(root, ["tokei", "--output", "json"], c)
+        if rc == 0:
+            corroborating_tool = "tokei"
+            loc_wholetree = _prime_tokei_total(out)
+    c.tool = tool
+
+    # Band.
+    if files > _PRIME_HUGE_FILES or loc > _PRIME_SIZE_LARGE:
+        band = "huge"
+    elif loc > _PRIME_SIZE_MEDIUM:
+        band = "large"
+    elif loc > _PRIME_SIZE_SMALL:
+        band = "medium"
+    else:
+        band = "small"
+
+    # Legibility sub-signals.
+    top_level_dirs = len({p.split("/", 1)[0] for p in deduped if "/" in p})
+    entrypoints: list[str] = []
+    for path in deduped:
+        base = path.rsplit("/", 1)[-1]
+        if base in ("main.py", "index.ts", "index.js", "main.go", "main.rs") or (
+            base.endswith(".dpr")
+        ) or re.match(r"^main\.[A-Za-z0-9]+$", base):
+            entrypoints.append(path)
+        if len(entrypoints) >= 20:
+            break
+    generated_vendored_tracked = sorted(
+        cat for cat in exclusions_applied if cat in ("vendored", "fixtures")
+    )
+    instruction_file_lines = 0
+    for doc in ("CLAUDE.md", "AGENTS.md"):
+        n = _prime_count_lines(root, doc)
+        if n:
+            instruction_file_lines = max(instruction_file_lines, n)
+
+    legibility = {
+        "top_level_dirs": top_level_dirs,
+        "entrypoints": entrypoints,
+        "generated_vendored_tracked": generated_vendored_tracked,
+        "instruction_file_lines": instruction_file_lines,
+        "ambiguity_probe_hits": 0,  # bounded core-identifier grep lands in fn-92.13
+    }
+
+    evidence = [
+        f"{loc} LOC / {files} files via {tool}",
+        f"band {band}",
+    ]
+    if duplicates:
+        evidence.append(f"{duplicates} content-hash duplicate file(s) deduped")
+    if exclusions_applied:
+        evidence.append("exclusions: " + ", ".join(sorted(exclusions_applied)))
+    if corroborating_tool is not None:
+        evidence.append(
+            f"{loc_wholetree} LOC via {corroborating_tool} "
+            "(whole-checkout corroboration; not exclusion-aware; not banded)"
+        )
+
+    size = {
+        "band": band,
+        "confidence": _prime_cap_confidence("high", c),
+        "loc": loc,
+        "files": files,
+        "tool": tool,
+        "exclusions_applied": sorted(exclusions_applied),
+        "loc_corroboration": (
+            {"tool": corroborating_tool, "loc_wholetree": loc_wholetree}
+            if corroborating_tool is not None
+            else None
+        ),
+        "legibility": legibility,
+        "evidence": evidence,
+    }
+    return (size, c, deduped, loc_by_stack)
+
+
+def _prime_git_free_tool(
+    root: Path, cmd: "list[str]", collector: "_PrimeCollector"
+) -> "tuple[int, str, str]":
+    collector.op()
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=_PRIME_TOOL_TIMEOUT,
+        )
+        return (result.returncode, result.stdout or "", result.stderr or "")
+    except subprocess.TimeoutExpired:
+        collector.fail("tool timeout: " + " ".join(cmd))
+        return (1, "", "timeout")
+    except (OSError, subprocess.SubprocessError) as exc:
+        collector.fail(str(exc))
+        return (1, "", str(exc))
+
+
+def _prime_scc_total(out: str) -> int:
+    try:
+        data = json.loads(out)
+        if isinstance(data, list):
+            return sum(int(row.get("Code", 0)) for row in data if isinstance(row, dict))
+    except (ValueError, TypeError):
+        pass
+    return 0
+
+
+def _prime_tokei_total(out: str) -> int:
+    try:
+        data = json.loads(out)
+        total = 0
+        for key, val in data.items():
+            if key == "Total":
+                continue
+            if isinstance(val, dict) and "code" in val:
+                total += int(val.get("code", 0))
+        return total
+    except (ValueError, TypeError, AttributeError):
+        return 0
+
+
+def _prime_collect_stacks(
+    root: Path, deduped: "list[str]", loc_by_stack: "Optional[dict[str, int]]" = None
+) -> "tuple[list[dict[str, Any]], _PrimeCollector]":
+    # One op per tracked file (single pass over `deduped`), so the real bound is
+    # the upstream ls-files cap; size the budget to it so a completed scan on a
+    # normal repo reports cap_hit=False / complete=True.
+    c = _PrimeCollector("stacks", budget=_PRIME_MAX_TRACKED_FILES + 200)
+
+    # Manifest gating. Every stacks.md matrix row's Detect signal is covered
+    # here - a basename table for exact manifest names plus an extension table
+    # for rows whose detect signal IS a file extension (*.csproj, *.pks, ...).
+    # Adding a stack row in stacks.md must add its manifest signal here.
+    manifest_by_base = {
+        "package.json": "JavaScript/TypeScript",
+        "pyproject.toml": "Python",
+        "setup.py": "Python",
+        "requirements.txt": "Python",
+        "go.mod": "Go",
+        "Cargo.toml": "Rust",
+        "pom.xml": "Java",
+        # Gradle manifests resolve to ONE stack after the scan (Kotlin vs Java
+        # by source-file evidence; generic JVM/Gradle when ambiguous) - a repo
+        # tracking both build.gradle.kts + settings.gradle.kts is one project,
+        # never a dual Java + Kotlin/Android stack pair.
+        "build.gradle": "__gradle__",
+        "build.gradle.kts": "__gradle__",
+        "settings.gradle": "__gradle__",
+        "gradlew": "__gradle__",
+        "settings.gradle.kts": "__gradle__",
+        "composer.json": "PHP",
+        "Gemfile": "Ruby",
+        "CMakeLists.txt": "C/C++",
+        "Package.swift": "Swift/iOS",
+    }
+    manifest_ext_rules = [
+        ((".csproj", ".sln"), "C#/.NET"),
+        ((".dproj", ".dpr"), "Delphi"),
+        ((".pks", ".pkb"), "SQL/PLSQL"),
+        ((".vbp", ".pbl"), "VB6/PowerBuilder"),
+        ((".cbl", ".cob"), "COBOL"),
+    ]
+
+    # Extension histogram. loc_share is LOC-weighted when the size pass
+    # provided per-stack line counts (one large service file outranks many tiny
+    # config files); the file-count histogram is the fallback.
+    hist: dict[str, int] = {}
+    total = 0
+    for path in deduped:
+        c.op()
+        ext = os.path.splitext(path)[1].lower()
+        stack = _PRIME_EXT_STACK.get(ext)
+        if stack is None:
+            continue
+        hist[stack] = hist.get(stack, 0) + 1
+        total += 1
+
+    # Detect manifests among tracked files, remembering their dir.
+    detected: dict[str, tuple[str, bool]] = {}  # stack -> (manifest path, subproject)
+    for path in deduped:
+        base = path.rsplit("/", 1)[-1]
+        subproject = "/" in path
+        mstack = manifest_by_base.get(base)
+        if mstack is not None:
+            detected.setdefault(mstack, (path, subproject))
+        lower = base.lower()
+        for exts, estack in manifest_ext_rules:
+            if lower.endswith(exts):
+                detected.setdefault(estack, (path, subproject))
+        # Xcode app projects: tracked files live INSIDE the .xcodeproj bundle.
+        if ".xcodeproj/" in path or lower.endswith(".xcodeproj"):
+            detected.setdefault("Swift/iOS", (path, subproject))
+
+    # Resolve the Gradle sentinel to exactly ONE stack. Stronger signals first:
+    # tracked .kt sources -> Kotlin/Android, .java sources -> Java; with no
+    # sources, a cheap grep of the gradle build files for a kotlin plugin
+    # marker; still ambiguous -> a single generic JVM/Gradle stack.
+    gradle_hit = detected.pop("__gradle__", None)
+    if gradle_hit is not None:
+        kt_files = sum(1 for p in deduped if p.endswith(".kt"))
+        java_files = sum(1 for p in deduped if p.endswith(".java"))
+        if kt_files or java_files:
+            gradle_stack = "Kotlin/Android" if kt_files >= java_files else "Java"
+        else:
+            kotlin_re = re.compile(r"(?i)org\.jetbrains\.kotlin|kotlin-android|\bkotlin\s*\(")
+            gradle_files = [
+                p for p in deduped
+                if p.rsplit("/", 1)[-1] in (
+                    "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"
+                )
+            ]
+            kotlin_marker = False
+            for rel in gradle_files[:5]:
+                c.op()
+                txt = _prime_read_tracked(root, rel, c, cap=100_000)
+                if txt and kotlin_re.search(txt):
+                    kotlin_marker = True
+                    break
+            gradle_stack = "Kotlin/Android" if kotlin_marker else "JVM/Gradle"
+        detected.setdefault(gradle_stack, gradle_hit)
+
+    # Manifest-stack name -> extension-histogram bucket(s) for loc_share.
+    share_buckets = {
+        "JavaScript/TypeScript": ("JavaScript", "TypeScript"),
+        "C/C++": ("C", "C++"),
+        "C#/.NET": ("C#",),
+        "Kotlin/Android": ("Kotlin",),
+        "JVM/Gradle": ("Java", "Kotlin"),
+        "Swift/iOS": ("Swift",),
+        "SQL/PLSQL": ("PL/SQL",),
+        "VB6/PowerBuilder": ("VB6",),
+    }
+    total_loc = sum((loc_by_stack or {}).values())
+    stacks: list[dict[str, Any]] = []
+    for stack, (manifest, subproject) in detected.items():
+        # loc_share: LOC-weighted from the size pass when available, else the
+        # file-count histogram (map the manifest stack to its ext buckets).
+        buckets = share_buckets.get(stack, (stack,))
+        if total_loc:
+            share_loc = sum((loc_by_stack or {}).get(b, 0) for b in buckets)
+            loc_share = round(share_loc / total_loc, 3)
+            share_label = "loc-share"
+        else:
+            share_files = sum(hist.get(b, 0) for b in buckets)
+            loc_share = round(share_files / total, 3) if total else 0.0
+            share_label = "file-share"
+        agreement = "high" if (loc_share > 0 or not (total_loc or total)) else "low"
+        stacks.append(
+            {
+                "name": stack,
+                "manifest": manifest,
+                "loc_share": loc_share,
+                "subproject": subproject,
+                "confidence": _prime_cap_confidence(agreement, c),
+                "evidence": [
+                    f"manifest {manifest}",
+                    f"{share_label} {loc_share}",
+                ],
+            }
+        )
+
+    stacks.sort(key=lambda s: s["loc_share"], reverse=True)
+    return (stacks, c)
+
+
+def _prime_collect_shape_markers(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    c = _PrimeCollector("shape-markers", budget=60)
+    bin_exports: list[str] = []
+    framework_markers: list[str] = []
+    serve_health_code: list[str] = []
+    desktop_markers: list[str] = []
+
+    # ALL tracked package.json manifests (bounded), not root-only: in
+    # pnpm/Nx/Turborepo layouts the web/CLI app lives in a workspace package
+    # and its framework/bin markers drive Axis 5.
+    pkg_paths = [
+        p for p in deduped if p.rsplit("/", 1)[-1] == "package.json"
+    ][:30]
+    if len([p for p in deduped if p.rsplit("/", 1)[-1] == "package.json"]) > 30:
+        c.note_sampled()
+    for rel in pkg_paths:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c)
+        if not txt:
+            continue
+        try:
+            data = json.loads(txt)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        if data.get("bin"):
+            bin_exports.append(f"{rel} bin")
+        if data.get("exports"):
+            bin_exports.append(f"{rel} exports")
+        deps = {}
+        deps.update(data.get("dependencies", {}) or {})
+        deps.update(data.get("devDependencies", {}) or {})
+        for fw in ("next", "react", "vue", "svelte", "@angular/core", "express", "fastify", "nestjs"):
+            if fw in deps and fw not in framework_markers:
+                framework_markers.append(fw)
+        for dm in ("electron", "@tauri-apps/cli", "electrobun"):
+            if dm in deps and dm not in desktop_markers:
+                desktop_markers.append(dm)
+
+    # ALL tracked pyproject.toml manifests (bounded), matching the
+    # package.json scan: a Python CLI in a workspace package
+    # (packages/cli/pyproject.toml [project.scripts]) drives Axis 5 too.
+    py_paths = [p for p in deduped if p.rsplit("/", 1)[-1] == "pyproject.toml"][:30]
+    if len([p for p in deduped if p.rsplit("/", 1)[-1] == "pyproject.toml"]) > 30:
+        c.note_sampled()
+    for rel in py_paths:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c)
+        if not txt:
+            continue
+        label = "pyproject" if rel == "pyproject.toml" else rel
+        if re.search(r"(?m)^\s*\[project\.scripts\]", txt):
+            bin_exports.append(f"{label} [project.scripts]")
+        if re.search(r"(?m)^\s*\[tool\.poetry\.scripts\]", txt):
+            bin_exports.append(f"{label} [tool.poetry.scripts]")
+
+    # ALL tracked Cargo.toml manifests (bounded), matching the package.json /
+    # pyproject scans: a CLI crate under crates/cli/Cargo.toml drives Axis 5.
+    cargo_paths = [p for p in deduped if p.rsplit("/", 1)[-1] == "Cargo.toml"][:30]
+    if len([p for p in deduped if p.rsplit("/", 1)[-1] == "Cargo.toml"]) > 30:
+        c.note_sampled()
+    for rel in cargo_paths:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c)
+        if not txt:
+            continue
+        if re.search(r"(?m)^\s*\[\[bin\]\]", txt):
+            label = "Cargo" if rel == "Cargo.toml" else rel
+            bin_exports.append(f"{label} [[bin]]")
+
+    # go cmd/*/main.go entrypoint marker.
+    for path in deduped:
+        if re.match(r"^cmd/[^/]+/main\.go$", path):
+            bin_exports.append(path)
+        if path.endswith(".desktop"):
+            desktop_markers.append(path)
+        # Cap serve/health hits WITHOUT stopping the scan - later CLI
+        # entrypoints (cmd/*/main.go) or desktop markers must still be seen
+        # regardless of git path order, since Axis 5 drives playbook selection.
+        if len(serve_health_code) < 10 and re.search(
+            r"(^|/)(server|main|app)\.(py|ts|js|go)$", path
+        ):
+            serve_health_code.append(path)
+
+    # Framework config-file markers.
+    for cfg, label in (
+        ("next.config.js", "next.config"),
+        ("next.config.mjs", "next.config"),
+        ("vite.config.ts", "vite"),
+        ("vite.config.js", "vite"),
+        ("manage.py", "django"),
+        ("config/routes.rb", "rails"),
+        ("tauri.conf.json", "tauri"),
+    ):
+        c.op()
+        if (root / cfg).exists():
+            if label == "tauri":
+                desktop_markers.append("tauri.conf.json")
+            else:
+                framework_markers.append(label)
+
+    # prose ratio = markdown files / total counted (file-weighted proxy).
+    md_files = sum(1 for p in deduped if p.lower().endswith((".md", ".mdx")))
+    prose_ratio = round(md_files / len(deduped), 3) if deduped else 0.0
+
+    markers = {
+        "bin_exports": sorted(set(bin_exports)),
+        "framework_markers": sorted(set(framework_markers)),
+        "serve_health_code": serve_health_code,
+        "desktop_markers": sorted(set(desktop_markers)),
+        "prose_ratio": prose_ratio,
+    }
+    return (markers, c)
+
+
+def _prime_collect_scope(
+    root: Path, top: Optional[Path]
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    c = _PrimeCollector("assessment-scope", budget=10)
+    root_resolved = root.resolve()
+    evidence: list[str] = []
+
+    if top is None:
+        # Not a git repo — home-base detection FIRST.
+        c.op()
+        parent_self = root_resolved
+        siblings, _wt = _prime_sibling_git_dirs(root_resolved, Path("/__none__"))
+        has_manifest = any(
+            (root_resolved / m).exists()
+            for m in ("package.json", "pyproject.toml", "go.mod", "Cargo.toml", "pom.xml")
+        )
+        if siblings and not has_manifest:
+            value, agreement = "constellation-home-base", "medium"
+            evidence.append(f"non-git dir with {len(siblings)} child git repo(s), no own manifest")
+        else:
+            value, agreement = "repository", "low"
+            evidence.append("non-git dir; no home-base signals")
+        return (
+            {"value": value, "confidence": _prime_cap_confidence(agreement, c), "evidence": evidence},
+            c,
+        )
+
+    if top != root_resolved:
+        # cwd below the git toplevel → workspace member.
+        try:
+            rel = root_resolved.relative_to(top)
+            member = rel.as_posix()
+        except (ValueError, OSError):
+            member = root_resolved.name
+        value, agreement = "workspace-member", "high"
+        evidence.append(f"assessing workspace member `{member}` of `{top.name}`")
+        return (
+            {
+                "value": value,
+                "member_path": member,
+                "confidence": _prime_cap_confidence(agreement, c),
+                "evidence": evidence,
+            },
+            c,
+        )
+    value, agreement = "repository", "high"
+    evidence.append("standalone git checkout at toplevel")
+
+    return (
+        {"value": value, "confidence": _prime_cap_confidence(agreement, c), "evidence": evidence},
+        c,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Substance collectors (fn-92.13) — deterministic substance-grep outputs the
+# skill CONSUMES in Phase 2/3 (the `emitter`-owned rows of the pillars.md
+# criterion-to-score map, resolution 21a). RAW SIGNALS ONLY — no judgment, no
+# verdicts, no severities resolved here (that is skill-side). Each collector is
+# bounded (a per-collector operation budget) and wrapped in the same
+# completeness envelope as the classification collectors.
+#
+# REDACTION (hard contract, classification.md + pillars.md HP9/DE1): emitted
+# evidence carries KEY NAMES / matched-pattern TOKENS ONLY — never a secret
+# value, never a complete sensitive config line, never a full hook command
+# string. A fixture asserts key-name-only redaction (test_prime_eval.py).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Source-code extensions for env-read / large-file / encoding scans (post the
+# path exclusions the size collector already applied).
+# Source scans stay ALIGNED with the recognized stack extensions (minus prose
+# and shell) - Delphi/PLSQL/VB6/COBOL playbooks depend on FH2/LEG5 inspecting
+# exactly the files those stacks are made of.
+_PRIME_SOURCE_EXTS = frozenset(
+    {
+        ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs",
+        ".py", ".go", ".rs", ".java", ".kt", ".cs", ".php", ".rb",
+        ".c", ".h", ".cc", ".cpp", ".hpp", ".pas", ".swift",
+    }
+) | frozenset(
+    ext for ext, stack in _PRIME_EXT_STACK.items() if stack not in ("Markdown", "Shell")
+)
+
+# Platform / CI vars filtered from the DE1 undeclared-env cross-ref (never a
+# real ".env.example" omission — they come from the host, not the app).
+_PRIME_WELLKNOWN_ENV = frozenset(
+    {
+        "NODE_ENV", "CI", "PATH", "HOME", "PORT", "PWD", "USER", "LANG",
+        "TERM", "SHELL", "TZ", "HOSTNAME", "DEBUG", "LOG_LEVEL", "VERBOSE",
+        "PYTHONPATH", "PYTHONUNBUFFERED", "TMPDIR", "TEMP", "TMP",
+        "GITHUB_ACTIONS", "GITHUB_TOKEN", "GITHUB_SHA", "GITHUB_REF",
+        "RUNNER_OS", "RUNNER_TEMP", "GOPATH", "GOROOT", "VIRTUAL_ENV",
+    }
+)
+
+# Env-read patterns across the common runtimes (var NAME captured; the value is
+# never touched → redaction-safe by construction).
+_PRIME_ENV_READ_RE = re.compile(
+    r"""(?x)
+      process\.env\.([A-Za-z_][A-Za-z0-9_]*)
+    | process\.env\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
+    | os\.environ(?:\.get)?\(?\[?\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
+    | os\.getenv\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
+    | os\.Getenv\(\s*"([A-Za-z_][A-Za-z0-9_]*)"
+    | \bENV\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
+    | \bgetenv\(\s*"([A-Za-z_][A-Za-z0-9_]*)"
+    """
+)
+
+# Destructive-command patterns (FH5). POSIX character classes only; matched over
+# manifest scripts / Makefiles / shell scripts, NEVER executed.
+_PRIME_DESTRUCTIVE_PATTERNS = (
+    ("recursive-delete", re.compile(r"\brm\s+-[A-Za-z]*[rf][A-Za-z]*\b")),
+    ("force-flag", re.compile(r"--force\b")),
+    ("force-push", re.compile(r"\bpush\s+(?:-[A-Za-z]*f|--force)\b")),
+    ("git-clean", re.compile(r"\bgit\s+clean\b")),
+    ("db-drop", re.compile(r"(?i)\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b")),
+    ("truncate", re.compile(r"(?i)\bTRUNCATE\s+TABLE\b")),
+)
+
+# Hook content-class patterns (HP7). Only the matched keyword TOKEN is emitted.
+_PRIME_HOOK_CLASSES = (
+    ("network_call", re.compile(r"\b(curl|wget|nc|ncat|Invoke-WebRequest)\b|https?://")),
+    ("credential_path", re.compile(
+        r"(?i)(\.env\b|credentials|secret|_token\b|id_rsa|\.aws|\.npmrc|\.netrc)")),
+    ("obfuscation", re.compile(r"base64|\beval\b|\|\s*(?:sh|bash)\b|\$\(\s*echo|\\x[0-9a-f]{2}")),
+    ("destructive", re.compile(r"\brm\s+-[A-Za-z]*[rf]|\bgit\s+clean\b|--force\b")),
+)
+
+_PRIME_SUBSTANCE_READ_CAP = 4000  # max source files read across substance scans
+
+
+def _prime_iter_source(deduped: "list[str]") -> "list[str]":
+    """Source-extension subset of the already-excluded/deduped tracked paths."""
+    return [p for p in deduped if os.path.splitext(p)[1].lower() in _PRIME_SOURCE_EXTS]
+
+
+_PRIME_TEST_DIR_SEGMENTS = frozenset(
+    ("test", "tests", "__tests__", "spec", "specs", "e2e", "integration-tests")
+)
+_PRIME_TEST_BASENAME_RE = re.compile(
+    r"(?i)(^test_[^/]*$|_test\.[a-z0-9]+$|\.(test|spec)\.[a-z0-9]+$|^conftest\.py$)"
+)
+
+
+_PRIME_INSTALLER_SEG_RE = re.compile(
+    r"(?i)^\s*(?:-\s*)?(?:sudo\s+)?(?:"
+    r"(?:pip3?|pipx)\s+install\b"
+    r"|python3?\s+-m\s+pip\s+install\b"
+    r"|uv\s+(?:pip\s+)?(?:install|add)\b"
+    r"|(?:npm|pnpm|yarn|bun)\s+(?:install|ci|i|add)\b"
+    r"|(?:cargo|gem|brew|apk|choco)\s+install\b"
+    r"|apt(?:-get)?\s+(?:-y\s+)?install\b"
+    r")"
+)
+
+
+def _prime_strip_prose_segments(lines: "list[str]") -> "list[str]":
+    """Drop echo/printf AND installer SEGMENTS from executable lines, keeping
+    commands chained after them (`echo "running tests" && pytest` keeps
+    `pytest`; `pip install pytest black` drops entirely). Shared by the CI
+    test/lint detector and the secrets-gate enforcement scan - a logged or
+    merely INSTALLED tool name is not an invocation."""
+    out: "list[str]" = []
+    for ln in lines:
+        kept = [
+            seg for seg in re.split(r"&&|\|\||;|\|", ln)
+            if seg.strip()
+            and not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", seg)
+            and not _PRIME_INSTALLER_SEG_RE.match(seg)
+        ]
+        if kept:
+            out.append(" ; ".join(s.strip() for s in kept))
+    return out
+
+
+def _prime_is_test_path(path: str) -> bool:
+    """True when a tracked path is test-harness code by directory segment
+    (tests/, __tests__/, spec/, ...) or basename convention (test_*.py,
+    *_test.go, *.test.ts, *.spec.js, conftest.py)."""
+    segs = _prime_posix_segments(path)
+    if any(s.lower() in _PRIME_TEST_DIR_SEGMENTS for s in segs[:-1]):
+        return True
+    return bool(_PRIME_TEST_BASENAME_RE.search(segs[-1])) if segs else False
+
+
+def _prime_env_declared(root: Path, deduped: "list[str]", c: "_PrimeCollector") -> "set[str]":
+    """Var NAMES declared across every `.env.example`-family file (per-member).
+
+    Only the KEY before `=` is captured — the value is never read into the
+    payload (redaction). Workspace-member `.env.example` files count (the
+    correct monorepo pattern), not root-only.
+    """
+    declared: set[str] = set()
+    candidates = [
+        p for p in deduped
+        if p.rsplit("/", 1)[-1] in (".env.example", ".env.sample", ".env.template", ".env.dist")
+    ]
+    for rel in candidates[:50]:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if not txt:
+            continue
+        for line in txt.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key = line.split("=", 1)[0].strip()
+            # Strip the literal `export ` prefix, NOT the character set - lstrip
+            # would mangle lowercase keys (token->ken, repo_url->_url).
+            key = key[7:].strip() if key.startswith("export ") else key
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+                declared.add(key)
+    return declared
+
+
+def _prime_collect_env_crossref(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """DE1: diff declared env vars against env READS in source.
+
+    Emits COUNTS + declared var NAMES + undeclared var NAMES (safe: names only,
+    never values - `_prime_env_declared` strips everything after `=`). The skill
+    applies the ~30% "stale template" judgment.
+    """
+    c = _PrimeCollector("substance-env-crossref", budget=_PRIME_SUBSTANCE_READ_CAP + 100)
+    declared = _prime_env_declared(root, deduped, c)
+    read_vars: set[str] = set()
+    # Test files are excluded from the read scan: a TEST_DATABASE_URL read
+    # only by the test harness is not an app-code env dependency and must not
+    # flag the .env.example template as stale.
+    sources = [
+        p for p in _prime_iter_source(deduped) if not _prime_is_test_path(p)
+    ]
+    for idx, rel in enumerate(sources):
+        if idx >= _PRIME_SUBSTANCE_READ_CAP:
+            c.note_sampled()
+            break
+        c.op()
+        txt = _prime_read_tracked(root, rel, c)
+        if not txt:
+            continue
+        for m in _PRIME_ENV_READ_RE.finditer(txt):
+            name = next((g for g in m.groups() if g), None)
+            if name:
+                read_vars.add(name)
+    undeclared = sorted(
+        v for v in read_vars if v not in declared and v not in _PRIME_WELLKNOWN_ENV
+    )
+    raw = {
+        "env_example_present": bool(declared) or any(
+            p.rsplit("/", 1)[-1].startswith(".env.") for p in deduped
+        ),
+        "declared_count": len(declared),
+        "declared_vars": sorted(declared)[:100],
+        "source_read_count": len(read_vars),
+        "undeclared_count": len(undeclared),
+        "undeclared_vars": undeclared[:100],
+    }
+    return (raw, c)
+
+
+def _prime_destructive_context(line: str, target: str) -> str:
+    """Classify a destructive-command hit by CONTEXT AND TARGET (FH5, raw).
+
+    Returns one of: comment | doc-snippet | string-literal | self-managed |
+    bounded | unbounded. The skill maps these to severities.
+    """
+    stripped = line.strip()
+    if stripped.startswith("#") or stripped.startswith("//") or stripped.startswith("*"):
+        return "comment"
+    if re.match(r'^\s*echo\s', line) or re.search(r'echo\s+["\'].*(?:rm|clean|force)', line):
+        return "string-literal"
+    if not target:
+        return "unbounded"
+    # $HOME / ~ / a single ${VAR} anchored to a subpath = bounded.
+    if re.search(r"\$HOME\b|(^|/)~($|/)|^\~/", target) or re.match(r"^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/\S+", target):
+        return "bounded"
+    # bare / , ~ alone, or a lone parameter expansion = unbounded / parameterized.
+    if target in ("/", "~", "$HOME") or re.match(r"^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/?$", target) or target.startswith("$"):
+        return "unbounded"
+    # Parent-relative traversal escapes the repo: `rm -rf ../sibling` is an
+    # out-of-repo wipe, never a regenerated-dir candidate.
+    if target.startswith("..") or "/../" in target:
+        return "unbounded"
+    # relative, repo-internal literal dir (no leading / or ~) = self-managed
+    # candidate (the same script often regenerates it; skill confirms via LEG7).
+    if not target.startswith("/") and not target.startswith("~"):
+        return "self-managed"
+    return "unbounded"
+
+
+def _prime_scan_scripts(root: Path, deduped: "list[str]", c: "_PrimeCollector") -> "list[tuple[str, str]]":
+    """Return (path, text) for manifest scripts + Makefiles + shell scripts.
+
+    package.json `scripts` values are flattened into a synthetic text blob so
+    the destructive/secret patterns match them uniformly.
+    """
+    out: list[tuple[str, str]] = []
+    # ALL tracked package.json manifests (bounded) - a workspace package's
+    # `scripts.clean` is as destructive as the root's.
+    pkg_paths = [p for p in deduped if p.rsplit("/", 1)[-1] == "package.json"][:30]
+    for rel in pkg_paths:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if not txt:
+            continue
+        try:
+            scripts = json.loads(txt).get("scripts", {}) or {}
+            blob = "\n".join(f"{k}: {v}" for k, v in scripts.items() if isinstance(v, str))
+            if blob:
+                out.append((f"{rel}[scripts]", blob))
+        except (ValueError, TypeError, AttributeError):
+            continue
+    script_paths = [
+        p for p in deduped
+        if p.rsplit("/", 1)[-1] in ("Makefile", "makefile", "GNUmakefile", "justfile", "Justfile", "Taskfile.yml")
+        or _prime_posix_segments(p)[:1] == ["scripts"]
+        or p.endswith((".sh", ".bash", ".zsh"))
+    ]
+    for rel in script_paths[:200]:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if txt:
+            out.append((rel, txt))
+    return out
+
+
+def _prime_collect_destructive(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH5: raw destructive-command hits WITH context class (never executed)."""
+    c = _PrimeCollector("substance-destructive", budget=500)
+    hits: list[dict[str, Any]] = []
+    for path, text in _prime_scan_scripts(root, deduped, c):
+        for line in text.splitlines():
+            # Classify by the SEGMENT containing the match, not the whole
+            # line: `echo cleaning && rm -rf /` is a logged label followed by
+            # a REAL wipe - the echo prefix must not launder it into
+            # string-literal (which the skill drops).
+            comment_prefix = line.strip().startswith(("#", "//", "*"))
+            for seg in re.split(r"&&|\|\||;", line):
+                for label, pat in _PRIME_DESTRUCTIVE_PATTERNS:
+                    m = pat.search(seg)
+                    if not m:
+                        continue
+                    # Extract a target token following the match for context class.
+                    tail = seg[m.end():].strip()
+                    target = tail.split()[0] if tail and not tail.startswith("-") else (
+                        tail.split()[1] if len(tail.split()) > 1 else ""
+                    )
+                    # Strip surrounding quotes so a parameterized target like
+                    # "$BUILD_DIR" or '"${TARGET}"' classifies into the
+                    # variable/unbounded tier instead of downgrading to
+                    # self-managed on the leading quote character.
+                    target = target.strip("'\"")
+                    ctx = (
+                        "comment"
+                        if comment_prefix
+                        else _prime_destructive_context(seg, target)
+                    )
+                    # Non-filesystem destructive ops (remote force-push, DB
+                    # drop/truncate) have no repo-relative target dir - the
+                    # path classifier would launder them into self-managed and
+                    # Phase 3 would downgrade them to informational. They stay
+                    # high-risk unless they are prose (comment/string-literal).
+                    if label in ("force-push", "db-drop", "truncate") and ctx in (
+                        "self-managed", "bounded"
+                    ):
+                        ctx = "unbounded"
+                    hits.append(
+                        {
+                            "file": path,
+                            "pattern": label,
+                            "context_class": ctx,
+                            "target": target[:80],
+                        }
+                    )
+                    if len(hits) >= 200:
+                        c.note_truncated()
+                        break
+                if len(hits) >= 200:
+                    break
+            if len(hits) >= 200:
+                break
+        if len(hits) >= 200:
+            break
+    return ({"hits": hits, "hit_count": len(hits)}, c)
+
+
+def _prime_collect_encoding(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """LEG5: BOM / non-UTF-8 sniff on a SAMPLE per extension (read-only)."""
+    c = _PrimeCollector("substance-encoding", budget=300)
+    by_ext: dict[str, list[str]] = {}
+    for rel in _prime_iter_source(deduped):
+        ext = os.path.splitext(rel)[1].lower()
+        by_ext.setdefault(ext, []).append(rel)
+    samples: list[dict[str, Any]] = []
+    for ext, files in sorted(by_ext.items()):
+        non_utf8 = 0
+        encodings: set[str] = set()
+        sample = files[:3]
+        if len(files) > 3:
+            c.note_sampled()
+        for rel in sample:
+            c.op()
+            fp = root / rel
+            # Same guards as the text readers: skip tracked symlinks, and reject
+            # a `..`/absolute escape before opening (count it in the envelope).
+            if fp.is_symlink():
+                continue
+            if _prime_contained(root, rel) is None:
+                c.fail("path escapes root: " + rel)
+                continue
+            try:
+                with fp.open("rb") as fh:
+                    head = fh.read(4096)
+            except (OSError, ValueError):
+                continue
+            if head.startswith(b"\xef\xbb\xbf"):
+                encodings.add("utf-8-bom")
+            elif head.startswith(b"\xff\xfe"):
+                encodings.add("utf-16-le")
+                non_utf8 += 1
+            elif head.startswith(b"\xfe\xff"):
+                encodings.add("utf-16-be")
+                non_utf8 += 1
+            else:
+                try:
+                    head.decode("utf-8")
+                    encodings.add("utf-8")
+                except UnicodeDecodeError:
+                    encodings.add("non-utf-8")
+                    non_utf8 += 1
+        samples.append(
+            {
+                "ext": ext,
+                "files_total": len(files),
+                "sampled": len(sample),
+                "non_utf8_count": non_utf8,
+                "encodings": sorted(encodings),
+            }
+        )
+    return ({"per_extension": samples}, c)
+
+
+def _prime_collect_atomic_pairs(
+    deduped: "list[str]", pre_dedup: "Optional[list[str]]" = None
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """LEG6: designer/generator atomic-pair CANDIDATES from the tracked list.
+
+    Scans the post-exclusion, PRE-hash-dedup list when provided: two
+    synchronized copies that are currently byte-identical (the healthy state
+    of a dual-copy invariant) collapse to one path under the blob dedup, and
+    the second location must still be visible here or the dual-copy warning
+    can never fire.
+    """
+    # One op per tracked file; bound is the upstream ls-files cap, not 200.
+    c = _PrimeCollector("substance-atomic-pairs", budget=_PRIME_MAX_TRACKED_FILES + 200)
+    if pre_dedup is not None:
+        deduped = pre_dedup
+    tracked = set(deduped)
+    pairs: list[dict[str, Any]] = []
+
+    def _add(kind: str, a: str, b: str) -> None:
+        pairs.append({"kind": kind, "files": sorted([a, b])})
+
+    for rel in deduped:
+        c.op()
+        low = rel.lower()
+        if low.endswith(".pas"):
+            dfm = rel[:-4] + ".dfm"
+            if dfm in tracked or (rel[:-4] + ".dfm").lower() in {t.lower() for t in tracked}:
+                _add("delphi-form", rel, dfm)
+        if low.endswith(".designer.cs"):
+            base = rel[: -len(".designer.cs")] + ".cs"
+            if base in tracked:
+                _add("winforms-designer", rel, base)
+        if low.endswith(".proto"):
+            stem = rel[:-6]
+            for gen in (stem + "_pb2.py", stem + ".pb.go", stem + "_pb.js"):
+                if gen in tracked:
+                    _add("protobuf", rel, gen)
+    # Dual-copy invariant candidates: identical basename in >=2 distinct dirs.
+    by_base: dict[str, list[str]] = {}
+    for rel in deduped:
+        base = rel.rsplit("/", 1)[-1]
+        if base.endswith((".py", ".ts", ".js", ".go")) and "/" in rel:
+            by_base.setdefault(base, []).append(rel)
+    for base, locs in by_base.items():
+        if len(locs) >= 2:
+            pairs.append({"kind": "dual-copy-candidate", "files": sorted(locs)[:4]})
+    # Dedup identical pair entries.
+    seen: set[str] = set()
+    uniq: list[dict[str, Any]] = []
+    for p in pairs:
+        key = p["kind"] + "|" + "|".join(p["files"])
+        if key not in seen:
+            seen.add(key)
+            uniq.append(p)
+    return ({"candidates": uniq[:100], "candidate_count": len(uniq)}, c)
+
+
+def _prime_collect_tool_managed(
+    deduped: "list[str]", destructive: "dict[str, Any]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """LEG7: tool-managed / regenerated-dir never-edit CANDIDATES (raw)."""
+    # One op per tracked file; bound is the upstream ls-files cap, not 200.
+    c = _PrimeCollector("substance-tool-managed", budget=_PRIME_MAX_TRACKED_FILES + 200)
+    suffixes = (".suo", ".dproj", ".dsk", ".identcache", ".user", ".ncb", ".sln.docstates")
+    opaque_dirs = frozenset({"__history", "__recovery"})
+    tool_files: list[str] = []
+    for rel in deduped:
+        c.op()
+        if rel.lower().endswith(suffixes):
+            tool_files.append(rel)
+        elif set(_prime_posix_segments(rel)) & opaque_dirs:
+            tool_files.append(rel)
+    # Regenerated dirs: the self-managed destructive hits name a repo-internal
+    # dir the same script wipes → a never-edit candidate. Only actual WIPE
+    # patterns qualify - a generic `--force` flag is not a delete and must not
+    # mark its argument a never-edit dir.
+    regenerated_dirs = sorted(
+        {
+            h["target"].rstrip("/")
+            for h in destructive.get("hits", [])
+            if h.get("context_class") == "self-managed"
+            and h.get("target")
+            and h.get("pattern") in ("recursive-delete", "git-clean")
+        }
+    )
+    return (
+        {
+            "tool_managed_files": tool_files[:100],
+            "regenerated_dir_candidates": regenerated_dirs[:50],
+        },
+        c,
+    )
+
+
+def _prime_collect_docs_freshness(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH1: last-commit timestamps for instruction/docs files vs src churn."""
+    c = _PrimeCollector("substance-docs-freshness", budget=30)
+    instruction_files: list[dict[str, Any]] = []
+    for doc in ("CLAUDE.md", "AGENTS.md", "README.md"):
+        rc, out, _err = _prime_git(root, ["log", "-1", "--format=%ct", "--", doc], c)
+        ts = int(out.strip()) if rc == 0 and out.strip().isdigit() else None
+        if ts is not None:
+            instruction_files.append({"path": doc, "last_commit_ts": ts})
+    # Newest source-file commit timestamp (pathspec-restricted to source exts).
+    src_exts = sorted({os.path.splitext(p)[1] for p in _prime_iter_source(deduped)})
+    src_pathspecs = [f"*{ext}" for ext in src_exts[:12]]
+    src_last_ts: Optional[int] = None
+    if src_pathspecs:
+        rc, out, _err = _prime_git(
+            root, ["log", "-1", "--format=%ct", "--", *src_pathspecs], c
+        )
+        if rc == 0 and out.strip().isdigit():
+            src_last_ts = int(out.strip())
+    return (
+        {"instruction_files": instruction_files, "src_last_commit_ts": src_last_ts},
+        c,
+    )
+
+
+def _prime_read_ci_workflows(root: Path, deduped: "list[str]", c: "_PrimeCollector") -> "list[tuple[str, str]]":
+    out: list[tuple[str, str]] = []
+    wf = [
+        p for p in deduped
+        if _prime_posix_segments(p)[:2] == [".github", "workflows"]
+        and p.endswith((".yml", ".yaml"))
+    ]
+    wf += [p for p in deduped if p.rsplit("/", 1)[-1] in (".gitlab-ci.yml", "bitbucket-pipelines.yml", "azure-pipelines.yml")]
+    wf += [p for p in deduped if p == ".circleci/config.yml" or p.endswith("/.circleci/config.yml")]
+    for rel in wf[:40]:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if txt:
+            out.append((rel, txt))
+    return out
+
+
+def _prime_ci_triggers(text: str) -> "set[str]":
+    """Extract push / pull_request GitHub Actions triggers across ALL `on:`
+    forms, not just the mapping-key style:
+
+    - mapping keys:   `on:\\n  push:\\n  pull_request:`
+    - inline scalar:  `on: push`
+    - inline flow-list: `on: [push, pull_request]`
+    - block sequence: `on:\\n  - push\\n  - pull_request`
+
+    (`on` may be written quoted - `"on":` - since YAML 1.1 reads bare `on` as a
+    boolean.) Matching is scoped to the `on:` block ONLY - a `- push` list item
+    or `push:` key elsewhere in the workflow (steps, matrices, unrelated
+    mappings) must never count as a gate trigger.
+    """
+    found: set[str] = set()
+    on_re = re.compile(r"""(?i)^(\s*)['"]?on['"]?\s*:\s*(.*)$""")
+    lines = text.splitlines()
+    idx = 0
+    while idx < len(lines):
+        m = on_re.match(lines[idx])
+        idx += 1
+        if not m:
+            continue
+        on_indent = len(m.group(1))
+        inline = m.group(2).split("#", 1)[0].strip()
+        if inline:
+            # Inline scalar (`on: push`) or flow-list (`on: [push, ...]`).
+            # pull_request_target is GitHub's PR-event family too - normalize
+            # it to the pull_request trigger token.
+            if re.search(r"\bpush\b", inline):
+                found.add("push")
+            if re.search(r"\bpull_request(?:_target)?\b", inline):
+                found.add("pull_request")
+            continue
+        # Block form: scan only lines indented deeper than the `on:` key;
+        # the first non-blank line at <= its indent ends the block.
+        while idx < len(lines):
+            line = lines[idx]
+            if line.strip():
+                indent = len(line) - len(line.lstrip())
+                if indent <= on_indent:
+                    break
+                body = line.strip()
+                km = re.match(r"(?i)^(pull_request(?:_target)?|push)\s*:", body)
+                if km:
+                    found.add("pull_request" if km.group(1).lower().startswith("pull_request") else "push")
+                sm = re.match(r"(?i)^-\s*(pull_request(?:_target)?|push)\b", body)
+                if sm:
+                    found.add("pull_request" if sm.group(1).lower().startswith("pull_request") else "push")
+            idx += 1
+    return found
+
+
+_PRIME_NON_GITHUB_CI = (".gitlab-ci.yml", "bitbucket-pipelines.yml", "azure-pipelines.yml")
+# Pseudo-basename routing token for CircleCI (its real basename `config.yml`
+# is too generic to route on).
+_PRIME_CIRCLECI = ".circleci/config.yml"
+
+
+def _prime_ci_triggers_non_github(basename: str, text: str) -> "set[str]":
+    """Gate-trigger heuristic for non-GitHub CI configs (FH3).
+
+    GitLab / Bitbucket / Azure pipelines run on push by default, so forcing
+    GitHub Actions `on:` parsing on them yields a false has_gate_trigger=false.
+    Deterministic, deliberately simple per-system rules:
+
+    - .gitlab-ci.yml: present -> push-gated by default (GitLab runs pipelines
+      on push; `only:`/`rules:` narrowing such as schedules-only is out of
+      scope for the raw signal - the skill judges edge cases).
+    - bitbucket-pipelines.yml: a `pipelines:` config with a `default:` /
+      `branches:` (push gate) or `pull-requests:` (PR gate) section as a
+      DIRECT child of the top-level `pipelines:` key -> gated. The walk is
+      indent-scoped (same approach as the GitHub `on:`-block scan): a
+      `branches:` line nested deeper - e.g. under `pipelines.custom.<name>` -
+      never gates; a custom-/manual-only file is not gated.
+    - azure-pipelines.yml: `trigger: none` -> not gated; otherwise gated (an
+      explicit `trigger:` key AND the absent-key default both mean CI on push).
+    """
+    if basename == ".gitlab-ci.yml":
+        return {"push"}
+    if basename == _PRIME_CIRCLECI:
+        # CircleCI builds on push by default; schedule-only narrowing is out of
+        # scope for the raw signal (the skill judges edge cases).
+        return {"push"}
+    if basename == "bitbucket-pipelines.yml":
+        found: set[str] = set()
+        lines = text.splitlines()
+        idx = 0
+        n = len(lines)
+        while idx < n:
+            m = re.match(r"^pipelines\s*:\s*(?:#.*)?$", lines[idx])
+            idx += 1
+            if not m:
+                continue
+            # Scan the pipelines: block; only its FIRST-level children count.
+            child_indent = None
+            while idx < n:
+                line = lines[idx]
+                body = line.strip()
+                if not body or body.startswith("#"):
+                    idx += 1
+                    continue
+                indent = len(line) - len(line.lstrip())
+                if indent <= 0:
+                    break  # dedent back to top level ends the pipelines: block
+                if child_indent is None:
+                    child_indent = indent
+                if indent == child_indent:
+                    if re.match(r"(?i)^(?:default|branches)\s*:", body):
+                        found.add("push")
+                    elif re.match(r"(?i)^pull-requests\s*:", body):
+                        found.add("pull_request")
+                idx += 1
+        return found
+    if basename == "azure-pipelines.yml":
+        found_az: set[str] = set()
+        # Top-level `trigger:` only - a nested pipeline-resource
+        # `resources: ... trigger: none` must not suppress the CI push gate.
+        if not re.search(r"(?m)^trigger\s*:\s*none\s*(?:#.*)?$", text):
+            found_az.add("push")
+        # A top-level `pr:` key (not `pr: none`) is Azure's PR trigger - a
+        # trigger:none + pr:... file is a valid PR-only gate.
+        if re.search(r"(?m)^pr\s*:", text) and not re.search(
+            r"(?m)^pr\s*:\s*none\s*(?:#.*)?$", text
+        ):
+            found_az.add("pull_request")
+        return found_az
+    return set()
+
+
+def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
+    """Executable-content lines of a CI config (FH3/FH4).
+
+    Test/lint/scanner detection must only see what CI actually RUNS - never
+    `name:` values, job ids, comments, or matrix entries (a `name: test lint`
+    step must not set has_test_step). Deterministic indent-block walk:
+
+    - GitHub workflows: `run:` step values - inline (`run: pytest`) and block
+      scalars (the indented block after `run: |` / `run: >`).
+    - GitLab / Bitbucket / Azure: `script:`-family values (`script`,
+      `before_script`, `after_script`, `bash`, `pwsh`, `powershell`) - inline,
+      block-scalar, and `- item` list forms.
+
+    Comment lines are stripped in both modes, and TRAILING comments are
+    stripped from every collected value (`npm ci # pytest later` must not
+    read as a pytest invocation) - whitespace-then-# only, so URL anchors
+    survive.
+    """
+    if basename == _PRIME_CIRCLECI:
+        # CircleCI steps: inline `- run: cmd` and the full `run:\n  command:` form.
+        keys = r"(?:run|command)"
+    elif basename in _PRIME_NON_GITHUB_CI:
+        keys = r"(?:script|before_script|after_script|bash|pwsh|powershell)"
+    else:
+        keys = r"run"
+    key_re = re.compile(r"^(\s*(?:-\s+)?)" + keys + r"\s*:\s*(.*)$")
+
+    def _no_trailing_comment(value: str) -> str:
+        return re.sub(r"\s+#.*$", "", value).strip()
+
+    out: list[str] = []
+    lines = text.splitlines()
+    idx = 0
+    n = len(lines)
+    while idx < n:
+        m = key_re.match(lines[idx])
+        idx += 1
+        if not m:
+            continue
+        key_indent = len(m.group(1))
+        # Strip the trailing comment BEFORE the block-scalar decision:
+        # `run: | # main tests` is a block scalar, not an inline `|` command.
+        inline = m.group(2).strip()
+        if inline.startswith("#"):
+            inline = ""
+        else:
+            inline = _no_trailing_comment(inline)
+        if inline and not re.fullmatch(r"[|>][+-]?\d*", inline):
+            out.append(inline)
+            continue
+        # Block scalar / block sequence: lines indented deeper than the key.
+        skip_deeper_than: Optional[int] = None
+        while idx < n:
+            line = lines[idx]
+            body = line.strip()
+            if body:
+                indent = len(line) - len(line.lstrip())
+                if indent <= key_indent:
+                    break
+                # Inside a skipped non-exec mapping block (e.g. the children of
+                # `environment:` - `TEST: "1"` is config, not an invocation).
+                if skip_deeper_than is not None:
+                    if indent > skip_deeper_than:
+                        idx += 1
+                        continue
+                    skip_deeper_than = None
+                if not body.startswith("#"):
+                    val = _no_trailing_comment(
+                        body[2:].strip() if body.startswith("- ") else body
+                    )
+                    # CircleCI map-form `run:` steps nest label fields - only
+                    # executable fields count: `name: Test` must not read as a
+                    # test invocation, and a `command:` value is unwrapped so
+                    # the prose filter sees the actual command.
+                    if basename == _PRIME_CIRCLECI:
+                        if re.match(
+                            r"(?:name|when|environment|no_output_timeout|working_directory|background)\s*:",
+                            val,
+                        ):
+                            val = ""
+                            skip_deeper_than = indent
+                        else:
+                            cm = re.match(r"(?:command|shell)\s*:\s*(.*)$", val)
+                            if cm:
+                                val = cm.group(1).strip()
+                                if re.fullmatch(r"[|>][+-]?\d*", val):
+                                    val = ""  # block scalar: content follows
+                    if val:
+                        out.append(val)
+            idx += 1
+    return out
+
+
+def _prime_collect_ci_gate(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH3: CI trigger + test/lint step + mutating-lint greps (raw)."""
+    c = _PrimeCollector("substance-ci-gate", budget=100)
+    workflows = _prime_read_ci_workflows(root, deduped, c)
+    test_re = re.compile(r"(?i)\b(pytest|jest|vitest|mocha|go\s+test|cargo\s+test|npm\s+(?:run\s+)?test|rspec|phpunit|dotnet\s+test|gradle\s+test|mvn\s+test|\btest\b)")
+    lint_re = re.compile(r"(?i)\b(eslint|biome|oxlint|ruff|flake8|golangci-lint|clippy|black|prettier|rubocop|\blint\b)")
+    mutating_re = re.compile(r"(?i)(--fix|--write|format:write|ruff\s+.*--fix|eslint\s+.*--fix|biome\s+(?:check\s+)?.*--(?:write|apply))")
+    has_test = has_lint = has_trigger = mutating_lint = False
+    gated_test = gated_lint = False
+    triggers: set[str] = set()
+    files: list[str] = []
+    for path, text in workflows:
+        files.append(path)
+        base = path.rsplit("/", 1)[-1]
+        if path == _PRIME_CIRCLECI or path.endswith("/" + _PRIME_CIRCLECI):
+            base = _PRIME_CIRCLECI  # pseudo-basename routing token
+        # Test/lint detection sees only EXECUTABLE content (run:/script: values)
+        # - a `name: test lint` step or matrix entry never sets the flags.
+        # echo/printf SEGMENTS are prose, not invocation - but commands chained
+        # after them (`echo "running tests" && pytest`) are real.
+        exec_text = "\n".join(
+            _prime_strip_prose_segments(_prime_ci_exec_lines(base, text))
+        )
+        file_test = bool(test_re.search(exec_text))
+        file_lint = bool(lint_re.search(exec_text))
+        has_test = has_test or file_test
+        has_lint = has_lint or file_lint
+        if base in _PRIME_NON_GITHUB_CI or base == _PRIME_CIRCLECI:
+            # Route by filename: never force GitHub `on:` parsing on other CI systems.
+            file_triggers = _prime_ci_triggers_non_github(base, text)
+        else:
+            file_triggers = _prime_ci_triggers(text)
+        if file_triggers:
+            triggers |= file_triggers
+            has_trigger = True
+            # PER-WORKFLOW conjunction: "CI actually gates" means the SAME
+            # workflow that has a push/PR trigger runs the test/lint step - a
+            # dispatch-only test workflow next to a gated deploy workflow is
+            # not a gate.
+            gated_test = gated_test or file_test
+            gated_lint = gated_lint or file_lint
+        # Mutating-lint is a PER-LINE property: the --fix/--write flag must sit
+        # on the SAME executable line as the lint command, or an unrelated
+        # `--write` step (e.g. a cache updater) false-flags a check-only linter.
+        # Formatters that WRITE BY DEFAULT (black/isort without --check/--diff)
+        # are mutating with no flag at all.
+        # ruff format also writes by default (--check/--diff are its no-write
+        # modes), same as black/isort.
+        default_write_re = re.compile(r"(?i)\b(black|isort)\b|\bruff\s+format\b")
+        no_write_flag_re = re.compile(r"(?i)--(?:check(?:-only)?|diff)\b")
+        for exec_line in exec_text.splitlines():
+            if lint_re.search(exec_line) and mutating_re.search(exec_line):
+                mutating_lint = True
+                break
+            # Default-write exemption is PER SEGMENT: in
+            # `black --check . && isort .` the --check protects only black -
+            # the chained isort still writes.
+            for seg in re.split(r"&&|\|\||;", exec_line):
+                if default_write_re.search(seg) and not no_write_flag_re.search(seg):
+                    mutating_lint = True
+                    break
+            if mutating_lint:
+                break
+    return (
+        {
+            "workflow_files": files,
+            "has_test_step": has_test,
+            "has_lint_step": has_lint,
+            "has_gate_trigger": has_trigger,
+            # Per-workflow conjunction: the SAME workflow carries the trigger
+            # AND the step. These are the load-bearing FH3 signals; the plain
+            # booleans above are whole-repo aggregates.
+            "gated_test_step": gated_test,
+            "gated_lint_step": gated_lint,
+            "triggers": sorted(triggers),
+            "mutating_lint": mutating_lint,
+        },
+        c,
+    )
+
+
+def _prime_collect_secrets_gate(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH4: secrets-scanner presence in the commit gate or CI.
+
+    Split contract: `tools_found` carries ENFORCED invocations only (pre-commit
+    hooks, package scripts, CI files that actually invoke a scanner);
+    scanner config/baseline files (.gitleaks.toml, .secrets.baseline) are
+    EVIDENCE-ONLY and land in `configs_found` - config presence alone is never
+    an enforced gate.
+
+    Invocation surfaces are scoped: package.json matches count only inside the
+    `"scripts"` object values (a gitleaks devDependency is metadata, not
+    enforcement; unparseable package.json is skipped, never wholesale-grepped),
+    and CI files count only executable lines (`run:`/`script:` values via
+    `_prime_ci_exec_lines`). Pre-commit configs keep whole-file matching -
+    every hook entry there IS an enforcement surface.
+    """
+    c = _PrimeCollector("substance-secrets-gate", budget=60)
+    tool_re = re.compile(r"(?i)\b(gitleaks|detect-secrets|trufflehog|ggshield|git-secrets)\b")
+    config_files = {".gitleaks.toml": "gitleaks", ".secrets.baseline": "detect-secrets"}
+    tools: set[str] = set()
+    locations: list[str] = []
+    configs: list[dict[str, str]] = []
+    scan_files = [
+        p for p in deduped
+        if p.rsplit("/", 1)[-1] in (".pre-commit-config.yaml", ".pre-commit-config.yml", "package.json", ".gitleaks.toml", ".secrets.baseline")
+        or _prime_posix_segments(p)[:2] == [".github", "workflows"]
+        # Every CI system `_prime_ci_exec_lines` can parse is an enforcement
+        # surface - GitLab, Bitbucket, Azure, AND CircleCI (a `script: gitleaks
+        # detect` gate in bitbucket-pipelines.yml is as real as a GitHub
+        # `run:` one).
+        or p.rsplit("/", 1)[-1] in _PRIME_NON_GITHUB_CI
+        or p == _PRIME_CIRCLECI or p.endswith("/" + _PRIME_CIRCLECI)
+    ]
+    for rel in scan_files[:60]:
+        c.op()
+        base = rel.rsplit("/", 1)[-1]
+        if rel == _PRIME_CIRCLECI or rel.endswith("/" + _PRIME_CIRCLECI):
+            base = _PRIME_CIRCLECI
+        if base in config_files:
+            configs.append({"tool": config_files[base], "path": rel})
+            continue
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if not txt:
+            continue
+        if base == "package.json":
+            # Only "scripts" values are enforcement; deps mentioning a scanner
+            # are metadata. A parse failure skips the file (never wholesale-grep).
+            try:
+                pkg = json.loads(txt)
+            except ValueError:
+                continue
+            scripts = pkg.get("scripts") if isinstance(pkg, dict) else None
+            if not isinstance(scripts, dict):
+                continue
+            # Prose-segment filter: `echo "gitleaks not configured"` in a
+            # script logs a name, it does not enforce a gate.
+            scan_text = "\n".join(
+                _prime_strip_prose_segments([str(v) for v in scripts.values()])
+            )
+        elif (
+            base in _PRIME_NON_GITHUB_CI
+            or base == _PRIME_CIRCLECI
+            or _prime_posix_segments(rel)[:2] == [".github", "workflows"]
+        ):
+            # CI files: executable lines only (consistent with the FH3 scoping),
+            # with the same echo/printf prose-segment filter.
+            scan_text = "\n".join(
+                _prime_strip_prose_segments(_prime_ci_exec_lines(base, txt))
+            )
+        else:
+            # Pre-commit configs: strip comment lines first - a scanner named
+            # only in a `# TODO: add gitleaks later` comment is not an
+            # enforced hook and must not land in tools_found.
+            scan_text = "\n".join(
+                ln for ln in txt.splitlines() if not ln.lstrip().startswith("#")
+            )
+        found = {m.group(1).lower() for m in tool_re.finditer(scan_text)}
+        if found:
+            tools |= found
+            locations.append(rel)
+    configs.sort(key=lambda e: (e["tool"], e["path"]))
+    return (
+        {
+            "tools_found": sorted(tools),
+            "locations": sorted(set(locations)),
+            "configs_found": configs,
+        },
+        c,
+    )
+
+
+def _prime_collect_api_contract(
+    deduped: "list[str]", framework_markers: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH6: API-contract file globs; http_framework flag from shape markers."""
+    # One op per tracked file; bound is the upstream ls-files cap, not 100.
+    c = _PrimeCollector("substance-api-contract", budget=_PRIME_MAX_TRACKED_FILES + 200)
+    contract_re = re.compile(
+        r"(?i)(^|/)(openapi|swagger)\.(ya?ml|json)$|\.(graphql|gql|proto)$|(^|/)schema\.graphql$"
+    )
+    contracts: list[str] = []
+    for rel in deduped:
+        c.op()
+        if contract_re.search(rel):
+            contracts.append(rel)
+        if len(contracts) >= 100:
+            c.note_truncated()
+            break
+    http_fw = {"next", "react", "vue", "svelte", "@angular/core", "express", "fastify", "nestjs"}
+    http_framework = any(fw in http_fw for fw in framework_markers) or any(
+        m in ("next.config", "django", "rails", "vite") for m in framework_markers
+    )
+    return (
+        {"contract_files": contracts, "http_framework_present": http_framework},
+        c,
+    )
+
+
+def _prime_collect_config_presence(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH7 / FH11 / FH12 / FH13: config-presence rows (raw booleans + evidence)."""
+    c = _PrimeCollector("substance-config-presence", budget=120)
+    tracked = set(deduped)
+    basenames = {p.rsplit("/", 1)[-1] for p in deduped}
+
+    def _grep_any(files: "list[str]", pat: "re.Pattern") -> "Optional[str]":
+        for rel in files:
+            c.op()
+            txt = _prime_read_tracked(root, rel, c, cap=200_000)
+            if txt and pat.search(txt):
+                return rel
+        return None
+
+    manifests = [p for p in deduped if p.rsplit("/", 1)[-1] in (
+        "package.json", "pyproject.toml", "setup.cfg", "tox.ini", "pytest.ini",
+        "jest.config.js", "jest.config.ts", "vitest.config.ts", "playwright.config.ts",
+        "playwright.config.js", ".importlinter",
+    )]
+
+    # FH7 module-boundary.
+    mb_files = {".dependency-cruiser.js", ".dependency-cruiser.cjs", ".importlinter"}
+    module_boundary = sorted(basenames & mb_files)
+    if not module_boundary:
+        hit = _grep_any(
+            manifests,
+            re.compile(r"(?i)(eslint-plugin-boundaries|import-linter|\[tool\.importlinter\]|dependency-cruiser|@nx/enforce-module-boundaries|archunit)"),
+        )
+        if hit:
+            module_boundary = [hit]
+
+    # FH11 test-isolation / parallel safety.
+    ti_hit = _grep_any(
+        manifests,
+        re.compile(r"(?i)(pytest-xdist|-n\s+auto|maxWorkers|--parallel|test\.concurrent|\bworkers\s*:)"),
+    )
+
+    # FH12 flaky-test signals (retry config).
+    flaky_hit = _grep_any(
+        manifests,
+        re.compile(r"(?i)(pytest-rerunfailures|--reruns\b|retryTimes|\bretries\s*:|flaky)"),
+    )
+
+    # FH13 LLM-eval harness (deps-gated).
+    llm_sdks: set[str] = set()
+    pkg = root / "package.json"
+    if pkg.exists():
+        c.op()
+        txt = _prime_read_text(pkg)
+        if txt:
+            try:
+                data = json.loads(txt)
+                deps = {}
+                deps.update(data.get("dependencies", {}) or {})
+                deps.update(data.get("devDependencies", {}) or {})
+                for sdk in ("openai", "@anthropic-ai/sdk", "langchain", "@langchain/core", "cohere-ai", "llamaindex", "ai"):
+                    if sdk in deps:
+                        llm_sdks.add(sdk)
+            except (ValueError, TypeError, AttributeError):
+                pass
+    for cfg in ("pyproject.toml", "requirements.txt"):
+        if cfg in basenames:
+            c.op()
+            txt = _prime_read_text(root / cfg, cap=200_000)
+            if txt:
+                for sdk in ("openai", "anthropic", "langchain", "llama-index", "llama_index", "cohere", "litellm"):
+                    if re.search(r"(?im)^\s*['\"]?" + re.escape(sdk) + r"\b", txt) or sdk in txt:
+                        llm_sdks.add(sdk)
+    eval_harness: list[str] = []
+    if llm_sdks:
+        if any(_prime_posix_segments(p)[:1] == ["evals"] for p in deduped):
+            eval_harness.append("evals/")
+        if basenames & {"promptfooconfig.yaml", "promptfoo.yaml", "braintrust.config.ts"}:
+            eval_harness.append("promptfoo/braintrust config")
+
+    return (
+        {
+            "module_boundary": module_boundary,
+            "test_isolation": ti_hit,
+            "flaky_signals": flaky_hit,
+            "llm_sdk_present": bool(llm_sdks),
+            "llm_sdks": sorted(llm_sdks),
+            "eval_harness": eval_harness,
+        },
+        c,
+    )
+
+
+def _prime_ini_section(txt: str, headers: "tuple[str, ...]") -> str:
+    """Return the concatenated body of the given INI/TOML section header(s).
+
+    Header match is whitespace-normalized (`[ tool.mypy ]` -> `[tool.mypy]`), so
+    a scoped probe never leaks across into an unrelated section. Everything
+    after the next `[...]` header ends the section.
+    """
+    want = {h.replace(" ", "") for h in headers}
+    body: list[str] = []
+    in_section = False
+    for line in txt.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_section = stripped.replace(" ", "") in want
+            continue
+        if in_section:
+            body.append(line)
+    return "\n".join(body)
+
+
+def _prime_collect_type_strictness(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """SV3: strict-flag config + a bounded `: any` ratio probe on TS sources."""
+    c = _PrimeCollector("substance-type-strictness", budget=400)
+    ts_flags: dict[str, bool] = {}
+    # ALL tracked tsconfig*.json (bounded), not root-only: in workspace
+    # layouts the app package owns its tsconfig and SV3 must see its flags.
+    # A flag reported true by ANY tsconfig stays true (strict-anywhere
+    # beats a root shell config with no flags).
+    ts_paths = [
+        p for p in deduped
+        if re.fullmatch(r"tsconfig[^/]*\.json", p.rsplit("/", 1)[-1])
+    ][:30]
+    if len([
+        p for p in deduped
+        if re.fullmatch(r"tsconfig[^/]*\.json", p.rsplit("/", 1)[-1])
+    ]) > 30:
+        c.note_sampled()
+    for rel in ts_paths:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if not txt:
+            continue
+        # tsconfig is JSONC: strip `//` line comments and `/* */` blocks so a
+        # commented template option (`// "strict": true`) never outranks the
+        # real setting below it.
+        txt = re.sub(r"/\*.*?\*/", "", txt, flags=re.S)
+        txt = "\n".join(
+            ln for ln in txt.splitlines() if not ln.lstrip().startswith("//")
+        )
+        for flag in ("strict", "noImplicitAny", "strictNullChecks"):
+            m = re.search(r'"' + flag + r'"\s*:\s*(true|false)', txt)
+            if m:
+                val = m.group(1) == "true"
+                ts_flags[flag] = ts_flags.get(flag, False) or val
+    mypy_strict = False
+    pyright_strict = False
+    for cfg in ("mypy.ini", "setup.cfg", "pyproject.toml", "pyrightconfig.json"):
+        if (root / cfg).exists():
+            c.op()
+            # Cap-detecting read: a strictness flag past the cap must mark the
+            # collector truncated, never silently report as missing.
+            txt = _prime_read_tracked(root, cfg, c, cap=200_000)
+            if not txt:
+                continue
+            # Scope `strict = true` to the [mypy] / [tool.mypy] section only -
+            # an unrelated `strict = true` elsewhere in the file must NOT set it.
+            mypy_section = _prime_ini_section(txt, ("[mypy]", "[tool.mypy]"))
+            if mypy_section and re.search(r"(?im)^\s*strict\s*=\s*true", mypy_section):
+                mypy_strict = True
+            if re.search(r'"typeCheckingMode"\s*:\s*"strict"', txt) or re.search(r"(?im)typeCheckingMode\s*=\s*[\"']?strict", txt):
+                pyright_strict = True
+    # Bounded `: any` ratio probe on TS sources (sample).
+    ts_files = [p for p in deduped if p.endswith((".ts", ".tsx", ".mts", ".cts"))]
+    any_hits = 0
+    lines_sampled = 0
+    sampled_files = 0
+    any_re = re.compile(r":\s*any\b|<any>|as\s+any\b")
+    for idx, rel in enumerate(ts_files):
+        if idx >= 300:
+            c.note_sampled()
+            break
+        c.op()
+        txt = _prime_read_tracked(root, rel, c)
+        if not txt:
+            continue
+        sampled_files += 1
+        lines_sampled += txt.count("\n") + 1
+        any_hits += len(any_re.findall(txt))
+    return (
+        {
+            "ts_strict_flags": ts_flags,
+            "mypy_strict": mypy_strict,
+            "pyright_strict": pyright_strict,
+            "any_hits": any_hits,
+            "ts_files_sampled": sampled_files,
+            "ts_lines_sampled": lines_sampled,
+        },
+        c,
+    )
+
+
+def _prime_collect_coverage_threshold(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """TS5: an ENFORCED coverage threshold quoted from config (raw presence)."""
+    c = _PrimeCollector("substance-coverage-threshold", budget=60)
+    basenames = {p.rsplit("/", 1)[-1] for p in deduped}
+    candidates = [
+        p for p in deduped if p.rsplit("/", 1)[-1] in (
+            "pyproject.toml", "setup.cfg", ".coveragerc", "tox.ini", "pytest.ini",
+            "jest.config.js", "jest.config.ts", "vitest.config.ts", "package.json",
+            "nyc.config.js", ".nycrc", ".nycrc.json",
+        )
+    ]
+    # The numeric-key arm accepts quoted AND bare JS object keys - Jest/Vitest
+    # configs commonly write `lines: 0` without quotes.
+    thr_re = re.compile(r"(?i)(fail_under\s*=\s*(\d+)|--cov-fail-under[=\s]+(\d+)|coverageThreshold|[\"']?(?:branches|lines|functions|statements)[\"']?\s*:\s*(\d+))")
+    found_in: list[str] = []
+    zero_only = None
+    for rel in candidates[:60]:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if not txt:
+            continue
+        # A threshold left only in a comment (`# fail_under = 80`,
+        # `// coverageThreshold: ...`, or a `/* ... */` block) does not run -
+        # strip block comments THEN comment lines so TS5 never reports a
+        # disabled example as an enforced threshold.
+        txt = re.sub(r"/\*.*?\*/", "", txt, flags=re.S)
+        # An unterminated `/*` comments out the rest of the file.
+        txt = re.sub(r"/\*.*$", "", txt, flags=re.S)
+        txt = "\n".join(
+            ln for ln in txt.splitlines()
+            if not re.match(r"\s*(?:#|//|;|\*|/\*)", ln)
+        )
+        # Walk ALL matches in the file - the common Jest/Vitest form puts the
+        # keyword-only `coverageThreshold` BEFORE the numeric lines/branches
+        # values, and stopping at the first match would hide an all-zero
+        # (stub) threshold.
+        matched = False
+        for m in thr_re.finditer(txt):
+            matched = True
+            val = next((g for g in (m.group(2), m.group(3), m.group(4)) if g), None)
+            if val is not None:
+                zero_only = (int(val) == 0) if zero_only in (None, True) else False
+        if matched:
+            found_in.append(rel)
+    # A keyword-only match (e.g. `coverageThreshold` with no parsed number) means
+    # a threshold is configured but not zero-only - report False, never null.
+    if found_in and zero_only is None:
+        zero_only = False
+    return (
+        {"threshold_found": bool(found_in), "locations": found_in, "zero_threshold": zero_only},
+        c,
+    )
+
+
+def _prime_collect_setup_stages(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """DE4: setup script chains real stages (static content grep, never run)."""
+    c = _PrimeCollector("substance-setup-stages", budget=60)
+    scripts: list[tuple[str, str]] = []
+    for rel in deduped:
+        base = rel.rsplit("/", 1)[-1]
+        if base in ("setup.sh", "bootstrap.sh", "install.sh", "Makefile", "makefile") or (
+            _prime_posix_segments(rel)[:1] == ["scripts"] and base.startswith("setup")
+        ):
+            c.op()
+            txt = _prime_read_tracked(root, rel, c, cap=200_000)
+            if txt:
+                scripts.append((rel, txt))
+    pkg = root / "package.json"
+    if pkg.exists():
+        c.op()
+        txt = _prime_read_text(pkg)
+        if txt:
+            try:
+                sc = json.loads(txt).get("scripts", {}) or {}
+                blob = "\n".join(str(v) for v in sc.values())
+                if blob:
+                    scripts.append(("package.json[scripts]", blob))
+            except (ValueError, TypeError, AttributeError):
+                pass
+    install_re = re.compile(r"(?i)\b(install|npm ci|pnpm i|yarn|pip install|poetry install|uv sync|go mod download|bundle install)\b")
+    migrate_re = re.compile(r"(?i)\b(migrate|migration|seed|db:push|db:create|prisma migrate|alembic|rake db)\b")
+    has_install = any(install_re.search(t) for _p, t in scripts)
+    has_migrate_seed = any(migrate_re.search(t) for _p, t in scripts)
+    return (
+        {
+            "setup_scripts": [p for p, _t in scripts],
+            "has_install": has_install,
+            "has_migrate_seed": has_migrate_seed,
+        },
+        c,
+    )
+
+
+def _prime_collect_devcontainer(
+    root: Path
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """DE5: devcontainer non-empty (features / postCreateCommand present)."""
+    c = _PrimeCollector("substance-devcontainer", budget=10)
+    present = False
+    has_features = False
+    has_post_create = False
+    for rel in (".devcontainer/devcontainer.json", ".devcontainer.json"):
+        p = root / rel
+        if p.exists():
+            present = True
+            c.op()
+            txt = _prime_read_text(p)
+            if txt:
+                if re.search(r'"features"\s*:\s*\{[^}]*[^\s{}]', txt):
+                    has_features = True
+                if re.search(r'"postCreateCommand"\s*:\s*"[^"]+', txt) or re.search(r'"postCreateCommand"\s*:\s*\[', txt):
+                    has_post_create = True
+            break
+    return (
+        {"present": present, "has_features": has_features, "has_post_create": has_post_create},
+        c,
+    )
+
+
+def _prime_collect_large_files(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH2: p50 / max file LOC + top-N offenders (bounded reads over source)."""
+    c = _PrimeCollector("substance-large-files", budget=_PRIME_MAX_LOC_FILES + 50)
+    sources = _prime_iter_source(deduped)
+    counts: list[tuple[str, int]] = []
+    for idx, rel in enumerate(sources):
+        if idx >= _PRIME_MAX_LOC_FILES:
+            c.note_sampled()
+            break
+        c.op()
+        n = _prime_count_lines(root, rel, c)
+        if n is not None:
+            counts.append((rel, n))
+    p50 = 0
+    mx = 0
+    top: list[dict[str, Any]] = []
+    if counts:
+        nums = sorted(n for _p, n in counts)
+        p50 = nums[len(nums) // 2]
+        mx = nums[-1]
+        top = [
+            {"path": p, "lines": n}
+            for p, n in sorted(counts, key=lambda t: t[1], reverse=True)[:10]
+        ]
+    return ({"p50_lines": p50, "max_lines": mx, "top_offenders": top, "files_measured": len(counts)}, c)
+
+
+def _prime_collect_runtime_currency(
+    root: Path
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH10: declared runtime major versions from manifests (report-only, raw)."""
+    c = _PrimeCollector("substance-runtime-currency", budget=20)
+    runtimes: list[dict[str, str]] = []
+    pkg = root / "package.json"
+    if pkg.exists():
+        c.op()
+        txt = _prime_read_text(pkg)
+        if txt:
+            m = re.search(r'"node"\s*:\s*"([^"]+)"', txt)
+            if m:
+                runtimes.append({"lang": "node", "version": m.group(1)})
+    pyproject = root / "pyproject.toml"
+    if pyproject.exists():
+        c.op()
+        txt = _prime_read_text(pyproject, cap=200_000)
+        if txt:
+            m = re.search(r'requires-python\s*=\s*"([^"]+)"', txt)
+            if m:
+                runtimes.append({"lang": "python", "version": m.group(1)})
+    gomod = root / "go.mod"
+    if gomod.exists():
+        c.op()
+        txt = _prime_read_text(gomod, cap=200_000)
+        if txt:
+            m = re.search(r"(?m)^go\s+(\d+\.\d+)", txt)
+            if m:
+                runtimes.append({"lang": "go", "version": m.group(1)})
+    cargo = root / "Cargo.toml"
+    if cargo.exists():
+        c.op()
+        txt = _prime_read_text(cargo, cap=200_000)
+        if txt:
+            m = re.search(r'edition\s*=\s*"(\d+)"', txt)
+            if m:
+                runtimes.append({"lang": "rust", "version": "edition " + m.group(1)})
+    return ({"runtimes": runtimes}, c)
+
+
+def _prime_collect_hooks(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """HP7: hook content-class raw signals — key/keyword TOKENS ONLY (redaction).
+
+    The COMMAND STRING is NEVER emitted; only per-source boolean content
+    classes + the matched keyword token. Hooks are READ, never executed (a
+    committed hook config is an RCE vector, CVE-2025-59536 class).
+    """
+    c = _PrimeCollector("substance-hooks", budget=60)
+    sources: list[tuple[str, str]] = []
+    # Harness hook config (Claude settings) — extract the hooks section only.
+    for rel in (".claude/settings.json", ".claude/settings.local.json"):
+        p = root / rel
+        if p.exists():
+            c.op()
+            txt = _prime_read_text(p)
+            if txt:
+                try:
+                    hooks = json.loads(txt).get("hooks")
+                    sources.append((rel, json.dumps(hooks) if hooks else ""))
+                except (ValueError, TypeError, AttributeError):
+                    sources.append((rel, txt))
+    # git/husky/pre-commit hook files.
+    hook_files = [
+        p for p in deduped
+        if _prime_posix_segments(p)[:1] == [".husky"]
+        or p.rsplit("/", 1)[-1] in (".pre-commit-config.yaml", ".pre-commit-config.yml")
+    ]
+    for rel in hook_files[:30]:
+        c.op()
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if txt is not None:
+            sources.append((rel, txt))
+    results: list[dict[str, Any]] = []
+    for rel, text in sources:
+        # Pre-commit config METADATA is not hook execution: `repo:`/`rev:`
+        # lines legitimately carry remote URLs (repo: https://github.com/...)
+        # and must not trip the network_call class into a false P0 - only the
+        # executable hook surface (entry/args/additional_dependencies) counts.
+        if rel.rsplit("/", 1)[-1].startswith(".pre-commit-config"):
+            text = "\n".join(
+                ln for ln in text.splitlines()
+                if not re.match(r"^\s*-?\s*(?:repo|rev)\s*:", ln)
+            )
+        classes: dict[str, bool] = {}
+        tokens: set[str] = set()
+        for label, pat in _PRIME_HOOK_CLASSES:
+            m = pat.search(text)
+            classes[label] = bool(m)
+            if m:
+                # Redaction boundary: only a whitelisted KEYWORD group is ever
+                # emitted; a group-less match (URL scheme, obfuscation shape)
+                # emits the class label - never raw matched content from a
+                # (possibly local, untracked) hook config.
+                kw = m.group(1) if m.groups() and m.group(1) else None
+                tokens.add(kw[:24] if kw else label)
+        stripped = re.sub(r"\s+", "", text)
+        is_stub = (not stripped) or bool(re.fullmatch(r"(?:echo[^\n]*)+", text.strip()))
+        results.append(
+            {
+                "source": rel,
+                "content_classes": classes,
+                "matched_tokens": sorted(tokens),
+                "stub": is_stub,
+            }
+        )
+    return ({"hooks": results, "hook_source_count": len(results)}, c)
+
+
+def _prime_collect_substance(
+    root: Path,
+    deduped: "list[str]",
+    framework_markers: "list[str]",
+    pre_dedup: "Optional[list[str]]" = None,
+    destructive: "Optional[tuple[dict[str, Any], _PrimeCollector]]" = None,
+) -> "tuple[dict[str, Any], list[_PrimeCollector]]":
+    """Assemble every emitter-owned substance-grep row (raw signals only)."""
+    env, env_c = _prime_collect_env_crossref(root, deduped)
+    # Reuse the destructive pre-pass from _prime_classify when provided (it
+    # runs before sizing to feed regenerated-dir exclusions).
+    if destructive is not None:
+        destructive, destr_c = destructive
+    else:
+        destructive, destr_c = _prime_collect_destructive(root, deduped)
+    encoding, enc_c = _prime_collect_encoding(root, deduped)
+    atomic, atomic_c = _prime_collect_atomic_pairs(deduped, pre_dedup)
+    tool_managed, tm_c = _prime_collect_tool_managed(deduped, destructive)
+    docs_fresh, docs_c = _prime_collect_docs_freshness(root, deduped)
+    ci_gate, ci_c = _prime_collect_ci_gate(root, deduped)
+    secrets, sec_c = _prime_collect_secrets_gate(root, deduped)
+    api, api_c = _prime_collect_api_contract(deduped, framework_markers)
+    config, cfg_c = _prime_collect_config_presence(root, deduped)
+    strictness, strict_c = _prime_collect_type_strictness(root, deduped)
+    coverage, cov_c = _prime_collect_coverage_threshold(root, deduped)
+    setup, setup_c = _prime_collect_setup_stages(root, deduped)
+    devc, devc_c = _prime_collect_devcontainer(root)
+    large, large_c = _prime_collect_large_files(root, deduped)
+    runtime, rt_c = _prime_collect_runtime_currency(root)
+    hooks, hooks_c = _prime_collect_hooks(root, deduped)
+
+    substance = {
+        "type_strictness": strictness,       # SV3
+        "coverage_threshold": coverage,      # TS5
+        "env_crossref": env,                 # DE1
+        "setup_stages": setup,               # DE4
+        "devcontainer": devc,                # DE5
+        "docs_freshness": docs_fresh,        # FH1
+        "large_files": large,                # FH2
+        "ci_gate": ci_gate,                  # FH3
+        "secrets_gate": secrets,             # FH4
+        "destructive_scan": destructive,     # FH5
+        "api_contract": api,                 # FH6
+        "config_presence": config,           # FH7 / FH11 / FH12 / FH13
+        "runtime_currency": runtime,         # FH10
+        "encoding_sample": encoding,         # LEG5
+        "atomic_pairs": atomic,              # LEG6
+        "tool_managed": tool_managed,        # LEG7
+        "hooks": hooks,                      # HP7
+    }
+    collectors = [
+        strict_c, cov_c, env_c, setup_c, devc_c, docs_c, large_c, ci_c, sec_c,
+        destr_c, api_c, cfg_c, rt_c, enc_c, atomic_c, tm_c, hooks_c,
+    ]
+    return (substance, collectors)
+
+
+def _prime_classify(root: Path) -> "dict[str, Any]":
+    """Assemble the full pinned classification payload for ``root``."""
+    top = _prime_git_toplevel(root)
+
+    scope, scope_c = _prime_collect_scope(root, top)
+
+    # Workspace-member scope: classify against the ROOT (classification.md) -
+    # the inventory and every topology/substance collector run from the git
+    # toplevel so root workspace config, CI, and sibling manifests stay
+    # visible; the member subpath is recorded in `assessment_scope.member_path`.
+    collect_root = top if (top is not None and scope["value"] == "workspace-member") else root
+
+    # Tracked-file inventory (single ls-files -s parse feeds size + topology + stacks).
+    ls_collector = _PrimeCollector("inventory", budget=2)
+    staged, ls_truncated = _prime_parse_ls_files_staged(collect_root, ls_collector)
+    tracked_paths = [p for _sha, p in staged]
+
+    lifecycle, life_c = _prime_collect_lifecycle(
+        collect_root, tracked_count=len(staged), ls_truncated=ls_truncated
+    )
+    topology, mono_c, con_c = _prime_collect_topology(collect_root, top, tracked_paths)
+    # Post-exclusion PRE-dedup list: feeds the destructive pre-pass (below) and
+    # the atomic-pair scan, where byte-identical dual copies collapse under the
+    # blob dedup and must stay visible.
+    pre_dedup = [p for _sha, p in staged if _prime_exclusion_category(p) is None]
+    # Destructive pre-pass BEFORE sizing: self-managed wipe targets are
+    # regenerated-dir candidates, and the classification contract lists
+    # `regenerated` as a size exclusion - bulky checked-in generated mirrors
+    # must not push the repo into the wrong size playbook.
+    destructive, destr_c = _prime_collect_destructive(collect_root, pre_dedup)
+    # NOTE: prefix-strip `./` properly (lstrip is a char-class strip and would
+    # mangle `../x`); self-managed context already excludes `..` traversal.
+    regenerated_dirs = set()
+    for h in destructive.get("hits", []):
+        # Only actual WIPE patterns mark a dir regenerated - a generic
+        # `--force` flag (`tool --force src`) is not a delete and must never
+        # exclude real source from sizing.
+        if h.get("pattern") not in ("recursive-delete", "git-clean"):
+            continue
+        if h.get("context_class") != "self-managed" or not h.get("target"):
+            continue
+        t = h["target"].rstrip("/")
+        while t.startswith("./"):
+            t = t[2:]
+        if t and not t.startswith(".."):
+            regenerated_dirs.add(t)
+    size, size_c, deduped, loc_by_stack = _prime_collect_size(
+        collect_root, staged, ls_truncated, regenerated_dirs
+    )
+    stacks, stacks_c = _prime_collect_stacks(collect_root, deduped, loc_by_stack)
+    shape_markers, shape_c = _prime_collect_shape_markers(collect_root, deduped)
+    substance, substance_collectors = _prime_collect_substance(
+        collect_root, deduped, shape_markers["framework_markers"], pre_dedup,
+        destructive=(destructive, destr_c),
+    )
+
+    payload: dict[str, Any] = {
+        "schema_version": PRIME_SCHEMA_VERSION,
+        "assessment_scope": scope,
+        "axes": {
+            "lifecycle": lifecycle,
+            "topology": topology,
+            "size": size,
+            "stacks": stacks,
+        },
+        "shape_markers": shape_markers,
+        "substance": substance,
+        "collectors": [
+            scope_c.to_dict(),
+            ls_collector.to_dict(),
+            life_c.to_dict(),
+            mono_c.to_dict(),
+            con_c.to_dict(),
+            size_c.to_dict(),
+            stacks_c.to_dict(),
+            shape_c.to_dict(),
+            *(sc.to_dict() for sc in substance_collectors),
+        ],
+    }
+    return payload
+
+
+def cmd_prime_classify(args: argparse.Namespace) -> None:
+    """`flowctl prime classify [ROOT] --json` — deterministic Phase-0.5 emitter.
+
+    JSON on stdout (the pinned schema), diagnostics on stderr. JSON mode always
+    exits 0 with structured per-collector errors — the skill's judgment layer
+    reads the completeness diagnostics rather than an exit code.
+    """
+    use_json = bool(getattr(args, "json", False))
+    root_arg = getattr(args, "root", None) or "."
+    root = Path(root_arg)
+    if not root.exists() or not root.is_dir():
+        if use_json:
+            # Align the bad-root branch with the classify-exception branch: exit 0
+            # with the schema_version/error/collectors shape so the skill's
+            # judgment layer reads a consistent envelope, not a divergent exit-1.
+            print(
+                json.dumps(
+                    {
+                        "schema_version": PRIME_SCHEMA_VERSION,
+                        "error": f"root path not found or not a directory: {root_arg}",
+                        "collectors": [],
+                    },
+                    indent=2,
+                    default=str,
+                )
+            )
+            return
+        error_exit(f"root path not found or not a directory: {root_arg}", use_json=False)
+        return
+
+    try:
+        payload = _prime_classify(root)
+    except Exception as exc:  # defensive: the emitter never crashes the caller
+        if use_json:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": PRIME_SCHEMA_VERSION,
+                        "error": f"classify failed: {exc}",
+                        "collectors": [],
+                    },
+                    indent=2,
+                    default=str,
+                )
+            )
+            return
+        error_exit(f"classify failed: {exc}", use_json=False)
+        return
+
+    if use_json:
+        print(json.dumps(payload, indent=2, default=str))
+        return
+
+    # Plain summary (the full `--classify-only` block is skill-side judgment).
+    sc = payload["assessment_scope"]
+    life = payload["axes"]["lifecycle"]
+    topo = payload["axes"]["topology"]
+    size = payload["axes"]["size"]
+    member = f" member={sc['member_path']}" if sc.get("member_path") else ""
+    print(f"assessment_scope: {sc['value']} ({sc['confidence']}){member}")
+    print(f"lifecycle:        {life['value']} ({life['confidence']})")
+    print(
+        "topology:         "
+        f"monorepo={topo['monorepo']['value']} ({topo['monorepo']['confidence']}) | "
+        f"constellation-member=tier-{topo['constellation_member']['tier']} "
+        f"({topo['constellation_member']['confidence']})"
+    )
+    print(
+        f"size:             {size['band']} ~{size['loc']} LOC / {size['files']} files via {size['tool']}"
+    )
+    stack_names = ", ".join(
+        f"{s['name']} ({s['loc_share']})" for s in payload["axes"]["stacks"]
+    ) or "(none detected)"
+    print(f"stacks:           {stack_names}")
+
+
 def main() -> None:
     _reconfigure_stdio_utf8()
     parser = argparse.ArgumentParser(
@@ -28149,6 +31253,39 @@ def main() -> None:
         "--json", action="store_true", help="JSON output"
     )
     p_repo_map_since_ref.set_defaults(func=cmd_repo_map_since_ref)
+
+    # prime classify (fn-92.4) — deterministic Phase-0.5 classification emitter.
+    # Bounded, pure-stdlib, no LLM/judgment. Schema pinned in
+    # skills/flow-next-prime/classification.md; the skill layers Axis-5 shape
+    # values + final confidence + Phase-0.6 asks on top. Bypasses .flow/ guard
+    # (classifies arbitrary ROOTs, incl. non-flow repos and constellation home
+    # bases).
+    p_prime = subparsers.add_parser(
+        "prime",
+        help=(
+            "Prime deterministic helpers (classify). Bounded, pure-stdlib, no "
+            "LLM — the skill layers judgment on the emitted signals."
+        ),
+    )
+    prime_sub = p_prime.add_subparsers(dest="prime_cmd", required=True)
+
+    p_prime_classify = prime_sub.add_parser(
+        "classify",
+        help=(
+            "Emit axes 1-4 raw signals + Axis-5 shape markers + assessment_scope "
+            "with the per-collector completeness-diagnostics envelope."
+        ),
+    )
+    p_prime_classify.add_argument(
+        "root",
+        nargs="?",
+        default=".",
+        help="Directory to classify (default: current directory)",
+    )
+    p_prime_classify.add_argument(
+        "--json", action="store_true", help="JSON output (the pinned schema)"
+    )
+    p_prime_classify.set_defaults(func=cmd_prime_classify)
 
     # glossary add / list / read / remove (fn-38.2)
     p_glossary = subparsers.add_parser(

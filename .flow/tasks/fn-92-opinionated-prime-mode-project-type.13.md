@@ -20,9 +20,8 @@ Emitter substance collectors + redaction + performance accounting + fixture fami
 - [ ] Six fixture families + expectation rows pass 3-OS
 
 ## Done summary
-TBD
-
+Extended the prime classify emitter with all emitter-owned substance collectors per the pillars.md ownership matrix: hook content-class inputs, env cross-ref counts, destructive-scan raw hits with context class, LEG5 encoding sampling, LEG6 atomic-pair candidates, LEG7 tool-managed/regenerated-dir candidates, docs-freshness timestamps, CI trigger + mutating-lint greps, secrets-gate presence, API-contract globs, module-boundary/test-isolation/flaky/LLM-eval config presence - raw signals only, each in the completeness envelope with per-collector budgets. Key-name-only redaction with an asserting fixture. Resolution-21b performance accounting: op-count CI assertions, generated high-file-count benchmark fixture, documented local wall-time vs the <10s target, timeout/progress failure assertions. Six temp-git fixture families with per-row expectation data (raw signals/markers/exclusions/diagnostics only). Dual-copy byte-identical, parity green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f5797818408ee9f00b60438663ef3c242e362611
+- Tests: python3 -m unittest discover plugins/flow-next/tests (OK, exit 0; 65 tests in test_prime_eval.py), dual-copy parity byte-identical (cmp)
 - PRs:
