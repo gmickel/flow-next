@@ -9,7 +9,7 @@ byte-identical dual-copy invariant, and a live-subcommand smoke.
 
 Substance (fn-92.13): the emitter-owned substance-grep collectors of the
 pillars.md criterion-to-score map (SV3/TS5/DE1/DE4/DE5/FH1-FH7/FH10-FH13/HP7 +
-LEG5/LEG6/LEG7) — raw signals only, no judgment; the key-name-only REDACTION
+LEG5/LEG6/LEG7) - raw signals only, no judgment; the key-name-only REDACTION
 contract; op-count-based performance accounting (never wall-time) with a
 generated high-file-count benchmark fixture + a documented local wall-time note;
 the six fixture families (workspace-parent, tier-a siblings, tier-b home base,
@@ -155,7 +155,7 @@ class SchemaShapeTestCase(unittest.TestCase):
             set(markers.keys()),
             {"bin_exports", "framework_markers", "serve_health_code", "desktop_markers", "prose_ratio"},
         )
-        # Axis 5 shape VALUES are never resolved by the emitter — only markers.
+        # Axis 5 shape VALUES are never resolved by the emitter - only markers.
         self.assertNotIn("shape", self.flowctl._prime_classify(self.repo)["axes"])
 
     def test_every_collector_carries_full_envelope(self) -> None:
@@ -222,7 +222,7 @@ class ConfidenceCeilingTestCase(unittest.TestCase):
 
     def test_budget_scaffolding_present(self) -> None:
         # Per-collector budgets are wired (a real cap, not None) on the bounded
-        # collectors — regression guard for the budget-scaffolding acceptance.
+        # collectors - regression guard for the budget-scaffolding acceptance.
         self.assertIsInstance(self.flowctl._PRIME_MAX_TRACKED_FILES, int)
         self.assertIsInstance(self.flowctl._PRIME_MAX_LOC_FILES, int)
 
@@ -294,7 +294,7 @@ class ExclusionTestCase(unittest.TestCase):
 
     def test_own_tooling_never_pollutes_classification(self) -> None:
         # A repo whose ONLY tracked file lives under .flow/ must not report that
-        # as its stack / LOC — prime polluting its own classification is the
+        # as its stack / LOC - prime polluting its own classification is the
         # most embarrassing failure (classification.md Axis 3).
         tmp = Path(tempfile.mkdtemp()).resolve()
         try:
@@ -386,7 +386,7 @@ class TopologyTestCase(unittest.TestCase):
 
     def test_worktree_sibling_excluded_from_constellation(self) -> None:
         # A sibling whose `.git` is a FILE (gitdir: pointer) resolves to the
-        # SAME repo — a worktree, not a constellation sibling (R19 edge case).
+        # SAME repo - a worktree, not a constellation sibling (R19 edge case).
         tmp = Path(tempfile.mkdtemp()).resolve()
         try:
             parent = tmp / "workspace"
@@ -407,7 +407,7 @@ class TopologyTestCase(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_workspace_parent_dampener(self) -> None:
-        # A parent holding many git dirs is a developer WORKSPACE — shared-org
+        # A parent holding many git dirs is a developer WORKSPACE - shared-org
         # is meaningless there and must not auto-confirm a constellation.
         tmp = Path(tempfile.mkdtemp()).resolve()
         try:
@@ -573,7 +573,7 @@ class DualCopyInvariantTestCase(unittest.TestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Substance collectors (fn-92.13) — raw signals only, no judgment.
+# Substance collectors (fn-92.13) - raw signals only, no judgment.
 # ══════════════════════════════════════════════════════════════════════════════
 
 _SUBSTANCE_KEYS = {
@@ -669,7 +669,7 @@ class SubstanceDestructiveTestCase(_SubstanceBase):
         d = self._classify()["substance"]["destructive_scan"]
         classes = {(h["pattern"], h["context_class"]) for h in d["hits"]}
         got = {c for _p, c in classes}
-        # Raw context vocabulary only — the skill maps these to severities.
+        # Raw context vocabulary only - the skill maps these to severities.
         self.assertTrue(got <= {"comment", "doc-snippet", "string-literal", "self-managed", "bounded", "unbounded"})
         self.assertIn("comment", got)
         self.assertIn("self-managed", got)
@@ -687,7 +687,7 @@ class SubstanceDestructiveTestCase(_SubstanceBase):
 
 
 class SubstanceRedactionTestCase(_SubstanceBase):
-    """The hard redaction contract: KEY NAMES / matched TOKENS only — a secret
+    """The hard redaction contract: KEY NAMES / matched TOKENS only - a secret
     VALUE or a complete sensitive line must NEVER appear in the payload."""
 
     def test_hook_content_is_token_only_never_full_command(self) -> None:
@@ -883,7 +883,7 @@ class SubstanceLegacyRowsTestCase(_SubstanceBase):
 
 class PerformanceAccountingTestCase(_SubstanceBase):
     def test_op_counts_stay_within_budget(self) -> None:
-        # Every collector's operations must respect its declared budget — this
+        # Every collector's operations must respect its declared budget - this
         # is host-INDEPENDENT (op counts), unlike wall-time. cap_hit ⇒ the
         # budget was exceeded and the envelope MUST flag it.
         for i in range(40):
@@ -952,7 +952,7 @@ class PerformanceAccountingTestCase(_SubstanceBase):
 class FixtureFamiliesTestCase(unittest.TestCase):
     """Six fixture families built with temp git-init in tmpdirs (NEVER an
     in-tree `.git`). The oracle asserts RAW signals / markers / exclusions /
-    diagnostics ONLY — never a final delivery shape or a judgment verdict (that
+    diagnostics ONLY - never a final delivery shape or a judgment verdict (that
     is skill-side)."""
 
     @classmethod
@@ -1028,7 +1028,7 @@ class FixtureFamiliesTestCase(unittest.TestCase):
 
     def test_expectation_oracle_over_raw_signals(self) -> None:
         # Per-row expectation table as DATA. Each row asserts only raw
-        # signals / markers / exclusions / diagnostics — never a final shape.
+        # signals / markers / exclusions / diagnostics - never a final shape.
         rows = [
             (
                 "workspace-parent",
@@ -1094,7 +1094,7 @@ class FixtureFamiliesTestCase(unittest.TestCase):
 
 
 # The 48 SCORED legacy criteria + the 3 legacy INFORMATIONAL rows (DC7 frontend-
-# only, DC8 glossary, DE7 feature-map) — the full stable legacy denominator R13
+# only, DC8 glossary, DE7 feature-map) - the full stable legacy denominator R13
 # forbids diluting. `substance upgrades tighten pass conditions, never remove
 # checks`: every one of these IDs must still carry a table row in pillars.md.
 _LEGACY_CRITERION_IDS = (
@@ -1113,7 +1113,7 @@ _LEGACY_INFORMATIONAL = ("DC7", "DC8", "DE7")
 class ReportInputDerivabilityTestCase(unittest.TestCase):
     """R13 re-baselined (resolution 14): instead of a heavyweight full-prime run,
     a lightweight CI smoke that the INPUTS the Phase-3 verdict/scoring machinery
-    consumes are still derivable — (a) every legacy criterion ID is present in
+    consumes are still derivable - (a) every legacy criterion ID is present in
     pillars.md (the level denominator is never silently shrunk), (b) the
     hard-gate / verdict-headline machinery the skill references actually resolves
     in the doc, and (c) the emitter classify path is non-mutating (`git status
@@ -1180,7 +1180,7 @@ class PrimeProseContractTestCase(unittest.TestCase):
     """Prose contracts the host-inline scoring depends on, locked on the
     canonical file AND the Codex mirror (sync-codex.sh must not drop the frozen
     SV4 wording, the N/A whitelist, or the stacks.md row schema). Prose-only
-    review is NOT acceptable coverage — the strings are pinned in CI."""
+    review is NOT acceptable coverage - the strings are pinned in CI."""
 
     def _pillars(self, base: Path) -> str:
         return (base / "pillars.md").read_text(encoding="utf-8")
@@ -1190,7 +1190,7 @@ class PrimeProseContractTestCase(unittest.TestCase):
 
     def _assert_sv4_contract(self, base: Path) -> None:
         text = self._pillars(base)
-        # The SV4 feedback-gate rewrite — the layer-agnostic contract.
+        # The SV4 feedback-gate rewrite - the layer-agnostic contract.
         self.assertIn("Deterministic feedback gate (layer-agnostic)", text, base)
         self.assertIn('Rewritten from "pre-commit hooks configured".', text, base)
         self.assertIn("headroom warn, never a pass-blocker", text, base)
@@ -1200,7 +1200,7 @@ class PrimeProseContractTestCase(unittest.TestCase):
 
     def _assert_na_whitelist(self, base: Path) -> None:
         text = self._pillars(base)
-        # The single N/A whitelist table — the ONLY source of N/A entries.
+        # The single N/A whitelist table - the ONLY source of N/A entries.
         self.assertIn("N/A Whitelist (single source", text, base)
         self.assertIn("| Criterion(s) | N/A condition |", text, base)
         # Representative rows must survive the mirror sync.
@@ -1209,7 +1209,7 @@ class PrimeProseContractTestCase(unittest.TestCase):
 
     def _assert_stacks_row_schema(self, base: Path) -> None:
         text = self._stacks(base)
-        # The stacks.md map header columns — the dispatch schema the skill reads.
+        # The stacks.md map header columns - the dispatch schema the skill reads.
         self.assertIn(
             "| Stack | Detect | Verify (non-interactive) | LSP for agents | Map tooling | Gotchas |",
             text,
