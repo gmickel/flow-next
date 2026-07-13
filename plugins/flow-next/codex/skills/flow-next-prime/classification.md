@@ -229,7 +229,9 @@ The deterministic layer of Phase 0.5 ships as a pure-stdlib flowctl emitter (bou
 Notes on the split:
 - The emitter emits axes 1-4 with deterministic values + a mechanical confidence, plus RAW `shape_markers` (Axis 5 is NOT resolved by the emitter - the skill reasons over the markers).
 - `collectors[]` carries the per-collector completeness diagnostics (resolution 21b). The judgment layer MUST downgrade confidence and use NOT ASSESSED when `complete` is false / `sampled` / `truncated` / `cap_hit` - partial data never yields high confidence.
-- The emitter ALSO carries the deterministic substance-grep outputs consumed by Phase 2/3 (its `emitter`-owned rows in the criterion-to-score map in [pillars.md](pillars.md)); this file pins only the classification portion of that payload.
+- The emitter ALSO carries the deterministic substance-grep outputs consumed by Phase 2/3 (its `emitter`-owned rows in the criterion-to-score map in [pillars.md](pillars.md)); this file pins only the classification portion of that payload. Two substance-payload contracts worth pinning here because the judgment layer depends on them:
+ - `substance.secrets_gate` splits ENFORCED invocations from config-only presence: `tools_found` + `locations` carry only scanner invocations found in enforcement surfaces (pre-commit config, package.json, CI files); scanner config/baseline files (`.gitleaks.toml`, `.secrets.baseline`) land in `configs_found` (`{tool, path}` entries) as EVIDENCE-ONLY - FH4 must never grade config presence alone as an enforced gate.
+ - `substance.ci_gate` trigger detection routes by CI system: GitHub workflows are parsed for `on:` push/pull_request forms; `.gitlab-ci.yml` counts as push-gated by default, `bitbucket-pipelines.yml` counts when its `pipelines:` config has a `default:`/`branches:` section, and `azure-pipelines.yml` counts unless `trigger: none` (these systems run on push by default - the GitHub `on:` grammar is never forced on them).
 
 ---
 

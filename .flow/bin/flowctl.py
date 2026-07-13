@@ -27466,6 +27466,9 @@ _PRIME_EXT_STACK = {
     ".cc": "C++", ".cpp": "C++", ".hpp": "C++", ".pas": "Delphi",
     ".dpr": "Delphi", ".swift": "Swift", ".md": "Markdown",
     ".mdx": "Markdown", ".sh": "Shell",
+    ".pks": "PL/SQL", ".pkb": "PL/SQL",
+    ".bas": "VB6", ".frm": "VB6",
+    ".cbl": "COBOL", ".cob": "COBOL",
 }
 
 
@@ -28352,19 +28355,34 @@ def _prime_collect_stacks(
     # normal repo reports cap_hit=False / complete=True.
     c = _PrimeCollector("stacks", budget=_PRIME_MAX_TRACKED_FILES + 200)
 
-    # Manifest gating: (manifest-basename, stack, is-glob).
-    manifest_rules = [
-        ("package.json", "JavaScript/TypeScript", False),
-        ("pyproject.toml", "Python", False),
-        ("setup.py", "Python", False),
-        ("requirements.txt", "Python", False),
-        ("go.mod", "Go", False),
-        ("Cargo.toml", "Rust", False),
-        ("pom.xml", "Java", False),
-        ("build.gradle", "Java", False),
-        ("composer.json", "PHP", False),
-        ("Gemfile", "Ruby", False),
-        ("CMakeLists.txt", "C/C++", False),
+    # Manifest gating. Every stacks.md matrix row's Detect signal is covered
+    # here - a basename table for exact manifest names plus an extension table
+    # for rows whose detect signal IS a file extension (*.csproj, *.pks, ...).
+    # Adding a stack row in stacks.md must add its manifest signal here.
+    manifest_by_base = {
+        "package.json": "JavaScript/TypeScript",
+        "pyproject.toml": "Python",
+        "setup.py": "Python",
+        "requirements.txt": "Python",
+        "go.mod": "Go",
+        "Cargo.toml": "Rust",
+        "pom.xml": "Java",
+        "build.gradle": "Java",
+        "build.gradle.kts": "Java",
+        "settings.gradle": "Java",
+        "gradlew": "Java",
+        "settings.gradle.kts": "Kotlin/Android",
+        "composer.json": "PHP",
+        "Gemfile": "Ruby",
+        "CMakeLists.txt": "C/C++",
+        "Package.swift": "Swift/iOS",
+    }
+    manifest_ext_rules = [
+        ((".csproj", ".sln"), "C#/.NET"),
+        ((".dproj", ".dpr"), "Delphi"),
+        ((".pks", ".pkb"), "SQL/PLSQL"),
+        ((".vbp", ".pbl"), "VB6/PowerBuilder"),
+        ((".cbl", ".cob"), "COBOL"),
     ]
 
     # Extension histogram (file-count-weighted; LOC-weighted refinement lands in
@@ -28382,31 +28400,35 @@ def _prime_collect_stacks(
 
     # Detect manifests among tracked files, remembering their dir.
     detected: dict[str, tuple[str, bool]] = {}  # stack -> (manifest path, subproject)
-    dproj = False
     for path in deduped:
         base = path.rsplit("/", 1)[-1]
         subproject = "/" in path
-        for mname, stack, _glob in manifest_rules:
-            if base == mname and stack not in detected:
-                detected[stack] = (path, subproject)
-        if base.endswith(".csproj") or base.endswith(".sln"):
-            detected.setdefault("C#/.NET", (path, "/" in path))
-        if base.endswith(".dproj") or base.endswith(".dpr"):
-            dproj = True
-            detected.setdefault("Delphi", (path, "/" in path))
+        mstack = manifest_by_base.get(base)
+        if mstack is not None:
+            detected.setdefault(mstack, (path, subproject))
+        lower = base.lower()
+        for exts, estack in manifest_ext_rules:
+            if lower.endswith(exts):
+                detected.setdefault(estack, (path, subproject))
+        # Xcode app projects: tracked files live INSIDE the .xcodeproj bundle.
+        if ".xcodeproj/" in path or lower.endswith(".xcodeproj"):
+            detected.setdefault("Swift/iOS", (path, subproject))
 
+    # Manifest-stack name -> extension-histogram bucket(s) for loc_share.
+    share_buckets = {
+        "JavaScript/TypeScript": ("JavaScript", "TypeScript"),
+        "C/C++": ("C", "C++"),
+        "C#/.NET": ("C#",),
+        "Kotlin/Android": ("Kotlin",),
+        "Swift/iOS": ("Swift",),
+        "SQL/PLSQL": ("PL/SQL",),
+        "VB6/PowerBuilder": ("VB6",),
+    }
     stacks: list[dict[str, Any]] = []
     for stack, (manifest, subproject) in detected.items():
         # loc_share from histogram (map the manifest stack to its extensions).
-        share_files = 0
-        if stack.startswith("JavaScript"):
-            share_files = hist.get("JavaScript", 0) + hist.get("TypeScript", 0)
-        elif stack.startswith("C/C++"):
-            share_files = hist.get("C", 0) + hist.get("C++", 0)
-        elif stack == "C#/.NET":
-            share_files = hist.get("C#", 0)
-        else:
-            share_files = hist.get(stack, 0)
+        buckets = share_buckets.get(stack, (stack,))
+        share_files = sum(hist.get(b, 0) for b in buckets)
         loc_share = round(share_files / total, 3) if total else 0.0
         agreement = "high" if (loc_share > 0 or not total) else "low"
         stacks.append(
@@ -28787,6 +28809,11 @@ def _prime_collect_destructive(
                 target = tail.split()[0] if tail and not tail.startswith("-") else (
                     tail.split()[1] if len(tail.split()) > 1 else ""
                 )
+                # Strip surrounding quotes so a parameterized target like
+                # "$BUILD_DIR" or '"${TARGET}"' classifies into the
+                # variable/unbounded tier instead of downgrading to
+                # self-managed on the leading quote character.
+                target = target.strip("'\"")
                 hits.append(
                     {
                         "file": path,
@@ -29037,6 +29064,39 @@ def _prime_ci_triggers(text: str) -> "set[str]":
     return found
 
 
+_PRIME_NON_GITHUB_CI = (".gitlab-ci.yml", "bitbucket-pipelines.yml", "azure-pipelines.yml")
+
+
+def _prime_ci_triggers_non_github(basename: str, text: str) -> "set[str]":
+    """Gate-trigger heuristic for non-GitHub CI configs (FH3).
+
+    GitLab / Bitbucket / Azure pipelines run on push by default, so forcing
+    GitHub Actions `on:` parsing on them yields a false has_gate_trigger=false.
+    Deterministic, deliberately simple per-system rules:
+
+    - .gitlab-ci.yml: present -> push-gated by default (GitLab runs pipelines
+      on push; `only:`/`rules:` narrowing such as schedules-only is out of
+      scope for the raw signal - the skill judges edge cases).
+    - bitbucket-pipelines.yml: a `pipelines:` config with a `default:` or
+      `branches:` section -> push-gated; a custom-/manual-only file is not.
+    - azure-pipelines.yml: `trigger: none` -> not gated; otherwise gated (an
+      explicit `trigger:` key AND the absent-key default both mean CI on push).
+    """
+    if basename == ".gitlab-ci.yml":
+        return {"push"}
+    if basename == "bitbucket-pipelines.yml":
+        if re.search(r"(?m)^pipelines\s*:", text) and re.search(
+            r"(?m)^\s+(?:default|branches)\s*:", text
+        ):
+            return {"push"}
+        return set()
+    if basename == "azure-pipelines.yml":
+        if re.search(r"(?m)^\s*trigger\s*:\s*none\s*(?:#.*)?$", text):
+            return set()
+        return {"push"}
+    return set()
+
+
 def _prime_collect_ci_gate(
     root: Path, deduped: "list[str]"
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
@@ -29055,7 +29115,12 @@ def _prime_collect_ci_gate(
             has_test = True
         if lint_re.search(text):
             has_lint = True
-        file_triggers = _prime_ci_triggers(text)
+        base = path.rsplit("/", 1)[-1]
+        if base in _PRIME_NON_GITHUB_CI:
+            # Route by filename: never force GitHub `on:` parsing on other CI systems.
+            file_triggers = _prime_ci_triggers_non_github(base, text)
+        else:
+            file_triggers = _prime_ci_triggers(text)
         if file_triggers:
             triggers |= file_triggers
             has_trigger = True
@@ -29077,11 +29142,20 @@ def _prime_collect_ci_gate(
 def _prime_collect_secrets_gate(
     root: Path, deduped: "list[str]"
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
-    """FH4: secrets-scanner presence in the commit gate or CI (config-presence)."""
+    """FH4: secrets-scanner presence in the commit gate or CI.
+
+    Split contract: `tools_found` carries ENFORCED invocations only (pre-commit
+    hooks, package scripts, CI files that actually invoke a scanner);
+    scanner config/baseline files (.gitleaks.toml, .secrets.baseline) are
+    EVIDENCE-ONLY and land in `configs_found` - config presence alone is never
+    an enforced gate.
+    """
     c = _PrimeCollector("substance-secrets-gate", budget=60)
     tool_re = re.compile(r"(?i)\b(gitleaks|detect-secrets|trufflehog|ggshield|git-secrets)\b")
+    config_files = {".gitleaks.toml": "gitleaks", ".secrets.baseline": "detect-secrets"}
     tools: set[str] = set()
     locations: list[str] = []
+    configs: list[dict[str, str]] = []
     scan_files = [
         p for p in deduped
         if p.rsplit("/", 1)[-1] in (".pre-commit-config.yaml", ".pre-commit-config.yml", "package.json", ".gitleaks.toml", ".secrets.baseline")
@@ -29091,9 +29165,8 @@ def _prime_collect_secrets_gate(
     for rel in scan_files[:60]:
         c.op()
         base = rel.rsplit("/", 1)[-1]
-        if base in (".gitleaks.toml", ".secrets.baseline"):
-            tools.add(base.lstrip(".").split(".")[0])
-            locations.append(rel)
+        if base in config_files:
+            configs.append({"tool": config_files[base], "path": rel})
             continue
         txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if not txt:
@@ -29102,7 +29175,15 @@ def _prime_collect_secrets_gate(
         if found:
             tools |= found
             locations.append(rel)
-    return ({"tools_found": sorted(tools), "locations": sorted(set(locations))}, c)
+    configs.sort(key=lambda e: (e["tool"], e["path"]))
+    return (
+        {
+            "tools_found": sorted(tools),
+            "locations": sorted(set(locations)),
+            "configs_found": configs,
+        },
+        c,
+    )
 
 
 def _prime_collect_api_contract(

@@ -518,6 +518,48 @@ class StacksAndShapeTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_documented_stack_manifests_detected(self) -> None:
+        # Regression (PR #207): every stacks.md matrix row's Detect signal must
+        # be covered by the emitter's manifest table - Package.swift,
+        # settings.gradle.kts, *.pks/*.pkb, *.vbp, *.cbl were missing.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "poly"
+            _init_repo(repo)
+            _write(repo, "Package.swift", "// swift-tools-version:5.9\n")
+            _write(repo, "android/settings.gradle.kts", 'rootProject.name = "app"\n')
+            _write(repo, "sql/pkg.pks", "CREATE OR REPLACE PACKAGE pkg AS END;\n")
+            _write(repo, "sql/pkg.pkb", "CREATE OR REPLACE PACKAGE BODY pkg AS END;\n")
+            _write(repo, "legacy/app.vbp", "Type=Exe\n")
+            _write(repo, "mainframe/main.cbl", "IDENTIFICATION DIVISION.\n")
+            _commit_all(repo, "seed")
+            stacks = self.flowctl._prime_classify(repo)["axes"]["stacks"]
+            names = {s["name"] for s in stacks}
+            for expected in (
+                "Swift/iOS", "Kotlin/Android", "SQL/PLSQL",
+                "VB6/PowerBuilder", "COBOL",
+            ):
+                self.assertIn(expected, names)
+            # Extension histogram feeds loc_share for extension-signal stacks.
+            plsql = next(s for s in stacks if s["name"] == "SQL/PLSQL")
+            self.assertGreater(plsql["loc_share"], 0)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_gradle_wrapper_and_kts_build_detected_as_java(self) -> None:
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "jvm"
+            _init_repo(repo)
+            _write(repo, "gradlew", "#!/bin/sh\n")
+            _write(repo, "build.gradle.kts", "plugins { java }\n")
+            _write(repo, "src/App.java", "class App {}\n")
+            _commit_all(repo, "seed")
+            stacks = self.flowctl._prime_classify(repo)["axes"]["stacks"]
+            self.assertIn("Java", {s["name"] for s in stacks})
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_bin_export_marker_emitted(self) -> None:
         tmp = Path(tempfile.mkdtemp()).resolve()
         try:
@@ -761,6 +803,26 @@ class SubstanceDestructiveTestCase(_SubstanceBase):
         d = self._classify()["substance"]["destructive_scan"]
         self.assertTrue(any(h["file"] == "package.json[scripts]" for h in d["hits"]))
 
+    def test_quoted_variable_targets_classify_as_unbounded(self) -> None:
+        # Regression (PR #207): surrounding quotes must be stripped before
+        # classification - `rm -rf "$BUILD_DIR"` is a parameterized delete
+        # (unbounded tier), never a self-managed relative dir.
+        _write(
+            self.repo, "scripts/clean.sh",
+            "#!/bin/sh\n"
+            'rm -rf "$BUILD_DIR"\n'
+            "rm -rf \"${TARGET}\"\n"
+            "rm -rf '$OUT_DIR'\n",
+        )
+        d = self._classify()["substance"]["destructive_scan"]
+        hits = {h["target"]: h["context_class"] for h in d["hits"] if h["file"] == "scripts/clean.sh"}
+        self.assertEqual(hits.get("$BUILD_DIR"), "unbounded")
+        self.assertEqual(hits.get("${TARGET}"), "unbounded")
+        self.assertEqual(hits.get("$OUT_DIR"), "unbounded")
+        # Stored targets carry no surrounding quote characters.
+        for t in hits:
+            self.assertFalse(t.startswith(('"', "'")))
+
 
 class SubstanceRedactionTestCase(_SubstanceBase):
     """The hard redaction contract: KEY NAMES / matched TOKENS only - a secret
@@ -926,6 +988,65 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         ci = self._classify()["substance"]["ci_gate"]
         self.assertFalse(ci["has_gate_trigger"])
         self.assertEqual(ci["triggers"], [])
+
+    def test_gitlab_ci_counts_as_push_gated(self) -> None:
+        # Regression (PR #207): non-GitHub CI files must not be parsed with the
+        # GitHub `on:` grammar - GitLab pipelines run on push by default.
+        _write(
+            self.repo, ".gitlab-ci.yml",
+            "stages:\n  - test\ntest:\n  stage: test\n  script:\n    - pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("push", ci["triggers"])
+        self.assertTrue(ci["has_test_step"])
+
+    def test_bitbucket_default_section_counts_as_gated(self) -> None:
+        _write(
+            self.repo, "bitbucket-pipelines.yml",
+            "pipelines:\n  default:\n    - step:\n        script:\n          - pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("push", ci["triggers"])
+
+    def test_bitbucket_custom_only_not_gated(self) -> None:
+        _write(
+            self.repo, "bitbucket-pipelines.yml",
+            "pipelines:\n  custom:\n    manual-run:\n      - step:\n          script:\n            - pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_gate_trigger"])
+        self.assertEqual(ci["triggers"], [])
+
+    def test_azure_trigger_none_not_gated(self) -> None:
+        _write(
+            self.repo, "azure-pipelines.yml",
+            "trigger: none\nsteps:\n  - script: pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_gate_trigger"])
+
+    def test_azure_default_and_explicit_trigger_gated(self) -> None:
+        _write(
+            self.repo, "azure-pipelines.yml",
+            "trigger:\n  branches:\n    include:\n      - main\nsteps:\n  - script: pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("push", ci["triggers"])
+
+    def test_secrets_config_files_are_evidence_only(self) -> None:
+        # Regression (PR #207): a scanner CONFIG/baseline file is not an
+        # enforced gate - it lands in configs_found, never tools_found.
+        _write(self.repo, ".gitleaks.toml", "[allowlist]\n")
+        _write(self.repo, ".secrets.baseline", "{}\n")
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertEqual(sec["tools_found"], [])
+        self.assertEqual(sec["locations"], [])
+        configs = {(e["tool"], e["path"]) for e in sec["configs_found"]}
+        self.assertIn(("gitleaks", ".gitleaks.toml"), configs)
+        self.assertIn(("detect-secrets", ".secrets.baseline"), configs)
 
     def test_api_contract_globs_and_http_flag(self) -> None:
         _write(self.repo, "package.json", json.dumps({"dependencies": {"express": "^4"}}))
@@ -1401,6 +1522,53 @@ class PrimeProseContractTestCase(unittest.TestCase):
 
     def test_mirror_stacks_row_schema(self) -> None:
         self._assert_stacks_row_schema(PRIME_MIRROR_DIR)
+
+
+class AgenticEvalIsolationTestCase(unittest.TestCase):
+    """Regression (PR #207): tampering with projection.json - the ONLY arena
+    file - leaves the created-files diff empty, so the harness must catch it
+    via the pre-run content hash and treat the run as an isolation breach."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        harness_py = REPO_ROOT / "optimization" / "prime" / "run_agentic_eval.py"
+        spec = importlib.util.spec_from_file_location("prime_agentic_eval_under_test", harness_py)
+        cls.harness = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = cls.harness
+        spec.loader.exec_module(cls.harness)
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="prime-eval-iso-")).resolve()
+        self.arena = self.harness._prepare_arena(self.tmp, {"family": "t"})
+        self.sentinel, self.token, self.sig = self.harness._plant_sentinel(self.tmp)
+        self.pre = self.harness._fs_snapshot(self.arena)
+        self.proj_hash = self.harness._projection_hash(self.arena)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _report(self) -> dict:
+        return self.harness._isolation_report(
+            self.arena, self.pre, self.sentinel, self.token, self.sig, "",
+            projection_hash=self.proj_hash,
+        )
+
+    def test_untouched_projection_is_not_a_breach(self) -> None:
+        iso = self._report()
+        self.assertFalse(iso["projection_tampered"])
+        self.assertFalse(self.harness._isolation_breached(iso))
+
+    def test_overwritten_projection_is_a_breach(self) -> None:
+        (self.arena / "projection.json").write_text("{}", encoding="utf-8")
+        iso = self._report()
+        self.assertTrue(iso["projection_tampered"])
+        self.assertTrue(self.harness._isolation_breached(iso))
+
+    def test_deleted_projection_is_a_breach(self) -> None:
+        (self.arena / "projection.json").unlink()
+        iso = self._report()
+        self.assertTrue(iso["projection_tampered"])
+        self.assertTrue(self.harness._isolation_breached(iso))
 
 
 if __name__ == "__main__":

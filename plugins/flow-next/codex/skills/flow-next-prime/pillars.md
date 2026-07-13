@@ -328,7 +328,7 @@ The single source of truth for every new/upgraded criterion's scoring behavior. 
 | FH1 | FH | scored-in-tier | group | group pass-count | fix-offered (targeted refresh) | none | emitter (timestamps vs churn) |
 | FH2 | FH | scored-in-tier | group | group pass-count | fix-offered (max-lines rule) | none | emitter (scc metrics) |
 | FH3 | FH | scored-in-tier | group | group pass-count | fix-offered | none | emitter (trigger + mutating-lint greps) + host (gh corroboration) |
-| FH4 | FH | scored-in-tier | group | group pass-count | fix-offered | none | emitter (config presence) |
+| FH4 | FH | scored-in-tier | group | group pass-count | fix-offered | none | emitter (`tools_found` = enforced invocations; `configs_found` = config presence, evidence-only) |
 | FH5 | FH | scored-in-tier | group | group pass-count | fix-offered (never/ask tiers) | none | emitter (raw hits + context class) |
 | FH6 | FH | scored-in-tier | group | group pass-count | fix-offered (suggest gen) | none | emitter (contract globs) |
 | FH7 | FH | informational | none (report) | info line | report-only | none | emitter (config presence) |

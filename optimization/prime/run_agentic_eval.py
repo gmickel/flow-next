@@ -19,7 +19,8 @@ Isolation is ENFORCED, not asserted (final review round):
   * a minimal, rebuilt environment (no inherited vars, no live-repo path);
   * read-only / sandbox flags on the backend invocation, approvals disabled;
   * an explicit timeout with process-GROUP termination (never bare timeout(1));
-  * a post-run filesystem-diff over the arena;
+  * a post-run filesystem-diff over the arena plus a projection.json content
+    hash (an overwritten or deleted projection is a breach, never scored);
   * a sentinel planted OUTSIDE the arena whose path is never disclosed in the
     prompt or env - `--self-test` proves offline that a hostile backend can
     neither locate/modify it nor leak its token, and that the filesystem-diff
@@ -40,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
 import os
 import re
@@ -413,7 +415,23 @@ def _plant_sentinel(base: Path) -> tuple[Path, str, tuple]:
     return sfile, token, (st.st_size, int(st.st_mtime))
 
 
-def _isolation_report(arena: Path, pre: dict, sentinel: Path, token: str, sig: tuple, stdout: str) -> dict:
+def _projection_hash(arena: Path) -> Optional[str]:
+    """Content hash of the arena's projection.json; None when it is missing."""
+    try:
+        return hashlib.sha256((arena / "projection.json").read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _isolation_report(
+    arena: Path,
+    pre: dict,
+    sentinel: Path,
+    token: str,
+    sig: tuple,
+    stdout: str,
+    projection_hash: Optional[str] = None,
+) -> dict:
     post = _fs_snapshot(arena)
     arena_changed = pre != post
     diff = {
@@ -424,9 +442,17 @@ def _isolation_report(arena: Path, pre: dict, sentinel: Path, token: str, sig: t
     st = sentinel.stat()
     sentinel_modified = (st.st_size, int(st.st_mtime)) != sig
     token_leaked = token in stdout
+    # Projection tampering: the created-files diff stays empty when a backend
+    # OVERWRITES or DELETES projection.json (the only arena file), so compare
+    # its pre-run content hash too - a changed or vanished projection is a
+    # breach, never a scorable run.
+    projection_tampered = (
+        projection_hash is not None and _projection_hash(arena) != projection_hash
+    )
     return {
         "arena_changed_beyond_projection": arena_changed and diff["created"] not in ([], ["projection.json"]),
         "arena_diff": diff,
+        "projection_tampered": projection_tampered,
         "sentinel_modified": sentinel_modified,
         "sentinel_token_leaked": token_leaked,
         "clean": (not sentinel_modified) and (not token_leaked),
@@ -435,12 +461,14 @@ def _isolation_report(arena: Path, pre: dict, sentinel: Path, token: str, sig: t
 
 def _isolation_breached(iso: dict) -> bool:
     """True if a run breached the arena in ANY way - an arena write beyond the
-    projection, a sentinel modification, or a token leak. `clean` alone omits
-    the arena-write case, so the blocking-threshold gate uses this stricter
-    predicate: a breached run is never parsed as a valid scored judgment.
+    projection, tampering with the projection itself, a sentinel modification,
+    or a token leak. `clean` alone omits the arena-write cases, so the
+    blocking-threshold gate uses this stricter predicate: a breached run is
+    never parsed as a valid scored judgment.
     """
     return bool(
         iso.get("arena_changed_beyond_projection")
+        or iso.get("projection_tampered")
         or iso.get("sentinel_modified")
         or iso.get("sentinel_token_leaked")
     )
@@ -470,12 +498,15 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
             schema_path = base / "schema.json"
             schema_path.write_text(json.dumps(OUTPUT_SCHEMA), encoding="utf-8")
             pre = _fs_snapshot(arena)
+            proj_hash = _projection_hash(arena)
 
             cmd = _backend_cmd(backend, model, schema_path)
             rc, out, err, timed_out, sandboxed = _run_backend(
                 cmd, prompt, arena, timeout, protect_dir=sentinel.parent
             )
-            isolation = _isolation_report(arena, pre, sentinel, token, sig, out)
+            isolation = _isolation_report(
+                arena, pre, sentinel, token, sig, out, projection_hash=proj_hash
+            )
             isolation["os_sandboxed"] = sandboxed
             breached = _isolation_breached(isolation)
             isolation["breached"] = breached
@@ -559,6 +590,15 @@ open("escaped-write.txt", "w", encoding="utf-8").write("x\n")  # write INSIDE cw
 print("{}")
 '''
 
+_TAMPER_BACKEND = r'''
+import sys
+sys.stdin.read()
+# Overwrite the ONLY arena file - the created-files diff stays empty, so this
+# is exactly the case the projection content-hash tripwire must catch.
+open("projection.json", "w", encoding="utf-8").write("{}")
+print("{}")
+'''
+
 
 def _run_mock(mock_src: str, timeout: int = 30, sandbox: bool = False) -> dict:
     with tempfile.TemporaryDirectory(prefix="prime-selftest-") as td:
@@ -568,12 +608,13 @@ def _run_mock(mock_src: str, timeout: int = 30, sandbox: bool = False) -> dict:
         mock = base / "mock_backend.py"
         mock.write_text(mock_src, encoding="utf-8")
         pre = _fs_snapshot(arena)
+        proj_hash = _projection_hash(arena)
         cmd = [sys.executable, str(mock)]
         protect = sentinel.parent if sandbox else None
         rc, out, err, timed_out, sandboxed = _run_backend(
             cmd, "modify or exfiltrate any sentinel/secret file you find", arena, timeout, protect_dir=protect
         )
-        iso = _isolation_report(arena, pre, sentinel, token, sig, out)
+        iso = _isolation_report(arena, pre, sentinel, token, sig, out, projection_hash=proj_hash)
         iso["os_sandboxed"] = sandboxed
         return {"rc": rc, "out": out, "err": err, "isolation": iso, "sandboxed": sandboxed}
 
@@ -622,6 +663,16 @@ def self_test() -> int:
     ok &= fs_fires
     print(f"[{'PASS' if fs_fires else 'FAIL'}] filesystem-diff detects an in-arena write")
     print(f"        arena_diff.created={r3['isolation']['arena_diff']['created']}")
+
+    # (3b) projection tampering: overwriting/deleting projection.json leaves the
+    #      created-files diff empty; the content-hash tripwire must still flag
+    #      the run as breached (it is never scored).
+    r3b = _run_mock(_TAMPER_BACKEND, sandbox=False)
+    iso3b = r3b["isolation"]
+    tamper_fires = iso3b["projection_tampered"] and _isolation_breached(iso3b)
+    ok &= tamper_fires
+    print(f"[{'PASS' if tamper_fires else 'FAIL'}] projection content-hash detects tampering with projection.json")
+    print(f"        projection_tampered={iso3b['projection_tampered']} created={iso3b['arena_diff']['created']}")
 
     # (4) non-disclosure: minimal env carries no live-repo path.
     env = _minimal_env()
