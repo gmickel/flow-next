@@ -28748,6 +28748,24 @@ def _prime_iter_source(deduped: "list[str]") -> "list[str]":
     return [p for p in deduped if os.path.splitext(p)[1].lower() in _PRIME_SOURCE_EXTS]
 
 
+_PRIME_TEST_DIR_SEGMENTS = frozenset(
+    ("test", "tests", "__tests__", "spec", "specs", "e2e", "integration-tests")
+)
+_PRIME_TEST_BASENAME_RE = re.compile(
+    r"(?i)(^test_[^/]*$|_test\.[a-z0-9]+$|\.(test|spec)\.[a-z0-9]+$|^conftest\.py$)"
+)
+
+
+def _prime_is_test_path(path: str) -> bool:
+    """True when a tracked path is test-harness code by directory segment
+    (tests/, __tests__/, spec/, ...) or basename convention (test_*.py,
+    *_test.go, *.test.ts, *.spec.js, conftest.py)."""
+    segs = _prime_posix_segments(path)
+    if any(s.lower() in _PRIME_TEST_DIR_SEGMENTS for s in segs[:-1]):
+        return True
+    return bool(_PRIME_TEST_BASENAME_RE.search(segs[-1])) if segs else False
+
+
 def _prime_env_declared(root: Path, deduped: "list[str]", c: "_PrimeCollector") -> "set[str]":
     """Var NAMES declared across every `.env.example`-family file (per-member).
 
@@ -28790,7 +28808,12 @@ def _prime_collect_env_crossref(
     c = _PrimeCollector("substance-env-crossref", budget=_PRIME_SUBSTANCE_READ_CAP + 100)
     declared = _prime_env_declared(root, deduped, c)
     read_vars: set[str] = set()
-    sources = _prime_iter_source(deduped)
+    # Test files are excluded from the read scan: a TEST_DATABASE_URL read
+    # only by the test harness is not an app-code env dependency and must not
+    # flag the .env.example template as stale.
+    sources = [
+        p for p in _prime_iter_source(deduped) if not _prime_is_test_path(p)
+    ]
     for idx, rel in enumerate(sources):
         if idx >= _PRIME_SUBSTANCE_READ_CAP:
             c.note_sampled()
@@ -28976,11 +28999,20 @@ def _prime_collect_encoding(
 
 
 def _prime_collect_atomic_pairs(
-    deduped: "list[str]"
+    deduped: "list[str]", pre_dedup: "Optional[list[str]]" = None
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
-    """LEG6: designer/generator atomic-pair CANDIDATES from the tracked list."""
+    """LEG6: designer/generator atomic-pair CANDIDATES from the tracked list.
+
+    Scans the post-exclusion, PRE-hash-dedup list when provided: two
+    synchronized copies that are currently byte-identical (the healthy state
+    of a dual-copy invariant) collapse to one path under the blob dedup, and
+    the second location must still be visible here or the dual-copy warning
+    can never fire.
+    """
     # One op per tracked file; bound is the upstream ls-files cap, not 200.
     c = _PrimeCollector("substance-atomic-pairs", budget=_PRIME_MAX_TRACKED_FILES + 200)
+    if pre_dedup is not None:
+        deduped = pre_dedup
     tracked = set(deduped)
     pairs: list[dict[str, Any]] = []
 
@@ -29817,12 +29849,13 @@ def _prime_collect_substance(
     root: Path,
     deduped: "list[str]",
     framework_markers: "list[str]",
+    pre_dedup: "Optional[list[str]]" = None,
 ) -> "tuple[dict[str, Any], list[_PrimeCollector]]":
     """Assemble every emitter-owned substance-grep row (raw signals only)."""
     env, env_c = _prime_collect_env_crossref(root, deduped)
     destructive, destr_c = _prime_collect_destructive(root, deduped)
     encoding, enc_c = _prime_collect_encoding(root, deduped)
-    atomic, atomic_c = _prime_collect_atomic_pairs(deduped)
+    atomic, atomic_c = _prime_collect_atomic_pairs(deduped, pre_dedup)
     tool_managed, tm_c = _prime_collect_tool_managed(deduped, destructive)
     docs_fresh, docs_c = _prime_collect_docs_freshness(root, deduped)
     ci_gate, ci_c = _prime_collect_ci_gate(root, deduped)
@@ -29885,8 +29918,11 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
     size, size_c, deduped = _prime_collect_size(collect_root, staged, ls_truncated)
     stacks, stacks_c = _prime_collect_stacks(collect_root, deduped)
     shape_markers, shape_c = _prime_collect_shape_markers(collect_root, deduped)
+    # Post-exclusion PRE-dedup list for the atomic-pair scan: byte-identical
+    # dual copies collapse under the blob dedup and must stay visible there.
+    pre_dedup = [p for _sha, p in staged if _prime_exclusion_category(p) is None]
     substance, substance_collectors = _prime_collect_substance(
-        collect_root, deduped, shape_markers["framework_markers"]
+        collect_root, deduped, shape_markers["framework_markers"], pre_dedup
     )
 
     payload: dict[str, Any] = {

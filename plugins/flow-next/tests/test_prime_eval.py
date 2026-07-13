@@ -965,6 +965,20 @@ class SubstanceEnvCrossrefTestCase(_SubstanceBase):
         self.assertIn("PY_VAR", env["undeclared_vars"])
         self.assertIn("GO_VAR", env["undeclared_vars"])
 
+    def test_test_only_env_reads_excluded(self) -> None:
+        # Regression (PR #207 round 6): env vars read ONLY by test-harness
+        # code (tests/, __tests__/, *.test.ts, test_*.py, conftest.py) are not
+        # app-code env dependencies and must not flag the template as stale.
+        _write(self.repo, "svc.py", "import os\nx = os.getenv('APP_VAR')\n")
+        _write(self.repo, "tests/test_svc.py", "import os\nd = os.getenv('TEST_DATABASE_URL')\n")
+        _write(self.repo, "conftest.py", "import os\nf = os.getenv('FIXTURE_VAR')\n")
+        _write(self.repo, "src/api.test.ts", "const t = process.env.JEST_ONLY_VAR;\n")
+        env = self._classify()["substance"]["env_crossref"]
+        self.assertIn("APP_VAR", env["undeclared_vars"])
+        self.assertNotIn("TEST_DATABASE_URL", env["undeclared_vars"])
+        self.assertNotIn("FIXTURE_VAR", env["undeclared_vars"])
+        self.assertNotIn("JEST_ONLY_VAR", env["undeclared_vars"])
+
     def test_lowercase_declared_vars_unmangled(self) -> None:
         # Regression: a char-set `lstrip("export ")` mangled lowercase keys
         # (token->ken, repo_url->_url). The literal-prefix strip keeps them whole,
@@ -1102,6 +1116,19 @@ class SubstanceAtomicPairsTestCase(_SubstanceBase):
         _write(self.repo, "b/util.py", "x = 2\n")  # same basename, distinct dirs
         pairs = self._classify()["substance"]["atomic_pairs"]["candidates"]
         self.assertTrue(any(p["kind"] == "dual-copy-candidate" for p in pairs))
+
+    def test_byte_identical_dual_copy_still_detected(self) -> None:
+        # Regression (PR #207 round 6): byte-identical copies (the HEALTHY
+        # state of a dual-copy invariant) collapse under the blob-hash dedup -
+        # the pair scan must run on the pre-dedup list or the warning can
+        # never fire before an agent edits just one copy.
+        _write(self.repo, "scripts/tool.py", "x = 1\n")
+        _write(self.repo, "bin/tool.py", "x = 1\n")  # identical content
+        pairs = self._classify()["substance"]["atomic_pairs"]["candidates"]
+        dual = [p for p in pairs if p["kind"] == "dual-copy-candidate"]
+        self.assertTrue(
+            any(set(p["files"]) >= {"scripts/tool.py", "bin/tool.py"} for p in dual)
+        )
 
 
 class SubstanceToolManagedTestCase(_SubstanceBase):
