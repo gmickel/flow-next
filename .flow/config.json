@@ -28,7 +28,7 @@
     "enabled": true
   },
   "review": {
-    "backend": "rp"
+    "backend": "codex"
   },
   "scouts": {
     "github": false

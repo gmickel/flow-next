@@ -199,7 +199,7 @@ class PipelineQaConfigTestCase(unittest.TestCase):
     def test_setting_pipeline_key_does_not_clobber_other_defaults(self) -> None:
         self._run_config_set_cli("pipeline.qa", "on")
         self.assertEqual(
-            self._run_config_get_cli("work.delegateModel")["value"], "gpt-5.6-sol"
+            self._run_config_get_cli("work.delegateModel")["value"], "gpt-5.6-terra"
         )
         self.assertEqual(
             self._run_config_get_cli("land.ciFixBudget")["value"], 3

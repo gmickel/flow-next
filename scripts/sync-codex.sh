@@ -21,6 +21,13 @@ CODEX_MODEL_FAST="${CODEX_MODEL_FAST:-gpt-5.4-mini}"
 # Review-shaped agents (quality-auditor) override to a higher tier — see reasoning_effort_for().
 CODEX_REASONING_EFFORT="${CODEX_REASONING_EFFORT:-medium}"
 CODEX_REASONING_EFFORT_AUDITOR="${CODEX_REASONING_EFFORT_AUDITOR:-high}"
+# fn-97: the Codex-mirror WORKER is pinned to terra-medium (Claude-side worker
+# stays `inherit`). Eval-motivated (2026-07-14 controlled pipeline eval, n=3):
+# terra-medium matched gpt-5.6-sol hidden-suite correctness at ~2/3 wall-clock
+# on frontier-authored specs; effort above medium was pure overhead. Override
+# via env when your Codex plan carries a different mix.
+CODEX_MODEL_WORKER="${CODEX_MODEL_WORKER:-gpt-5.6-terra}"
+CODEX_REASONING_EFFORT_WORKER="${CODEX_REASONING_EFFORT_WORKER:-medium}"
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -45,6 +52,13 @@ rename_agent() {
 
 map_model() {
   local claude_model="$1" agent_name="${2:-}"
+  # fn-97: worker is pinned regardless of its Claude-side `inherit` frontmatter
+  # (see CODEX_MODEL_WORKER above). Everything else keeps the FAST/INTELLIGENT
+  # tier mapping below.
+  if [ "$agent_name" = "worker" ]; then
+    echo "$CODEX_MODEL_WORKER"
+    return
+  fi
   case "$claude_model" in
     opus|claude-opus-*)
       echo "$CODEX_MODEL_INTELLIGENT" ;;
@@ -76,6 +90,7 @@ model_supports_reasoning() {
 reasoning_effort_for() {
   case "$1" in
     quality-auditor) echo "$CODEX_REASONING_EFFORT_AUDITOR" ;;
+    worker)          echo "$CODEX_REASONING_EFFORT_WORKER" ;;
     *)               echo "$CODEX_REASONING_EFFORT" ;;
   esac
 }

@@ -96,17 +96,20 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 | Review-shaped | `gpt-5.5` | `high` | quality-auditor |
 | Scout / editorial | `gpt-5.5` | `medium` | flow-gap-analyst, context-scout, docs-scout, github-scout, practice-scout, repo-scout, plan-sync, spec-scout, agents-md-scout, docs-gap-scout |
 | Fast scouts | `gpt-5.4-mini` | n/a | build, env, testing, tooling, observability, security, workflow, memory scouts |
-| Inherited | parent model | parent | worker, pr-comment-resolver |
+| Worker (pinned) | `gpt-5.6-terra` | `medium` | worker |
+| Inherited | parent model | parent | pr-comment-resolver |
 
-`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The actual review backend (`flowctl impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults to `gpt-5.5:high` on its own.
+`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The `worker` pin is eval-motivated (fn-97, 2026-07 controlled pipeline eval at n=3: terra-medium matched `gpt-5.6-sol` correctness at ~2/3 wall-clock on frontier-authored specs); on Claude Code the worker stays `inherit`. The actual review backend (`flowctl impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults to `gpt-5.5:high` on its own.
 
 Override model defaults (global install only):
 
 ```bash
 CODEX_MODEL_INTELLIGENT=gpt-5.5 \
 CODEX_MODEL_FAST=gpt-5.4-mini \
+CODEX_MODEL_WORKER=gpt-5.6-terra \
 CODEX_REASONING_EFFORT=medium \
 CODEX_REASONING_EFFORT_AUDITOR=high \
+CODEX_REASONING_EFFORT_WORKER=medium \
 CODEX_MAX_THREADS=12 \
 ./scripts/install-codex.sh flow-next
 ```

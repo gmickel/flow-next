@@ -201,10 +201,14 @@ flow-next skills are prompts the host agent executes — so you (the host) can r
 ```bash
 # codex exec DEFAULTS to a read-only sandbox. Redirect stdin from /dev/null —
 # spawned by another agent it hangs indefinitely on inherited non-TTY stdin.
-codex exec -s read-only "<self-contained investigation prompt>" </dev/null # read-only investigation
-codex exec --sandbox workspace-write -o out.md "<self-contained impl prompt>" </dev/null # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
+# ALWAYS pass --skip-git-repo-check: outside a trusted git repo codex refuses in ~1s
+# with the error only in the log — a fire-and-forget caller sees a clean, silent failure.
+codex exec -s read-only --skip-git-repo-check "<self-contained investigation prompt>" </dev/null # read-only investigation
+codex exec --sandbox workspace-write --skip-git-repo-check -o out.md "<self-contained impl prompt>" </dev/null # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
 
 # cursor-agent: -p print mode; --force actually APPLIES edits (else proposed-only).
+# Run it INSIDE a git repo (`git init` scratch dirs first): in a non-repo dir it blocks on an
+# interactive workspace-trust prompt and exits "successfully" with empty output.
 CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>" # model IDs are volatile → cursor-agent --list-models
 
 # claude -p: the same bridge in REVERSE — drive Claude headlessly from a Codex/Cursor host.
@@ -222,6 +226,8 @@ Harness-relative: every direction works — from Claude Code the bridges are `co
 # Delegate implementation to codex (host keeps gating/git/review; codex only writes code)
 .flow/bin/flowctl config set work.delegate codex # value MUST be `codex` to activate (OFF by default, consent-gated)
 # …or per-run, no config: $flow-next-work fn-1-add-oauth delegate:codex
+# Steer the delegate: work.delegateModel (default gpt-5.6-terra, passed as -m) +
+# work.delegateEffort (default medium, passed as -c model_reasoning_effort=)
 
 # Cross-family review — the model that writes is never the model that reviews
 .flow/bin/flowctl config set review.backend codex # or cursor:composer-2.5
