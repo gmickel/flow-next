@@ -100,6 +100,14 @@ droid plugin marketplace add \
 
 **Grok Build (xAI)?** If flow-next is already installed in Claude Code, Grok Build picks it up automatically — `grok inspect` shows the skills + hook loaded, zero extra setup. The `/flow-next:*` commands **run when typed** and the **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scout subagents end-to-end, verified). Grok's slash autocomplete + `grok inspect` just under-list flow-next's commands/agents — cosmetic, they work when invoked. (Don't `grok plugin install` the repo — it's a marketplace, not a single plugin.) See [`docs/platforms.md`](plugins/flow-next/docs/platforms.md#grok-build-claude-code-compatibility).
 
+### After every update: re-run `/flow-next:setup`
+
+> **Update the plugin, then re-run `/flow-next:setup` in each project.** One command, safe to re-run.
+
+Your plugin manager updates the *plugin* (`/plugin` update on Claude Code, `droid plugin update`, or `git pull` + re-run the install script on Codex/Cursor). But two things live as **snapshot copies inside your repo's `.flow/`**, not live links to the plugin: the bundled **`flowctl` CLI** (`.flow/bin/`) and **`.flow/usage.md`** (the in-repo agent guide). A plugin update does **not** touch them - so after updating, re-run `/flow-next:setup` in each project to refresh the CLI, `usage.md`, the model-routing scaffold, and the spec template. It is idempotent; nothing is lost.
+
+flow-next reminds you: when the bundled copy lags the plugin, the skills print a one-line `Run /flow-next:setup to refresh local scripts` nudge on stderr. If `flowctl` behaves oddly right after an update, that refresh is almost always the fix (see [Troubleshooting](plugins/flow-next/docs/troubleshooting.md)).
+
 ### The 5-command happy path
 
 ```bash
