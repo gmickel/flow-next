@@ -199,7 +199,7 @@ Implementation via gpt-5.6-sol: `/flow-next:work <id> delegate:codex` (packaged 
 Implementation via composer-2.5: the `cursor-agent` bridge (`--force` to apply); host reviews + commits.
 Implementation via grok-4.5: a fast, cheap first-draft worker via the `grok -p` one-shot bridge; host reviews + commits on a taste-heavier tier. Route it to bulk/implementation, NOT UI or final taste-critical work (higher hallucination, weaker on UI). (Or reach grok-4.5 through the cursor review line below.)
 Review, cross-family: `review.backend codex`; per-task `review:` pins exceptions; escalate reviewer↔worker disagreements to the session model.
-Review, cross-family: `review.backend cursor:composer-2.5` (or `cursor:grok-4.5-high` for a fast cross-family pass; pair a taste model on UI-heavy diffs).
+Review, cross-family via cursor (multi-family reach): `review.backend cursor:claude-opus-4-8-thinking-high` (Claude-family; `cursor:claude-fable-5-thinking-high` for the frontier gate — NO ZDR) or `cursor:gpt-5.6-sol-high` (GPT-family) — pick the family that did NOT write the diff. Ids are volatile → `cursor-agent --list-models`. Composer/grok tiers are quick extra voices, never the gate.
 - Review, same-family heavy: a fresh-context reviewer subagent on opus-4.8 (or the session model) with the review criteria — no registry rung needed; describe the arrangement.
 Bulk, low-judgment reads (codebase sweeps): scouts may shell out to `cursor-agent`; only the digest returns.
 - Bulk reads, native: haiku-4.5 / sonnet-5 subagents for scans and digests.
