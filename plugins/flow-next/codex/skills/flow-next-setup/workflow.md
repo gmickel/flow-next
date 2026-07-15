@@ -697,21 +697,29 @@ Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Claude Code / Droid / Cursor**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` syntax — Cursor runs the slash commands, so its AGENTS.md must carry the `/flow-next:` snippet, NOT the Codex `$flow-next-` one)
 - CLAUDE.md (any platform): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
 
-For each chosen file (CLAUDE.md and/or AGENTS.md) — preserve repo-custom content; only touch the marker block:
+For each chosen file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marker-scoped replace, per-target pristine-hash tracking in `.flow/meta.json` `setup.block_hashes`) are deterministic flowctl plumbing; this step owns only the ask:
 
-1. Read the file (create if doesn't exist).
-2. **No marker block present** (`<!-- BEGIN FLOW-NEXT -->` absent): append the snippet at the end of the file. All pre-existing content outside the snippet is untouched.
-3. **Marker block present** — compare current marker-block content (everything between `<!-- BEGIN FLOW-NEXT -->` and `<!-- END FLOW-NEXT -->`, inclusive) against the canonical template byte-for-byte:
- - **Identical**: no-op. Skip the write — re-running setup must not bump mtime on unchanged files.
- - **Customized** (any deviation, including whitespace): do NOT silently replace. Ask the user via `plain-text numbered prompt`:
+1. Run the helper (repeat per chosen file, substituting the snippet template selected above):
+
+ ```bash
+ "${PLUGIN_ROOT}/scripts/flowctl" setup-block apply --file <FILE> \
+ --template "${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md" --json
+ ```
+
+2. Route on the returned `action` - the first four need no prompt:
+ - `appended` - no marker block existed; the snippet was appended at end of file (pre-existing content untouched) and its pristine hash recorded.
+ - `refreshed` - the existing block matched its recorded pristine hash (never customized), so the helper silently replaced it with the new canonical and updated the hash. Existing installs receive template fixes without a prompt.
+ - `unchanged` - the block already matches the canonical template. No write, no mtime bump.
+ - `kept` - a previous "Keep mine" recorded the `"customized"` sentinel; the helper never re-asks and never silently overwrites. Leave it alone.
+ - `ask` (reason `customized` or `hash-absent`) - the block differs from canonical and is not provably pristine. The helper wrote nothing; ask via `plain-text numbered prompt`:
  - **header**: `Overwrite customized <FILE>?` (substitute CLAUDE.md or AGENTS.md)
- - **body**: `<FILE> contains a flow-next marker block that has been customized (differs from the canonical template shipped with this plugin version). Overwriting replaces your customizations within the marker block; pre-existing content outside the markers is untouched either way.`
+ - **body**: `<FILE> contains a flow-next marker block that differs from the canonical template shipped with this plugin version and is not recorded as pristine. Overwriting replaces the marker block only; content outside the markers is untouched either way.`
  - **options**:
- - `Keep mine (Recommended)` — leave the marker block unchanged. Print the path to the canonical template so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
- - `Overwrite with canonical` — replace the marker block with the canonical snippet. Customizations inside the markers are lost; content outside the markers is preserved.
- - `abort` — exit cleanly. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the Model Routing scaffold, and the Star step). Re-run `/flow-next:setup` later to complete setup.
+ - `Keep mine (Recommended)` - run `"${PLUGIN_ROOT}/scripts/flowctl" setup-block resolve --file <FILE> --template <same template> --choice keep --json`. This records the `"customized"` sentinel so future re-runs never re-ask and never overwrite. Print the canonical template path so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
+ - `Overwrite with canonical` - run the same `setup-block resolve` command with `--choice overwrite`. This replaces the marker block with the canonical snippet and records the new pristine hash; customizations inside the markers are lost, content outside the markers is preserved.
+ - `abort` - exit cleanly, no further writes. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the Model Routing scaffold, and the Star step). Re-run `/flow-next:setup` later to complete setup.
 
-The marker-block boundaries are load-bearing: pre-existing prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` is **never** modified by this step. Only the bytes between (and including) those markers are candidates for replacement.
+The marker-block boundaries are load-bearing: pre-existing prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` is **never** modified by this step, and only the flowctl helper performs writes. Only the bytes between (and including) those markers are candidates for replacement.
 
 **Model Routing scaffold** (only if the Model Routing question was asked — i.e. `ROUTING_ASK=1` AND `BRIDGE_DETECTED=1`; when either is 0 the question was never shown, so this step is a silent no-op — record `not offered` for the summary and skip to Star).
 

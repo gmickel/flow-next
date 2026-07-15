@@ -2066,6 +2066,204 @@ def read_text_or_exit(path: Path, what: str, use_json: bool = True) -> str:
         error_exit(f"{what} unreadable: {path} ({e})", use_json=use_json)
 
 
+# --- Setup docs block helpers (fn-99, R3/R8/R12) ---
+
+SETUP_BLOCK_BEGIN = "<!-- BEGIN FLOW-NEXT -->"
+SETUP_BLOCK_END = "<!-- END FLOW-NEXT -->"
+
+
+def _read_text_verbatim(path: Path) -> str:
+    """Read text without newline translation so setup-block preserves bytes."""
+    with open(path, encoding="utf-8", newline="") as f:
+        return f.read()
+
+
+def _setup_block_hash(content: str) -> str:
+    """Hash a marker block after the fn-99 CRLF-only normalization."""
+    normalized = content.replace("\r\n", "\n")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _setup_block_span(content: str) -> Optional[tuple[int, int]]:
+    """Return marker-line indexes, or fail on a BEGIN marker without END."""
+    lines = content.splitlines(keepends=True)
+    begin_index = next(
+        (index for index, line in enumerate(lines) if SETUP_BLOCK_BEGIN in line), None
+    )
+    if begin_index is None:
+        return None
+    end_index = next(
+        (
+            index
+            for index in range(begin_index + 1, len(lines))
+            if SETUP_BLOCK_END in lines[index]
+        ),
+        None,
+    )
+    if end_index is None:
+        raise ValueError("corrupt flow-next marker block: BEGIN marker has no END marker")
+    start = sum(len(line) for line in lines[:begin_index])
+    end = sum(len(line) for line in lines[: end_index + 1])
+    return start, end
+
+
+def _setup_block_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, str]:
+    """Resolve fn-99 setup-block paths and its repo-relative state-map key."""
+    repo_root = get_repo_root().resolve()
+    target = Path(args.file)
+    if not target.is_absolute():
+        target = repo_root / target
+    target = target.resolve()
+    try:
+        key = target.relative_to(repo_root).as_posix()
+    except ValueError:
+        error_exit("target file must be inside the repository", use_json=args.json)
+
+    template = Path(args.template)
+    if not template.is_absolute():
+        template = repo_root / template
+    return repo_root, target, template, key
+
+
+def _setup_block_recorded_hash(meta: dict, key: str) -> Optional[str]:
+    """Return a valid stored hash, treating malformed setup metadata as absent."""
+    setup = meta.get("setup")
+    if not isinstance(setup, dict):
+        return None
+    block_hashes = setup.get("block_hashes")
+    if not isinstance(block_hashes, dict):
+        return None
+    if any(not isinstance(value, str) for value in block_hashes.values()):
+        return None
+    value = block_hashes.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _setup_block_record_hash(meta: dict, key: str, value: str) -> None:
+    """Repair only malformed fn-99 setup state and record one target's value."""
+    setup = meta.get("setup")
+    if not isinstance(setup, dict):
+        setup = {}
+        meta["setup"] = setup
+    block_hashes = setup.get("block_hashes")
+    if not isinstance(block_hashes, dict) or any(
+        not isinstance(existing, str) for existing in block_hashes.values()
+    ):
+        block_hashes = {}
+        setup["block_hashes"] = block_hashes
+    block_hashes[key] = value
+
+
+def _setup_block_meta_or_exit(use_json: bool) -> tuple[Path, dict]:
+    """Load setup-block state, requiring setup initialization first (fn-99 R3)."""
+    meta_path = get_flow_dir() / META_FILE
+    if not meta_path.exists():
+        error_exit("meta.json missing - run flowctl init first", use_json=use_json)
+    meta = load_json_or_exit(meta_path, "meta.json", use_json=use_json)
+    if not isinstance(meta, dict):
+        error_exit("meta.json invalid: expected an object", use_json=use_json)
+    return meta_path, meta
+
+
+def _setup_block_emit(args: argparse.Namespace, target: str, action: str,
+                      reason: Optional[str], recorded_hash: Optional[str]) -> None:
+    """Emit the stable fn-99 transition-table result shape."""
+    result = {
+        "target": target,
+        "action": action,
+        "reason": reason,
+        "hash": recorded_hash,
+    }
+    if args.json:
+        json_output(result)
+    else:
+        detail = f" ({reason})" if reason else ""
+        print(f"setup-block {target}: {action}{detail}")
+
+
+def cmd_setup_block_apply(args: argparse.Namespace) -> None:
+    """Apply fn-99's R3/R8/R12 pristine-hash transition table to one doc block."""
+    _, target, template, key = _setup_block_paths(args)
+    meta_path, meta = _setup_block_meta_or_exit(args.json)
+    try:
+        canonical = _read_text_verbatim(template)
+    except Exception as e:
+        error_exit(f"template unreadable: {template} ({e})", use_json=args.json)
+    canonical_hash = _setup_block_hash(canonical)
+    recorded = _setup_block_recorded_hash(meta, key)
+
+    if not target.exists():
+        atomic_write(target, canonical)
+        _setup_block_record_hash(meta, key, canonical_hash)
+        atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "appended", None, canonical_hash)
+        return
+
+    try:
+        current = _read_text_verbatim(target)
+        span = _setup_block_span(current)
+    except ValueError as e:
+        error_exit(str(e), use_json=args.json)
+    except Exception as e:
+        error_exit(f"target unreadable: {target} ({e})", use_json=args.json)
+
+    if span is None:
+        separator = "" if not current else ("\n" if current.endswith("\n") else "\n\n")
+        atomic_write(target, current + separator + canonical)
+        _setup_block_record_hash(meta, key, canonical_hash)
+        atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "appended", None, canonical_hash)
+        return
+
+    current_block = current[span[0]:span[1]]
+    current_hash = _setup_block_hash(current_block)
+    if current_block.replace("\r\n", "\n") == canonical.replace("\r\n", "\n"):
+        if recorded != canonical_hash:
+            _setup_block_record_hash(meta, key, canonical_hash)
+            atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "unchanged", None, canonical_hash)
+        return
+
+    if recorded == current_hash:
+        atomic_write(target, current[:span[0]] + canonical + current[span[1]:])
+        _setup_block_record_hash(meta, key, canonical_hash)
+        atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "refreshed", None, canonical_hash)
+    elif recorded == "customized":
+        _setup_block_emit(args, key, "kept", "customized-sentinel", recorded)
+    elif recorded is not None:
+        _setup_block_emit(args, key, "ask", "customized", recorded)
+    else:
+        _setup_block_emit(args, key, "ask", "hash-absent", None)
+
+
+def cmd_setup_block_resolve(args: argparse.Namespace) -> None:
+    """Resolve fn-99's one-time customized-block prompt (keep or overwrite)."""
+    _, target, template, key = _setup_block_paths(args)
+    meta_path, meta = _setup_block_meta_or_exit(args.json)
+    if args.choice == "keep":
+        _setup_block_record_hash(meta, key, "customized")
+        atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "kept", "customized-sentinel", "customized")
+        return
+
+    try:
+        canonical = _read_text_verbatim(template)
+        current = _read_text_verbatim(target)
+        span = _setup_block_span(current)
+    except ValueError as e:
+        error_exit(str(e), use_json=args.json)
+    except Exception as e:
+        error_exit(f"target or template unreadable ({e})", use_json=args.json)
+    if span is None:
+        error_exit("target has no flow-next marker block to overwrite", use_json=args.json)
+    canonical_hash = _setup_block_hash(canonical)
+    atomic_write(target, current[:span[0]] + canonical + current[span[1]:])
+    _setup_block_record_hash(meta, key, canonical_hash)
+    atomic_write_json(meta_path, meta)
+    _setup_block_emit(args, key, "overwritten", None, canonical_hash)
+
+
 def read_file_or_stdin(file_arg: str, what: str, use_json: bool = True) -> str:
     """Read from file path or stdin if file_arg is '-'.
 
@@ -30553,6 +30751,28 @@ def main() -> None:
     p_init = subparsers.add_parser("init", help="Initialize .flow/ directory")
     p_init.add_argument("--json", action="store_true", help="JSON output")
     p_init.set_defaults(func=cmd_init)
+
+    # setup-block (fn-99): deterministic marker-block lifecycle for setup docs.
+    p_setup_block = subparsers.add_parser(
+        "setup-block", help="Apply or resolve the tracked Flow-Next docs block"
+    )
+    setup_block_sub = p_setup_block.add_subparsers(
+        dest="setup_block_cmd", required=True
+    )
+    for name, handler, help_text in (
+        ("apply", cmd_setup_block_apply, "Apply the canonical block safely"),
+        ("resolve", cmd_setup_block_resolve, "Keep or overwrite a customized block"),
+    ):
+        sub = setup_block_sub.add_parser(name, help=help_text)
+        sub.add_argument("--file", required=True, help="Target docs file")
+        sub.add_argument("--template", required=True, help="Canonical marker-block template")
+        if name == "resolve":
+            sub.add_argument(
+                "--choice", required=True, choices=["keep", "overwrite"],
+                help="Resolution for a customized marker block",
+            )
+        sub.add_argument("--json", action="store_true", help="JSON output")
+        sub.set_defaults(func=handler)
 
     # detect
     p_detect = subparsers.add_parser("detect", help="Check if .flow/ exists")

@@ -1,6 +1,11 @@
 {
   "next_spec": 1,
   "schema_version": 3,
+  "setup": {
+    "block_hashes": {
+      "CLAUDE.md": "9a1df8788dedd3195e474b8304963cb7f595db85fca7ec8cb0cbbf3ff9a06cee"
+    }
+  },
   "setup_date": "2026-07-15T14:03:14Z",
   "setup_version": "2.14.0"
 }
