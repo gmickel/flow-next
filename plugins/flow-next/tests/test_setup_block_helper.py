@@ -166,6 +166,51 @@ class SetupBlockFixtureTest(unittest.TestCase):
         finally:
             locked.chmod(stat.S_IRWXU)
 
+    def test_non_standalone_markers_are_rejected_without_writes(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        for content in (
+            "prose <!-- BEGIN FLOW-NEXT -->\nbody\n<!-- END FLOW-NEXT -->\n",
+            "<!-- BEGIN FLOW-NEXT -->\nbody\n<!-- END FLOW-NEXT --> suffix\n",
+            "leading <!-- END FLOW-NEXT -->\n",
+        ):
+            with self.subTest(content=content):
+                target.write_text(content, encoding="utf-8")
+                before = target.read_bytes()
+                meta_before = self.meta_path.read_bytes()
+                rejected = self._flowctl("apply", "CLAUDE.md", self.v1)
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertIn("marker must be on its own line", rejected.stdout + rejected.stderr)
+                self.assertEqual(target.read_bytes(), before)
+                self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_duplicate_marker_pairs_replace_first_block_only(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        second = "<!-- BEGIN FLOW-NEXT -->\nsecond\n<!-- END FLOW-NEXT -->\n"
+        target.write_text(self.v1.read_text(encoding="utf-8") + "middle\n" + second, encoding="utf-8")
+        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))  # records v1 hash
+        refreshed = self._result(self._flowctl("apply", "CLAUDE.md", self.v2))
+        self.assertEqual(refreshed["action"], "refreshed")
+        self.assertEqual(
+            target.read_text(encoding="utf-8"),
+            self.v2.read_text(encoding="utf-8") + "middle\n" + second,
+        )
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits required")
+    def test_write_preserves_existing_mode_and_umask_for_new_files(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text(self.v1.read_text(encoding="utf-8"), encoding="utf-8")
+        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
+        target.chmod(0o640)
+        refreshed = self._result(self._flowctl("apply", "CLAUDE.md", self.v2))
+        self.assertEqual(refreshed["action"], "refreshed")
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
+
+        fresh = self.repo / "AGENTS.md"
+        self._result(self._flowctl("apply", "AGENTS.md", self.v2))
+        umask = os.umask(0)
+        os.umask(umask)
+        self.assertEqual(stat.S_IMODE(fresh.stat().st_mode), 0o666 & ~umask)
+
     def test_missing_meta_and_corrupt_block_do_not_write(self) -> None:
         target = self.repo / "CLAUDE.md"
         target.write_text("prose\n", encoding="utf-8")

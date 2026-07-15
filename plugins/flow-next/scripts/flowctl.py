@@ -2085,22 +2085,44 @@ def _setup_block_hash(content: str) -> str:
 
 
 def _setup_block_span(content: str) -> Optional[tuple[int, int]]:
-    """Return marker-line indexes, or fail on a BEGIN marker without END."""
+    """Return marker-line indexes, or fail on a BEGIN marker without END.
+
+    A marker counts ONLY as a standalone line (stripped equality). Replacing
+    whole lines that merely CONTAIN a marker would delete the surrounding
+    user content (violates R3/R12 outside-marker preservation), so when no
+    standalone BEGIN exists but a marker token appears embedded in other
+    content, the block state is ambiguous and we refuse to write.
+    """
     lines = content.splitlines(keepends=True)
+
+    def _is_marker(line: str, marker: str) -> bool:
+        return line.strip() == marker
+
     begin_index = next(
-        (index for index, line in enumerate(lines) if SETUP_BLOCK_BEGIN in line), None
+        (i for i, line in enumerate(lines) if _is_marker(line, SETUP_BLOCK_BEGIN)),
+        None,
     )
     if begin_index is None:
+        if any(
+            SETUP_BLOCK_BEGIN in line or SETUP_BLOCK_END in line for line in lines
+        ):
+            raise ValueError(
+                "corrupt flow-next marker block: marker must be on its own line"
+            )
         return None
     end_index = next(
         (
             index
             for index in range(begin_index + 1, len(lines))
-            if SETUP_BLOCK_END in lines[index]
+            if _is_marker(lines[index], SETUP_BLOCK_END)
         ),
         None,
     )
     if end_index is None:
+        if any(SETUP_BLOCK_END in line for line in lines[begin_index + 1 :]):
+            raise ValueError(
+                "corrupt flow-next marker block: marker must be on its own line"
+            )
         raise ValueError("corrupt flow-next marker block: BEGIN marker has no END marker")
     start = sum(len(line) for line in lines[:begin_index])
     end = sum(len(line) for line in lines[: end_index + 1])
@@ -2154,6 +2176,31 @@ def _setup_block_record_hash(meta: dict, key: str, value: str) -> None:
     block_hashes[key] = value
 
 
+def _setup_block_write(target: Path, content: str) -> None:
+    """Atomic doc write that preserves the target's permission bits.
+
+    `atomic_write` replaces via mkstemp (mode 0600); a bare call would strip
+    group/world readability from an existing CLAUDE.md/AGENTS.md. Preserve the
+    prior mode for existing targets; give new files normal umask-derived
+    document permissions.
+    """
+    prior_mode: Optional[int] = None
+    try:
+        prior_mode = os.stat(target).st_mode & 0o7777
+    except OSError:
+        prior_mode = None
+    atomic_write(target, content)
+    try:
+        if prior_mode is not None:
+            os.chmod(target, prior_mode)
+        else:
+            umask = os.umask(0)
+            os.umask(umask)
+            os.chmod(target, 0o666 & ~umask)
+    except OSError:
+        pass
+
+
 def _setup_block_meta_or_exit(use_json: bool) -> tuple[Path, dict]:
     """Load setup-block state, requiring setup initialization first (fn-99 R3)."""
     meta_path = get_flow_dir() / META_FILE
@@ -2193,7 +2240,7 @@ def cmd_setup_block_apply(args: argparse.Namespace) -> None:
     recorded = _setup_block_recorded_hash(meta, key)
 
     if not target.exists():
-        atomic_write(target, canonical)
+        _setup_block_write(target, canonical)
         _setup_block_record_hash(meta, key, canonical_hash)
         atomic_write_json(meta_path, meta)
         _setup_block_emit(args, key, "appended", None, canonical_hash)
@@ -2209,7 +2256,7 @@ def cmd_setup_block_apply(args: argparse.Namespace) -> None:
 
     if span is None:
         separator = "" if not current else ("\n" if current.endswith("\n") else "\n\n")
-        atomic_write(target, current + separator + canonical)
+        _setup_block_write(target, current + separator + canonical)
         _setup_block_record_hash(meta, key, canonical_hash)
         atomic_write_json(meta_path, meta)
         _setup_block_emit(args, key, "appended", None, canonical_hash)
@@ -2225,7 +2272,7 @@ def cmd_setup_block_apply(args: argparse.Namespace) -> None:
         return
 
     if recorded == current_hash:
-        atomic_write(target, current[:span[0]] + canonical + current[span[1]:])
+        _setup_block_write(target, current[:span[0]] + canonical + current[span[1]:])
         _setup_block_record_hash(meta, key, canonical_hash)
         atomic_write_json(meta_path, meta)
         _setup_block_emit(args, key, "refreshed", None, canonical_hash)
@@ -2258,7 +2305,7 @@ def cmd_setup_block_resolve(args: argparse.Namespace) -> None:
     if span is None:
         error_exit("target has no flow-next marker block to overwrite", use_json=args.json)
     canonical_hash = _setup_block_hash(canonical)
-    atomic_write(target, current[:span[0]] + canonical + current[span[1]:])
+    _setup_block_write(target, current[:span[0]] + canonical + current[span[1]:])
     _setup_block_record_hash(meta, key, canonical_hash)
     atomic_write_json(meta_path, meta)
     _setup_block_emit(args, key, "overwritten", None, canonical_hash)
