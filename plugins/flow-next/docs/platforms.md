@@ -101,7 +101,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 
 `quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The `worker` pin is eval-motivated (fn-97, 2026-07 controlled pipeline eval at n=3: terra-medium matched `gpt-5.6-sol` correctness at ~2/3 wall-clock on frontier-authored specs); on Claude Code the worker stays `inherit`. The actual review backend (`flowctl impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults to `gpt-5.5:high` on its own.
 
-Override model defaults (global install only):
+Override model defaults: the `CODEX_MODEL_*` / `CODEX_REASONING_EFFORT_*` env vars are read by **`sync-codex.sh`** (which generates the agent `.toml` files) — `install-codex.sh` only copies the pre-built mirror, so regenerate first, then install:
 
 ```bash
 CODEX_MODEL_INTELLIGENT=gpt-5.5 \
@@ -110,8 +110,8 @@ CODEX_MODEL_WORKER=gpt-5.6-terra \
 CODEX_REASONING_EFFORT=medium \
 CODEX_REASONING_EFFORT_AUDITOR=high \
 CODEX_REASONING_EFFORT_WORKER=medium \
-CODEX_MAX_THREADS=12 \
-./scripts/install-codex.sh flow-next
+./scripts/sync-codex.sh
+CODEX_MAX_THREADS=12 ./scripts/install-codex.sh flow-next   # CODEX_MAX_THREADS is the installer's own knob
 ```
 
 ### Hooks (experimental)

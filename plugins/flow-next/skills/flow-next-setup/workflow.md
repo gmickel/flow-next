@@ -531,7 +531,7 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-When `HAVE_CODEX=1`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family via codex, so this question IS the ceremony's `review.backend codex` offer (fn-97). It only appears while `review.backend` is unset - existing config is never overwritten, so the offer never re-fires on a re-run.
+When `HAVE_CODEX=1`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family via codex, so this question carries the ceremony's `review.backend codex` offer while the key is unset (fn-97). When `review.backend` is ALREADY set to something else, this question is skipped (existing config is never silently overwritten) - the offer instead rides the Model Routing scaffold as an explicit opt-in switch, Step 7's step 8 below.
 
 Stored value is a bare backend name by default. Power users can also write a full spec like `codex:gpt-5.4:high`, `copilot:claude-opus-4.5:xhigh`, or `cursor:gpt-5.5-high` (cursor takes a model only — no `:effort`) via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms.
 
@@ -756,6 +756,22 @@ Run this **after** the Docs block above and **before** Star. It may touch the **
    DELEGATE_SET=$("${PLUGIN_ROOT}/scripts/flowctl" config get work.delegate --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
    ```
    If `DELEGATE_SET` is `codex`, note `ROUTING_DELEGATE="enabled"`; otherwise print `Warning: work.delegate did not persist as codex — set it manually with flowctl config set work.delegate codex` and note `ROUTING_DELEGATE="failed"`.
+
+**8. Review-backend switch offer** (fn-97 — run once, after step 7, only when ALL hold: the answer was `Scaffold` or `Scaffold + enable codex delegation`, `HAVE_CODEX=1`, and `CURRENT_BACKEND` is non-empty AND is not already codex — i.e. neither bare `codex` nor a `codex:...` spec form). This is the scaffold's `review.backend codex` offer for projects whose backend was configured before the scaffold existed; when `CURRENT_BACKEND` is empty the Review question in 6d already carried the offer, so this step is a silent no-op. Ask via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
+
+```json
+{
+  "header": "Review Backend",
+  "question": "The scaffolded pipeline reviews cross-family via codex. Switch review.backend from <CURRENT_BACKEND> to codex?",
+  "options": [
+    {"label": "Keep current (Recommended)", "description": "Leave review.backend as <CURRENT_BACKEND>. Switch later with: flowctl config set review.backend codex"},
+    {"label": "Switch to codex", "description": "Set review.backend codex now (the scaffold's recommended cross-family default)"}
+  ],
+  "multiSelect": false
+}
+```
+
+`Keep current` → no write, done. `Switch to codex` → run `"${PLUGIN_ROOT}/scripts/flowctl" config set review.backend codex --json`, then read the persisted value back (same read-back pattern as step 7); if it did not persist as `codex`, print `Warning: review.backend did not persist as codex — set it manually with flowctl config set review.backend codex`. This step never runs non-interactively (the whole scaffold pipeline is gated on `ROUTING_ASK=1`) and never fires when the user skipped the scaffold — declining the scaffold declines its pipeline too.
 
 **Star:**
 - If "Yes, star it":

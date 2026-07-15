@@ -204,6 +204,10 @@ flow-next skills are prompts the host agent executes — so you (the host) can r
 # ALWAYS pass --skip-git-repo-check: outside a trusted git repo codex refuses in ~1s
 # with the error only in the log — a fire-and-forget caller sees a clean, silent failure.
 codex exec -s read-only --skip-git-repo-check "<self-contained investigation prompt>" </dev/null # read-only investigation
+# WRITE mode: the flag also disables codex's git-repo preflight — your rollback boundary.
+# Assert the intended workspace FIRST (or `git init` a scratch dir), so the flag only
+# suppresses the silent-refusal failure mode, never the safety check:
+[ "$(git rev-parse --show-toplevel 2>/dev/null)" = "<intended-repo-root>" ] && \
 codex exec --sandbox workspace-write --skip-git-repo-check -o out.md "<self-contained impl prompt>" </dev/null # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
 
 # cursor-agent: -p print mode; --force actually APPLIES edits (else proposed-only).

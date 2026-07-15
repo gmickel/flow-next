@@ -134,7 +134,7 @@ The roles are **model-per-role, not host-relative**: the bridges run in both dir
 | Plan | Session frontier model | Two cross-family blind judges ranked frontier plans clearly ahead; raising effort on a weaker planner did not close the gap | Session-native | Session-native * |
 | Plan-review | Cross-family frontier | Uncorrelated blind spots on the highest-leverage artifact | `--review=codex` / `review.backend codex` | `review.backend` to a non-GPT family (e.g. `cursor:...`) |
 | Work (implementation) | `gpt-5.6-terra` @ `medium` | Matched `gpt-5.6-sol` on hidden-suite correctness at ~2/3 wall-clock on frontier-authored specs; effort above medium was pure overhead | `delegate:codex` (the `work.delegateModel` / `work.delegateEffort` defaults) | Native - the Codex mirror's worker role is pinned to terra-medium |
-| Impl-review, first pass | `gpt-5.6-sol` @ `high` | 12/12 recall on planted bugs, 0 false positives, fastest reviewer in the fleet (103s mean) | `review.backend codex` (pin `codex:gpt-5.6-sol:high`) | Same config key - the review subsystem is host-independent |
+| Impl-review, first pass | Cross-family from the writer - `gpt-5.6-sol` @ `high` when the writer is Claude-family | 12/12 recall on planted bugs, 0 false positives, fastest reviewer in the fleet (103s mean) | `review.backend codex` (pin `codex:gpt-5.6-sol:high`) - the session writes, sol reviews | The worker writes GPT (terra), so sol would be SAME-family: route the first pass to a non-GPT reviewer instead (`review.backend copilot:claude-opus-4.5` / `cursor:composer-2.5`) |
 | Impl-review, final gate | Session frontier model | Only the frontier tier volunteered correct severity tiering and blast-radius judgment unprompted | Session-native (the host interprets the verdict; escalate disagreements to it) | Session-native |
 
 \* Plan is **session-native by design** - there is no packaged cross-family plan rung. Ad-hoc bridging works (`claude -p` can author a plan from a Codex host) but frontier-Claude via `claude -p` can hit CLI credit limits on plan-sized prompts (observed 2026-07-14); plan on whatever frontier model your session runs.
@@ -145,6 +145,7 @@ Notes that keep the table honest:
 - **`gpt-5.6-luna` @ `xhigh`** is the equal-recall alternative for the first-pass reviewer (12/12) at ~2.5x the time; luna-medium is the budget delegate alternative (same hidden-suite correctness, tightest code, more tool-loop round-trips).
 - **`grok-4.5` is a classic-bug quick pass ONLY - never the gate.** It missed the eval's subtle latent bug in all 3 runs. Fine as a cheap extra pass; a ship decision must not rest on it.
 - Build-tier models are excluded from review roles entirely (in the same eval one missed a planted bug, another returned a false all-clear).
+- **"Cross-family" is measured from the WRITER, not the host.** sol-high's 12/12 was earned reviewing Claude-family-written code; when your writer is GPT (e.g. the Codex mirror's terra-pinned worker), a GPT reviewer re-correlates the blind spots - pick the reviewer from whichever family did NOT write the diff.
 
 ### The wrapper pattern - self-healing bridges for unattended loops
 

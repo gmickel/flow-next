@@ -17,7 +17,7 @@ Goal: make the proven defaults reachable without hand-rolled bridge commands, an
 
 Four pieces, no new subsystems:
 
-1. **Delegate model steering (flowctl config + work skill).** New config keys `work.delegate_model` (default `gpt-5.6-terra`) and `work.delegate_effort` (default `medium`), read by the codex-delegation bridge in flow-next-work (`skills/flow-next-work/references/codex-delegation.md` + the skill's bridge invocation): pass `-m <model> -c model_reasoning_effort=<effort>` to `codex exec`. Without these keys the bridge inherits whatever `~/.codex/config.toml` defaults to (observed: sol-high = 1.6x slower for zero quality gain). Keys are optional; unset preserves current behavior. Document in flowctl.md + orchestration.md.
+1. **Delegate model steering (flowctl config + work skill).** AMENDED during implementation (fn-97.1): the steering keys ALREADY exist from fn-55 as `work.delegateModel` / `work.delegateEffort` (camelCase, the flow config convention), are already read by the codex-delegation bridge, and are ALWAYS passed explicitly as `-m <model>` / `-c model_reasoning_effort=<effort>` (the bridge runs `--ignore-user-config`, so there is deliberately NO defer-to-`~/.codex/config.toml` path - the earlier snake_case/omit-when-unset wording described keys that never shipped anywhere). The actual delta: flip the default `work.delegateModel` from `gpt-5.6-sol` to `gpt-5.6-terra` (eval-motivated; `work.delegateEffort` stays `medium`) and document the steering keys in flowctl.md + orchestration.md + the usage.md template.
 2. **Setup scaffold question.** `/flow-next:setup` gains one optional question, asked only when at least one bridge CLI is detected on PATH (`codex`, `cursor-agent`, `grok`): "Scaffold a recommended multi-model pipeline?" Yes writes a routing block into the project instruction file's model-routing section (frontier plan + review, terra-medium delegated work, cross-family `review.backend codex`, wrapper pattern pointer for autonomous loops) and offers to set `flowctl config set review.backend codex`. No = no change. Customize = present the table for editing.
 3. **Codex mirror worker pin.** `sync-codex.sh` / `agents/worker.toml`: pin the worker role to `model = "gpt-5.6-terra"`, `model_reasoning_effort = "medium"` so Codex-host multi-agent work threads ride the efficient tier. Keep the map_model FAST/INTELLIGENT tier mapping consistent.
 4. **Docs hardening + defaults example.** (a) usage.md template bridge recipes: `--skip-git-repo-check` always on `codex exec` lines; cursor-agent "run inside a git repo" warning (edits already made locally on main, fold into this task's commit). (b) orchestration.md: add a "proven default pipeline" host-relative table (plan on session frontier / plan-review cross-family frontier / work terra-medium / impl-review: sol-high cross-family first pass + session-model final gate for severity calibration; luna-xhigh documented as the equal-recall-slower alternative; grok-4.5 documented as classic-bug quick pass ONLY - it consistently missed the subtle latent bug at n=3 and must never be the gate), a wrapper-pattern subsection (thin sonnet wrapper for unattended loops; wrapper MUST run the bridge in the foreground; self-heal license limited to environment/flags, never judgment), and a review-prompt note for the RAW-BRIDGE recipe examples ONLY (ad-hoc codex exec reviews consumed directly by a human, outside the packaged review subsystem): include P0-P3 severity so edge findings do not flip ship gates, and optionally request minimal fix + blast radius when no fix loop follows - control runs showed the artifact is prompt-shaped. The PACKAGED impl-review prompt is explicitly NOT changed: its find-vs-fix split (reviewer returns findings; the internal fix loop investigates and fixes, with validator + iteration caps) is by design.
@@ -25,8 +25,8 @@ Four pieces, no new subsystems:
 ## API Contracts
 <!-- scope: technical -->
 
-- `flowctl config set work.delegate_model <model-id>` / `flowctl config set work.delegate_effort <minimal|low|medium|high|xhigh>` - plain string config keys, no validation beyond non-empty (model ids are volatile); `flowctl config get` round-trips them.
-- Delegation bridge command shape becomes: `codex exec --sandbox workspace-write --skip-git-repo-check ${model:+-m $model} ${effort:+-c model_reasoning_effort=$effort} ...` (flag omitted entirely when key unset).
+- `flowctl config set work.delegateModel <model-id>` / `flowctl config set work.delegateEffort <none|low|medium|high|xhigh>` - pre-existing fn-55 string config keys (camelCase per flow config convention; amended from this spec's earlier snake_case spelling, which never shipped); `flowctl config get` round-trips them and returns the defaults (`gpt-5.6-terra` / `medium`) when unset.
+- Delegation bridge command shape (unchanged from fn-55): `-m` and `-c model_reasoning_effort=` are ALWAYS passed explicitly from the resolved config values - never omitted, never deferred to the user's codex config (`--ignore-user-config` isolation).
 - Setup question is additive and optional; non-interactive/autonomous setup runs skip it (no prompt, no scaffold).
 
 ## Edge Cases & Constraints
@@ -42,7 +42,7 @@ Four pieces, no new subsystems:
 ## Acceptance Criteria
 <!-- scope: both -->
 
-- R1: `work.delegate_model` + `work.delegate_effort` config keys exist, are read by the work skill's codex delegation bridge, and produce `-m`/`-c model_reasoning_effort=` flags; unset keys change nothing.
+- R1 (amended fn-97.1 to the as-shipped fn-55 contract): `work.delegateModel` + `work.delegateEffort` config keys exist, are read by the work skill's codex delegation bridge, and always produce explicit `-m`/`-c model_reasoning_effort=` flags; the shipped default flips to `gpt-5.6-terra`/`medium` (eval-motivated), and a user-set value passes through unchanged.
 - R2: `/flow-next:setup` asks the multi-model scaffold question only when a bridge CLI is detected, and Yes writes the routing block + offers `review.backend codex`; the question never fires in autonomous/non-interactive runs.
 - R3: Codex mirror `agents/worker.toml` pins terra-medium; regenerated by `sync-codex.sh`; Claude-side worker unchanged.
 - R4: usage.md template bridge recipes carry `--skip-git-repo-check` on all codex exec lines and the cursor-agent git-repo warning; codex mirror regenerated.
@@ -54,7 +54,7 @@ Four pieces, no new subsystems:
 <!-- scope: business -->
 
 - NOT building a new wrapper agent type, review backend, or scoring harness - docs + config plumbing only.
-- NOT changing default behavior for users who set nothing (all additions opt-in or inert-by-default) except the recipe hardening flags, which are strictly safer.
+- NOT changing default behavior for users who set nothing (all additions opt-in or inert-by-default) except the recipe hardening flags, which are strictly safer, and the R1 delegate-default flip (`gpt-5.6-sol` -> `gpt-5.6-terra`, only visible when delegation is actively enabled) - which is the point of R1 (amended fn-97.1).
 - NOT encoding benchmark numbers as normative claims in docs - the eval is one task; docs may cite it as motivation, not as a guarantee.
 - Vendor model names in defaults are starting opinions, same contract as the existing model-routing scaffold.
 
