@@ -36,7 +36,7 @@ The bundled agents are pre-tiered by task shape (each A/B-verified before downgr
 | heavy (`opus`) | quality-auditor | adversarial audit |
 | `inherit` | worker, pr-comment-resolver | implementation follows the session model |
 
-The Codex mirror maps these to `gpt-5.5` / `gpt-5.4-mini` at sync time (`scripts/sync-codex.sh` `map_model`, overridable via `CODEX_MODEL_INTELLIGENT` / `CODEX_MODEL_FAST`), with one exception: the mirror's **worker is pinned to `gpt-5.6-terra` @ `medium`** (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`) so Codex-host work threads ride the efficient tier - the Claude-side worker stays `inherit`. Details: [`platforms.md`](platforms.md).
+The Codex mirror maps these to `gpt-5.5` / `gpt-5.4-mini` at sync time (`scripts/sync-codex.sh` `map_model`, overridable via `CODEX_MODEL_INTELLIGENT` / `CODEX_MODEL_FAST`), The worker keeps `inherit` on both platforms (your session model rules); an OPT-IN sync-time pin (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`, recommended `gpt-5.6-terra` @ `medium`) lets Codex-host work threads ride the efficient tier - Codex `spawn_agent` offers no per-spawn model choice, so the role config is the only steering mechanism there. Details: [`platforms.md`](platforms.md).
 
 ### Review backends — cross-model review
 
@@ -133,7 +133,7 @@ The roles are **model-per-role, not host-relative**: the bridges run in both dir
 |------|-------|-----|-------------------------------|-------------------------|
 | Plan | Session frontier model | Two cross-family blind judges ranked frontier plans clearly ahead; raising effort on a weaker planner did not close the gap | Session-native | Session-native * |
 | Plan-review | Cross-family frontier | Uncorrelated blind spots on the highest-leverage artifact | `--review=codex` / `review.backend codex` | `review.backend` to a non-GPT family (e.g. `cursor:...`) |
-| Work (implementation) | `gpt-5.6-terra` @ `medium` | Matched `gpt-5.6-sol` on hidden-suite correctness at ~2/3 wall-clock on frontier-authored specs; effort above medium was pure overhead | `delegate:codex` (the `work.delegateModel` / `work.delegateEffort` defaults) | Native - the Codex mirror's worker role is pinned to terra-medium |
+| Work (implementation) | `gpt-5.6-terra` @ `medium` | Matched `gpt-5.6-sol` on hidden-suite correctness at ~2/3 wall-clock on frontier-authored specs; effort above medium was pure overhead | `delegate:codex` (the `work.delegateModel` / `work.delegateEffort` defaults) | Native - session model by default; opt-in sync-time pin `CODEX_MODEL_WORKER=gpt-5.6-terra` (spawn_agent has no per-spawn model choice) |
 | Impl-review, first pass | Cross-family from the writer - `gpt-5.6-sol` @ `high` when the writer is Claude-family | 12/12 recall on planted bugs, 0 false positives, fastest reviewer in the fleet (103s mean) | `review.backend codex` (pin `codex:gpt-5.6-sol:high`) - the session writes, sol reviews | The worker writes GPT (terra), so sol would be SAME-family: route the first pass to a non-GPT reviewer instead (`review.backend copilot:claude-opus-4.5` / `cursor:composer-2.5`) |
 | Impl-review, final gate | Session frontier model | Only the frontier tier volunteered correct severity tiering and blast-radius judgment unprompted | Session-native (the host interprets the verdict; escalate disagreements to it) | Session-native |
 
