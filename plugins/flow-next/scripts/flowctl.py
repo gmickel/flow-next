@@ -2130,16 +2130,38 @@ def _setup_block_span(content: str) -> Optional[tuple[int, int]]:
 
 
 def _setup_block_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, str]:
-    """Resolve fn-99 setup-block paths and its repo-relative state-map key."""
+    """Resolve fn-99 setup-block paths and its repo-relative state-map key.
+
+    The state-map key and the target's logical identity come from the
+    *unresolved* path: CLAUDE.md and AGENTS.md must stay independent keys even
+    when one is a symlink to the other (a common instruction-file convention).
+    Following the symlink here would collapse both keys onto the referent, name
+    the wrong target in output, and let the Codex `$flow-next-*` template land in
+    CLAUDE.md. Containment is checked against the resolved PARENT (so `..`
+    escapes are still caught) while the filename is preserved verbatim.
+    """
     repo_root = get_repo_root().resolve()
     target = Path(args.file)
     if not target.is_absolute():
         target = repo_root / target
-    target = target.resolve()
+    # Resolve the parent for containment; keep the filename unresolved.
+    resolved_parent = target.parent.resolve()
+    target = resolved_parent / target.name
     try:
         key = target.relative_to(repo_root).as_posix()
     except ValueError:
         error_exit("target file must be inside the repository", use_json=args.json)
+
+    if target.is_symlink():
+        # Setup's discoverability picks the substantive (real) instruction file;
+        # a symlink reaching the block helper would write through to its referent
+        # (e.g. CLAUDE.md->AGENTS.md), corrupting the other target. Reject with
+        # guidance rather than silently following it.
+        error_exit(
+            f"target {key} is a symlink; point setup-block at the real "
+            "instruction file (the symlink referent) instead",
+            use_json=args.json,
+        )
 
     template = Path(args.template)
     if not template.is_absolute():
@@ -2212,6 +2234,26 @@ def _setup_block_meta_or_exit(use_json: bool) -> tuple[Path, dict]:
     return meta_path, meta
 
 
+@contextmanager
+def _setup_block_lock():
+    """Serialize setup-block meta.json read-modify-write across concurrent runs.
+
+    Parallel CLAUDE.md + AGENTS.md applies both load the per-target
+    `setup.block_hashes` map, mutate one key, and write back; unlocked, the
+    second writer clobbers the first target's hash. A repo-local exclusive lock
+    (re-read meta INSIDE the lock at each call site) makes the map merge safe.
+    """
+    lock_dir = get_flow_dir() / "locks"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_dir / "setup-block.lock"
+    with open(lock_path, "w") as f:
+        try:
+            _flock(f, LOCK_EX)
+            yield
+        finally:
+            _flock(f, LOCK_UN)
+
+
 def _setup_block_emit(args: argparse.Namespace, target: str, action: str,
                       reason: Optional[str], recorded_hash: Optional[str]) -> None:
     """Emit the stable fn-99 transition-table result shape."""
@@ -2231,13 +2273,24 @@ def _setup_block_emit(args: argparse.Namespace, target: str, action: str,
 def cmd_setup_block_apply(args: argparse.Namespace) -> None:
     """Apply fn-99's R3/R8/R12 pristine-hash transition table to one doc block."""
     _, target, template, key = _setup_block_paths(args)
-    meta_path, meta = _setup_block_meta_or_exit(args.json)
     try:
         canonical = _read_text_verbatim(template)
     except Exception as e:
         error_exit(f"template unreadable: {template} ({e})", use_json=args.json)
     canonical_hash = _setup_block_hash(canonical)
-    recorded = _setup_block_recorded_hash(meta, key)
+    with _setup_block_lock():
+        # Re-read meta inside the lock so a concurrent sibling apply cannot
+        # clobber this target's hash (fn-99 R8 concurrency finding).
+        meta_path, meta = _setup_block_meta_or_exit(args.json)
+        recorded = _setup_block_recorded_hash(meta, key)
+        _cmd_setup_block_apply_locked(
+            args, target, canonical, canonical_hash, recorded, meta_path, meta, key
+        )
+
+
+def _cmd_setup_block_apply_locked(args, target, canonical, canonical_hash,
+                                  recorded, meta_path, meta, key) -> None:
+    """Transition body for cmd_setup_block_apply; runs under _setup_block_lock."""
 
     if not target.exists():
         _setup_block_write(target, canonical)
@@ -2287,7 +2340,14 @@ def cmd_setup_block_apply(args: argparse.Namespace) -> None:
 def cmd_setup_block_resolve(args: argparse.Namespace) -> None:
     """Resolve fn-99's one-time customized-block prompt (keep or overwrite)."""
     _, target, template, key = _setup_block_paths(args)
-    meta_path, meta = _setup_block_meta_or_exit(args.json)
+    with _setup_block_lock():
+        # Re-read meta inside the lock (fn-99 R8 concurrency finding).
+        meta_path, meta = _setup_block_meta_or_exit(args.json)
+        _cmd_setup_block_resolve_locked(args, target, template, key, meta_path, meta)
+
+
+def _cmd_setup_block_resolve_locked(args, target, template, key, meta_path, meta) -> None:
+    """Resolve body; runs under _setup_block_lock."""
     if args.choice == "keep":
         _setup_block_record_hash(meta, key, "customized")
         atomic_write_json(meta_path, meta)

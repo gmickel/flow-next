@@ -137,6 +137,42 @@ class SetupBlockFixtureTest(unittest.TestCase):
         self.assertEqual(rerun["action"], "kept")
         self.assertEqual(target.read_bytes(), original)
 
+    def test_customized_keep_from_recorded_hash_sets_sentinel_and_never_reasks(self) -> None:
+        # R12: the recorded-hash -> customized -> Keep -> sentinel transition
+        # (distinct from the hash-absent Keep path already covered).
+        target = self.repo / "CLAUDE.md"
+        target.write_text("top\n", encoding="utf-8")
+        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))  # records v1 pristine hash
+        # User edits inside the markers AFTER a pristine install: current now
+        # differs from both the recorded hash and the new canonical.
+        target.write_text(target.read_text(encoding="utf-8").replace("v1", "mine"), encoding="utf-8")
+        edited = target.read_bytes()
+        asked = self._result(self._flowctl("apply", "CLAUDE.md", self.v2))
+        self.assertEqual((asked["action"], asked["reason"]), ("ask", "customized"))
+        kept = self._result(self._flowctl("resolve", "CLAUDE.md", self.v2, "--choice", "keep"))
+        self.assertEqual(kept["action"], "kept")
+        self.assertEqual(target.read_bytes(), edited)  # bytes unchanged
+        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"], "customized")
+        rerun = self._result(self._flowctl("apply", "CLAUDE.md", self.v2))
+        self.assertEqual(rerun["action"], "kept")  # sentinel: never re-asks
+        self.assertEqual(target.read_bytes(), edited)
+
+    @unittest.skipIf(os.name == "nt", "POSIX symlinks required")
+    def test_symlinked_instruction_file_is_rejected_without_touching_referent(self) -> None:
+        # Major finding: a symlinked CLAUDE.md->AGENTS.md must NOT be followed;
+        # its logical key must stay independent and the referent untouched.
+        agents = self.repo / "AGENTS.md"
+        agents.write_text(self.v1.read_text(encoding="utf-8"), encoding="utf-8")
+        self._result(self._flowctl("apply", "AGENTS.md", self.v1))  # records AGENTS.md hash
+        agents_before = agents.read_bytes()
+        (self.repo / "CLAUDE.md").symlink_to("AGENTS.md")
+        rejected = self._flowctl("apply", "CLAUDE.md", self.v2)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("symlink", (rejected.stdout + rejected.stderr).lower())
+        self.assertEqual(agents.read_bytes(), agents_before)  # referent untouched
+        # Key never collapsed onto the referent.
+        self.assertNotIn("CLAUDE.md", self._meta()["setup"]["block_hashes"])
+
     def test_malformed_setup_metadata_repairs_on_overwrite(self) -> None:
         target = self.repo / "CLAUDE.md"
         for malformed in ({"block_hashes": "bad"}, ["bad"]):

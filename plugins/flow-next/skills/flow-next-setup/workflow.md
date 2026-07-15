@@ -695,9 +695,11 @@ Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Claude Code / Droid / Cursor**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` syntax — Cursor runs the slash commands, so its AGENTS.md must carry the `/flow-next:` snippet, NOT the Codex `$flow-next-` one)
 - CLAUDE.md (any platform): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
 
-For each chosen file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marker-scoped replace, per-target pristine-hash tracking in `.flow/meta.json` `setup.block_hashes`) are deterministic flowctl plumbing; this step owns only the ask:
+**Resolve the target file set (independent of whether the Docs question fired):** run the helper for every marker-bearing instruction file plus any file the Docs question just chose to (re)write - NOT only the "chosen" files. This matters for R8: when the Docs question is skipped because the block is already current (per the Note above), a current-but-hashless block (written by a pre-hash plugin version) would otherwise never reach `apply`, so its pristine hash never gets backfilled and the NEXT template change wrongly prompts "Overwrite customized?". Running `apply` on a current block is cheap and idempotent - it returns `unchanged` and backfills the hash. So: resolve targets = {files chosen by the Docs question} ∪ {files already carrying the `<!-- BEGIN FLOW-NEXT -->` marker}; run the helper once per resolved file.
 
-1. Run the helper (repeat per chosen file, substituting the snippet template selected above):
+For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marker-scoped replace, per-target pristine-hash tracking in `.flow/meta.json` `setup.block_hashes`) are deterministic flowctl plumbing; this step owns only the ask:
+
+1. Run the helper (repeat per resolved file, substituting the snippet template selected above):
 
    ```bash
    "${PLUGIN_ROOT}/scripts/flowctl" setup-block apply --file <FILE> \
