@@ -17,9 +17,12 @@ Gotchas (memory): re-declare paths per skill bash block; bash snippets are execu
 - Lockstep parity test green and fails on twin drift (R9).
 - Repo CLAUDE.md dogfood block updated; unit + smoke green.
 ## Done summary
-TBD
+Dieted the setup-written Flow-Next instruction block from ~575 to ~248 tokens (both claude-md-snippet.md and agents-md-snippet.md twins), inlined the evidence-JSON schema example (the eval's sole correctness-critical content), and added pristine-upgrade detection so existing installs receive template fixes without a spurious "overwrite customized?" prompt.
 
+Delivered R1 (evidence schema inline, structural-equality contract vs worker.md), R2 (both snippets ~248 tok with the full keep-list), R3 (marker-scoped in-place refresh, outside-marker bytes preserved), R8 (per-target setup.block_hashes map + "customized" sentinel), R9 (twin lockstep + evidence-shape tests), R12 (fixture matrix incl. the customized-Keep transition).
+
+Mechanics live in thin flowctl plumbing (setup-block apply/resolve) with a transition table; workflow.md owns only the ask. Codex impl-review (sol-high) took 3 rounds: r1 (worker) initial fixes; r2 fixed symlink-collapse identity bug (Major), skipped-Docs hash backfill, meta.json concurrency lock; r3 scoped the backfill to honor explicit Docs deselection. SHIP on r3.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c0f4d7a0, 2f89a776, 56a40052, 22090627
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1784 OK, skipped=2), python3 -m unittest plugins.flow-next.tests.test_setup_block_helper plugins.flow-next.tests.test_setup_snippet_lockstep (14 OK), codex impl-review sol-high SHIP round 3
 - PRs:
