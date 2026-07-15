@@ -1,0 +1,31 @@
+{
+  "branch_name": "fn-99-setup-block-diet-evidence-schema-inline",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-07-15T17:23:25.417079Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-99-setup-block-diet-evidence-schema-inline",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-99-setup-block-diet-evidence-schema-inline.md",
+  "status": "open",
+  "title": "Setup-block diet: evidence schema inline, minimal tracking block, usage.md trim",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-15T18:41:12.536081Z"
+}

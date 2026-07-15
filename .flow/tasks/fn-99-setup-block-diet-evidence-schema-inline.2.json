@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-15T18:28:55.804494Z",
+  "depends_on": [
+    "fn-99-setup-block-diet-evidence-schema-inline.1"
+  ],
+  "id": "fn-99-setup-block-diet-evidence-schema-inline.2",
+  "priority": null,
+  "spec": "fn-99-setup-block-diet-evidence-schema-inline",
+  "spec_path": ".flow/tasks/fn-99-setup-block-diet-evidence-schema-inline.2.md",
+  "status": "todo",
+  "title": "Guidance-eval harness: commit under agent_docs, extend with multi-task scenario, baseline",
+  "updated_at": "2026-07-15T18:38:29.033799Z"
+}

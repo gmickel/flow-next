@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-15T18:28:56.349326Z",
+  "depends_on": [
+    "fn-99-setup-block-diet-evidence-schema-inline.1",
+    "fn-99-setup-block-diet-evidence-schema-inline.2"
+  ],
+  "id": "fn-99-setup-block-diet-evidence-schema-inline.3",
+  "priority": null,
+  "spec": "fn-99-setup-block-diet-evidence-schema-inline",
+  "spec_path": ".flow/tasks/fn-99-setup-block-diet-evidence-schema-inline.3.md",
+  "status": "todo",
+  "title": "usage.md trim: consumer audit, cuts, sandbox line, budget tests, changelogs",
+  "updated_at": "2026-07-15T18:38:57.544221Z"
+}
