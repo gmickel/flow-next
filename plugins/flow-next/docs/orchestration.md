@@ -68,7 +68,7 @@ flowctl config set work.delegateEffort medium     # none|low|medium|high|xhigh f
 
 Or per-invocation: `/flow-next:work fn-12 delegate:codex`. The host retains gating, classification, git ownership, review, and commit; `codex exec` writes code and is forbidden from git and decisions. OFF by default, one-time consent-gated, circuit-breakered, with an independent verification backstop (the worker runs tests on the delegated diff even with `REVIEW_MODE=none`). Full contract: [`codex-delegation.md`](../skills/flow-next-work/references/codex-delegation.md).
 
-The `gpt-5.6-terra` / `medium` defaults are eval-motivated, not arbitrary: a controlled pipeline eval (2026-07-14, hidden 39-check oracle suite, n=3 reps) had terra-medium match `gpt-5.6-sol` on correctness at roughly two-thirds the wall-clock on frontier-authored specs, with effort above `medium` pure overhead. One task, so motivation rather than guarantee - escalate `work.delegateModel` to `gpt-5.6-sol` when a task looks gnarly.
+The `gpt-5.6-terra` / `medium` defaults are eval-motivated, not arbitrary: a controlled pipeline eval (2026-07-14, hidden 39-check oracle suite, n=3 reps) had terra-medium match `gpt-5.6-sol` on correctness at roughly two-thirds the wall-clock on frontier-authored specs, with effort above `medium` pure overhead. One task, so motivation rather than guarantee - escalate `work.delegateModel` to `gpt-5.6-sol` when a task looks gnarly. Upgraders note: `flowctl init` persists defaults into `.flow/config.json` and raw values win, so installs initialized under an older default keep it until you run the `config set` above yourself.
 
 ### Per-spec backend fields — external orchestrators
 

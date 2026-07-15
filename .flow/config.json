@@ -77,7 +77,7 @@
     "delegateConsent": false,
     "delegateDecision": "auto",
     "delegateEffort": "medium",
-    "delegateModel": "gpt-5.5",
+    "delegateModel": "gpt-5.6-terra",
     "delegateSandbox": "yolo"
   }
 }
