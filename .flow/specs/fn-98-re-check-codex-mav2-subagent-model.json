@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-98-re-check-codex-mav2-subagent-model",
+  "created_at": "2026-07-15T12:47:53.776759Z",
+  "depends_on_epics": [],
+  "id": "fn-98-re-check-codex-mav2-subagent-model",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-98-re-check-codex-mav2-subagent-model.md",
+  "status": "open",
+  "title": "Re-check codex MAv2 subagent model steering fixes (watch, ~2026-07-22)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-15T12:48:20.314725Z"
+}

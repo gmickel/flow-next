@@ -201,10 +201,18 @@ flow-next skills are prompts the host agent executes — so you (the host) can r
 ```bash
 # codex exec DEFAULTS to a read-only sandbox. Redirect stdin from /dev/null —
 # spawned by another agent it hangs indefinitely on inherited non-TTY stdin.
-codex exec -s read-only "<self-contained investigation prompt>" </dev/null # read-only investigation
-codex exec --sandbox workspace-write -o out.md "<self-contained impl prompt>" </dev/null # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
+# ALWAYS pass --skip-git-repo-check: outside a trusted git repo codex refuses in ~1s
+# with the error only in the log — a fire-and-forget caller sees a clean, silent failure.
+codex exec -s read-only --skip-git-repo-check "<self-contained investigation prompt>" </dev/null # read-only investigation
+# WRITE mode: the flag also disables codex's git-repo preflight — your rollback boundary.
+# Assert the intended workspace FIRST (or `git init` a scratch dir), so the flag only
+# suppresses the silent-refusal failure mode, never the safety check:
+[ "$(git rev-parse --show-toplevel 2>/dev/null)" = "<intended-repo-root>" ] && \
+codex exec --sandbox workspace-write --skip-git-repo-check -o out.md "<self-contained impl prompt>" </dev/null # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
 
 # cursor-agent: -p print mode; --force actually APPLIES edits (else proposed-only).
+# Run it INSIDE a git repo (`git init` scratch dirs first): in a non-repo dir it blocks on an
+# interactive workspace-trust prompt and exits "successfully" with empty output.
 CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>" # model IDs are volatile → cursor-agent --list-models
 
 # claude -p: the same bridge in REVERSE — drive Claude headlessly from a Codex/Cursor host.
@@ -214,6 +222,8 @@ claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Ba
 grok -p "<self-contained prompt>" -m grok-4.5-high </dev/null # read-only-ish; add --always-approve (or --permission-mode acceptEdits) to let it act. -m/--model + --reasoning-effort; --json-schema for structured output. Grok 4.5 = fast + cheap first-draft; route to bulk/implementation, not UI or final taste-critical work.
 ```
 
+The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<prompt>"` steers a different GPT tier reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.
+
 Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.
 
 **flow-next shortcuts** — the same bridges, packaged as config:
@@ -222,6 +232,8 @@ Harness-relative: every direction works — from Claude Code the bridges are `co
 # Delegate implementation to codex (host keeps gating/git/review; codex only writes code)
 .flow/bin/flowctl config set work.delegate codex # value MUST be `codex` to activate (OFF by default, consent-gated)
 # …or per-run, no config: $flow-next-work fn-1-add-oauth delegate:codex
+# Steer the delegate: work.delegateModel (default gpt-5.6-terra, passed as -m) +
+# work.delegateEffort (default medium, passed as -c model_reasoning_effort=)
 
 # Cross-family review — the model that writes is never the model that reviews
 .flow/bin/flowctl config set review.backend codex # or cursor:composer-2.5

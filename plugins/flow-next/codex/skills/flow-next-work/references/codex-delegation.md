@@ -247,7 +247,7 @@ passes the resolved flags into each spawned worker's prompt (the
 
 ```text
 DELEGATE: codex # on; absent/`local` ⇒ standard in-session worker
-DELEGATE_MODEL: <work.delegateModel> # default gpt-5.6-sol (requires codex CLI >= 0.144)
+DELEGATE_MODEL: <work.delegateModel> # default gpt-5.6-terra (fn-97 eval-motivated default; requires codex CLI >= 0.144)
 DELEGATE_SANDBOX: <yolo|full-auto> # from consent
 DELEGATE_EFFORT_FLOOR: <work.delegateEffort> # default medium (per-batch escalation floors here)
 DELEGATE_DECISION: <auto|ask>
@@ -266,7 +266,7 @@ local`) — the worker runs standard in-session implementation, unchanged.
 > isolated by `--ignore-user-config`. Re-verify the flag shape on any CLI bump
 > (`codex exec --help`; CLI moves fast).
 
-### The `codex exec` invocation (lifted; gpt-5.6-sol/medium defaults)
+### The `codex exec` invocation (lifted; gpt-5.6-terra/medium defaults)
 
 Pick the sandbox flag from the host-passed `DELEGATE_SANDBOX`
 (`work.delegateSandbox`) and **inline the LITERAL flag into the launched command**
@@ -303,7 +303,7 @@ FLOW_DELEGATE_CODEX=1 codex exec \
  `export`ed var would neither reach the hook nor persist across Bash prompt turns.
  Keep it in the command string verbatim.
 - **`-m` / `-c` are ALWAYS passed explicitly** from `DELEGATE_MODEL`
- (`work.delegateModel`, default `gpt-5.6-sol` — delegated work is real work, never a cheaper tier; needs codex CLI >= 0.144) and the per-batch `effective_effort`
+ (`work.delegateModel`, default `gpt-5.6-terra` — a controlled 2026-07 pipeline eval (n=3) had terra-medium match gpt-5.6-sol on correctness at ~2/3 the wall-clock on frontier-authored specs; one task, motivation not guarantee. Escalate to `gpt-5.6-sol` via config for gnarly tasks; needs codex CLI >= 0.144) and the per-batch `effective_effort`
  (default `medium`, escalated below). **There is NO "defer to `~/.codex/config.toml`"
  path** — `--ignore-user-config` deliberately skips the user Codex config (MCP
  isolation wins), so model + effort MUST come from flow config, never the user's
@@ -698,7 +698,7 @@ things so the host can run the breaker without re-reading the scratch dir:
  "summary": "...",
  "verification_summary": "..."
  },
- "model": "gpt-5.6-sol",
+ "model": "gpt-5.6-terra",
  "effort": "medium",
  "class": "success"
  }
@@ -863,8 +863,8 @@ AI-Orchestrator: Claude
 AI-Implementer: codex <model> (<effort>)
 ```
 
-- `<model>` is `DELEGATE_MODEL` (e.g. `gpt-5.6-sol`); `<effort>` is the per-batch
- `effective_effort` (e.g. `medium`) — yielding `AI-Implementer: codex gpt-5.6-sol (medium)`.
+- `<model>` is `DELEGATE_MODEL` (e.g. `gpt-5.6-terra`); `<effort>` is the per-batch
+ `effective_effort` (e.g. `medium`) — yielding `AI-Implementer: codex gpt-5.6-terra (medium)`.
 - Append them as real trailer lines (own paragraph, blank line before the
  `Task:` trailer block) so `git interpret-trailers` / `make-pr` can read them.
 - **Only on a delegated commit.** A standard in-session commit (no delegation, or

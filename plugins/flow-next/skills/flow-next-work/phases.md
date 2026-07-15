@@ -264,7 +264,7 @@ the worker then runs standard in-session implementation, unchanged.
 
 ```
 DELEGATE: codex
-DELEGATE_MODEL: <work.delegateModel>          # default gpt-5.5
+DELEGATE_MODEL: <work.delegateModel>          # default gpt-5.6-terra
 DELEGATE_SANDBOX: <yolo|full-auto>            # from consent (work.delegateSandbox)
 DELEGATE_EFFORT_FLOOR: <work.delegateEffort>  # default medium (per-batch escalation floors here)
 DELEGATE_DECISION: <auto|ask>

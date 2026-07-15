@@ -370,6 +370,32 @@ class WorkflowProseContract(unittest.TestCase):
             re.compile(r"after\*{0,2} the Docs block above", re.IGNORECASE),
             path,
         )
+        # fn-97: the question is bridge-CLI-gated — BRIDGE_DETECTED is probed
+        # in 6a and conjoined with ROUTING_ASK at both the 6d question include
+        # rule and the Step 7 processing gate.
+        self.assertIn("BRIDGE_DETECTED=0", text, path)
+        self.assertIn("BRIDGE_DETECTED=1", text, path)
+        self.assertIn("`ROUTING_ASK=1` AND `BRIDGE_DETECTED=1`", text, path)
+        # fn-97: all three bridge probes feed the gate.
+        self.assertRegex(
+            text,
+            re.compile(
+                r'"\$HAVE_CODEX" == "1" \|\| "\$HAVE_CURSOR" == "1" \|\| "\$HAVE_GROK" == "1"'
+            ),
+            path,
+        )
+        # fn-97: the review.backend codex offer — Recommended label while unset,
+        # explicit step-8 switch offer when a different backend is already set,
+        # and the never-silently-overwrite guarantee.
+        self.assertIn("(Recommended - cross-family default)", text, path)
+        self.assertIn("Review-backend switch offer", text, path)
+        self.assertIn("Keep current (Recommended)", text, path)
+        self.assertIn("Switch to codex", text, path)
+        self.assertRegex(
+            text,
+            re.compile(r"never silently overwritten", re.IGNORECASE),
+            path,
+        )
 
     def test_canonical_workflow(self) -> None:
         self._assert_contract(CANONICAL_WORKFLOW)

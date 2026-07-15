@@ -36,7 +36,9 @@ The bundled agents are pre-tiered by task shape (each A/B-verified before downgr
 | heavy (`opus`) | quality-auditor | adversarial audit |
 | `inherit` | worker, pr-comment-resolver | implementation follows the session model |
 
-The Codex mirror maps these to `gpt-5.5` / `gpt-5.4-mini` at sync time (`scripts/sync-codex.sh` `map_model`, overridable via `CODEX_MODEL_INTELLIGENT` / `CODEX_MODEL_FAST`). Details: [`platforms.md`](platforms.md).
+The Codex mirror maps these to `gpt-5.5` / `gpt-5.4-mini` at sync time (`scripts/sync-codex.sh` `map_model`, overridable via `CODEX_MODEL_INTELLIGENT` / `CODEX_MODEL_FAST`), The worker keeps `inherit` on both platforms (your session model rules); an OPT-IN sync-time pin (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`, recommended `gpt-5.6-terra` @ `medium`) lets Codex-host work threads ride the efficient tier. Details: [`platforms.md`](platforms.md).
+
+**Known Codex limitation (Jul 2026):** on GPT-5.6 Sol / Multi-Agent V2 builds, per-spawn model steering is unreliable end to end - `spawn_agent` stripped `model`/`reasoning_effort`/`agent_type` from its schema (openai/codex#31814, partially restored by #32749; `agent_type` still missing per #32782), explicit overrides are silently dropped when the agent carries a role layer (#33268), and role-profile application is not verifiable (#33314). Until those settle, the ROBUST way to steer a different model from a Codex host is the **same-family self-bridge**: `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<self-contained prompt>"` - a fresh process taking `-m` on the command line, immune to the spawn_agent path entirely. Caveats: the child needs process-spawn + network inside the parent sandbox, and keep the child prompt flat (a child that spawns MAv2 subagents of its own can return undecodable results, #33267).
 
 ### Review backends — cross-model review
 
@@ -59,12 +61,14 @@ Precedence (highest wins): per-task `review:` / per-spec `default_review` → `F
 Opt-in offload of the token-heavy part (writing code) to a second CLI while the host keeps all judgment:
 
 ```bash
-flowctl config set work.delegate codex          # activation predicate is exactly the string "codex"
-flowctl config set work.delegateModel gpt-5.6-sol   # default (codex CLI >= 0.144; real work, never a cheaper tier)
-flowctl config set work.delegateEffort medium   # none|low|medium|high|xhigh floor
+flowctl config set work.delegate codex            # activation predicate is exactly the string "codex"
+flowctl config set work.delegateModel gpt-5.6-terra   # default (codex CLI >= 0.144) - passed as -m on the delegated codex exec
+flowctl config set work.delegateEffort medium     # none|low|medium|high|xhigh floor - passed as -c model_reasoning_effort=
 ```
 
 Or per-invocation: `/flow-next:work fn-12 delegate:codex`. The host retains gating, classification, git ownership, review, and commit; `codex exec` writes code and is forbidden from git and decisions. OFF by default, one-time consent-gated, circuit-breakered, with an independent verification backstop (the worker runs tests on the delegated diff even with `REVIEW_MODE=none`). Full contract: [`codex-delegation.md`](../skills/flow-next-work/references/codex-delegation.md).
+
+The `gpt-5.6-terra` / `medium` defaults are eval-motivated, not arbitrary: a controlled pipeline eval (2026-07-14, hidden 39-check oracle suite, n=3 reps) had terra-medium match `gpt-5.6-sol` on correctness at roughly two-thirds the wall-clock on frontier-authored specs, with effort above `medium` pure overhead. One task, so motivation rather than guarantee - escalate `work.delegateModel` to `gpt-5.6-sol` when a task looks gnarly. Upgraders note: `flowctl init` persists defaults into `.flow/config.json` and raw values win, so installs initialized under an older default keep it until you run the `config set` above yourself.
 
 ### Per-spec backend fields — external orchestrators
 
@@ -121,6 +125,50 @@ The orchestration patterns that emerged in the wild through mid-2026 all have a 
 | **Effort discipline** | Run the orchestrator at high, not max — top effort tiers are token furnaces with flat-or-worse output on routine work | Session effort is yours; `work.delegateEffort` floors the delegate (`medium` default, per-batch risk escalation raises it) |
 | **Token-hungry offload** | Computer use, live-app verification, bulk analysis go to other models/agents; results come back as evidence | `/flow-next:qa` drives the app in its own context and files P0/P1/P2 findings; workers run fresh-context and return receipts |
 
+## A proven default pipeline
+
+One controlled pipeline eval (2026-07-14: a hidden 39-check oracle suite for the work stage, a planted-bug review eval at n=3 reps per arm with matched reasoning efforts, dual cross-family blind judges for plans) produced a concrete default routing. It is one task's worth of evidence - motivation, not a guarantee - but it is the shape this repo now runs.
+
+The roles are **model-per-role, not host-relative**: the bridges run in both directions (`codex exec` reaches GPT from a Claude host, `claude -p` reaches Claude from a Codex host), so the recommended model for each role is the same everywhere - only the *reach mechanism* differs by host.
+
+| Role | Model | Why | Reach from a Claude Code host | Reach from a Codex host |
+|------|-------|-----|-------------------------------|-------------------------|
+| Plan (spec authoring: capture / interview / plan / plan-review critique) | Session frontier model | Two cross-family blind judges ranked frontier plans clearly ahead; raising effort on a weaker planner did not close the gap | Session-native | Session-native * |
+| Plan-review | Cross-family frontier | Uncorrelated blind spots on the highest-leverage artifact | `--review=codex` / `review.backend codex` | `review.backend` to a non-GPT family (e.g. `cursor:...`) |
+| Work (implementation) | `gpt-5.6-terra` @ `medium` | Matched `gpt-5.6-sol` on hidden-suite correctness at ~2/3 wall-clock on frontier-authored specs; effort above medium was pure overhead | `delegate:codex` (the `work.delegateModel` / `work.delegateEffort` defaults) | `codex exec -m gpt-5.6-terra` self-bridge (robust today); session model natively; opt-in sync-time pin `CODEX_MODEL_WORKER=gpt-5.6-terra` once MAv2 profile application is trustworthy |
+| Impl-review, first pass | Cross-family from the writer - `gpt-5.6-sol` @ `high` when the writer is Claude-family | 12/12 recall on planted bugs, 0 false positives, fastest reviewer in the fleet (103s mean) | `review.backend codex` (pin `codex:gpt-5.6-sol:high`) - the session writes, sol reviews; no codex CLI? `cursor:gpt-5.6-sol-high` reaches sol through cursor | The worker writes GPT (terra), so sol would be SAME-family: route the first pass to a non-GPT reviewer instead - packaged rungs `review.backend copilot:claude-opus-4.5` / `cursor:claude-opus-4-8-thinking-high` (cursor also carries `claude-fable-5-thinking-high` — NO ZDR — and, for the reverse direction, `gpt-5.6-sol-high`), or Claude Code ad hoc via the `claude -p` reverse bridge (no packaged rung; prefer opus/sonnet targets - fable via `claude -p` can hit CLI credit limits) |
+| Impl-review, final gate | Session frontier model | Only the frontier tier volunteered correct severity tiering and blast-radius judgment unprompted | Session-native (the host interprets the verdict; escalate disagreements to it) | Session-native |
+
+\* Spec authoring is **session-native by design** — capture, interview, and plan are inline skills, so the session model is who writes and refines every spec - there is no packaged cross-family plan rung. Ad-hoc bridging works (`claude -p` can author a plan from a Codex host) but frontier-Claude via `claude -p` can hit CLI credit limits on plan-sized prompts (observed 2026-07-14); plan on whatever frontier model your session runs.
+
+Notes that keep the table honest:
+
+- **Single subscription? The table still reads correctly.** Most orgs run ONE harness subscription. Every row degrades to "the session model" and the pipeline works exactly as shipped - multi-model routing is optional garnish, never a prerequisite.
+- **`gpt-5.6-luna` @ `xhigh`** is the equal-recall alternative for the first-pass reviewer (12/12) at ~2.5x the time; luna-medium is the budget delegate alternative (same hidden-suite correctness, tightest code, more tool-loop round-trips).
+- **`grok-4.5` is a classic-bug quick pass ONLY - never the gate.** It missed the eval's subtle latent bug in all 3 runs. Fine as a cheap extra pass; a ship decision must not rest on it.
+- Build-tier models are excluded from review roles entirely (in the same eval one missed a planted bug, another returned a false all-clear).
+- **"Cross-family" is measured from the WRITER, not the host.** sol-high's 12/12 was earned reviewing Claude-family-written code; when your writer is GPT (e.g. the Codex mirror's terra-pinned worker), a GPT reviewer re-correlates the blind spots - pick the reviewer from whichever family did NOT write the diff.
+
+### The wrapper pattern - self-healing bridges for unattended loops
+
+Raw bridge calls have a silent-failure class: outside a trusted git directory, `codex exec` refuses in about a second with the error only in its log, and `cursor-agent` blocks on an interactive workspace-trust prompt, then exits "successfully" with empty output. An interactive host sees the stderr and just fixes it; an **autonomous loop dies silently**. The pattern that closed this in the eval: wrap the bridge in a thin fast-tier subagent (sonnet-class) instead of calling it raw. The wrapper composes the self-contained prompt, runs the bridge, verifies output is non-empty/parseable, repairs the environment if not, and retries once. Output quality was identical to raw calls.
+
+Two rules are load-bearing:
+
+- **The wrapper MUST run the bridge in the foreground** - one blocking Bash call. A backgrounded bridge loses the completion signal and the wrapper idles forever on a finished (or silently dead) process.
+- **The self-heal license covers environment and flags only, never judgment.** In scope: git trust (`--skip-git-repo-check`, `git init` in a scratch dir), sandbox flags, stale model ids, empty-output retry. Out of scope: rewriting the task prompt, interpreting review verdicts, or switching models on quality grounds - judgment stays with the host.
+
+This is a documented pattern, not a shipped agent type - the bridge recipes live in `.flow/usage.md` § Orchestration & model steering. Interactive sessions don't need it.
+
+### Raw-bridge review prompts - demand severity tiers
+
+Applies to **ad-hoc bridge reviews only** - a hand-rolled `codex exec` review whose output a human reads directly (the usage.md recipes). When you write one, put two things in the prompt:
+
+- **P0-P3 severity tiers plus spec-grounded verdicts**, so an edge-case finding does not flip a ship gate. Reviewers reliably flag spec-gray edges as bugs (in the eval, behavior explicitly licensed by a plan amendment was reported as a defect by every reviewer) - severity tiers and "cite the spec line" are what keep those findings informative instead of gate-flipping.
+- Optionally **a minimal suggested fix and blast radius per finding** when no fix loop follows the review. Control runs showed this artifact is prompt-shaped: models produce it when the prompt demands it and omit it when not asked.
+
+The **packaged** `/flow-next:impl-review` prompt is deliberately NOT changed to this shape: its find-vs-fix split (the reviewer returns findings; the internal fix loop investigates and fixes, with validator and iteration caps) is by design, and its rubric already carries confidence anchors and introduced-vs-pre-existing classification.
+
 ## Durable routing — a model table in CLAUDE.md
 
 The emergent pattern (mid-2026): a standing "which model for what" section in your agent instructions — a ranking of the models you can reach plus routing rules. This is **prompted orchestration made durable**: the table is interpreted by intelligence, not parsed by a config loader. The host reads it every session and applies it *with judgment* when it dispatches subagents, picks reviewers, or decides to delegate — which is exactly why the rules grant standing permission to escalate.
@@ -136,7 +184,7 @@ flow-next ships this as a canonical scaffold — [`../skills/flow-next-setup/tem
 | composer-2.5             | 9    | 10    | 6            | 6     |
 
 - Defaults, not limits — escalate to a smarter model when output misses the bar.
-- Delegated implementation → gpt-5.6-sol (delegate:codex, real work — never a cheaper tier); fast/cheap first-draft implementation → grok-4.5 (`grok -p`); cheap bulk reads → gpt-5.6-terra; reviews cross-family; user-facing needs taste ≥ 7.
+- Delegated implementation → gpt-5.6-terra @ medium (delegate:codex; escalate to gpt-5.6-sol when a task looks gnarly); fast/cheap first-draft implementation → grok-4.5 (`grok -p`); cheap bulk reads → gpt-5.6-terra; reviews cross-family; user-facing needs taste ≥ 7.
 - Graceful degrade: a routed CLI that is missing or errors → fall back to the session model.
 ```
 
@@ -157,7 +205,7 @@ Pilot and land end every tick with machine-readable verdict lines precisely so a
 ```text
 /loop 30m — one tick: run /flow-next:pilot --review=codex --depth=deep.
   If PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land in the same tick.
-  Delegation is on (work.delegate=codex): implementation tasks go to gpt-5.6-sol,
+  Delegation is on (work.delegate=codex): implementation tasks go to gpt-5.6-terra,
   UI tasks stay on the session model, reviews come from codex.
   Stop when pilot prints NO_WORK and land prints LAND_VERDICT=NO_WORK,
   or on any NEEDS_HUMAN.

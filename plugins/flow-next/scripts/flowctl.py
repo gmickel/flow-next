@@ -1207,13 +1207,16 @@ def get_default_config() -> dict:
         # keys (phases.md:94-101) — no clash.
         "work": {
             "delegate": False,
-            # Delegated implementation IS real work — never routed to a
-            # cheaper tier. Default is the strongest codex model (gpt-5.6-sol);
-            # requires codex CLI >= 0.144 (older CLIs 400 "requires a newer
+            # fn-97 — default is gpt-5.6-terra: a controlled pipeline eval
+            # (2026-07-14, n=3 reps) found terra-medium matched gpt-5.6-sol on
+            # correctness at ~2/3 the wall-clock on frontier-authored specs
+            # (one task; motivation, not a guarantee). Escalate via
+            # `config set work.delegateModel gpt-5.6-sol` for gnarly tasks.
+            # Requires codex CLI >= 0.144 (older CLIs 400 "requires a newer
             # version of Codex"). The delegation path passes -m explicitly and
             # has no fn-76 resolution ladder, so this default is a hard floor,
             # not a resolved best-available.
-            "delegateModel": "gpt-5.6-sol",
+            "delegateModel": "gpt-5.6-terra",
             # Effort enum: none|low|medium|high|xhigh. `medium` is the floor
             # default; the per-batch risk escalation (fn-55.3) floors against it.
             "delegateEffort": "medium",

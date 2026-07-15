@@ -7,7 +7,7 @@ Covers two surfaces:
    `work` block so `flowctl config get work.delegate*` returns the spec
    defaults (NOT `null`) on a fresh repo, WITHOUT any prior `config set`:
      * work.delegate         → False
-     * work.delegateModel    → "gpt-5.6-sol"
+     * work.delegateModel    → "gpt-5.6-terra"  (fn-97: eval-motivated default; escalate to gpt-5.6-sol manually)
      * work.delegateEffort   → "medium"  (floor; enum none|low|medium|high|xhigh)
      * work.delegateSandbox  → "yolo"
      * work.delegateConsent  → False
@@ -119,7 +119,7 @@ class WorkDelegateDefaultsTestCase(unittest.TestCase):
             defaults["work"],
             {
                 "delegate": False,
-                "delegateModel": "gpt-5.6-sol",
+                "delegateModel": "gpt-5.6-terra",
                 "delegateEffort": "medium",
                 "delegateSandbox": "yolo",
                 "delegateConsent": False,
@@ -135,9 +135,9 @@ class WorkDelegateDefaultsTestCase(unittest.TestCase):
         out = self._run_config_get_cli("work.delegate")
         self.assertIs(out["value"], False)
 
-    def test_fresh_get_model_is_gpt56_sol(self) -> None:
+    def test_fresh_get_model_is_gpt56_terra(self) -> None:
         out = self._run_config_get_cli("work.delegateModel")
-        self.assertEqual(out["value"], "gpt-5.6-sol")
+        self.assertEqual(out["value"], "gpt-5.6-terra")
 
     def test_fresh_get_effort_is_medium(self) -> None:
         out = self._run_config_get_cli("work.delegateEffort")

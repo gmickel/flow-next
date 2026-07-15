@@ -189,7 +189,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
     def test_setting_land_key_does_not_clobber_work_defaults(self) -> None:
         self._run_config_set_cli("land.reviewSignal", "approve")
         self.assertEqual(
-            self._run_config_get_cli("work.delegateModel")["value"], "gpt-5.6-sol"
+            self._run_config_get_cli("work.delegateModel")["value"], "gpt-5.6-terra"
         )
 
     # ── fn-65.1: land.cleanReviewCommentPattern (R5) ─────────────────────

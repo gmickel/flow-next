@@ -96,19 +96,22 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 | Review-shaped | `gpt-5.5` | `high` | quality-auditor |
 | Scout / editorial | `gpt-5.5` | `medium` | flow-gap-analyst, context-scout, docs-scout, github-scout, practice-scout, repo-scout, plan-sync, spec-scout, agents-md-scout, docs-gap-scout |
 | Fast scouts | `gpt-5.4-mini` | n/a | build, env, testing, tooling, observability, security, workflow, memory scouts |
-| Inherited | parent model | parent | worker, pr-comment-resolver |
+| Worker (default) | *inherit (session model)* | *session default* | worker |
+| Inherited | parent model | parent | pr-comment-resolver |
 
-`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The actual review backend (`flowctl impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults to `gpt-5.5:high` on its own.
+`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The worker defaults to `inherit` on BOTH platforms - your session model rules, and flow-next never hardcodes a model opinion into generated config. An OPT-IN pin is available at sync time (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`); the eval-motivated recommendation is `gpt-5.6-terra` @ `medium`. Note (Jul 2026): on Sol/Multi-Agent-V2 builds role-profile model application is currently unreliable (openai/codex#33268, #33314) - prefer the `codex exec -m` self-bridge to steer models from a Codex host until those are fixed (fn-97, 2026-07 controlled pipeline eval at n=3: terra-medium matched `gpt-5.6-sol` correctness at ~2/3 wall-clock on frontier-authored specs). The actual review backend (`flowctl impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults to `gpt-5.5:high` on its own.
 
-Override model defaults (global install only):
+Override model defaults: the `CODEX_MODEL_*` / `CODEX_REASONING_EFFORT_*` env vars are read by **`sync-codex.sh`** (which generates the agent `.toml` files) — `install-codex.sh` only copies the pre-built mirror, so regenerate first, then install:
 
 ```bash
 CODEX_MODEL_INTELLIGENT=gpt-5.5 \
 CODEX_MODEL_FAST=gpt-5.4-mini \
+CODEX_MODEL_WORKER=gpt-5.6-terra \
 CODEX_REASONING_EFFORT=medium \
 CODEX_REASONING_EFFORT_AUDITOR=high \
-CODEX_MAX_THREADS=12 \
-./scripts/install-codex.sh flow-next
+CODEX_REASONING_EFFORT_WORKER=medium \
+./scripts/sync-codex.sh
+CODEX_MAX_THREADS=12 ./scripts/install-codex.sh flow-next   # CODEX_MAX_THREADS is the installer's own knob
 ```
 
 ### Hooks (experimental)

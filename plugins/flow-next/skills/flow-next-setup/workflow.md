@@ -362,6 +362,15 @@ HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_GROK=$(which grok >/dev/null 2>&1 && echo 1 || echo 0)
 
+# fn-97: at least one bridge CLI on PATH gates the Model Routing question in 6d
+# (with zero bridges every wiring route in the scaffold would be an inert
+# install-note comment, so the question is not offered - install a bridge CLI
+# and re-run /flow-next:setup to get it).
+BRIDGE_DETECTED=0
+if [[ "$HAVE_CODEX" == "1" || "$HAVE_CURSOR" == "1" || "$HAVE_GROK" == "1" ]]; then
+  BRIDGE_DETECTED=1
+fi
+
 # Read current config values if they exist.
 # NB: pass `--raw` to bypass merged defaults. Without it, `flowctl config get`
 # returns the built-in default for unset keys (e.g. `planSync.crossSpec` →
@@ -385,7 +394,8 @@ CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github
 CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.html.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 
 # Optional model-routing scaffold ceremony (Step 6d question + Step 7 processing)
-# is offered ONLY in an interactive setup. Under ANY non-interactive / autonomous
+# is offered ONLY in an interactive setup AND only when a bridge CLI was
+# detected (BRIDGE_DETECTED=1 above, fn-97). Under ANY non-interactive / autonomous
 # marker, the question is skipped SILENTLY — setup must never block a headless
 # driver. Scan the WHOLE autonomy-marker family (Ralph / receipt-path / autonomous
 # / mode token), not a fixed pair — the same family every lifecycle skill honors.
@@ -521,13 +531,15 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
+When `HAVE_CODEX=1` AND `PLATFORM` is NOT `codex`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family FROM THE WRITER, and on a Claude Code / Droid / Cursor host codex review is a different family than the session writer - so this question carries the ceremony's `review.backend codex` offer while the key is unset (fn-97). On a Codex host (`PLATFORM=codex`) do NOT add the label: the writer is GPT-family (the session model, or the optional terra worker pin), so codex review would be SAME-family - prefer a detected non-GPT backend there (copilot / cursor with a Claude-family model) and leave the options unannotated when none is detected. When `review.backend` is ALREADY set to something else, this question is skipped (existing config is never silently overwritten) - the offer instead rides the Model Routing scaffold as an explicit opt-in switch, Step 7's step 8 below.
+
 Stored value is a bare backend name by default. Power users can also write a full spec like `codex:gpt-5.4:high`, `copilot:claude-opus-4.5:xhigh`, or `cursor:gpt-5.5-high` (cursor takes a model only — no `:effort`) via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms.
 
-**Model Routing question** (include ONLY when `ROUTING_ASK=1` — interactive setup; skipped silently under any non-interactive/autonomous marker per 6a). Offers the optional model-routing scaffold (composed + written in Step 7). The frozen option set is `Scaffold` / `Scaffold + enable codex delegation` / `Skip`; **include the `Scaffold + enable codex delegation` option ONLY when `HAVE_CODEX=1`** (drop that one object entirely when `HAVE_CODEX=0` — never show a delegation route to a missing binary):
+**Model Routing question** (include ONLY when `ROUTING_ASK=1` AND `BRIDGE_DETECTED=1` — interactive setup with at least one bridge CLI (`codex` / `cursor-agent` / `grok`) detected per 6a; skipped silently under any non-interactive/autonomous marker, and skipped without a detected bridge CLI — the scaffold's wiring routes would all be inert install notes). Offers the recommended multi-model pipeline scaffold (composed + written in Step 7). The frozen option set is `Scaffold` / `Scaffold + enable codex delegation` / `Skip`; **include the `Scaffold + enable codex delegation` option ONLY when `HAVE_CODEX=1`** (drop that one object entirely when `HAVE_CODEX=0` — never show a delegation route to a missing binary):
 ```json
 {
   "header": "Model Routing",
-  "question": "Scaffold an opinionated model-routing example into your project instruction file? (a cost/intelligence/taste scores table + how-to-apply rules + flow-next wiring; shown in FULL before writing — yours to edit after)",
+  "question": "Scaffold a recommended multi-model pipeline into your project instruction file? (a cost/intelligence/taste scores table + how-to-apply rules + the flow-next wiring for the bridge CLIs detected on this machine; shown in FULL before writing — yours to edit after)",
   "options": [
     {"label": "Scaffold", "description": "Write the model-routing example into the same CLAUDE.md/AGENTS.md the Docs step targets. Shown in full before writing; these are starting opinions you edit down, not up."},
     {"label": "Scaffold + enable codex delegation", "description": "Also set work.delegate=codex so /flow-next:work can offload bulk implementation to the codex CLI. First-use consent is still required — this never pre-approves it. INCLUDE THIS OPTION ONLY WHEN HAVE_CODEX=1."},
@@ -699,7 +711,7 @@ For each chosen file (CLAUDE.md and/or AGENTS.md) — preserve repo-custom conte
 
 The marker-block boundaries are load-bearing: pre-existing prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` is **never** modified by this step. Only the bytes between (and including) those markers are candidates for replacement.
 
-**Model Routing scaffold** (only if the Model Routing question was asked — i.e. `ROUTING_ASK=1`; when `ROUTING_ASK=0` the question was never shown, so this step is a silent no-op — record `not offered` for the summary and skip to Star).
+**Model Routing scaffold** (only if the Model Routing question was asked — i.e. `ROUTING_ASK=1` AND `BRIDGE_DETECTED=1`; when either is 0 the question was never shown, so this step is a silent no-op — record `not offered` for the summary and skip to Star).
 
 Run this **after** the Docs block above and **before** Star. It may touch the **same** file the Docs block just wrote this run — always **re-read the target from disk here**; never reuse an in-memory copy and never interleave the two writes. Set `ROUTING_OUTCOME=""` for the Step 8 summary and update it at each terminal branch below. Every "done with the block pipeline" terminal below still falls through to **step 7 (delegation)** — the delegation opt-in is independent of whether the block was written — then on to Star.
 
@@ -744,6 +756,22 @@ Run this **after** the Docs block above and **before** Star. It may touch the **
    DELEGATE_SET=$("${PLUGIN_ROOT}/scripts/flowctl" config get work.delegate --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
    ```
    If `DELEGATE_SET` is `codex`, note `ROUTING_DELEGATE="enabled"`; otherwise print `Warning: work.delegate did not persist as codex — set it manually with flowctl config set work.delegate codex` and note `ROUTING_DELEGATE="failed"`.
+
+**8. Review-backend switch offer** (fn-97 — run once, after step 7, only when ALL hold: the answer was `Scaffold` or `Scaffold + enable codex delegation`, `HAVE_CODEX=1`, `PLATFORM` is NOT `codex` — on a Codex host the writer is GPT-family, so switching review to codex would trade a genuinely cross-family backend for a same-family one; skip the offer there — and `CURRENT_BACKEND` is non-empty AND is not already codex — i.e. neither bare `codex` nor a `codex:...` spec form). This is the scaffold's `review.backend codex` offer for projects whose backend was configured before the scaffold existed; when `CURRENT_BACKEND` is empty the Review question in 6d already carried the offer, so this step is a silent no-op. Ask via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
+
+```json
+{
+  "header": "Review Backend",
+  "question": "The scaffolded pipeline reviews cross-family via codex. Switch review.backend from <CURRENT_BACKEND> to codex?",
+  "options": [
+    {"label": "Keep current (Recommended)", "description": "Leave review.backend as <CURRENT_BACKEND>. Switch later with: flowctl config set review.backend codex"},
+    {"label": "Switch to codex", "description": "Set review.backend codex now (the scaffold's recommended cross-family default)"}
+  ],
+  "multiSelect": false
+}
+```
+
+`Keep current` → no write, done. `Switch to codex` → run `"${PLUGIN_ROOT}/scripts/flowctl" config set review.backend codex --json`, then read the persisted value back (same read-back pattern as step 7); if it did not persist as `codex`, print `Warning: review.backend did not persist as codex — set it manually with flowctl config set review.backend codex`. This step never runs non-interactively (the whole scaffold pipeline is gated on `ROUTING_ASK=1`) and never fires when the user skipped the scaffold — declining the scaffold declines its pipeline too.
 
 **Star:**
 - If "Yes, star it":
