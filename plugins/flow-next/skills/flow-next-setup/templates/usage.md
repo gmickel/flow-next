@@ -222,6 +222,8 @@ claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Ba
 grok -p "<self-contained prompt>" -m grok-4.5-high </dev/null                              # read-only-ish; add --always-approve (or --permission-mode acceptEdits) to let it act. -m/--model + --reasoning-effort; --json-schema for structured output. Grok 4.5 = fast + cheap first-draft; route to bulk/implementation, not UI or final taste-critical work.
 ```
 
+The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<prompt>"` steers a different GPT tier reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.
+
 Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.
 
 **flow-next shortcuts** — the same bridges, packaged as config:
