@@ -298,4 +298,53 @@ just size — the evidence example's *placeholder style* and the presence of a
 one-line typical-flow sequence measurably change weak-tier compliance. Any block
 revision should re-run this matrix and compare against these rows.
 
+### Post-trim gate - "post-usage-trim + block-evidence-amendment" (2026-07-16, fn-99…4)
+
+Recorded AFTER fn-99…3 landed both levers: the usage.md trim (5392 → 1928
+tok-equiv; irrelevant to this harness by construction - both arms ship no
+usage.md - but this batch is the required no-regression gate for shipping it)
+and the block's evidence-line amendment toward the minimal arm's demonstrated
+phrasing (`"<sha>"`/`"<command>"` placeholders + the claim → implement → commit
+flow line; block 249 tok-equiv). Same R13 matrix as the baseline: scenarios
+{slugify, multitask} × arms {minimal, full} × models {sonnet, haiku, gpt-5.6-terra
+@ medium} × reps {3 Claude-family, 1 codex}.
+
+Tool ids: `codex-cli 0.144.1`, model `gpt-5.6-terra` `model_reasoning_effort=medium`;
+`claude 2.1.210`, models `sonnet` / `haiku`. Grader: `grade.py` @ this commit -
+fixed during this batch to merge multi-line shim records (a sonnet cell passed a
+multi-line `--text` arg whose continuation lines crashed the old line-per-record
+parse and inflated call counts); all 28 runs (re)graded with the fixed grader
+from the retained run dirs.
+
+| date | scenario | arm | model | reps | passed | evidence_ok | scores | lifecycle | flowctl_calls | notes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-07-16 | slugify | full | sonnet | 3 | 3/3 | 3/3 | 7/7 ×3 | - | 14-17 | clean (r2 was the grade_error cell; regrades 7/7) |
+| 2026-07-16 | slugify | full | haiku | 3 | **1/3** | **1/3** | 7/7, 6/7 ×2 | - | 13-21 | r2/r3 self-decomposed into 4 tasks and `done`d intermediate ones with empty lists; the final "commit" task carries the real sha + valid evidence. Softer residual than baseline (0/3, no sha anywhere) |
+| 2026-07-16 | slugify | full | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 7/7 | - | 28 | clean |
+| 2026-07-16 | slugify | minimal | sonnet | 3 | 3/3 | 3/3 | 7/7 ×3 | - | 8-11 | clean |
+| 2026-07-16 | slugify | minimal | haiku | 3 | 3/3 | 3/3 | 7/7 ×3 | - | 6-11 | floor holds |
+| 2026-07-16 | slugify | minimal | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 7/7 | - | 19 | clean |
+| 2026-07-16 | multitask | full | sonnet | 3 | 3/3 | 3/3 | 10/10 ×3 | reset (ordered) ×3 | 25-31 | **baseline's 1/3 cell now clean** - real shas recorded, committed unprompted |
+| 2026-07-16 | multitask | full | haiku | 3 | 3/3 | 3/3 | 10/10 ×3 | reset (ordered) ×3 | 18-21 | clean |
+| 2026-07-16 | multitask | full | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 10/10 | reset (ordered) | 50 | clean |
+| 2026-07-16 | multitask | minimal | sonnet | 3 | 3/3 | 3/3 | 10/10 ×3 | reset (ordered) ×3 | 25-27 | clean |
+| 2026-07-16 | multitask | minimal | haiku | 3 | 3/3 | 3/3 | 10/10 ×3 | reset (ordered) ×3 | 19-24 | clean |
+| 2026-07-16 | multitask | minimal | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 10/10 | reset (ordered) | 40 | clean |
+
+**Gate verdict (vs the baseline rows above):**
+
+1. **Minimal arm 14/14 - unchanged.** No regression on any graded dimension,
+   haiku floor intact. The usage.md trim ships.
+2. **Full block 12/14, up from 9/14.** No cell regressed; two improved
+   (sonnet multitask 1/3 → 3/3, haiku slugify 0/3 → 1/3). The evidence-line
+   amendment measurably worked but did not reach minimal-arm parity on the
+   weakest tier.
+3. **Residual (honest):** haiku on the single-task scenario sometimes
+   over-decomposes into micro-tasks and `done`s the non-commit ones with empty
+   evidence lists, while still recording the real sha on the final task -
+   a task-granularity artifact, strictly softer than the baseline failure
+   (schema-shaped but NO sha anywhere). Improvement was the gate's expectation,
+   parity the hope; recorded as-is.
+4. `tests_green`, `md_todos`, dependency + ordered reset: clean across all 28.
+
 <!-- LEDGER:END -->

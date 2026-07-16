@@ -121,7 +121,19 @@ def main():
     # set-plan INPUT is sanctioned usage, not a tracking-substitute violation.
     # (inv/set-plan parsing happens before scoring; see section 4 ordering note)
     log = d / ".flow/invocations.log"
-    inv = log.read_text().splitlines() if log.exists() else []
+    # One shim RECORD is "rc|args...", but args may themselves contain newlines
+    # (e.g. a multi-line `--text` value), producing continuation lines without the
+    # "rc|" prefix. Merge those into their record: a raw line only STARTS a record
+    # when it matches ^<digits>| (observed 2026-07-16: a sonnet cell's multi-line
+    # set-acceptance crashed the old line-per-record parse and inflated call counts).
+    inv = []
+    if log.exists():
+        for raw in log.read_text().splitlines():
+            if re.match(r"^\d+\|", raw):
+                inv.append(raw)
+            elif inv:
+                inv[-1] += "\n" + raw
+            # a continuation line before any record (impossible via the shim) is dropped
     setplan_inputs = set()
     for line in inv:
         rc_str, _, rest = line.partition("|")
