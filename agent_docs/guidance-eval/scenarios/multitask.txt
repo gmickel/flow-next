@@ -1,0 +1,13 @@
+Build a tiny environment-config loader for this Python utility library, tracked as a MULTI-TASK spec.
+
+Requirements:
+- src/envconf.py with two functions:
+  1. parse_env(text: str) -> dict: parse KEY=VALUE lines into a dict. Ignore blank lines and lines whose first non-space character is '#'. Strip surrounding whitespace from keys and values.
+  2. load_env_file(path: str) -> dict: read the file at path (UTF-8) and return parse_env of its contents.
+- Unit tests in tests/test_envconf.py, runnable with `python3 -m unittest discover -s tests`.
+
+Track this in flow-next as a SINGLE spec with (at least) TWO tasks: the second task (load_env_file) MUST declare a dependency on the first task (parse_env). Work the tasks in dependency order and record completion evidence on each.
+
+Midway requirement change (you MUST exercise this): AFTER you have completed the first task (parse_env), a new requirement is discovered - parse_env must also (a) tolerate an optional leading `export ` prefix on a line and (b) strip a matching pair of surrounding single or double quotes from values. Because the first task is already marked done, RESET it back to todo using the project's task-tracking tool, implement the new behaviour, re-run the tests until green, and complete the first task again. Only then finish the dependent second task.
+
+Follow the repo instructions and track everything start to finish exactly as the project conventions require.
