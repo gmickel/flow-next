@@ -15,6 +15,8 @@ All notable changes to the flow-next.
   - **Sandbox-blocked-commit guidance** added where autonomous agents actually read: `agents/worker.md` near its evidence teaching (primary) and usage.md's Workflow section.
   - No flowctl behavior/validation changes beyond the additive `setup-block` helper; the model-routing scaffold block is untouched. No version bump (batched releases).
 
+## [flow-next 2.14.0] - 2026-07-15
+
 ### Changed
 
 - **Multi-model orchestration defaults: delegate model steering, setup pipeline scaffold, recipe hardening (fn-97).** A controlled multi-model pipeline eval (2026-07-14: hidden 39-check oracle suite for the work stage, planted-bug review eval at n=3 reps per arm with matched reasoning efforts, dual cross-family blind plan judges) validated the orchestration shape flow-next ships and exposed four small gaps. One task's evidence - cited as motivation, never as a guarantee.
