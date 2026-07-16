@@ -28,6 +28,7 @@ Scenario-specific:
 """
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -122,14 +123,20 @@ def main():
     ]
     r["md_todos"] = bad
 
-    # 3. tests
+    # 3. tests. `unittest discover` exits 0 even when it discovers ZERO tests, so
+    # green-with-no-tests must not pass: require >=1 test actually RAN. (The test
+    # FILE being committed + clean is enforced per scenario via committed_and_clean
+    # below, so the tests that ran are the committed ones.)
     tp = subprocess.run(
-        ["python3", "-m", "unittest", "discover", "-s", "tests"],
+        ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"],
         cwd=d,
         capture_output=True,
         text=True,
     )
-    r["tests_green"] = tp.returncode == 0
+    m = re.search(r"^Ran (\d+) test", tp.stderr, re.MULTILINE)
+    ran = int(m.group(1)) if m else 0
+    r["tests_ran"] = ran
+    r["tests_green"] = tp.returncode == 0 and ran >= 1
 
     # 4. shim log: agent flowctl invocations + failures
     log = d / ".flow/invocations.log"
@@ -198,6 +205,7 @@ def main():
         src_rel = "src/envconf.py"
         r["src_present"] = (d / src_rel).exists()
         r["src_committed"] = committed_and_clean(src_rel)
+        r["tests_committed"] = committed_and_clean("tests/test_envconf.py")
         r["has_dependency"] = in_spec_dependency
         # Identify the prerequisite (depended-upon) and dependent (depends_on)
         # tasks, then require the PRESCRIBED ordered workflow in the shim log:
@@ -245,11 +253,13 @@ def main():
             r["tests_green"],
             not bad,
             r["src_committed"],
+            r["tests_committed"],
         ]
     else:  # slugify (single-task)
         src_rel = "src/slugify.py"
         r["src_present"] = (d / src_rel).exists()
         r["src_committed"] = committed_and_clean(src_rel)
+        r["tests_committed"] = committed_and_clean("tests/test_slugify.py")
         dims = [
             r["spec_created"],
             r["any_task_done"],
@@ -257,6 +267,7 @@ def main():
             r["tests_green"],
             not bad,
             r["src_committed"],
+            r["tests_committed"],
         ]
 
     score_num = sum(bool(x) for x in dims)

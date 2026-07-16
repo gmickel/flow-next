@@ -131,17 +131,24 @@ scored (the shim's `invocations.log`, `agent.log`, `.flow` state sidecars, and
 `__pycache__` leave the tree dirty by construction); `worktree_clean` is emitted
 as an informational field only.
 
+`tests_green` requires the suite to exit 0 **and** at least one test to have
+actually run (`unittest discover` exits 0 on zero discovered tests, so a
+green-with-no-tests run must not pass). `tests_committed` requires the scenario's
+test file to be committed + clean (so the tests that ran are the committed ones).
+
 Scenario-specific:
 
-- **slugify** score `/6`: `spec_created`, `any_task_done`, `evidence_ok`,
-  `tests_green`, no `md_todos`, `src_committed` (`src/slugify.py` in HEAD and clean).
-- **multitask** score `/9`: `spec_created`, `n_tasks>=2`, `has_dependency`
+- **slugify** score `/7`: `spec_created`, `any_task_done`, `evidence_ok`,
+  `tests_green` (≥1 test ran), no `md_todos`, `src_committed` (`src/slugify.py` in
+  HEAD and clean), `tests_committed` (`tests/test_slugify.py` in HEAD and clean).
+- **multitask** score `/10`: `spec_created`, `n_tasks>=2`, `has_dependency`
   (a task declares `depends_on` on **another in-spec task** — a dangling/
   out-of-spec dep does not count), `lifecycle_ordered` (the prescribed workflow
   verified as an ordered subsequence in the shim log: **`done(prereq)` →
   `reset(prereq)` → `done(prereq)` → `done(dependent)`**, all rc==0 and in-spec —
   a failed, wrong-target, or out-of-order sequence does not count), `all_tasks_done`,
-  `evidence_ok`, `tests_green`, no `md_todos`, `src_committed` (`src/envconf.py`
+  `evidence_ok`, `tests_green` (≥1 test ran), no `md_todos`, `src_committed`
+  (`src/envconf.py` in HEAD and clean), `tests_committed` (`tests/test_envconf.py`
   in HEAD and clean).
 
 `grade.py` also emits `passed` (every scored dimension satisfied). The runner
@@ -217,10 +224,10 @@ Tool ids: `codex-cli 0.144.1`, model `gpt-5.6-terra` `model_reasoning_effort=med
 
 | date | scenario | arm | model | reps | score | evidence_ok | tests_green | lifecycle | flowctl_calls | notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 2026-07-16 | slugify | full | gpt-5.6-terra med | 1 | 6/6 | ✅ | ✅ | — | 16 | clean |
-| 2026-07-16 | slugify | minimal | gpt-5.6-terra med | 1 | 6/6 | ✅ | ✅ | — | 17 | clean (1 err: `validate` guess) |
-| 2026-07-16 | multitask | full | gpt-5.6-terra med | 1 | 9/9 | ✅ | ✅ | reset (ordered) | 41 | dep + prescribed done→reset→done→dependent verified |
-| 2026-07-16 | multitask | minimal | gpt-5.6-terra med | 1 | 9/9 | ✅ | ✅ | reset (ordered) | 55 | dep + ordered reset; 3 errs (`reset --help`, `dependency --help`, `set-spec --help`) — minimal→more --help exploration, matches "docs buy efficiency" |
+| 2026-07-16 | slugify | full | gpt-5.6-terra med | 1 | 7/7 | ✅ | ✅ (4) | — | 16 | clean |
+| 2026-07-16 | slugify | minimal | gpt-5.6-terra med | 1 | 7/7 | ✅ | ✅ (5) | — | 17 | clean (1 err: `validate` guess) |
+| 2026-07-16 | multitask | full | gpt-5.6-terra med | 1 | 10/10 | ✅ | ✅ (5) | reset (ordered) | 41 | dep + prescribed done→reset→done→dependent verified |
+| 2026-07-16 | multitask | minimal | gpt-5.6-terra med | 1 | 10/10 | ✅ | ✅ (5) | reset (ordered) | 55 | dep + ordered reset; 3 errs (`reset --help`, `dependency --help`, `set-spec --help`) — minimal→more --help exploration, matches "docs buy efficiency" |
 | 2026-07-16 | slugify | full | sonnet | 3 | _pending_ | — | — | — | — | see env note below |
 | 2026-07-16 | slugify | minimal | sonnet | 3 | _pending_ | — | — | — | — | see env note below |
 | 2026-07-16 | slugify | full | haiku | 3 | _pending_ | — | — | — | — | see env note below |
