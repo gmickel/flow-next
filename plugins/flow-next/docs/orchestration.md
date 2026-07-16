@@ -217,7 +217,7 @@ Loop internals: [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot
 
 This page lives in the plugin's doc tree — *outside* the repo you're working in. At use time the host agent reads two files that ship into your project, so the steering recipes are put where agents already look:
 
-- **`.flow/usage.md`** carries an `## Orchestration & model steering` section (installed in every project, read every session): the headless `codex exec` / `cursor-agent` / `claude -p` bridge commands and the flow-next shortcuts (`delegate:codex`, `review.backend`, per-task `review:`, prompted-orchestration examples). The bridges run in **every direction** — `claude -p` lets a Codex or Cursor host conduct Claude the same way; any harness that can run Bash can be the conductor.
+- **`.flow/usage.md`** carries an `## Orchestration & model steering` section (installed in every project; read on demand - the always-loaded CLAUDE.md/AGENTS.md block points agents at it): the headless `codex exec` / `cursor-agent` / `claude -p` bridge commands and the flow-next shortcuts (`delegate:codex`, `review.backend`, per-task `review:`, prompted-orchestration examples). The bridges run in **every direction** — `claude -p` lets a Codex or Cursor host conduct Claude the same way; any harness that can run Bash can be the conductor.
 - **`CLAUDE.md` / `AGENTS.md`** can hold the durable model-routing table above: `/flow-next:setup` offers, as an optional ceremony step, to scaffold it live — annotated for the CLIs you actually have installed, shown in full before writing, yours to edit after. Marker-fenced so `/flow-next:uninstall` can remove it cleanly.
 
 ## What stays fixed

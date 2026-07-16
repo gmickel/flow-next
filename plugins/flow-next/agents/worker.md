@@ -370,6 +370,8 @@ If capture fails (memory disabled mid-run, flowctl error, etc.), log and continu
 ```
 If verification fails, fix and re-commit before proceeding.
 
+**Sandbox-blocked commit:** if the environment's sandbox denies `git commit`, do NOT stall or loop retrying - still write the evidence file and complete `flowctl done`, and record the sandbox restriction in the done summary so the orchestrator can commit on your behalf. A blocked commit is never a reason to block the task.
+
 **Delegation verification backstop — `DELEGATE: codex` AND `REVIEW_MODE: none`.**
 When delegation was active AND no impl-review gate ran (Phase 4 skipped), you MUST
 run this verification yourself on the delegated diff before `flowctl done` — do NOT

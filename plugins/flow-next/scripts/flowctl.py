@@ -2066,6 +2066,326 @@ def read_text_or_exit(path: Path, what: str, use_json: bool = True) -> str:
         error_exit(f"{what} unreadable: {path} ({e})", use_json=use_json)
 
 
+# --- Setup docs block helpers (fn-99, R3/R8/R12) ---
+
+SETUP_BLOCK_BEGIN = "<!-- BEGIN FLOW-NEXT -->"
+SETUP_BLOCK_END = "<!-- END FLOW-NEXT -->"
+
+
+def _read_text_verbatim(path: Path) -> str:
+    """Read text without newline translation so setup-block preserves bytes."""
+    with open(path, encoding="utf-8", newline="") as f:
+        return f.read()
+
+
+def _setup_block_hash(content: str) -> str:
+    """Hash a marker block after the fn-99 CRLF-only normalization."""
+    normalized = content.replace("\r\n", "\n")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _setup_block_span(content: str) -> Optional[tuple[int, int]]:
+    """Return marker-line indexes, or fail on a BEGIN marker without END.
+
+    A marker counts ONLY as a standalone line (stripped equality). Replacing
+    whole lines that merely CONTAIN a marker would delete the surrounding
+    user content (violates R3/R12 outside-marker preservation), so when no
+    standalone BEGIN exists but a marker token appears embedded in other
+    content, the block state is ambiguous and we refuse to write.
+    """
+    lines = content.splitlines(keepends=True)
+
+    def _is_marker(line: str, marker: str) -> bool:
+        return line.strip() == marker
+
+    begin_index = next(
+        (i for i, line in enumerate(lines) if _is_marker(line, SETUP_BLOCK_BEGIN)),
+        None,
+    )
+    if begin_index is None:
+        if any(
+            SETUP_BLOCK_BEGIN in line or SETUP_BLOCK_END in line for line in lines
+        ):
+            raise ValueError(
+                "corrupt flow-next marker block: marker must be on its own line"
+            )
+        return None
+    end_index = next(
+        (
+            index
+            for index in range(begin_index + 1, len(lines))
+            if _is_marker(lines[index], SETUP_BLOCK_END)
+        ),
+        None,
+    )
+    if end_index is None:
+        if any(SETUP_BLOCK_END in line for line in lines[begin_index + 1 :]):
+            raise ValueError(
+                "corrupt flow-next marker block: marker must be on its own line"
+            )
+        raise ValueError("corrupt flow-next marker block: BEGIN marker has no END marker")
+    start = sum(len(line) for line in lines[:begin_index])
+    end = sum(len(line) for line in lines[: end_index + 1])
+    return start, end
+
+
+def _setup_block_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, str]:
+    """Resolve fn-99 setup-block paths and its repo-relative state-map key.
+
+    The state-map key and the target's logical identity come from the
+    *unresolved* path: CLAUDE.md and AGENTS.md must stay independent keys even
+    when one is a symlink to the other (a common instruction-file convention).
+    Following the symlink here would collapse both keys onto the referent, name
+    the wrong target in output, and let the Codex `$flow-next-*` template land in
+    CLAUDE.md. Containment is checked against the resolved PARENT (so `..`
+    escapes are still caught) while the filename is preserved verbatim.
+    """
+    repo_root = get_repo_root().resolve()
+    target = Path(args.file)
+    if not target.is_absolute():
+        target = repo_root / target
+    # Resolve the parent for containment; keep the filename unresolved.
+    resolved_parent = target.parent.resolve()
+    target = resolved_parent / target.name
+    try:
+        key = target.relative_to(repo_root).as_posix()
+    except ValueError:
+        error_exit("target file must be inside the repository", use_json=args.json)
+
+    if target.is_symlink():
+        # Setup's discoverability picks the substantive (real) instruction file;
+        # a symlink reaching the block helper would write through to its referent
+        # (e.g. CLAUDE.md->AGENTS.md), corrupting the other target. Reject with
+        # guidance rather than silently following it.
+        error_exit(
+            f"target {key} is a symlink; point setup-block at the real "
+            "instruction file (the symlink referent) instead",
+            use_json=args.json,
+        )
+
+    template = Path(args.template)
+    if not template.is_absolute():
+        template = repo_root / template
+    return repo_root, target, template, key
+
+
+def _setup_block_recorded_hash(meta: dict, key: str) -> Optional[str]:
+    """Return a valid stored hash, treating malformed setup metadata as absent."""
+    setup = meta.get("setup")
+    if not isinstance(setup, dict):
+        return None
+    block_hashes = setup.get("block_hashes")
+    if not isinstance(block_hashes, dict):
+        return None
+    if any(not isinstance(value, str) for value in block_hashes.values()):
+        return None
+    value = block_hashes.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _setup_block_record_hash(meta: dict, key: str, value: str) -> None:
+    """Repair only malformed fn-99 setup state and record one target's value."""
+    setup = meta.get("setup")
+    if not isinstance(setup, dict):
+        setup = {}
+        meta["setup"] = setup
+    block_hashes = setup.get("block_hashes")
+    if not isinstance(block_hashes, dict) or any(
+        not isinstance(existing, str) for existing in block_hashes.values()
+    ):
+        block_hashes = {}
+        setup["block_hashes"] = block_hashes
+    block_hashes[key] = value
+
+
+def _setup_block_write(target: Path, content: str) -> None:
+    """Atomic doc write that preserves the target's permission bits.
+
+    `atomic_write` replaces via mkstemp (mode 0600); a bare call would strip
+    group/world readability from an existing CLAUDE.md/AGENTS.md. Preserve the
+    prior mode for existing targets; give new files normal umask-derived
+    document permissions.
+    """
+    prior_mode: Optional[int] = None
+    try:
+        prior_mode = os.stat(target).st_mode & 0o7777
+    except OSError:
+        prior_mode = None
+    atomic_write(target, content)
+    try:
+        if prior_mode is not None:
+            os.chmod(target, prior_mode)
+        else:
+            umask = os.umask(0)
+            os.umask(umask)
+            os.chmod(target, 0o666 & ~umask)
+    except OSError:
+        pass
+
+
+def _setup_block_meta_or_exit(use_json: bool) -> tuple[Path, dict]:
+    """Load setup-block state, requiring setup initialization first (fn-99 R3)."""
+    meta_path = get_flow_dir() / META_FILE
+    if not meta_path.exists():
+        error_exit("meta.json missing - run flowctl init first", use_json=use_json)
+    meta = load_json_or_exit(meta_path, "meta.json", use_json=use_json)
+    if not isinstance(meta, dict):
+        error_exit("meta.json invalid: expected an object", use_json=use_json)
+    return meta_path, meta
+
+
+@contextmanager
+def _setup_block_lock():
+    """Serialize setup-block meta.json read-modify-write across concurrent runs.
+
+    Parallel CLAUDE.md + AGENTS.md applies both load the per-target
+    `setup.block_hashes` map, mutate one key, and write back; unlocked, the
+    second writer clobbers the first target's hash. A repo-local exclusive lock
+    (re-read meta INSIDE the lock at each call site) makes the map merge safe.
+    """
+    lock_dir = get_flow_dir() / "locks"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    # The parent dir itself must be a real directory: a repository-controlled
+    # `.flow/locks -> /outside` symlink would relocate every child open even
+    # with O_NOFOLLOW on the leaf (security review, PR #209 wave 2).
+    if lock_dir.is_symlink() or not lock_dir.is_dir():
+        error_exit(f"setup-block lock dir is not a real directory: {lock_dir}", use_json=True)
+    lock_path = lock_dir / "setup-block.lock"
+    # O_NOFOLLOW: a repository-controlled symlink at the lock path must not
+    # redirect the open outside .flow/locks (security review, PR #209). No
+    # truncation flag - flock only needs a stable fd, never file content.
+    flags = os.O_CREAT | os.O_WRONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(lock_path, flags, 0o644)
+    except OSError as e:
+        error_exit(f"setup-block lock unavailable: {lock_path} ({e})", use_json=True)
+    with os.fdopen(fd, "w") as f:
+        try:
+            _flock(f, LOCK_EX)
+            yield
+        finally:
+            _flock(f, LOCK_UN)
+
+
+def _setup_block_emit(args: argparse.Namespace, target: str, action: str,
+                      reason: Optional[str], recorded_hash: Optional[str]) -> None:
+    """Emit the stable fn-99 transition-table result shape."""
+    result = {
+        "target": target,
+        "action": action,
+        "reason": reason,
+        "hash": recorded_hash,
+    }
+    if args.json:
+        json_output(result)
+    else:
+        detail = f" ({reason})" if reason else ""
+        print(f"setup-block {target}: {action}{detail}")
+
+
+def cmd_setup_block_apply(args: argparse.Namespace) -> None:
+    """Apply fn-99's R3/R8/R12 pristine-hash transition table to one doc block."""
+    _, target, template, key = _setup_block_paths(args)
+    try:
+        canonical = _read_text_verbatim(template)
+    except Exception as e:
+        error_exit(f"template unreadable: {template} ({e})", use_json=args.json)
+    canonical_hash = _setup_block_hash(canonical)
+    with _setup_block_lock():
+        # Re-read meta inside the lock so a concurrent sibling apply cannot
+        # clobber this target's hash (fn-99 R8 concurrency finding).
+        meta_path, meta = _setup_block_meta_or_exit(args.json)
+        recorded = _setup_block_recorded_hash(meta, key)
+        _cmd_setup_block_apply_locked(
+            args, target, canonical, canonical_hash, recorded, meta_path, meta, key
+        )
+
+
+def _cmd_setup_block_apply_locked(args, target, canonical, canonical_hash,
+                                  recorded, meta_path, meta, key) -> None:
+    """Transition body for cmd_setup_block_apply; runs under _setup_block_lock."""
+
+    if not target.exists():
+        _setup_block_write(target, canonical)
+        _setup_block_record_hash(meta, key, canonical_hash)
+        atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "appended", None, canonical_hash)
+        return
+
+    try:
+        current = _read_text_verbatim(target)
+        span = _setup_block_span(current)
+    except ValueError as e:
+        error_exit(str(e), use_json=args.json)
+    except Exception as e:
+        error_exit(f"target unreadable: {target} ({e})", use_json=args.json)
+
+    if span is None:
+        separator = "" if not current else ("\n" if current.endswith("\n") else "\n\n")
+        _setup_block_write(target, current + separator + canonical)
+        _setup_block_record_hash(meta, key, canonical_hash)
+        atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "appended", None, canonical_hash)
+        return
+
+    current_block = current[span[0]:span[1]]
+    current_hash = _setup_block_hash(current_block)
+    if current_block.replace("\r\n", "\n") == canonical.replace("\r\n", "\n"):
+        if recorded != canonical_hash:
+            _setup_block_record_hash(meta, key, canonical_hash)
+            atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "unchanged", None, canonical_hash)
+        return
+
+    if recorded == current_hash:
+        _setup_block_write(target, current[:span[0]] + canonical + current[span[1]:])
+        _setup_block_record_hash(meta, key, canonical_hash)
+        atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "refreshed", None, canonical_hash)
+    elif recorded == "customized":
+        _setup_block_emit(args, key, "kept", "customized-sentinel", recorded)
+    elif recorded is not None:
+        _setup_block_emit(args, key, "ask", "customized", recorded)
+    else:
+        _setup_block_emit(args, key, "ask", "hash-absent", None)
+
+
+def cmd_setup_block_resolve(args: argparse.Namespace) -> None:
+    """Resolve fn-99's one-time customized-block prompt (keep or overwrite)."""
+    _, target, template, key = _setup_block_paths(args)
+    with _setup_block_lock():
+        # Re-read meta inside the lock (fn-99 R8 concurrency finding).
+        meta_path, meta = _setup_block_meta_or_exit(args.json)
+        _cmd_setup_block_resolve_locked(args, target, template, key, meta_path, meta)
+
+
+def _cmd_setup_block_resolve_locked(args, target, template, key, meta_path, meta) -> None:
+    """Resolve body; runs under _setup_block_lock."""
+    if args.choice == "keep":
+        _setup_block_record_hash(meta, key, "customized")
+        atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "kept", "customized-sentinel", "customized")
+        return
+
+    try:
+        canonical = _read_text_verbatim(template)
+        current = _read_text_verbatim(target)
+        span = _setup_block_span(current)
+    except ValueError as e:
+        error_exit(str(e), use_json=args.json)
+    except Exception as e:
+        error_exit(f"target or template unreadable ({e})", use_json=args.json)
+    if span is None:
+        error_exit("target has no flow-next marker block to overwrite", use_json=args.json)
+    canonical_hash = _setup_block_hash(canonical)
+    _setup_block_write(target, current[:span[0]] + canonical + current[span[1]:])
+    _setup_block_record_hash(meta, key, canonical_hash)
+    atomic_write_json(meta_path, meta)
+    _setup_block_emit(args, key, "overwritten", None, canonical_hash)
+
+
 def read_file_or_stdin(file_arg: str, what: str, use_json: bool = True) -> str:
     """Read from file path or stdin if file_arg is '-'.
 
@@ -6362,6 +6682,8 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # fn-52 tracker-sync per-run receipts (proof-of-work; accumulate per sync,
     # same class as receipts/ — runtime artifacts, not durable repo state)
     "sync-runs/",
+    # fn-99 setup-block serialization locks (runtime artifacts, never repo state)
+    "locks/",
     # fn-68 pilot backlog-mode decision-log rows (per-tick triage/advance/ask
     # proof-of-work; accumulate per pilot tick, same runtime-artifact class as
     # sync-runs/ — deliberately NOT a receipts/ path the ralph-guard validates)
@@ -30553,6 +30875,28 @@ def main() -> None:
     p_init = subparsers.add_parser("init", help="Initialize .flow/ directory")
     p_init.add_argument("--json", action="store_true", help="JSON output")
     p_init.set_defaults(func=cmd_init)
+
+    # setup-block (fn-99): deterministic marker-block lifecycle for setup docs.
+    p_setup_block = subparsers.add_parser(
+        "setup-block", help="Apply or resolve the tracked Flow-Next docs block"
+    )
+    setup_block_sub = p_setup_block.add_subparsers(
+        dest="setup_block_cmd", required=True
+    )
+    for name, handler, help_text in (
+        ("apply", cmd_setup_block_apply, "Apply the canonical block safely"),
+        ("resolve", cmd_setup_block_resolve, "Keep or overwrite a customized block"),
+    ):
+        sub = setup_block_sub.add_parser(name, help=help_text)
+        sub.add_argument("--file", required=True, help="Target docs file")
+        sub.add_argument("--template", required=True, help="Canonical marker-block template")
+        if name == "resolve":
+            sub.add_argument(
+                "--choice", required=True, choices=["keep", "overwrite"],
+                help="Resolution for a customized marker block",
+            )
+        sub.add_argument("--json", action="store_true", help="JSON output")
+        sub.set_defaults(func=handler)
 
     # detect
     p_detect = subparsers.add_parser("detect", help="Check if .flow/ exists")

@@ -1,7 +1,4 @@
 {
-  "assignee": null,
-  "claim_note": "",
-  "claimed_at": null,
   "created_at": "2026-07-15T18:37:42.764546Z",
   "depends_on": [
     "fn-99-setup-block-diet-evidence-schema-inline.2",
@@ -13,5 +10,5 @@
   "spec_path": ".flow/tasks/fn-99-setup-block-diet-evidence-schema-inline.4.md",
   "status": "todo",
   "title": "Post-trim eval gate, restoration loop, changelogs + docs-site staging",
-  "updated_at": "2026-07-15T18:38:58.466377Z"
+  "updated_at": "2026-07-16T11:50:48.364523Z"
 }
