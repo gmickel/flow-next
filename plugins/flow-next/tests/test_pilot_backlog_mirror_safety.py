@@ -48,7 +48,6 @@ import pathlib
 import re
 import unittest
 
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 PLUGIN = REPO_ROOT / "plugins" / "flow-next"
 

@@ -32,14 +32,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import flowctl  # noqa: E402
-
 
 EPIC_ID = "fn-1-cursor-demo"
 TASK_ID = f"{EPIC_ID}.1"

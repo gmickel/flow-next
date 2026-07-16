@@ -44,7 +44,6 @@ import sys
 import tempfile
 import unittest
 
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 PLUGIN = REPO_ROOT / "plugins" / "flow-next"
 FLOWCTL_PY = PLUGIN / "scripts" / "flowctl.py"

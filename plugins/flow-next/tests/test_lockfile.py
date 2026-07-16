@@ -37,7 +37,6 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
-
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
 
@@ -214,7 +213,6 @@ class TestStalePidReclaimWindows(unittest.TestCase):
 
     def test_windows_dead_pid_returns_false(self) -> None:
         """OpenProcess returns 0 (NULL handle) → process is gone → dead."""
-        import ctypes
         from ctypes import wintypes  # noqa: F401 — only used to satisfy attr lookup
 
         fake_kernel32 = mock.MagicMock()
@@ -247,7 +245,6 @@ class TestStalePidReclaimWindows(unittest.TestCase):
         cell our patched byref captures.
         """
         import ctypes
-        from ctypes import wintypes
 
         # Capture the DWORD that the helper allocates so our side_effect can
         # mutate it to express liveness/exitcode. ctypes.byref returns an

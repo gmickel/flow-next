@@ -14,10 +14,9 @@ criteria like `R4a` / `R4b`. Multi-letter suffixes (`R4ab`) and separators
 (`R-4`) remain rejected by design.
 """
 
+import sys
 import unittest
 from pathlib import Path
-import sys
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"
@@ -25,7 +24,6 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import flowctl  # noqa: E402  (path-injected import)
-
 
 _BODY_TEMPLATE = """# Spec Title
 

@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import importlib.util
-import io
 import json
 import os
 import sys
@@ -36,7 +35,6 @@ import unittest
 from pathlib import Path
 from typing import Any
 from unittest import mock
-
 
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"

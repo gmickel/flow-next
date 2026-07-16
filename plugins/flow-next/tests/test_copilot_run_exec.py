@@ -11,13 +11,11 @@ These tests mock ``subprocess.run`` and ``require_copilot`` so they run
 cleanly on any host without spawning copilot.
 """
 
-import io
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"

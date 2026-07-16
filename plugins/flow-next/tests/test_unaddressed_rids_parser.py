@@ -15,10 +15,9 @@ live impl-review A/B in 1.3.x; fixed in 1.3.4 by extending both regexes to
 `\\bR(\\d+[a-z]?)\\b`, in lockstep with the spec parser.
 """
 
+import sys
 import unittest
 from pathlib import Path
-import sys
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"

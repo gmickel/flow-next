@@ -17,11 +17,10 @@ Post-removal contract pinned here:
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
-import tempfile
 from unittest import mock
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"

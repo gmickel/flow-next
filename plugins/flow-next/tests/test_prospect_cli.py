@@ -20,13 +20,11 @@ smoke tests in task 6); they verify the helpers + descriptor shape.
 from __future__ import annotations
 
 import importlib.util
-import os
 import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
-
 
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
@@ -519,8 +517,8 @@ class ArchiveCommand(unittest.TestCase):
     def _run_archive(self, prospects_dir: Path, artifact_id: str) -> dict[str, Any]:
         import argparse
         import io
-        import sys
         import json
+        import sys
 
         # Point the helpers at our temp prospects dir's grandparent — that's
         # where `.flow/` lives.

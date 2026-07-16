@@ -48,7 +48,6 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
 

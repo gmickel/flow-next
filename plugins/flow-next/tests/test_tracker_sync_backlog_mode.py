@@ -37,7 +37,6 @@ from __future__ import annotations
 import pathlib
 import unittest
 
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 SKILL_DIR = (
     REPO_ROOT

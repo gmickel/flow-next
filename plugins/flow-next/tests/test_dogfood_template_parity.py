@@ -27,7 +27,6 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent           # plugins/flow-next
 REPO_ROOT = PLUGIN_DIR.parent.parent      # repo root

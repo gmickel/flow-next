@@ -37,7 +37,6 @@ import json
 import sys
 from pathlib import Path
 
-
 # Canned result bodies keyed by row. ``files_modified`` mirrors any --create-file
 # paths the caller passes so the trust cross-check has something to chew on.
 _ROWS = {

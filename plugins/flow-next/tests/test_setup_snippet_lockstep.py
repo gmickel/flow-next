@@ -11,7 +11,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 HERE = Path(__file__).resolve()
 TESTS_DIR = HERE.parent
 PLUGIN_DIR = TESTS_DIR.parent

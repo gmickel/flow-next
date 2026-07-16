@@ -24,9 +24,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import unittest
 from pathlib import Path
 from typing import Any
-import unittest
 
 
 def _load_flowctl() -> Any:

@@ -16,7 +16,6 @@ import inspect
 import io
 import json
 import os
-import sys
 import tempfile
 import unittest
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
@@ -1029,7 +1028,6 @@ def _stub_subprocess(module, captured: list, *, stdout: str = "", returncode: in
     so ``require_codex`` / ``require_copilot`` don't error out on hosts that
     don't have codex/copilot installed.
     """
-    import subprocess as _subprocess
 
     real_run = module.subprocess.run
     real_which = module.shutil.which

@@ -21,11 +21,10 @@ Run:
 from __future__ import annotations
 
 import importlib.util
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
 from typing import Any
-
 
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"

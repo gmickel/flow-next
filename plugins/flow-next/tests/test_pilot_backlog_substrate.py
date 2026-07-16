@@ -43,7 +43,6 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent                 # plugins/flow-next
 REPO_ROOT = PLUGIN_DIR.parent.parent            # repo root

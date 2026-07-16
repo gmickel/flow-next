@@ -37,7 +37,6 @@ import subprocess
 import sys
 import unittest
 
-
 HERE = pathlib.Path(__file__).resolve()
 TESTS_DIR = HERE.parent
 PLUGIN_DIR = TESTS_DIR.parent

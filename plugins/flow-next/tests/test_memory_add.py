@@ -18,19 +18,16 @@ Covers:
 
 from __future__ import annotations
 
-import argparse
 import importlib.util
-import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import contextmanager, redirect_stdout
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
-
 
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"

@@ -12,11 +12,10 @@ All four are deterministic and reproducible from repo state — no LLM judgment.
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-import sys
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"
@@ -323,7 +322,8 @@ class TestRemovedRefsCrossExtension(RemovedExportRefsBase if 'RemovedExportRefsB
     grep pathspec covers all known source extensions, not diff-touched only."""
 
     def test_ts_removal_tsx_reference_found(self):
-        import subprocess, tempfile
+        import subprocess
+        import tempfile
         from pathlib import Path as _P
         with tempfile.TemporaryDirectory() as d:
             root = _P(d)

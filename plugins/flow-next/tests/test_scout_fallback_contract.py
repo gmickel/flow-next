@@ -45,7 +45,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
 AGENTS_DIR = PLUGIN_DIR / "agents"

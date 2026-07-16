@@ -18,10 +18,10 @@ import json
 import os
 import tempfile
 import unittest
-from unittest import mock
 from contextlib import contextmanager, redirect_stderr
 from pathlib import Path
 from typing import Any, Optional
+from unittest import mock
 
 
 def _load_flowctl() -> Any:

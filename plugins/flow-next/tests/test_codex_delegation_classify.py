@@ -28,12 +28,8 @@ This file also locks the prose contract authored in this task:
 
 from __future__ import annotations
 
-import argparse
-import contextlib
 import importlib.util
-import io
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -41,7 +37,6 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, Optional
-
 
 HERE = Path(__file__).resolve()
 TESTS_DIR = HERE.parent

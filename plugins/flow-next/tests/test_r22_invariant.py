@@ -32,7 +32,6 @@ import sys
 import unittest
 from pathlib import Path
 
-
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
 FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
