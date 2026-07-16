@@ -156,16 +156,26 @@ def main():
     # green-with-no-tests must not pass: require >=1 test actually RAN. (The test
     # FILE being committed + clean is enforced per scenario via committed_and_clean
     # below, so the tests that ran are the committed ones.)
-    tp = subprocess.run(
-        ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"],
-        cwd=d,
-        capture_output=True,
-        text=True,
-    )
-    m = re.search(r"^Ran (\d+) test", tp.stderr, re.MULTILINE)
-    ran = int(m.group(1)) if m else 0
+    # Bounded: an agent-authored hanging test (or an infinite loop the tests
+    # exercise) must not stall grading after the bridge already returned -
+    # timeout counts as not-green (PR #209 review).
+    try:
+        tp = subprocess.run(
+            ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"],
+            cwd=d,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        m = re.search(r"^Ran (\d+) test", tp.stderr, re.MULTILINE)
+        ran = int(m.group(1)) if m else 0
+        green = tp.returncode == 0 and ran >= 1
+    except subprocess.TimeoutExpired:
+        ran = 0
+        green = False
+        r["tests_timeout"] = True
     r["tests_ran"] = ran
-    r["tests_green"] = tp.returncode == 0 and ran >= 1
+    r["tests_green"] = green
 
     # 4. shim log: agent flowctl invocations + failures (inv read in section 2)
     r["flowctl_calls"] = len(inv)

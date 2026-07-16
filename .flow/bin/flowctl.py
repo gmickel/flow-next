@@ -2245,6 +2245,11 @@ def _setup_block_lock():
     """
     lock_dir = get_flow_dir() / "locks"
     lock_dir.mkdir(parents=True, exist_ok=True)
+    # The parent dir itself must be a real directory: a repository-controlled
+    # `.flow/locks -> /outside` symlink would relocate every child open even
+    # with O_NOFOLLOW on the leaf (security review, PR #209 wave 2).
+    if lock_dir.is_symlink() or not lock_dir.is_dir():
+        error_exit(f"setup-block lock dir is not a real directory: {lock_dir}", use_json=True)
     lock_path = lock_dir / "setup-block.lock"
     # O_NOFOLLOW: a repository-controlled symlink at the lock path must not
     # redirect the open outside .flow/locks (security review, PR #209). No
