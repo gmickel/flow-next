@@ -187,6 +187,8 @@ class SetupBlockFixtureTest(unittest.TestCase):
                 self.assertIsInstance(meta["setup"]["block_hashes"], dict)
 
     @unittest.skipIf(os.name == "nt", "POSIX directory permissions required")
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0,
+                     "root ignores directory write permissions")
     def test_failed_target_write_leaves_hash_unchanged(self) -> None:
         locked = self.repo / "locked"
         locked.mkdir()

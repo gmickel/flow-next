@@ -2246,7 +2246,17 @@ def _setup_block_lock():
     lock_dir = get_flow_dir() / "locks"
     lock_dir.mkdir(parents=True, exist_ok=True)
     lock_path = lock_dir / "setup-block.lock"
-    with open(lock_path, "w") as f:
+    # O_NOFOLLOW: a repository-controlled symlink at the lock path must not
+    # redirect the open outside .flow/locks (security review, PR #209). No
+    # truncation flag - flock only needs a stable fd, never file content.
+    flags = os.O_CREAT | os.O_WRONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(lock_path, flags, 0o644)
+    except OSError as e:
+        error_exit(f"setup-block lock unavailable: {lock_path} ({e})", use_json=True)
+    with os.fdopen(fd, "w") as f:
         try:
             _flock(f, LOCK_EX)
             yield
@@ -6667,6 +6677,8 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # fn-52 tracker-sync per-run receipts (proof-of-work; accumulate per sync,
     # same class as receipts/ — runtime artifacts, not durable repo state)
     "sync-runs/",
+    # fn-99 setup-block serialization locks (runtime artifacts, never repo state)
+    "locks/",
     # fn-68 pilot backlog-mode decision-log rows (per-tick triage/advance/ask
     # proof-of-work; accumulate per pilot tick, same runtime-artifact class as
     # sync-runs/ — deliberately NOT a receipts/ path the ralph-guard validates)
