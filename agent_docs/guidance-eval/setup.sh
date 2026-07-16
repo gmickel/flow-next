@@ -3,14 +3,19 @@
 #
 # Usage:
 #   setup.sh <run_dir> <arm> <scenario> <family> [model_name] [rep] [run_id]
-#     arm       minimal | full          (guidance block written into the agent-instruction file)
+#     arm       minimal | full                 (block-only: NO .flow/usage.md ships)
+#               full-usage | full-usage-pretrim (block + on-demand usage.md variant)
 #     scenario  slugify | multitask     (picks scenarios/<scenario>.txt at run time)
 #     family    claude | codex          (target file: CLAUDE.md vs AGENTS.md; full-block twin selection)
 #
 # The scratch repo is a self-contained git repo with its OWN flow state, a logging
 # shim on flowctl (appends "rc|args" to .flow/invocations.log), the chosen guidance
-# block, and a project header. It intentionally ships NO .flow/usage.md - both arms
-# measure the always-loaded block ALONE (usage.md is on-demand; see README).
+# block, and a project header. The block-only arms (minimal|full) ship NO
+# .flow/usage.md - they measure the always-loaded block ALONE. The usage-aware
+# arms ship the full block PLUS an on-demand .flow/usage.md:
+#   full-usage          the CURRENT shipped template (post-trim), pulled live
+#   full-usage-pretrim  the frozen pre-trim 5392-tok fixture (arms/usage-pretrim.md)
+# so a trim can be gated usage-included: trimmed vs pre-trim, same block.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -30,7 +35,7 @@ run_id="${7:-$(basename "$run_dir")}"
 
 # --- validate inputs before ANY destructive filesystem op --------------------
 # This script `rm -rf`s run_dir, so guard the path and whitelist identifiers.
-case "$arm"      in minimal|full) ;; *) echo "FATAL: bad arm '$arm' (minimal|full)" >&2; exit 1 ;; esac
+case "$arm"      in minimal|full|full-usage|full-usage-pretrim) ;; *) echo "FATAL: bad arm '$arm' (minimal|full|full-usage|full-usage-pretrim)" >&2; exit 1 ;; esac
 case "$scenario" in slugify|multitask) ;; *) echo "FATAL: bad scenario '$scenario' (slugify|multitask)" >&2; exit 1 ;; esac
 case "$family"   in claude|codex) ;; *) echo "FATAL: bad family '$family' (claude|codex)" >&2; exit 1 ;; esac
 case "$model_name" in *[!A-Za-z0-9._-]*) echo "FATAL: model '$model_name' has unsafe chars" >&2; exit 1 ;; esac
@@ -54,16 +59,32 @@ case "$arm" in
   minimal)
     block="$(cat "$HERE/arms/minimal-block.md")"
     ;;
-  full)
+  full|full-usage|full-usage-pretrim)
     # Derived LIVE from the shipped template so the baseline always reflects the
     # real current block (no drifting snapshot). Marker lines are stripped.
+    # The usage-aware arms use the SAME block; they differ only in the
+    # .flow/usage.md variant installed below.
     tmpl="$TEMPLATE_DIR/claude-md-snippet.md"
     [ "$family" = codex ] && tmpl="$TEMPLATE_DIR/agents-md-snippet.md"
     [ -f "$tmpl" ] || { echo "FATAL: full-block template not found at $tmpl" >&2; exit 1; }
     block="$(grep -v -e '<!-- BEGIN FLOW-NEXT -->' -e '<!-- END FLOW-NEXT -->' "$tmpl")"
     ;;
-  *) echo "FATAL: unknown arm '$arm' (minimal|full)" >&2; exit 1 ;;
+  *) echo "FATAL: unknown arm '$arm' (minimal|full|full-usage|full-usage-pretrim)" >&2; exit 1 ;;
 esac
+
+# usage-aware arms: resolve the usage.md variant BEFORE any destructive op
+usage_src=""
+case "$arm" in
+  full-usage)
+    usage_src="$TEMPLATE_DIR/usage.md"   # current shipped template (post-trim), live
+    ;;
+  full-usage-pretrim)
+    usage_src="$HERE/arms/usage-pretrim.md"  # frozen 5392-tok pre-trim fixture
+    ;;
+esac
+if [ -n "$usage_src" ] && [ ! -f "$usage_src" ]; then
+  echo "FATAL: usage.md source not found at $usage_src" >&2; exit 1
+fi
 
 target=CLAUDE.md
 [ "$family" = codex ] && target=AGENTS.md
@@ -95,8 +116,12 @@ SHIM
 chmod +x .flow/bin/flowctl
 : > .flow/invocations.log
 
-# block-only arms: remove the on-demand usage.md so the block is measured alone
+# block-only arms measure the block alone: remove the on-demand usage.md.
+# usage-aware arms install their variant instead (what /flow-next:setup would ship).
 rm -f .flow/usage.md
+if [ -n "$usage_src" ]; then
+  cp "$usage_src" .flow/usage.md
+fi
 
 # project header + guidance block -> agent instruction file
 {

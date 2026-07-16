@@ -30,6 +30,8 @@ guidance-eval/
   arms/
     minimal-block.md     # ~110-token block, syntax-neutral, WITH inline evidence schema
                          # (full-block arm is pulled LIVE from the shipped template — see Arms)
+    usage-pretrim.md     # frozen pre-trim usage.md (5392 tok-equiv, pre-fn-99…3) for the
+                         # usage-included trim gate (full-usage-pretrim arm)
   scenarios/
     slugify.txt          # (a) single-task: implement + test a slugify() helper
     multitask.txt        # (b) multi-task: 2 tasks, a dependency, and a reset lifecycle event
@@ -83,8 +85,23 @@ Outputs land under `RUN_ROOT`:
   for Codex). It is derived live, not snapshotted, so the baseline always reflects
   the block a fresh repo actually gets — no drifting copy to maintain.
 
-Both arms ship **no `.flow/usage.md`**: the harness isolates the always-loaded
-block. `usage.md` is on-demand; agents reach it (and `--help`) themselves.
+The two block-only arms ship **no `.flow/usage.md`**: they isolate the
+always-loaded block. Two further **usage-aware** arms exist for gating a
+`usage.md` trim with usage.md actually present (a block-only matrix cannot see a
+usage.md regression by construction):
+
+- **full-usage** — the full block PLUS the **current shipped**
+  `templates/usage.md` (post-trim), pulled live, installed at
+  `.flow/usage.md` exactly where `/flow-next:setup` puts it.
+- **full-usage-pretrim** — the full block PLUS the frozen pre-trim fixture
+  `arms/usage-pretrim.md` (5392 tok-equiv, the template as of the commit before
+  fn-99…3's trim). The comparison anchor: same block, only the usage.md differs.
+
+Both usage-aware arms use the canonical (slash-syntax) template for both
+families — the codex mirror's copy differs only in invocation-syntax tokens,
+which none of the scenario flows exercise. Run them via
+`ARMS="full-usage full-usage-pretrim" ./runner.sh`; the default `ARMS` stays
+`minimal full` (block-only).
 
 ## Scenarios
 
@@ -346,5 +363,63 @@ from the retained run dirs.
    (schema-shaped but NO sha anywhere). Improvement was the gate's expectation,
    parity the hope; recorded as-is.
 4. `tests_green`, `md_todos`, dependency + ordered reset: clean across all 28.
+
+### Usage-included trim gate - "trimmed vs pre-trim usage.md, same block" (2026-07-16, fn-99…4)
+
+The block-only gate above cannot see a usage.md regression by construction (both
+arms ship no usage.md). This batch closes that gap with the two usage-aware arms:
+**full-usage** (current post-trim template, 1928 tok-equiv, live) vs
+**full-usage-pretrim** (frozen 5392 tok-equiv fixture `arms/usage-pretrim.md`,
+the template as of the commit before fn-99…3's trim). Same full block in both;
+only the `.flow/usage.md` variant differs. Matrix: scenarios {slugify, multitask}
+x arms {full-usage, full-usage-pretrim} x models {sonnet, haiku, gpt-5.6-terra @
+medium} x reps {3 Claude-family, 1 codex} = 28 runs, PLUS a 6-run extension
+(3 extra reps per arm) on the one cell where the arms differed (slugify x haiku)
+to separate noise from regression.
+
+Tool ids: `codex-cli 0.144.1` `gpt-5.6-terra` `model_reasoning_effort=medium`;
+`claude 2.1.210` `sonnet`/`haiku`. Grader: `grade.py` @ this commit - fixed
+during this batch to canonicalize legacy short ids in shim-log lifecycle events
+(`fn-1.1` for `fn-1-<slug>.1`; flowctl resolves them, agents legitimately use
+them; the raw-string match scored one sonnet cell's fully-prescribed reset flow
+as `lifecycle_kind="none"`). Both retained batches re-graded with the fix (the
+block-only batch above: no row changed).
+
+| date | scenario | arm | model | reps | passed | evidence_ok | scores | lifecycle | flowctl_calls | notes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-07-16 | slugify | full-usage | sonnet | 3 | 3/3 | 3/3 | 7/7 x3 | - | 13-16 | clean |
+| 2026-07-16 | slugify | full-usage | haiku | 6 | **3/6** | **3/6** | 7/7 x3, 6/7 x3 | - | 7-14 | granularity artifact (see verdict) |
+| 2026-07-16 | slugify | full-usage | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 7/7 | - | 33 | clean |
+| 2026-07-16 | slugify | full-usage-pretrim | sonnet | 3 | 3/3 | 3/3 | 7/7 x3 | - | 13-18 | clean |
+| 2026-07-16 | slugify | full-usage-pretrim | haiku | 6 | **5/6** | **5/6** | 7/7 x5, 6/7 | - | 8-18 | SAME artifact, r3 of the extension |
+| 2026-07-16 | slugify | full-usage-pretrim | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 7/7 | - | 21 | clean |
+| 2026-07-16 | multitask | full-usage | sonnet | 3 | 3/3 | 3/3 | 10/10 x3 | reset (ordered) x3 | 25-29 | one row scored via the short-id grader fix |
+| 2026-07-16 | multitask | full-usage | haiku | 3 | 3/3 | 3/3 | 10/10 x3 | reset (ordered) x3 | 15-16 | clean |
+| 2026-07-16 | multitask | full-usage | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 10/10 | reset (ordered) | 45 | clean |
+| 2026-07-16 | multitask | full-usage-pretrim | sonnet | 3 | 3/3 | 3/3 | 10/10 x3 | reset (ordered) x3 | 26-28 | clean |
+| 2026-07-16 | multitask | full-usage-pretrim | haiku | 3 | 3/3 | 3/3 | 10/10 x3 | reset (ordered) x3 | 15-21 | clean |
+| 2026-07-16 | multitask | full-usage-pretrim | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 10/10 | reset (ordered) | 55 | clean |
+
+**Gate verdict (trimmed usage.md vs pre-trim usage.md):**
+
+1. **Every dimension except one cell is identical across arms** - multitask
+   (deps + ordered reset + evidence) is 7/7 on BOTH arms across all models: the
+   cut Common Commands bulk did not hurt the reset/deps flows (the kept
+   typical-flow core carries `task reset`, and agents reach `--help` for the
+   rest, exactly as designed).
+2. **The one differing cell (slugify x haiku, n=6/arm: trimmed 3/6 vs pre-trim
+   5/6) is NOT content-attributable.** The failure mode - a self-decomposed
+   verification-only micro-task `done`d with an empty commits list while the
+   implementation tasks carry real shas - occurs in **both arms** (pre-trim's
+   extension r3 fails identically, with the full 5392-tok usage.md present).
+   Every evidence-teaching line (the Evidence JSON section, the typical-flow
+   done line) survived the trim verbatim, so there is no cut content to
+   restore; the delta at n=6 (Fisher p≈0.55) is noise around a weak-tier
+   granularity artifact that is orthogonal to the usage.md variant - the same
+   artifact the block-only gate recorded at higher frequency (block-only full
+   arm: 2/3 fail) than either usage-carrying arm.
+3. **Verdict: no regression attributable to the trim; the usage.md trim ships.**
+   Residual recorded honestly: haiku + multi-micro-task decomposition remains
+   the one flaky evidence surface, in every arm that was ever measured.
 
 <!-- LEDGER:END -->

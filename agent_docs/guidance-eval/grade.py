@@ -213,19 +213,33 @@ def main():
         )
         return diff.returncode == 0  # 0 = no diff between worktree and HEAD
 
-    # ordered successful (rc==0) lifecycle events (kind, task) from the shim log
+    # ordered successful (rc==0) lifecycle events (kind, task) from the shim log.
+    # flowctl RESOLVES legacy short ids (`fn-1.2` for `fn-1-some-slug.2`, `fn-1`
+    # for the spec) - agents legitimately use them (observed 2026-07-16: a sonnet
+    # cell ran the full prescribed done->reset->done->done flow via `fn-1.1` and
+    # the raw-string match scored lifecycle_kind="none"). Canonicalize event tids
+    # through the same alias before matching against canonical task ids.
+    short_alias = {}
+    for tid in all_task_ids:
+        spec_part, _, n = tid.rpartition(".")
+        m = re.match(r"fn-\d+", spec_part)
+        if m and n:
+            short_alias[f"{m.group(0)}.{n}"] = tid
     events = []
     for line in inv:
         rc_str, _, rest = line.partition("|")
         if rc_str != "0":
             continue
         args = rest.split()
+        tid = None
         if args[:1] == ["done"] and len(args) >= 2:
-            events.append(("done", args[1]))
+            kind, tid = "done", args[1]
         elif args[:2] == ["task", "reset"] and len(args) >= 3:
-            events.append(("reset", args[2]))
+            kind, tid = "reset", args[2]
         elif args[:1] == ["block"] and len(args) >= 2:
-            events.append(("block", args[1]))
+            kind, tid = "block", args[1]
+        if tid is not None:
+            events.append((kind, short_alias.get(tid, tid)))
 
     # 6. scenario-specific dimensions
     if scenario == "multitask":
