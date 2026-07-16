@@ -122,16 +122,27 @@ least one commit recorded. This mirrors what `agents/worker.md` teaches and
 `cmd_done` accepts. The historical failure mode is `done` with no/empty
 evidence — this dimension is what the whole eval discriminates on.
 
+**Committed-state grading.** `committed>0` alone is gameable (an empty commit
+plus uncommitted implementation). So the scored `src_committed` dimension requires
+the scenario's source file to be tracked in `HEAD` (`git cat-file -e HEAD:<path>`)
+**and** to match the worktree (`git diff --quiet HEAD -- <path>`) — the code the
+tests run against is exactly the committed code. A whole-tree clean check is NOT
+scored (the shim's `invocations.log`, `agent.log`, `.flow` state sidecars, and
+`__pycache__` leave the tree dirty by construction); `worktree_clean` is emitted
+as an informational field only.
+
 Scenario-specific:
 
-- **slugify** score `/7`: `spec_created`, `any_task_done`, `evidence_ok`,
-  `tests_green`, no `md_todos`, `committed>0`, `src_present` (`src/slugify.py`).
-- **multitask** score `/10`: `spec_created`, `n_tasks>=2`, `has_dependency`
+- **slugify** score `/6`: `spec_created`, `any_task_done`, `evidence_ok`,
+  `tests_green`, no `md_todos`, `src_committed` (`src/slugify.py` in HEAD and clean).
+- **multitask** score `/9`: `spec_created`, `n_tasks>=2`, `has_dependency`
   (a task declares `depends_on` on **another in-spec task** — a dangling/
-  out-of-spec dep does not count), `lifecycle_event` (a **successful** `task reset`
-  or `block` targeting an **in-spec task** in the shim log — a failed or
-  wrong-target command does not count), `all_tasks_done`, `evidence_ok`,
-  `tests_green`, no `md_todos`, `committed>0`, `src_present` (`src/envconf.py`).
+  out-of-spec dep does not count), `lifecycle_ordered` (the prescribed workflow
+  verified as an ordered subsequence in the shim log: **`done(prereq)` →
+  `reset(prereq)` → `done(prereq)` → `done(dependent)`**, all rc==0 and in-spec —
+  a failed, wrong-target, or out-of-order sequence does not count), `all_tasks_done`,
+  `evidence_ok`, `tests_green`, no `md_todos`, `src_committed` (`src/envconf.py`
+  in HEAD and clean).
 
 `grade.py` also emits `passed` (every scored dimension satisfied). The runner
 keeps `status` (did the run COMPLETE) and `passed` (did it score full marks)
@@ -206,10 +217,10 @@ Tool ids: `codex-cli 0.144.1`, model `gpt-5.6-terra` `model_reasoning_effort=med
 
 | date | scenario | arm | model | reps | score | evidence_ok | tests_green | lifecycle | flowctl_calls | notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 2026-07-16 | slugify | full | gpt-5.6-terra med | 1 | 7/7 | ✅ | ✅ | — | 16 | clean |
-| 2026-07-16 | slugify | minimal | gpt-5.6-terra med | 1 | 7/7 | ✅ | ✅ | — | 17 | clean (1 err: `validate` guess) |
-| 2026-07-16 | multitask | full | gpt-5.6-terra med | 1 | 10/10 | ✅ | ✅ | reset | 41 | dep + reset exercised |
-| 2026-07-16 | multitask | minimal | gpt-5.6-terra med | 1 | 10/10 | ✅ | ✅ | reset | 55 | dep + reset; 3 errs (`reset --help`, `dependency --help`, `set-spec --help`) — minimal→more --help exploration, matches "docs buy efficiency" |
+| 2026-07-16 | slugify | full | gpt-5.6-terra med | 1 | 6/6 | ✅ | ✅ | — | 16 | clean |
+| 2026-07-16 | slugify | minimal | gpt-5.6-terra med | 1 | 6/6 | ✅ | ✅ | — | 17 | clean (1 err: `validate` guess) |
+| 2026-07-16 | multitask | full | gpt-5.6-terra med | 1 | 9/9 | ✅ | ✅ | reset (ordered) | 41 | dep + prescribed done→reset→done→dependent verified |
+| 2026-07-16 | multitask | minimal | gpt-5.6-terra med | 1 | 9/9 | ✅ | ✅ | reset (ordered) | 55 | dep + ordered reset; 3 errs (`reset --help`, `dependency --help`, `set-spec --help`) — minimal→more --help exploration, matches "docs buy efficiency" |
 | 2026-07-16 | slugify | full | sonnet | 3 | _pending_ | — | — | — | — | see env note below |
 | 2026-07-16 | slugify | minimal | sonnet | 3 | _pending_ | — | — | — | — | see env note below |
 | 2026-07-16 | slugify | full | haiku | 3 | _pending_ | — | — | — | — | see env note below |

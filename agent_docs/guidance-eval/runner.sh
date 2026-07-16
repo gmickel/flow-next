@@ -101,11 +101,21 @@ run_with_timeout() {
   local watchdog=$!
   wait "$leader" 2>/dev/null
   local rc=$?
-  kill -TERM -"$leader" 2>/dev/null || true   # sweep any stragglers left in the group
+  if [ -f "$marker" ]; then
+    # Timeout fired: the leader died from TERM, but TERM-ignoring descendants may
+    # still be alive. Do NOT cancel the watchdog - let it finish its grace + KILL
+    # of the whole group before we return.
+    wait "$watchdog" 2>/dev/null || true
+    rm -f "$marker"
+    return 124
+  fi
+  # Normal completion: cancel the pending watchdog, then TERM+KILL-sweep any
+  # stragglers left in the group (a completed run may still have orphans).
   kill "$watchdog" 2>/dev/null || true
   wait "$watchdog" 2>/dev/null || true
-  if [ -f "$marker" ]; then rm -f "$marker"; return 124; fi
-  rm -f "$marker"
+  kill -TERM -"$leader" 2>/dev/null || true
+  sleep 1
+  kill -KILL -"$leader" 2>/dev/null || true
   return "$rc"
 }
 

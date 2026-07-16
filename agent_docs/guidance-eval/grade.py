@@ -140,56 +140,123 @@ def main():
         line.split("|", 1)[1][:70] for line in inv if not line.startswith("0|")
     ][:4]
 
-    # 5. commits beyond the scaffold commit
+    # 5. committed state. The grade is only meaningful against COMMITTED work:
+    # `committed>0` alone is gameable (an empty commit + uncommitted impl). So we
+    # require a CLEAN worktree (worktree == HEAD) and verify the scenario's source
+    # file is tracked in HEAD - only then does grading the worktree grade HEAD.
     lg = subprocess.run(
         ["git", "log", "--oneline"], cwd=d, capture_output=True, text=True
     )
     r["committed"] = max(0, len(lg.stdout.splitlines()) - 1)
+    # worktree_clean is INFORMATIONAL only: the shim's invocations.log, agent.log,
+    # .flow state sidecars, and __pycache__ leave the tree dirty by construction on
+    # every run, so it cannot be a scored dimension. The scored committed-state
+    # guard is per-source-file (src_committed + src_clean below).
+    porcelain = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=d, capture_output=True, text=True
+    )
+    r["worktree_clean"] = porcelain.stdout.strip() == ""
+
+    def in_head(relpath):
+        return (
+            subprocess.run(
+                ["git", "cat-file", "-e", f"HEAD:{relpath}"],
+                cwd=d,
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+
+    def committed_and_clean(relpath):
+        """The source is tracked in HEAD AND the worktree copy matches HEAD, so the
+        code the tests run against is exactly the committed code. This defeats the
+        'empty commit + uncommitted implementation' gaming path without penalizing
+        the harness's own always-dirty instrumentation files."""
+        if not in_head(relpath):
+            return False
+        diff = subprocess.run(
+            ["git", "diff", "--quiet", "HEAD", "--", relpath], cwd=d, capture_output=True
+        )
+        return diff.returncode == 0  # 0 = no diff between worktree and HEAD
+
+    # ordered successful (rc==0) lifecycle events (kind, task) from the shim log
+    events = []
+    for line in inv:
+        rc_str, _, rest = line.partition("|")
+        if rc_str != "0":
+            continue
+        args = rest.split()
+        if args[:1] == ["done"] and len(args) >= 2:
+            events.append(("done", args[1]))
+        elif args[:2] == ["task", "reset"] and len(args) >= 3:
+            events.append(("reset", args[2]))
+        elif args[:1] == ["block"] and len(args) >= 2:
+            events.append(("block", args[1]))
 
     # 6. scenario-specific dimensions
     if scenario == "multitask":
-        r["src_present"] = (d / "src/envconf.py").exists()
+        src_rel = "src/envconf.py"
+        r["src_present"] = (d / src_rel).exists()
+        r["src_committed"] = committed_and_clean(src_rel)
         r["has_dependency"] = in_spec_dependency
-        # lifecycle event = a SUCCESSFUL (rc==0) `task reset <id>` or `block <id>`
-        # whose target is an in-spec task. A failed command, or one aimed at a
-        # task outside this spec, does NOT count. The shim logs "rc|argv...".
-        reset_seen = False
-        block_seen = False
-        for line in inv:
-            rc_str, _, rest = line.partition("|")
-            if rc_str != "0":
-                continue  # only successful invocations count
-            args = rest.split()
-            if args[:2] == ["task", "reset"] and len(args) >= 3 and args[2] in task_id_set:
-                reset_seen = True
-            if args[:1] == ["block"] and len(args) >= 2 and args[1] in task_id_set:
-                block_seen = True
-        r["lifecycle_event"] = reset_seen or block_seen
-        r["lifecycle_kind"] = (
-            "reset" if reset_seen else ("block" if block_seen else "none")
-        )
+        # Identify the prerequisite (depended-upon) and dependent (depends_on)
+        # tasks, then require the PRESCRIBED ordered workflow in the shim log:
+        #   done(prereq) -> reset(prereq) -> done(prereq) -> done(dependent).
+        # A subsequence match (other events may interleave) - so legitimate
+        # variation is allowed, but a materially wrong execution cannot score.
+        prereq = dependent = None
+        for tid, deps in deps_by_task.items():
+            in_spec = [dep for dep in deps if dep in task_id_set and dep != tid]
+            if in_spec:
+                dependent, prereq = tid, in_spec[0]
+                break
+        lifecycle_ordered = False
+        lifecycle_kind = "none"
+        if prereq and dependent:
+            state = 0  # 0:await done1  1:await reset  2:await done2  3:done
+            second_done_idx = None
+            for i, (kind, tid) in enumerate(events):
+                if tid != prereq:
+                    continue
+                if state == 0 and kind == "done":
+                    state = 1
+                elif state == 1 and kind in ("reset", "block"):
+                    state = 2
+                    lifecycle_kind = kind
+                elif state == 2 and kind == "done":
+                    state = 3
+                    second_done_idx = i
+            dependent_after = second_done_idx is not None and any(
+                k == "done" and t == dependent and i > second_done_idx
+                for i, (k, t) in enumerate(events)
+            )
+            lifecycle_ordered = state == 3 and dependent_after
+        r["lifecycle_ordered"] = lifecycle_ordered
+        r["lifecycle_kind"] = lifecycle_kind
+        r["prereq_task"] = prereq
+        r["dependent_task"] = dependent
         dims = [
             r["spec_created"],
             n_tasks >= 2,
             r["has_dependency"],
-            r["lifecycle_event"],
+            r["lifecycle_ordered"],
             r["all_tasks_done"],
             r["evidence_ok"],
             r["tests_green"],
             not bad,
-            r["committed"] > 0,
-            r["src_present"],
+            r["src_committed"],
         ]
     else:  # slugify (single-task)
-        r["src_present"] = (d / "src/slugify.py").exists()
+        src_rel = "src/slugify.py"
+        r["src_present"] = (d / src_rel).exists()
+        r["src_committed"] = committed_and_clean(src_rel)
         dims = [
             r["spec_created"],
             r["any_task_done"],
             r["evidence_ok"],
             r["tests_green"],
             not bad,
-            r["committed"] > 0,
-            r["src_present"],
+            r["src_committed"],
         ]
 
     score_num = sum(bool(x) for x in dims)
