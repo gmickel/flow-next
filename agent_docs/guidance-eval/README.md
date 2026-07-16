@@ -161,10 +161,38 @@ completed-but-not-passed run is never hidden as a success).
 
 Prior eval rounds proved each of these matters; they are not optional.
 
-- **`claude -p --bare`** — without `--bare`, the maintainer's `~/.claude` global
-  `CLAUDE.md` and plugins leak into the scratch repo and confound the arm under
-  test (observed round-1 contamination). Plus explicit
-  `--permission-mode acceptEdits --allowedTools "Read,Bash,Edit,Write,Grep,Glob"`.
+- **`claude -p --setting-sources project,local`** (on the **default** config dir,
+  non-bare) — the clean-room mechanism for Claude cells. Without isolation, the
+  maintainer's `~/.claude` global `CLAUDE.md` and settings leak into the scratch
+  repo and confound the arm under test (observed round-1 contamination, and
+  re-verified 2026-07-16: a default-sources probe from a `/tmp` scratch reported
+  the global file's owner block verbatim). The setting-source filter excludes all
+  `user`-level sources while the default config dir keeps the OAuth login. Plus
+  explicit `--permission-mode acceptEdits --allowedTools
+  "Read,Bash,Edit,Write,Grep,Glob"` and `--no-session-persistence` (keeps eval
+  sessions out of the user's session store).
+
+  **Why not `--bare` (the original binding mechanism) or `CLAUDE_CONFIG_DIR`?**
+  Probe-verified on 2026-07-16 (claude 2.1.210, macOS, OAuth/keychain login):
+  - `--bare` authenticates **strictly** via `ANTHROPIC_API_KEY`/`apiKeyHelper`
+    (it skips keychain reads) → `claude -p "ok" --bare` returned
+    `Not logged in · Please run /login` on an OAuth-only machine. Requiring it
+    would force API-key credential handling for no isolation gain.
+  - A fresh `CLAUDE_CONFIG_DIR` drops the login too (auth state lives in the
+    config dir, not at account level): `CLAUDE_CONFIG_DIR=<fresh> claude -p "ok"`
+    also returned `Not logged in · Please run /login` (haiku + sonnet).
+  - The adopted mechanism passed both probes:
+    **auth probe** — `claude -p "reply exactly OK" --setting-sources project,local`
+    → `OK`. **Leak probe** — from a scratch dir with a planted project `CLAUDE.md`
+    (`codename: AZUREFERN`), "list everything you know from your loaded
+    instruction/memory files": the agent reported the project codename and test
+    command, and NONE of the global file's content (no owner name/contact, no
+    workspace paths, no tool conventions). The same question with default sources
+    reported the global owner block — confirming the filter is what provides the
+    isolation.
+  - Residual, documented: the **account email** remains visible to the agent (it
+    is OAuth session identity, inseparable from staying logged in). It carries no
+    flow-next guidance, so it cannot confound the arms under test.
 - **`codex exec --sandbox danger-full-access --skip-git-repo-check`** —
   `workspace-write` demonstrably **blocks `git commit`** in scratch dirs, which
   makes an agent `block` its own task and confounds grading (observed round-1).
@@ -215,52 +243,59 @@ now ~248 tok WITH the inline evidence schema) and BEFORE any `usage.md` trim
 regression is measured against these rows.
 
 **R13 matrix:** scenarios {slugify, multitask} × arms {minimal, full} × models
-{sonnet (`claude -p --bare`), gpt-5.6-terra @ medium (`codex exec`), haiku
-(`claude -p --bare`)} × reps {3 on the evidence-validity-discriminating cells
-(the Claude family, where the historical evidence-miss lived), 1 elsewhere}.
+{sonnet (`claude -p --setting-sources project,local`), gpt-5.6-terra @ medium
+(`codex exec`), haiku (`claude -p --setting-sources project,local`)} × reps
+{3 on the evidence-validity-discriminating cells (the Claude family, where the
+historical evidence-miss lived), 1 elsewhere}. **Method amendment:** the spec
+originally bound `claude -p --bare`, which is API-key-only auth and cannot run
+on an OAuth login; the probe-verified setting-source isolation replaced it (see
+Threat model). Amendment made 2026-07-16 with maintainer approval; the spec text
+is being amended host-side.
 
 Tool ids: `codex-cli 0.144.1`, model `gpt-5.6-terra` `model_reasoning_effort=medium`;
-`claude 2.1.210`, models `sonnet` / `haiku`. Grader: `grade.py` @ this commit.
+`claude 2.1.210`, models `sonnet` / `haiku`. Grader: `grade.py` @ this commit
+(all rows re-graded with the final grader from the retained run dirs).
 
-| date | scenario | arm | model | reps | score | evidence_ok | tests_green | lifecycle | flowctl_calls | notes |
+Scenario design note: the slugify prompt explicitly says "commit your work"; the
+multitask prompt deliberately does NOT prime committing — recording evidence with
+a commit sha must come from the guidance block. That asymmetry is what exposed
+the full-block failures below.
+
+| date | scenario | arm | model | reps | passed | evidence_ok | scores | lifecycle | flowctl_calls | notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 2026-07-16 | slugify | full | gpt-5.6-terra med | 1 | 7/7 | ✅ | ✅ (4) | — | 16 | clean |
-| 2026-07-16 | slugify | minimal | gpt-5.6-terra med | 1 | 7/7 | ✅ | ✅ (5) | — | 17 | clean (1 err: `validate` guess) |
-| 2026-07-16 | multitask | full | gpt-5.6-terra med | 1 | 10/10 | ✅ | ✅ (5) | reset (ordered) | 41 | dep + prescribed done→reset→done→dependent verified |
-| 2026-07-16 | multitask | minimal | gpt-5.6-terra med | 1 | 10/10 | ✅ | ✅ (5) | reset (ordered) | 55 | dep + ordered reset; 3 errs (`reset --help`, `dependency --help`, `set-spec --help`) — minimal→more --help exploration, matches "docs buy efficiency" |
-| 2026-07-16 | slugify | full | sonnet | 3 | _pending_ | — | — | — | — | see env note below |
-| 2026-07-16 | slugify | minimal | sonnet | 3 | _pending_ | — | — | — | — | see env note below |
-| 2026-07-16 | slugify | full | haiku | 3 | _pending_ | — | — | — | — | see env note below |
-| 2026-07-16 | slugify | minimal | haiku | 3 | _pending_ | — | — | — | — | see env note below |
-| 2026-07-16 | multitask | * | sonnet | 3 | _pending_ | — | — | — | — | see env note below |
-| 2026-07-16 | multitask | * | haiku | 3 | _pending_ | — | — | — | — | see env note below |
+| 2026-07-16 | slugify | full | sonnet | 3 | 3/3 | 3/3 | 7/7 ×3 | — | 15-17 | clean |
+| 2026-07-16 | slugify | full | haiku | 3 | **0/3** | **0/3** | 6/7 ×3 | — | 14-17 | `done` with schema-shaped but **EMPTY** lists (`{"commits": [], …}`) — committed the work, never recorded the sha |
+| 2026-07-16 | slugify | full | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 7/7 | — | 16 | clean |
+| 2026-07-16 | slugify | minimal | sonnet | 3 | 3/3 | 3/3 | 7/7 ×3 | — | 8-9 | clean |
+| 2026-07-16 | slugify | minimal | haiku | 3 | 3/3 | 3/3 | 7/7 ×3 | — | 4-6 | weakest tier, fewest calls, full marks |
+| 2026-07-16 | slugify | minimal | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 7/7 | — | 17 | 1 err (`validate` guess) |
+| 2026-07-16 | multitask | full | sonnet | 3 | **1/3** | **1/3** | 7/10 ×2, 10/10 | reset (ordered) ×3 | 27-33 | r1/r2: empty `commits` AND never committed — agent's own words: "nothing was committed to git since you didn't ask for a commit" |
+| 2026-07-16 | multitask | full | haiku | 3 | 3/3 | 3/3 | 10/10 ×3 | reset (ordered) ×3 | 18-22 | clean (r3's `plan_envconf.md` is a sanctioned `set-plan --file` input, exempted by the grader) |
+| 2026-07-16 | multitask | full | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 10/10 | reset (ordered) | 41 | dep + prescribed done→reset→done→dependent verified |
+| 2026-07-16 | multitask | minimal | sonnet | 3 | 3/3 | 3/3 | 10/10 ×3 | reset (ordered) ×3 | 20-22 | clean |
+| 2026-07-16 | multitask | minimal | haiku | 3 | 3/3 | 3/3 | 10/10 ×3 | reset (ordered) ×3 | 18-20 | haiku floor holds on deps + reset |
+| 2026-07-16 | multitask | minimal | gpt-5.6-terra med | 1 | 1/1 | 1/1 | 10/10 | reset (ordered) | 55 | 3 errs (`--help` exploration) — matches "docs buy efficiency" |
 
-**Reading the codex rows:** post-diet, BOTH arms produce **valid evidence** on
-both scenarios and both families of task graph — the dieted block's inline schema
-holds, and the ~110-token minimal arm matches the ~248-token full arm on every
-scored dimension (its only cost is efficiency: more `--help` exploration and a
-`close`-command guess, exactly the "docs buy efficiency, not correctness"
-finding). The multitask scenario confirms the dependency + `task reset` flows the
-original single-task eval never exercised.
+**Reading the baseline (14 minimal / 14 full / 28 runs total):**
 
-**Claude-family rows are pending an API-key environment (env constraint, not a
-harness defect).** `--bare` (the binding clean-room method — it disables the
-`~/.claude` global-CLAUDE.md leak that otherwise confounds the arm under test)
-authenticates **strictly** via `ANTHROPIC_API_KEY` or `apiKeyHelper`, not OAuth /
-keychain. The worker this baseline was recorded on has no `ANTHROPIC_API_KEY`, and
-running non-`--bare` was verified to leak Gordon's global `CLAUDE.md` ("Gordon owns
-this") into a `/tmp` scratch — which would poison the measurement. Complete these
-rows from a shell with an API key:
+1. **The minimal arm passes 14/14** — every scenario, every model incl. the haiku
+   floor, valid evidence throughout, ordered dep+reset verified on multitask.
+2. **The current dieted full block fails 5/14** on the Claude family, all one
+   failure mode: `done` with **schema-shaped but empty** evidence lists (haiku
+   slugify 3/3; sonnet multitask 2/3, which also never committed when the prompt
+   didn't prime it). The fn-99…1 diet fixed the *shape* miss (no more invalid
+   JSON) but the `"commits": ["abc123"]` placeholder didn't teach *filling in the
+   real sha* the way the minimal arm's `"commits": ["<sha>"]` + inline
+   `start -> implement -> done` flow line does.
+3. **Codex/terra passes everything on both arms** — the failure mode is
+   Claude-family-specific, consistent with the original 2026-07-15 finding.
+4. Efficiency ordering unchanged: minimal-arm agents take the same or fewer
+   flowctl calls on Claude (haiku 4-6!) and slightly more `--help` exploration
+   on codex.
 
-```bash
-cd agent_docs/guidance-eval
-ANTHROPIC_API_KEY=… MODELS="sonnet haiku" ./runner.sh   # appends sonnet+haiku cells
-```
-
-The historical evidence-miss (the reason this eval exists) lived in the Claude
-family on the block-WITHOUT-schema; both arms here now carry the schema, so the
-expected result is valid evidence across the board — but the haiku floor must be
-re-confirmed in an API-key environment before the fn-99…4 post-trim gate is
-declared green.
+**Implication for fn-99…3/.4:** the block-content lever for the trim tasks is not
+just size — the evidence example's *placeholder style* and the presence of a
+one-line typical-flow sequence measurably change weak-tier compliance. Any block
+revision should re-run this matrix and compare against these rows.
 
 <!-- LEDGER:END -->

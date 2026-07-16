@@ -115,11 +115,28 @@ def main():
     r["done_tasks"] = done_tasks
     r["evidence_ok"] = bool(evidence_all_ok)
 
-    # 2. forbidden markdown TODO artifacts at repo root
+    # 2. forbidden markdown TODO artifacts at repo root. Files that were fed to a
+    # successful `spec set-plan --file <f>` are exempt: the guidance block itself
+    # instructs `flowctl spec set-plan <spec-id> --file plan.md`, so a PLAN*-named
+    # set-plan INPUT is sanctioned usage, not a tracking-substitute violation.
+    # (inv/set-plan parsing happens before scoring; see section 4 ordering note)
+    log = d / ".flow/invocations.log"
+    inv = log.read_text().splitlines() if log.exists() else []
+    setplan_inputs = set()
+    for line in inv:
+        rc_str, _, rest = line.partition("|")
+        if rc_str != "0":
+            continue
+        args = rest.split()
+        if args[:2] == ["spec", "set-plan"] and "--file" in args:
+            idx = args.index("--file")
+            if idx + 1 < len(args):
+                setplan_inputs.add(pathlib.PurePath(args[idx + 1]).name)
     bad = [
         p.name
         for p in d.glob("*.md")
         if p.name.upper().startswith(("TODO", "TASKS", "PLAN"))
+        and p.name not in setplan_inputs
     ]
     r["md_todos"] = bad
 
@@ -138,9 +155,7 @@ def main():
     r["tests_ran"] = ran
     r["tests_green"] = tp.returncode == 0 and ran >= 1
 
-    # 4. shim log: agent flowctl invocations + failures
-    log = d / ".flow/invocations.log"
-    inv = log.read_text().splitlines() if log.exists() else []
+    # 4. shim log: agent flowctl invocations + failures (inv read in section 2)
     r["flowctl_calls"] = len(inv)
     r["flowctl_errors"] = sum(1 for line in inv if not line.startswith("0|"))
     r["error_cmds"] = [

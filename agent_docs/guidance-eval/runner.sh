@@ -4,8 +4,12 @@
 # ledger-ready JSONL + a batch summary.
 #
 # Clean-room + hardening contract (binding - see README "Threat model"):
-#   * claude models run `claude -p --bare` (else ~/.claude global state leaks in)
-#     with explicit `--permission-mode acceptEdits --allowedTools "..."`.
+#   * claude models run `claude -p --setting-sources project,local` on the
+#     DEFAULT config dir (keeps the OAuth login; the setting-source filter
+#     suppresses the ~/.claude global CLAUDE.md/settings that otherwise leak in;
+#     probe-verified - see README) with explicit `--permission-mode acceptEdits
+#     --allowedTools "..."`. --bare was the original mechanism but is
+#     API-key-only auth; a fresh CLAUDE_CONFIG_DIR drops the login too.
 #   * codex runs `codex exec --sandbox danger-full-access --skip-git-repo-check`
 #     (workspace-write demonstrably blocks `git commit` in scratch dirs and
 #     confounds grading).
@@ -91,13 +95,17 @@ run_with_timeout() {
   # target, keeping it group leader. `$!` therefore equals the pgid to signal.
   perl -e 'use POSIX qw(setsid); setsid() or die "setsid: $!"; exec @ARGV or die "exec: $!"' -- "$@" &
   local leader=$!
-  (
-    sleep "$secs"
-    : > "$marker"
-    kill -TERM -"$leader" 2>/dev/null
+  # The watchdog is ALSO its own setsid group with detached stdio, so cancelling
+  # it can group-kill its `sleep` too. (A bare `kill $watchdog` on a subshell
+  # orphans the sleep, which then holds the runner's stdout pipe open for up to
+  # TIMEOUT_SECS and hangs any pipeline reading the runner - observed.)
+  perl -e 'use POSIX qw(setsid); setsid() or die; exec @ARGV or die' -- bash -c '
+    sleep "$1"
+    : > "$2"
+    kill -TERM -"$3" 2>/dev/null
     sleep 10
-    kill -KILL -"$leader" 2>/dev/null
-  ) &
+    kill -KILL -"$3" 2>/dev/null
+  ' watchdog "$secs" "$marker" "$leader" >/dev/null 2>&1 &
   local watchdog=$!
   wait "$leader" 2>/dev/null
   local rc=$?
@@ -109,13 +117,14 @@ run_with_timeout() {
     rm -f "$marker"
     return 124
   fi
-  # Normal completion: cancel the pending watchdog, then TERM+KILL-sweep any
-  # stragglers left in the group (a completed run may still have orphans).
-  kill "$watchdog" 2>/dev/null || true
+  # Normal completion: cancel the whole watchdog group (bash + its sleep), then
+  # TERM+KILL-sweep any stragglers left in the bridge group.
+  kill -TERM -"$watchdog" 2>/dev/null || true
   wait "$watchdog" 2>/dev/null || true
   kill -TERM -"$leader" 2>/dev/null || true
   sleep 1
   kill -KILL -"$leader" 2>/dev/null || true
+  rm -f "$marker"
   return "$rc"
 }
 
@@ -175,9 +184,18 @@ run_one() {
   started=$(date +%s)
   export GE_DIR="$dir" GE_LOG="$dir/agent.log" GE_PROMPT="$prompt" GE_MODEL="$model"
   if [ "$family" = claude ]; then
+    # Clean-room mechanism (amended from the original --bare requirement):
+    # --bare authenticates STRICTLY via ANTHROPIC_API_KEY/apiKeyHelper (it skips
+    # keychain/OAuth), so it cannot run on an OAuth-only login; and a fresh
+    # CLAUDE_CONFIG_DIR drops the login too (auth state lives in the config dir).
+    # Instead: keep the DEFAULT config dir (auth intact) and exclude all
+    # user-level content with --setting-sources project,local. Leak-probe
+    # verified (see README "Threat model"): the scratch repo's project CLAUDE.md
+    # loads; the user's global CLAUDE.md/settings do not.
     run_with_timeout "$TIMEOUT_SECS" bash -c '
       cd "$GE_DIR" || exit 99
-      exec claude -p "$GE_PROMPT" --model "$GE_MODEL" --bare --output-format text \
+      exec claude -p "$GE_PROMPT" --model "$GE_MODEL" --output-format text \
+        --setting-sources project,local --no-session-persistence \
         --permission-mode acceptEdits \
         --allowedTools "Read,Bash,Edit,Write,Grep,Glob" </dev/null >"$GE_LOG" 2>&1'
   else
