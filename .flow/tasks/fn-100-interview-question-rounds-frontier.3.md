@@ -30,9 +30,8 @@ Update the public docs site for the interview rounds protocol. SEPARATE repo: `~
 - [ ] Committed in flow-next.dev (separate repo), not pushed unless standing config allows
 
 ## Done summary
-TBD
-
+Updated the flow-next.dev interview skill page for the fn-100 rounds protocol: new "Question rounds" section (design-tree frontier, whole frontier per round split across question calls of up to 4, dependency deferral, earned-slot restraint, recompute between rounds, checkpoint exclusions), per-round doc-aware meta-question budgets in "Doc-aware behaviors", and "One question at a time" replaced with a rounds pointer. Committed in the separate flow-next.dev repo as 4e71945909470553018213a09b36ec5f62185dba (main, NOT pushed; base 1a6b53c694e131b2f40f90bc2497c9a0610ee3bd); pnpm build green (65 pages); both navs already carry the page, no nav edits. Baseline: green (pnpm build passed pre-edit). Review: codex mode, deterministic triage-skip (docs-only diff) -> SHIP, run from the flow-next.dev cwd against base 1a6b53c694e131b2f40f90bc2497c9a0610ee3bd. Docs-site changelog entry pending batched release: interview rounds protocol (fn-100).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4e71945909470553018213a09b36ec5f62185dba
+- Tests: cd ~/work/flow-next.dev && pnpm build (green pre-edit baseline and post-edit: 65 pages built, Complete)
 - PRs:
