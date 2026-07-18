@@ -33,9 +33,8 @@ Add the eval-validated async fact-scout mode to the interview skill and its down
 - [ ] pytest + smoke green (paste tails)
 
 ## Done summary
-TBD
-
+Added the eval-validated async fact-scout mode (fn-100 R12): Edit D inserted verbatim in the interview SKILL.md (byte parity with the spec block, incl. the review-amended absence-evidence wording), Codex mirror regenerated with a new sync-codex.sh Explore-dispatch transform (`Task`/`Explore` -> `spawn_agent`/`agent_type: explorer`) plus a validation guard, CHANGELOG fn-100 entry extended (and its stale R-ID sub-bullet realigned to the shipped gloss wording missed by 7af46865), Experiment 3 ledger gains the async fact-scout addendum, and one sentence landed on the flow-next.dev interview page (commit eddb080 in that repo, build green, NOT pushed). Baseline green pre-edit (pytest 51, smoke 144); post-edit full suite 1794 + smoke 144 green. Codex impl-review SHIP after 1 fix round (mirror dispatch transform + absence-evidence wording). RELEASE-TIME NOTE: the flow-next.dev changelog entry for fn-100 (rounds + fact-scouts) remains DEFERRED to the batched release per R11.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3c3d93f38696e79e7583a6e124a9a288968551ca, 2bd5bfb9c5b2f14b69470534764b6c6ec41b8494
+- Tests: uv run --with pytest pytest plugins/flow-next/tests/ (1794 passed, 2 skipped), uv run --with pytest pytest plugins/flow-next/tests/test_interview_scope_flag.py (51 passed), bash plugins/flow-next/scripts/smoke_test.sh (144 passed, 0 failed), ./scripts/sync-codex.sh x2 (idempotent, all validations green incl. new Explore-dispatch guard), pnpm build in ~/work/flow-next.dev (65 pages, green)
 - PRs:

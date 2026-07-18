@@ -4,12 +4,12 @@ date: "2026-05-18"
 track: bug
 category: build-errors
 module: scripts/sync-codex.sh
-tags: [sync-codex, codex, mirror, fn-45, AskUserQuestion, tool-rewrites, injection, markdown-tables, fenced-code-blocks, fn-50, FLOWCTL, prelude, agents, scouts, symmetry-gap, R2-injection, is_negative_context, fn-55, plain-text-numbered-prompt, reference-doc]
+tags: [sync-codex, codex, mirror, fn-45, AskUserQuestion, tool-rewrites, injection, markdown-tables, fenced-code-blocks, fn-50, FLOWCTL, prelude, agents, scouts, symmetry-gap, R2-injection, is_negative_context, fn-55, plain-text-numbered-prompt, reference-doc, fn-100, Task, Explore, spawn_agent, review-feedback]
 problem_type: build-error
 symptoms: "Codex impl-review NEEDS_WORK cycles: injection inside tables/code-blocks, contradictions with auto-fix mandates, structured-tool prose surviving token rewrite, anti-patterns inverted on Codex"
 root_cause: "Token-only AskUserQuestion → plain-text-prompt rewrite leaves Claude-specific structured-tool prose (multiSelect, blocking-question, JSON questions array, deferred-tool schema-loader) intact, and 'first non-negative occurrence' injection lands inside tables, code blocks, and deterministic Ralph branches"
 resolution_type: fix
-last_updated: "2026-06-05"
+last_updated: "2026-07-18"
 ---
 
 ## Problem
@@ -137,3 +137,36 @@ Result: mirror has exactly ONE INSTRUCTION block under the Gate 4 consent headin
 - Any markdown that merely *describes* asking (vs. issuing a live ask) is an injection hazard — the R2 anchor heuristic keys on ask-verbs and can't tell "cannot ask" from "ask". When adding such prose to a synced file, run `./scripts/sync-codex.sh` and grep the mirror for: a stray "Ask the user via plain text" block, "cannot ... `plain-text numbered prompt`", and `ToolSearch select:plain-text numbered prompt`.
 - The sync validator greps for literal `AskUserQuestion`/`ToolSearch select:AskUserQuestion` — it has a BLIND SPOT for the post-rewrite `plain-text numbered prompt` nonsense, so a green sync does NOT prove clean mirror prose. Eyeball the mirror around any ask-related prose.
 - Keep live-ask phrasing on one physical line; the INSTRUCTION block injects before the anchor LINE.
+
+## Update 2026-07-18
+
+## Problem
+fn-100.4 inserted the interview fact-scout subsection whose canonical prose dispatches
+"(`Task` with `subagent_type: Explore`)". The Codex mirror regenerated clean (all
+validations green) but carried the Claude-native phrase verbatim - sync-codex.sh only
+rewrites NAMED Task patterns (worker, plan-sync, scouts) plus 'Task flow-next:' refs;
+a generic Explore dispatch has no transform and no guard, so on Codex the documented
+tool call cannot execute. Codex impl-review flagged it Major (R12 promised the rewrite).
+
+## What Didn't Work
+Trusting precedent: capture/audit mirrors carry surviving `Task`/`Explore` mentions, so
+the survival looked like established behavior. Those survivors are inside cross-platform
+documentation tables (deliberate); an EXECUTABLE dispatch instruction is not the same
+class - it must be rewritten or the mirror instructs an unavailable tool.
+
+## Solution
+scripts/sync-codex.sh: exact-phrase transform `` `Task` with `subagent_type: Explore` ``
+-> `` `spawn_agent` with `agent_type: explorer` `` (matches only the dispatch phrase; the
+"`Task` tool with" variants in platform tables are excluded by construction), plus a
+validation guard that hard-fails the sync if the Claude-native phrase survives. Second
+finding same round: "file:line evidence; absence findings count" is impossible for an
+absence - amended to "cited as the paths and patterns searched" in spec + canonical +
+mirror.
+
+## Prevention
+- New canonical prose that INSTRUCTS a Claude-native tool call (Task/Explore dispatch,
+  AskUserQuestion, ToolSearch) needs a sync transform + a validation guard in the same
+  change; "mirror regenerated clean" only proves existing guards, not new tool refs.
+- Distinguish executable dispatch prose from cross-platform documentation tables when
+  auditing mirror survivors - tables may keep Claude names, instructions may not.
+- Scope new transforms by exact phrase so documentation-table variants stay untouched.
