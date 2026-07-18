@@ -482,7 +482,7 @@ Ralph closes done specs at the end of the loop.
 
 Then push + open PR if user wants.
 
-**Tracker-sync end-of-run check — LAST action before the final summary.** Read-only audit: did every lifecycle touchpoint that triggered this run actually fire (receipt-backed)? It runs independently of the touchpoints, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the summary slot then reads `n/a (bridge inactive)` and nothing else changes. Join first: before running this `sync check`, await any outstanding `tracker-runner` dispatches for this spec (join-before-audit, [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md)).
+**Tracker-sync end-of-run check — LAST action before the final summary.** Read-only audit: did every lifecycle touchpoint that triggered this run actually fire (receipt-backed)? It runs independently of the touchpoints, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the summary slot then reads `n/a (bridge inactive)` and nothing else changes. Join first: before running this `sync check`, await any outstanding `tracker_runner` dispatches for this spec (join-before-audit, [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md)).
 
 ```bash
 # Tasks worked this run = the task ids Phase 3 claimed/completed (you know these
@@ -534,7 +534,7 @@ Review: <verdict | n/a>
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
 ```
 
-When any touchpoint ran as a forked `tracker-runner` dispatch this run, append one
+When any touchpoint ran as a forked `tracker_runner` dispatch this run, append one
 `Tracker runner:` line per dispatch under the `Tracker sync:` slot, carrying the
 runner's parsed terminal outcome verbatim (`<event>: TRACKER_RUNNER=<status> note="..."`).
 The aggregate slot proves the audit ran; these lines surface WHAT each runner

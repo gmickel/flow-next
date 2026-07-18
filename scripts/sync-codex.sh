@@ -513,12 +513,19 @@ done
 
 # --- TOOL NAMES: tracker-runner dispatch → tracker_runner role (fn-89) ---
 # Touchpoint gates dispatch the background runner Claude-native as
-# `Task flow-next:tracker-runner`. Codex has no Task tool - the mirror uses
-# the tracker_runner agent role. A validation guard below hard-fails if the
-# Claude-native form survives in the mirror.
-find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
+# `Task flow-next:tracker-runner` and in prose as "a background
+# `tracker-runner`". Codex has no Task tool and install-codex.sh registers
+# the hyphenated agent file under the underscore role key
+# (agents.tracker_runner), so BOTH forms must resolve to the role name in
+# the mirror (skills AND references - tracker-dispatch.md lives in
+# references/). A validation guard below hard-fails if either Claude-native
+# form survives.
+find "$CODEX_DIR/skills" "$CODEX_DIR/references" -name "*.md" -type f 2>/dev/null | while read -r f; do
   sed -i.bak \
     -e 's|Task flow-next:tracker-runner|Use the tracker_runner agent|g' \
+    -e 's|as a background `tracker-runner` per|as a background `tracker_runner` agent (Use the tracker_runner agent) per|g' \
+    -e 's|a background `tracker-runner` subagent|a background `tracker_runner` agent|g' \
+    -e 's|`tracker-runner`|`tracker_runner`|g' \
     "$f"
   rm -f "${f}.bak"
 done
@@ -1736,13 +1743,13 @@ fi
 
 # fn-89: the Claude-native tracker-runner dispatch must not survive in the
 # mirror - the transform above rewrites it to the tracker_runner agent role.
-runner_refs=$( { grep -r 'Task flow-next:tracker-runner' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+runner_refs=$( { grep -r --include='*.md' -e 'Task flow-next:tracker-runner' -e '`tracker-runner`' "$CODEX_DIR/skills/" "$CODEX_DIR/references/" 2>/dev/null || true; } | wc -l | tr -d ' ')
 if [ "$runner_refs" != "0" ]; then
-  echo -e "  ${RED}✗${NC} $runner_refs Claude-native tracker-runner dispatch refs remain in codex skill prose - the tracker-runner transform (fn-89) should have rewritten these"
-  { grep -rn 'Task flow-next:tracker-runner' "$CODEX_DIR/skills/" 2>/dev/null || true; } | head -5
+  echo -e "  ${RED}✗${NC} $runner_refs Claude-native tracker-runner dispatch refs remain in codex skill/reference prose - the tracker-runner transform (fn-89) should have rewritten these to the tracker_runner role"
+  { grep -rn --include='*.md' -e 'Task flow-next:tracker-runner' -e '`tracker-runner`' "$CODEX_DIR/skills/" "$CODEX_DIR/references/" 2>/dev/null || true; } | head -5
   errors=$((errors + 1))
 else
-  echo -e "  ${GREEN}✓${NC} No Claude-native tracker-runner dispatch refs in Codex skill prose"
+  echo -e "  ${GREEN}✓${NC} No Claude-native tracker-runner dispatch refs in Codex skill/reference prose"
 fi
 
 # fn-89 (fn-50.6 symmetry rule): agent toml bodies must not carry unrewritten
