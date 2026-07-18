@@ -88,6 +88,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 - flowctl CLI (`~/.codex/scripts/flowctl`).
 - Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/hooks/flowctl to project.
 - `openai.yaml` UI metadata for Codex app display (brand color, descriptions).
+- Tracker-sync background dispatch at **Tier B (isolated-but-awaited)**: comment-shaped tracker touchpoints on linked specs run in a `tracker_runner` agent (context isolation preserved) but are **awaited** — the fire-and-forget overlap is Claude-Code-only (Tier A). Same for Cursor. See `docs/tracker-sync.md` § Background dispatch + `references/tracker-dispatch.md` (host capability ladder).
 
 ### Model mapping (per-agent reasoning tier)
 
@@ -213,6 +214,7 @@ flow-next's **skills, commands, and subagents all register and run** on Cursor. 
 - **No "plugin" card.** Cursor registers the individual skills/commands/agents (they appear in the `/` menu + skill/command/subagent lists), but flow-next does **not** show as a grouped plugin in the marketplace UI — cosmetic; the components work.
 - **Slash autocomplete under-lists** (same as Grok): `user-invocable: false` skills + the command wrappers don't populate the menu, but **run when typed in full**.
 - **Ralph autonomous mode is NOT supported.** Cursor's hook schema is `afterFileEdit` / `beforeShellExecution`; flow-next's hooks use Claude Code's `PreToolUse` / `Stop` + `Bash|Execute` matchers, which Cursor doesn't recognize — so the Ralph guard never fires. The interactive plan / work / review workflow is unaffected. (A future Cursor-format hook mirror could add it.)
+- **Tracker-sync background dispatch runs at Tier B (isolated-but-awaited).** Comment-shaped tracker touchpoints on linked specs dispatch to a `tracker-runner` subagent for context isolation, but the host **awaits** it — the fire-and-forget overlap is Claude-Code-only (Tier A). See `docs/tracker-sync.md` § Background dispatch.
 
 > **Status:** skills + commands + agents register and run; **multi-agent verified**; flowctl resolves post-`/flow-next:setup`. Cosmetic: no plugin card + autocomplete under-lists. Ralph unsupported (hook-schema mismatch).
 
