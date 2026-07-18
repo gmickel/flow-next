@@ -93,6 +93,14 @@ line. The marker is the canonical dedup key and the back-reference all at once:
  (`none` when not evidence-bearing). This makes a *re-post of the same evidence*
  detectable even if the surrounding prose changed.
 
+**Retry rule — re-check before ANY re-post.** A post whose response you failed to
+parse may still have LANDED (body-escaping bugs corrupt the response read, not the
+write). Before retrying a `postComment`, re-run the Layer-1 marker check
+(`listComments`) and skip the retry if the marker is already present. Never retry
+blind: the dedup layers protect across runs, but a blind within-run retry is the
+one path that can still double-post (fn-89.4 live-proof finding — one runner,
+three identical posts from two parse-failed retries).
+
 > **Marker reconciliation.** The adapter ([linear-ladder.md](linear-ladder.md),
 > [linear-mcp.md](linear-mcp.md), [linear-graphql.md](linear-graphql.md)) detects
 > a flow-owned marker token and sets the normalized `comment.marker` field. The
