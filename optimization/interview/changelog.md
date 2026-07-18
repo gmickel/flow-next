@@ -127,3 +127,26 @@ tok-equiv) accepted as feature cost, and the structural win (adaptation checkpoi
 instead of one-per-call) living outside the TSV's scored columns. `status=shipped` marks the fn-100
 ship decision, not a ratchet keep; the ratchet audit rule continues to apply, unmodified, to future
 optimization rows.
+
+**Async fact-scout addendum (fn-100 R12) - feature validation, no TSV row:** same fixtures, 2026-07-18,
+investigation UNFROZEN against the live repo, host-scored against objective answer keys (fable judges
+deliberately not used - the discriminating dimension was factual grounding, which the keys settle
+objectively). Arms: inline (interviewer investigates itself; 5 runs, 96-136k tok each) vs scout-assisted
+two-phase (phase-1 brief + pre-fact round, background fact-scout, phase-2 rounds from digest). As first
+tested with fastest-tier (haiku) scouts it FAILED the pre-registered bar: both I1 haiku scouts missed the
+load-bearing fact (live task status resides in the git-common-dir flow-state StateStore, not
+`.flow/tasks` - definition status is a legacy mirror), so both phase-2 cells never asked the
+highest-stakes data-source question the inline runs led with at `[high]`; one phase-1 run emitted no
+brief at all (its cell degraded safely - honest "investigation owed" flags - but hollow). A sonnet scout
+on the IDENTICAL brief found the storage split completely (RUNTIME_FIELDS merge-shadow, legacy-mirror
+fallback) at similar cost (62k vs 44-49k tok); re-running phase 2 for both I1 cells with the sonnet
+digest recovered the data-source question, led at `[high]` with correct premise, in both - plus correct
+pruning (race question dropped via the atomicity fact; mechanism folded to an interval question).
+Granular briefs mattered: the 11-item I3 brief drove the scout arm's best cell (rivaling inline); coarse
+briefs underperformed. Cost honesty: the scout arm saves NO total tokens (150-190k vs 96-136k inline) -
+its wins are latency-hiding (the scout runs while the user answers, by construction) and halving the
+interviewer's own context growth. Restraint held (the thorough fixture's phase 2 asked zero further
+questions). Shipped guardrails follow directly: sonnet-minimum scout tier with escalation,
+brief-is-the-contract with granular gated lookups, no-brief-no-deferral, digest spot-verification before
+`[high]` recommendations, silent degradation forbidden. No results.tsv row: feature validation of an
+optional mode, not a prose mutation of the emission harness.

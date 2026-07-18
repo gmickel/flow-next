@@ -103,6 +103,21 @@ Edit C - in the `### Plain-language question contract` section, append one bulle
 
 Like rule 6, this is an additive post-eval bullet (legibility, not question-selection prose); it extends the contract's existing no-unexplained-shorthand rule to R-IDs. (Revised from an earlier full-quote form on maintainer feedback: full criterion text risks overlong AskUserQuestion bodies; a gist carries the meaning at a fraction of the length.)
 
+## Exact SKILL.md edit D (R12 source of truth - apply verbatim)
+
+Edit D - insert as a new H4 subsection at the END of the `### Investigate Codebase Before Asking` section (after the "If you find yourself answering a "should" question via grep, that's the bug" paragraph, before `#### Code-versus-assertion contradiction`):
+
+```markdown
+#### Async fact-scouts (optional, rounds mode)
+
+While the user answers the current round, you MAY dispatch ONE read-only fact-scout subagent (`Task` with `subagent_type: Explore`) to resolve codebase lookups that gate NEXT-round questions — investigation latency hides inside user-answer time instead of stalling the interview between rounds.
+
+- **The brief is the contract.** Number each lookup: what to look up, where to start, and which question it gates or could eliminate. Facts only, never judgments. Deferring a question on a pending fact REQUIRES the brief to already name that lookup — no brief, no deferral: investigate inline as usual.
+- **Scout tier: judgment-capable, never a fastest-tier scanner** — mid-tier or stronger (sonnet on Claude Code), escalating toward the session model's tier when it is stronger or a digest comes back thin. Eval-validated: the fastest tier missed a load-bearing storage-architecture fact that the mid tier found on the identical brief.
+- **Digest discipline.** The scout returns facts with file:line evidence; absence findings count. Treat the digest as investigation results, state residual uncertainty honestly, and spot-verify a load-bearing fact yourself before building a `[high]` recommendation on it.
+- **Never block, never degrade silently.** Scout unavailable or digest missing → investigate inline exactly as today, and say so. Doc-aware budgets and their sanctioned hold-back are unchanged.
+```
+
 ## Acceptance Criteria
 
 - **R1:** SKILL.md `## Interview Process` bullet (line ~266, "Group 2-4 related questions per tool call") replaced per Edit A, verbatim.
@@ -115,6 +130,7 @@ Like rule 6, this is an additive post-eval bullet (legibility, not question-sele
 - **R9:** SKILL.md plain-language question contract gains the Edit C bullet, verbatim: questions citing a spec R-ID attach a short plain-words gist at first mention ("R3 (the audit line's required fields)"), never a bare R-ID pointer that forces the interviewee to open the spec, and never the full criterion text (body bloat).
 - **R10:** The two repo docs that promise per-TURN doc-aware throttling are updated to per-round wording consistent with R8: `plugins/flow-next/docs/teams.md` (~line 137) and `plugins/flow-next/docs/strategy.md` (~line 49). Minimal word-level edits; nothing else in those files changes.
 - **R11:** The flow-next.dev docs site (`~/work/flow-next.dev`, separate repo - NOT part of this repo's PR, tracked as its own task in this workstream per the repo guide's same-workstream rule) is updated: the interview skill page describes the rounds protocol and `pnpm build` passes in that repo; committed separately there. The docs-site CHANGELOG entry is explicitly DEFERRED to the batched release (that site's changelog couples entries to version bumps - it has no unreleased-staging convention); the release-time note is recorded in the task completion summary so the release walk picks it up.
+- **R12:** SKILL.md gains the Edit D subsection verbatim (async fact-scouts in rounds mode); Codex mirror regenerated (sync-codex rewrites `Task`/`Explore` per its existing transforms); one sentence added to the flow-next.dev interview page's Question rounds section describing background fact-finding during rounds (flow-next.dev commit, separate repo, build green); CHANGELOG Unreleased entry extended with one bullet; `optimization/interview/changelog.md` Experiment 3 entry gains a short "Async fact-scout addendum" paragraph recording the scout eval (data in the Appendix); no results.tsv row (feature validation, arm not a prose mutation of the emission harness).
 - **R8:** `references/doc-aware.md` "per interview turn" redefined as "per round" at all six throttle sites (lines ~55, 63, 76, 78, 131, 171): one glossary question per round; the sharpening body text names rounds; the glossary re-read note reads per-round; the "<=6 turns" heuristic becomes "<=6 rounds"; one decision write per round; one strategy-conflict question per round with the combined doc-aware budget staying "3 max" per round. Intent preserved: meta-questions never crowd a round; the budget does NOT multiply by calls within a round.
 
 ## Early proof point
@@ -136,6 +152,7 @@ Task fn-100-interview-question-rounds-frontier.1 validates the core change (both
 | R9 | Edit C: R-IDs quoted in full in question bodies | fn-100-interview-question-rounds-frontier.1 | - |
 | R10 | teams.md + strategy.md per-turn lines updated to per-round | fn-100-interview-question-rounds-frontier.2 | - |
 | R11 | flow-next.dev interview page + build green (changelog deferred to release) | fn-100-interview-question-rounds-frontier.3 | - |
+| R12 | Async fact-scout mode (Edit D + mirror + docs + ledger addendum) | fn-100-interview-question-rounds-frontier.4 | - |
 
 ## Edge Cases & Constraints
 
@@ -167,6 +184,14 @@ First pass, N=2 per arm per fixture (E4/E5 verdicts per rep):
 Accuracy E1-E3: 12/12 on every rep of both arms. Partition: correct on all rounds runs. I4 restraint: rounds asked 1 question vs baseline 2, both with explicit settled ledgers. I1 rounds-v1 E5 failure mechanism: draft rule "never hold a frontier question back" licensed cosmetic follow-up questions into round 2; judges scored them padding.
 
 Fix: "a frontier slot is earned" rule (v2) - NFR probes always qualify, cosmetics fold into options or a stated write-back default. I1 re-run at N=3 under v2: E4 PASS 3/3 (baseline was 0/2), E5 PASS 3/3, partition correct, freed slots went to substantive probes (hybrid change detection with scale rationale, repo-size question, Windows/SIGTERM nuance, retry-exhaustion chain). Guard reps I3/I4 under v2 (N=1): I4 PASS/PASS (1 question; found a genuine R1-vs-R4 contract gap in the fixture no other run surfaced); I3 E5 PASS with boundaries intact, E4 FAIL attributable to documented judge-counting noise on that fixture (append-perf crediting + an R-ID-gap probe no run in any arm ever asked), content matching the passing baseline reps.
+
+Async fact-scout eval (2026-07-18, for R12; same fixtures, investigation UNFROZEN against the live repo, host-scored vs objective answer keys - fable judges deliberately not used this round since the discriminating dimension was factual grounding, which the keys settle objectively):
+
+- Arms: inline (interviewer investigates itself; 5 runs, 96-136k tok each) vs scout-assisted two-phase (phase-1 brief + pre-fact round, background fact-scout, phase-2 rounds from digest).
+- As first tested with fastest-tier (haiku) scouts: FAILED the pre-registered bar. Both I1 haiku scouts missed the load-bearing fact (live task status resides in the git-common-dir flow-state StateStore, not .flow/tasks - definition status is a legacy mirror), so both phase-2 cells never asked the highest-stakes data-source question the inline runs led with at [high]; one phase-1 run emitted no brief at all (its cell degraded safely - honest "investigation owed" flags - but hollow).
+- Tier probe: a sonnet scout on the identical brief found the storage split completely (RUNTIME_FIELDS merge-shadow, legacy-mirror fallback) at similar cost (62k vs 44-49k tok). Re-running phase 2 for both I1 cells with the sonnet digest recovered the data-source question, led at [high] with correct premise, in both - plus correct pruning (race question dropped via the atomicity fact; mechanism folded to an interval question). Granular briefs also mattered: the 11-item I3 brief drove the scout arm's best cell (rivaling inline); coarse briefs underperformed.
+- Cost honesty: the scout arm saves NO total tokens (150-190k vs 96-136k inline); its wins are latency-hiding (the scout runs while the user answers - by construction) and halving the interviewer's own context growth. Restraint held (the thorough fixture's phase 2 asked zero further questions).
+- Shipped guardrails follow directly: sonnet-minimum scout tier with escalation, brief-is-the-contract with granular gated lookups, no-brief-no-deferral, digest spot-verification before [high] recommendations, silent-degradation forbidden.
 
 Efficiency: adaptation checkpoints collapse from one per call to one per round (emission: 1-3 rounds vs 2-4 sequential calls). That checkpoint reduction is the measured, structural win; live-host turn/latency/token effects are platform-dependent and get validated in dogfood after ship, not claimed from the eval. Verdict: accuracy floor holds, quality >= baseline with the v2 wording, adaptation checkpoints reduced; shipped via this spec. E5 remains an advisory-noise eval at low N per the fn-84 ledger; the accuracy floor plus E4 plus the partition check are the hard guards.
 
