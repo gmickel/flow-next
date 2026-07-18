@@ -31,9 +31,8 @@ Record the fn-100 eval in the interview optimization ledger, add the CHANGELOG e
 - [ ] R7: full pytest suite + smoke_test.sh green (paste tails as evidence)
 
 ## Done summary
-TBD
-
+Recorded the fn-100 eval in the interview optimization ledger and staged the release note: results.tsv row experiment=3 (v2-only: accuracy 12/12, quality 7/8, tokens 13242->13754 tok-equiv from task .1's before/after measurement, runs=6, sonnet, shipped) + changelog.md Experiment 3 SHIPPED entry (v1 4x2 table, earned-slot-rule story, I1 v2 re-run 3/3, guard reps, partition population 11 = 8 v1 + 3 v2 I1 with guard reps disclosed unscored, E5-noise caveat, and an explicit ledger-contract note that this is a feature-validation entry, not an optimization-ratchet keep); created CHANGELOG.md `## Unreleased` with the frontier-rounds `### Changed` entry (no version bump, batched-release rule); updated teams.md + strategy.md strategy-conflict throttle wording per turn -> per round (R10 grep clean). Gates green (pytest 1794 passed / 2 skipped; smoke 144/0). Codex impl-review SHIP after 1 fix round (r1: ratchet-exception documentation, partition-denominator reconciliation, contract-wording contradiction; plus a post-SHIP FYI unit-typo fix +512B -> +2044B/+512 tok-equiv).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 7f1cc8ce3e0f10a136e5c638cd6ad6336f52367c, 12e0889db3ebac7e9c51cfc989655bf5cee40b3e, 1e864b406d992b37643ee6a290cf048737fbc35c, b77c0ed10824d3964e91a85413c8f9b0ed76e8c2
+- Tests: uv run --with pytest python -m pytest plugins/flow-next/tests/ -q (1794 passed, 2 skipped, 225 subtests; baseline green pre-edit, green post-edit and after review fixes), bash plugins/flow-next/scripts/smoke_test.sh (144 passed, 0 failed; baseline green pre-edit, green post-fix), grep -rn 'per interview turn|per turn' plugins/flow-next/docs/teams.md plugins/flow-next/docs/strategy.md (no matches - R10 clean)
 - PRs:
