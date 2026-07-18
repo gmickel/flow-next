@@ -499,6 +499,7 @@ done
 find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   sed -i.bak \
     -e 's/`Task` with `subagent_type: Explore`/`spawn_agent` with `agent_type: explorer`/g' \
+    -e 's/(sonnet on Claude Code)/(the host'"'"'s mid-tier)/g' \
     "$f"
   rm -f "${f}.bak"
 done
@@ -1708,6 +1709,18 @@ if [ "$scout_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No Claude-native Explore-dispatch refs in Codex skill prose"
+fi
+
+# fn-100 R12 follow-up: the Claude-specific scout-tier example "(sonnet on
+# Claude Code)" must read platform-neutral in the mirror — the transform above
+# rewrites it to "(the host's mid-tier)".
+tier_refs=$( { grep -r '(sonnet on Claude Code)' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+if [ "$tier_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $tier_refs Claude-specific scout-tier example(s) remain in codex skill prose — the tier-example transform should have rewritten these"
+  { grep -rn '(sonnet on Claude Code)' "$CODEX_DIR/skills/" 2>/dev/null || true; } | head -5
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No Claude-specific scout-tier examples in Codex skill prose"
 fi
 
 # R6 mirror scan — `request_user_input` must NOT leak into the Codex mirror

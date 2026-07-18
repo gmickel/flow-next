@@ -367,7 +367,7 @@ If you find yourself answering a "should" question via grep, that's the bug. Sto
 
 #### Async fact-scouts (optional, rounds mode)
 
-While the user answers the current round, you MAY dispatch ONE read-only fact-scout subagent (`Task` with `subagent_type: Explore`) to resolve codebase lookups that gate NEXT-round questions — investigation latency hides inside user-answer time instead of stalling the interview between rounds.
+While the user answers the current round, you MAY dispatch ONE read-only fact-scout subagent (`Task` with `subagent_type: Explore`; on hosts without an Explore builtin — e.g. Cursor, which registers only the plugin's own agents — use the host's generic subagent dispatch with Edit/Write disallowed) to resolve codebase lookups that gate NEXT-round questions — investigation latency hides inside user-answer time instead of stalling the interview between rounds.
 
 - **The brief is the contract.** Number each lookup: what to look up, where to start, and which question it gates or could eliminate. Facts only, never judgments. Deferring a question on a pending fact REQUIRES the brief to already name that lookup — no brief, no deferral: investigate inline as usual.
 - **Scout tier: judgment-capable, never a fastest-tier scanner** — mid-tier or stronger (sonnet on Claude Code), escalating toward the session model's tier when it is stronger or a digest comes back thin. Eval-validated: the fastest tier missed a load-bearing storage-architecture fact that the mid tier found on the identical brief.

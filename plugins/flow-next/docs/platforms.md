@@ -206,7 +206,7 @@ Both copy the plugin into `~/.cursor/plugins/local/flow-next` (`%USERPROFILE%\.c
 
 ### What works (verified)
 
-flow-next's **skills, commands, and subagents all register and run** on Cursor. A full `/flow-next:plan` run fanned out the scout subagents in parallel (Opus 4.8) and drove `flowctl` to create the spec + tasks end-to-end — the same multi-agent engine as Claude Code. `flowctl` resolves via `.flow/bin/flowctl` after `/flow-next:setup`: Cursor exposes **no plugin-root env var**, so the `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl` path is empty, but the project-local `.flow/bin/flowctl` + the `AGENTS.md` / `.flow/usage.md` instructions are what the agent uses (verified end-to-end).
+flow-next's **skills, commands, and subagents all register and run** on Cursor. The interview skill's optional async fact-scout dispatch names Claude Code's `Explore` builtin; Cursor has no such builtin (it registers only the plugin's own agents), so the skill's portable-host clause applies — a generic read-only subagent dispatch (Edit/Write disallowed), falling back to inline investigation if none is available. A full `/flow-next:plan` run fanned out the scout subagents in parallel (Opus 4.8) and drove `flowctl` to create the spec + tasks end-to-end — the same multi-agent engine as Claude Code. `flowctl` resolves via `.flow/bin/flowctl` after `/flow-next:setup`: Cursor exposes **no plugin-root env var**, so the `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl` path is empty, but the project-local `.flow/bin/flowctl` + the `AGENTS.md` / `.flow/usage.md` instructions are what the agent uses (verified end-to-end).
 
 ### Caveats
 
