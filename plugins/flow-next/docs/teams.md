@@ -134,7 +134,7 @@ The tech lead runs `/flow-next:interview <spec-id> --scope=technical`. This is t
 
 `--scope=technical` is the default when no scope flag is passed — solo devs running the single-pass workflow keep their pre-1.1.0 behavior. Teams adopting the symmetric pattern opt in explicitly via `--scope=business` then `--scope=technical` (or `--scope=both` for a single combined pass).
 
-Optional `--strategy --docs` flags activate doc-aware mode (orthogonal to scope): the interview pulls from `STRATEGY.md` (active tracks), `GLOSSARY.md` (canonical vocabulary), and `knowledge/decisions/` (load-bearing past choices). When the user's wording diverges from the canonical glossary term, the interview surfaces the conflict in a `## Glossary Conflicts` spec section rather than silently rewriting. Same shape for strategy: a `## Strategy Conflicts` section parallel to glossary, ≤1 strategy-conflict question per turn.
+Optional `--strategy --docs` flags activate doc-aware mode (orthogonal to scope): the interview pulls from `STRATEGY.md` (active tracks), `GLOSSARY.md` (canonical vocabulary), and `knowledge/decisions/` (load-bearing past choices). When the user's wording diverges from the canonical glossary term, the interview surfaces the conflict in a `## Glossary Conflicts` spec section rather than silently rewriting. Same shape for strategy: a `## Strategy Conflicts` section parallel to glossary, ≤1 strategy-conflict question per round.
 
 Run `/flow-next:plan-review <spec-id>` before handover. A different model (RepoPrompt / Codex / Copilot / Cursor) reads the fully-completed spec and reports gaps, ambiguities, and hidden assumptions. The disagreement surface between the writing model and the review model is where the gaps live.
 

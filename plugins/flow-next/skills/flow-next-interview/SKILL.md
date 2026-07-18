@@ -263,7 +263,7 @@ Why this exists: a PM invoking `/flow-next:interview <spec-id>` bare used to get
 - DO NOT output questions as text
 - DO NOT list questions in your response
 - ONLY ask questions via AskUserQuestion tool calls
-- Group 2-4 related questions per tool call
+- Ask in rounds: each round carries the whole frontier (see Question Order below), split across AskUserQuestion calls of up to 4 questions each
 - Expect 40+ questions total for complex specs
 
 **Anti-pattern (WRONG)**:
@@ -291,6 +291,7 @@ Applies to EVERY question, both scopes. The interviewee must be able to read a q
 - **Write for the audience in everyday words**; prefer the common word over the term of art. A term of art you genuinely need gets a plain-word gloss in ≤1 clause at first use (e.g. "counter-metrics — things we'd hate to make worse").
 - **No unexplained acronyms or tool/repo shorthand.** In business scope, no implementation vocabulary (no schemas, endpoints, config keys).
 - **Every option description states its consequence in plain words**: "Choose this if…" / "This means…".
+- **Gloss referenced acceptance criteria.** When a question cites a spec R-ID, attach a short plain-words gist at first mention — "R3 (the audit line's required fields)" — never a bare "R3" the interviewee must open the spec to decode. Gist, not quote: pasting full criterion text bloats the question body.
 
 Required content and trim order (priorities — NOT a length cap; never trade required content for brevity):
 
@@ -332,23 +333,27 @@ For every skipped question:
 - **body**: `<N> question(s) were skipped during this interview. Recommended: park-open — record them under ## Open Questions with my unconfirmed leanings; nothing skipped becomes a decision. Confidence: [high].`
 - **options** (frozen): `park-open` (default — Open Questions entries only), `fill-assumptions` (write the agent's recommendation into the relevant spec section, each marked inline `*(assumed — unconfirmed)*`, plus one Open Questions entry pointing at the markers for later ratification), `re-ask` (walk the skipped questions once more — answers and explicit delegations resolve normally; anything skipped again parks per park-open)
 
-### Question Order: Walk the Decision Tree
+### Question Order: Rounds over the Decision Tree
 
-Walk down branches of the decision tree in dependency order. Don't ask about implementation details before establishing whether they're needed.
+Map the interview as a **design tree**: every decision branches into the decisions that hang off it. The **frontier** is every question whose prerequisites are already settled — the questions you can ask NOW without guessing at answers you haven't heard yet. Work the tree in **rounds**: ask the whole frontier, wait for answers, recompute, repeat.
 
 Concrete rules:
 
-1. **Cap branch depth at 4.** Research shows >4 prior turns rarely improves question quality — drop deeper threads, ask about something else. Heuristic; revisit if too restrictive in real use.
-2. **Discover-as-you-go**, not pre-compute. Adapt the next question based on prior answers. Don't lock a tree before you start.
-3. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly: "Skipping persistence questions — you said no DB."
-4. **One `AskUserQuestion` call per turn**, period — never queue multiple tool calls back-to-back. Within that single call you may bundle 2-4 closely-related sub-questions per the existing batching rule above; do NOT pad with loosely-related questions just to hit four. The intent: one focused checkpoint per turn so the user isn't barraged with unrelated decisions in parallel. Use multi-select within a sub-question when options are non-exclusive.
+1. **Each round asks the entire current frontier.** A question whose answer depends on another question still open in this round belongs to a *later* round, not this one — never ask a question alongside its own prerequisite.
+2. **Split the frontier across `AskUserQuestion` calls of up to 4 questions each**, grouped by topic (closest-related together), announced as one round ("Round N — part 1/2"). Never pad a call to reach 4; never hold a genuine frontier question back to a later round just to smooth pacing.
+   **A frontier slot is earned.** Every genuinely open decision joins the round — NFR probes (failure modes, concurrency/races, scale, portability, testing) ALWAYS qualify, however thin the spec. Pure-cosmetic polish (message wording, label/flag spelling, visual formatting) does not get its own question: fold it into a related question's options, or carry it as a stated default the user can veto at write-back.
+   Standalone checkpoint questions (scope selection, the code-mismatch question, the write-back consent checkpoint, the mark-ready offer) sit outside rounds — never labeled "Round N", never counted against round depth. Doc-aware meta-questions keep their own per-round budget (references/doc-aware.md): a meta-question deferred by that budget is pending for a later round, not dropped — the one sanctioned hold-back.
+3. **Recompute the frontier after each round.** Answers reshape the tree — settled decisions unblock their dependents; adapt the next round to what you heard. Don't lock the whole tree before you start: deeper rounds are discovered from answers, not pre-scripted.
+4. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly at the next round's opener: "Skipping persistence questions — you said no DB."
+5. **Cap branch depth at 4 rounds** down any one branch. Research shows >4 prior turns rarely improves question quality — drop deeper threads, ask about something else. Heuristic; revisit if too restrictive in real use.
+6. **Finish the round before recomputing.** If a later part of a round never got asked (tool error, interruption), ask the missed part first — never silently drop frontier questions and move on.
 
 Example flow:
 
-> Q: "Does this feature need persistence?"
-> A: "No, ephemeral state is fine."
+> Round 1 (frontier: persistence?, auth model?, error surface?) — asked together in one call.
+> A: "No persistence — ephemeral is fine. API-key auth. Errors: existing JSON convention."
 > [agent prunes the {DB choice, schema design, migration plan} sub-tree]
-> Q: "Skipped DB questions — you said ephemeral. Next: how should this state survive page reloads?"
+> Round 2 opener: "Skipping DB questions — you said ephemeral." (frontier now: reload survival?, key-tier limits? — the questions those answers unblocked)
 
 ### Investigate Codebase Before Asking
 
@@ -359,6 +364,15 @@ Before every question, classify it via the [questions-shared.md](questions-share
 - **User-judgment-required** ("what should exist / what tradeoff to make / what priority") → ask via `AskUserQuestion`.
 
 If you find yourself answering a "should" question via grep, that's the bug. Stop and ask the user.
+
+#### Async fact-scouts (optional, rounds mode)
+
+While the user answers the current round, you MAY dispatch ONE read-only fact-scout subagent (`Task` with `subagent_type: Explore`; on hosts without an Explore builtin — e.g. Cursor, which registers only the plugin's own agents — use the host's generic subagent dispatch with Edit/Write disallowed) to resolve codebase lookups that gate NEXT-round questions — investigation latency hides inside user-answer time instead of stalling the interview between rounds.
+
+- **The brief is the contract.** Number each lookup: what to look up, where to start, and which question it gates or could eliminate. Facts only, never judgments. Deferring a question on a pending fact REQUIRES the brief to already name that lookup — no brief, no deferral: investigate inline as usual.
+- **Scout tier: judgment-capable, never a fastest-tier scanner** — mid-tier or stronger (sonnet on Claude Code), escalating toward the session model's tier when it is stronger or a digest comes back thin. Eval-validated: the fastest tier missed a load-bearing storage-architecture fact that the mid tier found on the identical brief.
+- **Digest discipline.** The scout returns facts with file:line evidence; absence findings count, cited as the paths and patterns searched. Treat the digest as investigation results, state residual uncertainty honestly, and spot-verify a load-bearing fact yourself before building a `[high]` recommendation on it.
+- **Never block, never degrade silently.** Scout unavailable or digest missing → investigate inline exactly as today, and say so. Doc-aware budgets and their sanctioned hold-back are unchanged.
 
 #### Code-versus-assertion contradiction (`DOC_AWARE=1` — behavior (c))
 

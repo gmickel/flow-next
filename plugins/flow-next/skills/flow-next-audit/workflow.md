@@ -338,6 +338,7 @@ When `TOTAL >= 3` AND the entries don't share heavy overlap (different modules /
 | Claude Code | `Task` tool with `subagent_type: Explore` (read-only investigation) or `general-purpose` (when Explore unavailable) | Explore preferred — read-only enforced |
 | Codex | `spawn_agent` with `agent_type: explorer` | Read-only by Codex contract |
 | Droid | `spawn_agent` or platform-equivalent (verify tool name in current Droid docs) | Read-only |
+| Cursor | Host's generic subagent dispatch (no Explore/general-purpose builtins — only the plugin's own agents register) | Disallow Edit/Write in the prompt |
 | Fallback | Main thread sequential | Use when no subagent primitive is available |
 
 Investigation subagents are **read-only**. They must not Edit, Write, Bash beyond Read / Grep / Glob, or git-mutate. Each returns a structured payload:

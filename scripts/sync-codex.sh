@@ -487,6 +487,23 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   rm -f "${f}.bak"
 done
 
+# --- TOOL NAMES: read-only Explore dispatch → spawn_agent (fn-100 R12) ---
+# Canonical prose writes the interview fact-scout dispatch Claude-native as
+# "(`Task` with `subagent_type: Explore`)". Codex spawns subagents via
+# `spawn_agent` with `agent_type: explorer` (same naming as the audit
+# workflow's platform table). Exact-phrase match only: the "`Task` tool with
+# `subagent_type: Explore`" variants (audit platform table, capture prose)
+# deliberately document the Claude Code naming inside cross-platform tables
+# and must NOT be rewritten. A validation guard below hard-fails if the
+# exact dispatch phrase survives in the mirror.
+find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
+  sed -i.bak \
+    -e 's/`Task` with `subagent_type: Explore`/`spawn_agent` with `agent_type: explorer`/g' \
+    -e 's/(sonnet on Claude Code)/(the host'"'"'s mid-tier)/g' \
+    "$f"
+  rm -f "${f}.bak"
+done
+
 # --- TOOL NAMES: AskUserQuestion → plain-text numbered prompt (fn-45) ---
 # Canonical skills use Claude-native `AskUserQuestion`. Codex's structured
 # `request_user_input` errors outside Plan mode (openai/codex #10384, #11536,
@@ -1678,6 +1695,32 @@ if [ "$askq_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No Claude-native tool refs in Codex skill prose"
+fi
+
+# fn-100 R12: the Claude-native fact-scout dispatch phrase must not survive in
+# the mirror — the Explore-dispatch transform above rewrites it to
+# `spawn_agent` with `agent_type: explorer`. Exact-phrase match: the
+# "`Task` tool with" variants in cross-platform tables are deliberate
+# documentation of the Claude Code naming and are excluded by construction.
+scout_refs=$( { grep -r '`Task` with `subagent_type: Explore`' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+if [ "$scout_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $scout_refs Claude-native Explore-dispatch refs remain in codex skill prose — Explore-dispatch transform (fn-100 R12) should have rewritten these"
+  { grep -rn '`Task` with `subagent_type: Explore`' "$CODEX_DIR/skills/" 2>/dev/null || true; } | head -5
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No Claude-native Explore-dispatch refs in Codex skill prose"
+fi
+
+# fn-100 R12 follow-up: the Claude-specific scout-tier example "(sonnet on
+# Claude Code)" must read platform-neutral in the mirror — the transform above
+# rewrites it to "(the host's mid-tier)".
+tier_refs=$( { grep -r '(sonnet on Claude Code)' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+if [ "$tier_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $tier_refs Claude-specific scout-tier example(s) remain in codex skill prose — the tier-example transform should have rewritten these"
+  { grep -rn '(sonnet on Claude Code)' "$CODEX_DIR/skills/" 2>/dev/null || true; } | head -5
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No Claude-specific scout-tier examples in Codex skill prose"
 fi
 
 # R6 mirror scan — `request_user_input` must NOT leak into the Codex mirror

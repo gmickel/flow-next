@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-18T08:12:54.300359Z",
+  "depends_on": [
+    "fn-100-interview-question-rounds-frontier.1"
+  ],
+  "id": "fn-100-interview-question-rounds-frontier.2",
+  "priority": null,
+  "spec": "fn-100-interview-question-rounds-frontier",
+  "spec_path": ".flow/tasks/fn-100-interview-question-rounds-frontier.2.md",
+  "status": "todo",
+  "title": "Eval-ledger row + changelog entry + CHANGELOG Unreleased + gates",
+  "updated_at": "2026-07-18T08:13:33.416908Z"
+}

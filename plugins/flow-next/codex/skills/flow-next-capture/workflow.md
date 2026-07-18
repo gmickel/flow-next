@@ -229,7 +229,7 @@ Rules:
 
 ### 1.2 — Optional codebase verification (subagent dispatch — R12)
 
-When the conversation references repo files or modules whose state matters for the spec ("the auth module needs X", "we already have a rate limiter at..."), spawn a **read-only investigation subagent** via the `Task` tool with `subagent_type: Explore` (or `general-purpose` when Explore is unavailable). For clean conversations with no file references, skip this step. ( per repo cross-platform convention.)
+When the conversation references repo files or modules whose state matters for the spec ("the auth module needs X", "we already have a rate limiter at..."), spawn a **read-only investigation subagent** via the `Task` tool with `subagent_type: Explore` (or `general-purpose` when Explore is unavailable; on hosts with neither builtin — e.g. Cursor — the host's generic subagent dispatch with Edit/Write disallowed). For clean conversations with no file references, skip this step. ( per repo cross-platform convention.)
 
 Investigation subagents are **read-only**. They must not Edit, Write, Bash beyond Read / Grep / Glob, or git-mutate. Pass `disallowedTools: Edit, Write, Task` when dispatching. Each returns:
 

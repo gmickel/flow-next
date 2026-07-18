@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Interview asks in frontier rounds (fn-100).** `/flow-next:interview` replaces the one-`AskUserQuestion`-call-per-turn depth-first walk with frontier rounds: each round asks the whole frontier - every question whose prerequisites are already settled - split across `AskUserQuestion` calls of up to 4 questions grouped by topic and announced as one round. A question is never asked alongside its own prerequisite (dependents defer to a later round); the frontier is recomputed once per round instead of once per call, pruned branches are announced at the next round's opener, and branch depth caps at 4 rounds. Eval-validated on the canonical `optimization/interview/` harness (fn-84.3 protocol, blind fable E4/E5 judges): accuracy floor 12/12 on every rep of both arms, quality 7/8 under the shipped wording (thin-fixture E4 0/2 -> 3/3 vs baseline), zero intra-round dependency violations across all 11 partition-scored rounds runs; full data in `optimization/interview/{results.tsv,changelog.md}`.
+  - **"A frontier slot is earned."** NFR probes (failure modes, concurrency, scale, portability, testing) always qualify however thin the spec; pure-cosmetic polish folds into a related question's options or a stated write-back default - the scoped rule that fixed the first-pass padding regression on the thin fixture.
+  - **Doc-aware budgets are per round, not per call.** The glossary/decision/strategy meta-question throttles in `references/doc-aware.md` count once per round (they do not multiply across the calls within a round); the two fuzzy-term sharpening triggers are observation-based (user replies) so they stay reachable in a 3-5 round interview. `docs/teams.md` and `docs/strategy.md` updated to the per-round wording.
+  - **R-IDs glossed at first mention.** A question citing a spec R-ID attaches a short plain-words gist - "R3 (the audit line's required fields)" - never a bare "R3" the interviewee must open the spec to decode, and never the full criterion text (question-body bloat).
+  - **Async fact-scouts (optional, rounds mode).** While the user answers the current round, the interviewer MAY dispatch ONE read-only fact-scout subagent to resolve the codebase lookups gating next-round questions - investigation latency hides inside user-answer time. The brief is the contract (numbered lookups, each naming the question it gates; no brief, no deferral), scout tier is sonnet-minimum with escalation (eval-validated: the fastest tier missed a load-bearing storage-architecture fact the mid tier found on the identical brief), load-bearing digest facts are spot-verified before `[high]` recommendations, and an unavailable scout degrades loudly to inline investigation. No total-token savings claimed - the wins are latency-hiding and interviewer context-growth halving; eval addendum in `optimization/interview/changelog.md`.
+  - Standalone checkpoint questions (scope selection, code-mismatch, write-back consent, mark-ready) stay outside the rounds protocol. Codex mirror regenerated (idempotent, plain-text ask-block audit clean). Ordering/batching change only - the plain-language question contract is otherwise unchanged (the R-ID-gloss bullet above is its one additive extension), and confidence tiers, skipped-questions contract, scope passes, write-back, and tracker sync are untouched. No flowctl changes. No version bump (batched releases).
+
 ## [flow-next 2.15.0] - 2026-07-16
 
 ### Changed

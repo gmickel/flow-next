@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-18T11:58:35.021261Z",
+  "depends_on": [
+    "fn-100-interview-question-rounds-frontier.1"
+  ],
+  "id": "fn-100-interview-question-rounds-frontier.4",
+  "priority": null,
+  "spec": "fn-100-interview-question-rounds-frontier",
+  "spec_path": ".flow/tasks/fn-100-interview-question-rounds-frontier.4.md",
+  "status": "todo",
+  "title": "Async fact-scouts: Edit D + mirror + docs sentence + ledger addendum",
+  "updated_at": "2026-07-18T11:58:35.437042Z"
+}

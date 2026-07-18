@@ -52,7 +52,7 @@ When a hit passes the load-bearing filter AND the user's wording conflicts with 
 
 Confidence tier: `[high]` when the canonical entry is recent and the user's wording cleanly maps to an `avoid` alias; `[judgment-call]` when meaning could plausibly have drifted; `[your-call]` when the term sits in user-domain territory the agent has no purchase on.
 
-**Throttle:** at most one Phase-zero glossary question per interview turn. If multiple terms hit, surface the most load-bearing one first; the rest fold into the natural conversation flow as they come up. Bombarding the user with vocabulary questions before the core spec questions is the failure mode this filter prevents.
+**Throttle:** at most one Phase-zero glossary question per interview round. If multiple terms hit, surface the most load-bearing one first; the rest fold into the natural conversation flow as they come up. Bombarding the user with vocabulary questions before the core spec questions is the failure mode this filter prevents.
 
 ### Behavior (b) — Fuzzy-term sharpening
 
@@ -60,7 +60,7 @@ Across the conversation, watch for overloaded language — words the user keeps 
 
 1. Propose a canonical via `AskUserQuestion`:
    - **header**: `Sharpen "<term>"?`
-   - **body**: `You've used "<term>" in <count> turns. I'm reading it as "<agent's working definition>" but want to lock it in. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>].`
+   - **body**: `You've used "<term>" in <count> replies. I'm reading it as "<agent's working definition>" but want to lock it in. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>].`
    - **options**: 2-4 candidate canonical wordings + `none-of-these` (user provides their own).
 
 2. On user-pick, build the resolved entry and write it to the nearest-ancestor `GLOSSARY.md` via `flowctl glossary add`:
@@ -73,9 +73,9 @@ Across the conversation, watch for overloaded language — words the user keeps 
 
    Use `--definition-file -` (stdin) so multi-sentence definitions and quoted phrasing round-trip cleanly. `glossary add` is upsert — case-insensitive match replaces the existing entry in full; new terms append at the end of the file. If the user picked `redefine` in behavior (a), this is the same call site (one path, one upsert).
 
-3. The next question can re-read the glossary. There is no in-memory cache to invalidate — re-read on every doc-aware turn that needs canonical lookup. The cost is one stat + one file read per turn; sub-millisecond at typical sizes.
+3. The next question can re-read the glossary. There is no in-memory cache to invalidate — re-read on every doc-aware round that needs canonical lookup. The cost is one stat + one file read per round; sub-millisecond at typical sizes.
 
-**When to skip behavior (b):** if a term is single-use, or if the user volunteered a clear definition the first time they used it, or if the conversation is short enough (≤6 turns) that consolidation buys nothing yet. The behavior triggers when overloading is real and persistent, not on every undefined word.
+**When to skip behavior (b):** if a term is single-use, or if the user volunteered a clear definition the first time they used it, or if the conversation is short enough (≤6 user replies) that consolidation buys nothing yet. The behavior triggers when overloading is real and persistent, not on every undefined word.
 
 ### Behavior (d) — Decision-record write (three-criteria gate)
 
@@ -128,7 +128,7 @@ When all three hold:
 
 5. **On `skip`**, do nothing — the choice still appears in spec prose; only the memory entry is suppressed.
 
-**At most one decision write per interview turn.** Even if multiple gate-passing decisions surface, ask one at a time; subsequent asks adapt to the user's energy level for read-back.
+**At most one decision write per interview round.** Even if multiple gate-passing decisions surface, ask one at a time; subsequent asks adapt to the user's energy level for read-back.
 
 ### Behavior (e) — Code-versus-strategy contradiction (`STRATEGY_AWARE=1` only)
 
@@ -168,6 +168,6 @@ When a hit passes the filter, surface via `AskUserQuestion`:
 
 Confidence tier: `[high]` when the strategy entry is recent and the user's wording cleanly maps to a canonical track or directly contradicts the verbatim approach; `[judgment-call]` when meaning could plausibly have drifted; `[your-call]` when the strategic direction sits in user-domain territory the agent has no purchase on.
 
-**Throttle:** at most one strategy-conflict question per interview turn (parallel to behavior (a)'s glossary throttle). If multiple strategy mismatches hit, surface the most load-bearing one first; the rest fold into the natural conversation flow as they come up. Bombarding the user with strategy-alignment questions before the core spec questions is the failure mode this throttle prevents. Combined with the (a) and (d) throttles, the per-turn doc-aware question budget is **3 max** (1 glossary + 1 decision-record + 1 strategy).
+**Throttle:** at most one strategy-conflict question per interview round (parallel to behavior (a)'s glossary throttle). If multiple strategy mismatches hit, surface the most load-bearing one first; the rest fold into the natural conversation flow as they come up. Bombarding the user with strategy-alignment questions before the core spec questions is the failure mode this throttle prevents. Combined with the (a) and (d) throttles, the per-round doc-aware question budget is **3 max** (1 glossary + 1 decision-record + 1 strategy).
 
 The output of behavior (e) lands in a new spec section, `## Strategy Conflicts`, parallel to `## Glossary Conflicts`. Format: per-line entries with user-wording / canonical-strategy-wording / STRATEGY.md path / resolution-chosen. Lets reviewers see where the spec aligns or pushes back on strategic intent. Strategy conflicts are read-only signal for `/flow-next:sync`'s plan-sync agent — the interview never edits `STRATEGY.md`.

@@ -69,3 +69,84 @@ specs (a real, corroborated blind spot). Lever reverted — PRIMARY ground: it s
 change. Durable deliverables: a **fable-judged question-quality eval suite** for a core skill, a diagnosed
 blind spot, and two concrete follow-ups (re-scope the prune cue to well-specified specs only; add a
 per-fixture must-ask-NFR answer-key + majority-vote E5 at N≥5 before re-attempting).
+
+## Experiment 3 - frontier rounds (fn-100) - SHIPPED - accuracy 12/12, quality 7/8, 13,242 -> 13,754 tok
+2026-07-18, fn-84.3 protocol (sonnet emission runs, blind fable E4/E5 judges, host-scored E1-E3) plus a
+rounds-specific host check: frontier partition - no question grouped in a round with its own open
+prerequisite. Note: tokens measured as bytes/4 of the technical-scope loaded set immediately before/after
+the fn-100 edits (52,970 -> 55,014 B); the 12,314 figure in rows 0-2 is the historical fn-84 file state.
+
+**Mutation (SKILL.md Question Order rewrite):** the depth-first one-call-per-turn walk becomes frontier
+rounds - model the interview as a design tree; each round asks the entire frontier (every question whose
+prerequisites are settled), split across calls of up to 4 grouped by topic and announced as one round;
+recompute the frontier once per round, announce pruned branches at the next round's opener; branch depth
+caps at 4 rounds. Dependency discipline explicit: a question never rides in the same round as its own
+prerequisite.
+
+**First pass (v1, N=2 per arm per fixture):** accuracy E1-E3 12/12 on every rep of BOTH arms; partition
+correct on all rounds runs; I4 restraint sharpened (1 Q vs baseline 2, explicit already-settled ledger);
+I2 rounds beat baseline on E4 (PASS,PASS vs FAIL,PASS); I3 near-parity (E4 PASS,FAIL / E5 PASS,PASS).
+But **I1 thin lost E5 both reps** (rounds-v1 E4 FAIL,FAIL / E5 FAIL,FAIL vs baseline E4 FAIL,FAIL /
+E5 PASS,PASS): the draft rule "never hold a frontier question back" licensed queued cosmetic follow-ups
+that judges scored as padding.
+
+**Fix (v2, the shipped wording) - "a frontier slot is earned":** every genuinely open decision joins the
+round and NFR probes ALWAYS qualify however thin the spec (guarding the exp-1 trap where an unscoped
+prune cue dropped thin-spec NFR probes), but pure-cosmetic polish folds into a related question's options
+or a stated write-back default. I1 re-run at N=3 under v2: **E4 3/3 PASS (baseline was 0/2), E5 3/3
+PASS**, partition correct - the freed slots went to substantive probes (change-detection mechanism with
+scale rationale, repo-size, Windows/SIGTERM nuance, retry-exhaustion chain). Guard reps I3/I4 under v2
+(bleed check, N=1 each): I4 PASS/PASS with a single question that surfaced a genuine R1-vs-R4 contract
+gap no other run in the eval found, and fold-as-stated-default fired exactly as written; I3 E5 PASS with
+both DECIDED boundaries intact and content near item-for-item with the passing baseline reps (plus a
+security probe baseline lacked) - its E4 FAIL is documented judge-counting noise on that fixture (judges
+split all session on crediting append-perf from the append-mode rationale, and on an R-ID-gap probe no
+run in any arm ever asked). No bleed detected.
+
+**Partition: 11/11 partition-scored rounds runs, zero intra-round dependency violations** - every
+dependent question deferred with an explicit unblocked-by annotation; conditional prunes announced.
+Scored population: the 8 v1 runs + the 3 v2 I1 re-runs. The 3 v2 guard reps (I2/I3/I4) were not
+separately partition-scored (14 rounds emissions total; 11 in the partition denominator).
+
+**Row mapping (v2-only observations):** quality 7/8 = I1 2/2 (N=3) + I2 2/2 + I3 1/2 (E4 tie-broken FAIL
+per the conservative rule - the documented noise above) + I4 2/2; runs=6 (3+1+1+1 v2 emissions; the 8 v1
+rounds runs and baseline comparison reps stay in this prose, never in the row).
+
+**Verdict - SHIPPED:** accuracy floor holds, quality >= baseline under v2, and adaptation checkpoints
+collapse from one per call to one per round (emission: 1-3 rounds vs 2-4 sequential baseline calls;
+live-host turn/latency effects are platform-dependent and get validated in dogfood, not claimed from the
+eval). E5 remains an advisory-noise eval at low N per the fn-84 ledger; the hard guards are the accuracy
+floor + E4 + the partition check.
+
+**Ledger-contract note (feature validation, not an optimization ratchet):** the header's keep rule
+(accuracy >= baseline AND (accuracy-up OR tokens-down OR quality-up)) governs prompt-OPTIMIZATION
+experiments; this entry does not claim it. Experiment 3 records a protocol FEATURE change (spec fn-100)
+validated on this harness as a regression gate: ship criteria were accuracy floor held (12/12), quality
+>= baseline under the shipped v2 wording, and a clean frontier partition - with the +2,044 B (+512
+tok-equiv) accepted as feature cost, and the structural win (adaptation checkpoints one-per-round
+instead of one-per-call) living outside the TSV's scored columns. `status=shipped` marks the fn-100
+ship decision, not a ratchet keep; the ratchet audit rule continues to apply, unmodified, to future
+optimization rows.
+
+**Async fact-scout addendum (fn-100 R12) - feature validation, no TSV row:** same fixtures, 2026-07-18,
+investigation UNFROZEN against the live repo, host-scored against objective answer keys (fable judges
+deliberately not used - the discriminating dimension was factual grounding, which the keys settle
+objectively). Arms: inline (interviewer investigates itself; 5 runs, 96-136k tok each) vs scout-assisted
+two-phase (phase-1 brief + pre-fact round, background fact-scout, phase-2 rounds from digest). As first
+tested with fastest-tier (haiku) scouts it FAILED the pre-registered bar: both I1 haiku scouts missed the
+load-bearing fact (live task status resides in the git-common-dir flow-state StateStore, not
+`.flow/tasks` - definition status is a legacy mirror), so both phase-2 cells never asked the
+highest-stakes data-source question the inline runs led with at `[high]`; one phase-1 run emitted no
+brief at all (its cell degraded safely - honest "investigation owed" flags - but hollow). A sonnet scout
+on the IDENTICAL brief found the storage split completely (RUNTIME_FIELDS merge-shadow, legacy-mirror
+fallback) at similar cost (62k vs 44-49k tok); re-running phase 2 for both I1 cells with the sonnet
+digest recovered the data-source question, led at `[high]` with correct premise, in both - plus correct
+pruning (race question dropped via the atomicity fact; mechanism folded to an interval question).
+Granular briefs mattered: the 11-item I3 brief drove the scout arm's best cell (rivaling inline); coarse
+briefs underperformed. Cost honesty: the scout arm saves NO total tokens (150-190k vs 96-136k inline) -
+its wins are latency-hiding (the scout runs while the user answers, by construction) and halving the
+interviewer's own context growth. Restraint held (the thorough fixture's phase 2 asked zero further
+questions). Shipped guardrails follow directly: sonnet-minimum scout tier with escalation,
+brief-is-the-contract with granular gated lookups, no-brief-no-deferral, digest spot-verification before
+`[high]` recommendations, silent degradation forbidden. No results.tsv row: feature validation of an
+optional mode, not a prose mutation of the emission harness.
