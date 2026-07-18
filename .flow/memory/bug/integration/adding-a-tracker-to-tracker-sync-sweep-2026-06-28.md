@@ -4,12 +4,12 @@ date: "2026-06-28"
 track: bug
 category: integration
 module: plugins/flow-next/skills/flow-next-tracker-sync
-tags: [tracker-sync, gitlab, fn-69, doc-sweep, flow:deps, dependency-projection, impl-review, jira, fn-70, per-adapter-fidelity, adapter-ref-crosscheck]
+tags: [tracker-sync, gitlab, fn-69, doc-sweep, flow:deps, dependency-projection, impl-review, jira, fn-70, per-adapter-fidelity, adapter-ref-crosscheck, fn-89, tracker-runner, DISPATCH-forked, autonomy-parity, FLOW_SETUP_ASK, ralph-gate]
 problem_type: integration
 symptoms: "impl-review NEEDS_WORK x5: stale Linear/GitHub-only enumerations in ~12 secondary files + flow:deps framed as GitLab-degrade-only when GitLab carries it on every tier"
 root_cause: "Swept only the spec's named-file list (not the whole plugin tree) + copied GitHub's fenced-block-FALLBACK mental model onto GitLab, which carries the block on every tier"
 resolution_type: fix
-last_updated: "2026-06-29"
+last_updated: "2026-07-18"
 related_to: [bug/integration/gh-api-f-stringifies-numeric-body-2026-06-17, bug/integration/markerstruct-field-semantics-must-2026-06-27, bug/integration/rp-builder-file-slices-cause-false-2026-06-10, bug/integration/set-tracker-id-rejected-github-n-2026-06-03, bug/integration/trackers-auto-linkify-issue-key-2026-06-03]
 ---
 
@@ -134,3 +134,22 @@ transfers.
   review rounds when the change is a tracker-doc sweep; the findings shrink to nits.
 - Per-adapter fidelity bullets are the highest-density miss site. The slash-list
   grep is the floor; the per-adapter-clause grep is the ceiling.
+
+## Update 2026-07-18
+
+## Problem
+fn-89.1 added `DISPATCH=forked` to tracker-sync's Phase 0 RALPH gate (steps.md) so a background tracker-runner queues instead of asking. Codex impl-review flagged (Major, 100): the SKILL.md setup-version pre-check runs BEFORE Phase 0 and has its OWN autonomy-suppression gate - a forked runner in an interactive host session could still hit `FLOW_SETUP_ASK` and stall on a blocking prompt no subagent can answer. The "Inline skill (no `context: fork`)" statement also contradicted the new runner architecture.
+
+## What Didn't Work
+Treating "the single RALPH gate" as the only ask-reachability gate. tracker-sync has TWO independent gates: the SKILL.md pre-check suppression (runs first) and the steps.md Phase 0 RALPH gate. Adding a new autonomy-family marker to only one leaves a reachable prompt path.
+
+## Solution
+- SKILL.md pre-check condition gained `|| "${DISPATCH:-}" == "forked"` (plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md:41).
+- Inline-skill paragraph narrowed: inline requirement covers ceremonies + interactive conflict resolution; a forked tracker-runner dispatch legitimately runs the skill in a fork where every would-be prompt resolves to `sync defer`.
+- Regression tests pin BOTH gates (test_tracker_sync_backlog_mode.py: forked-dispatch tests for the steps.md gate window and the SKILL.md pre-check window).
+- Bonus finding: a run-scoped `.flow/config.json` `work.delegate=codex` flip leaked into the feature commit via `git add -A`; reverted to the committed baseline `false`.
+
+## Prevention
+- When adding a marker to the autonomy family, grep the WHOLE skill (SKILL.md preamble + steps.md + references) for every ask-suppression gate - `grep -n 'FLOW_RALPH' <skill-dir> -r` finds them all; update every gate, not just the named "single gate".
+- Prose-contract tests should pin each gate separately (pre-check window + Phase 0 window), not just the steps.md one.
+- Before `git add -A` on a worker commit, diff `.flow/config.json` against the task base - host sessions flip run-scoped keys (work.delegate) that must not land in feature commits.
