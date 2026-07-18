@@ -14,6 +14,7 @@ Foundations for the background tracker-runner: the shared discipline reference, 
 3. tracker-sync steps.md RALPH gate: add `|| "${DISPATCH:-}" == "forked"` (one line, current gate at steps.md:21-26).
 4. sync-codex.sh: sandbox_for gains `tracker-runner) echo "workspace-write"`; global `Task flow-next:tracker-runner` -> `tracker_runner` role rewrite + hard-fail guard (fn-100 transform+guard pattern); regen twice, idempotent, guards green; verify codex/agents/tracker-runner.toml generated with workspace-write.
 5. Proof point (R9): dispatch one real runner (comment op, linked spec, dedup-safe) and parse the terminal line from its LAST line; record in evidence.
+6. Tier B probe (R8, if a Codex CLI is available): on the INTERACTIVE surface, spawn_agent a trivial runner and confirm the parent reads its terminal line cleanly (openai/codex#33267 is exec-scoped). Pass -> Codex resolves Tier B in the ladder prose; fail -> Codex stays Tier C, recorded with the probe output.
 
 ## Acceptance
 - [ ] R11: reference exists, <=50 lines, sole statement of the rules
