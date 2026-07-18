@@ -5,7 +5,7 @@ dispatched off the critical path. This file is the sole statement of the rules.
 
 ## The discipline
 
-1. When a tracker gate resolves to a COMMENT op on a LINKED spec and the host is Claude Code, dispatch it to a background `tracker-runner` subagent and keep working.
+1. When a tracker gate resolves to a COMMENT op on a LINKED spec and the host qualifies on the capability ladder below (Tier A or Tier B), dispatch it to a `tracker-runner` subagent - Tier A in the background (keep working), Tier B awaited. Tier C runs it inline.
 2. Fire-and-forget only when a later `sync check` this session will audit the receipt; otherwise await the runner before your skill's summary.
 3. Before ANY `sync check`, and before any state-shaped tracker work on a spec, await your outstanding dispatches for that spec.
 4. An UNLINKED spec's first touch is state-shaped (create-if-unlinked writes link state) - run it inline.
@@ -13,7 +13,7 @@ dispatched off the critical path. This file is the sole statement of the rules.
 
 ## MUST invariant 1 - single state-writer
 
-Never let two operations touch one spec's sync state concurrently - a comment fork writes only its own receipt file and the tracker comment, so linked-spec comment forks may overlap freely, but anything that writes link/merge-base/lastSyncedAt state runs alone.
+Never let two operations touch one spec's sync state concurrently - a comment fork writes only its own receipt file and the tracker comment (a one-way lifecycle append NEVER advances `lastSyncedAt` - comments-sync.md scopes that advance to two-way reconciles), so linked-spec comment forks may overlap freely, but anything that writes link/merge-base/lastSyncedAt state runs alone.
 
 ## MUST invariant 2 - join-before-audit
 
