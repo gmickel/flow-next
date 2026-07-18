@@ -46,9 +46,8 @@ Token measurement (feeds task .2's ledger row): IMMEDIATELY before and after app
 - [ ] Commit(s) include canonical + mirror together
 
 ## Done summary
-TBD
-
+Applied the fn-100 frontier-rounds protocol to the interview skill: Edits A/B/C verbatim in SKILL.md (rounds bullet, "Rounds over the Decision Tree" section rules 1-6 + example, quote-R-IDs-in-full contract bullet), doc-aware.md throttles redefined per-round, Codex mirror regenerated (idempotent, R2-injection audit clean, no stray AskUserQuestion literal). Baseline green pre-edit (pytest 51, smoke 144); same gates green post-edit plus full unit suite (1794 passed). Codex impl-review SHIP after 2 fix rounds: r1 caught that the mechanical "<=6 turns" -> "<=6 rounds" swap at the two behavior-(b) TRIGGER sites (doc-aware.md:63,78) made fuzzy-term sharpening unreachable (a full rounds interview is 3-5 rounds), so those two sites are now observation-based ("<count> replies", "<=6 user replies") and spec R8 + task acceptance were amended to the corrected contract (four per-round throttle/cadence sites + two reply-based triggers) - deviation from the original R8 letter, honoring its "Intent preserved" clause. Token measurement for task .2's ledger row: tokens_before=52970 bytes, tokens_after=55014 bytes (cat SKILL.md questions-shared.md questions-technical.md | wc -c; tok-equiv = bytes/4 -> 13242 -> 13754).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b72dde7a24f2eebaf4a715111d17acd353bd8454, fe6b8e7ea25815b7f8bfa063bb19e9e47b49e468, 14d720a036e49863834b4be0d1378fa9aeb0084e, fd17dcc92ead0b69126f7a1f49fc87080b2a9219
+- Tests: uv run --with pytest python3 -m pytest plugins/flow-next/tests/test_interview_scope_flag.py (51 passed), uv run --with pytest python3 -m pytest plugins/flow-next/tests/ (1794 passed, 2 skipped), bash plugins/flow-next/scripts/smoke_test.sh (144 passed), ./scripts/sync-codex.sh x2 idempotency (byte-identical)
 - PRs:
