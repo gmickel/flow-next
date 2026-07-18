@@ -47,3 +47,18 @@ Created 2026-07-15 during fn-97 post-review discussion (maintainer caught the ha
 The interview skill now ships an async fact-scout mode (fn-100 Edit D). On the Codex host the scout dispatch is `spawn_agent` with `agent_type: explorer`, and because MAv2 subagent model steering is the broken surface this spec re-checks, the scout currently INHERITS the session/default model - unpinnable. That is safe today (sol/terra clear the mid-tier floor by default) but not cost-optimal.
 
 - R4: when the re-check finds subagent model/effort steering working, ALSO update the fact-scout guidance for Codex hosts: pin the scout to the cost-optimal capable tier (gpt-5.6-terra at medium was the eval-era candidate) and record the pin syntax in orchestration.md + the Codex mirror wording. Until then the inherit-default behavior stands and needs no caveat beyond this note.
+
+
+## Status check 2026-07-18 (early, user-requested; R1 partial)
+
+Checked with gh against openai/codex (local codex-cli 0.144.1):
+
+- #32782 CLOSED 07-16 (spawn_agent agent_type exposure; maintainer jif-oai: "will land soon", merged into umbrella #31814 - itself CLOSED 07-17).
+- #33268 CLOSED 07-16 (model/reasoning_effort silently dropped - consolidated as duplicate; the substantive fix is PR #32749 "Expose model overrides for multi-agent v2 spawns", MERGED to main 2026-07-13).
+- #33314 still OPEN (full-profile verification follow-up; fresh macOS repro 07-16 shows role/model/effort now APPLY in newer builds but the role's sandbox layer is replaced by the parent's - i.e. steering works, profile application incomplete).
+- #33267 still OPEN (codex exec MAv2 subagent results unusable in parent turn).
+- App-side field report (in #31814): updated Codex app supports specifying subagent models for gpt-5.6-sol and gpt-5.6-terra, NOT gpt-5.6-luna.
+
+Ship vehicle: PR #32749 is on main only - the 0.144.x line ships cherry-picked fixes (0.144.5/6 notes contain no spawn changes); the feature rides 0.145.0 (alpha.23 as of 07-17, no stable yet). Local 0.144.1 predates it, so NO live probe of the fix is possible without an alpha install (not done - R3 pending a stable release).
+
+Disposition: fixed-upstream, unreleased-on-stable. Re-run this spec in full when rust-v0.145.0 STABLE ships: R3 live probe (spawn_agent model+effort override observed end-to-end), then R2 docs updates and R4 (pin the interview fact-scout on Codex hosts, terra@medium candidate) - and note #33314's sandbox-replacement caveat when writing the docs: model steering working does not yet mean full profile application.
