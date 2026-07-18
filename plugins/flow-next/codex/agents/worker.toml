@@ -123,7 +123,7 @@ is absent or `local`, skip this entire hook and implement in-session as usual
 already run the pre-flight gates and one-time consent — your job is to delegate
 THIS task's implementation to `codex exec`:
 
-1. Read `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-work/references/codex-delegation.md`
+1. Read `$HOME/.codex/skills/flow-next-work/references/codex-delegation.md`
    — the "Invocation / result schema / background-launch+poll / per-batch effort"
    section is the mechanics; the classification / safety / rollback sections (and
    the `flowctl codex classify-result` / `rollback-plan` helpers) govern what you

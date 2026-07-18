@@ -22,8 +22,10 @@ The autonomy marker family folds into the **single `RALPH` gate** below — trac
 RALPH=0
 # R14: recognize the FULL autonomy marker family (FLOW_AUTONOMOUS / mode:autonomous),
 # not just FLOW_RALPH / REVIEW_RECEIPT_PATH — parity with work / make-pr / resolve-pr / capture.
+# fn-89: a forked tracker-runner dispatch (DISPATCH=forked) queues-not-asks - same policy.
 [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-   || "${FLOW_AUTONOMOUS:-}" == "1" || "$ARGUMENTS" == *mode:autonomous* ]] && RALPH=1
+   || "${FLOW_AUTONOMOUS:-}" == "1" || "$ARGUMENTS" == *mode:autonomous* \
+   || "${DISPATCH:-}" == "forked" ]] && RALPH=1
 # Lifecycle event tag: the caller's `event:` token, e.g. work.firstClaim |
 # work.done | completionReview | capture | makePr | resolvePr. Empty on manual runs.
 EVENT="<perEvent-key from the invocation, or empty>"

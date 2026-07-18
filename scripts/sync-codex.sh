@@ -62,6 +62,12 @@ map_model() {
     echo "$CODEX_MODEL_WORKER"
     return
   fi
+  # fn-89: tracker-runner runs the SESSION model on Codex (Tier B spawn
+  # inheritance; subagent model steering is unreliable on MAv2) - no pin.
+  if [ "$agent_name" = "tracker-runner" ]; then
+    echo ""
+    return
+  fi
   case "$claude_model" in
     opus|claude-opus-*)
       echo "$CODEX_MODEL_INTELLIGENT" ;;
@@ -103,6 +109,7 @@ sandbox_for() {
   local name="$1"
   case "$name" in
     worker|plan-sync) echo "workspace-write" ;;
+    tracker-runner)   echo "workspace-write" ;;
     *)                echo "read-only" ;;
   esac
 }
@@ -500,6 +507,18 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   sed -i.bak \
     -e 's/`Task` with `subagent_type: Explore`/`spawn_agent` with `agent_type: explorer`/g' \
     -e 's/(sonnet on Claude Code)/(the host'"'"'s mid-tier)/g' \
+    "$f"
+  rm -f "${f}.bak"
+done
+
+# --- TOOL NAMES: tracker-runner dispatch → tracker_runner role (fn-89) ---
+# Touchpoint gates dispatch the background runner Claude-native as
+# `Task flow-next:tracker-runner`. Codex has no Task tool - the mirror uses
+# the tracker_runner agent role. A validation guard below hard-fails if the
+# Claude-native form survives in the mirror.
+find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
+  sed -i.bak \
+    -e 's|Task flow-next:tracker-runner|Use the tracker_runner agent|g' \
     "$f"
   rm -f "${f}.bak"
 done
@@ -1457,6 +1476,10 @@ for md_file in "$SRC_AGENTS"/*.md; do
   # Codex form plus the local `.flow/bin/flowctl` fallback. fn-50.3 added the
   # repo-scout / context-scout `repo-map` probes that surfaced this gap.
   body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/scripts/flowctl|$HOME/.codex/scripts/flowctl|g')"
+  # fn-89: same class of rewrite for skill-file paths in agent bodies
+  # (tracker-runner reads the tracker-sync skill body) - neither plugin-root
+  # var resolves inside Codex; the installed mirror lives at ~/.codex/skills/.
+  body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/skills/|$HOME/.codex/skills/|g')"
   # Insert the local fallback line after every FLOWCTL= assignment that points
   # at the Codex path. Matches `FLOWCTL="$HOME/.codex/scripts/flowctl"` with
   # any leading whitespace; the inserted fallback line preserves that
@@ -1709,6 +1732,28 @@ if [ "$scout_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No Claude-native Explore-dispatch refs in Codex skill prose"
+fi
+
+# fn-89: the Claude-native tracker-runner dispatch must not survive in the
+# mirror - the transform above rewrites it to the tracker_runner agent role.
+runner_refs=$( { grep -r 'Task flow-next:tracker-runner' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+if [ "$runner_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $runner_refs Claude-native tracker-runner dispatch refs remain in codex skill prose - the tracker-runner transform (fn-89) should have rewritten these"
+  { grep -rn 'Task flow-next:tracker-runner' "$CODEX_DIR/skills/" 2>/dev/null || true; } | head -5
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No Claude-native tracker-runner dispatch refs in Codex skill prose"
+fi
+
+# fn-89 (fn-50.6 symmetry rule): agent toml bodies must not carry unrewritten
+# plugin-root /skills/ paths - the agents-pipeline rewrite maps them to
+# $HOME/.codex/skills/. The skills-side guard above has no agents coverage.
+agent_skill_refs=$( { grep -rE '(DROID_PLUGIN_ROOT|CLAUDE_PLUGIN_ROOT|\$PLUGIN_ROOT)[^[:space:]]*/skills/' "$CODEX_DIR/agents/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+if [ "$agent_skill_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $agent_skill_refs unrewritten plugin-root /skills/ path refs in codex/agents/"
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No unrewritten plugin-root /skills/ path refs in codex/agents/"
 fi
 
 # fn-100 R12 follow-up: the Claude-specific scout-tier example "(sonnet on

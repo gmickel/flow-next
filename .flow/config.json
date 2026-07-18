@@ -73,7 +73,7 @@
     "version": 1
   },
   "work": {
-    "delegate": false,
+    "delegate": "codex",
     "delegateConsent": true,
     "delegateDecision": "auto",
     "delegateEffort": "medium",
