@@ -263,7 +263,7 @@ Why this exists: a PM invoking `/flow-next:interview <spec-id>` bare used to get
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
 - ONLY ask via the plain-text numbered prompt
-- Group 2-4 related questions per prompt turn
+- Ask in rounds: each round carries the whole frontier (see Question Order below), split across plain-text numbered prompt calls of up to 4 questions each
 - Expect 40+ questions total for complex specs
 
 ### Question Format: Lead with Recommendation
@@ -283,6 +283,7 @@ Applies to EVERY question, both scopes. The interviewee must be able to read a q
 - **Write for the audience in everyday words**; prefer the common word over the term of art. A term of art you genuinely need gets a plain-word gloss in ≤1 clause at first use (e.g. "counter-metrics — things we'd hate to make worse").
 - **No unexplained acronyms or tool/repo shorthand.** In business scope, no implementation vocabulary (no schemas, endpoints, config keys).
 - **Every option description states its consequence in plain words**: "Choose this if…" / "This means…".
+- **Quote referenced acceptance criteria in full.** When a question cites a spec R-ID, inline the criterion text at first mention — "R3 — 'Each line carries: command, args, timestamp, resulting id'" — never a bare "R3" the interviewee must open the spec to decode.
 
 Required content and trim order (priorities — NOT a length cap; never trade required content for brevity):
 
@@ -324,23 +325,27 @@ For every skipped question:
 - **body**: `<N> question(s) were skipped during this interview. Recommended: park-open — record them under ## Open Questions with my unconfirmed leanings; nothing skipped becomes a decision. Confidence: [high].`
 - **options** (frozen): `park-open` (default — Open Questions entries only), `fill-assumptions` (write the agent's recommendation into the relevant spec section, each marked inline `*(assumed — unconfirmed)*`, plus one Open Questions entry pointing at the markers for later ratification), `re-ask` (walk the skipped questions once more — answers and explicit delegations resolve normally; anything skipped again parks per park-open)
 
-### Question Order: Walk the Decision Tree
+### Question Order: Rounds over the Decision Tree
 
-Walk down branches of the decision tree in dependency order. Don't ask about implementation details before establishing whether they're needed.
+Map the interview as a **design tree**: every decision branches into the decisions that hang off it. The **frontier** is every question whose prerequisites are already settled — the questions you can ask NOW without guessing at answers you haven't heard yet. Work the tree in **rounds**: ask the whole frontier, wait for answers, recompute, repeat.
 
 Concrete rules:
 
-1. **Cap branch depth at 4.** Research shows >4 prior turns rarely improves question quality — drop deeper threads, ask about something else. Heuristic; revisit if too restrictive in real use.
-2. **Discover-as-you-go**, not pre-compute. Adapt the next question based on prior answers. Don't lock a tree before you start.
-3. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly: "Skipping persistence questions — you said no DB."
-4. **One `plain-text numbered prompt` call per turn**, period — never queue multiple prompt turns back-to-back. Within that single call you may bundle 2-4 closely-related sub-questions per the existing batching rule above; do NOT pad with loosely-related questions just to hit four. The intent: one focused checkpoint per turn so the user isn't barraged with unrelated decisions in parallel. Use multi-select within a sub-question when options are non-exclusive.
+1. **Each round asks the entire current frontier.** A question whose answer depends on another question still open in this round belongs to a *later* round, not this one — never ask a question alongside its own prerequisite.
+2. **Split the frontier across `plain-text numbered prompt` calls of up to 4 questions each**, grouped by topic (closest-related together), announced as one round ("Round N — part 1/2"). Never pad a call to reach 4; never hold a genuine frontier question back to a later round just to smooth pacing.
+ **A frontier slot is earned.** Every genuinely open decision joins the round — NFR probes (failure modes, concurrency/races, scale, portability, testing) ALWAYS qualify, however thin the spec. Pure-cosmetic polish (message wording, label/flag spelling, visual formatting) does not get its own question: fold it into a related question's options, or carry it as a stated default the user can veto at write-back.
+ Standalone checkpoint questions (scope selection, the code-mismatch question, the write-back consent checkpoint, the mark-ready offer) sit outside rounds — never labeled "Round N", never counted against round depth. Doc-aware meta-questions keep their own per-round budget (references/doc-aware.md): a meta-question deferred by that budget is pending for a later round, not dropped — the one sanctioned hold-back.
+3. **Recompute the frontier after each round.** Answers reshape the tree — settled decisions unblock their dependents; adapt the next round to what you heard. Don't lock the whole tree before you start: deeper rounds are discovered from answers, not pre-scripted.
+4. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly at the next round's opener: "Skipping persistence questions — you said no DB."
+5. **Cap branch depth at 4 rounds** down any one branch. Research shows >4 prior turns rarely improves question quality — drop deeper threads, ask about something else. Heuristic; revisit if too restrictive in real use.
+6. **Finish the round before recomputing.** If a later part of a round never got asked (tool error, interruption), ask the missed part first — never silently drop frontier questions and move on.
 
 Example flow:
 
-> Q: "Does this feature need persistence?"
-> A: "No, ephemeral state is fine."
+> Round 1 (frontier: persistence?, auth model?, error surface?) — asked together in one call.
+> A: "No persistence — ephemeral is fine. API-key auth. Errors: existing JSON convention."
 > [agent prunes the {DB choice, schema design, migration plan} sub-tree]
-> Q: "Skipped DB questions — you said ephemeral. Next: how should this state survive page reloads?"
+> Round 2 opener: "Skipping DB questions — you said ephemeral." (frontier now: reload survival?, key-tier limits? — the questions those answers unblocked)
 
 ### Investigate Codebase Before Asking
 
