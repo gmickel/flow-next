@@ -78,6 +78,8 @@ fi
 
 Best-effort — append-only comment sync never blocks the work loop; the skill emits its own receipt, event-tagged `--event work.done` (audited by Phase 5's end-of-run `sync check`).
 
+Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference (fire-and-forget: Phase 5's end-of-run `sync check` audits the receipt); otherwise run it inline exactly as above.
+
 ## Completion review
 
 phases.md **3g — SHIP → verdict comment, NEVER terminal Done (fn-66).** Runs only when the tracker bridge is active AND `completionReview` is opted in, immediately after the caller sets `completion_review_status=ship`. Hooked **at the caller** (not inside the review skill) because that is where `completion_review_status=ship` lands. **Local completion review is NOT merge evidence** — `Done` is reserved for a `MERGED` PR (fn-66 status-sync `flowToNormalized`), so this touchpoint is **comment-shaped only**: it posts the verdict + R-ID coverage and at most leaves the issue at `In Review` (if an open PR exists). It NEVER pushes `Done`/`verified`:
@@ -101,3 +103,5 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
   :
 fi
 ```
+
+Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference (fire-and-forget: Phase 5's end-of-run `sync check` audits the receipt); otherwise run it inline exactly as above.

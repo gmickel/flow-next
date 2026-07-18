@@ -859,7 +859,7 @@ When `HTML_LENS = true`: **read [`references/html-lens.md`](references/html-lens
 
 **Goal:** print the suggested next step. The deliverable is the new spec; this footer tells the user what to do with it.
 
-**Tracker-sync end-of-run check — runs BEFORE the footer.** Read-only audit: did the capture touchpoint (5.7) actually fire (receipt-backed)? It runs independently of 5.7, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the footer slot then reads `n/a (bridge inactive)` and nothing else changes. (Capture is Ralph-blocked, so there is no stdout-routing concern — the slot prints where the footer prints.)
+**Tracker-sync end-of-run check — runs BEFORE the footer.** Read-only audit: did the capture touchpoint (5.7) actually fire (receipt-backed)? It runs independently of 5.7, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the footer slot then reads `n/a (bridge inactive)` and nothing else changes. (Capture is Ralph-blocked, so there is no stdout-routing concern — the slot prints where the footer prints.) Join first: before running this `sync check`, await any outstanding `tracker-runner` dispatches for this spec (join-before-audit, [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md)).
 
 ```bash
 # --since: the run anchor written at the Phase-5 write step (5.2/5.3). Fallback:
