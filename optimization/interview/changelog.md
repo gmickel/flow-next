@@ -103,8 +103,10 @@ security probe baseline lacked) - its E4 FAIL is documented judge-counting noise
 split all session on crediting append-perf from the append-mode rationale, and on an R-ID-gap probe no
 run in any arm ever asked). No bleed detected.
 
-**Partition: 11/11 rounds runs, zero intra-round dependency violations** - every dependent question
-deferred with an explicit unblocked-by annotation; conditional prunes announced.
+**Partition: 11/11 partition-scored rounds runs, zero intra-round dependency violations** - every
+dependent question deferred with an explicit unblocked-by annotation; conditional prunes announced.
+Scored population: the 8 v1 runs + the 3 v2 I1 re-runs. The 3 v2 guard reps (I2/I3/I4) were not
+separately partition-scored (14 rounds emissions total; 11 in the partition denominator).
 
 **Row mapping (v2-only observations):** quality 7/8 = I1 2/2 (N=3) + I2 2/2 + I3 1/2 (E4 tie-broken FAIL
 per the conservative rule - the documented noise above) + I4 2/2; runs=6 (3+1+1+1 v2 emissions; the 8 v1
@@ -115,3 +117,13 @@ collapse from one per call to one per round (emission: 1-3 rounds vs 2-4 sequent
 live-host turn/latency effects are platform-dependent and get validated in dogfood, not claimed from the
 eval). E5 remains an advisory-noise eval at low N per the fn-84 ledger; the hard guards are the accuracy
 floor + E4 + the partition check.
+
+**Ledger-contract note (feature validation, not an optimization ratchet):** the header's keep rule
+(accuracy >= baseline AND (accuracy-up OR tokens-down OR quality-up)) governs prompt-OPTIMIZATION
+experiments; this entry does not claim it. Experiment 3 records a protocol FEATURE change (spec fn-100)
+validated on this harness as a regression gate: ship criteria were accuracy floor held (12/12), quality
+>= baseline under the shipped v2 wording, and a clean frontier partition - with the +512 B (+128
+tok-equiv) accepted as feature cost, and the structural win (adaptation checkpoints one-per-round
+instead of one-per-call) living outside the TSV's scored columns. `status=shipped` marks the fn-100
+ship decision, not a ratchet keep; the ratchet audit rule continues to apply, unmodified, to future
+optimization rows.
