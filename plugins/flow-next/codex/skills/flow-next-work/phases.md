@@ -534,6 +534,13 @@ Review: <verdict | n/a>
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
 ```
 
+When any touchpoint ran as a forked `tracker-runner` dispatch this run, append one
+`Tracker runner:` line per dispatch under the `Tracker sync:` slot, carrying the
+runner's parsed terminal outcome verbatim (`<event>: TRACKER_RUNNER=<status> note="..."`).
+The aggregate slot proves the audit ran; these lines surface WHAT each runner
+reported — `sync check` counts any receipt as fired, so an `errored`/`queued`
+outcome is visible only here. Inline (non-forked) touchpoints add no line.
+
 ## Definition of Done
 
 Confirm before ship:

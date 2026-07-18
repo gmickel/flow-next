@@ -604,6 +604,6 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
 fi
 ```
 
-Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference and await its terminal line before the skill's summary (no later `sync check` audits this event); otherwise run it inline exactly as above. The skill emits its own receipt, event-tagged `--event qa`.
+Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference and await its terminal line before the skill's summary (no later `sync check` audits this event); otherwise run it inline exactly as above. The skill emits its own receipt, event-tagged `--event qa`. When the dispatch forked, the §6.4 verdict surface MUST include the runner's parsed terminal outcome verbatim as a `Tracker runner: qa: TRACKER_RUNNER=<status> note="..."` line — an `errored`/`queued` outcome is visible nowhere else.
 
 The leaf accepts `off` | `comment` (default `off`). `comment` is the only verdict-meaningful verb; treat any other non-`off` value as `comment` (never `push`/`pull`/`reconcile`). The actual transport / comment dedup / receipt lives entirely in the **flow-next-tracker-sync** skill — Phase A only gates + delegates.

@@ -454,7 +454,7 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
 fi
 ```
 
-Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference and await its terminal line before the Phase 10 summary (no later `sync check` audits this event); otherwise run it inline exactly as above. The skill emits its own receipt, event-tagged `--event resolvePr`.
+Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference and await its terminal line before the Phase 10 summary (no later `sync check` audits this event); otherwise run it inline exactly as above. The skill emits its own receipt, event-tagged `--event resolvePr`. When the dispatch forked, the Phase 10 summary MUST include the runner's parsed terminal outcome verbatim as a `Tracker runner: resolvePr: TRACKER_RUNNER=<status> note="..."` line — an `errored`/`queued` outcome is visible nowhere else.
 
 ---
 
