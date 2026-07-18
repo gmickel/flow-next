@@ -39,6 +39,7 @@ VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
 if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
   if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
         || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
+        || "${DISPATCH:-}" == "forked" \
         || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
     echo "Local setup v${SETUP_VER} differs from plugin v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts." >&2
   else
@@ -59,7 +60,7 @@ If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user wit
 
 Any other output (the one-line differs notice, or nothing) is non-blocking: continue.
 
-**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). The discovery ceremony (Phase 1) and genuine-conflict surfacing (body-merge / comments-sync) both require user choice in interactive mode. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
+**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). The discovery ceremony (Phase 1) and genuine-conflict surfacing (body-merge / comments-sync) both require user choice in interactive mode. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.) This inline requirement covers the ceremonies and interactive conflict resolution only — a background `tracker-runner` dispatch (fn-89) legitimately runs this skill in a fork with `DISPATCH=forked`, which folds into the setup pre-check above and the Phase 0 RALPH gate (steps.md), so in a fork every would-be prompt resolves to queue (`sync defer`) and no interactive prompt is ever reachable there.
 
 ## flowctl owns plumbing; the skill owns judgment
 
