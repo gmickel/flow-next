@@ -78,7 +78,7 @@ fi
 
 Best-effort — append-only comment sync never blocks the work loop; the skill emits its own receipt, event-tagged `--event work.done` (audited by Phase 5's end-of-run `sync check`).
 
-Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference (fire-and-forget: Phase 5's end-of-run `sync check` audits the receipt); otherwise run it inline exactly as above.
+Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference - on a Tier A host fire-and-forget (Phase 5's end-of-run `sync check` audits the receipt); on a Tier B host await its terminal line before continuing (the ladder in that reference decides the tier); otherwise run it inline exactly as above.
 
 ## Completion review
 
@@ -104,4 +104,4 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
 fi
 ```
 
-Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference (fire-and-forget: Phase 5's end-of-run `sync check` audits the receipt); otherwise run it inline exactly as above.
+Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference - on a Tier A host fire-and-forget (Phase 5's end-of-run `sync check` audits the receipt); on a Tier B host await its terminal line before continuing (the ladder in that reference decides the tier); otherwise run it inline exactly as above.
