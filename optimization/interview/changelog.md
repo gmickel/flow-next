@@ -122,7 +122,7 @@ floor + E4 + the partition check.
 (accuracy >= baseline AND (accuracy-up OR tokens-down OR quality-up)) governs prompt-OPTIMIZATION
 experiments; this entry does not claim it. Experiment 3 records a protocol FEATURE change (spec fn-100)
 validated on this harness as a regression gate: ship criteria were accuracy floor held (12/12), quality
->= baseline under the shipped v2 wording, and a clean frontier partition - with the +512 B (+128
+>= baseline under the shipped v2 wording, and a clean frontier partition - with the +2,044 B (+512
 tok-equiv) accepted as feature cost, and the structural win (adaptation checkpoints one-per-round
 instead of one-per-call) living outside the TSV's scored columns. `status=shipped` marks the fn-100
 ship decision, not a ratchet keep; the ratchet audit rule continues to apply, unmodified, to future
