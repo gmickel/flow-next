@@ -283,7 +283,7 @@ Applies to EVERY question, both scopes. The interviewee must be able to read a q
 - **Write for the audience in everyday words**; prefer the common word over the term of art. A term of art you genuinely need gets a plain-word gloss in ≤1 clause at first use (e.g. "counter-metrics — things we'd hate to make worse").
 - **No unexplained acronyms or tool/repo shorthand.** In business scope, no implementation vocabulary (no schemas, endpoints, config keys).
 - **Every option description states its consequence in plain words**: "Choose this if…" / "This means…".
-- **Quote referenced acceptance criteria in full.** When a question cites a spec R-ID, inline the criterion text at first mention — "R3 — 'Each line carries: command, args, timestamp, resulting id'" — never a bare "R3" the interviewee must open the spec to decode.
+- **Gloss referenced acceptance criteria.** When a question cites a spec R-ID, attach a short plain-words gist at first mention — "R3 (the audit line's required fields)" — never a bare "R3" the interviewee must open the spec to decode. Gist, not quote: pasting full criterion text bloats the question body.
 
 Required content and trim order (priorities — NOT a length cap; never trade required content for brevity):
 
