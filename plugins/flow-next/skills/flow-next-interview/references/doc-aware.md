@@ -60,7 +60,7 @@ Across the conversation, watch for overloaded language — words the user keeps 
 
 1. Propose a canonical via `AskUserQuestion`:
    - **header**: `Sharpen "<term>"?`
-   - **body**: `You've used "<term>" in <count> rounds. I'm reading it as "<agent's working definition>" but want to lock it in. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>].`
+   - **body**: `You've used "<term>" in <count> replies. I'm reading it as "<agent's working definition>" but want to lock it in. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>].`
    - **options**: 2-4 candidate canonical wordings + `none-of-these` (user provides their own).
 
 2. On user-pick, build the resolved entry and write it to the nearest-ancestor `GLOSSARY.md` via `flowctl glossary add`:
@@ -75,7 +75,7 @@ Across the conversation, watch for overloaded language — words the user keeps 
 
 3. The next question can re-read the glossary. There is no in-memory cache to invalidate — re-read on every doc-aware round that needs canonical lookup. The cost is one stat + one file read per round; sub-millisecond at typical sizes.
 
-**When to skip behavior (b):** if a term is single-use, or if the user volunteered a clear definition the first time they used it, or if the conversation is short enough (≤6 rounds) that consolidation buys nothing yet. The behavior triggers when overloading is real and persistent, not on every undefined word.
+**When to skip behavior (b):** if a term is single-use, or if the user volunteered a clear definition the first time they used it, or if the conversation is short enough (≤6 user replies) that consolidation buys nothing yet. The behavior triggers when overloading is real and persistent, not on every undefined word.
 
 ### Behavior (d) — Decision-record write (three-criteria gate)
 
