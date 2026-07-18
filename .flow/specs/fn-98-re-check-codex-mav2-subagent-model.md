@@ -62,3 +62,12 @@ Checked with gh against openai/codex (local codex-cli 0.144.1):
 Ship vehicle: PR #32749 is on main only - the 0.144.x line ships cherry-picked fixes (0.144.5/6 notes contain no spawn changes); the feature rides 0.145.0 (alpha.23 as of 07-17, no stable yet). Local 0.144.1 predates it, so NO live probe of the fix is possible without an alpha install (not done - R3 pending a stable release).
 
 Disposition: fixed-upstream, unreleased-on-stable. Re-run this spec in full when rust-v0.145.0 STABLE ships: R3 live probe (spawn_agent model+effort override observed end-to-end), then R2 docs updates and R4 (pin the interview fact-scout on Codex hosts, terra@medium candidate) - and note #33314's sandbox-replacement caveat when writing the docs: model steering working does not yet mean full profile application.
+
+## Addendum 2026-07-18 (second - post fn-89 Tier B probe)
+
+The fn-89 live probe (codex-cli 0.144.1, `codex exec` surface) confirmed the plain spawn fork-join primitive works TODAY: sol spawned a child, collab Wait joined, and the parent read the child's reply back verbatim (CHILD_SAID echo probe, 15.7k tok). Consequences for this spec:
+
+- **Decoupling:** fn-89's Codex path no longer waits on this spec - Tier B (isolated-but-awaited, session-model inheritance) is live without steering. This spec is now purely (a) cost optimization - pin runners/fact-scouts to terra instead of inheriting sol - and (b) docs currency.
+- **R3 probe harness exists:** reuse the fn-89 echo probe with model/effort params added and the child asked to report its model id. Recipe: `codex exec -m gpt-5.6-sol -s workspace-write --skip-git-repo-check "<spawn one subagent pinned to gpt-5.6-terra effort medium; child replies with its model id; parent ends with CHILD_MODEL=<id>>"`. One command, deterministic parse of the terminal line.
+- **Local-config gotcha (fold into R2 docs):** `--enable multi_agent_v2` errors with `agents.max_threads cannot be set when features.multi_agent_v2 is enabled` (-32600) against this machine's config - while the plain run (no enable flag) spawned fine, proving MAv2 is already default-active for sol. Docs guidance: never force-enable the feature flag; it is default-on for sol and force-enabling collides with `agents.max_threads` configs.
+- **#33267 scope narrowed:** the blanket "exec-surface results unusable" caveat is too broad - simple task-prompt spawns return results fine; the breakage evidently concerns richer shapes (output schemas / fork_turns / custom profiles). R2's docs updates should narrow the caveat accordingly.
