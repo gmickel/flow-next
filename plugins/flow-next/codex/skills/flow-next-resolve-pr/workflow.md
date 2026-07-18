@@ -446,13 +446,15 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
  && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill: append a one-line resolution comment
  # to the linked issue (e.g. "Addressed N of M review items on PR #<NUMBER>").
- # skill: flow-next-tracker-sync (operation: comment <spec-id>)
+ # skill: flow-next-tracker-sync (operation: comment <spec-id>, event: resolvePr)
  # Unlinked spec → flow-first push (create + link) first, then comment
  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
  # Best-effort — never blocks the resolve-pr summary.
  :
 fi
 ```
+
+Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker_runner` agent (Use the tracker_runner agent) per that reference and await its terminal line before the Phase 10 summary (no later `sync check` audits this event); otherwise run it inline exactly as above. The skill emits its own receipt, event-tagged `--event resolvePr`. When the dispatch forked, the Phase 10 summary MUST include the runner's parsed terminal outcome verbatim as a `Tracker runner: resolvePr: TRACKER_RUNNER=<status> note="..."` line — an `errored`/`queued` outcome is visible nowhere else.
 
 ---
 

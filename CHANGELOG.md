@@ -2,6 +2,16 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Tracker-sync lifecycle dispatches off the critical path (fn-89).** Comment-shaped tracker touchpoints on LINKED specs, on Claude Code, now dispatch to a background `tracker-runner` subagent (sonnet) so the host keeps working - fire-and-forget where a later in-session `sync check` audits the receipt (`work.done`, comment-leaf completion review), awaited before the skill summary where none does (`resolve-pr`, `qa`). The runner executes the existing flow-next-tracker-sync skill body for the one op, with no second implementation, and reports the parseable terminal line `TRACKER_RUNNER=<status> spec=<id> note="..."` parsed from the LAST line of output.
+  - The shared discipline reference `plugins/flow-next/references/tracker-dispatch.md` is the sole statement of the rules: five-sentence discipline, both MUST invariants (single state-writer per spec and join-before-audit), join mechanics, host capability ladder, and recovery. Every touchpoint gate carries one conditional sentence pointing at it.
+  - Pre-audit joins: the three `sync check` call sites (work Phase 5, make-pr, capture) each await outstanding dispatches for the audited spec first, closing the demonstrated false-MISSING duplicate-retro-fire race. Resolve-pr and qa dispatch lines now carry their `event:` tags so `sync check` can audit those events.
+  - Host capability ladder: Claude Code Tier A (background plus notification join, `TaskOutput(block=true)` forbidden); Cursor and Codex Tier B (isolated-but-awaited, Codex probe-verified 2026-07-18 on codex-cli 0.144.1); Tier C inline degrade, loudly never silently. Everything else stays inline byte-identical: state-shaped ops (`reconcile`/`push`/`create-if-unlinked`), unlinked first touches, ceremonies, manual runs, `--dry-run`, interactive conflict resolution, `land.merged`. Forked genuine conflicts queue via `sync defer`, never prompt.
+  - No flowctl changes, no new config leaves; receipts, event tags, and `sync check` semantics untouched. `forked => queue-not-ask` folded into tracker-sync's single RALPH gate. Codex mirror regenerated (tracker-runner toml plus role rewrite guard). No version bump (batched releases).
+
 ## [flow-next 2.16.0] - 2026-07-18
 
 ### Changed

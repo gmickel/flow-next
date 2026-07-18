@@ -137,6 +137,20 @@ A `Tracker sync: MISSING:<event> (retro-fire failed: <reason>)` summary line mea
 2. **Once transport returns**, re-fire the missed touchpoint manually via the skill: `/flow-next:tracker-sync push <spec-id>` for the status event (`work.firstClaim`), or the matching `comment <spec-id>` op for comment events (`work.done`, `makePr`, and `completionReview` — the last posts only a verdict + R-ID coverage comment, never a terminal status per fn-66).
 3. **Verify**: `flowctl sync check <spec-id> --events <event> --since <retro-fire-time>` now prints `OK:<event>`.
 
+## Background dispatch (Claude Code)
+
+When a lifecycle touchpoint resolves to `comment` for an already LINKED spec on Claude Code, it dispatches a background `tracker-runner` subagent (model: sonnet), so the host can keep working. The runner executes the existing flow-next-tracker-sync skill body for that one op and reports `TRACKER_RUNNER=<status> spec=<id> note="..."` from the LAST line of its output. Dispatch is fire-and-forget only when a later in-session `sync check` audits the receipt (`work.done`, comment-leaf `completionReview`); `resolve-pr` and `qa` await it before their skill summary.
+
+State-shaped ops (`reconcile`, `push`, `create-if-unlinked`), an UNLINKED spec's first touch, ceremonies, manual `/flow-next:tracker-sync` runs, `--dry-run`, interactive conflict resolution, and `land.merged` run inline exactly as before. A forked dispatch that reaches a genuine conflict queues with `sync defer`; it never prompts.
+
+**MUST - single state-writer:** never run two concurrent operations on one spec's sync state; linked-spec comment forks may overlap freely, but anything writing link, merge-base, or `lastSyncedAt` state runs alone.
+
+**MUST - join-before-audit:** no `sync check` runs with a dispatch outstanding for its audited spec, preventing the false-MISSING duplicate-retro-fire race. The pre-audit join sits at the work Phase 5, make-pr, and capture audit sites.
+
+Claude Code is Tier A: background dispatch plus notification join. Cursor and Codex are Tier B: isolated-but-awaited, so fire-and-forget does not exist there. Other hosts, failed probes, and dispatch errors are Tier C: inline exactly as today, degrading loudly rather than silently.
+
+The rules live in one place: [`references/tracker-dispatch.md`](../references/tracker-dispatch.md). Each touchpoint gate carries one conditional pointer there; there is no config leaf because inline is the natural degrade path.
+
 ## Linear Diffs — review the PR inside the issue
 
 [Linear Diffs](https://linear.app/docs/diffs) (GA May 2026) renders a GitHub PR's diff, file changes, checks, and inline review threads directly on the Linear issue, and lets you approve / request changes / merge from Linear. flow-next makes your PRs **Diffs-ready automatically** when `tracker.type == linear`:
