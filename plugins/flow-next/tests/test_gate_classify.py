@@ -235,3 +235,29 @@ class GateClassifyBackslashRegressionTestCase(unittest.TestCase):
         self.assertIn("backslash", reason)
         cls2, _ = mod._classify_gate_path(".flow\\tasks\\x.md")
         self.assertEqual(cls2, "force-full")
+
+
+class GateClassifyFlowStateTestCase(unittest.TestCase):
+    """PR #213 r3: .flow state JSON is safe; bin/config stay force-full."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "flowctl_flowstate_probe",
+            Path(__file__).resolve().parent.parent / "scripts" / "flowctl.py",
+        )
+        cls.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.mod)
+
+    def test_flow_state_json_is_safe(self) -> None:
+        for path in (".flow/specs/fn-1-x.json", ".flow/tasks/fn-1-x.1.json",
+                     ".flow/meta.json", ".flow/specs/fn-1-x.md"):
+            self.assertEqual(self.mod._classify_gate_path(path)[0], "safe", path)
+
+    def test_flow_executable_surface_stays_force_full(self) -> None:
+        for path in (".flow/bin/flowctl.py", ".flow/bin/flowctl.cmd", ".flow/config.json"):
+            self.assertEqual(self.mod._classify_gate_path(path)[0], "force-full", path)
+
+    def test_backslash_still_wins_over_flow_prefix(self) -> None:
+        self.assertEqual(self.mod._classify_gate_path(".flow\\specs\\x.json")[0], "force-full")

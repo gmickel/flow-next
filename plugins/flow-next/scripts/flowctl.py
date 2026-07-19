@@ -27500,13 +27500,23 @@ def _classify_gate_path(path: str) -> tuple[str, str]:
     if dot > 0:
         ext = base[dot:].lower()
 
+    # .flow state is resolved BEFORE the extension rule: spec/task/receipt
+    # JSON under .flow/ is non-executable bookkeeping (nothing imports it),
+    # and it rides nearly every flow commit - blanket-extension force-full
+    # here would kill the diet's most common case. The two executable
+    # exceptions stay force-full and are checked first.
+    if p.startswith(".flow/bin/"):
+        return "force-full", "force-full prefix .flow/bin/"
+    if p == ".flow/config.json":
+        return "force-full", "force-full path .flow/config.json"
+    if p.startswith(".flow/"):
+        return "safe", "safe prefix .flow/ (non-executable state)"
+
     if ext in GATE_CODE_EXTS:
         return "force-full", f"code/config extension {ext}"
     for prefix in GATE_FORCE_FULL_PREFIXES:
         if p.startswith(prefix):
             return "force-full", f"force-full prefix {prefix}"
-    if p == ".flow/config.json":
-        return "force-full", "force-full path .flow/config.json"
 
     for prefix in GATE_SAFE_PREFIXES:
         if p.startswith(prefix):
@@ -27517,8 +27527,6 @@ def _classify_gate_path(path: str) -> tuple[str, str]:
         return "safe", f"safe root file {base}"
     if p.startswith(GATE_PLUGIN_DOC_PREFIX) and ext in GATE_PLUGIN_DOC_EXTS:
         return "safe", f"safe plugin docs extension {ext}"
-    if p.startswith(".flow/"):
-        return "safe", "safe prefix .flow/"
 
     return "full", "unmatched"
 
