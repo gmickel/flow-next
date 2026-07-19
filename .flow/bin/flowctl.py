@@ -27560,6 +27560,16 @@ def cmd_gate_receipt(args: argparse.Namespace) -> None:
     receipt_path = _gate_receipt_path(repo_root, head_sha, args.gate_id)
     try:
         receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        # Symlink containment (repo convention - cf. land's setup_stale guard):
+        # a committed symlink at .flow, .flow/tmp, or green-receipts would
+        # redirect this write outside the workspace during an unattended run.
+        resolved_parent = receipt_path.parent.resolve()
+        if not str(resolved_parent).startswith(str(repo_root.resolve()) + os.sep):
+            error_exit(
+                "green-receipts dir resolves outside the repository "
+                "(symlinked .flow path) - refusing to write",
+                code=2, use_json=args.json,
+            )
         atomic_write_json(receipt_path, receipt)
     except OSError as e:
         error_exit(f"failed to write green receipt: {e}", code=2, use_json=args.json)

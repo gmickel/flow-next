@@ -402,9 +402,10 @@ do NOT trust Codex's `verification_summary` as the sole gate. The Verify block i
 authoritative here too: classify first, honor green receipts, and run the full
 tests/lints when neither applies (a docs-only tier-B or receipt-honored outcome
 with its GATE_SKIPPED evidence lines satisfies this backstop); on failure, fix +
-follow-up commit (never blind-commit). When
-`REVIEW_MODE != none`, the impl-review SHIP gate already covered this — skip the
-duplicate run.
+follow-up commit (never blind-commit). When `REVIEW_MODE != none`, the
+impl-review SHIP gate covered the CODE-QUALITY judgment only — the Phase 5 Verify
+block above still runs (classify → receipts → gates); it is cheap when a receipt
+or docs-only classification applies and load-bearing when neither does.
 
 Write the evidence file — re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered) in the SAME block, so no shell variable has to survive across tool calls. `base_commit` is an additive evidence field — always include it. Include any `GATE_SKIPPED` lines recorded during this task as plain strings in `tests[]` alongside real command strings (fn-99 plain-string schema - no new fields or objects), and echo those `GATE_SKIPPED` lines verbatim in the worker summary:
 ```bash

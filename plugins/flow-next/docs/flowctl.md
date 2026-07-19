@@ -1062,7 +1062,7 @@ flowctl gate check --gate unittest --command "python3 -m unittest discover -s pl
 flowctl gate classify --base <ref> [--json]
 ```
 
-`gate receipt` writes one file per receipt at `.flow/tmp/green-receipts/<sha8>-<gate_id>.json` with an atomic write, not a shared ledger or lock. Exit codes: `0` written; `2` error, including an invalid gate ID, missing repository, or unresolvable HEAD.
+`gate receipt` writes one file per receipt at `.flow/tmp/green-receipts/<sha8>-<gate_id>.json` with an atomic write, not a shared ledger or lock. Receipts are **cooperative local bookkeeping within one trust domain** - the same local agent writes and honors them (like review receipts and triage-skip receipts), so they are not a security boundary; remote CI gates never consult them and cannot be skipped by one. Exit codes: `0` written; `2` error, including an invalid gate ID, missing repository, or unresolvable HEAD.
 
 Receipt schema:
 

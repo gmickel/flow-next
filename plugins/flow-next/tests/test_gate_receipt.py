@@ -24,8 +24,12 @@ COMMAND = "python3 -m unittest discover -s plugins/flow-next/tests -p 'test_gate
 GATE_ID = "full-gate"
 
 
-class GateReceiptTestCase(unittest.TestCase):
-    """Temporary git repo with helpers that invoke the public CLI wire."""
+class GateReceiptHarness(unittest.TestCase):
+    """Temporary git repo with helpers that invoke the public CLI wire.
+
+    Carries NO test_* methods - concrete test classes inherit it so unittest
+    discovery never runs a shared case twice (PR #213 P3).
+    """
 
     def setUp(self) -> None:
         self.tmpdir = Path(tempfile.mkdtemp()).resolve()
@@ -91,6 +95,10 @@ class GateReceiptTestCase(unittest.TestCase):
         receipt = json.loads(path.read_text(encoding="utf-8"))
         receipt.update(updates)
         path.write_text(json.dumps(receipt), encoding="utf-8")
+
+
+class GateReceiptTestCase(GateReceiptHarness):
+    """Base receipt/check contract cases."""
 
     def test_receipt_round_trip_body_and_path(self) -> None:
         self._receipt()
@@ -249,7 +257,7 @@ class GateReceiptTestCase(unittest.TestCase):
                     self.assertEqual(result.returncode, 2, result.stderr or result.stdout)
 
 
-class GateReceiptCompletionRegressionsTestCase(GateReceiptTestCase):
+class GateReceiptCompletionRegressionsTestCase(GateReceiptHarness):
     """fn-102 completion-review regressions: full-sha compare, backslash, git errors."""
 
     def test_check_fails_closed_on_full_head_sha_mismatch_same_path(self) -> None:
@@ -347,6 +355,22 @@ class GateReceiptCompletionRegressionsTestCase(GateReceiptTestCase):
         finally:
             (self.tmpdir / ".git").unlink()
             backup.rename(git_dir)
+
+    def test_receipt_refuses_symlinked_receipts_dir(self) -> None:
+        # A symlinked .flow/tmp would redirect the receipt write outside the
+        # workspace - the containment guard must refuse (exit 2), never write.
+        outside = Path(tempfile.mkdtemp()).resolve()
+        try:
+            flow_tmp = self.tmpdir / ".flow" / "tmp"
+            flow_tmp.parent.mkdir(parents=True, exist_ok=True)
+            if flow_tmp.exists():
+                shutil.rmtree(flow_tmp)
+            flow_tmp.symlink_to(outside, target_is_directory=True)
+            result = self._flowctl("receipt", "--gate", GATE_ID, "--command", COMMAND)
+            self.assertGreaterEqual(result.returncode, 2, result.stderr or result.stdout)
+            self.assertFalse(list(outside.rglob("*.json")), "receipt escaped the workspace")
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
 
     def test_check_outside_repo_exits_1(self) -> None:
         outside = Path(tempfile.mkdtemp()).resolve()
