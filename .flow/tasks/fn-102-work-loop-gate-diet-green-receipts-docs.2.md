@@ -24,9 +24,8 @@ Wire the three gate sites to the flowctl `gate` plumbing; every skip loud, per-l
 - [ ] R7: mirror regen x2 idempotent, guards green
 
 ## Done summary
-TBD
-
+Wired the fn-102 gate diet into the work-loop prose: worker Baseline check honors green receipts via `gate check` per (gate_id, command) with loud GATE_SKIPPED evidence, Verify-before-completing runs `gate classify` for docs-only tier-B (lint/format only, human-claused skip lines) and writes receipts after passing full gates, host phases.md persists a spec-run base (`.flow/tmp/spec_base`) and consults check/classify at Phase 4 with per-outcome `Gates:` lines in the Phase 5 summary, and the codex-delegation poll loop moved from 10s to 2s intervals (same 60s bound). Implementation delegated to codex gpt-5.6-terra (medium); codex mirror regenerated x2 idempotent; codex impl-review r1 NEEDS_WORK (Gates-slot accumulation + missing human clause) fixed -> r2 SHIP.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 168c096e0e5e7095b65194dcffda97adc73a1249, 28f5c0bb6828d12d5532ddd4c264243ceaa29ba9
+- Tests: baseline: green (python3 -m unittest discover -s plugins/flow-next/tests -q pre-edit run passed; corroborated by fn-102.1 post-gate 1818 OK on the same tree - delta was a .flow-only chore commit), python3 -m unittest discover -s plugins/flow-next/tests -q (exit=0, full suite green at 168c096e post-delegation tree), python3 -m unittest -q test_worker_anchor_prose test_ralph_guard_codex_delegation test_codex_delegation_classify test_codex_delegation_gates test_gate_receipt test_gate_classify test_cp1252_robustness (206 tests OK at branch tip 28f5c0bb), python3 -m unittest -q test_anchor_bundle test_work_delegate_config (40 tests OK at branch tip - completes coverage of every module reading the edited files), ./scripts/sync-codex.sh x2 (idempotent, zero second-run diff, guards green - run twice again after r1 fixes)
 - PRs:
