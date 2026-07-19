@@ -369,6 +369,8 @@ class GateReceiptCompletionRegressionsTestCase(GateReceiptHarness):
             result = self._flowctl("receipt", "--gate", GATE_ID, "--command", COMMAND)
             self.assertGreaterEqual(result.returncode, 2, result.stderr or result.stdout)
             self.assertFalse(list(outside.rglob("*.json")), "receipt escaped the workspace")
+            self.assertFalse((outside / "green-receipts").exists(),
+                             "mkdir side-effect escaped the workspace before the guard")
         finally:
             shutil.rmtree(outside, ignore_errors=True)
 
