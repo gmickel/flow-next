@@ -19,7 +19,7 @@ The fn-103 run was trace-measured against the fn-89 baseline (post-mortem 2026-0
 ## Key files / interfaces
 
 - `plugins/flow-next/scripts/flowctl.py` + `.flow/bin/flowctl.py` (`cmd_gate_check` ~L27667, `_gate_ignored_worktree_path` ~L27482 - extract the shared path predicate)
-- `plugins/flow-next/agents/worker.md` (suite-run capture prose, receipt/state-commit ordering)
+- `plugins/flow-next/agents/worker.md` (suite-run capture prose only)
 - `plugins/flow-next/tests/test_gate_receipt.py` (ancestor-walk cases)
 - `CHANGELOG.md`, `plugins/flow-next/docs/flowctl.md` (gate section: ancestor-walk clause)
 
