@@ -33,9 +33,8 @@ flow-next.dev design makeover: landing rework around the claim hierarchy + the d
 - [ ] llms.txt served; pnpm build green (R7)
 
 ## Done summary
-TBD
-
+flow-next.dev design makeover shipped (commit cdd5937 in ~/work/flow-next.dev, committed there per site conventions): landing reworked around the claim hierarchy - hero leads with "Agents generate. flow-next proves." plus a real paper-receipt proof-artifact render in the mockup; new claim-ordered sections 01 Proof (bias-towards-verification register tape), 02 Flexibility (menu-not-a-rail teaser), 03 Loops, 04 Signal (all-linked case capsules + anonymized field line). Docs-body rhythm kit created (ReceiptCallout, RecipeCard, CaseCapsule + Starlight-native Tabs) and applied to two existing pages (strategy/pipeline.mdx, orchestration); public/llms.txt served with canonical claims + site map; copy buttons wired. Single dark-ink/cream theme kept; no new pages so both nav sources untouched. pnpm build green (66 pages); PSVI + client-name boundary greps clean.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: flow-next.dev@cdd59374366ddab20d144da884cd60555a08c118
+- Tests: baseline: green (cd ~/work/flow-next.dev && pnpm build, suite_rc=0, 66 pages, pre-edit), cd ~/work/flow-next.dev && pnpm build (suite_rc=0, 66 pages, post-change), grep -ri 'PSVI|Velocity Index' ~/work/flow-next.dev/src (clean, exit 1), grep -riwf ~/.claude/flow-next-client-names.txt ~/work/flow-next.dev/src (clean, exit 1), grep stale model ids/1.x badges in touched surfaces (clean, exit 1), nav sanity diff astro.config.mjs vs site.ts (only intentional install/introduction astro-only entries), curl http://localhost:4322/llms.txt -> 200; visual verification via agent-browser screenshots (hero receipt, verify tape, menu recipes, capsules, pipeline Tabs+ReceiptCallout, orchestration RecipeCards)
 - PRs:

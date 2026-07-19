@@ -22,9 +22,8 @@ The flexibility cluster: "Menu, not a rail" doctrine page + the Cookbook nav gro
 - [ ] Both nav sources; pnpm build green (R7)
 
 ## Done summary
-TBD
-
+Flexibility cluster shipped in ~/work/flow-next.dev (commit bebd3b0): new strategy/menu-not-a-rail.mdx doctrine page (kills the rigid-conveyor misreading, canonical field lines, absorbs core-concepts "Tunable baseline" leaving a pointer, contracts-hold section, nine-moves table) + new single-page Cookbook (44 verified recipes across the 9 categories, incl. the maintainer-flagged plan-from-research meta-recipe; Decision 7 both live parallelism forms marketed; 4 banned patterns absent; every invocation checked against current skill/flowctl contracts - 15+ spot-checked). Both nav sources updated (site.ts navGroups + astro.config sidebar: Strategy gains Menu, Not a Rail; new Cookbook group); landing menu teaser retargeted to the doctrine page; orchestration page cross-linked both ways. pnpm build green (68 pages); PSVI + client-name boundary greps clean. Cookbook shipped as one long page (Orchestration single-page precedent; ~5 recipes/category too thin for 9 pages; one copy-paste surface for agents).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: bebd3b0
+- Tests: baseline: green (cd ~/work/flow-next.dev && pnpm build, 66 pages, rc=0), cd ~/work/flow-next.dev && pnpm build (post-change: 68 pages, rc=0; green receipt recorded via flowctl gate receipt --gate build), grep -ri 'PSVI|Velocity Index' ~/work/flow-next.dev/src (empty), client-name boundary grep via ~/.claude/flow-next-client-names.txt over flow-next.dev/src (empty), anchor check: all 9 cookbook category ids present in dist/cookbook/index.html; 44 recipe cards rendered; Menu, Not a Rail + All Recipes present in built rail
 - PRs:

@@ -11,8 +11,9 @@ Proof + reference pages, and the skill-page content pass. Repo: ~/work/flow-next
 
 ## Approach
 
-- Verification spine page: the philosophy as ONE system (receipts, evidence JSON, QA live-app verdicts, gate receipts, evidence-over-narration, no-self-grading); lineage citations exactly once sitewide (Wei/Karpathy/Vogels/Sonar/Willison) + Sonar 96/48 stat with link. This page owns "bias towards verification".
-- Field notes page: anonymized-BOLD enterprise evidence (Decision 5): discovery throughput (2-3h interviews -> 8-11 specs), PM verdicts, same-day field-fix arcs, GHE/Windows/GitLab/Jira environments; honest asymmetry (PM relief vs senior-dev friction); OSS proof strip (linked quotes, awesome-list, 3-OS CI). NO client names; boundary grep must stay clean.
+- Verification spine page: the philosophy as ONE system (receipts, evidence JSON, QA live-app verdicts, gate receipts, evidence-over-narration, no-self-grading); lineage citations exactly once sitewide (Wei/Karpathy/Vogels/Sonar/Willison) + Sonar 96/48 stat with link. This page owns "bias towards verification". Use the ReceiptCallout component from .4 (src/components/ReceiptCallout.astro) for receipt/gate-outcome facts on this page.
+- Field notes page: anonymized-BOLD enterprise evidence (Decision 5): discovery throughput (2-3h interviews -> 8-11 specs), PM verdicts, same-day field-fix arcs, GHE/Windows/GitLab/Jira environments; honest asymmetry (PM relief vs senior-dev friction); OSS proof strip (linked quotes, awesome-list, 3-OS CI) using the CaseCapsule component from .4 (src/components/CaseCapsule.astro) for the linked case/testimonial quotes. NO client names; boundary grep must stay clean.
+<!-- Updated by plan-sync: fn-117.4 built ReceiptCallout/CaseCapsule as concrete component names (task text previously described them only generically) -->
 - FAQ: real coaching objections as seeds (spec-becomes-the-app sizing fear; perpetual-spec-library misconception - completed specs are immutable change history, living docs are separate; guardrails vs security controls taxonomy; "do I need all of this? no - smallest sufficient workflow"). NO competitor comparison content (Decision 2).
 - First 30 minutes: narrative first-spec tutorial with real command output.
 - Troubleshooting: port repo docs/troubleshooting.md; Glossary: render from GLOSSARY.md.
