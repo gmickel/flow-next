@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-103-delegation-diet-path-handoff-replaces",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-07-19T12:52:38.088854Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-103-delegation-diet-path-handoff-replaces",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-103-delegation-diet-path-handoff-replaces.md",
   "status": "open",
   "title": "Delegation diet: path-handoff replaces the composed brief; delegate:codex shrinks to rails",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T12:57:49.264335Z"
+  "updated_at": "2026-07-19T13:04:33.644165Z"
 }

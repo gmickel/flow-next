@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-19T13:04:34.502109Z",
+  "depends_on": [
+    "fn-103-delegation-diet-path-handoff-replaces.1"
+  ],
+  "id": "fn-103-delegation-diet-path-handoff-replaces.2",
+  "priority": null,
+  "spec": "fn-103-delegation-diet-path-handoff-replaces",
+  "spec_path": ".flow/tasks/fn-103-delegation-diet-path-handoff-replaces.2.md",
+  "status": "todo",
+  "title": "Docs reframe + plan-density sentence + decision record + CHANGELOG",
+  "updated_at": "2026-07-19T13:05:11.007600Z"
+}
