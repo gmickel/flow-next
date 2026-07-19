@@ -12,13 +12,13 @@ Direction: make Ralph a self-contained opt-in add-on. Default install = zero hoo
 
 ### A. No default install (the core of this spec)
 
-1. **Delete plugins/flow-next/hooks/hooks.json from the plugin.** Hook registration moves into `/flow-next:ralph-init`, which merges the four hook entries into the project's `.claude/settings.json` (careful merge, never clobber existing hooks; idempotent re-run). Claude Code will prompt the user to trust project hooks - that IS the consent gate. Droid: ralph-init writes the Factory-equivalent hooks config (or documents the manual step) - verify current Factory settings path at build time.
-2. **Setup surfaces the choice without installing anything**: /flow-next:setup mentions Ralph as available via ralph-init (one line); optionally record `ralph.enabled` in config for skills that care. No yes/no ceremony needed once hooks.json is gone - ralph-init IS the yes.
-3. **Uninstall parity**: /flow-next:uninstall and ralph-init --remove (if absent, add) must strip the hook entries from .claude/settings.json.
+1. **Delete plugins/flow-next/hooks/hooks.json from the plugin.** Fresh installs register zero hooks. Hook registration becomes AGENT-DRIVEN, skill-prose only (maintainer 2026-07-19: leverage the agent's intelligence, do NOT grow flowctl): `/flow-next:ralph-init`'s prose instructs the host agent to merge the four hook entries into the project's `.claude/settings.json` via Read+Edit (never clobber existing hooks; idempotent re-run; Claude Code's project-hooks trust prompt is the consent gate). Droid: the skill prose covers the Factory-equivalent config (verify current Factory settings path at build time). **Hard boundary: no new flowctl subcommand for hook install/remove/status - zero hook machinery in Python.**
+2. **Setup asks**: /flow-next:setup (fresh AND re-run on existing repos) asks via AskUserQuestion whether to enable/keep Ralph mode. Yes -> run/point to ralph-init (which installs hooks per item 1). No -> the agent removes any flow-next hook entries it finds in `.claude/settings.json` and notes the scaffold under scripts/ralph/ can be deleted (agent asks before deleting - existing runs/receipts may matter). Default: no.
+3. **Uninstall parity**: /flow-next:uninstall prose gains the same agent-driven hook-entry removal step.
 
 ### B. Extract ralph surface out of flowctl core (the "separate python")
 
-4. Move `flowctl ralph pause/resume/stop/status` (~90 LOC sentinel plumbing) and `find_active_runs` progress.txt parsing (~90 LOC) out of flowctl.py into a repo-local `scripts/ralph/ralphctl.py` (or fold into ralph.sh helpers) installed by ralph-init. `flowctl status` drops its active-runs section, or probes `scripts/ralph/runs/` only when present via a soft import - decide at plan. PRECONDITION: check flow-next-tui for `flowctl ralph status` / active-runs JSON consumers before moving (TUI has Ralph control integration in flight).
+4. Move `flowctl ralph pause/resume/stop/status` (~90 LOC sentinel plumbing) and `find_active_runs` progress.txt parsing (~90 LOC) out of flowctl.py into a repo-local `scripts/ralph/ralphctl.py` (or fold into ralph.sh helpers) installed by ralph-init. `flowctl status` drops its active-runs section, or probes `scripts/ralph/runs/` only when present via a soft import - decide at plan. Non-blocking check: glance at flow-next-tui for `flowctl ralph status` / active-runs JSON consumers (maintainer 2026-07-19: low prio - if the move breaks the TUI, that is a follow-up spec, not a blocker here).
 5. RALPH_ITERATION receipt stamping stays in flowctl (passive env read, needed by review receipts) but deduped: one `stamp_ralph_iteration(receipt)` helper replaces 10 identical blocks (flowctl.py:24396...27280). Coordinate with fn-112.
 6. sync-codex.sh: confirm the codex mirror never shipped hooks (Codex has no Claude-schema hooks); remove any hooks.json handling from the sync script if present.
 
@@ -41,7 +41,8 @@ Direction: make Ralph a self-contained opt-in add-on. Default install = zero hoo
 - Post ralph-init: ralph smoke + e2e-short suites green; guard blocks/permits unchanged on Claude Code happy paths.
 - Zero /tmp writes and zero Python spawns from hooks when FLOW_RALPH unset (test).
 - flowctl.py contains no `cmd_ralph_*` functions (or documented soft-probe remainder per item 4 decision).
-- TUI consumer check recorded; Droid decision recorded and files consistent.
+- Droid decision recorded and files consistent. No new flowctl subcommands introduced by this spec (hook management is agent-driven skill prose).
+- Setup on an existing repo asks the Ralph keep/enable question and the agent performs the install/removal itself.
 
 ## Boundaries
 
