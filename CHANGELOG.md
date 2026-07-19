@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Work-loop gate diet: green receipts + docs-only gate tiering + event-driven waits (fn-102).** Trace-mining the fn-89 run showed about 50% of a 2h41 work stage spent re-running the full unittest suite ten times on already-proven trees; the fix is mechanical, never semantic.
+  - **New `flowctl gate` group.** `gate receipt` / `gate check` record command-fingerprinted green receipts at `.flow/tmp/green-receipts/`, honored only for exact HEAD, exact command, clean worktree, and a 24h TTL, then fail closed to running the full gate. `gate classify` selects docs-only tier-B through ordered path precedence reusing triage-skip primitives; mirror, skill, and agent prose plus all code extensions force FULL.
+  - **Worker and host wiring.** Baseline check honors receipts; Verify-before-completing classifies, runs full or tier-B, and writes receipts after passing full gates. Host Phase 4 uses a persisted spec-run base. Every skip is loud: `GATE_SKIPPED:` lines in task-evidence `tests[]` and per-outcome `Gates:` lines in the Phase 5 summary.
+  - **Delegation polling.** The codex-delegation poll loop changes from 10s to 2s intervals, with the same 60s bound.
+  - **Scope guard.** Predicates are commit-hash equality, cleanliness, receipt age, and path membership only; fn-83's semantic-skip ban stands and its decision record gains a forward pointer. Review triage-skip protects meaning while the gate tier protects executables: two whitelists with two purposes.
+  - **Boundaries and generated surfaces.** Remote CI is out of scope; worktree-mode receipts are per checkout. Dual-copy flowctl and the Codex mirror regenerated.
+
 ## [flow-next 2.17.0] - 2026-07-19
 
 ### Changed

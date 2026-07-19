@@ -9,7 +9,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ```
 init, detect, status, config, review-backend, memory, prospect, glossary, strategy,
 spec, task, dep, show, specs, tasks, list, cat, anchor, ready, next, start, done, block,
-state-path, migrate-state, migrate-rename, migrate-rollback, validate, triage-skip,
+state-path, migrate-state, migrate-rename, migrate-rollback, validate, triage-skip, gate,
 checkpoint, prep-chat, repo-map, prime, sync,
 ralph, rp, codex, copilot, cursor,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
@@ -1046,6 +1046,52 @@ Receipt schema (only on SKIP):
 ```json
 {"type": "triage_skip", "id": "fn-1.2", "mode": "triage_skip", "verdict": "SHIP", "timestamp": "..."}
 ```
+
+### gate
+
+Gate-diet plumbing for the work loop: green receipts reuse a passing full-gate baseline only when keyed by the exact commit hash and exact command string, while docs-only tiering classifies path membership. Both fail closed: any doubt means run the full gate. These are two whitelists with two purposes: review `triage-skip` protects MEANING by forcing review on `.flow/specs`, `.flow/tasks`, and `.flow/epics`; the gate tier protects EXECUTABLES because most `.flow/**` is gate-safe and a spec Markdown file cannot break the Python suite. The layers share `_normalize_repo_path` and `TRIAGE_CODE_EXTS` primitives, but are independently correct.
+
+```bash
+# Record a passing full gate as a green receipt for the current HEAD
+flowctl gate receipt --gate unittest --command "python3 -m unittest discover -s plugins/flow-next/tests -q" [--json]
+
+# Honor probe: can a green receipt stand in for re-running this exact command?
+flowctl gate check --gate unittest --command "python3 -m unittest discover -s plugins/flow-next/tests -q" [--json]
+
+# Docs-only tiering: classify the cumulative diff (base...HEAD union worktree)
+flowctl gate classify --base <ref> [--json]
+```
+
+`gate receipt` writes one file per receipt at `.flow/tmp/green-receipts/<sha8>-<gate_id>.json` with an atomic write, not a shared ledger or lock. Exit codes: `0` written; `2` error, including an invalid gate ID, missing repository, or unresolvable HEAD.
+
+Receipt schema:
+
+```json
+{"schema": 1, "head_sha": "<full sha>", "gate_id": "unittest", "command_sha256": "<sha256 of the exact command string>", "timestamp": "<ISO-8601 UTC>"}
+```
+
+The contract is `command_sha256`: a receipt certifies exactly one command string. A changed command has a different fingerprint and is never honored.
+
+`gate_id` is a bounded slug validated at both boundaries: `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. Literal `.` and `..` are explicitly rejected. The ID is interpolated into the receipt filename, so traversal characters are impossible; invalid IDs exit `2`.
+
+`gate check` exits `0` (honored: skip the re-run) only when all of these hold: the receipt exists for the current full HEAD and its `head_sha` matches; `schema == 1`; `command_sha256` matches the probe command; and the worktree is clean. Cleanliness uses `git status --porcelain=v1 -z --no-renames --untracked-files=all` and permits no entries outside `.flow/**` minus `.flow/bin/**` minus `.flow/config.json`. A dirty `.flow/bin/**` or `.flow/config.json` is execution-affecting and returns `1`; receipts under `.flow/tmp/` do not self-dirty a check. Finally, receipt age must satisfy `0 <= age <= 24h`: the lower bound rejects future timestamps and clock skew, and the TTL bounds toolchain drift on an unchanged tree.
+
+| Condition | Exit |
+| --- | --- |
+| Missing receipt, malformed JSON, bad schema, HEAD mismatch, command fingerprint mismatch, dirty worktree, stale receipt (`>24h`), future timestamp, or not a git repository | `1`: run the full gate, exactly as without receipts |
+| Real error: invalid gate ID, git unavailable, or `git status` failing inside a resolvable repository | `2+` |
+
+Callers fail closed on both outcomes.
+
+`gate classify` collects the union of `git diff --name-only -z --no-renames <base>...HEAD` and `git status --porcelain=v1 -z --no-renames --untracked-files=all` paths. Paths are NUL-delimited, renames are uncollapsed, and untracked files are enumerated individually. Ordered precedence applies to each path, first match wins:
+
+1. **FORCE-FULL:** any code/config extension anywhere (`TRIAGE_CODE_EXTS` plus `.py`, `.sh`, `.cmd`, `.ps1`, `.toml`, `.json`, `.yaml`, `.yml`), or `scripts/`, `plugins/flow-next/scripts/`, `plugins/flow-next/tests/`, `.flow/bin/`, `plugins/flow-next/skills/`, `plugins/flow-next/agents/`, `plugins/flow-next/commands/`, `plugins/flow-next/references/`, `plugins/flow-next/templates/`, `plugins/flow-next/hooks/`, `plugins/flow-next/codex/`, or exact `.flow/config.json`. Extension wins over prefix, so a `.py` file under `docs/` is FULL.
+2. **SAFE:** `docs/`, `agent_docs/`, `optimization/`; root `CHANGELOG.md`, `GLOSSARY.md`, `STRATEGY.md`, or `README*`; `plugins/flow-next/docs/**` only with `.md`, `.mdx`, or `.txt`; and remaining `.flow/**`.
+3. **FULL:** anything unmatched.
+
+Exit `0` (tier-B) only for a non-empty diff where every path is SAFE. Empty diffs and any forcing path exit `1`; errors exit `2+`. `--json` emits per-path `{path, class, reason}` entries for evidence lines. Tier-B runs configured lint/format gates only, and nothing else.
+
+Lint and format commands are always-run and never receipted in v1. Remote CI gates, including land's tri-state and GitHub Actions, are out of scope: a green receipt never means CI can be skipped. Receipts under `.flow/tmp/` are per checkout, so worktree-mode workers never share them across worktrees, correctly because their HEADs differ. Scope guard: every predicate is commit-hash equality, worktree cleanliness, receipt age, or path membership. There is no semantic skipping: fn-83's deterministic-plan-sync-skip ban remains in force; see decision record `plan-sync-skip-gate-not-viable-2026-07-03`.
 
 ### prep-chat
 
