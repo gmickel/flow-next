@@ -498,6 +498,11 @@ test is an incomplete implementation.
 Output: emit the result JSON per result-schema.json (verbatim).
 ```
 
+The two id slots take the CANONICAL ids - `flowctl show <input-id> --json` ->
+`.id` (task) and `.spec` (parent) - never a short alias: `fn-103.1` resolves
+fine inside flowctl, but the literal path `.flow/tasks/fn-103.1.md` does not
+exist, so an alias-filled template hands Codex two missing files.
+
 ### Result classification (lifted — computed by `classify-result`)
 
 After the bg-launch+poll loop yields a non-empty, JSON-parseable result file,

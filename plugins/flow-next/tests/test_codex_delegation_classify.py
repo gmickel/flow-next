@@ -634,15 +634,34 @@ class DelegationProseContractTestCase(unittest.TestCase):
         self.assertIn("flowctl codex classify-result", self.ref)
         self.assertIn("flowctl codex rollback-plan", self.ref)
 
+    # The eval-validated exhaustive-tests sentence, pinned VERBATIM as one
+    # whitespace-normalized string (the file line-wraps it inside the fenced
+    # template; loose fragments would let the first half drift).
+    EXHAUSTIVE_SENTENCE = (
+        "Where the task enumerates test cases, edge cases, or a fail-closed "
+        "matrix, write ONE test per named case - exhaustive, never "
+        "representative; a named case without a test is an incomplete "
+        "implementation."
+    )
+
     def test_reference_prompt_template_is_fixed_path_handoff(self) -> None:
         self.assertIn(".flow/tasks/<task-id>.md", self.ref)
         self.assertIn(".flow/specs/<spec-id>.md", self.ref)
         self.assertIn("3 slots", self.ref)
-        self.assertIn("exhaustive, never representative", self.ref)
-        self.assertIn("a named case without a", self.ref)
-        self.assertIn("test is an incomplete implementation", self.ref)
+        normalized = " ".join(self.ref.split())
+        self.assertIn(self.EXHAUSTIVE_SENTENCE, normalized)
         self.assertNotIn("<patterns>", self.ref)
         self.assertNotIn("<approach>", self.ref)
+
+    def test_reference_template_slots_take_canonical_ids(self) -> None:
+        # REGRESSION (fn-103.1 review): /work accepts short aliases (fn-103.1);
+        # flowctl resolves them, but the literal alias path does not exist. The
+        # template contract must pin canonical-id resolution for the two id
+        # slots — in the reference AND at worker.md's fill step.
+        self.assertIn("CANONICAL ids", self.ref)
+        self.assertIn("never a short alias", self.ref)
+        self.assertIn("CANONICAL ids", self.worker)
+        self.assertIn("never a short alias", self.worker)
 
     def test_reference_constraints_forbid_git_and_nonscratch_flow(self) -> None:
         # <constraints> must forbid git/PRs and non-scratch .flow writes.
@@ -658,18 +677,23 @@ class DelegationProseContractTestCase(unittest.TestCase):
         self.assertIn("prompt-batch-1.md", self.ref)
         self.assertIn("result-batch-1.json", self.ref)
 
+    # The canonical `codex exec` invocation rail, pinned as ONE exact
+    # contiguous block (independent per-line assertIn would tolerate
+    # reordering, insertion, or duplication between the lines).
+    CANONICAL_INVOCATION_BLOCK = (
+        "FLOW_DELEGATE_CODEX=1 codex exec \\\n"
+        "  --ignore-user-config \\\n"
+        '  -m "<DELEGATE_MODEL>" \\\n'
+        "  -c 'model_reasoning_effort=\"<effective_effort>\"' \\\n"
+        "  --dangerously-bypass-approvals-and-sandbox \\\n"
+        '  --output-schema "<scratch-dir>/result-schema.json" \\\n'
+        '  -o "<scratch-dir>/result-batch-<n>.json" \\\n'
+        '  - < "<scratch-dir>/prompt-batch-<n>.md"\n'
+    )
+
     def test_reference_canonical_invocation_block_unchanged(self) -> None:
-        for line in (
-            "FLOW_DELEGATE_CODEX=1 codex exec \\",
-            "  --ignore-user-config \\",
-            "  -m \"<DELEGATE_MODEL>\" \\",
-            "  -c 'model_reasoning_effort=\"<effective_effort>\"' \\",
-            "  --dangerously-bypass-approvals-and-sandbox \\",
-            "  --output-schema \"<scratch-dir>/result-schema.json\" \\",
-            "  -o \"<scratch-dir>/result-batch-<n>.json\" \\",
-            '  - < "<scratch-dir>/prompt-batch-<n>.md"',
-        ):
-            self.assertIn(line, self.ref)
+        # Exactly ONE occurrence of the exact block — byte-contiguous.
+        self.assertEqual(self.ref.count(self.CANONICAL_INVOCATION_BLOCK), 1)
 
     def test_reference_trust_cross_check_documented(self) -> None:
         self.assertIn("git status --porcelain", self.ref)

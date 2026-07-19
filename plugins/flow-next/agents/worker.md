@@ -147,8 +147,10 @@ host's counter stays untouched - not a failure, not a strike).
    do with the result.
 2. Build the scratch dir `.flow/tmp/codex-<task-id>/`, write `result-schema.json`,
    fill the fixed path-handoff template's 3 slots (task id, spec id, allowed-file
-   list) into `prompt-batch-1.md` - one run per task, nothing else composed -
-   pick the per-run effort (floored at
+   list) into `prompt-batch-1.md` - one run per task, nothing else composed. The
+   id slots take the CANONICAL ids from `flowctl show <TASK_ID> --json` (`.id` /
+   `.spec`), never a short alias - an alias-filled `.flow/tasks/<task-id>.md`
+   path does not exist. Pick the per-run effort (floored at
    `DELEGATE_EFFORT_FLOOR`), and **launch `codex exec` via the Bash
    `run_in_background` tool parameter** (NOT shell `&`) using `DELEGATE_MODEL` +
    the **literal** sandbox flag inlined from `DELEGATE_SANDBOX` (yolo →
