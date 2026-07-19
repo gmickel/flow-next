@@ -1,4 +1,3 @@
-# fn-115 model-pin registry: role map in config + agent refresh ceremony at setup
 
 > STUB (2026-07-19, maintainer-requested during the fn-101 review). Problem: hardcoded model pins rot. Interview/plan before building.
 
@@ -38,3 +37,20 @@ Direction (doctrine-conformant split): flowctl stores and validates a pin map + 
 - Role vocabulary: minimum viable set (fastJudge / review / delegate / scoutFast / scoutIntelligent) or fold review into existing review.backend semantics?
 - Should the staleness nudge live in setup only (quiet) or also `flowctl status` (visible)? Bias: setup only, avoid noise.
 - Does sync-codex read the map directly (repo-local config at regen time) or via exported env (current mechanism)? Bias: env, keep the mirror build decoupled.
+
+## Ladder policy + probed seed data (maintainer critique session, 2026-07-19)
+
+Maintainer decisions on the current BACKEND_REGISTRY ladders:
+
+1. **Floor rule**: review ladders floor at roughly gpt-5.6-terra-high intelligence. No mini/nano/4.1-class rungs on any REVIEW path - a weak model silently issuing SHIP verdicts is worse than failing loudly. When the ladder exhausts, error with a clear "no acceptable review model available - update your CLI or check model access" instead of degrading.
+2. **codex ladder**: solve old-CLI compatibility via DOCUMENTATION ("update your codex CLI"), not programmatic rungs. Ladder shrinks to the 5.6 family (sol -> terra -> luna if accepted; probe codex CLI at build), then loud failure. Drop gpt-5.5/5.4/5.2/5/5-mini/5-codex rungs.
+3. **copilot ladder**: reseed from GitHub's product docs (GA as of 2026-07: gpt-5.6 sol/terra/luna, claude-opus-4.8, claude-sonnet-5, claude-sonnet-4.6, claude-fable-5 w/ enterprise enablement) with the floor rule applied; org allowlists vary wildly (see probe below), so the ladder tops stay optimistic and the existing unavailable-signature step-down personalizes per account. Drop gpt-4.1 (GitHub already removed it) and the mini tails from review.
+4. **cursor ladder**: fix the ordering bug (all five sol effort tiers currently outrank terra-high); effort-degraded sol rungs (medium/low/none) drop below terra-high or out entirely. Drop `auto` (unpredictable tier) and composer-2.5 from the REVIEW ladder - composer-2.5 and luna tiers are fastJudge/scout material, not review gates. claude-fable-5-* rungs are NO ZDR on cursor - keep them out of the default ladder; users opt in explicitly (existing CLAUDE.md guidance).
+5. **Role map seeds**: fastJudge = luna-class (codex: gpt-5.6-luna; copilot: claude-haiku-4.5; cursor: composer-2.5 or gpt-5.6-luna-low). scoutFast likewise moves off gpt-5.4-mini to a luna tier at refresh.
+
+Probe results 2026-07-19 (why per-install probing is the mechanism, not better universal pins):
+
+- **cursor-agent 2026.07.16** (updated, then `--list-models`, 193 ids): full gpt-5.6 sol/terra/luna ranges (none->max, +fast variants), claude-opus-4-8 full range, claude-fable-5 (NO ZDR), claude-sonnet-5 range, cursor-grok-4.5 tiers, composer-2.5, gpt-5.5/5.4-high, codex 5.3/5.2/5.1-max families. Registry's v2026.06 snapshot already stale (missing fable-5, sonnet-5, grok tiers, opus-4-8 non-thinking range).
+- **copilot CLI 1.0.71** (updated; maintainer's org-provided account): ACCEPTS gpt-5.5, gpt-5.4, gpt-5.4-mini, claude-opus-4.7, claude-sonnet-4.5, claude-haiku-4.5. REJECTS gpt-5.6-sol/terra/luna, claude-opus-4.8, claude-sonnet-5, claude-sonnet-4.6, claude-fable-5, gpt-4.1 - although GitHub's docs list most of those as GA product-wide. Org policy gap == exactly the per-install truth the setup refresh ceremony captures. Also: registry claims default gpt-5.5, but a bare copilot session self-reports claude-sonnet-4.5 as its conductor on this account.
+
+Acceptance addition: BACKEND_REGISTRY ladders reseeded per the five policies above (coordinate shape with fn-112); triage defaults, work.delegateModel default, and sync-codex FAST/INTELLIGENT pins all resolve through the role map (they are the "other deterministic pins" - confirmed in scope).
