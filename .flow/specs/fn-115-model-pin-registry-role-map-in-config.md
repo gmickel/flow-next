@@ -1,3 +1,4 @@
+# fn-115 model-pin registry: role map in config + agent refresh ceremony at setup
 
 > STUB (2026-07-19, maintainer-requested during the fn-101 review). Problem: hardcoded model pins rot. Interview/plan before building.
 

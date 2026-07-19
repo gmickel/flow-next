@@ -1,3 +1,4 @@
+# fn-113 flowctl judgment evictions: memory overlap, scope suggest, carve-out doc
 
 > STUB from the fn-101 audit (2026-07-19). The doctrine-violation cleanup: judgment moves back to the host skill. Interview/plan before building.
 

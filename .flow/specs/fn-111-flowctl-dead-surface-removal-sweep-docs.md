@@ -1,3 +1,4 @@
+# fn-111 flowctl dead-surface removal sweep + docs drift
 
 > STUB from the fn-101 audit (2026-07-19). ~2.7k LOC with zero fleet callers, plus 11 docs-drift items. Interview/plan before building (a few keep-or-kill calls need the maintainer).
 

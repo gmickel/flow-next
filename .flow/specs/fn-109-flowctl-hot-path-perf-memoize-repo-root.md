@@ -1,3 +1,4 @@
+# fn-109 flowctl hot-path perf: memoize repo root and state dir
 
 > STUB from the fn-101 audit (2026-07-19). Small, urgent, measurable. Interview/plan optional; scope is tight enough to work directly.
 
