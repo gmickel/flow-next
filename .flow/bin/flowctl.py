@@ -27406,7 +27406,9 @@ def _gate_repo_and_head() -> tuple[Optional[Path], Optional[str], Optional[str]]
             probe = Path.cwd()
             for candidate in [probe, *probe.parents]:
                 try:
-                    if (candidate / ".git").exists():
+                    # lexists: a dangling .git symlink IS present-but-broken
+                    # metadata (exists() would follow it and report absent).
+                    if os.path.lexists(candidate / ".git"):
                         return None, None, (
                             "git error: repository metadata present but "
                             f"unusable: {stderr}"

@@ -333,6 +333,21 @@ class GateReceiptCompletionRegressionsTestCase(GateReceiptTestCase):
             (self.tmpdir / ".git").unlink()
             backup.rename(git_dir)
 
+    def test_check_dangling_git_symlink_exits_2(self) -> None:
+        # .git as a DANGLING symlink: present-but-broken metadata. exists()
+        # would follow the link and report absent; lexists must catch it.
+        self._receipt()
+        git_dir = self.tmpdir / ".git"
+        backup = self.tmpdir / ".git-backup"
+        git_dir.rename(backup)
+        (self.tmpdir / ".git").symlink_to("/nonexistent/broken-target")
+        try:
+            result = self._check()
+            self.assertGreaterEqual(result.returncode, 2, result.stderr or result.stdout)
+        finally:
+            (self.tmpdir / ".git").unlink()
+            backup.rename(git_dir)
+
     def test_check_outside_repo_exits_1(self) -> None:
         outside = Path(tempfile.mkdtemp()).resolve()
         try:
