@@ -26748,6 +26748,18 @@ TRIAGE_ARTIFACT_PREFIXES: tuple[str, ...] = (
 )
 
 
+def _normalize_repo_path(path: str) -> str:
+    """Normalize a repo-relative path for portable prefix matching.
+
+    Separator normalization ONLY - leading/trailing whitespace is preserved
+    because it is meaningful in filenames: a path like " .flow/x" (leading
+    space) is a DIFFERENT path from ".flow/x", and stripping it would let
+    gate check/classify mis-bucket it (fail-open). Callers that want the
+    legacy trimmed behavior strip explicitly.
+    """
+    return path.replace("\\", "/")
+
+
 def _classify_triage_path(path: str) -> str:
     """Classify a changed file into one triage bucket.
 
@@ -26761,7 +26773,9 @@ def _classify_triage_path(path: str) -> str:
       - ``other``     — unknown; forces REVIEW by fallthrough
     """
     # Normalize to POSIX for stable prefix matching even on Windows checkouts.
-    p = path.replace("\\", "/").strip()
+    # Triage keeps its historical trim (paths come from `git diff --name-only`
+    # line-splitting, which can carry stray whitespace).
+    p = _normalize_repo_path(path).strip()
     if not p:
         return "other"
 
@@ -27306,6 +27320,443 @@ def cmd_triage_skip(args: argparse.Namespace) -> None:
             print(f"REVIEW: {reason}")
 
     sys.exit(0 if verdict == "SKIP" else 1)
+
+
+# --- Gate diet: green receipts + docs-only tiering (fn-102) ---
+#
+# Review triage-skip protects MEANING: it decides whether a diff merits a
+# full implementation review. Gate tiering protects EXECUTABLES: it decides
+# whether a docs-only path set may use the lighter tier-B gate. Both are
+# intentionally fail-closed, but share path normalization and code/doc
+# primitives so platform-specific path spelling cannot split their behavior.
+
+GATE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+GATE_RECEIPTS_DIR = Path(".flow") / "tmp" / "green-receipts"
+GATE_CODE_EXTS: frozenset[str] = TRIAGE_CODE_EXTS | frozenset({
+    ".py",
+    ".sh",
+    ".cmd",
+    ".ps1",
+    ".toml",
+    ".json",
+    ".yaml",
+    ".yml",
+})
+GATE_FORCE_FULL_PREFIXES: tuple[str, ...] = (
+    "scripts/",
+    "plugins/flow-next/scripts/",
+    "plugins/flow-next/tests/",
+    ".flow/bin/",
+    "plugins/flow-next/skills/",
+    "plugins/flow-next/agents/",
+    "plugins/flow-next/commands/",
+    "plugins/flow-next/references/",
+    "plugins/flow-next/templates/",
+    "plugins/flow-next/hooks/",
+    "plugins/flow-next/codex/",
+)
+GATE_SAFE_PREFIXES: tuple[str, ...] = (
+    "docs/",
+    "agent_docs/",
+    "optimization/",
+)
+GATE_PLUGIN_DOC_PREFIX = "plugins/flow-next/docs/"
+# Derived from TRIAGE_DOC_EXTS (R2 reuse requirement) restricted to the gate-safe
+# subset - .rst/.adoc are doc-shaped for review triage but unused under
+# plugins/flow-next/docs/ and stay FULL here (conservative).
+GATE_PLUGIN_DOC_EXTS: frozenset[str] = TRIAGE_DOC_EXTS & frozenset({".md", ".mdx", ".txt"})
+GATE_SAFE_ROOT_FILES: frozenset[str] = frozenset({
+    "CHANGELOG.md",
+    "GLOSSARY.md",
+    "STRATEGY.md",
+})
+# Extensionless (or oddly-suffixed) executable/build basenames that can drive a
+# gate command from ANY location (e.g. `make -C docs test`) - force-full
+# regardless of prefix. Case-insensitive match.
+GATE_EXECUTABLE_BASENAMES: frozenset[str] = frozenset({
+    "makefile", "gnumakefile", "dockerfile", "justfile", "rakefile",
+    "cmakelists.txt", "taskfile.yml", "taskfile.yaml",
+})
+
+
+def _gate_id_is_valid(gate_id: str) -> bool:
+    """Return whether a filename-safe gate identifier satisfies the contract."""
+    # These are rejected explicitly because gate ids become receipt filenames.
+    return gate_id not in {".", ".."} and GATE_ID_RE.fullmatch(gate_id) is not None
+
+
+def _gate_command_sha256(command: str) -> str:
+    """Fingerprint the exact command string certified by a green receipt."""
+    return hashlib.sha256(command.encode("utf-8")).hexdigest()
+
+
+def _gate_repo_and_head() -> tuple[Optional[Path], Optional[str], Optional[str]]:
+    """Resolve current repository and HEAD without get_repo_root's fallback."""
+    try:
+        root_proc = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+    except OSError as e:
+        return None, None, f"git unavailable: {e}"
+    if root_proc.returncode != 0:
+        stderr = (root_proc.stderr or "").strip()
+        if "not a git repository" in stderr.lower():
+            # git uses this phrase for BOTH a genuinely absent repository and
+            # broken/unreadable .git metadata. Distinguish them ourselves: if
+            # any directory on the upward walk carries a .git entry, metadata
+            # exists but is unusable - a tooling error (2+), never the quiet
+            # exit-1 fallback.
+            probe = Path.cwd()
+            for candidate in [probe, *probe.parents]:
+                try:
+                    # lexists: a dangling .git symlink IS present-but-broken
+                    # metadata (exists() would follow it and report absent).
+                    if os.path.lexists(candidate / ".git"):
+                        return None, None, (
+                            "git error: repository metadata present but "
+                            f"unusable: {stderr}"
+                        )
+                except OSError:
+                    return None, None, f"git error: cannot inspect {candidate}"
+            return None, None, "not a git repo"
+        # Corruption / permissions / other git failures are tooling errors (2+),
+        # never a quiet fall-back-to-full-gates condition.
+        return None, None, f"git error: {stderr or 'rev-parse failed'}"
+
+    repo_root = Path(root_proc.stdout.strip())
+    try:
+        head_proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError as e:
+        return None, None, f"git unavailable: {e}"
+    if head_proc.returncode != 0 or not head_proc.stdout.strip():
+        return repo_root, None, "HEAD unresolvable"
+    return repo_root, head_proc.stdout.strip(), None
+
+
+def _gate_receipt_path(repo_root: Path, head_sha: str, gate_id: str) -> Path:
+    """Return the receipt path for one gate id at one immutable HEAD."""
+    return repo_root / GATE_RECEIPTS_DIR / f"{head_sha[:8]}-{gate_id}.json"
+
+
+def _gate_repo_relative_path(path: Path) -> str:
+    """Render a receipt path using the stable repo-relative POSIX spelling."""
+    return path.as_posix()
+
+
+def _gate_status_paths(repo_root: Path) -> tuple[Optional[list[str]], Optional[str]]:
+    """Collect porcelain paths or return a fail-closed status error."""
+    try:
+        proc = subprocess.run(
+            [
+                "git",
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--no-renames",
+                "--untracked-files=all",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError as e:
+        return None, f"git unavailable: {e}"
+    if proc.returncode != 0:
+        return None, "unable to inspect worktree"
+    return [entry[3:] for entry in proc.stdout.split("\0") if entry], None
+
+
+def _gate_ignored_worktree_path(path: str) -> bool:
+    """Whether a dirty path is receipt-only state, not executable state."""
+    if "\\" in path:
+        # A literal backslash in a git-reported path on POSIX is a filename
+        # character, not a separator - normalization would alias it into the
+        # ignore set. Ambiguous spelling fails CLOSED (counts as dirty).
+        return False
+    normalized = _normalize_repo_path(path)
+    return (
+        normalized.startswith(".flow/")
+        and not normalized.startswith(".flow/bin/")
+        and normalized != ".flow/config.json"
+    )
+
+
+def _classify_gate_path(path: str) -> tuple[str, str]:
+    """Classify one path using only its normalized spelling, never contents."""
+    if "\\" in path:
+        # Literal backslash on POSIX would alias into SAFE prefixes after
+        # normalization ("docs\\x.md" -> "docs/x.md"). Ambiguous -> FULL.
+        return "force-full", "literal backslash in path (ambiguous spelling)"
+    p = _normalize_repo_path(path)
+    base = p.rsplit("/", 1)[-1]
+    ext = ""
+    dot = base.rfind(".")
+    if dot > 0:
+        ext = base[dot:].lower()
+
+    # .flow state is resolved BEFORE the extension rule: spec/task/receipt
+    # JSON under .flow/ is non-executable bookkeeping (nothing imports it),
+    # and it rides nearly every flow commit - blanket-extension force-full
+    # here would kill the diet's most common case. The two executable
+    # exceptions stay force-full and are checked first.
+    if p.startswith(".flow/bin/"):
+        return "force-full", "force-full prefix .flow/bin/"
+    if p == ".flow/config.json":
+        return "force-full", "force-full path .flow/config.json"
+    if p.startswith(".flow/"):
+        return "safe", "safe prefix .flow/ (non-executable state)"
+
+    if base.lower() in GATE_EXECUTABLE_BASENAMES:
+        return "force-full", f"executable/build basename {base}"
+    if ext in GATE_CODE_EXTS:
+        return "force-full", f"code/config extension {ext}"
+    for prefix in GATE_FORCE_FULL_PREFIXES:
+        if p.startswith(prefix):
+            return "force-full", f"force-full prefix {prefix}"
+
+    for prefix in GATE_SAFE_PREFIXES:
+        if p.startswith(prefix):
+            return "safe", f"safe prefix {prefix}"
+    if "/" not in p and (
+        base in GATE_SAFE_ROOT_FILES or base.startswith("README")
+    ):
+        return "safe", f"safe root file {base}"
+    if p.startswith(GATE_PLUGIN_DOC_PREFIX) and ext in GATE_PLUGIN_DOC_EXTS:
+        return "safe", f"safe plugin docs extension {ext}"
+
+    return "full", "unmatched"
+
+
+def _gate_exit_check(
+    args: argparse.Namespace, honored: bool, reason: str, sha8: Optional[str]
+) -> None:
+    """Render gate-check output and leave callers with its honor-probe code."""
+    if args.json:
+        json_output({
+            "honored": honored,
+            "gate_id": args.gate_id,
+            "reason": reason,
+            "sha8": sha8,
+        })
+    elif honored:
+        print(f"HONORED: gate {args.gate_id} green receipt {sha8}")
+    else:
+        print(f"RUN: {reason}")
+    sys.exit(0 if honored else 1)
+
+
+def cmd_gate_receipt(args: argparse.Namespace) -> None:
+    """Record a green receipt for the current HEAD and exact full-gate command."""
+    if not _gate_id_is_valid(args.gate_id):
+        error_exit("invalid gate id", code=2, use_json=args.json)
+    repo_root, head_sha, repo_error = _gate_repo_and_head()
+    if repo_error or repo_root is None or head_sha is None:
+        error_exit(repo_error or "unable to resolve repository", code=2, use_json=args.json)
+
+    # Same cleanliness predicate as `gate check`: a gate that ran on a dirty
+    # tree exercised HEAD-plus-dirt, not HEAD - a receipt keyed to HEAD would
+    # later be honored on a clean tree state that was never actually tested.
+    # Refuse to warrant it (exit 1: nothing written, run/record gates as
+    # today); tooling failures stay 2+.
+    entries, entries_error = _gate_status_paths(repo_root)
+    if entries_error or entries is None:
+        error_exit(entries_error or "unable to inspect worktree", code=2, use_json=args.json)
+    dirty = [e for e in entries if not _gate_ignored_worktree_path(e)]
+    if dirty:
+        message = f"worktree dirty outside the ignore set ({dirty[0]}) - receipt not warrantable"
+        if args.json:
+            json_output({"written": False, "reason": message})
+        else:
+            print(f"NO_RECEIPT: {message}")
+        sys.exit(1)
+
+    timestamp = now_iso()
+    receipt = {
+        "schema": 1,
+        "head_sha": head_sha,
+        "gate_id": args.gate_id,
+        "command_sha256": _gate_command_sha256(args.command),
+        "timestamp": timestamp,
+    }
+    receipt_path = _gate_receipt_path(repo_root, head_sha, args.gate_id)
+    try:
+        # Symlink containment BEFORE any filesystem side effect (repo
+        # convention - cf. land's setup_stale guard): a committed symlink at
+        # .flow, .flow/tmp, or green-receipts would redirect the mkdir AND
+        # the write outside the workspace during an unattended run. resolve()
+        # follows symlinks in the existing components of a not-yet-created
+        # path, so the probe works before mkdir.
+        resolved_parent = receipt_path.parent.resolve()
+        if not str(resolved_parent).startswith(str(repo_root.resolve()) + os.sep):
+            error_exit(
+                "green-receipts dir resolves outside the repository "
+                "(symlinked .flow path) - refusing to write",
+                code=2, use_json=args.json,
+            )
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(receipt_path, receipt)
+    except OSError as e:
+        error_exit(f"failed to write green receipt: {e}", code=2, use_json=args.json)
+
+    relative_path = _gate_repo_relative_path(receipt_path.relative_to(repo_root))
+    if args.json:
+        json_output({
+            "gate_id": args.gate_id,
+            "head_sha": head_sha,
+            "sha8": head_sha[:8],
+            "command_sha256": receipt["command_sha256"],
+            "path": relative_path,
+            "timestamp": timestamp,
+        })
+    else:
+        print(f"GREEN_RECEIPT: {relative_path}")
+
+
+def cmd_gate_check(args: argparse.Namespace) -> None:
+    """Honor a current, matching, clean green receipt or request the full gate."""
+    if not _gate_id_is_valid(args.gate_id):
+        error_exit("invalid gate id", code=2, use_json=args.json)
+    repo_root, head_sha, repo_error = _gate_repo_and_head()
+    if repo_error:
+        if repo_error.startswith(("git unavailable:", "git error:")):
+            error_exit(repo_error, code=2, use_json=args.json)
+        _gate_exit_check(args, False, repo_error, None)
+    if repo_root is None or head_sha is None:
+        _gate_exit_check(args, False, "HEAD unresolvable", None)
+
+    sha8 = head_sha[:8]
+    receipt_path = _gate_receipt_path(repo_root, head_sha, args.gate_id)
+    # Read-side symmetry with `gate receipt`'s containment guard: a symlinked
+    # .flow path (or a symlinked receipt file) could make check honor a
+    # receipt stored OUTSIDE this checkout that the write side would have
+    # refused to create. Not honorable -> run the full gate (exit 1).
+    try:
+        resolved_parent = receipt_path.parent.resolve()
+        if not str(resolved_parent).startswith(str(repo_root.resolve()) + os.sep):
+            _gate_exit_check(args, False, "receipts dir resolves outside the repository (symlinked .flow path)", sha8)
+        if receipt_path.is_symlink():
+            _gate_exit_check(args, False, "receipt file is a symlink", sha8)
+    except OSError:
+        _gate_exit_check(args, False, "unable to resolve receipts dir", sha8)
+    if not receipt_path.is_file():
+        _gate_exit_check(args, False, "no receipt for HEAD", sha8)
+    try:
+        with receipt_path.open(encoding="utf-8") as f:
+            receipt = json.load(f)
+    except (OSError, json.JSONDecodeError, ValueError):
+        _gate_exit_check(args, False, "malformed receipt", sha8)
+    if not isinstance(receipt, dict):
+        _gate_exit_check(args, False, "malformed receipt", sha8)
+    if receipt.get("schema") != 1:
+        _gate_exit_check(args, False, "bad schema", sha8)
+    if receipt.get("head_sha") != head_sha:
+        _gate_exit_check(args, False, "HEAD mismatch", sha8)
+    if receipt.get("command_sha256") != _gate_command_sha256(args.command):
+        _gate_exit_check(args, False, "command fingerprint mismatch", sha8)
+
+    status_paths, status_error = _gate_status_paths(repo_root)
+    if status_error:
+        # A failing `git status` inside a resolvable repo is a real tooling
+        # error, not an ordinary "run the full gate" condition -> exit 2+
+        # (spec R1: missing/mismatch/dirty/stale/future/no-repo are exit 1;
+        # real errors are 2+). Callers fail closed on both.
+        error_exit(status_error, code=2, use_json=args.json)
+    assert status_paths is not None
+    for path in status_paths:
+        if not _gate_ignored_worktree_path(path):
+            _gate_exit_check(args, False, f"worktree dirty: {path}", sha8)
+
+    timestamp = receipt.get("timestamp")
+    if not isinstance(timestamp, str):
+        _gate_exit_check(args, False, "bad receipt timestamp", sha8)
+    try:
+        parsed_timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        if parsed_timestamp.tzinfo is None:
+            raise ValueError("timestamp has no timezone")
+        # OverflowError: extreme-but-parseable values (e.g. year 1 with a
+        # +23:59 offset) overflow astimezone(); fail closed, never crash.
+        age = datetime.now(timezone.utc) - parsed_timestamp.astimezone(timezone.utc)
+    except (TypeError, ValueError, OverflowError):
+        _gate_exit_check(args, False, "bad receipt timestamp", sha8)
+    if age < timedelta(0):
+        _gate_exit_check(args, False, "receipt timestamp in the future", sha8)
+    if age > timedelta(hours=24):
+        _gate_exit_check(args, False, "receipt stale (>24h)", sha8)
+    _gate_exit_check(args, True, "green receipt honored", sha8)
+
+
+def cmd_gate_classify(args: argparse.Namespace) -> None:
+    """Classify base...HEAD plus worktree paths for docs-only tier-B gating."""
+    repo_root, _head_sha, repo_error = _gate_repo_and_head()
+    if repo_error or repo_root is None:
+        error_exit(repo_error or "not a git repo", code=2, use_json=args.json)
+    try:
+        diff_proc = subprocess.run(
+            ["git", "diff", "--name-only", "-z", "--no-renames", f"{args.base}...HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError as e:
+        error_exit(f"git diff failed: {e}", code=2, use_json=args.json)
+    if diff_proc.returncode != 0:
+        error_exit(
+            f"git diff --name-only {args.base}...HEAD failed: {(diff_proc.stderr or '').strip()}",
+            code=2,
+            use_json=args.json,
+        )
+
+    status_paths, status_error = _gate_status_paths(repo_root)
+    if status_error:
+        error_exit(status_error, code=2, use_json=args.json)
+    assert status_paths is not None
+    paths = set(path for path in diff_proc.stdout.split("\0") if path)
+    paths.update(path for path in status_paths if path)
+    ordered_paths = sorted(paths)
+    entries = []
+    for path in ordered_paths:
+        classification, reason = _classify_gate_path(path)
+        entries.append({"path": path, "class": classification, "reason": reason})
+
+    if not entries:
+        tier = "full"
+        reason = "empty diff - refusing tier-B"
+    else:
+        forcing_entry = next((entry for entry in entries if entry["class"] != "safe"), None)
+        if forcing_entry is None:
+            tier = "tier-b"
+            reason = f"docs-only ({len(entries)} files)"
+        else:
+            tier = "full"
+            reason = f"{forcing_entry['reason']}: {forcing_entry['path']}"
+
+    if args.json:
+        json_output({
+            "tier": tier,
+            "base": args.base,
+            "paths": entries,
+            "changed_file_count": len(entries),
+        })
+    elif tier == "tier-b":
+        print(f"TIER_B: docs-only ({len(entries)} files)")
+    else:
+        print(f"FULL: {reason}")
+    sys.exit(0 if tier == "tier-b" else 1)
 
 
 # --- Checkpoint commands ---
@@ -32470,6 +32921,55 @@ def main() -> None:
     )
     p_triage.add_argument("--json", action="store_true", help="JSON output")
     p_triage.set_defaults(func=cmd_triage_skip)
+
+    # gate (fn-102)
+    p_gate = subparsers.add_parser(
+        "gate",
+        help="Gate-diet commands: green receipts + docs-only tiering (fn-102)",
+    )
+    gate_sub = p_gate.add_subparsers(dest="gate_cmd", required=True)
+
+    p_gate_receipt = gate_sub.add_parser(
+        "receipt",
+        help="Record a passing full gate as a green receipt (exit 0=written, 2=error)",
+    )
+    p_gate_receipt.add_argument(
+        "--gate",
+        required=True,
+        dest="gate_id",
+        help="Gate id slug ([A-Za-z0-9][A-Za-z0-9._-]{0,63})",
+    )
+    p_gate_receipt.add_argument(
+        "--command", required=True, help="Exact command string the receipt certifies"
+    )
+    p_gate_receipt.add_argument("--json", action="store_true", help="JSON output")
+    p_gate_receipt.set_defaults(func=cmd_gate_receipt)
+
+    p_gate_check = gate_sub.add_parser(
+        "check",
+        help="Check whether a green receipt can honor the full gate (exit 0=honored, 1=run)",
+    )
+    p_gate_check.add_argument(
+        "--gate",
+        required=True,
+        dest="gate_id",
+        help="Gate id slug ([A-Za-z0-9][A-Za-z0-9._-]{0,63})",
+    )
+    p_gate_check.add_argument(
+        "--command", required=True, help="Exact command string the receipt certifies"
+    )
+    p_gate_check.add_argument("--json", action="store_true", help="JSON output")
+    p_gate_check.set_defaults(func=cmd_gate_check)
+
+    p_gate_classify = gate_sub.add_parser(
+        "classify",
+        help="Classify changed paths for docs-only tier-B gating (exit 0=tier-B, 1=full)",
+    )
+    p_gate_classify.add_argument(
+        "--base", required=True, help="Base ref for the three-dot diff against HEAD"
+    )
+    p_gate_classify.add_argument("--json", action="store_true", help="JSON output")
+    p_gate_classify.set_defaults(func=cmd_gate_classify)
 
     # checkpoint
     p_checkpoint = subparsers.add_parser("checkpoint", help="Checkpoint commands")

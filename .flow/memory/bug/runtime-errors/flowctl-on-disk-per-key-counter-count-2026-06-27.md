@@ -4,11 +4,12 @@ date: "2026-06-27"
 track: bug
 category: runtime-errors
 module: plugins/flow-next/scripts/flowctl.py
-tags: [fn-68, pilot-log, tick-counter, race-condition, flock, rp-review, review-feedback]
+tags: [fn-68, pilot-log, tick-counter, race-condition, flock, rp-review, review-feedback, fn-102, gate-diet, path-normalization, fail-open, codex-review]
 problem_type: runtime-error
 symptoms: duplicate/colliding tick values; summary crashes with str-vs-int TypeError on a non-int tick
 root_cause: tick counted by filename slug not stored id; glob-count+write race; sort key used 'value or 0' instead of int() coercion
 resolution_type: fix
+last_updated: "2026-07-19"
 ---
 
 ## Problem
@@ -48,3 +49,17 @@ read-modify-write race; (c) numeric sort keys over external/hand-editable JSON
 must coerce defensively (`int()` in try/except), never `value or 0`. Regression
 tests should include an actual concurrent (subprocess) append to exercise the
 OS-level flock, not just in-process threads.
+
+## Update 2026-07-19
+
+## Problem
+The fn-102 gate subsystem shared a path-normalization helper with the review triage layer. The helper did `path.replace("\\", "/").strip()`; `.strip()` silently rewrote a leading-space path like `" .flow/tasks/x.md"` into `".flow/tasks/x.md"`, so `gate check` classed real dirt as ignorable `.flow/` state and `gate classify` classed `" docs/a.md"` as SAFE - both fail-OPEN in a mechanism whose whole contract is fail-closed.
+
+## What Didn't Work
+Lifting the triage layer's normalization verbatim into a new trust boundary. Trimming was harmless for triage (paths came from line-split `git diff --name-only`, worst case a false REVIEW) but the same trim inverted into a false SKIP once the consumer's ignore/safe sets keyed on exact path prefixes.
+
+## Solution
+Split the concerns: `_normalize_repo_path` now does separator normalization only (no strip); `_classify_triage_path` re-applies `.strip()` locally to preserve its historical behavior; gate check/classify consume the unstripped path. Regression tests pin a literal `" .flow"`/`" docs"` directory at both the check and classify boundaries (flowctl.py `_normalize_repo_path`, review round 1, commit 3e10ec31).
+
+## Prevention
+When a helper crosses from a fail-safe layer into a fail-closed layer, audit every lossy transform (strip/lower/normalize) against the new failure direction - a transform that only causes false negatives in one layer can cause false positives in the other. Whitespace-hostile path fixtures (leading-space dirs) belong in any test suite for path-membership predicates.

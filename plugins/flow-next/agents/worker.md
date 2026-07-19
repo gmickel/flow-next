@@ -60,6 +60,15 @@ Parse the spec carefully. Identify:
 #     then either fix the tooling if trivial, or escalate `BLOCKED: TOOLING_FAILURE`.
 #   No Quick commands defined → record `baseline: none` and proceed.
 # Never treat a pre-existing red baseline as your own success or your own failure.
+# Before each full gate command from the Quick commands, map it to a `(gate_id, exact command string)`
+# pair (`unittest` for the test suite, `smoke` for a smoke script) and first run:
+#   <FLOWCTL> gate check --gate <gate_id> --command "<cmd>"
+# Exit 0 means SKIP that full command: record
+#   GATE_SKIPPED:<gate_id>:green-receipt <sha8> - baseline reused from prior post-gate pass
+# using the `<sha8>` from the `HONORED` output (or `--json` `.sha8`). A reused green receipt
+# counts as `baseline: green` via receipt. On exit 1 or 2+, run the full command exactly as
+# today: fail closed, and never treat a check error as a skip. Lint/format commands are unchanged:
+# always run, never receipted, never skipped.
 ```
 
 **Capture the base commit at Phase-1 end — BEFORE any edit — and PERSIST it to a file** (bash variables do NOT survive across separate tool-call Bash blocks; a later block reading a stale `$BASE_COMMIT` would expand to `..HEAD` and record blank/empty evidence):
@@ -263,8 +272,12 @@ verification on the delegated diff — `verification_summary` from Codex is NOT
 trusted as the sole gate. See Phase 5.)
 
 **If REVIEW_MODE is any non-`none` value (`rp`, `codex`, `copilot`, or `cursor`), you MUST invoke impl-review and receive SHIP before proceeding.**
-(On a delegated task this impl-review SHIP gate IS the independent check — do not
-re-run a duplicate test pass in Phase 5; the impl-review gate already covers it.)
+(On a delegated task the impl-review SHIP gate is the independent CODE-QUALITY
+check. The Phase 5 Verify block still runs in every mode — it is the authoritative
+gate discipline (classify → tier-B or full gates → receipts → GATE_SKIPPED
+evidence). It is no longer a duplicate cost: a green receipt or docs-only
+classification resolves it in seconds, and when neither applies the full run is
+genuinely needed — the reviewer read the diff, it never executed the suite.)
 
 Use the Skill tool to invoke impl-review (NOT flowctl directly). If you're in a fresh shell, re-read the base first (`BASE_COMMIT=$(cat .flow/tmp/base_commit)`) so `--base` is populated:
 
@@ -365,8 +378,20 @@ If capture fails (memory disabled mid-run, flowctl error, etc.), log and continu
 
 **Verify before completing (if project has tests/lints):**
 ```bash
-# Run same tests/lints as baseline
-# Must pass before marking done
+BASE_COMMIT=$(cat .flow/tmp/base_commit)
+<FLOWCTL> gate classify --base "$BASE_COMMIT"
+# Exit 0: docs-only tier-B. Run ONLY lint/format where the repo configures them;
+# do NOT run the test/smoke gates. Record ONE evidence line PER GATE THE SPEC'S
+# QUICK COMMANDS ACTUALLY DEFINE - the same (gate_id, command) pairs the
+# Baseline check mapped; never a fixed id list (a project without a `smoke`
+# gate gets no smoke line - fabricated skip lines corrupt the evidence trail):
+#   GATE_SKIPPED:<gate_id>:docs-only - cumulative diff classified tier-B (no executable paths touched)
+# Mirror regen is unaffected: mirror-source diffs never classify tier-B because the classifier
+# force-fulls plugins/flow-next/{skills,agents,commands,references,templates,hooks}/** and codex/**.
+# Exit nonzero: run the full gates exactly as today. For each passed full gate command, use the
+# same `(gate_id, exact command string)` vocabulary as the baseline and then run:
+#   <FLOWCTL> gate receipt --gate <gate_id> --command "<cmd>"
+# Receipt failure is non-blocking: log it and continue. Must pass before marking done.
 ```
 If verification fails, fix and re-commit before proceeding.
 
@@ -374,18 +399,22 @@ If verification fails, fix and re-commit before proceeding.
 
 **Delegation verification backstop — `DELEGATE: codex` AND `REVIEW_MODE: none`.**
 When delegation was active AND no impl-review gate ran (Phase 4 skipped), you MUST
-run this verification yourself on the delegated diff before `flowctl done` — do NOT
-trust Codex's `verification_summary` as the sole gate. Run the project's
-tests/lints; on failure, fix + follow-up commit (never blind-commit). When
-`REVIEW_MODE != none`, the impl-review SHIP gate already covered this — skip the
-duplicate run.
+run the Phase 5 Verify block yourself on the delegated diff before `flowctl done` —
+do NOT trust Codex's `verification_summary` as the sole gate. The Verify block is
+authoritative here too: classify first, honor green receipts, and run the full
+tests/lints when neither applies (a docs-only tier-B or receipt-honored outcome
+with its GATE_SKIPPED evidence lines satisfies this backstop); on failure, fix +
+follow-up commit (never blind-commit). When `REVIEW_MODE != none`, the
+impl-review SHIP gate covered the CODE-QUALITY judgment only — the Phase 5 Verify
+block above still runs (classify → receipts → gates); it is cheap when a receipt
+or docs-only classification applies and load-bearing when neither does.
 
-Write the evidence file — re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered) in the SAME block, so no shell variable has to survive across tool calls. `base_commit` is an additive evidence field — always include it:
+Write the evidence file — re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered) in the SAME block, so no shell variable has to survive across tool calls. `base_commit` is an additive evidence field — always include it. Include any `GATE_SKIPPED` lines recorded during this task as plain strings in `tests[]` alongside real command strings (fn-99 plain-string schema - no new fields or objects), and echo those `GATE_SKIPPED` lines verbatim in the worker summary:
 ```bash
 BASE_COMMIT=$(cat .flow/tmp/base_commit)
 COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
 cat > /tmp/evidence.json << EOF
-{"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands>"], "prs": []}
+{"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands + any GATE_SKIPPED lines>"], "prs": []}
 EOF
 ```
 
@@ -400,7 +429,7 @@ Codex `result-batch-*.json`; `class` comes from `flowctl codex classify-result`;
 BASE_COMMIT=$(cat .flow/tmp/base_commit)
 COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
 cat > /tmp/evidence.json << EOF
-{"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands>"], "prs": [],
+{"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands + any GATE_SKIPPED lines>"], "prs": [],
  "delegation": {
    "result": {"status": "completed", "files_modified": ["<f>"], "issues": [],
               "summary": "<codex summary>", "verification_summary": "<codex verify>"},

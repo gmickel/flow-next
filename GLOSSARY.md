@@ -38,7 +38,15 @@ Optional scout output field listing feature slices from the feature map that ove
 
 ## Receipt
 
-A JSON artefact that gates Ralph state transitions. `flowctl impl-review` writes a receipt at `.flow/review-receipts/<branch>.json` with verdict (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`), confidence anchors, introduced vs pre-existing finding counts, and the deferred / suppressed counts. Ralph reads receipts to decide loop progression.
+A review-layer JSON artefact that gates Ralph state transitions. `flowctl impl-review` writes a receipt at `.flow/review-receipts/<branch>.json` with verdict (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`), confidence anchors, introduced vs pre-existing finding counts, and deferred / suppressed counts. Ralph reads review receipts to decide loop progression. A Green receipt is the gate-layer counterpart, not a review-layer receipt.
+
+_Relates to_: Green receipt
+
+## Green receipt
+
+The gate-layer counterpart introduced by fn-102: a per-file JSON record at `.flow/tmp/green-receipts/<sha8>-<gate_id>.json` (`{schema, head_sha, gate_id, command_sha256, timestamp}`) proving one exact full-gate command passed at one exact commit. `flowctl gate check` honors it only on a full-HEAD match, exact command fingerprint, clean worktree outside the `.flow/**` minus `.flow/bin/**` minus `.flow/config.json` ignore set, and `0 <= age <= 24h`; otherwise the caller runs the full gate, fail-closed. Skips are always loud (`GATE_SKIPPED:` evidence lines and `Gates:` summary lines). Predicates are purely mechanical: hash, path, and age, never semantic; local gates only, never CI.
+
+_Relates to_: Triage skip, Receipt
 
 ## Worker subagent
 

@@ -356,9 +356,9 @@ message lands, so `test -s` alone would accept a partial:
 
 ```bash
 RESULT_FILE="<scratch-dir>/result-batch-<n>.json"
-for i in $(seq 1 6); do
+for i in $(seq 1 30); do
   test -s "$RESULT_FILE" && jq -e . "$RESULT_FILE" >/dev/null 2>&1 && echo DONE && exit 0
-  sleep 10
+  sleep 2
 done
 echo "Waiting for Codex..."
 ```

@@ -41,6 +41,7 @@ Kept as archived evidence (dev assets under `optimization/`, never shipped in th
 - **Do NOT re-attempt a deterministic plan-sync skip-gate.** The failure is fundamental (semantic drift is invisible to path/symbol analysis), not a corpus/threshold/predicate that needs improvement. Any future attempt must start from the `transcribe fn-25.3` false-skip exhibit in `optimization/plan-sync-gate/cross-repo/` and explain how it catches semantic drift a deterministic probe cannot — which almost certainly requires a second LLM, defeating the purpose.
 - If plan-sync cost is worth attacking again, attack it a different way: make plan-sync itself cheaper/faster (smaller prompt, cheaper model, tighter scope), or reduce how often *work* produces genuinely disjoint downstream tasks — not a gate that predicts drift.
 - General lesson (reinforces the repo's agentic-vs-deterministic doctrine, CLAUDE.md): "did this change semantically affect that plan?" is a judgment question. Building a deterministic proxy for a judgment question is the anti-pattern the doctrine warns about; the eval harness earned its cost by killing the plausible-but-wrong optimization before it shipped and cost quality.
+- Scope note: fn-102's hash/path-only gate diet is outside this ban - predicates are commit-hash equality + path membership + receipt age, no semantic proxies (see the fn-102 spec Decision Context).
 
 ## References
 
