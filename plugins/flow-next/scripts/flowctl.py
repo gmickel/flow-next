@@ -27398,6 +27398,21 @@ def _gate_repo_and_head() -> tuple[Optional[Path], Optional[str], Optional[str]]
     if root_proc.returncode != 0:
         stderr = (root_proc.stderr or "").strip()
         if "not a git repository" in stderr.lower():
+            # git uses this phrase for BOTH a genuinely absent repository and
+            # broken/unreadable .git metadata. Distinguish them ourselves: if
+            # any directory on the upward walk carries a .git entry, metadata
+            # exists but is unusable - a tooling error (2+), never the quiet
+            # exit-1 fallback.
+            probe = Path.cwd()
+            for candidate in [probe, *probe.parents]:
+                try:
+                    if (candidate / ".git").exists():
+                        return None, None, (
+                            "git error: repository metadata present but "
+                            f"unusable: {stderr}"
+                        )
+                except OSError:
+                    return None, None, f"git error: cannot inspect {candidate}"
             return None, None, "not a git repo"
         # Corruption / permissions / other git failures are tooling errors (2+),
         # never a quiet fall-back-to-full-gates condition.

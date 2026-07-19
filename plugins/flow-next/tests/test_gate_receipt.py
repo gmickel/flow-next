@@ -305,9 +305,33 @@ class GateReceiptCompletionRegressionsTestCase(GateReceiptTestCase):
                 stderr="fatal: not a git repository (or any of the parent directories): .git",
             )
 
-        with mock.patch.object(mod.subprocess, "run", side_effect=fake_run_outside):
-            root, head, err = mod._gate_repo_and_head()
+        # The genuinely-outside case must be probed from a cwd with NO .git
+        # anywhere on the upward walk (the metadata-presence check is cwd-based).
+        outside = Path(tempfile.mkdtemp()).resolve()
+        try:
+            os.chdir(outside)
+            with mock.patch.object(mod.subprocess, "run", side_effect=fake_run_outside):
+                root, head, err = mod._gate_repo_and_head()
+        finally:
+            os.chdir(self.tmpdir)
+            shutil.rmtree(outside, ignore_errors=True)
         self.assertEqual(err, "not a git repo")
+
+    def test_check_broken_git_metadata_exits_2(self) -> None:
+        # A .git FILE with an invalid gitdir target: git reports "not a git
+        # repository", but metadata EXISTS - our walk detects it and maps to
+        # a real error (exit 2+), never the quiet run-full-gates fallback.
+        self._receipt()
+        git_dir = self.tmpdir / ".git"
+        backup = self.tmpdir / ".git-backup"
+        git_dir.rename(backup)
+        (self.tmpdir / ".git").write_text("gitdir: /nonexistent/broken\n", encoding="utf-8")
+        try:
+            result = self._check()
+            self.assertGreaterEqual(result.returncode, 2, result.stderr or result.stdout)
+        finally:
+            (self.tmpdir / ".git").unlink()
+            backup.rename(git_dir)
 
     def test_check_outside_repo_exits_1(self) -> None:
         outside = Path(tempfile.mkdtemp()).resolve()
