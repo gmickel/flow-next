@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 2.19.1] - 2026-07-19
 
 ### Changed
 
@@ -10,7 +10,7 @@ All notable changes to the flow-next.
   - **cwd-keyed, success-only memoization.** `get_repo_root()` / `get_state_dir()` cache per `Path.cwd()` (state-dir additionally keyed by the `FLOW_STATE_DIR` env value), so a chdir invalidates naturally and the module-scope-load + per-test chdir suites keep passing. Only SUCCESS results are cached - the CalledProcessError fallbacks stay uncached, so a transient git failure is never sticky. Regression test asserts `cmd_list` at 400+ tasks spawns <= 5 subprocesses.
   - **Cache sweep on the smaller repeat offenders.** `get_copilot_version` / `get_cursor_version` gain a per-process memo keyed by the `shutil.which()`-resolved executable path (success-only; PATH change re-probes; the disk model cache is untouched); prospect enumeration reads + frontmatter-parses each artifact exactly once per pass (was 3) and `_prospect_resolve_id` resolves an exact filename hit without enumerating the directory; `cmd_tasks`'s double `get_flow_dir()` is absorbed by the repo-root cache.
   - **Batched export git grep.** `_export_removed_export_refs` issues one `git grep -n -w -F -e s1 -e s2 ...` per 20-symbol chunk (at most 2 spawns for the 40-symbol cap, was up to 40), with per-symbol attribution recovered by a Python post-filter replicating `-w` word-boundary semantics exactly - payload byte-identical to the sequential form (oracle-tested).
-  - No behavior change anywhere; dual-copy flowctl mirrored. No version bump (batched releases).
+  - No behavior change anywhere; dual-copy flowctl mirrored. Released as 2.19.1.
 ## [flow-next 2.19.0] - 2026-07-19
 
 ### Changed
@@ -61,7 +61,7 @@ All notable changes to the flow-next.
   - **Guards that stay in CI:** a lockstep parity test pins the two snippet twins identical modulo the documented `/flow-next:` vs `$flow-next-` syntax substitutions; token-budget tripwires assert block <= 300 / usage.md template <= 2800 tokens-equivalent (budgets sit above targets; regrowth trips the test, content changes re-run the eval).
   - **Guidance-eval harness committed** under `agent_docs/guidance-eval/` (runner + per-cell scaffold + deterministic grader + README with grading contract, threat model, and results ledger). Clean-room mechanism probe-verified for OAuth logins: default config dir + `claude -p --setting-sources project,local` (`--bare` is API-key-only; a fresh `CLAUDE_CONFIG_DIR` drops the login); `codex exec --sandbox danger-full-access --skip-git-repo-check` for the Codex arm. Maintainer dev tool: committed + documented, deliberately not CI-wired.
   - **Sandbox-blocked-commit guidance** added where autonomous agents actually read: `agents/worker.md` near its evidence teaching (primary) and usage.md's Workflow section.
-  - No flowctl behavior/validation changes beyond the additive `setup-block` helper; the model-routing scaffold block is untouched. No version bump (batched releases).
+  - No flowctl behavior/validation changes beyond the additive `setup-block` helper; the model-routing scaffold block is untouched. Released as 2.19.1.
 
 ## [flow-next 2.14.0] - 2026-07-15
 
@@ -74,7 +74,7 @@ All notable changes to the flow-next.
   - **usage.md bridge-recipe hardening (strictly safer).** All `codex exec` recipe lines carry `--skip-git-repo-check` (outside a trusted git repo codex refuses in ~1s with the error only in the log - a fire-and-forget caller sees a clean silent failure); the write-mode recipe asserts the intended workspace first (the flag also disables codex's git-repo preflight, so the guard keeps it a silence fix, never a safety bypass); the `cursor-agent` recipe warns to run inside a git repo (in a non-repo dir it blocks on an interactive trust prompt and exits "successfully" with empty output). Existing projects pick both up on the next `/flow-next:setup` re-run.
   - **Codex self-bridge documented + MAv2 steering caveat.** On GPT-5.6-Sol/Multi-Agent-V2 builds, per-spawn model steering is currently unreliable (openai/codex#31814/#32782/#33268/#33314); orchestration.md, platforms.md, and the usage.md bridge recipes now document the robust route from a Codex host - the same-family `codex exec -m` self-bridge (flat child prompt; nested MAv2 subagents can return undecodable results, #33267). Re-check tracked as a stub spec.
   - **`orchestration.md`: "A proven default pipeline".** Model-per-role defaults table with a per-host reach column (roles are host-independent because the bridges run both directions; only the reach mechanism differs) - plan session-native by design, work terra-medium, impl-review sol-high cross-family first pass + session-model final gate; luna-xhigh as the equal-recall-slower alternative; grok-4.5 as classic-bug quick pass only, never the gate. Plus the wrapper-pattern subsection (thin fast-tier wrapper for unattended loops; bridge runs in the FOREGROUND; self-heal license covers environment/flags only, never judgment) and the raw-bridge severity-tier note (ad-hoc review prompts should demand P0-P3 tiers + spec-grounded verdicts; the packaged impl-review find-vs-fix split is deliberately unchanged). Single-subscription framing throughout: multi-model routing is optional garnish, every row degrades to the session model.
-  - No behavior change when the new defaults are untouched and the setup question is declined, except the strictly-safer recipe flags and the delegate-default flip documented above. No version bump (batched releases).
+  - No behavior change when the new defaults are untouched and the setup question is declined, except the strictly-safer recipe flags and the delegate-default flip documented above. Released as 2.19.1.
 
 ## [flow-next 2.13.1] - 2026-07-13
 
