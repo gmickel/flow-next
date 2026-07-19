@@ -1,24 +1,31 @@
 {
   "branch_name": "fn-118-work-skill-sanctioned-parallel-worker",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-07-19T20:18:04.642828Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-118-work-skill-sanctioned-parallel-worker",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-118-work-skill-sanctioned-parallel-worker.md",
   "status": "open",
   "title": "work skill: sanctioned parallel worker dispatch for file-disjoint tasks",
   "tracker": {
-    "baseHashFlow": null,
-    "baseHashTracker": null,
+    "baseHashFlow": "3ef0bfd5b4a4588d115757b08e067669e4713e3d9dd1eff9ba2ed5024f2f603d",
+    "baseHashTracker": "06dee75cbd1272b802ec317b1fbbd5bf07ca9a9ad55807fe6f820089ffe33446",
     "depRelations": [],
-    "id": null,
-    "identifier": null,
-    "lastSyncedAt": null,
-    "mergeBaseFlow": null,
-    "mergeBaseTracker": null,
-    "url": null
+    "id": "b49b6ebe-be82-4da6-b331-59add090d352",
+    "identifier": "FLOW-52",
+    "lastSyncedAt": "2026-07-19T20:26:44.031269Z",
+    "mergeBaseFlow": "# fn-118 work skill: sanctioned parallel worker dispatch for file-disjoint tasks\n\n> STUB (2026-07-19, maintainer-requested during the fn-117 messaging research). Interview/plan before building.\n\n## Goal & Context\n\nThe maintainer has long run multiple worker subagents in parallel on disjoint tasks of one spec by prompting into `/flow-next:work` (\"run .2 and .3 in parallel - they touch disjoint files\"). This works today because the host can batch multiple worker Task calls in one message and the state store makes claims atomic (flock in `flowctl start`, assignee collision checks) - but a full-history check (both plugin generations) confirms the skill prose NEVER sanctioned it: phases.md describes a strictly sequential per-task loop (\"For each task, spawn a worker\"). The capability is real, load-bearing in practice, and undocumented - which risks (a) a future prose tightening accidentally forbidding it, (b) agents refusing or serializing when prompted, (c) the fn-117 cookbook marketing a pattern the skill contract does not name.\n\nMake it official: the work skill gains a sanctioned parallel branch.\n\n## Sketch (design at plan time)\n\n- Phase 3 gains an explicit parallel mode: when 2+ READY tasks have no dependency edges between them AND declare disjoint `**Files:**` lists (plan-time file-overlap minimization is the existing design guidance), the host MAY dispatch their workers in one parallel batch (multiple Task calls in one message). Triggered by user prompt (\"in parallel\") or an explicit flag (`--parallel[=N]`); default remains sequential (context-budget conservatism).\n- Each worker keeps its full per-task contract unchanged (claim via `flowctl start`, implement, gates, review loop to SHIP, `flowctl done` with evidence, per-task commit). Verification (3d) runs per returned worker; plan-sync (3e) runs ONCE after the batch (downstream = remaining todo tasks).\n- Overlap guard: tasks whose Files lists intersect (or that share a dep edge) are NEVER co-dispatched - fall back to sequential for those. Same-branch commits from parallel workers are serialized by git itself (workers commit at different times; a push race is not in scope - single-branch local commits only).\n- Autonomous callers (pilot) stay sequential in v1 - this is an interactive/prompted capability first; pilot integration is a separate decision.\n- Docs: work skill page + teams.md \"Parallel work from one spec\" gains the single-session variant; cookbook recipe in fn-117 updates from \"prompted, works today\" to \"sanctioned contract\" once this lands.\n\n## Boundaries\n\n- No flowctl changes expected (claims are already atomic; if a gap is found, it is a bug fix not a feature).\n- Not Ralph-scoped (fresh-session-per-iteration model unchanged).\n- Coordinate with fn-110 (skill fence consolidation touches the same phases.md).\n",
+    "mergeBaseTracker": "> STUB (2026-07-19, maintainer-requested during the fn-117 messaging research). Interview/plan before building.\n\n## Goal & Context\n\nThe maintainer has long run multiple worker subagents in parallel on disjoint tasks of one spec by prompting into `/flow-next:work` (\"run .2 and .3 in parallel - they touch disjoint files\"). This works today because the host can batch multiple worker Task calls in one message and the state store makes claims atomic (flock in `flowctl start`, assignee collision checks) - but a full-history check (both plugin generations) confirms the skill prose NEVER sanctioned it: phases.md describes a strictly sequential per-task loop (\"For each task, spawn a worker\"). The capability is real, load-bearing in practice, and undocumented - which risks (a) a future prose tightening accidentally forbidding it, (b) agents refusing or serializing when prompted, (c) the fn-117 cookbook marketing a pattern the skill contract does not name.\n\nMake it official: the work skill gains a sanctioned parallel branch.\n\n## Sketch (design at plan time)\n\n* Phase 3 gains an explicit parallel mode: when 2+ READY tasks have no dependency edges between them AND declare disjoint `**Files:**` lists (plan-time file-overlap minimization is the existing design guidance), the host MAY dispatch their workers in one parallel batch (multiple Task calls in one message). Triggered by user prompt (\"in parallel\") or an explicit flag (`--parallel[=N]`); default remains sequential (context-budget conservatism).\n* Each worker keeps its full per-task contract unchanged (claim via `flowctl start`, implement, gates, review loop to SHIP, `flowctl done` with evidence, per-task commit). Verification (3d) runs per returned worker; plan-sync (3e) runs ONCE after the batch (downstream = remaining todo tasks).\n* Overlap guard: tasks whose Files lists intersect (or that share a dep edge) are NEVER co-dispatched - fall back to sequential for those. Same-branch commits from parallel workers are serialized by git itself (workers commit at different times; a push race is not in scope - single-branch local commits only).\n* Autonomous callers (pilot) stay sequential in v1 - this is an interactive/prompted capability first; pilot integration is a separate decision.\n* Docs: work skill page + teams.md \"Parallel work from one spec\" gains the single-session variant; cookbook recipe in fn-117 updates from \"prompted, works today\" to \"sanctioned contract\" once this lands.\n\n## Boundaries\n\n* No flowctl changes expected (claims are already atomic; if a gap is found, it is a bug fix not a feature).\n* Not Ralph-scoped (fresh-session-per-iteration model unchanged).\n* Coordinate with fn-110 (skill fence consolidation touches the same phases.md).",
+    "url": "https://linear.app/gmickel/issue/FLOW-52"
   },
-  "updated_at": "2026-07-19T20:18:53.193676Z"
+  "updated_at": "2026-07-19T20:26:44.031515Z"
 }
