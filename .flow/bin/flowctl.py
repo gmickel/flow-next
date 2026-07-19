@@ -27630,6 +27630,18 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
 
     sha8 = head_sha[:8]
     receipt_path = _gate_receipt_path(repo_root, head_sha, args.gate_id)
+    # Read-side symmetry with `gate receipt`'s containment guard: a symlinked
+    # .flow path (or a symlinked receipt file) could make check honor a
+    # receipt stored OUTSIDE this checkout that the write side would have
+    # refused to create. Not honorable -> run the full gate (exit 1).
+    try:
+        resolved_parent = receipt_path.parent.resolve()
+        if not str(resolved_parent).startswith(str(repo_root.resolve()) + os.sep):
+            _gate_exit_check(args, False, "receipts dir resolves outside the repository (symlinked .flow path)", sha8)
+        if receipt_path.is_symlink():
+            _gate_exit_check(args, False, "receipt file is a symlink", sha8)
+    except OSError:
+        _gate_exit_check(args, False, "unable to resolve receipts dir", sha8)
     if not receipt_path.is_file():
         _gate_exit_check(args, False, "no receipt for HEAD", sha8)
     try:

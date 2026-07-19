@@ -389,6 +389,32 @@ class GateReceiptCompletionRegressionsTestCase(GateReceiptHarness):
         self._receipt()
         self.assertTrue(self._receipt_path().exists())
 
+    def test_check_refuses_symlinked_receipts_dir(self) -> None:
+        # Read-side symmetry: a symlinked .flow/tmp pointing at a shared dir
+        # holding a VALID receipt must not be honored (exit 1).
+        self._receipt()
+        outside = Path(tempfile.mkdtemp()).resolve()
+        try:
+            flow_tmp = self.tmpdir / ".flow" / "tmp"
+            shutil.move(str(flow_tmp), str(outside / "tmp"))
+            flow_tmp.symlink_to(outside / "tmp", target_is_directory=True)
+            result = self._check()
+            self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+        finally:
+            if flow_tmp.is_symlink():
+                flow_tmp.unlink()
+                shutil.move(str(outside / "tmp"), str(flow_tmp))
+            shutil.rmtree(outside, ignore_errors=True)
+
+    def test_check_refuses_symlinked_receipt_file(self) -> None:
+        self._receipt()
+        path = self._receipt_path()
+        real = path.with_suffix(".real.json")
+        path.rename(real)
+        path.symlink_to(real)
+        result = self._check()
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+
     def test_check_outside_repo_exits_1(self) -> None:
         outside = Path(tempfile.mkdtemp()).resolve()
         try:
