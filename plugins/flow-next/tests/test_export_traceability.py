@@ -407,5 +407,222 @@ class TestRemovedSymbolsSignatureEdit(unittest.TestCase):
         self.assertIn("helper", out)
         self.assertEqual(out["helper"], "lib.py")
 
+# --------------------------------------------------------------------------
+# fn-109 R8 — batched `git grep` in _export_removed_export_refs
+# --------------------------------------------------------------------------
+class _BatchedRefsGitBase(unittest.TestCase):
+    """Temp git repo helpers for the batched-grep tests (fn-109 R8)."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _git(self.root, "init", "-q")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _commit(self, msg: str) -> str:
+        _git(self.root, "add", "-A")
+        _git(self.root, "commit", "-qm", msg)
+        return _git(self.root, "rev-parse", "HEAD").strip()
+
+    def _write(self, rel: str, content: str) -> None:
+        p = self.root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    def _counting_export_git(self):
+        """Patch `_export_run_git` with a recording delegate; returns the
+        (patcher, calls) pair. Precedent: test_backend_spec.py subprocess
+        counting."""
+        from unittest import mock
+
+        real = flowctl._export_run_git
+        calls: list = []
+
+        def wrapper(args, cwd=None):
+            calls.append(list(args))
+            return real(args, cwd=cwd)
+
+        return mock.patch.object(flowctl, "_export_run_git", wrapper), calls
+
+    @staticmethod
+    def _sequential_reference(merge_base: str, root: Path) -> list:
+        """The PRE-fn-109 per-symbol implementation, replicated verbatim as
+        the byte-parity oracle: one `git grep -n -w -F -e <sym>` per symbol,
+        per-symbol ref cap applied while consuming that symbol's own grep
+        output."""
+        rc_u, out_u, _ = flowctl._export_run_git(
+            ["diff", "-M", "--unified=0", f"{merge_base}..HEAD"], cwd=root
+        )
+        if rc_u != 0:
+            return []
+        removed = flowctl._export_extract_removed_symbols(out_u)
+        if not removed:
+            return []
+        pathspecs = sorted("*" + ext for ext in flowctl._EXPORT_SOURCE_EXTENSIONS)
+        results = []
+        for sym in sorted(removed)[: flowctl._EXPORT_REMOVED_REFS_MAX_SYMBOLS]:
+            grep_args = ["grep", "-n", "-w", "-F", "-e", sym]
+            if pathspecs:
+                grep_args += ["--", *pathspecs]
+            rc_g, out_g, _ = flowctl._export_run_git(grep_args, cwd=root)
+            if rc_g != 0:
+                continue
+            refs = []
+            for gline in out_g.splitlines():
+                parts = gline.split(":", 2)
+                if len(parts) < 2:
+                    continue
+                try:
+                    ref_lineno = int(parts[1])
+                except ValueError:
+                    continue
+                snippet = parts[2].strip() if len(parts) > 2 else ""
+                refs.append(
+                    {"path": parts[0], "line": ref_lineno, "text": snippet[:200]}
+                )
+                if len(refs) >= flowctl._EXPORT_REMOVED_REFS_MAX_PER_SYMBOL:
+                    break
+            if refs:
+                results.append(
+                    {"symbol": sym, "defined_in": removed[sym], "refs": refs}
+                )
+        return results
+
+
+class TestBatchedRemovedRefsGrep(_BatchedRefsGitBase):
+    def test_40_symbols_at_most_2_grep_calls(self) -> None:
+        syms = [f"gone_fn_{i:02d}" for i in range(40)]
+        lib = "".join(f"def {s}(x):\n    return x\n" for s in syms)
+        use = "".join(f"{s}(1)\n" for s in syms)
+        self._write("lib.py", lib)
+        self._write("use.py", use)
+        base = self._commit("base")
+        self._write("lib.py", "def keep():\n    return 0\n")
+        self._commit("remove all 40")
+
+        patcher, calls = self._counting_export_git()
+        with patcher:
+            refs = flowctl._export_removed_export_refs(
+                base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
+            )
+        grep_calls = [c for c in calls if c and c[0] == "grep"]
+        self.assertLessEqual(
+            len(grep_calls), 2,
+            f"expected <=2 batched greps for 40 symbols, got {len(grep_calls)}",
+        )
+        self.assertEqual([r["symbol"] for r in refs], sorted(syms))
+        for r in refs:
+            self.assertEqual(r["defined_in"], "lib.py")
+            self.assertTrue(
+                any(x["path"] == "use.py" for x in r["refs"]),
+                f'{r["symbol"]} lost its use.py reference in the batch',
+            )
+
+    def test_multi_symbol_line_attributed_to_each(self) -> None:
+        self._write(
+            "lib.py",
+            "def alpha_fn(x):\n    return x\n"
+            "def beta_fn(x):\n    return x\n",
+        )
+        self._write("use.py", "combined = alpha_fn(beta_fn(1))\n")
+        base = self._commit("base")
+        self._write("lib.py", "def keep():\n    return 0\n")
+        self._commit("remove both")
+        refs = flowctl._export_removed_export_refs(
+            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
+        )
+        by_sym = {r["symbol"]: r["refs"] for r in refs}
+        self.assertIn("alpha_fn", by_sym)
+        self.assertIn("beta_fn", by_sym)
+        shared = {"path": "use.py", "line": 1,
+                  "text": "combined = alpha_fn(beta_fn(1))"}
+        self.assertIn(shared, by_sym["alpha_fn"])
+        self.assertIn(shared, by_sym["beta_fn"])
+
+    def test_prefix_collision_word_boundary_preserved(self) -> None:
+        # `foo` vs `foobar`: git grep -w -F semantics (word chars are
+        # [0-9A-Za-z_]) must survive the Python post-filter — a `foobar(`
+        # line is NOT a `foo` reference, and `foo_bar` matches neither.
+        self._write(
+            "lib.py",
+            "def foo(x):\n    return x\n"
+            "def foobar(x):\n    return x\n",
+        )
+        self._write(
+            "use.py",
+            "foo(1)\n"
+            "foobar(2)\n"
+            "foo_bar = 3\n",
+        )
+        base = self._commit("base")
+        self._write("lib.py", "def keep():\n    return 0\n")
+        self._commit("remove foo + foobar")
+        refs = flowctl._export_removed_export_refs(
+            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
+        )
+        by_sym = {r["symbol"]: r["refs"] for r in refs}
+        foo_texts = [x["text"] for x in by_sym["foo"] if x["path"] == "use.py"]
+        foobar_texts = [
+            x["text"] for x in by_sym["foobar"] if x["path"] == "use.py"
+        ]
+        self.assertEqual(foo_texts, ["foo(1)"])
+        self.assertEqual(foobar_texts, ["foobar(2)"])
+
+    def test_per_symbol_cap_preserved(self) -> None:
+        cap = flowctl._EXPORT_REMOVED_REFS_MAX_PER_SYMBOL
+        self._write("lib.py", "def capped_fn(x):\n    return x\n")
+        self._write(
+            "use.py", "".join(f"capped_fn({i})\n" for i in range(cap + 5))
+        )
+        base = self._commit("base")
+        self._write("lib.py", "def keep():\n    return 0\n")
+        self._commit("remove capped_fn")
+        refs = flowctl._export_removed_export_refs(
+            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
+        )
+        self.assertEqual(len(refs), 1)
+        self.assertEqual(len(refs[0]["refs"]), cap)
+        # Cap keeps the FIRST `cap` matches in grep output order.
+        self.assertEqual(refs[0]["refs"][0]["line"], 1)
+        self.assertEqual(refs[0]["refs"][-1]["line"], cap)
+
+    def test_payload_byte_identical_vs_sequential_reference(self) -> None:
+        # Messy fixture exercising multi-symbol lines, prefix collisions,
+        # the per-symbol cap, and an unreferenced removal — the batched
+        # implementation must serialize byte-identically to the sequential
+        # per-symbol oracle.
+        import json as _json
+
+        cap = flowctl._EXPORT_REMOVED_REFS_MAX_PER_SYMBOL
+        self._write(
+            "lib.py",
+            "def foo(x):\n    return x\n"
+            "def foobar(x):\n    return x\n"
+            "def lonely_fn(x):\n    return x\n"
+            "def busy_fn(x):\n    return x\n",
+        )
+        use = ["foo(foobar(0))\n", "foo_bar = 1\n"]
+        use += [f"busy_fn({i})\n" for i in range(cap + 3)]
+        self._write("use.py", "".join(use))
+        base = self._commit("base")
+        self._write("lib.py", "def keep():\n    return 0\n")
+        self._commit("remove all")
+
+        batched = flowctl._export_removed_export_refs(
+            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
+        )
+        oracle = self._sequential_reference(base, self.root)
+        self.assertEqual(
+            _json.dumps(batched, sort_keys=True, indent=2),
+            _json.dumps(oracle, sort_keys=True, indent=2),
+        )
+        # Sanity: the oracle actually exercised the interesting cases.
+        by_sym = {r["symbol"]: r["refs"] for r in oracle}
+        self.assertNotIn("lonely_fn", by_sym)  # removed but unreferenced
+        self.assertEqual(len(by_sym["busy_fn"]), cap)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,15 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **flowctl hot-path perf: memoized repo-root/state-dir lookups (fn-109).** `flowctl list --json` on a 100-spec / 403-task repo dropped from 30.8s to under 1s (`status` 32s to under 1.5s): `load_task_with_state` was spawning 2 uncached `git rev-parse` subprocesses PER TASK - 809 spawns per list. pilot/land/ralph run these reads every tick, so this is loop-tick latency across the whole autonomy track.
+  - **cwd-keyed, success-only memoization.** `get_repo_root()` / `get_state_dir()` cache per `Path.cwd()` (state-dir additionally keyed by the `FLOW_STATE_DIR` env value), so a chdir invalidates naturally and the module-scope-load + per-test chdir suites keep passing. Only SUCCESS results are cached - the CalledProcessError fallbacks stay uncached, so a transient git failure is never sticky. Regression test asserts `cmd_list` at 400+ tasks spawns <= 5 subprocesses.
+  - **Cache sweep on the smaller repeat offenders.** `get_copilot_version` / `get_cursor_version` gain a per-process memo keyed by the `shutil.which()`-resolved executable path (success-only; PATH change re-probes; the disk model cache is untouched); prospect enumeration reads + frontmatter-parses each artifact exactly once per pass (was 3) and `_prospect_resolve_id` resolves an exact filename hit without enumerating the directory; `cmd_tasks`'s double `get_flow_dir()` is absorbed by the repo-root cache.
+  - **Batched export git grep.** `_export_removed_export_refs` issues one `git grep -n -w -F -e s1 -e s2 ...` per 20-symbol chunk (at most 2 spawns for the 40-symbol cap, was up to 40), with per-symbol attribution recovered by a Python post-filter replicating `-w` word-boundary semantics exactly - payload byte-identical to the sequential form (oracle-tested).
+  - No behavior change anywhere; dual-copy flowctl mirrored. No version bump (batched releases).
 ## [flow-next 2.19.0] - 2026-07-19
 
 ### Changed
