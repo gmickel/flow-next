@@ -26749,8 +26749,15 @@ TRIAGE_ARTIFACT_PREFIXES: tuple[str, ...] = (
 
 
 def _normalize_repo_path(path: str) -> str:
-    """Normalize a repo-relative path for portable prefix matching."""
-    return path.replace("\\", "/").strip()
+    """Normalize a repo-relative path for portable prefix matching.
+
+    Separator normalization ONLY - leading/trailing whitespace is preserved
+    because it is meaningful in filenames: a path like " .flow/x" (leading
+    space) is a DIFFERENT path from ".flow/x", and stripping it would let
+    gate check/classify mis-bucket it (fail-open). Callers that want the
+    legacy trimmed behavior strip explicitly.
+    """
+    return path.replace("\\", "/")
 
 
 def _classify_triage_path(path: str) -> str:
@@ -26766,7 +26773,9 @@ def _classify_triage_path(path: str) -> str:
       - ``other``     — unknown; forces REVIEW by fallthrough
     """
     # Normalize to POSIX for stable prefix matching even on Windows checkouts.
-    p = _normalize_repo_path(path)
+    # Triage keeps its historical trim (paths come from `git diff --name-only`
+    # line-splitting, which can carry stray whitespace).
+    p = _normalize_repo_path(path).strip()
     if not p:
         return "other"
 
@@ -27567,9 +27576,11 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
 
     status_paths, status_error = _gate_status_paths(repo_root)
     if status_error:
-        if status_error.startswith("git unavailable:"):
-            error_exit(status_error, code=2, use_json=args.json)
-        _gate_exit_check(args, False, status_error, sha8)
+        # A failing `git status` inside a resolvable repo is a real tooling
+        # error, not an ordinary "run the full gate" condition -> exit 2+
+        # (spec R1: missing/mismatch/dirty/stale/future/no-repo are exit 1;
+        # real errors are 2+). Callers fail closed on both.
+        error_exit(status_error, code=2, use_json=args.json)
     assert status_paths is not None
     for path in status_paths:
         if not _gate_ignored_worktree_path(path):
@@ -27582,8 +27593,10 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
         parsed_timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         if parsed_timestamp.tzinfo is None:
             raise ValueError("timestamp has no timezone")
+        # OverflowError: extreme-but-parseable values (e.g. year 1 with a
+        # +23:59 offset) overflow astimezone(); fail closed, never crash.
         age = datetime.now(timezone.utc) - parsed_timestamp.astimezone(timezone.utc)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         _gate_exit_check(args, False, "bad receipt timestamp", sha8)
     if age < timedelta(0):
         _gate_exit_check(args, False, "receipt timestamp in the future", sha8)

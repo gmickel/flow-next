@@ -182,6 +182,18 @@ class GateClassifyTestCase(unittest.TestCase):
         self.assertEqual(flowctl._classify_gate_path("docs\\a.md")[0], "safe")
         self.assertEqual(flowctl._classify_triage_path("docs\\a.md"), "docs")
 
+    def test_leading_space_path_is_not_safe(self) -> None:
+        # " docs/a.md" lives in a directory literally named " docs" - a
+        # DIFFERENT path from docs/. Normalization must not strip the space
+        # into a SAFE bucket (review round 1 fail-open): unmatched -> FULL.
+        self.assertEqual(flowctl._classify_gate_path(" docs/a.md")[0], "full")
+        self.assertEqual(flowctl._classify_gate_path(" .flow/specs/x.md")[0], "full")
+        # End-to-end through the CLI wire: an untracked file under " docs".
+        self._commit_paths("docs/real.md")
+        self._write(" docs/impostor.md")
+        result, _data = self._classify()
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+
     def test_path_only_classifier_handles_missing_paths_and_all_force_extensions(self) -> None:
         self.assertEqual(flowctl._classify_gate_path("docs/ghost.md")[0], "safe")
         self.assertEqual(

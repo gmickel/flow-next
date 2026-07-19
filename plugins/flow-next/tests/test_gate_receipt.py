@@ -190,6 +190,54 @@ class GateReceiptTestCase(unittest.TestCase):
         self.assertEqual(check.returncode, 1)
         self.assertEqual(receipt.returncode, 2)
 
+    def test_check_rejects_leading_space_flow_lookalike_dirt(self) -> None:
+        # A path in a directory literally named " .flow" (leading space) is
+        # NOT the ignorable .flow/ state dir. Normalization must preserve the
+        # whitespace so the dirt fails the probe (review round 1 fail-open).
+        self._receipt()
+        path = self.tmpdir / " .flow" / "tasks" / "x.md"
+        path.parent.mkdir(parents=True)
+        path.write_text("dirt\n", encoding="utf-8")
+        result = self._check()
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+
+    def test_check_rejects_extreme_offset_timestamp_without_traceback(self) -> None:
+        # Parseable-but-overflowing value: year 1 with a +23:59 offset raises
+        # OverflowError in astimezone(); must fail closed, never crash.
+        self._receipt()
+        self._rewrite_receipt(timestamp="0001-01-01T00:00:00+23:59")
+        result = self._check()
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("Traceback", result.stdout + result.stderr)
+
+    @unittest.skipUnless(os.name == "posix", "PATH shim requires a POSIX shell")
+    def test_check_git_status_failure_is_error_exit_2(self) -> None:
+        # A failing `git status` inside a resolvable repo is a real tooling
+        # error (exit 2+), not the ordinary run-the-full-gate exit 1.
+        self._receipt()
+        real_git = shutil.which("git")
+        assert real_git is not None
+        shim_dir = self.tmpdir / "shim-bin"
+        shim_dir.mkdir()
+        shim = shim_dir / "git"
+        shim.write_text(
+            "#!/bin/sh\n"
+            'for a in "$@"; do case "$a" in status) exit 128;; esac; done\n'
+            f'exec "{real_git}" "$@"\n',
+            encoding="utf-8",
+        )
+        shim.chmod(0o755)
+        env = dict(os.environ)
+        env["PATH"] = f"{shim_dir}{os.pathsep}{env.get('PATH', '')}"
+        result = subprocess.run(
+            [sys.executable, str(FLOWCTL_PY), "gate", "check", "--gate", GATE_ID, "--command", COMMAND],
+            cwd=self.tmpdir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 2, result.stderr or result.stdout)
+
     def test_gate_id_validation_at_both_boundaries(self) -> None:
         invalid_ids = ["../x", "a/b", "..\\x", ".", "..", "", "a" * 65, "-x", ".x"]
         for gate_id in invalid_ids:
