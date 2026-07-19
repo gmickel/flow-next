@@ -184,9 +184,21 @@ RUNTIME_FIELDS = {
 
 # --- Helpers ---
 
+# fn-109: hot-path memoization. Keyed by Path.cwd() so os.chdir() (test
+# suites load this module once then chdir per test; embedding callers may
+# too) invalidates naturally. Only SUCCESS results are cached — the
+# CalledProcessError fallback stays uncached so a transient git failure
+# is never sticky. Separate from _STATE_DIR_CACHE (worktree-local
+# --show-toplevel vs shared --git-common-dir semantics; never merge).
+_REPO_ROOT_CACHE = {}  # {Path.cwd(): repo-root Path}
+
 
 def get_repo_root() -> Path:
-    """Find git repo root."""
+    """Find git repo root. Memoized per cwd (success-only)."""
+    cwd = Path.cwd()
+    cached = _REPO_ROOT_CACHE.get(cwd)
+    if cached is not None:
+        return cached
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -194,10 +206,12 @@ def get_repo_root() -> Path:
             text=True, encoding="utf-8",
             check=True,
         )
-        return Path(result.stdout.strip())
+        root = Path(result.stdout.strip())
+        _REPO_ROOT_CACHE[cwd] = root
+        return root
     except subprocess.CalledProcessError:
-        # Fallback to current directory
-        return Path.cwd()
+        # Fallback to current directory (uncached: never sticky)
+        return cwd
 
 
 def get_flow_dir() -> Path:
@@ -835,6 +849,15 @@ def validate_strategy_frontmatter(fm: dict[str, Any]) -> list[str]:
     return errors
 
 
+# fn-109: hot-path memoization for get_state_dir. Keyed by
+# (Path.cwd(), FLOW_STATE_DIR value) so a chdir OR an env set/unset within
+# one process resolves fresh. Only the SUCCESSFUL --git-common-dir branch
+# is cached; the env-override branch (no subprocess, semantics unchanged)
+# and the non-git fallback stay uncached. Kept separate from
+# _REPO_ROOT_CACHE (shared-common-dir vs worktree-local semantics).
+_STATE_DIR_CACHE = {}  # {(Path.cwd(), FLOW_STATE_DIR or None): state-dir Path}
+
+
 def get_state_dir() -> Path:
     """Get state directory for runtime task state.
 
@@ -847,6 +870,11 @@ def get_state_dir() -> Path:
     if state_dir := os.environ.get("FLOW_STATE_DIR"):
         return Path(state_dir).resolve()
 
+    cache_key = (Path.cwd(), state_dir)
+    cached = _STATE_DIR_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     # 2. Git common-dir (shared across worktrees)
     try:
         result = subprocess.run(
@@ -856,11 +884,13 @@ def get_state_dir() -> Path:
             check=True,
         )
         common = result.stdout.strip()
-        return Path(common) / "flow-state"
+        state = Path(common) / "flow-state"
+        _STATE_DIR_CACHE[cache_key] = state
+        return state
     except subprocess.CalledProcessError:
         pass
 
-    # 3. Fallback for non-git repos
+    # 3. Fallback for non-git repos (uncached: never sticky)
     return get_flow_dir() / "state"
 
 
