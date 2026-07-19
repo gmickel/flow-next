@@ -10,7 +10,7 @@
   "id": "fn-116-gate-diet-follow-up-ancestor-walk",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 1,
+  "plan_review_rounds": 2,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T18:55:50.265218Z"
+  "updated_at": "2026-07-19T18:58:22.351489Z"
 }
