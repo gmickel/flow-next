@@ -27331,6 +27331,7 @@ def cmd_triage_skip(args: argparse.Namespace) -> None:
 # primitives so platform-specific path spelling cannot split their behavior.
 
 GATE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+GATE_FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 GATE_RECEIPTS_DIR = Path(".flow") / "tmp" / "green-receipts"
 GATE_CODE_EXTS: frozenset[str] = TRIAGE_CODE_EXTS | frozenset({
     ".py",
@@ -27494,6 +27495,135 @@ def _gate_ignored_worktree_path(path: str) -> bool:
     )
 
 
+def _gate_receipt_timestamp(receipt: dict[str, Any]) -> tuple[Optional[datetime], Optional[str]]:
+    """Parse a receipt timestamp into UTC or return its fail-closed reason."""
+    timestamp = receipt.get("timestamp")
+    if not isinstance(timestamp, str):
+        return None, "bad receipt timestamp"
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            raise ValueError("timestamp has no timezone")
+        return parsed.astimezone(timezone.utc), None
+    except (TypeError, ValueError, OverflowError):
+        return None, "bad receipt timestamp"
+
+
+def _gate_receipt_valid(
+    receipt: dict[str, Any], head_sha: Optional[str], command: str
+) -> tuple[bool, str]:
+    """Validate receipt schema, command, age, and optional exact HEAD identity.
+
+    ``head_sha`` is the expected current HEAD for the exact-path probe. Ancestor
+    candidates pass ``None``: their embedded SHA is instead validated and
+    canonicalized by `_gate_walk_candidate_ok`, never self-compared here.
+    """
+    if receipt.get("schema") != 1:
+        return False, "bad schema"
+    receipt_head_sha = receipt.get("head_sha")
+    if not isinstance(receipt_head_sha, str):
+        return False, "HEAD mismatch"
+    if head_sha is not None and receipt_head_sha != head_sha:
+        return False, "HEAD mismatch"
+    if receipt.get("command_sha256") != _gate_command_sha256(command):
+        return False, "command fingerprint mismatch"
+    parsed_timestamp, timestamp_error = _gate_receipt_timestamp(receipt)
+    if timestamp_error or parsed_timestamp is None:
+        return False, timestamp_error or "bad receipt timestamp"
+    age = datetime.now(timezone.utc) - parsed_timestamp
+    if age < timedelta(0):
+        return False, "receipt timestamp in the future"
+    if age > timedelta(hours=24):
+        return False, "receipt stale (>24h)"
+    return True, "green receipt honored"
+
+
+def _gate_walk_candidate_ok(
+    receipt_path: Path, receipt: dict[str, Any], repo_root: Path, head_sha: str
+) -> tuple[bool, str]:
+    """Check a prior receipt's immutable git/path prerequisites for reuse."""
+    receipt_head_sha = receipt.get("head_sha")
+    if not isinstance(receipt_head_sha, str) or GATE_FULL_SHA_RE.fullmatch(receipt_head_sha) is None:
+        return False, "candidate HEAD is not a full SHA"
+    try:
+        oid_proc = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{receipt_head_sha}^{{commit}}"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError:
+        return False, "unable to canonicalize candidate HEAD"
+    if oid_proc.returncode != 0 or oid_proc.stdout.strip() != receipt_head_sha:
+        return False, "candidate HEAD is not a canonical commit"
+
+    filename_sha8 = receipt_path.name.split("-", 1)[0]
+    if filename_sha8 != receipt_head_sha[:8]:
+        return False, "receipt filename SHA mismatch"
+    try:
+        if receipt_path.is_symlink():
+            return False, "receipt file is a symlink"
+    except OSError:
+        return False, "unable to inspect receipt path"
+
+    try:
+        ancestor_proc = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", receipt_head_sha, head_sha],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError:
+        return False, "unable to inspect receipt ancestry"
+    if ancestor_proc.returncode != 0:
+        return False, "receipt HEAD is not an ancestor of HEAD"
+
+    try:
+        diff_proc = subprocess.run(
+            [
+                "git", "diff", "--name-only", "-z", "--no-renames",
+                f"{receipt_head_sha}..{head_sha}",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError:
+        return False, "unable to inspect receipt diff"
+    if diff_proc.returncode != 0:
+        return False, "unable to inspect receipt diff"
+    for path in (path for path in diff_proc.stdout.split("\0") if path):
+        if not _gate_ignored_worktree_path(path):
+            return False, f"non-ignored path since receipt: {path}"
+    return True, "green receipt honored"
+
+
+def _gate_prune_stale_receipts(receipts_dir: Path) -> None:
+    """Best-effort prune of receipts that can no longer pass the 24-hour TTL."""
+    try:
+        for receipt_path in receipts_dir.glob("*.json"):
+            try:
+                with receipt_path.open(encoding="utf-8") as f:
+                    receipt = json.load(f)
+                if not isinstance(receipt, dict):
+                    continue
+                timestamp, timestamp_error = _gate_receipt_timestamp(receipt)
+                if timestamp_error or timestamp is None:
+                    continue
+                if datetime.now(timezone.utc) - timestamp > timedelta(hours=24):
+                    receipt_path.unlink()
+            except (OSError, json.JSONDecodeError, ValueError):
+                continue
+    except OSError:
+        pass
+
+
 def _classify_gate_path(path: str) -> tuple[str, str]:
     """Classify one path using only its normalized spelling, never contents."""
     if "\\" in path:
@@ -27611,6 +27741,10 @@ def cmd_gate_receipt(args: argparse.Namespace) -> None:
     except OSError as e:
         error_exit(f"failed to write green receipt: {e}", code=2, use_json=args.json)
 
+    # Expired receipts cannot honor a check. Pruning is deliberately best
+    # effort: the successful write is the command's only required side effect.
+    _gate_prune_stale_receipts(receipt_path.parent)
+
     relative_path = _gate_repo_relative_path(receipt_path.relative_to(repo_root))
     if args.json:
         json_output({
@@ -27651,22 +27785,26 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
             _gate_exit_check(args, False, "receipt file is a symlink", sha8)
     except OSError:
         _gate_exit_check(args, False, "unable to resolve receipts dir", sha8)
-    if not receipt_path.is_file():
-        _gate_exit_check(args, False, "no receipt for HEAD", sha8)
-    try:
-        with receipt_path.open(encoding="utf-8") as f:
-            receipt = json.load(f)
-    except (OSError, json.JSONDecodeError, ValueError):
-        _gate_exit_check(args, False, "malformed receipt", sha8)
-    if not isinstance(receipt, dict):
-        _gate_exit_check(args, False, "malformed receipt", sha8)
-    if receipt.get("schema") != 1:
-        _gate_exit_check(args, False, "bad schema", sha8)
-    if receipt.get("head_sha") != head_sha:
-        _gate_exit_check(args, False, "HEAD mismatch", sha8)
-    if receipt.get("command_sha256") != _gate_command_sha256(args.command):
-        _gate_exit_check(args, False, "command fingerprint mismatch", sha8)
-
+    exact_receipt: Optional[dict[str, Any]] = None
+    exact_valid: Optional[bool] = None
+    exact_reason: Optional[str] = None
+    if receipt_path.is_file():
+        try:
+            with receipt_path.open(encoding="utf-8") as f:
+                receipt = json.load(f)
+        except (OSError, json.JSONDecodeError, ValueError):
+            _gate_exit_check(args, False, "malformed receipt", sha8)
+        if not isinstance(receipt, dict):
+            _gate_exit_check(args, False, "malformed receipt", sha8)
+        exact_receipt = receipt
+        exact_valid, exact_reason = _gate_receipt_valid(receipt, head_sha, args.command)
+        # Preserve the exact-path validation order: malformed schema, identity,
+        # and fingerprint reject before cleanliness; timestamp outcomes follow it.
+        if exact_reason in {"bad schema", "HEAD mismatch", "command fingerprint mismatch"}:
+            _gate_exit_check(args, False, exact_reason, sha8)
+    # Cleanliness is intentionally checked once, before any candidate walk.
+    # A status failure remains an exit-2 tooling error; a dirty worktree cannot
+    # reuse either an exact receipt or an ancestor receipt.
     status_paths, status_error = _gate_status_paths(repo_root)
     if status_error:
         # A failing `git status` inside a resolvable repo is a real tooling
@@ -27679,23 +27817,47 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
         if not _gate_ignored_worktree_path(path):
             _gate_exit_check(args, False, f"worktree dirty: {path}", sha8)
 
-    timestamp = receipt.get("timestamp")
-    if not isinstance(timestamp, str):
-        _gate_exit_check(args, False, "bad receipt timestamp", sha8)
+    if exact_receipt is not None:
+        assert exact_valid is not None and exact_reason is not None
+        _gate_exit_check(args, exact_valid, exact_reason, sha8)
+
+    # Exact HEAD receipt missing: rank every parseable candidate deterministically
+    # before performing the bounded (at most eight) git-heavy candidate checks.
+    candidates: list[tuple[Path, dict[str, Any], datetime]] = []
     try:
-        parsed_timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-        if parsed_timestamp.tzinfo is None:
-            raise ValueError("timestamp has no timezone")
-        # OverflowError: extreme-but-parseable values (e.g. year 1 with a
-        # +23:59 offset) overflow astimezone(); fail closed, never crash.
-        age = datetime.now(timezone.utc) - parsed_timestamp.astimezone(timezone.utc)
-    except (TypeError, ValueError, OverflowError):
-        _gate_exit_check(args, False, "bad receipt timestamp", sha8)
-    if age < timedelta(0):
-        _gate_exit_check(args, False, "receipt timestamp in the future", sha8)
-    if age > timedelta(hours=24):
-        _gate_exit_check(args, False, "receipt stale (>24h)", sha8)
-    _gate_exit_check(args, True, "green receipt honored", sha8)
+        candidate_paths = receipt_path.parent.glob(f"*-{args.gate_id}.json")
+        for candidate_path in candidate_paths:
+            try:
+                with candidate_path.open(encoding="utf-8") as f:
+                    candidate = json.load(f)
+                if not isinstance(candidate, dict):
+                    continue
+                timestamp, timestamp_error = _gate_receipt_timestamp(candidate)
+                if timestamp_error or timestamp is None:
+                    continue
+                candidates.append((candidate_path, candidate, timestamp))
+            except (OSError, json.JSONDecodeError, ValueError):
+                continue
+    except OSError:
+        # A broken/unreadable directory is not a tooling taxonomy change: no
+        # receipt can be honored, so the caller runs the full gate.
+        pass
+
+    # Stable two-key ordering: filename ASC first, then stable timestamp DESC.
+    candidates.sort(key=lambda item: item[0].name)
+    candidates.sort(key=lambda item: item[2], reverse=True)
+    for candidate_path, candidate, _timestamp in candidates[:8]:
+        valid, _reason = _gate_receipt_valid(candidate, None, args.command)
+        if not valid:
+            continue
+        eligible, _reason = _gate_walk_candidate_ok(
+            candidate_path, candidate, repo_root, head_sha
+        )
+        if eligible:
+            candidate_sha = candidate["head_sha"]
+            assert isinstance(candidate_sha, str)
+            _gate_exit_check(args, True, "green receipt honored", candidate_sha[:8])
+    _gate_exit_check(args, False, "no honorable receipt for HEAD", sha8)
 
 
 def cmd_gate_classify(args: argparse.Namespace) -> None:

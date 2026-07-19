@@ -96,6 +96,33 @@ class GateReceiptHarness(unittest.TestCase):
         receipt.update(updates)
         path.write_text(json.dumps(receipt), encoding="utf-8")
 
+    def _receipt_dir(self) -> Path:
+        path = self.tmpdir / ".flow" / "tmp" / "green-receipts"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _write_receipt(
+        self,
+        head_sha: str,
+        *,
+        command: str = COMMAND,
+        timestamp: Optional[str] = None,
+        filename_sha8: Optional[str] = None,
+    ) -> Path:
+        sha8 = filename_sha8 if filename_sha8 is not None else head_sha[:8]
+        path = self._receipt_dir() / f"{sha8}-{GATE_ID}.json"
+        path.write_text(
+            json.dumps({
+                "schema": 1,
+                "head_sha": head_sha,
+                "gate_id": GATE_ID,
+                "command_sha256": hashlib.sha256(command.encode("utf-8")).hexdigest(),
+                "timestamp": timestamp or datetime.now(timezone.utc).isoformat(),
+            }),
+            encoding="utf-8",
+        )
+        return path
+
 
 class GateReceiptTestCase(GateReceiptHarness):
     """Base receipt/check contract cases."""
@@ -255,6 +282,131 @@ class GateReceiptTestCase(GateReceiptHarness):
                         command, "--gate", gate_id, "--command", COMMAND
                     )
                     self.assertEqual(result.returncode, 2, result.stderr or result.stdout)
+
+
+class GateReceiptAncestorWalkTestCase(GateReceiptHarness):
+    """fn-116 ancestor-walk and receipt-retention contract matrix."""
+
+    def test_ancestor_receipt_honors_after_flow_only_commit(self) -> None:
+        self._receipt()
+        receipt_head = self._git("rev-parse", "HEAD")
+        self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        result = self._check()
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn(receipt_head[:8], result.stdout)
+
+    def test_walk_rejects_non_ignored_commit_path(self) -> None:
+        self._receipt()
+        self._commit("docs/next.md", "next\n", "docs change")
+        self.assertEqual(self._check().returncode, 1)
+
+    def test_walk_rejects_diverged_sibling_receipt(self) -> None:
+        starting_branch = self._git("branch", "--show-current")
+        self._git("checkout", "-qb", "receipt-branch")
+        receipt_head = self._commit(".flow/tasks/receipt.md", "receipt\n", "receipt branch")
+        self._write_receipt(receipt_head)
+        self._git("checkout", "-q", starting_branch)
+        self._commit(".flow/tasks/current.md", "current\n", "current branch")
+        self.assertEqual(self._check().returncode, 1)
+
+    def test_walk_skips_filename_body_sha_mismatch(self) -> None:
+        receipt_head = self._git("rev-parse", "HEAD")
+        forged_prefix = "0" * 8 if receipt_head[:8] != "0" * 8 else "1" * 8
+        self._write_receipt(receipt_head, filename_sha8=forged_prefix)
+        self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        self.assertEqual(self._check().returncode, 1)
+
+    def test_corrupt_candidate_does_not_abort_later_valid_candidate(self) -> None:
+        self._receipt()
+        receipt_head = self._git("rev-parse", "HEAD")
+        self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        (self._receipt_dir() / f"corrupt-{GATE_ID}.json").write_text("not json", encoding="utf-8")
+        result = self._check()
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn(receipt_head[:8], result.stdout)
+
+    def test_walk_skips_symlinked_candidate(self) -> None:
+        self._receipt()
+        path = self._receipt_path()
+        outside = Path(tempfile.mkdtemp()).resolve()
+        try:
+            target = outside / "receipt.json"
+            target.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+            path.unlink()
+            path.symlink_to(target)
+            self._commit(".flow/tasks/state.md", "state\n", "flow state")
+            self.assertEqual(self._check().returncode, 1)
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+
+    def test_walk_evaluates_only_eight_newest_candidates(self) -> None:
+        oldest_head = ""
+        base_timestamp = datetime.now(timezone.utc)
+        for index in range(9):
+            commit = self._commit(
+                f".flow/tasks/state-{index}.md", f"{index}\n", f"flow state {index}"
+            )
+            if index == 0:
+                oldest_head = commit
+            self._write_receipt(
+                commit,
+                command=COMMAND if index == 0 else "mismatched command",
+                timestamp=(base_timestamp + timedelta(seconds=index)).isoformat(),
+            )
+        self._commit(".flow/tasks/final.md", "final\n", "final flow state")
+        result = self._check()
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+        self.assertNotIn(oldest_head[:8], result.stdout)
+
+    def test_walk_tries_next_candidate_after_command_fingerprint_mismatch(self) -> None:
+        older_head = self._git("rev-parse", "HEAD")
+        self._write_receipt(older_head)
+        newer_head = self._commit(".flow/tasks/newer.md", "newer\n", "newer state")
+        self._write_receipt(newer_head, command="mismatched command")
+        self._commit(".flow/tasks/final.md", "final\n", "final state")
+        result = self._check()
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn(older_head[:8], result.stdout)
+
+    def test_walk_tied_timestamps_use_filename_order(self) -> None:
+        first_head = self._git("rev-parse", "HEAD")
+        self._write_receipt(first_head)
+        second_head = self._commit(".flow/tasks/second.md", "second\n", "second state")
+        tied_timestamp = datetime.now(timezone.utc).isoformat()
+        self._write_receipt(first_head, timestamp=tied_timestamp)
+        self._write_receipt(second_head, timestamp=tied_timestamp)
+        self._commit(".flow/tasks/final.md", "final\n", "final state")
+        result = self._check()
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn(min(first_head[:8], second_head[:8]), result.stdout)
+
+    def test_receipt_prunes_old_receipts_but_keeps_fresh_ones(self) -> None:
+        old_head = self._git("rev-parse", "HEAD")
+        old_path = self._write_receipt(
+            old_head,
+            timestamp=(datetime.now(timezone.utc) - timedelta(hours=25)).isoformat(),
+        )
+        fresh_head = self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        fresh_path = self._write_receipt(fresh_head, filename_sha8="ffffffff")
+        self._receipt()
+        self.assertFalse(old_path.exists())
+        self.assertTrue(fresh_path.exists())
+
+    def test_walk_skips_symbolic_head_sha(self) -> None:
+        self._write_receipt("HEAD", filename_sha8="HEAD")
+        self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        self.assertEqual(self._check().returncode, 1)
+
+    def test_walk_skips_abbreviated_head_sha(self) -> None:
+        self._write_receipt(self._git("rev-parse", "HEAD")[:8])
+        self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        self.assertEqual(self._check().returncode, 1)
+
+    def test_walk_skips_non_commit_object_sha(self) -> None:
+        tree_sha = self._git("rev-parse", "HEAD^{tree}")
+        self._write_receipt(tree_sha)
+        self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        self.assertEqual(self._check().returncode, 1)
 
 
 class GateReceiptCompletionRegressionsTestCase(GateReceiptHarness):

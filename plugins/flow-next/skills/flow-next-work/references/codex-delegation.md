@@ -489,7 +489,7 @@ Constraints (hard rules):
   `.flow/tmp/codex-<task-id>/` scratch dir - `.flow/specs`, `.flow/tasks`,
   `.flow/config.json`, `.flow/memory`, ... are host-owned.
 
-Verify: run all named test files in ONE process; `status:"completed"` is
+Verify: run all named test files in ONE process; observe greenness via the command exit code, never by re-running a suite; `status:"completed"` is
 forbidden unless verification passes - verify and fix before reporting. Where
 the task enumerates test cases, edge cases, or a fail-closed matrix, write ONE
 test per named case - exhaustive, never representative; a named case without a

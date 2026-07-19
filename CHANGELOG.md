@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Gate-diet receipt follow-up (fn-116).** The green-receipt path introduced in 2.18.0 was structurally dead after the work loop committed its `.flow` state: exact-HEAD lookup orphaned an otherwise valid receipt. `gate check` now permits a bounded, fail-closed ancestor walk through receipt-only state changes; it does not loosen the force-full floor or promise the separate parallelization work.
+
 ## [flow-next 2.19.0] - 2026-07-19
 
 ### Changed
