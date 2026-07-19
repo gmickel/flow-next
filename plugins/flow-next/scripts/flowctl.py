@@ -27361,7 +27361,10 @@ GATE_SAFE_PREFIXES: tuple[str, ...] = (
     "optimization/",
 )
 GATE_PLUGIN_DOC_PREFIX = "plugins/flow-next/docs/"
-GATE_PLUGIN_DOC_EXTS: frozenset[str] = frozenset({".md", ".mdx", ".txt"})
+# Derived from TRIAGE_DOC_EXTS (R2 reuse requirement) restricted to the gate-safe
+# subset - .rst/.adoc are doc-shaped for review triage but unused under
+# plugins/flow-next/docs/ and stay FULL here (conservative).
+GATE_PLUGIN_DOC_EXTS: frozenset[str] = TRIAGE_DOC_EXTS & frozenset({".md", ".mdx", ".txt"})
 GATE_SAFE_ROOT_FILES: frozenset[str] = frozenset({
     "CHANGELOG.md",
     "GLOSSARY.md",
@@ -27393,7 +27396,12 @@ def _gate_repo_and_head() -> tuple[Optional[Path], Optional[str], Optional[str]]
     except OSError as e:
         return None, None, f"git unavailable: {e}"
     if root_proc.returncode != 0:
-        return None, None, "not a git repo"
+        stderr = (root_proc.stderr or "").strip()
+        if "not a git repository" in stderr.lower():
+            return None, None, "not a git repo"
+        # Corruption / permissions / other git failures are tooling errors (2+),
+        # never a quiet fall-back-to-full-gates condition.
+        return None, None, f"git error: {stderr or 'rev-parse failed'}"
 
     repo_root = Path(root_proc.stdout.strip())
     try:
@@ -27449,6 +27457,11 @@ def _gate_status_paths(repo_root: Path) -> tuple[Optional[list[str]], Optional[s
 
 def _gate_ignored_worktree_path(path: str) -> bool:
     """Whether a dirty path is receipt-only state, not executable state."""
+    if "\\" in path:
+        # A literal backslash in a git-reported path on POSIX is a filename
+        # character, not a separator - normalization would alias it into the
+        # ignore set. Ambiguous spelling fails CLOSED (counts as dirty).
+        return False
     normalized = _normalize_repo_path(path)
     return (
         normalized.startswith(".flow/")
@@ -27459,6 +27472,10 @@ def _gate_ignored_worktree_path(path: str) -> bool:
 
 def _classify_gate_path(path: str) -> tuple[str, str]:
     """Classify one path using only its normalized spelling, never contents."""
+    if "\\" in path:
+        # Literal backslash on POSIX would alias into SAFE prefixes after
+        # normalization ("docs\\x.md" -> "docs/x.md"). Ambiguous -> FULL.
+        return "force-full", "literal backslash in path (ambiguous spelling)"
     p = _normalize_repo_path(path)
     base = p.rsplit("/", 1)[-1]
     ext = ""
@@ -27550,7 +27567,7 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
         error_exit("invalid gate id", code=2, use_json=args.json)
     repo_root, head_sha, repo_error = _gate_repo_and_head()
     if repo_error:
-        if repo_error.startswith("git unavailable:"):
+        if repo_error.startswith(("git unavailable:", "git error:")):
             error_exit(repo_error, code=2, use_json=args.json)
         _gate_exit_check(args, False, repo_error, None)
     if repo_root is None or head_sha is None:

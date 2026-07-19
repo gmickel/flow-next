@@ -179,7 +179,9 @@ class GateClassifyTestCase(unittest.TestCase):
         self.assertEqual(data["paths"][0]["path"], "docs/my file.md")
 
     def test_windows_normalization_is_shared(self) -> None:
-        self.assertEqual(flowctl._classify_gate_path("docs\\a.md")[0], "safe")
+        # fn-102 completion review: a literal backslash on POSIX must NOT alias
+        # into a SAFE prefix - ambiguous spelling fails closed to FULL.
+        self.assertEqual(flowctl._classify_gate_path("docs\\a.md")[0], "force-full")
         self.assertEqual(flowctl._classify_triage_path("docs\\a.md"), "docs")
 
     def test_leading_space_path_is_not_safe(self) -> None:
@@ -215,3 +217,21 @@ class GateClassifyTestCase(unittest.TestCase):
         for entry in data["paths"]:
             self.assertEqual(set(entry), {"path", "class", "reason"})
             self.assertIn(entry["class"], {"safe", "force-full", "full"})
+
+
+class GateClassifyBackslashRegressionTestCase(unittest.TestCase):
+    """fn-102 completion-review regression: literal-backslash paths force FULL."""
+
+    def test_literal_backslash_docs_path_forces_full(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "flowctl_backslash_probe",
+            Path(__file__).resolve().parent.parent / "scripts" / "flowctl.py",
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        cls, reason = mod._classify_gate_path("docs\\x.md")
+        self.assertEqual(cls, "force-full")
+        self.assertIn("backslash", reason)
+        cls2, _ = mod._classify_gate_path(".flow\\tasks\\x.md")
+        self.assertEqual(cls2, "force-full")

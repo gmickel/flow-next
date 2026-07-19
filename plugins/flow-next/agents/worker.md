@@ -272,8 +272,12 @@ verification on the delegated diff — `verification_summary` from Codex is NOT
 trusted as the sole gate. See Phase 5.)
 
 **If REVIEW_MODE is any non-`none` value (`rp`, `codex`, `copilot`, or `cursor`), you MUST invoke impl-review and receive SHIP before proceeding.**
-(On a delegated task this impl-review SHIP gate IS the independent check — do not
-re-run a duplicate test pass in Phase 5; the impl-review gate already covers it.)
+(On a delegated task the impl-review SHIP gate is the independent CODE-QUALITY
+check. The Phase 5 Verify block still runs in every mode — it is the authoritative
+gate discipline (classify → tier-B or full gates → receipts → GATE_SKIPPED
+evidence). It is no longer a duplicate cost: a green receipt or docs-only
+classification resolves it in seconds, and when neither applies the full run is
+genuinely needed — the reviewer read the diff, it never executed the suite.)
 
 Use the Skill tool to invoke impl-review (NOT flowctl directly). If you're in a fresh shell, re-read the base first (`BASE_COMMIT=$(cat .flow/tmp/base_commit)`) so `--base` is populated:
 
@@ -393,9 +397,12 @@ If verification fails, fix and re-commit before proceeding.
 
 **Delegation verification backstop — `DELEGATE: codex` AND `REVIEW_MODE: none`.**
 When delegation was active AND no impl-review gate ran (Phase 4 skipped), you MUST
-run this verification yourself on the delegated diff before `flowctl done` — do NOT
-trust Codex's `verification_summary` as the sole gate. Run the project's
-tests/lints; on failure, fix + follow-up commit (never blind-commit). When
+run the Phase 5 Verify block yourself on the delegated diff before `flowctl done` —
+do NOT trust Codex's `verification_summary` as the sole gate. The Verify block is
+authoritative here too: classify first, honor green receipts, and run the full
+tests/lints when neither applies (a docs-only tier-B or receipt-honored outcome
+with its GATE_SKIPPED evidence lines satisfies this backstop); on failure, fix +
+follow-up commit (never blind-commit). When
 `REVIEW_MODE != none`, the impl-review SHIP gate already covered this — skip the
 duplicate run.
 

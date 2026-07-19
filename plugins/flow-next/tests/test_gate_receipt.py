@@ -247,3 +247,72 @@ class GateReceiptTestCase(unittest.TestCase):
                         command, "--gate", gate_id, "--command", COMMAND
                     )
                     self.assertEqual(result.returncode, 2, result.stderr or result.stdout)
+
+
+class GateReceiptCompletionRegressionsTestCase(GateReceiptTestCase):
+    """fn-102 completion-review regressions: full-sha compare, backslash, git errors."""
+
+    def test_check_fails_closed_on_full_head_sha_mismatch_same_path(self) -> None:
+        # Rewrite head_sha IN PLACE (path/sha8 unchanged) so the probe reaches
+        # the full-SHA comparison rather than missing on the filename lookup.
+        self._receipt()
+        real_head = self._git("rev-parse", "HEAD")
+        forged = real_head[:8] + ("0" * (len(real_head) - 8))
+        self.assertNotEqual(forged, real_head)
+        self._rewrite_receipt(head_sha=forged)
+        result = self._check()
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+
+    def test_check_counts_literal_backslash_path_as_dirty(self) -> None:
+        # ".flow\tasks\x.md" on POSIX is a root-level FILE whose name contains
+        # backslashes; normalization must not alias it into the .flow/ ignore set.
+        self._receipt()
+        (self.tmpdir / ".flow\\tasks\\x.md").write_text("dirt", encoding="utf-8")
+        result = self._check()
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+
+    def test_repo_probe_distinguishes_git_errors_from_not_a_repo(self) -> None:
+        # Our branch logic, probed in-process: rev-parse failures whose stderr
+        # is NOT "not a git repository" (dubious ownership, corruption,
+        # permissions) must surface the "git error:" sentinel that the CLI
+        # maps to exit 2+, never the quiet exit-1 "not a git repo" fallback.
+        # (git itself reports broken gitdir pointers and unreadable .git dirs
+        # as "not a git repository", so those legitimately stay exit 1 - the
+        # taxonomy is git's; this pins OUR mapping of everything else.)
+        import importlib.util
+        from unittest import mock
+
+        spec = importlib.util.spec_from_file_location(
+            "flowctl_gate_repo_probe", str(FLOWCTL_PY)
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(
+                cmd, 128, stdout="",
+                stderr="fatal: detected dubious ownership in repository at '/x'",
+            )
+
+        with mock.patch.object(mod.subprocess, "run", side_effect=fake_run):
+            root, head, err = mod._gate_repo_and_head()
+        self.assertIsNone(root)
+        self.assertTrue(err and err.startswith("git error:"), err)
+
+        def fake_run_outside(cmd, **kwargs):
+            return subprocess.CompletedProcess(
+                cmd, 128, stdout="",
+                stderr="fatal: not a git repository (or any of the parent directories): .git",
+            )
+
+        with mock.patch.object(mod.subprocess, "run", side_effect=fake_run_outside):
+            root, head, err = mod._gate_repo_and_head()
+        self.assertEqual(err, "not a git repo")
+
+    def test_check_outside_repo_exits_1(self) -> None:
+        outside = Path(tempfile.mkdtemp()).resolve()
+        try:
+            result = self._flowctl("check", "--gate", GATE_ID, "--command", COMMAND, cwd=outside)
+            self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
