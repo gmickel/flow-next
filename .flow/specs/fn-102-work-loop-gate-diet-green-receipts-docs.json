@@ -10,7 +10,7 @@
   "id": "fn-102-work-loop-gate-diet-green-receipts-docs",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 1,
+  "plan_review_rounds": 2,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T05:54:36.379654Z"
+  "updated_at": "2026-07-19T05:57:51.410044Z"
 }
