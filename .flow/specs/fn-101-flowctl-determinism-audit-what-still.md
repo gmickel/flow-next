@@ -56,7 +56,7 @@ Zero fleet callers verified per item (skills/agents/hooks/templates greps, codex
 | `sync clear-dep-relation`, `strategy list`, `repo-map show`, `repo-map since-ref`, `prospect list`, `prospect read`, `pilot-log summary`, `checkpoint delete`, `state-path` | ~870 | All API-symmetry or human-CLI surfaces. KEEP `pilot-log summary` if the fn-102 post-land measurement plan will consume it (it is the designed readout); decide there first. |
 | ralph-guard debug log (unconditional `/tmp` append on EVERY hook fire, even with FLOW_RALPH unset - contradicts documented "zero overhead"), `RALPH_GUARD_VERSION` no-op constant, `ralph_e2e_test.sh` (unreferenced) | ~200 | Env-gate the log (`RALPH_GUARD_DEBUG=1`) rather than delete. |
 | Always-empty `review_receipts` export field + dead `--section` export filter | ~60 | make-pr already documents the workaround; qa forbids the flag. |
-| 3.0 retirement basket: `migrate-rename` + `migrate-rollback` + banner hook (~1.39k) + `migrate-state` (~70) | ~1.46k | Textbook-quality code, but it migrates pre-1.0.0 (2026-05-09) layouts. Orphans test_migrate_rename.py (24 tests), test_banner.py (26), test_lockfile.py (12), legacy-epics clauses in capture/make-pr prose. Schedule at 3.0, not now. |
+| `migrate-rename` + `migrate-rollback` + banner hook (~1.39k) + `migrate-state` (~70) | ~1.46k | Textbook-quality code, but it migrates pre-1.0.0 (2026-05-09) layouts. Maintainer decision 2026-07-19: remove NOW (was initially basketed for 3.0), replaced by a short usage.md porting prose entry - an agent can do the rename-and-validate port from three sentences. Orphans test_migrate_rename.py (24 tests), test_banner.py (26), test_lockfile.py (12), legacy-epics clauses in capture/make-pr prose. Scoped into fn-105. |
 
 ## 3. Ralph separation
 
@@ -108,9 +108,9 @@ Removals obsolete: `alias_smoke.sh` (whole file), `test_config_alias.py` (19 no-
 
 1. flowctl hot-path perf: memoize repo-root/state-dir + misc caches + batched git grep (section 4: 1, 6, 7)
 2. flowctl round-trip diet: multi-key config get, write-path flags, self-writing review handlers, skill-prose fence consolidation (section 4: 2-5)
-3. dead-surface removal sweep + docs drift corrections (sections 2 + 6, minus the 3.0 basket)
+3. dead-surface removal sweep + docs drift corrections (sections 2 + 6, INCLUDING pre-1.0 migrations + epic aliases per maintainer decision 2026-07-19; usage.md porting prose replaces the migration code)
 4. review backend registry: dedupe the 9 clones, prompts to templates, JSON reviewer-output contract (section 5: 1-3; section 1: 3-5, 8)
 5. judgment evictions: triage LLM judge, memory-add overlap auto-update, scope suggest (section 1: 1, 2, 6)
 6. ralph boundary: guard defect fixes + iteration-stamp dedupe + feature-freeze declaration (section 3 "now" + "boundary")
 
-3.0 basket (migrations retirement, alias removal if flow-swarm check passes, Ralph extract-or-sunset decision) is recorded here, not specced.
+Remaining 3.0-deferred item: only the Ralph extract-or-sunset decision (section 3). Migrations + aliases moved into fn-105 per maintainer decision 2026-07-19. Droid hook facts re-verified 2026-07-19 (Factory hooks reference): shell tool is still `Execute` (no `Bash`), file tools are `Edit`/`Create`/`ApplyPatch` (no `Write`) - the dual matcher stays needed and the guard body must honor it (fn-108). Hooks inventory confirmed: ralph-guard is the plugin's ONLY hook (all four events); flow-next has zero non-Ralph hooks.
