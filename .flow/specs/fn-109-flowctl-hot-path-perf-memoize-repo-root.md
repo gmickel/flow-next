@@ -12,7 +12,7 @@
 time .flow/bin/flowctl list --json >/dev/null      # target <1s (baseline 30.8s)
 time .flow/bin/flowctl status >/dev/null            # target <1.5s (baseline 32s)
 python3 -m unittest discover -s plugins/flow-next/tests -q
-bash plugins/flow-next/scripts/smoke_test.sh
+(cd "$(mktemp -d)" && bash /Users/gordon/work/flow-next/.claude/worktrees/flow-next-optimization-0e3145/plugins/flow-next/scripts/smoke_test.sh)   # guard refuses repo-root invocation
 ```
 
 ## Approach
@@ -20,7 +20,7 @@ bash plugins/flow-next/scripts/smoke_test.sh
 1. **Memoize `get_repo_root()` and `get_state_dir()`** with module-level dict caches KEYED BY `Path.cwd()` (state-dir cache additionally keyed by the `FLOW_STATE_DIR` env value). Rationale (scout-verified): `tests/test_review_convergence_cap.py` and `tests/test_anchor_bundle.py` load flowctl ONCE at module scope then `os.chdir` to fresh temp dirs per test - a first-call-wins global or bare `functools.lru_cache` leaks the first repo root across tests. cwd-keying invalidates naturally on chdir. No `functools` precedent exists in flowctl.py; hand-rolled dict matches file style.
 2. **Cache SUCCESS results only.** The existing fallback branches (CalledProcessError -> `Path.cwd()` / `.flow/state`) stay uncached so a transient git failure is never sticky. Same-input-same-output preserved; no behavior change.
 3. **Two separate caches** - `get_repo_root` (`--show-toplevel`, worktree-local) and `get_state_dir` (`--git-common-dir`, shared across worktrees) have different semantics; never merge them.
-4. **Sweep the smaller repeat offenders** (fn-101 findings): `get_cursor_version`/`get_copilot_version` per-process memo (flowctl.py:4737/4525 - in-process only, do NOT touch the disk model cache at :3249); prospect artifact triple-read folded to one read+parse passed down (`_prospect_iter_artifacts._emit` :11035, `_prospect_detect_corruption` :8194, `_prospect_artifact_status` :8267) and `_prospect_resolve_id` exact-hit shortcut (:11133); `cmd_tasks` double `get_flow_dir()` (:14029/14032) absorbed by cache; config triple-parse per `config get` reduced to one read passed down (:1435 resolver + :7203 inline dup).
+4. **Sweep the smaller repeat offenders** (fn-101 findings): `get_cursor_version`/`get_copilot_version` per-process memo (flowctl.py:4737/4525 - in-process only, do NOT touch the disk model cache at :3249); prospect artifact triple-read folded to one read+parse passed down (`_prospect_iter_artifacts._emit` :11035, `_prospect_detect_corruption` :8194, `_prospect_artifact_status` :8267) and `_prospect_resolve_id` exact-hit shortcut (:11133); `cmd_tasks` double `get_flow_dir()` (:14029/14032) absorbed by cache. Config `config get` parse count: VERIFIED no-op for current state (`_CONFIG_KEY_ALIASES = {}` means the live path already parses once; the extra parses live only in dormant alias machinery that fn-111 deletes) - explicitly out of scope here to avoid churn against fn-111.
 5. **Batch `_export_removed_export_refs`** (flowctl.py:16034): up to 40 sequential `git grep -n <sym>` become one `git grep -n -e s1 --or -e s2 ...` invocation (chunk if argv budget demands).
 6. **Dual-copy invariant**: every flowctl.py edit lands in `plugins/flow-next/scripts/flowctl.py` AND `.flow/bin/flowctl.py` in the SAME commit - 3 DualCopyInvariant unittest suites enforce byte-parity.
 
@@ -50,9 +50,9 @@ Active tracks served by this plan:
 - **R4:** Caches are cwd-keyed: existing chdir-based suites (test_review_convergence_cap.py, test_anchor_bundle.py) pass unmodified, and a new unit test proves a chdir invalidates both caches.
 - **R5:** `FLOW_STATE_DIR` override honored under caching (key includes the env value); new unit test covers set/unset within one process.
 - **R6:** Transient git failure is not sticky: only success results are cached; a new unit test proves a failed first call does not poison a later successful call.
-- **R7:** Sweep caches land with no behavior change: version-getter memo, prospect single-read, config single-parse, cmd_tasks dedup; existing prospect/config/backend test suites pass unmodified.
-- **R8:** `_export_removed_export_refs` issues at most 2 `git grep` invocations for 40 removed symbols (was 40); export output byte-identical on a fixture spec.
-- **R9:** Dual-copy byte-parity holds (DualCopyInvariant suites green); full `python3 -m unittest discover` + `bash plugins/flow-next/scripts/smoke_test.sh` green.
+- **R7:** Sweep caches land with no behavior change and TESTED counts: version getters cache SUCCESSFUL probes only, keyed by resolved executable path (one successful version subprocess per resolved executable per process; transient failure never sticky; PATH change re-probes) with tests for repeat-success, failure-then-success, and key-by-path; prospect DESCRIPTOR CONSTRUCTION (the `_prospect_iter_artifacts` enumeration path incl. `_prospect_detect_corruption` and `_prospect_artifact_status`) reads+parses each artifact file exactly once per enumeration (down from 3), asserted by a read-count test scoped to the iteration path; downstream consumers (read/promote body use) keep their own reads unchanged; existing prospect/config/backend suites pass unmodified.
+- **R8:** `_export_removed_export_refs` issues at most 2 `git grep` invocations for 40 removed symbols (was 40), with per-symbol attribution preserved by post-filtering the batched output in Python (which symbol matched which line), deterministic symbol ordering, the existing per-symbol reference cap unchanged, and multi-symbol lines attributed to every matching symbol. Tests cover: 40 symbols -> <=2 calls (subprocess-count assert), multi-symbol single line, prefix-collision symbols (`foo` vs `foobar` - word-boundary semantics preserved), per-symbol cap, and byte-identical export payload vs pre-change on a fixture spec.
+- **R9:** Dual-copy byte-parity holds (DualCopyInvariant suites green); full `python3 -m unittest discover` + `(cd "$(mktemp -d)" && bash /Users/gordon/work/flow-next/.claude/worktrees/flow-next-optimization-0e3145/plugins/flow-next/scripts/smoke_test.sh)   # guard refuses repo-root invocation` green.
 - **R10:** CHANGELOG gains an `## Unreleased` entry (bold-lead bullet naming fn-109, mechanism sub-bullets, "No version bump (batched releases)."), and docs/flowctl.md gains the one-line perf note under `### list`/`### status`.
 
 ## Early proof point
@@ -69,7 +69,7 @@ Task fn-109.1 validates the core approach (cwd-keyed success-only memoization hi
 | R4  | cwd-keyed invalidation | fn-109.1 | - |
 | R5  | FLOW_STATE_DIR override test | fn-109.1 | - |
 | R6  | failure never cached | fn-109.1 | - |
-| R7  | sweep caches, no behavior change | fn-109.2 | - |
+| R7  | sweep caches, tested counts, no behavior change | fn-109.2 | - |
 | R8  | batched export git grep | fn-109.2 | - |
 | R9  | dual-copy parity + full gate green | fn-109.1, fn-109.2 | - |
 | R10 | CHANGELOG + flowctl.md note | fn-109.2 | - |

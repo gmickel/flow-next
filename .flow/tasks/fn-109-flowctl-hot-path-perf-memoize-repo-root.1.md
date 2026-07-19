@@ -40,7 +40,7 @@ Memoize `get_repo_root()` and `get_state_dir()` in flowctl.py with module-level 
 - [ ] New test: cmd_list at 400+ generated tasks spawns <= 5 subprocesses via monkeypatched subprocess.run (R3)
 - [ ] New tests: chdir invalidates both caches (R4); FLOW_STATE_DIR set/unset honored within one process (R5); failed git call not cached, later success caches (R6)
 - [ ] test_review_convergence_cap.py + test_anchor_bundle.py pass UNMODIFIED
-- [ ] Full unittest discover + smoke_test.sh green; DualCopyInvariant suites green (R9)
+- [ ] Full unittest discover green + smoke_test.sh green (run from a temp dir via absolute script path - the guard refuses repo-root invocation); DualCopyInvariant suites green (R9)
 
 ## Done summary
 TBD

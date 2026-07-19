@@ -12,5 +12,5 @@
   "spec_path": ".flow/tasks/fn-109-flowctl-hot-path-perf-memoize-repo-root.2.md",
   "status": "todo",
   "title": "Cache sweep (version getters, prospect, config, cmd_tasks) + batched export git grep + CHANGELOG/docs",
-  "updated_at": "2026-07-19T13:58:10.331550Z"
+  "updated_at": "2026-07-19T14:12:04.914359Z"
 }
