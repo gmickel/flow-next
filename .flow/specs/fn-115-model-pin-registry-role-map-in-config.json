@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-115-model-pin-registry-role-map-in-config",
+  "created_at": "2026-07-19T13:17:56.448673Z",
+  "depends_on_epics": [],
+  "id": "fn-115-model-pin-registry-role-map-in-config",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-115-model-pin-registry-role-map-in-config.md",
+  "status": "open",
+  "title": "model-pin registry: role map in config + agent refresh ceremony at setup",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-19T13:18:31.583919Z"
+}
