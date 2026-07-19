@@ -39,9 +39,8 @@ Reproduction manifest: fixtures = fn-102.1 @ base c92bd7f8, fn-102.2 @ 916f85ed,
 - [ ] R7: mirror idempotent, guards green; no version bump
 
 ## Done summary
-TBD
-
+Docs reframe + plan-density sentence + decision record + CHANGELOG for the delegation diet (fn-103). orchestration.md and the setup usage.md template (plus dogfooded .flow/usage.md) now present the raw codex exec bridge as the interactive route and delegate:codex as the same bridge with deterministic rails for unattended loops (fixed path-handoff prompt; task/spec files ARE the brief); docs/README.md delegation row swaps batching for one-run-per-task; plan steps.md task template carries the R5 density sentence; R6 decision record with alternatives, verbatim eval table, do-not-rebuild clause and reproduction manifest landed at .flow/memory/knowledge/decisions/composed-brief-deleted-path-handoff-2026-07-19.md; CHANGELOG Unreleased entry added (no version bump). Sweep gate green (grep zero hits), mirror regenerated x2 idempotent, full suite green, codex impl-review SHIP (r1: dual-copy usage.md parity fix). Implementation delegated to codex gpt-5.6-terra@medium via the NEW path-handoff template (first production use) - partial (orchestrator-owned steps excluded by scope), finished locally. DOWNSTREAM HANDOFF (for the lander): apply the same interactive-raw-bridge vs unattended-rails reframe to the flow-next.dev orchestration page in ~/work/flow-next.dev (separate repo, landing workstream - not in this diff).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4333eb68dab0f3ad6d17e21ab0c7b46b5af20602, 1685a438743f78d038d32f56a48733190add6848
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (baseline: green pre-edit; post-edit: 1838 tests OK, green receipt 1685a438-unittest), python3 -m unittest plugins.flow-next.tests.test_dogfood_template_parity (r1 fix verification), grep -rn per-batch|units were trivial plugins/flow-next --include=*.md -> zero hits (R4 sweep gate), ./scripts/sync-codex.sh x2 idempotent, guards green
 - PRs:
