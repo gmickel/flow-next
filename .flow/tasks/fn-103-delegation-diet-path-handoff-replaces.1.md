@@ -26,9 +26,8 @@ The core surgery: codex-delegation.md sheds its composition layer, worker.md's d
 - [ ] Suite green; mirror idempotent x2
 
 ## Done summary
-TBD
-
+Replaced the 8-section composed delegation brief with the fixed 3-slot path-handoff template (canonical task/spec ids, allowed-file list, unchanged constraints, verify clause with the verbatim exhaustive-tests sentence, unchanged output contract); superseded batching with one-run-per-task; swept batch/unit vocabulary to per-run across codex-delegation.md, worker.md, phases.md, docs/flowctl.md; added the R5 thin-task valve at worker.md's delegation gate and the provisional-flags sentence at phases.md's flag-injection site; rewrote prose-contract test assertions to pin the new contract. R2 grep-gate: all 5 rail-fragment hashes byte-identical pre/post; mirror regenerated idempotently x2; full suite green pre+post; codex impl-review SHIP (r2).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 32eddef69b24abb0bff72e0e2129f516b9fe8e4e, e76025d5e18ad645afaa75a516cdf0e91a1ccd92
+- Tests: baseline: green - python3 -m unittest discover -s plugins/flow-next/tests (pre-edit, 1834 tests OK), python3 -m unittest discover -s plugins/flow-next/tests (post-edit @32eddef6, 1837 tests OK; @e76025d5, 1838 tests OK; green receipt e76025d5-unittest), python3 -m unittest discover -s plugins/flow-next/tests -p test_codex_delegation*.py (90 tests OK), python3 -m unittest discover -s plugins/flow-next/tests -p test_work_delegate_config.py (19 tests OK), R2 grep-gate: sha256 pre==post for all 5 rail fragments (f1-invocation c9335ae2, f2-result-schema 190ed11d, f3-classify-table 494aad62, f4-rollback 1e71dfd5, f5-ralph-guard b41a9462); all 10 load-bearing rail strings PASS pre+post, vocabulary sweep greps: zero per-batch / trivial-units hits across codex-delegation.md, worker.md, phases.md, docs/flowctl.md; <patterns>/<approach> absent; line count 876 -> 882, ./scripts/sync-codex.sh x2 idempotent (worktree hash identical across reruns), guards green
 - PRs:
