@@ -23,8 +23,8 @@ prompt where `phases.md` Phase 3c injects worker context.
 
 This file is the complete host-side substrate for delegation, top to bottom:
 pre-flight gates + one-time consent (below), the `codex exec` invocation /
-result-schema / background-launch+poll / per-batch effort, the orchestration
-split / batching / result-classification / safety, and the circuit-breaker /
+result-schema / background-launch+poll / per-run effort, the orchestration
+split / one-run-per-task / result-classification / safety, and the circuit-breaker /
 Ralph-safe / ralph-guard amendment / receipts / attribution. Each section is
 self-contained and read in order by `phases.md` once `delegation_active=true`.
 
@@ -249,7 +249,7 @@ passes the resolved flags into each spawned worker's prompt (the
 DELEGATE: codex # on; absent/`local` ⇒ standard in-session worker
 DELEGATE_MODEL: <work.delegateModel> # default gpt-5.6-terra (fn-97 eval-motivated default; requires codex CLI >= 0.144)
 DELEGATE_SANDBOX: <yolo|full-auto> # from consent
-DELEGATE_EFFORT_FLOOR: <work.delegateEffort> # default medium (per-batch escalation floors here)
+DELEGATE_EFFORT_FLOOR: <work.delegateEffort> # default medium (per-run escalation floors here)
 DELEGATE_DECISION: <auto|ask>
 ```
 
@@ -258,7 +258,7 @@ local`) — the worker runs standard in-session implementation, unchanged.
 
 ---
 
-## Invocation / result schema / background-launch+poll / per-batch effort
+## Invocation / result schema / background-launch+poll / per-run effort
 
 > **Verified against `codex-cli 0.136.0`** (early-proof gate fn-55.3, 2026-06-05).
 > A live delegation drove a real implementation end-to-end and returned a
@@ -303,7 +303,7 @@ FLOW_DELEGATE_CODEX=1 codex exec \
  `export`ed var would neither reach the hook nor persist across Bash prompt turns.
  Keep it in the command string verbatim.
 - **`-m` / `-c` are ALWAYS passed explicitly** from `DELEGATE_MODEL`
- (`work.delegateModel`, default `gpt-5.6-terra` — a controlled 2026-07 pipeline eval (n=3) had terra-medium match gpt-5.6-sol on correctness at ~2/3 the wall-clock on frontier-authored specs; one task, motivation not guarantee. Escalate to `gpt-5.6-sol` via config for gnarly tasks; needs codex CLI >= 0.144) and the per-batch `effective_effort`
+ (`work.delegateModel`, default `gpt-5.6-terra` — a controlled 2026-07 pipeline eval (n=3) had terra-medium match gpt-5.6-sol on correctness at ~2/3 the wall-clock on frontier-authored specs; one task, motivation not guarantee. Escalate to `gpt-5.6-sol` via config for gnarly tasks; needs codex CLI >= 0.144) and the per-run `effective_effort`
  (default `medium`, escalated below). **There is NO "defer to `~/.codex/config.toml`"
  path** — `--ignore-user-config` deliberately skips the user Codex config (MCP
  isolation wins), so model + effort MUST come from flow config, never the user's
@@ -394,12 +394,12 @@ load-bearing — they make `flowctl codex classify-result` (fn-55.4) determinist
  "additionalProperties": false }
 ```
 
-### Per-batch effort (lifted — proportional to risk, floored at config)
+### Per-run effort (lifted — proportional to risk, floored at config)
 
-Pick the reasoning effort **proportional to the batch's risk**, then floor it at
+Pick the reasoning effort **proportional to the run's risk**, then floor it at
 the host-passed `DELEGATE_EFFORT_FLOOR` (`work.delegateEffort`, default `medium`):
 
-| Risk of the batch | Picked effort |
+| Risk of the run | Picked effort |
 |---|---|
 | ordinary CRUD / small refactor / docs | `medium` (default) |
 | auth / session / payments / DB migrations / external-API / retry-fallback | `high` |
@@ -413,7 +413,7 @@ effective_effort = max(picked, DELEGATE_EFFORT_FLOOR) # by enum ordinality
 - Emit the chosen value as `-c 'model_reasoning_effort="<effective_effort>"'`.
 - **Never emit the literal `"default"`** — it is not a valid effort value; the
  enum is exactly `none | low | medium | high | xhigh`.
-- The floor means a per-batch pick BELOW the configured floor is raised to the
+- The floor means a per-run pick BELOW the configured floor is raised to the
  floor; a pick at/above it is kept.
 
 ### Scratch dir
@@ -424,13 +424,13 @@ Per-task scratch lives at **`.flow/tmp/codex-<task-id>/`** (already gitignored v
 scratch dir is cleaned post-commit (fn-55.4), so never persist a pointer to it in
 `flowctl done` evidence — inline the result fields instead (fn-55.4 contract).
 
-## Orchestration split / batching / result classification / safety
+## Orchestration split / one run per task / result classification / safety
 
 > **The classification + scoped-rollback logic is deterministic flowctl, NOT
 > markdown the host re-interprets** (CLAUDE.md agentic-vs-deterministic split).
 > The worker calls `flowctl codex classify-result` / `flowctl codex rollback-plan`
 > and acts on their JSON; the host AGENT keeps the judgment (delegate-or-not,
-> risk→effort, batching). The helpers are pure (no git, no model) so CI tests
+> risk→effort). The helpers are pure (no git, no model) so CI tests
 > target executable code, not prose.
 
 ### Orchestration split (R5) — who owns what
@@ -455,49 +455,50 @@ spawned `codex exec` is git-forbidden. The worker's existing `BASE_COMMIT` is
 **reused** for rollback scope + the impl-review base (no base reset — preserves
 the spec-wide-base rule for the final integration task).
 
-### Batching (R5) — scoped to ONE flow task
+### One run per task (supersedes batching)
 
-A delegated task's implementation is split into **≤5 units**, where each unit is
-a logical change-set:
+The delegation unit IS the flow task: the task file carries the whole contract,
+so a delegated task is exactly **ONE** `codex exec` run. The `prompt-batch-1.md`
+/ `result-batch-1.json` scratch naming survives unchanged (the rails and
+`classify-result` take explicit paths; `<n>` is always `1`). No cross-task
+delegation - each flow task is a fresh worker subagent; there is no shared
+orchestrator to span tasks.
 
-- Split at **phase / file boundaries**; **never split a shared-file unit** across
- batches (concurrent edits to one file would conflict).
-- **Skip delegation entirely if all units are trivial** (a one-line edit is not
- worth the round-trip — implement in-session).
-- **No cross-task batching in v1** — batching is scoped to the single flow task
- the worker owns. (Cross-task batching is explicitly out of scope: each flow
- task is a fresh worker subagent; there is no shared orchestrator to batch
- across tasks.)
-
-Each batch surfaces a brief **result block** (summary / files / verification /
+The run surfaces a brief **result block** (summary / files / verification /
 issues). In Ralph it routes to the Ralph log / receipt (no human in the loop).
 
-### The prompt template (lifted — 8 XML-tagged sections)
+### The prompt template (fixed path-handoff - 3 slots)
 
-The per-batch prompt (`prompt-batch-<n>.md`) carries exactly these sections:
+The per-run prompt (`prompt-batch-1.md`) is a FIXED template. Filling it is
+purely mechanical - exactly **3 slots**: task id, spec id, allowed-file list.
+Nothing else is composed: no pattern or approach sections, no restated
+contract, no line anchors - the task file IS the brief (plan-time knowledge
+reaches executors through the task file, no other channel).
 
 ```
-<task> one-sentence statement of THIS batch's change-set
-<files> the files this batch may touch (repo-relative)
-<patterns> existing patterns to follow (signatures, naming, structure)
-<approach> the technical approach (from the spec / investigation)
-<constraints> the hard rules — see below
-<testing> which test files / commands prove this batch
-<verify> run all test files in ONE process; gate `completed` on green
-<output_contract> emit the result JSON per result-schema.json (verbatim)
+Read .flow/tasks/<task-id>.md and .flow/specs/<spec-id>.md. Implement exactly
+that task - its description, steps, and acceptance criteria are the complete
+contract.
+
+Allowed files: <the task's Files line, minus orchestrator-owned artifacts -
+the codex mirror (plugins/flow-next/codex/**) and `.flow/bin` dual-copies>.
+
+Constraints (hard rules):
+- Do NOT `git commit` / `git push` / open PRs - the orchestrator owns all git.
+- Restrict modifications to the repo root and keep scope tight to the allowed
+ files.
+- Do NOT write anywhere under `.flow/` EXCEPT your own
+ `.flow/tmp/codex-<task-id>/` scratch dir - `.flow/specs`, `.flow/tasks`,
+ `.flow/config.json`, `.flow/memory`, ... are host-owned.
+
+Verify: run all named test files in ONE process; `status:"completed"` is
+forbidden unless verification passes - verify and fix before reporting. Where
+the task enumerates test cases, edge cases, or a fail-closed matrix, write ONE
+test per named case - exhaustive, never representative; a named case without a
+test is an incomplete implementation.
+
+Output: emit the result JSON per result-schema.json (verbatim).
 ```
-
-`<constraints>` **MUST**:
-- **forbid Codex from `git commit` / `git push` / opening PRs** (the orchestrator
- owns all git);
-- **restrict modifications to the repo root** and keep scope tight to `<files>`;
-- **explicitly forbid writing anywhere under `.flow/` EXCEPT its own
- `.flow/tmp/codex-<task-id>/` scratch dir** — `.flow/specs`, `.flow/tasks`,
- `.flow/config.json`, `.flow/memory`, … are host-owned.
-
-`<verify>` runs **all** test files in one process and **forbids
-`status:"completed"` unless verification passes** — Codex verifies + fixes itself
-before reporting `completed`.
 
 ### Result classification (lifted — computed by `classify-result`)
 
@@ -717,8 +718,8 @@ things so the host can run the breaker without re-reading the scratch dir:
  DELEGATION_ACTION=<commit|finish_locally|rollback|rollback_and_disable>
  ```
 
- When delegation was **not active** for a task (gates failed mid-run, all units
- trivial, or `DELEGATE: local`), the worker emits NO `DELEGATION_*` lines — the
+ When delegation was **not active** for a task (gates failed mid-run, the task ran
+ standard, or `DELEGATE: local`), the worker emits NO `DELEGATION_*` lines — the
  host treats a missing signal as "standard task, counter untouched."
 
 ### Host circuit breaker (phases.md Phase 3 — pre-loop init + per-task bridge)
@@ -769,7 +770,7 @@ In Ralph / headless mode, delegation is **non-blocking** and consent-gated:
  (`rollback` / `rollback_and_disable` / `finish_locally`) degrades to standard
  in-session work — the task still completes, the loop still advances. A forced
  CLI failure disables delegation for the rest of the run but does NOT halt Ralph.
-- **No human in the loop:** the per-batch result block (summary / files /
+- **No human in the loop:** the per-run result block (summary / files /
  verification / issues) routes to the **Ralph log / receipt**, not a prompt. The
  inlined `evidence.delegation` in `flowctl done` IS the durable proof-of-work
  surface that Ralph's receipt/log machinery picks up.
@@ -863,7 +864,7 @@ AI-Orchestrator: Claude
 AI-Implementer: codex <model> (<effort>)
 ```
 
-- `<model>` is `DELEGATE_MODEL` (e.g. `gpt-5.6-terra`); `<effort>` is the per-batch
+- `<model>` is `DELEGATE_MODEL` (e.g. `gpt-5.6-terra`); `<effort>` is the per-run
  `effective_effort` (e.g. `medium`) — yielding `AI-Implementer: codex gpt-5.6-terra (medium)`.
 - Append them as real trailer lines (own paragraph, blank line before the
  `Task:` trailer block) so `git interpret-trailers` / `make-pr` can read them.
