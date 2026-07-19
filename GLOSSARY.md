@@ -44,7 +44,7 @@ _Relates to_: Green receipt
 
 ## Green receipt
 
-The gate-layer counterpart introduced by fn-102: a per-file JSON record at `.flow/tmp/green-receipts/<sha8>-<gate_id>.json` (`{schema, head_sha, gate_id, command_sha256, timestamp}`) proving one exact full-gate command passed at one exact commit. `flowctl gate check` honors it only on a full-HEAD match, exact command fingerprint, clean worktree outside the `.flow/**` minus `.flow/bin/**` minus `.flow/config.json` ignore set, and `0 <= age <= 24h`; otherwise the caller runs the full gate, fail-closed. Skips are always loud (`GATE_SKIPPED:` evidence lines and `Gates:` summary lines). Predicates are purely mechanical: hash, path, and age, never semantic; local gates only, never CI.
+The gate-layer counterpart introduced by fn-102: a per-file JSON record at `.flow/tmp/green-receipts/<sha8>-<gate_id>.json` (`{schema, head_sha, gate_id, command_sha256, timestamp}`) proving one exact full-gate command passed at one exact commit. `flowctl gate check` honors an exact full-HEAD match, or an eligible ancestor receipt whose canonical commit SHA, filename SHA, command fingerprint, age, clean worktree, and intervening two-dot diff all satisfy the receipt-only `.flow/**` minus `.flow/bin/**` minus `.flow/config.json` ignore set; otherwise the caller runs the full gate, fail-closed. Skips are always loud (`GATE_SKIPPED:` evidence lines and `Gates:` summary lines). Predicates are purely mechanical: hash, path, and age, never semantic; local gates only, never CI.
 
 _Relates to_: Triage skip, Receipt
 

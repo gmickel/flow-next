@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Gate-diet receipt follow-up (fn-116).** The green-receipt path introduced in 2.18.0 was structurally dead after the work loop committed its `.flow` state: exact-HEAD lookup orphaned an otherwise valid receipt. `gate check` now permits a bounded, fail-closed ancestor walk through receipt-only state changes; it does not loosen the force-full floor or promise the separate parallelization work.
+
 ## [flow-next 2.19.1] - 2026-07-19
 
 ### Changed
@@ -11,6 +17,7 @@ All notable changes to the flow-next.
   - **Cache sweep on the smaller repeat offenders.** `get_copilot_version` / `get_cursor_version` gain a per-process memo keyed by the `shutil.which()`-resolved executable path (success-only; PATH change re-probes; the disk model cache is untouched); prospect enumeration reads + frontmatter-parses each artifact exactly once per pass (was 3) and `_prospect_resolve_id` resolves an exact filename hit without enumerating the directory; `cmd_tasks`'s double `get_flow_dir()` is absorbed by the repo-root cache.
   - **Batched export git grep.** `_export_removed_export_refs` issues one `git grep -n -w -F -e s1 -e s2 ...` per 20-symbol chunk (at most 2 spawns for the 40-symbol cap, was up to 40), with per-symbol attribution recovered by a Python post-filter replicating `-w` word-boundary semantics exactly - payload byte-identical to the sequential form (oracle-tested).
   - No behavior change anywhere; dual-copy flowctl mirrored. Released as 2.19.1.
+
 ## [flow-next 2.19.0] - 2026-07-19
 
 ### Changed

@@ -70,6 +70,8 @@ Parse the spec carefully. Identify:
 # always run, never receipted, never skipped.
 ```
 
+**Suite-output capture rule (Baseline and Verify):** green observation is the command exit code, not a scraped output line; re-running a suite merely to observe its result is forbidden. Run each suite once with output captured to a log (for example, `<cmd> > "$SUITE_LOG" 2>&1; suite_rc=$?; echo "suite_rc=$suite_rc"`), then read any summary from that log. Gate suites run as ONE blocking FOREGROUND Bash call with an explicit generous timeout (600s) - never `run_in_background` + a monitor: a background completion does not reliably resume a subagent context (the same Foreground rule review calls carry, applied to gate runs). In this Baseline block, apply that capture when an exit-1/2+ gate check requires the full command.
+
 **Capture the base commit at Phase-1 end — BEFORE any edit — and PERSIST it to a file** (bash variables do NOT survive across separate tool-call Bash blocks; a later block reading a stale `$BASE_COMMIT` would expand to `..HEAD` and record blank/empty evidence):
 ```bash
 mkdir -p .flow/tmp
@@ -403,6 +405,9 @@ BASE_COMMIT=$(cat .flow/tmp/base_commit)
 # same `(gate_id, exact command string)` vocabulary as the baseline and then run:
 #   <FLOWCTL> gate receipt --gate <gate_id> --command "<cmd>"
 # Receipt failure is non-blocking: log it and continue. Must pass before marking done.
+# When this Verify block runs a full suite, apply the Suite-output capture rule above:
+# capture output to a log, observe green from `suite_rc`, and read any summary
+# from that log; never run the suite a second time just to observe greenness.
 ```
 If verification fails, fix and re-commit before proceeding.
 
@@ -411,7 +416,7 @@ If verification fails, fix and re-commit before proceeding.
 **Delegation verification backstop — `DELEGATE: codex` AND `REVIEW_MODE: none`.**
 When delegation was active AND no impl-review gate ran (Phase 4 skipped), you MUST
 run the Phase 5 Verify block yourself on the delegated diff before `flowctl done` —
-do NOT trust Codex's `verification_summary` as the sole gate. The Verify block is
+do NOT trust Codex's `verification_summary` as the sole gate. Delegated tasks route through this SAME Verify block; its Suite-output capture rule applies without a separate delegation test site. The Verify block is
 authoritative here too: classify first, honor green receipts, and run the full
 tests/lints when neither applies (a docs-only tier-B or receipt-honored outcome
 with its GATE_SKIPPED evidence lines satisfies this backstop); on failure, fix +

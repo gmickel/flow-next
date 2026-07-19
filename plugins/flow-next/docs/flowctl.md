@@ -1051,7 +1051,7 @@ Receipt schema (only on SKIP):
 
 ### gate
 
-Gate-diet plumbing for the work loop: green receipts reuse a passing full-gate baseline only when keyed by the exact commit hash and exact command string, while docs-only tiering classifies path membership. Both fail closed: any doubt means run the full gate. These are two whitelists with two purposes: review `triage-skip` protects MEANING by forcing review on `.flow/specs`, `.flow/tasks`, and `.flow/epics`; the gate tier protects EXECUTABLES because most `.flow/**` is gate-safe and a spec Markdown file cannot break the Python suite. The layers share `_normalize_repo_path` and `TRIAGE_CODE_EXTS` primitives, but are independently correct.
+Gate-diet plumbing for the work loop: green receipts reuse a passing full-gate baseline only when keyed by the exact command string and either the exact commit hash or an eligible ancestor whose intervening two-dot diff is entirely receipt-only `.flow/**` state. Both fail closed: any doubt means run the full gate. These are two whitelists with two purposes: review `triage-skip` protects MEANING by forcing review on `.flow/specs`, `.flow/tasks`, and `.flow/epics`; the gate tier protects EXECUTABLES because most `.flow/**` is gate-safe and a spec Markdown file cannot break the Python suite. The layers share `_normalize_repo_path` and `TRIAGE_CODE_EXTS` primitives, but are independently correct.
 
 ```bash
 # Record a passing full gate as a green receipt for the current HEAD
@@ -1064,7 +1064,7 @@ flowctl gate check --gate unittest --command "python3 -m unittest discover -s pl
 flowctl gate classify --base <ref> [--json]
 ```
 
-`gate receipt` writes one file per receipt at `.flow/tmp/green-receipts/<sha8>-<gate_id>.json` with an atomic write, not a shared ledger or lock. Receipts are **cooperative local bookkeeping within one trust domain** - the same local agent writes and honors them (like review receipts and triage-skip receipts), so they are not a security boundary; remote CI gates never consult them and cannot be skipped by one. Exit codes: `0` written; `2` error, including an invalid gate ID, missing repository, or unresolvable HEAD.
+`gate receipt` writes one file per receipt at `.flow/tmp/green-receipts/<sha8>-<gate_id>.json` with an atomic write, not a shared ledger or lock. After a successful write it best-effort prunes sibling receipts older than 24 hours; prune failures never block the newly written receipt. Receipts are **cooperative local bookkeeping within one trust domain** - the same local agent writes and honors them (like review receipts and triage-skip receipts), so they are not a security boundary; remote CI gates never consult them and cannot be skipped by one. Exit codes: `0` written; `2` error, including an invalid gate ID, missing repository, or unresolvable HEAD.
 
 Receipt schema:
 
@@ -1076,11 +1076,11 @@ The contract is `command_sha256`: a receipt certifies exactly one command string
 
 `gate_id` is a bounded slug validated at both boundaries: `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. Literal `.` and `..` are explicitly rejected. The ID is interpolated into the receipt filename, so traversal characters are impossible; invalid IDs exit `2`.
 
-`gate check` exits `0` (honored: skip the re-run) only when all of these hold: the receipt exists for the current full HEAD and its `head_sha` matches; `schema == 1`; `command_sha256` matches the probe command; and the worktree is clean. Cleanliness uses `git status --porcelain=v1 -z --no-renames --untracked-files=all` and permits no entries outside `.flow/**` minus `.flow/bin/**` minus `.flow/config.json`. A dirty `.flow/bin/**` or `.flow/config.json` is execution-affecting and returns `1`; receipts under `.flow/tmp/` do not self-dirty a check. Finally, receipt age must satisfy `0 <= age <= 24h`: the lower bound rejects future timestamps and clock skew, and the TTL bounds toolchain drift on an unchanged tree.
+`gate check` exits `0` (honored: skip the re-run) only when all of these hold: an exact-HEAD receipt satisfies `schema == 1`, matching `head_sha`, matching `command_sha256`, and `0 <= age <= 24h`; or, when that exact filename is absent, one of the eight newest parseable candidates (timestamp descending, filename tie-break) satisfies those shared checks plus a full canonical commit SHA, filename-SHA consistency, no symlink, ancestry to HEAD, and a two-dot diff to HEAD containing only the receipt ignore set. Malformed, stale, non-ancestor, and otherwise ineligible candidates are skipped rather than aborting the bounded walk. Cleanliness uses `git status --porcelain=v1 -z --no-renames --untracked-files=all` once per probe and permits no entries outside `.flow/**` minus `.flow/bin/**` minus `.flow/config.json`. A dirty `.flow/bin/**` or `.flow/config.json` is execution-affecting and returns `1`; receipts under `.flow/tmp/` do not self-dirty a check.
 
 | Condition | Exit |
 | --- | --- |
-| Missing receipt, malformed JSON, bad schema, HEAD mismatch, command fingerprint mismatch, dirty worktree, stale receipt (`>24h`), future timestamp, or not a git repository | `1`: run the full gate, exactly as without receipts |
+| Missing exact receipt with no honorable ancestor candidate, malformed JSON, bad schema, HEAD mismatch, command fingerprint mismatch, dirty worktree, stale receipt (`>24h`), future timestamp, non-ancestor candidate, or not a git repository | `1`: run the full gate, exactly as without receipts |
 | Real error: invalid gate ID, git unavailable, or `git status` failing inside a resolvable repository | `2+` |
 
 Callers fail closed on both outcomes.
