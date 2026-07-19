@@ -21,9 +21,8 @@ New flowctl subcommand group `gate` mirroring the triage-skip architecture (cons
 - [ ] R7: dual-copy identical; full suite green pre+post
 
 ## Done summary
-TBD
-
+Added the `flowctl gate` subcommand group (receipt/check/classify) implementing green receipts (per-file, command-fingerprinted, 24h-bounded, fail-closed honor probe) and docs-only gate tiering (ordered extension-beats-prefix precedence over the NUL-delimited diff-union-status path set), reusing the triage normalization + extension constants; 30 hermetic tempdir-git tests cover receipt round-trip, every fail-closed check path, the force-full matrix, and the R5 path-only regression. Codex review round 1 surfaced a fail-open strip() in the shared normalizer (fixed, whitespace preserved), an OverflowError crash on extreme timestamps, and a status-failure exit-code mismatch - all fixed with regressions; round 2 SHIP. Dual-copy byte-identical; full suite green pre (1788) and post (1818).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 828a19ef67a502092bb3019bd77857a87a06c5af, 3e10ec3179eadcea25381b99121961bffa6b1dde
+- Tests: baseline: green (python3 -m unittest discover -s plugins/flow-next/tests -q -> 1788 OK pre-edit), python3 -m unittest discover -s plugins/flow-next/tests -p "test_gate_*.py" -q (30 tests OK), python3 -m unittest discover -s plugins/flow-next/tests -q (1818 tests OK at branch tip, pre+post green), dual-copy: cmp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py (byte-identical)
 - PRs:
