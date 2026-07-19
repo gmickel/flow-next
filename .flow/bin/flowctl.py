@@ -27370,6 +27370,13 @@ GATE_SAFE_ROOT_FILES: frozenset[str] = frozenset({
     "GLOSSARY.md",
     "STRATEGY.md",
 })
+# Extensionless (or oddly-suffixed) executable/build basenames that can drive a
+# gate command from ANY location (e.g. `make -C docs test`) - force-full
+# regardless of prefix. Case-insensitive match.
+GATE_EXECUTABLE_BASENAMES: frozenset[str] = frozenset({
+    "makefile", "gnumakefile", "dockerfile", "justfile", "rakefile",
+    "cmakelists.txt", "taskfile.yml", "taskfile.yaml",
+})
 
 
 def _gate_id_is_valid(gate_id: str) -> bool:
@@ -27512,6 +27519,8 @@ def _classify_gate_path(path: str) -> tuple[str, str]:
     if p.startswith(".flow/"):
         return "safe", "safe prefix .flow/ (non-executable state)"
 
+    if base.lower() in GATE_EXECUTABLE_BASENAMES:
+        return "force-full", f"executable/build basename {base}"
     if ext in GATE_CODE_EXTS:
         return "force-full", f"code/config extension {ext}"
     for prefix in GATE_FORCE_FULL_PREFIXES:

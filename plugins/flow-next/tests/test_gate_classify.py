@@ -261,3 +261,27 @@ class GateClassifyFlowStateTestCase(unittest.TestCase):
 
     def test_backslash_still_wins_over_flow_prefix(self) -> None:
         self.assertEqual(self.mod._classify_gate_path(".flow\\specs\\x.json")[0], "force-full")
+
+
+class GateClassifyExecutableBasenameTestCase(unittest.TestCase):
+    """PR #213 r7: executable/build basenames force FULL under any prefix."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "flowctl_basename_probe",
+            Path(__file__).resolve().parent.parent / "scripts" / "flowctl.py",
+        )
+        cls.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.mod)
+
+    def test_build_drivers_force_full_under_safe_prefixes(self) -> None:
+        for path in ("docs/Makefile", "agent_docs/Dockerfile", "optimization/Justfile",
+                     "docs/CMakeLists.txt", "docs/makefile"):
+            self.assertEqual(self.mod._classify_gate_path(path)[0], "force-full", path)
+
+    def test_plain_extensionless_doc_stays_unmatched_full(self) -> None:
+        # Unknown extensionless names under safe prefixes were already safe by
+        # prefix - confirm ordinary prose files still classify safe.
+        self.assertEqual(self.mod._classify_gate_path("docs/LICENSE")[0], "safe")
