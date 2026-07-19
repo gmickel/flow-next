@@ -171,6 +171,13 @@ Based on user's answer from setup questions:
   ```
 - **Current branch**: proceed (user already confirmed)
 
+After the branch choice is applied in any mode, persist the SPEC-RUN BASE once:
+```bash
+mkdir -p .flow/tmp
+git merge-base HEAD <base-branch> > .flow/tmp/spec_base   # <base-branch> = the branch the run is based on, e.g. origin/main
+```
+Like the worker `BASE_COMMIT`, bash variables do not survive across tool calls, so later phases re-read this persisted base via `$(cat .flow/tmp/spec_base)`. Capture it once at branch setup; Phase 4 uses it for classify calls.
+
 ## Phase 3: Task Loop
 
 **For each task**, spawn a worker subagent with fresh context.
@@ -476,11 +483,14 @@ Context optimization. Each task gets fresh context:
 
 After all tasks complete (or periodically for large specs):
 
-- Run relevant tests
+- Run `$FLOWCTL gate classify --base "$(cat .flow/tmp/spec_base)"`; exit 0 means docs-only tier-B: run lint/format only and note `Gates: docs-only tier-B` for the Phase 5 final summary. On nonzero, run the full gates.
+- For each full gate (test) command that would run, first probe `$FLOWCTL gate check --gate <gate_id> --command "<cmd>"`; exit 0 means skip that re-run and note `Gates: baseline reused (green receipt <sha8>)` for the Phase 5 final summary. On nonzero, run it. After any passing full gate run here, write its receipt with `$FLOWCTL gate receipt --gate <gate_id> --command "<cmd>"`.
 - Run lint/format per repo
 - If change is large/risky, run the quality auditor subagent:
   - Task flow-next:quality-auditor("Review recent changes")
 - Fix critical issues
+
+Host skips cannot land in task evidence because tasks are already done by Phase 4. Surface them only through the Phase 5 final summary Gates line - never silently skip.
 
 ## Phase 5: Ship
 
@@ -545,13 +555,14 @@ EVENTS="work.firstClaim,work.done"   # ← substitute the actual triggered set
    `"$FLOWCTL" sync check "$SPEC_ID" --events "<missed-csv>" --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the work is already done; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
 
-**Final summary (mandatory template).** End the run with this block. `Tracker sync:` is a REQUIRED field with exactly four states — an explicit `n/a` proves the check ran; an absent field is a skipped check. Under Ralph, the summary goes to the summary block / stderr, never stdout.
+**Final summary (mandatory template).** End the run with this block. `Tracker sync:` is a REQUIRED field with exactly four states — an explicit `n/a` proves the check ran; an absent field is a skipped check. Under Ralph, the summary goes to the summary block / stderr, never stdout. The `Gates:` line is where host-layer gate skips surface; worker-layer skips live in each task's evidence `tests[]`.
 
 ```
 Spec: <spec-id> — <title>
 Tasks: <n done>/<total>
 Tests: <commands + result>
 Review: <verdict | n/a>
+Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B>
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
 ```
 
