@@ -1,4 +1,3 @@
-# fn-107 flowctl judgment evictions: triage judge, memory overlap, scope suggest
 
 > STUB from the fn-101 audit (2026-07-19). The doctrine-violation cleanup: judgment moves back to the host skill. Interview/plan before building.
 

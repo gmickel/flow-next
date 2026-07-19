@@ -1,14 +1,14 @@
 {
-  "branch_name": "fn-105-flowctl-dead-surface-removal-sweep-docs",
-  "created_at": "2026-07-19T12:43:08.747875Z",
+  "branch_name": "fn-113-flowctl-judgment-evictions-memory",
+  "created_at": "2026-07-19T13:00:31.593953Z",
   "depends_on_epics": [],
-  "id": "fn-105-flowctl-dead-surface-removal-sweep-docs",
+  "id": "fn-113-flowctl-judgment-evictions-memory",
   "next_task": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
-  "spec_path": ".flow/specs/fn-105-flowctl-dead-surface-removal-sweep-docs.md",
+  "spec_path": ".flow/specs/fn-113-flowctl-judgment-evictions-memory.md",
   "status": "open",
-  "title": "flowctl dead-surface removal sweep + docs drift",
+  "title": "flowctl judgment evictions: memory overlap, scope suggest, carve-out doc",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T12:44:08.041990Z"
+  "updated_at": "2026-07-19T13:00:52.071765Z"
 }

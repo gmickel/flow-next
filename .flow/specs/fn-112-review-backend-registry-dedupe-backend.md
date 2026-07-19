@@ -1,4 +1,3 @@
-# fn-106 review backend registry: dedupe backend clones, prompts to templates
 
 > STUB from the fn-101 audit (2026-07-19). The extensibility spec: adding review backend #4 must become a registry entry, not a 4th copy of everything. Interview/plan before building.
 

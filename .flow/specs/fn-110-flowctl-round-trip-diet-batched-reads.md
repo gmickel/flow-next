@@ -1,4 +1,3 @@
-# fn-104 flowctl round-trip diet: batched reads and writes for hot skills
 
 > STUB from the fn-101 audit (2026-07-19). Each skill Bash fence costs an agent round-trip plus ~0.4s flowctl startup; hot skills spend 10-20 per run. Interview/plan before building (flag design decisions below).
 

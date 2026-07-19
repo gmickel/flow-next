@@ -1,14 +1,14 @@
 {
-  "branch_name": "fn-103-flowctl-hot-path-perf-memoize-repo-root",
-  "created_at": "2026-07-19T12:43:07.902080Z",
+  "branch_name": "fn-114-ralph-opt-in-extraction-guard-fixes-no",
+  "created_at": "2026-07-19T13:00:32.074228Z",
   "depends_on_epics": [],
-  "id": "fn-103-flowctl-hot-path-perf-memoize-repo-root",
+  "id": "fn-114-ralph-opt-in-extraction-guard-fixes-no",
   "next_task": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
-  "spec_path": ".flow/specs/fn-103-flowctl-hot-path-perf-memoize-repo-root.md",
+  "spec_path": ".flow/specs/fn-114-ralph-opt-in-extraction-guard-fixes-no.md",
   "status": "open",
-  "title": "flowctl hot-path perf: memoize repo root and state dir",
+  "title": "ralph opt-in extraction: guard fixes + no-default-install",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T12:43:30.550694Z"
+  "updated_at": "2026-07-19T13:02:03.461992Z"
 }
