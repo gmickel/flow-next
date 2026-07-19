@@ -27491,7 +27491,9 @@ def cmd_triage_skip(args: argparse.Namespace) -> None:
 # primitives so platform-specific path spelling cannot split their behavior.
 
 GATE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-GATE_FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+# 40 hex = SHA-1 repos; 64 hex = `git init --object-format=sha256` repos. Both
+# are full object ids; anything else (symbolic refs, abbreviations) is rejected.
+GATE_FULL_SHA_RE = re.compile(r"^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$")
 GATE_RECEIPTS_DIR = Path(".flow") / "tmp" / "green-receipts"
 GATE_CODE_EXTS: frozenset[str] = TRIAGE_CODE_EXTS | frozenset({
     ".py",
@@ -27756,6 +27758,10 @@ def _gate_walk_candidate_ok(
         )
     except OSError:
         return False, "unable to inspect receipt diff"
+    except ValueError:
+        # Non-UTF-8 path bytes in the diff (hostile or accidental filename)
+        # would raise UnicodeDecodeError during capture - skip, fail closed.
+        return False, "undecodable path in receipt diff"
     if diff_proc.returncode != 0:
         return False, "unable to inspect receipt diff"
     for path in (path for path in diff_proc.stdout.split("\0") if path):

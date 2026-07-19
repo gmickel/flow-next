@@ -289,6 +289,38 @@ class GateReceiptTestCase(GateReceiptHarness):
 
 class GateReceiptAncestorWalkTestCase(GateReceiptHarness):
 
+    def test_full_sha_regex_accepts_sha256_object_format(self) -> None:
+        # `git init --object-format=sha256` repos have 64-hex HEADs; the walk
+        # must not reject their receipts pre-canonicalization.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "flowctl_sha_probe", str(FLOWCTL_PY))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.assertIsNotNone(mod.GATE_FULL_SHA_RE.fullmatch("a" * 40))
+        self.assertIsNotNone(mod.GATE_FULL_SHA_RE.fullmatch("a" * 64))
+        self.assertIsNone(mod.GATE_FULL_SHA_RE.fullmatch("a" * 41))
+        self.assertIsNone(mod.GATE_FULL_SHA_RE.fullmatch("HEAD"))
+
+    def test_walk_survives_non_utf8_flow_path(self) -> None:
+        # A committed .flow filename with non-UTF-8 bytes must skip the
+        # candidate (fail closed), never traceback.
+        import os as _os
+        self._receipt()
+        raw = _os.path.join(str(self.tmpdir), ".flow", "tasks")
+        _os.makedirs(raw, exist_ok=True)
+        bad = _os.path.join(raw.encode(), b"\xff.md")
+        try:
+            with open(bad, "wb") as fh:
+                fh.write(b"x")
+        except (OSError, ValueError):
+            self.skipTest("filesystem refuses non-UTF-8 filenames")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "hostile path")
+        result = self._check()
+        self.assertIn(result.returncode, (0, 1), result.stderr or result.stdout)
+        self.assertNotIn("Traceback", (result.stderr or "") + (result.stdout or ""))
+
     def test_walk_skips_suffix_colliding_gate_id(self) -> None:
         # "gate" must never honor a "full-gate" receipt even though the glob
         # pattern *-gate.json matches the longer filename; the receipt body's
