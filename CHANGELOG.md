@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Delegation diet: path-handoff replaces the composed brief (fn-103).** The raw `codex exec` bridge is documented as the interactive route; `delegate:codex` is the same bridge with deterministic rails for unattended loops. Task and spec files carry the implementation contract, and the plan task template now requires named files, named test cases, and named acceptance because downstream executors receive the task file as their brief. The delegation reference index now describes one run per task. No version bump (batched release).
+
 ## [flow-next 2.18.0] - 2026-07-19
 
 ### Changed

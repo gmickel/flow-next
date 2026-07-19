@@ -454,7 +454,7 @@ Default to standard unless complexity demands more or less.
  [What to build, not how to build it]
 
  **Size:** S/M (L tasks should be split)
- **Files:** list expected files
+ **Files:** list expected files. Task files must carry the full contract - named files, named test cases, named acceptance - because downstream executors receive the task file AS the brief (plan-time knowledge reaches them through the task file, no other channel).
 
  ## Approach
  - Follow pattern at `src/example.ts:42`
