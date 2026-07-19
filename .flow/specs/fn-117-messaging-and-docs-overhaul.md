@@ -123,5 +123,5 @@ The six full audit reports live in the session transcript (2026-07-19); load-bea
 4. Testimonials: no outreach needed - the tweets exist publicly; recover correct links/handles from mickel.tech git history (d7a4024) and fix the mangled live page.
 5. Enterprise proof: anonymized, BOLD statements (no company names, no logo hunting).
 6. Launch post/thread: separate follow-up, not this spec.
-7. Task-level parallelism within one spec: reclassified SUPPORTED (multi-actor pattern) - include in cookbook + marketing.
+7. Task-level parallelism within one spec: reclassified SUPPORTED - TWO live forms: (a) multi-session/multi-actor (teams.md pattern, atomic claims), and (b) single-session prompted dispatch ("run .2 and .3 in parallel - disjoint files"): the host batches multiple worker Task calls in one message; the maintainer has used this routinely. History check (both plugin generations) confirms the skill prose never sanctioned form (b) - it works as prompted orchestration over the primitives. Cookbook markets both honestly (form (b) as "prompt into the step"); follow-up spec fn-118 makes form (b) an explicit sanctioned contract in the work skill (--parallel flag / prompt trigger, disjoint-Files guard, per-worker contracts unchanged, plan-sync once per batch).
 8. Workstream F added: private CLAUDE.md release guidance gains the narrative layer.
