@@ -10,7 +10,7 @@
   "id": "fn-103-delegation-diet-path-handoff-replaces",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 0,
+  "plan_review_rounds": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T13:04:33.644165Z"
+  "updated_at": "2026-07-19T13:05:20.911359Z"
 }
