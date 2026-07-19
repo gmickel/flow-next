@@ -71,21 +71,24 @@ class GateReceiptHarness(unittest.TestCase):
         return self._git("rev-parse", "HEAD")
 
     def _flowctl(
-        self, *args: str, cwd: Optional[Path] = None
+        self, *args: str, cwd: Optional[Path] = None, env: Optional[dict] = None
     ) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, str(FLOWCTL_PY), "gate"] + list(args),
             cwd=cwd or self.tmpdir,
             capture_output=True,
             text=True,
+            env=env,
         )
 
     def _receipt(self, gate_id: str = GATE_ID, command: str = COMMAND) -> None:
         result = self._flowctl("receipt", "--gate", gate_id, "--command", command)
         self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
-    def _check(self, gate_id: str = GATE_ID, command: str = COMMAND) -> subprocess.CompletedProcess:
-        return self._flowctl("check", "--gate", gate_id, "--command", command)
+    def _check(
+        self, gate_id: str = GATE_ID, command: str = COMMAND, env: Optional[dict] = None
+    ) -> subprocess.CompletedProcess:
+        return self._flowctl("check", "--gate", gate_id, "--command", command, env=env)
 
     def _receipt_path(self, gate_id: str = GATE_ID) -> Path:
         return self.tmpdir / ".flow" / "tmp" / "green-receipts" / f"{self._git('rev-parse', 'HEAD')[:8]}-{gate_id}.json"
@@ -407,6 +410,95 @@ class GateReceiptAncestorWalkTestCase(GateReceiptHarness):
         self._write_receipt(tree_sha)
         self._commit(".flow/tasks/state.md", "state\n", "flow state")
         self.assertEqual(self._check().returncode, 1)
+
+    def test_exact_receipt_ttl_evaluated_after_status(self) -> None:
+        """A receipt that ages past 24h during a slow `git status` must reject.
+
+        The shim sleeps 3s on `git status`; the receipt is 24h minus 1.5s old
+        at launch, so it is fresh at the pre-status probe but stale by the
+        post-status verdict. Caching the pre-status age would wrongly honor it.
+        """
+        real_git = shutil.which("git")
+        assert real_git is not None
+        shim_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, shim_dir, ignore_errors=True)
+        shim = shim_dir / "git"
+        shim.write_text(
+            f'#!/bin/sh\n[ "$1" = "status" ] && sleep 3\nexec "{real_git}" "$@"\n',
+            encoding="utf-8",
+        )
+        shim.chmod(0o755)
+        head = self._git("rev-parse", "HEAD")
+        almost_stale = (
+            datetime.now(timezone.utc) - timedelta(hours=24) + timedelta(seconds=1.5)
+        ).isoformat()
+        self._write_receipt(head, timestamp=almost_stale)
+        env = dict(os.environ)
+        env["PATH"] = f"{shim_dir}{os.pathsep}{env.get('PATH', '')}"
+        result = self._check(env=env)
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+        self.assertIn("stale", result.stdout + result.stderr)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFOs")
+    def test_walk_skips_fifo_candidate_without_hanging(self) -> None:
+        self._receipt()
+        receipt_head = self._git("rev-parse", "HEAD")
+        self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        os.mkfifo(self._receipt_dir() / f"eeeeeeee-{GATE_ID}.json")
+        result = self._check()
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn(receipt_head[:8], result.stdout)
+
+    def test_walk_skips_oversized_candidate(self) -> None:
+        self._receipt()
+        receipt_head = self._git("rev-parse", "HEAD")
+        self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        oversized = {
+            "schema": 1,
+            "head_sha": "f" * 40,
+            "gate_id": GATE_ID,
+            "command_sha256": hashlib.sha256(COMMAND.encode("utf-8")).hexdigest(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "padding": "x" * 70000,
+        }
+        (self._receipt_dir() / f"ffffffff-{GATE_ID}.json").write_text(
+            json.dumps(oversized), encoding="utf-8"
+        )
+        result = self._check()
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn(receipt_head[:8], result.stdout)
+
+    def test_walk_skips_deeply_nested_json_candidate(self) -> None:
+        self._receipt()
+        receipt_head = self._git("rev-parse", "HEAD")
+        self._commit(".flow/tasks/state.md", "state\n", "flow state")
+        (self._receipt_dir() / f"dddddddd-{GATE_ID}.json").write_text(
+            "[" * 60000 + "]" * 60000, encoding="utf-8"
+        )
+        result = self._check()
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn(receipt_head[:8], result.stdout)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFOs")
+    def test_receipt_prune_survives_hostile_siblings(self) -> None:
+        """Prune-on-write must skip FIFOs, nested JSON, and oversized files."""
+        receipt_dir = self._receipt_dir()
+        os.mkfifo(receipt_dir / "fifo.json")
+        (receipt_dir / "nested.json").write_text(
+            "[" * 60000 + "]" * 60000, encoding="utf-8"
+        )
+        (receipt_dir / "oversized.json").write_text(
+            json.dumps({"padding": "x" * 70000}), encoding="utf-8"
+        )
+        old_head = self._git("rev-parse", "HEAD")
+        old_path = self._write_receipt(
+            old_head,
+            filename_sha8="00000000",
+            timestamp=(datetime.now(timezone.utc) - timedelta(hours=25)).isoformat(),
+        )
+        self._receipt()
+        self.assertFalse(old_path.exists())
+        self.assertTrue(self._receipt_path().exists())
 
 
 class GateReceiptCompletionRegressionsTestCase(GateReceiptHarness):

@@ -15,6 +15,7 @@ import os
 import re
 import secrets
 import string
+import stat
 import subprocess
 import shlex
 import shutil
@@ -27604,21 +27605,43 @@ def _gate_walk_candidate_ok(
     return True, "green receipt honored"
 
 
+GATE_RECEIPT_MAX_BYTES = 65536
+
+
+def _gate_load_receipt_file(path: Path) -> Optional[dict[str, Any]]:
+    """Bounded, fail-closed read of one glob-discovered receipt file.
+
+    `lstat` screens non-regular files (symlinks, FIFOs, sockets) BEFORE any
+    open - opening a FIFO blocks forever, which would hang the walk. The size
+    cap bounds parse work (real receipts are ~250 bytes), and `RecursionError`
+    covers pathologically nested JSON that the json module raises through.
+    Any doubt returns None: callers skip the file, never abort.
+    """
+    try:
+        st = path.lstat()
+        if not stat.S_ISREG(st.st_mode) or st.st_size > GATE_RECEIPT_MAX_BYTES:
+            return None
+        with path.open(encoding="utf-8") as f:
+            data = json.loads(f.read(GATE_RECEIPT_MAX_BYTES + 1))
+    except (OSError, json.JSONDecodeError, ValueError, RecursionError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _gate_prune_stale_receipts(receipts_dir: Path) -> None:
     """Best-effort prune of receipts that can no longer pass the 24-hour TTL."""
     try:
         for receipt_path in receipts_dir.glob("*.json"):
             try:
-                with receipt_path.open(encoding="utf-8") as f:
-                    receipt = json.load(f)
-                if not isinstance(receipt, dict):
+                receipt = _gate_load_receipt_file(receipt_path)
+                if receipt is None:
                     continue
                 timestamp, timestamp_error = _gate_receipt_timestamp(receipt)
                 if timestamp_error or timestamp is None:
                     continue
                 if datetime.now(timezone.utc) - timestamp > timedelta(hours=24):
                     receipt_path.unlink()
-            except (OSError, json.JSONDecodeError, ValueError):
+            except OSError:
                 continue
     except OSError:
         pass
@@ -27786,22 +27809,20 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
     except OSError:
         _gate_exit_check(args, False, "unable to resolve receipts dir", sha8)
     exact_receipt: Optional[dict[str, Any]] = None
-    exact_valid: Optional[bool] = None
-    exact_reason: Optional[str] = None
     if receipt_path.is_file():
         try:
             with receipt_path.open(encoding="utf-8") as f:
                 receipt = json.load(f)
-        except (OSError, json.JSONDecodeError, ValueError):
+        except (OSError, json.JSONDecodeError, ValueError, RecursionError):
             _gate_exit_check(args, False, "malformed receipt", sha8)
         if not isinstance(receipt, dict):
             _gate_exit_check(args, False, "malformed receipt", sha8)
         exact_receipt = receipt
-        exact_valid, exact_reason = _gate_receipt_valid(receipt, head_sha, args.command)
         # Preserve the exact-path validation order: malformed schema, identity,
         # and fingerprint reject before cleanliness; timestamp outcomes follow it.
-        if exact_reason in {"bad schema", "HEAD mismatch", "command fingerprint mismatch"}:
-            _gate_exit_check(args, False, exact_reason, sha8)
+        _early_valid, early_reason = _gate_receipt_valid(receipt, head_sha, args.command)
+        if early_reason in {"bad schema", "HEAD mismatch", "command fingerprint mismatch"}:
+            _gate_exit_check(args, False, early_reason, sha8)
     # Cleanliness is intentionally checked once, before any candidate walk.
     # A status failure remains an exit-2 tooling error; a dirty worktree cannot
     # reuse either an exact receipt or an ancestor receipt.
@@ -27818,7 +27839,13 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
             _gate_exit_check(args, False, f"worktree dirty: {path}", sha8)
 
     if exact_receipt is not None:
-        assert exact_valid is not None and exact_reason is not None
+        # Re-validate AFTER cleanliness so the TTL / future-timestamp verdict
+        # uses the post-status clock, exactly like the pre-walk exact path did:
+        # a slow `git status` must never let a receipt honor after it aged past
+        # 24h (or reject one whose timestamp is no longer in the future).
+        exact_valid, exact_reason = _gate_receipt_valid(
+            exact_receipt, head_sha, args.command
+        )
         _gate_exit_check(args, exact_valid, exact_reason, sha8)
 
     # Exact HEAD receipt missing: rank every parseable candidate deterministically
@@ -27827,17 +27854,13 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
     try:
         candidate_paths = receipt_path.parent.glob(f"*-{args.gate_id}.json")
         for candidate_path in candidate_paths:
-            try:
-                with candidate_path.open(encoding="utf-8") as f:
-                    candidate = json.load(f)
-                if not isinstance(candidate, dict):
-                    continue
-                timestamp, timestamp_error = _gate_receipt_timestamp(candidate)
-                if timestamp_error or timestamp is None:
-                    continue
-                candidates.append((candidate_path, candidate, timestamp))
-            except (OSError, json.JSONDecodeError, ValueError):
+            candidate = _gate_load_receipt_file(candidate_path)
+            if candidate is None:
                 continue
+            timestamp, timestamp_error = _gate_receipt_timestamp(candidate)
+            if timestamp_error or timestamp is None:
+                continue
+            candidates.append((candidate_path, candidate, timestamp))
     except OSError:
         # A broken/unreadable directory is not a tooling taxonomy change: no
         # receipt can be honored, so the caller runs the full gate.
