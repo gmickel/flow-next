@@ -111,6 +111,52 @@ Task breakdown at /flow-next:plan time follows these phases; A and B1 are parall
 - PSVI and client-name boundaries are absolute (see hard boundaries).
 - German localization of new mickel.tech copy only where the page already has DE parity.
 
+## Quick commands
+
+```bash
+cd ~/work/flow-next.dev && pnpm build                        # docs-site gate (MDX + mermaid render)
+cd ~/work/mickel.tech && bun x biome check && bun run build  # microsite gate
+grep -ri "PSVI\|Velocity Index" ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/  # boundary gate: MUST be empty
+```
+
+## Acceptance Criteria
+
+- **R1:** Every property front door leads with the accuracy claim: hero direction "Agents generate. flow-next proves." applied on README + flow-next.dev landing + mickel.tech hero; the claim hierarchy (6 claims, in order) is traceable on each property.
+- **R2:** The flexibility doctrine ships everywhere: flow-next.dev "Menu, not a rail" page + Cookbook nav group with >= 35 verified recipes (9 categories, each recipe = scenario + exact invocation + why gates hold), README "The pipeline is a menu" section, guide menu-not-rail treatment. Zero marketing of the 4 banned aspirational patterns; task-parallelism marketed per Decision 7 (both live forms).
+- **R3:** Verification spine shipped: named page on flow-next.dev + landing pillar; lineage (Wei/Karpathy/Vogels/Sonar/Willison) cited exactly once sitewide; Sonar 96/48 stat present with source link.
+- **R4:** Enterprise proof shipped anonymized-bold: field-notes page + README adopters strip + mickel.tech credibility strip; the boundary grep (Quick commands) is empty; no client names connected to coaching stories anywhere.
+- **R5:** Zero unlinked testimonials on any property: the d7a4024 X set recovered with URLs verified resolving + the GitHub pool (Novotny #111 lead); mickel.tech mangled links fixed.
+- **R6:** GitHub front door complete: social-preview asset produced (1280x640; upload is a documented manual step), above-the-fold hero visual, proof badges (stars/CI/release/awesome), Discussions enabled + CODE_OF_CONDUCT + Wiki off, quick-start de-frictioned, consistency sweep done (command/agent counts, marketplace URL, model role labels).
+- **R7:** flow-next.dev structural gate: all B1 quick wins fixed; every new page present in BOTH nav sources; llms.txt served; `pnpm build` green.
+- **R8:** All ~21 bare skill pages gain Tips + Dynamic usage sections + one worked example each, cross-linked to cookbook recipes.
+- **R9:** Design makeover landed: single theme, landing reworked around the claim hierarchy with a proof-artifact hero, docs-body rhythm components (cards/code-tabs/recipe cards/receipt-motif callouts) used by the new pages, refreshed mockups (no stale model ids or 1.x badges).
+- **R10:** mickel.tech current: facts sweep (2.19.1+, 29 skills, 4 backends, 4 trackers, GPT-5.6 family), Prime section rebuilt to 2.13.0 model, lib/releases.ts fixed, /sdlc + /expert cross-links added, biome + build green.
+- **R11:** Guide updated: flow-next.md menu-not-rail treatment, code-factory-onboarding.html regenerated from source, plugins.md marketplace ref fixed, substantive additions to team-enterprise.md + code-review-tools.md + factory-and-multi-agent.md.
+- **R12:** Private CLAUDE.md "Flow-Next downstream properties" gains the narrative layer (claim-hierarchy frame, story-beat habit, boundaries, per-property tone map, canonical-home pointer) with mechanics intact.
+- **R13:** Vault walk complete: Messaging Library rewritten around the new architecture; Strategy & Positioning, Project Overview, Source Material Index refreshed; stale UNRELEASED markers cleared; Signals closure entry appended.
+
+## Early proof point
+
+Task fn-117.1 validates the foundation: the d7a4024 testimonial set recovers with resolving URLs and the boundary discipline (PSVI/client-name greps) can be mechanically gated. If recovery fails, the proof strategy for R5 reverts to GitHub-pool-only before any property copy ships.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1  | claim hierarchy on every front door | fn-117.2, fn-117.4, fn-117.7 | - |
+| R2  | flexibility doctrine everywhere | fn-117.2, fn-117.5, fn-117.8 | - |
+| R3  | verification spine | fn-117.4, fn-117.6 | - |
+| R4  | enterprise proof, anonymized-bold | fn-117.2, fn-117.6, fn-117.7 | - |
+| R5  | linked testimonials only | fn-117.1, fn-117.2, fn-117.4, fn-117.7 | - |
+| R6  | GitHub front door | fn-117.2 | - |
+| R7  | flow-next.dev structural gate | fn-117.3, fn-117.4, fn-117.5, fn-117.6 | - |
+| R8  | skill-page pass | fn-117.6 | - |
+| R9  | design makeover | fn-117.4 | - |
+| R10 | mickel.tech | fn-117.7 | - |
+| R11 | guide | fn-117.8 | - |
+| R12 | private release guidance | fn-117.1 | - |
+| R13 | vault walk | fn-117.9 | - |
+
 ## Research annex (pointers)
 
 The six full audit reports live in the session transcript (2026-07-19); load-bearing extracts are inlined above. Key artifacts to reuse at implementation time: the 40-recipe verified inventory with file:line citations (recipes agent), the linkable-testimonial list with URLs (github agent), the per-page flow-next.dev gap table (site agent), the vault quote harvest (vault agent), the competitor table + verifiability lineage citations (competitive agent), the mickel.tech staleness table (properties agent).

@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-19T20:21:44.037471Z",
+  "depends_on": [
+    "fn-117-messaging-and-docs-overhaul.1"
+  ],
+  "id": "fn-117-messaging-and-docs-overhaul.8",
+  "priority": null,
+  "spec": "fn-117-messaging-and-docs-overhaul",
+  "spec_path": ".flow/tasks/fn-117-messaging-and-docs-overhaul.8.md",
+  "status": "todo",
+  "title": "AI x SDLC guide: menu-not-rail treatment, onboarding regen, guide additions",
+  "updated_at": "2026-07-19T20:24:12.130346Z"
+}

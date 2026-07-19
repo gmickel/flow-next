@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-19T20:21:42.658987Z",
+  "depends_on": [
+    "fn-117-messaging-and-docs-overhaul.1",
+    "fn-117-messaging-and-docs-overhaul.3"
+  ],
+  "id": "fn-117-messaging-and-docs-overhaul.4",
+  "priority": null,
+  "spec": "fn-117-messaging-and-docs-overhaul",
+  "spec_path": ".flow/tasks/fn-117-messaging-and-docs-overhaul.4.md",
+  "status": "todo",
+  "title": "flow-next.dev design makeover: landing rework, docs-body components, llms.txt",
+  "updated_at": "2026-07-19T20:23:33.637811Z"
+}

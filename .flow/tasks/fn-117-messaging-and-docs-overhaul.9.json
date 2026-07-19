@@ -1,0 +1,20 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-19T20:21:44.388400Z",
+  "depends_on": [
+    "fn-117-messaging-and-docs-overhaul.2",
+    "fn-117-messaging-and-docs-overhaul.5",
+    "fn-117-messaging-and-docs-overhaul.6",
+    "fn-117-messaging-and-docs-overhaul.7",
+    "fn-117-messaging-and-docs-overhaul.8"
+  ],
+  "id": "fn-117-messaging-and-docs-overhaul.9",
+  "priority": null,
+  "spec": "fn-117-messaging-and-docs-overhaul",
+  "spec_path": ".flow/tasks/fn-117-messaging-and-docs-overhaul.9.md",
+  "status": "todo",
+  "title": "Vault walk: Messaging Library rewrite + note refresh + Signals closure",
+  "updated_at": "2026-07-19T20:24:12.495510Z"
+}

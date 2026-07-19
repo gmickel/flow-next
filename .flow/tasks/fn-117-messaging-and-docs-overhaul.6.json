@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-19T20:21:43.345692Z",
+  "depends_on": [
+    "fn-117-messaging-and-docs-overhaul.4"
+  ],
+  "id": "fn-117-messaging-and-docs-overhaul.6",
+  "priority": null,
+  "spec": "fn-117-messaging-and-docs-overhaul",
+  "spec_path": ".flow/tasks/fn-117-messaging-and-docs-overhaul.6.md",
+  "status": "todo",
+  "title": "flow-next.dev proof + reference pages: verification spine, field notes, FAQ, first-30-min, troubleshooting, glossary + skill-page pass",
+  "updated_at": "2026-07-19T20:23:34.316542Z"
+}
