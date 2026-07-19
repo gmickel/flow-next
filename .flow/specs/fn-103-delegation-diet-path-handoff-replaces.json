@@ -11,8 +11,8 @@
   "impl_review_rounds": {},
   "next_task": 1,
   "plan_review_rounds": 0,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-07-19T13:14:14.509169Z",
   "ready": true,
   "spec_path": ".flow/specs/fn-103-delegation-diet-path-handoff-replaces.md",
   "status": "open",
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T13:13:43.772795Z"
+  "updated_at": "2026-07-19T13:14:14.509333Z"
 }
