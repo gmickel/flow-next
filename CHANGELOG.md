@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 2.17.0] - 2026-07-19
 
 ### Changed
 
@@ -10,7 +10,8 @@ All notable changes to the flow-next.
   - The shared discipline reference `plugins/flow-next/references/tracker-dispatch.md` is the sole statement of the rules: five-sentence discipline, both MUST invariants (single state-writer per spec and join-before-audit), join mechanics, host capability ladder, and recovery. Every touchpoint gate carries one conditional sentence pointing at it.
   - Pre-audit joins: the three `sync check` call sites (work Phase 5, make-pr, capture) each await outstanding dispatches for the audited spec first, closing the demonstrated false-MISSING duplicate-retro-fire race. Resolve-pr and qa dispatch lines now carry their `event:` tags so `sync check` can audit those events.
   - Host capability ladder: Claude Code Tier A (background plus notification join, `TaskOutput(block=true)` forbidden); Cursor and Codex Tier B (isolated-but-awaited, Codex probe-verified 2026-07-18 on codex-cli 0.144.1); Tier C inline degrade, loudly never silently. Everything else stays inline byte-identical: state-shaped ops (`reconcile`/`push`/`create-if-unlinked`), unlinked first touches, ceremonies, manual runs, `--dry-run`, interactive conflict resolution, `land.merged`. Forked genuine conflicts queue via `sync defer`, never prompt.
-  - No flowctl changes, no new config leaves; receipts, event tags, and `sync check` semantics untouched. `forked => queue-not-ask` folded into tracker-sync's single RALPH gate. Codex mirror regenerated (tracker-runner toml plus role rewrite guard). No version bump (batched releases).
+  - No flowctl changes, no new config leaves; receipts, event tags, and `sync check` semantics untouched. `forked => queue-not-ask` folded into tracker-sync's single RALPH gate. Codex mirror regenerated (tracker-runner toml plus role rewrite guard).
+  - Hardening from the live proof + PR #212 review waves: comments-sync retry rule (a post whose response fails to parse may have landed - re-check the dedup marker before ANY re-post; found live as a runner triple-post), `lastSyncedAt` advance scoped to two-way reconciles so comment appends are provably state-free (makes the overlap invariant sound), tier-conditional dispatch wording (Tier A fire-and-forget, Tier B awaited) with a tier-based gate readable as-is in the mirror, runner terminal outcomes surfaced in host summary contracts (`Tracker runner:` lines - an `errored`/`queued` outcome is visible nowhere else), Codex-mirror `tracker_runner` role rewrite + hard-fail guard, and platform-matrix tier notes for Codex + Cursor in `docs/platforms.md`.
 
 ## [flow-next 2.16.0] - 2026-07-18
 
