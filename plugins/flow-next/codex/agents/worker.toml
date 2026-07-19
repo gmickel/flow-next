@@ -381,9 +381,11 @@ If capture fails (memory disabled mid-run, flowctl error, etc.), log and continu
 BASE_COMMIT=$(cat .flow/tmp/base_commit)
 <FLOWCTL> gate classify --base "$BASE_COMMIT"
 # Exit 0: docs-only tier-B. Run ONLY lint/format where the repo configures them;
-# do NOT run the test suite or smoke script. Record both evidence lines:
-#   GATE_SKIPPED:unittest:docs-only - cumulative diff classified tier-B (no executable paths touched)
-#   GATE_SKIPPED:smoke:docs-only - cumulative diff classified tier-B (no executable paths touched)
+# do NOT run the test/smoke gates. Record ONE evidence line PER GATE THE SPEC'S
+# QUICK COMMANDS ACTUALLY DEFINE - the same (gate_id, command) pairs the
+# Baseline check mapped; never a fixed id list (a project without a `smoke`
+# gate gets no smoke line - fabricated skip lines corrupt the evidence trail):
+#   GATE_SKIPPED:<gate_id>:docs-only - cumulative diff classified tier-B (no executable paths touched)
 # Mirror regen is unaffected: mirror-source diffs never classify tier-B because the classifier
 # force-fulls plugins/flow-next/{skills,agents,commands,references,templates,hooks}/** and codex/**.
 # Exit nonzero: run the full gates exactly as today. For each passed full gate command, use the
