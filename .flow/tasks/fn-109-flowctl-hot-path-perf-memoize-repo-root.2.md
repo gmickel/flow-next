@@ -44,9 +44,8 @@ Sweep the smaller uncached repeat offenders found by fn-101, batch the cognitive
 - [ ] Dual-copy parity + full unittest + smoke_test.sh (from temp dir, absolute path) green (R9)
 
 ## Done summary
-TBD
-
+Swept the fn-101 uncached repeat offenders: success-only executable-path-keyed memo for get_copilot_version/get_cursor_version, prospect descriptor construction folded to one read+parse per artifact (with an exact-hit _prospect_resolve_id shortcut preserving walk-filter and separator-id parity), and _export_removed_export_refs batched to <=2 git grep calls for 40 symbols (--color=never, per-symbol word-boundary attribution, oracle-tested byte parity). CHANGELOG Unreleased entry + docs/flowctl.md perf notes landed; codex review NEEDS_WORK (forced-color SGR dropped refs) fixed -> SHIP.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 90e3de47e8e00ab155d8f4f039ee4ffac306def7, 17f3c3c3ab2086eb6cc4ae2fdcf8094a912679a1
+- Tests: baseline: green (fn-109.1 gates green at base commit 0b88b4d7), python3 -m unittest discover -s plugins/flow-next/tests -q (1858 tests OK, skipped=2), (cd "$(mktemp -d)" && bash plugins/flow-next/scripts/smoke_test.sh) (144 passed, 0 failed), python3 -m unittest discover -s plugins/flow-next/tests -p test_hot_path_sweep.py (11 OK), python3 -m unittest discover -s plugins/flow-next/tests -p test_export_traceability.py (31 OK), cmp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py (byte parity), time .flow/bin/flowctl list --json (0.52s) / status (0.41s)
 - PRs:

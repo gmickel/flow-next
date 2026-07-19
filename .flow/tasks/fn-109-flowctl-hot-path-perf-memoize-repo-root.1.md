@@ -43,9 +43,8 @@ Memoize `get_repo_root()` and `get_state_dir()` in flowctl.py with module-level 
 - [ ] Full unittest discover green + smoke_test.sh green (run from a temp dir via absolute script path - the guard refuses repo-root invocation); DualCopyInvariant suites green (R9)
 
 ## Done summary
-TBD
-
+Memoized get_repo_root() and get_state_dir() in flowctl.py with module-level dict caches (cwd-keyed, success-only; state-dir key includes FLOW_STATE_DIR), collapsing 809 git subprocess spawns per list to 2: list 27s -> 0.48s, status 32s -> 0.43s. New tests/test_hot_path_memoization.py covers R3 (subprocess budget <=5 at 404 tasks), R4 (chdir invalidation incl. worktree leak-proof), R5 (FLOW_STATE_DIR set/unset), R6 (transient failure never sticky); chdir suites pass unmodified, dual-copy mirror synced same commit. Codex impl-review: SHIP (0 findings). Baseline was green pre-edit.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 1393074a5b101f11b4d410e9637b230f817ea9e8
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -q (1841 tests OK), bash plugins/flow-next/scripts/smoke_test.sh from temp dir (144 passed, 0 failed), python3 -m unittest plugins.flow-next.tests.test_hot_path_memoization -v (7 tests OK), time .flow/bin/flowctl list --json = 0.48s (R1 <1s, baseline 27-31s), time .flow/bin/flowctl status = 0.43s (R2 <1.5s, baseline 32s), DualCopyInvariant suites x4 green (12 tests)
 - PRs:
