@@ -6,7 +6,7 @@ Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre
 
 | Platform | Install command | Plugin file | Notes |
 |----------|-----------------|-------------|-------|
-| Claude Code | `/plugin marketplace add gmickel/flow-next-marketplace && /plugin install flow-next` | `.claude-plugin/plugin.json` | Canonical environment |
+| Claude Code | `/plugin marketplace add https://github.com/gmickel/flow-next && /plugin install flow-next` | `.claude-plugin/plugin.json` | Canonical environment |
 | Factory Droid | `droid plugin marketplace add https://github.com/gmickel/flow-next && droid plugin install flow-next` (in Droid CLI) | `.claude-plugin/plugin.json` (Droid auto-translates Claude Code plugin format) | Native cross-platform patterns |
 | OpenAI Codex | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-codex.sh` | `.codex-plugin/plugin.json` | Pre-built mirror under `plugins/flow-next/codex/` |
 | Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (read via Claude Code compat) | **Works incl. multi-agent** (full `/flow-next:plan` scout fan-out verified). UI under-lists commands/agents (cosmetic); Ralph TBD — see below |
@@ -83,7 +83,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 ### What works
 
 - Planning, work execution, interviews, reviews — full workflow.
-- Multi-agent roles: 20 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`).
+- Multi-agent roles: 22 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`).
 - Cross-model reviews (Codex as review backend).
 - flowctl CLI (`~/.codex/scripts/flowctl`).
 - Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/hooks/flowctl to project.
@@ -100,7 +100,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 | Worker (default) | *inherit (session model)* | *session default* | worker |
 | Inherited | parent model | parent | pr-comment-resolver |
 
-`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The worker defaults to `inherit` on BOTH platforms - your session model rules, and flow-next never hardcodes a model opinion into generated config. An OPT-IN pin is available at sync time (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`); the eval-motivated recommendation is `gpt-5.6-terra` @ `medium`. Note (Jul 2026): on Sol/Multi-Agent-V2 builds role-profile model application is currently unreliable (openai/codex#33268, #33314) - prefer the `codex exec -m` self-bridge to steer models from a Codex host until those are fixed (fn-97, 2026-07 controlled pipeline eval at n=3: terra-medium matched `gpt-5.6-sol` correctness at ~2/3 wall-clock on frontier-authored specs). The actual review backend (`flowctl impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults to `gpt-5.5:high` on its own.
+`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The worker defaults to `inherit` on BOTH platforms - your session model rules, and flow-next never hardcodes a model opinion into generated config. An OPT-IN pin is available at sync time (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`); the eval-motivated recommendation is `gpt-5.6-terra` @ `medium`. Note (Jul 2026): on Sol/Multi-Agent-V2 builds role-profile model application is currently unreliable (openai/codex#33268, #33314) - prefer the `codex exec -m` self-bridge to steer models from a Codex host until those are fixed (fn-97, 2026-07 controlled pipeline eval at n=3: terra-medium matched `gpt-5.6-sol` correctness at ~2/3 wall-clock on frontier-authored specs). The actual review backend (`flowctl impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults on its own to the backend's ranking-top model at `high` effort (current ids in [`flowctl.md`](flowctl.md)).
 
 Override model defaults: the `CODEX_MODEL_*` / `CODEX_REASONING_EFFORT_*` env vars are read by **`sync-codex.sh`** (which generates the agent `.toml` files) — `install-codex.sh` only copies the pre-built mirror, so regenerate first, then install:
 
@@ -126,7 +126,7 @@ Codex now supports hooks. The pre-built `codex/hooks.json` includes Ralph guard 
 Run `$flow-next-setup` (or select **Flow Setup** from the `$` dropdown) in your project. It detects the Codex platform and:
 - Initializes `.flow/` directory
 - Copies flowctl to `.flow/bin/`
-- Copies 20 agent `.toml` configs to `.codex/agents/` (project-scoped)
+- Copies 22 agent `.toml` configs to `.codex/agents/` (project-scoped)
 - Copies `hooks.json` to `.codex/hooks.json` (project-scoped)
 - Adds Flow-Next instructions to AGENTS.md
 - Configures review backend and recommended defaults
