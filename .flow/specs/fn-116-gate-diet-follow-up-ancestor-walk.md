@@ -12,10 +12,9 @@ The fn-103 run was trace-measured against the fn-89 baseline (post-mortem 2026-0
 
 - **R1: Ancestor-walk receipt honor.** `gate check` honors a receipt when ALL current conditions hold EXCEPT exact HEAD match, provided: receipt `head_sha` is an ancestor of HEAD (`git merge-base --is-ancestor`), AND `git diff --name-only <receipt_sha>..HEAD` (NUL-safe, --no-renames) contains ONLY ignore-set paths (`.flow/**` minus `.flow/bin/**` minus `.flow/config.json` - the SAME predicate as the worktree cleanliness check, one shared helper, no second list), AND the worktree cleanliness / command fingerprint / 0<=age<=24h / schema conditions are unchanged. Any non-ignore-set path in the walk, non-ancestor receipt, or git failure -> exit 1 (fail closed); tooling errors 2+. Bounded: if the walk spans > 50 commits, exit 1 (fail closed - receipts are same-session artifacts, a long walk means something else is going on).
 - **R2: Capture fix.** worker.md's suite-run prose (Baseline check + Verify site) captures greenness from the COMMAND EXIT CODE (`; echo "suite_rc=$?"`) with output to a file (`> log 2>&1`), reading the summary from the file - NEVER re-running a suite to observe its result. One sentence stating the rule: a green observation is the exit code, not a scraped line; re-running a suite for observation is forbidden.
-- **R3: Receipt-after-state-commit ordering.** The done-flow writes the gate receipt AFTER the `.flow` state commit where feasible (worker.md ordering swap), so the receipt's head_sha is the branch tip a successor actually sees - making R1's walk the fallback, not the primary path. Where the ordering cannot be swapped (host Phase 4), R1 covers it.
-- **R4: Tests.** Hermetic gate tests: ancestor-walk honor (receipt at sha A, .flow-only commit to B -> exit 0); non-.flow commit in the walk -> exit 1; non-ancestor receipt -> exit 1; walk-bound exceeded -> exit 1; renamed/moved path in walk fails closed. Existing exact-match tests unchanged.
-- **R5: Measured claim discipline.** CHANGELOG + docs state the honest status: the diet's receipt path was structurally dead in 2.18.0, fixed here; the ~35% floor and the parallelization lever are recorded in the post-mortem decision context, not promised.
-- **R6: Cross-platform.** Dual-copy flowctl, mirror x2 idempotent, no version bump (batched).
+- **R3: Tests.** Hermetic gate tests: ancestor-walk honor (receipt at sha A, .flow-only commit to B -> exit 0); non-.flow commit in the walk -> exit 1; non-ancestor receipt -> exit 1; walk-bound exceeded -> exit 1; renamed/moved path in walk fails closed. Existing exact-match tests unchanged.
+- **R4: Measured claim discipline.** CHANGELOG + docs state the honest status: the diet's receipt path was structurally dead in 2.18.0, fixed here; the ~35% floor and the parallelization lever are recorded in the post-mortem decision context, not promised.
+- **R5: Cross-platform.** Dual-copy flowctl, mirror x2 idempotent, no version bump (batched).
 
 ## Key files / interfaces
 
@@ -25,6 +24,8 @@ The fn-103 run was trace-measured against the fn-89 baseline (post-mortem 2026-0
 - `CHANGELOG.md`, `plugins/flow-next/docs/flowctl.md` (gate section: ancestor-walk clause)
 
 ## Decision Context
+
+- R3 (receipt-after-state-commit ordering) was considered and DROPPED pre-review: the ancestor-walk makes ordering irrelevant (a receipt behind N .flow-only commits is honored anyway), and reordering the done-flow adds prose complexity for no additional coverage. Trimmed 2026-07-19 before the first review cycle (renumbering safe).
 
 - Post-mortem evidence (fn-103 run): 7 suite runs / 2 tasks; 3 receipts written, 0 honored, all orphaned by .flow state commits 27-45s later; duplicate runs 2+7 = ~1,119s pure waste from tail-scraping; tracker dispatch delivered exactly as designed (~190k tokens off-host, 0s serial).
 - The ancestor-walk predicate is hash + path membership - mechanical, doctrine-clean (STRATEGY.md design principles: flowctl burden of proof met; no judgment).
