@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-19T05:46:00.872126Z",
+  "depends_on": [
+    "fn-102-work-loop-gate-diet-green-receipts-docs.1"
+  ],
+  "id": "fn-102-work-loop-gate-diet-green-receipts-docs.2",
+  "priority": null,
+  "spec": "fn-102-work-loop-gate-diet-green-receipts-docs",
+  "spec_path": ".flow/tasks/fn-102-work-loop-gate-diet-green-receipts-docs.2.md",
+  "status": "todo",
+  "title": "Wire worker + host prose: receipt honor, tiered gates, loud evidence, event-driven waits + mirror",
+  "updated_at": "2026-07-19T05:47:06.570754Z"
+}

@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-102-work-loop-gate-diet-green-receipts-docs",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-07-19T05:36:02.129089Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-102-work-loop-gate-diet-green-receipts-docs",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-102-work-loop-gate-diet-green-receipts-docs.md",
   "status": "open",
   "title": "Work-loop gate diet: green receipts + docs-only gate tiering + event-driven waits",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T05:36:02.592009Z"
+  "updated_at": "2026-07-19T05:46:00.007028Z"
 }
