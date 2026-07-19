@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-19T13:57:31.899518Z",
+  "depends_on": [
+    "fn-109-flowctl-hot-path-perf-memoize-repo-root.1"
+  ],
+  "id": "fn-109-flowctl-hot-path-perf-memoize-repo-root.2",
+  "priority": null,
+  "spec": "fn-109-flowctl-hot-path-perf-memoize-repo-root",
+  "spec_path": ".flow/tasks/fn-109-flowctl-hot-path-perf-memoize-repo-root.2.md",
+  "status": "todo",
+  "title": "Cache sweep (version getters, prospect, config, cmd_tasks) + batched export git grep + CHANGELOG/docs",
+  "updated_at": "2026-07-19T13:58:10.331550Z"
+}
