@@ -288,6 +288,16 @@ class GateReceiptTestCase(GateReceiptHarness):
 
 
 class GateReceiptAncestorWalkTestCase(GateReceiptHarness):
+
+    def test_walk_skips_suffix_colliding_gate_id(self) -> None:
+        # "gate" must never honor a "full-gate" receipt even though the glob
+        # pattern *-gate.json matches the longer filename; the receipt body's
+        # gate_id is the authoritative identity.
+        self._receipt(gate_id="full-gate")
+        self._commit(".flow/tasks/x.md", "state", "flow-only move")
+        result = self._flowctl("check", "--gate", "gate", "--command", COMMAND)
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+
     """fn-116 ancestor-walk and receipt-retention contract matrix."""
 
     def test_ancestor_receipt_honors_after_flow_only_commit(self) -> None:

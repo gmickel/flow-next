@@ -28016,6 +28016,12 @@ def cmd_gate_check(args: argparse.Namespace) -> None:
             candidate = _gate_load_receipt_file(candidate_path)
             if candidate is None:
                 continue
+            # The glob suffix is ambiguous for hyphenated gate ids ("gate"
+            # matches "...-full-gate.json") - the receipt BODY's gate_id is
+            # the authoritative identity; anything else is another gate's
+            # receipt and is skipped.
+            if candidate.get("gate_id") != args.gate_id:
+                continue
             timestamp, timestamp_error = _gate_receipt_timestamp(candidate)
             if timestamp_error or timestamp is None:
                 continue
