@@ -53,6 +53,7 @@ FLOWCTL_BIN = REPO_ROOT / ".flow" / "bin" / "flowctl"
 MOCK_CODEX = TESTS_DIR / "fixtures" / "mock-codex" / "mock-codex.py"
 REFERENCE_MD = PLUGIN_DIR / "skills" / "flow-next-work" / "references" / "codex-delegation.md"
 WORKER_MD = PLUGIN_DIR / "agents" / "worker.md"
+PHASES_MD = PLUGIN_DIR / "skills" / "flow-next-work" / "phases.md"
 
 
 def _load_flowctl() -> Any:
@@ -619,12 +620,13 @@ class DelegationProseContractTestCase(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.ref = REFERENCE_MD.read_text(encoding="utf-8")
         cls.worker = WORKER_MD.read_text(encoding="utf-8")
+        cls.phases = PHASES_MD.read_text(encoding="utf-8")
 
     def test_reference_orchestration_stub_is_filled(self) -> None:
         # The fn-55.4 stub placeholder must be GONE, the section present.
         self.assertNotIn("_(stub — authored by fn-55.4)_", self.ref)
         self.assertIn(
-            "## Orchestration split / batching / result classification / safety",
+            "## Orchestration split / one run per task / result classification / safety",
             self.ref,
         )
 
@@ -632,18 +634,34 @@ class DelegationProseContractTestCase(unittest.TestCase):
         self.assertIn("flowctl codex classify-result", self.ref)
         self.assertIn("flowctl codex rollback-plan", self.ref)
 
-    def test_reference_documents_prompt_template_8_sections(self) -> None:
-        for tag in (
-            "<task>",
-            "<files>",
-            "<patterns>",
-            "<approach>",
-            "<constraints>",
-            "<testing>",
-            "<verify>",
-            "<output_contract>",
-        ):
-            self.assertIn(tag, self.ref, tag)
+    # The eval-validated exhaustive-tests sentence, pinned VERBATIM as one
+    # whitespace-normalized string (the file line-wraps it inside the fenced
+    # template; loose fragments would let the first half drift).
+    EXHAUSTIVE_SENTENCE = (
+        "Where the task enumerates test cases, edge cases, or a fail-closed "
+        "matrix, write ONE test per named case - exhaustive, never "
+        "representative; a named case without a test is an incomplete "
+        "implementation."
+    )
+
+    def test_reference_prompt_template_is_fixed_path_handoff(self) -> None:
+        self.assertIn(".flow/tasks/<task-id>.md", self.ref)
+        self.assertIn(".flow/specs/<spec-id>.md", self.ref)
+        self.assertIn("3 slots", self.ref)
+        normalized = " ".join(self.ref.split())
+        self.assertIn(self.EXHAUSTIVE_SENTENCE, normalized)
+        self.assertNotIn("<patterns>", self.ref)
+        self.assertNotIn("<approach>", self.ref)
+
+    def test_reference_template_slots_take_canonical_ids(self) -> None:
+        # REGRESSION (fn-103.1 review): /work accepts short aliases (fn-103.1);
+        # flowctl resolves them, but the literal alias path does not exist. The
+        # template contract must pin canonical-id resolution for the two id
+        # slots — in the reference AND at worker.md's fill step.
+        self.assertIn("CANONICAL ids", self.ref)
+        self.assertIn("never a short alias", self.ref)
+        self.assertIn("CANONICAL ids", self.worker)
+        self.assertIn("never a short alias", self.worker)
 
     def test_reference_constraints_forbid_git_and_nonscratch_flow(self) -> None:
         # <constraints> must forbid git/PRs and non-scratch .flow writes.
@@ -652,10 +670,30 @@ class DelegationProseContractTestCase(unittest.TestCase):
         self.assertIn("forbid", low)
         self.assertIn("git commit", low)
 
-    def test_reference_batching_is_per_task_max_5(self) -> None:
-        self.assertIn("≤5", self.ref)
-        # cross-task batching is explicitly out of scope.
-        self.assertIn("cross-task", self.ref.lower())
+    def test_reference_one_run_per_task(self) -> None:
+        self.assertNotIn("≤5", self.ref)
+        self.assertIn("One run per task", self.ref)
+        self.assertIn("exactly **ONE** `codex exec` run", self.ref)
+        self.assertIn("prompt-batch-1.md", self.ref)
+        self.assertIn("result-batch-1.json", self.ref)
+
+    # The canonical `codex exec` invocation rail, pinned as ONE exact
+    # contiguous block (independent per-line assertIn would tolerate
+    # reordering, insertion, or duplication between the lines).
+    CANONICAL_INVOCATION_BLOCK = (
+        "FLOW_DELEGATE_CODEX=1 codex exec \\\n"
+        "  --ignore-user-config \\\n"
+        '  -m "<DELEGATE_MODEL>" \\\n'
+        "  -c 'model_reasoning_effort=\"<effective_effort>\"' \\\n"
+        "  --dangerously-bypass-approvals-and-sandbox \\\n"
+        '  --output-schema "<scratch-dir>/result-schema.json" \\\n'
+        '  -o "<scratch-dir>/result-batch-<n>.json" \\\n'
+        '  - < "<scratch-dir>/prompt-batch-<n>.md"\n'
+    )
+
+    def test_reference_canonical_invocation_block_unchanged(self) -> None:
+        # Exactly ONE occurrence of the exact block — byte-contiguous.
+        self.assertEqual(self.ref.count(self.CANONICAL_INVOCATION_BLOCK), 1)
 
     def test_reference_trust_cross_check_documented(self) -> None:
         self.assertIn("git status --porcelain", self.ref)
@@ -684,6 +722,19 @@ class DelegationProseContractTestCase(unittest.TestCase):
         self.assertIn("git clean", low)
         # never a bare git clean.
         self.assertIn("never", low)
+
+    def test_worker_thin_task_valve(self) -> None:
+        self.assertIn("Thin-task valve", self.worker)
+        self.assertIn("provisional", self.worker.lower())
+        self.assertIn("do NOT delegate", self.worker)
+        self.assertIn("EMPTY after removing orchestrator-owned", self.worker)
+        self.assertIn("DELEGATION_*", self.worker)
+        self.assertIn("not a failure, not a strike", self.worker)
+
+    def test_phases_delegate_flags_provisional(self) -> None:
+        self.assertIn("PROVISIONAL", self.phases)
+        self.assertIn("worker owns the final per-task call", self.phases)
+        self.assertIn("thin-task valve", self.phases)
 
     def test_rollback_has_nonempty_guard(self) -> None:
         # REGRESSION (review P1/75): both reference and worker MUST guard the

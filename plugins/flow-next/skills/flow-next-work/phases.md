@@ -267,13 +267,13 @@ this task).** Append the resolved flags to the worker prompt; the worker
 delegates its Phase 2 implementation to `codex exec` per
 [references/codex-delegation.md](references/codex-delegation.md). Omit them
 entirely (or pass `DELEGATE: local`) when delegation is off or a gate failed —
-the worker then runs standard in-session implementation, unchanged.
+the worker then runs standard in-session implementation, unchanged. The flags are PROVISIONAL - the worker owns the final per-task call: its thin-task valve (worker.md Phase 2) may still run the task standard in-session, emitting no `DELEGATION_*` lines (counter untouched).
 
 ```
 DELEGATE: codex
 DELEGATE_MODEL: <work.delegateModel>          # default gpt-5.6-terra
 DELEGATE_SANDBOX: <yolo|full-auto>            # from consent (work.delegateSandbox)
-DELEGATE_EFFORT_FLOOR: <work.delegateEffort>  # default medium (per-batch escalation floors here)
+DELEGATE_EFFORT_FLOOR: <work.delegateEffort>  # default medium (per-run escalation floors here)
 DELEGATE_DECISION: <auto|ask>
 ```
 
@@ -329,7 +329,7 @@ terminal `DELEGATION_RESULT=<class>` + `DELEGATION_ACTION=<action>` lines (both
 from `flowctl codex classify-result`, fn-55.4) and update the host-owned counter
 (init'd at the top of Phase 3). The worker emits these lines ONLY when delegation
 was active for the task — **a missing signal means the task ran standard and the
-counter is untouched** (e.g. a gate failed mid-run, all units were trivial, or the
+counter is untouched** (e.g. a gate failed mid-run, the task ran standard, or the
 worker fell back to in-session).
 
 ```text

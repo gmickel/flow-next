@@ -308,7 +308,7 @@ terminal `DELEGATION_RESULT=<class>` + `DELEGATION_ACTION=<action>` lines (both
 from `flowctl codex classify-result`, fn-55.4) and update the host-owned counter
 (init'd at the top of Phase 3). The worker emits these lines ONLY when delegation
 was active for the task — **a missing signal means the task ran standard and the
-counter is untouched** (e.g. a gate failed mid-run, all units were trivial, or the
+counter is untouched** (e.g. a gate failed mid-run, the task ran standard, or the
 worker fell back to in-session).
 
 ```text

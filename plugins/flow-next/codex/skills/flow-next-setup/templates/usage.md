@@ -70,6 +70,8 @@ Harness-relative: every direction works — from Claude Code the bridges are `co
 **flow-next shortcuts** — the same bridges, packaged as config:
 
 ```bash
+# The raw codex exec bridge above is the interactive route. delegate:codex is the same
+# bridge with deterministic rails for unattended loops; its task and spec paths are the brief.
 # Delegate implementation to codex (host keeps gating/git/review; codex only writes code)
 .flow/bin/flowctl config set work.delegate codex # value MUST be `codex` to activate (OFF by default, consent-gated)
 # …or per-run, no config: $flow-next-work fn-1-add-oauth delegate:codex

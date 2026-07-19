@@ -132,13 +132,24 @@ is absent or `local`, skip this entire hook and implement in-session as usual
 already run the pre-flight gates and one-time consent — your job is to delegate
 THIS task's implementation to `codex exec`:
 
+**Thin-task valve (you own the final call - the host's `DELEGATE:` flags are
+provisional).** Read the task file first: if it does not name its files and its
+acceptance, OR the allowed-file list is EMPTY after removing orchestrator-owned
+artifacts (the codex mirror, `.flow/bin` dual-copies), do NOT delegate -
+implement in-session as a standard task (emit no `DELEGATION_*` lines; the
+host's counter stays untouched - not a failure, not a strike).
+
 1. Read `$HOME/.codex/skills/flow-next-work/references/codex-delegation.md`
-   — the "Invocation / result schema / background-launch+poll / per-batch effort"
+   — the "Invocation / result schema / background-launch+poll / per-run effort"
    section is the mechanics; the classification / safety / rollback sections (and
    the `flowctl codex classify-result` / `rollback-plan` helpers) govern what you
    do with the result.
-2. Build the scratch dir `.flow/tmp/codex-<task-id>/`, write `result-schema.json`
-   + the XML-tagged `prompt-batch-<n>.md`, pick the per-batch effort (floored at
+2. Build the scratch dir `.flow/tmp/codex-<task-id>/`, write `result-schema.json`,
+   fill the fixed path-handoff template's 3 slots (task id, spec id, allowed-file
+   list) into `prompt-batch-1.md` - one run per task, nothing else composed. The
+   id slots take the CANONICAL ids from `flowctl show <TASK_ID> --json` (`.id` /
+   `.spec`), never a short alias - an alias-filled `.flow/tasks/<task-id>.md`
+   path does not exist. Pick the per-run effort (floored at
    `DELEGATE_EFFORT_FLOOR`), and **launch `codex exec` via the Bash
    `run_in_background` tool parameter** (NOT shell `&`) using `DELEGATE_MODEL` +
    the **literal** sandbox flag inlined from `DELEGATE_SANDBOX` (yolo →
@@ -152,7 +163,7 @@ THIS task's implementation to `codex exec`:
    non-zero `codex exec` exit MUST drive `cli_failure → rollback_and_disable` — so
    never guess `0`. Then classify + cross-check + enforce git/`.flow` ownership
    against `BASE_COMMIT`, and either commit (Phase 3), finish locally, or
-   scoped-rollback per the reference's "Orchestration split / batching / result
+   scoped-rollback per the reference's "Orchestration split / one run per task / result
    classification / safety" section. The concrete mechanics (all deterministic
    flowctl, never re-derived in prose):
 
@@ -245,7 +256,7 @@ Use conventional commits. Scope from task context.
 **Mixed-model attribution — ONLY on a delegated commit (`DELEGATE: codex` AND
 Codex wrote this commit's code).** Append these two trailers so `/flow-next:make-pr`
 can credit both models. Put them in their own paragraph (blank line before the
-`Task:` trailer) — `<model>` = `DELEGATE_MODEL`, `<effort>` = the per-batch
+`Task:` trailer) — `<model>` = `DELEGATE_MODEL`, `<effort>` = the per-run
 `effective_effort` you ran (e.g. `gpt-5.5` / `medium`):
 
 ```bash
@@ -423,7 +434,7 @@ INLINE the result fields into `evidence.delegation` (NOT a scratch-file pointer 
 the `.flow/tmp/codex-*` dir is cleaned post-commit, so a path would dangle). The
 `status`/`files_modified`/`issues`/`summary`/`verification_summary` come from the
 Codex `result-batch-*.json`; `class` comes from `flowctl codex classify-result`;
-`model`/`effort` are the `DELEGATE_MODEL` + per-batch `effective_effort` you ran:
+`model`/`effort` are the `DELEGATE_MODEL` + per-run `effective_effort` you ran:
 
 ```bash
 BASE_COMMIT=$(cat .flow/tmp/base_commit)
@@ -480,7 +491,7 @@ DELEGATION_ACTION=<commit|finish_locally|rollback|rollback_and_disable>
 The host bridges them: `rollback_and_disable` → disable delegation IMMEDIATELY for
 all remaining tasks; `rollback`/`finish_locally` → `consecutive_failures++`
 (disable at 3); `commit` → reset to 0. When delegation was NOT active (gates
-failed, all units trivial, or `DELEGATE: local`), emit **no** `DELEGATION_*` lines
+failed, the task ran standard, or `DELEGATE: local`), emit **no** `DELEGATION_*` lines
 — a missing signal tells the host the counter is untouched.
 
 ## Rules
