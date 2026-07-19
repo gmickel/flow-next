@@ -469,7 +469,7 @@ After all tasks complete (or periodically for large specs):
  - Use the quality_auditor agent("Review recent changes")
 - Fix critical issues
 
-Host skips cannot land in task evidence because tasks are already done by Phase 4. Surface them only through the Phase 5 final summary Gates line - never silently skip.
+Host skips cannot land in task evidence because tasks are already done by Phase 4. Accumulate EVERY skip/honor outcome as it happens (gate_id, plus the receipt `<sha8>` where one was honored) and surface each as its OWN `Gates:` line in the Phase 5 final summary - never silently skip, and never collapse mixed outcomes into one line (a periodic Phase 4 pass can produce several: some gates receipt-reused, some run full, a later pass docs-only).
 
 ## Phase 5: Ship
 
@@ -534,14 +534,14 @@ EVENTS="work.firstClaim,work.done" # ← substitute the actual triggered set
  `"$FLOWCTL" sync check "$SPEC_ID" --events "<missed-csv>" --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the work is already done; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
 
-**Final summary (mandatory template).** End the run with this block. `Tracker sync:` is a REQUIRED field with exactly four states — an explicit `n/a` proves the check ran; an absent field is a skipped check. Under Ralph, the summary goes to the summary block / stderr, never stdout. The `Gates:` line is where host-layer gate skips surface; worker-layer skips live in each task's evidence `tests[]`.
+**Final summary (mandatory template).** End the run with this block. `Tracker sync:` is a REQUIRED field with exactly four states — an explicit `n/a` proves the check ran; an absent field is a skipped check. Under Ralph, the summary goes to the summary block / stderr, never stdout. The `Gates:` slot is where host-layer gate skips surface - emit ONE `Gates:` line per accumulated Phase 4 outcome (repeat the line for each skip/honor so none is overwritten); worker-layer skips live in each task's evidence `tests[]`.
 
 ```
 Spec: <spec-id> — <title>
 Tasks: <n done>/<total>
 Tests: <commands + result>
 Review: <verdict | n/a>
-Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B>
+Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B> # one line per outcome; repeat for each
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
 ```
 
