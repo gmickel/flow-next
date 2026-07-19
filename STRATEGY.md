@@ -16,6 +16,14 @@ Spec-driven development with re-anchoring, cross-model review, and zero external
 
 Opt-in convenience skills (e.g. `/flow-next:map` wrapping `clawpatch`) may carry their own runtime prerequisites, but `flowctl` core never imports or requires them — the zero-dep contract holds for the base install; opt-in skills add nothing to the uninstall path beyond a single self-contained directory.
 
+## Design principles
+
+Standing rules that decide day-to-day build questions. Each earned its place through a shipped decision; the anchors are the receipts.
+
+- **The artifact is the contract.** Nothing between the plan and an executor restates content that lives in a file - prompts carry pointers and rails; every executor (native worker, `delegate:codex`, raw bridge, scout, runner) reads the spec/task files as its brief. Quality budget therefore concentrates at plan time, where the session model writes the spec; a thin artifact is refused downstream (the worker's thin-task valve), never compensated for. *(Anchor: fn-103 / decision record `composed-brief-deleted-path-handoff-2026-07-19` - an 8-run eval deleted the composed delegation brief.)*
+- **flowctl grows only under burden of proof.** flowctl is thin atomic plumbing - hashes, path membership, schema validation, receipts, git mechanics. A subcommand is added only when the operation involves zero judgment and must work with no agent in the loop; anything that reads, weighs, or decides belongs to the host agent. Deterministic proxies for judgment questions are banned outright *(anchor: `plan-sync-skip-gate-not-viable-2026-07-03`)*; the periodic audit that keeps this honest is the fn-101 pattern - classify every subcommand keep / leakage / vestigial, burden of proof on keeping, and on adding.
+- **Remember the bitter lesson.** Do not build scaffolding around a model's current weaknesses - capability grows and the scaffolding rots into cost (the composed brief was exactly this). Before adding a compensating mechanism, try stating the bar in one general sentence; before keeping one, eval it against its absence with pre-registered bars and delete on evidence. Deterministic machinery is reserved for what models should never own regardless of capability: unattended-trust rails (receipts, rollback, guard shapes, schemas), not quality compensation.
+
 ## Who it's for
 
 Solo developers running multi-agent loops who need re-anchoring + receipts to keep agents on track overnight. Engineering teams adopting spec-driven development who need an artefact chain that replaces standups / refinement / design-review touchpoints. Platform owners building autonomous agent harnesses (Ralph) who need cross-model review gates and proof-of-work receipts. Also flow-swarm operators (in-progress companion product reading `.flow/specs/` natively).
