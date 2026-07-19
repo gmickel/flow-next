@@ -23,9 +23,8 @@ Single cohesive task: the ancestor-walk in `gate check`, the capture rule in wor
 - [ ] R5: dual-copy identical; mirror idempotent x2; suite green
 
 ## Done summary
-TBD
-
+Implemented the fn-116 gate-diet follow-up: `gate check` now honors ancestor receipts via a deterministic bounded walk (pure validator + walk helper, timestamp-DESC/filename tie-break, cap 8, skip-never-abort, two-dot ignore-set diff, OID canonicalization) with prune-on-write in `gate receipt`; worker.md/codex-delegation.md gained the suite-output capture rule (exit-code observation, log capture, no re-runs) plus the R2-amended gate Foreground rule (one blocking foreground call, 600s timeout, never bg+monitor); 18 new tests (13-case named matrix + delayed-status TTL shim, FIFO/oversized/nested-JSON hostile-file regressions); docs/GLOSSARY/CHANGELOG updated with honest framing. Review (codex): r1 NEEDS_WORK (post-status TTL ordering, unbounded receipt loads) fixed, then SHIP; SHIP re-confirmed after the R2 amendment. Full suite green pre+post (1856 tests OK, suite_rc=0); mirror x2 idempotent; dual-copy byte-identical. Delegation: codex gpt-5.6-terra (high) wrote the initial implementation (honest partial - dual-copy/mirror host-owned); orchestrator finished locally. Downstream handoff for the lander: flow-next.dev gate/Green-receipt vocabulary needs the ancestor-clause update in ~/work/flow-next.dev in the landing workstream (fn-103 precedent).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e755b597ed1eca1ac013faf0d39bf4dc1023c48e, 48fea21fbcd45c6fbc305387c3149ccf44e54974, c68efeaed46d460e392b07abc05a8c3266b6481a, 9aee55cfa3461d5254b54428754b9b7a3618fd8e
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest discover -q; suite_rc=0, 1851 tests pre-edit), cd plugins/flow-next/tests && python3 -m unittest test_gate_receipt test_gate_classify -q (64 tests OK), cd plugins/flow-next/tests && python3 -m unittest discover -q (Ran 1856 tests, OK skipped=2, suite_rc=0; green receipt 9aee55cf-unittest written), ./scripts/sync-codex.sh x2 idempotent (identical mirror-diff sha256 snapshots), cmp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py (byte-identical)
 - PRs:
