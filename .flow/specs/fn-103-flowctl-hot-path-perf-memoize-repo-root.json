@@ -1,14 +1,14 @@
 {
-  "branch_name": "fn-101-flowctl-determinism-audit-what-still",
-  "created_at": "2026-07-18T18:44:52.811520Z",
+  "branch_name": "fn-103-flowctl-hot-path-perf-memoize-repo-root",
+  "created_at": "2026-07-19T12:43:07.902080Z",
   "depends_on_epics": [],
-  "id": "fn-101-flowctl-determinism-audit-what-still",
+  "id": "fn-103-flowctl-hot-path-perf-memoize-repo-root",
   "next_task": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
-  "spec_path": ".flow/specs/fn-101-flowctl-determinism-audit-what-still.md",
+  "spec_path": ".flow/specs/fn-103-flowctl-hot-path-perf-memoize-repo-root.md",
   "status": "open",
-  "title": "flowctl determinism audit: what still earns deterministic Python",
+  "title": "flowctl hot-path perf: memoize repo root and state dir",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T12:42:59.039039Z"
+  "updated_at": "2026-07-19T12:43:30.550694Z"
 }
