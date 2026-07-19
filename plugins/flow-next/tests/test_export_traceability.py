@@ -588,6 +588,64 @@ class TestBatchedRemovedRefsGrep(_BatchedRefsGitBase):
         self.assertEqual(refs[0]["refs"][0]["line"], 1)
         self.assertEqual(refs[0]["refs"][-1]["line"], cap)
 
+    def test_forced_color_grep_refs_survive(self) -> None:
+        # `git -c color.grep=always` wraps matches in SGR escapes even when
+        # piped; the escape's trailing `m` is a word char, so an attribution
+        # regex over colored output would silently DROP refs the per-symbol
+        # grep kept (codex review round 1). The batched grep passes
+        # --color=never, so refs survive and snippets are the raw file
+        # bytes, independent of the user's color config. (True byte-parity
+        # with the sequential form is impossible under forced color: each
+        # per-symbol grep colored only ITS OWN match on a shared line, so
+        # the old snippets were per-invocation-dependent.)
+        import json as _json
+        import re as _re
+
+        _git(self.root, "config", "color.grep", "always")
+        # Pin the non-match slots to `normal` (no escapes) so the fixture
+        # reproduces match-only coloring deterministically regardless of the
+        # host's global gitconfig slot colors: a colored filename/lineno
+        # breaks the `path:line:content` split identically in old and new
+        # code (both drop the line); the interesting case is a colored
+        # MATCH on an otherwise plain line.
+        _git(self.root, "config", "color.grep.filename", "normal")
+        _git(self.root, "config", "color.grep.linenumber", "normal")
+        _git(self.root, "config", "color.grep.separator", "normal")
+        _git(self.root, "config", "color.grep.match", "bold red")
+        self._write(
+            "lib.py",
+            "def tinted_fn(x):\n    return x\n"
+            "def shaded_fn(x):\n    return x\n",
+        )
+        self._write("use.py", "tinted_fn(shaded_fn(1))\n")
+        base = self._commit("base")
+        self._write("lib.py", "def keep():\n    return 0\n")
+        self._commit("remove both")
+
+        batched = flowctl._export_removed_export_refs(
+            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
+        )
+        by_sym = {r["symbol"]: r["refs"] for r in batched}
+        # The matches are NOT dropped under forced color...
+        self.assertIn("tinted_fn", by_sym)
+        self.assertIn("shaded_fn", by_sym)
+        shared = {"path": "use.py", "line": 1,
+                  "text": "tinted_fn(shaded_fn(1))"}
+        # ...and snippets carry the raw (escape-free) file bytes.
+        self.assertIn(shared, by_sym["tinted_fn"])
+        self.assertIn(shared, by_sym["shaded_fn"])
+        # Modulo the per-invocation color bytes the OLD form embedded, the
+        # payload matches the sequential oracle exactly.
+        sgr = _re.compile("\x1b\\[[0-9;]*m")
+        oracle = self._sequential_reference(base, self.root)
+        for entry in oracle:
+            for ref in entry["refs"]:
+                ref["text"] = sgr.sub("", ref["text"])
+        self.assertEqual(
+            _json.dumps(batched, sort_keys=True, indent=2),
+            _json.dumps(oracle, sort_keys=True, indent=2),
+        )
+
     def test_payload_byte_identical_vs_sequential_reference(self) -> None:
         # Messy fixture exercising multi-symbol lines, prefix collisions,
         # the per-symbol cap, and an unreferenced removal — the batched

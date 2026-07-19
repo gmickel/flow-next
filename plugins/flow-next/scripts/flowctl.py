@@ -16036,6 +16036,7 @@ _EXPORT_REMOVED_REFS_MAX_PER_SYMBOL = 25
 _EXPORT_REMOVED_REFS_GREP_CHUNK = 20
 
 
+
 def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
     """Extract candidate removed symbol definitions from a diff.
 
@@ -16164,7 +16165,14 @@ def _export_removed_export_refs(
     refs_by_symbol: dict[str, list[dict[str, Any]]] = {s: [] for s in symbols}
     for start in range(0, len(symbols), _EXPORT_REMOVED_REFS_GREP_CHUNK):
         chunk = symbols[start : start + _EXPORT_REMOVED_REFS_GREP_CHUNK]
-        grep_args = ["grep", "-n", "-w", "-F"]
+        # --color=never: a forced-color config (`color.grep=always`) wraps
+        # matches in SGR escapes whose trailing `m` is a word char - it would
+        # defeat the attribution lookbehind below and silently drop refs the
+        # per-symbol grep kept (and the batched call colors EVERY chunk
+        # symbol on a shared line, so colored output is per-invocation-
+        # dependent anyway). Disabling color at the source keeps the
+        # attribution regex on the exact raw bytes git matched.
+        grep_args = ["grep", "--color=never", "-n", "-w", "-F"]
         for sym in chunk:
             grep_args += ["-e", sym]
         if pathspecs:
