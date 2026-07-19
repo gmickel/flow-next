@@ -27549,6 +27549,23 @@ def cmd_gate_receipt(args: argparse.Namespace) -> None:
     if repo_error or repo_root is None or head_sha is None:
         error_exit(repo_error or "unable to resolve repository", code=2, use_json=args.json)
 
+    # Same cleanliness predicate as `gate check`: a gate that ran on a dirty
+    # tree exercised HEAD-plus-dirt, not HEAD - a receipt keyed to HEAD would
+    # later be honored on a clean tree state that was never actually tested.
+    # Refuse to warrant it (exit 1: nothing written, run/record gates as
+    # today); tooling failures stay 2+.
+    entries, entries_error = _gate_status_paths(repo_root)
+    if entries_error or entries is None:
+        error_exit(entries_error or "unable to inspect worktree", code=2, use_json=args.json)
+    dirty = [e for e in entries if not _gate_ignored_worktree_path(e)]
+    if dirty:
+        message = f"worktree dirty outside the ignore set ({dirty[0]}) - receipt not warrantable"
+        if args.json:
+            json_output({"written": False, "reason": message})
+        else:
+            print(f"NO_RECEIPT: {message}")
+        sys.exit(1)
+
     timestamp = now_iso()
     receipt = {
         "schema": 1,

@@ -372,6 +372,21 @@ class GateReceiptCompletionRegressionsTestCase(GateReceiptHarness):
         finally:
             shutil.rmtree(outside, ignore_errors=True)
 
+    def test_receipt_refuses_dirty_tree(self) -> None:
+        # Gates on a dirty tree exercised HEAD+dirt, not HEAD - the receipt
+        # must be refused (exit 1, nothing written). Ignore-set dirt (.flow
+        # scratch) does not block.
+        (self.tmpdir / "src" / "app.py").write_text("print('dirty')\n", encoding="utf-8")
+        result = self._flowctl("receipt", "--gate", GATE_ID, "--command", COMMAND)
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+        self.assertFalse(self._receipt_path().exists())
+        self._git("checkout", "--", "src/app.py")
+        scratch = self.tmpdir / ".flow" / "tmp" / "scratch.txt"
+        scratch.parent.mkdir(parents=True, exist_ok=True)
+        scratch.write_text("ok", encoding="utf-8")
+        self._receipt()
+        self.assertTrue(self._receipt_path().exists())
+
     def test_check_outside_repo_exits_1(self) -> None:
         outside = Path(tempfile.mkdtemp()).resolve()
         try:
