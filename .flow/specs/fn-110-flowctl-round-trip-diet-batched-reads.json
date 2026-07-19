@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-110-flowctl-round-trip-diet-batched-reads",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-07-19T13:00:30.319250Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-110-flowctl-round-trip-diet-batched-reads",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-110-flowctl-round-trip-diet-batched-reads.md",
   "status": "open",
   "title": "flowctl round-trip diet: batched reads and writes for hot skills",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T13:00:50.723461Z"
+  "updated_at": "2026-07-19T19:08:54.296639Z"
 }

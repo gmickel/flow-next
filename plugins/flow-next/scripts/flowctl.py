@@ -185,9 +185,21 @@ RUNTIME_FIELDS = {
 
 # --- Helpers ---
 
+# fn-109: hot-path memoization. Keyed by Path.cwd() so os.chdir() (test
+# suites load this module once then chdir per test; embedding callers may
+# too) invalidates naturally. Only SUCCESS results are cached — the
+# CalledProcessError fallback stays uncached so a transient git failure
+# is never sticky. Separate from _STATE_DIR_CACHE (worktree-local
+# --show-toplevel vs shared --git-common-dir semantics; never merge).
+_REPO_ROOT_CACHE = {}  # {Path.cwd(): repo-root Path}
+
 
 def get_repo_root() -> Path:
-    """Find git repo root."""
+    """Find git repo root. Memoized per cwd (success-only)."""
+    cwd = Path.cwd()
+    cached = _REPO_ROOT_CACHE.get(cwd)
+    if cached is not None:
+        return cached
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -195,10 +207,12 @@ def get_repo_root() -> Path:
             text=True, encoding="utf-8",
             check=True,
         )
-        return Path(result.stdout.strip())
+        root = Path(result.stdout.strip())
+        _REPO_ROOT_CACHE[cwd] = root
+        return root
     except subprocess.CalledProcessError:
-        # Fallback to current directory
-        return Path.cwd()
+        # Fallback to current directory (uncached: never sticky)
+        return cwd
 
 
 def get_flow_dir() -> Path:
@@ -836,6 +850,15 @@ def validate_strategy_frontmatter(fm: dict[str, Any]) -> list[str]:
     return errors
 
 
+# fn-109: hot-path memoization for get_state_dir. Keyed by
+# (Path.cwd(), FLOW_STATE_DIR value) so a chdir OR an env set/unset within
+# one process resolves fresh. Only the SUCCESSFUL --git-common-dir branch
+# is cached; the env-override branch (no subprocess, semantics unchanged)
+# and the non-git fallback stay uncached. Kept separate from
+# _REPO_ROOT_CACHE (shared-common-dir vs worktree-local semantics).
+_STATE_DIR_CACHE = {}  # {(Path.cwd(), FLOW_STATE_DIR or None): state-dir Path}
+
+
 def get_state_dir() -> Path:
     """Get state directory for runtime task state.
 
@@ -848,6 +871,11 @@ def get_state_dir() -> Path:
     if state_dir := os.environ.get("FLOW_STATE_DIR"):
         return Path(state_dir).resolve()
 
+    cache_key = (Path.cwd(), state_dir)
+    cached = _STATE_DIR_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     # 2. Git common-dir (shared across worktrees)
     try:
         result = subprocess.run(
@@ -857,11 +885,13 @@ def get_state_dir() -> Path:
             check=True,
         )
         common = result.stdout.strip()
-        return Path(common) / "flow-state"
+        state = Path(common) / "flow-state"
+        _STATE_DIR_CACHE[cache_key] = state
+        return state
     except subprocess.CalledProcessError:
         pass
 
-    # 3. Fallback for non-git repos
+    # 3. Fallback for non-git repos (uncached: never sticky)
     return get_flow_dir() / "state"
 
 
@@ -4523,11 +4553,27 @@ def require_copilot() -> str:
     return copilot
 
 
+# fn-109: per-process memo for CLI `--version` probes, shared by
+# get_copilot_version / get_cursor_version. Keyed by the shutil.which()-
+# resolved executable path, so a PATH change re-probes naturally (new key);
+# only SUCCESSFUL probes are cached, so a transient CLI failure is never
+# sticky. In-process only - distinct from the disk-backed model-resolution
+# cache, which has its own invalidation.
+_CLI_VERSION_CACHE = {}  # {resolved executable path: version str}
+
+
 def get_copilot_version() -> Optional[str]:
-    """Get copilot version, or None if not available."""
+    """Get copilot version, or None if not available.
+
+    Memoized per resolved executable path, success-only - see
+    _CLI_VERSION_CACHE.
+    """
     copilot = shutil.which("copilot")
     if not copilot:
         return None
+    cached = _CLI_VERSION_CACHE.get(copilot)
+    if cached is not None:
+        return cached
     try:
         result = subprocess.run(
             [copilot, "--version"],
@@ -4538,7 +4584,9 @@ def get_copilot_version() -> Optional[str]:
         # Parse version from output like "GitHub Copilot CLI 1.0.34." or "1.0.34"
         output = result.stdout.strip()
         match = re.search(r"(\d+\.\d+\.\d+)", output)
-        return match.group(1) if match else output
+        version = match.group(1) if match else output
+        _CLI_VERSION_CACHE[copilot] = version
+        return version
     except subprocess.CalledProcessError:
         return None
 
@@ -4741,10 +4789,16 @@ def get_cursor_version() -> Optional[str]:
     cursor-agent prints a calendar-style version like ``2026.06.13-abc1234``.
     We capture the dotted version plus the optional ``-<hash>`` suffix; if the
     output doesn't match, return it verbatim.
+
+    Memoized per resolved executable path, success-only - see
+    _CLI_VERSION_CACHE.
     """
     cursor = shutil.which("cursor-agent")
     if not cursor:
         return None
+    cached = _CLI_VERSION_CACHE.get(cursor)
+    if cached is not None:
+        return cached
     try:
         result = subprocess.run(
             [cursor, "--version"],
@@ -4754,7 +4808,9 @@ def get_cursor_version() -> Optional[str]:
         )
         output = result.stdout.strip()
         match = re.search(r"(\d+\.\d+\.\d+(?:-\S+)?)", output)
-        return match.group(1) if match else output
+        version = match.group(1) if match else output
+        _CLI_VERSION_CACHE[cursor] = version
+        return version
     except subprocess.CalledProcessError:
         return None
 
@@ -8192,7 +8248,16 @@ def _prospect_parse_frontmatter(text: str) -> Optional[dict[str, Any]]:
         return result
 
 
-def _prospect_detect_corruption(path: Path) -> Optional[str]:
+# fn-109: sentinel distinguishing "frontmatter not supplied by the caller"
+# from a parse that legitimately returned None (no frontmatter block).
+_PROSPECT_FM_UNSET: Any = object()
+
+
+def _prospect_detect_corruption(
+    path: Path,
+    text: Optional[str] = None,
+    fm: Any = _PROSPECT_FM_UNSET,
+) -> Optional[str]:
     """Return a corruption reason string for `path`, or None for a clean artifact.
 
     Reason strings (R16 contract — must match Phase 0 inline classifier):
@@ -8211,16 +8276,22 @@ def _prospect_detect_corruption(path: Path) -> Optional[str]:
     then frontmatter required-field presence (last so the more specific
     "missing date / sections" reasons surface before the generic
     "missing field" reason).
+
+    fn-109: callers that already read the artifact pass `text` (and
+    optionally `fm` - the result of `_prospect_parse_frontmatter(text)`)
+    to avoid re-reading/re-parsing; semantics are identical.
     """
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return PROSPECT_CORRUPT_UNREADABLE
+    if text is None:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            return PROSPECT_CORRUPT_UNREADABLE
 
     if not text.strip():
         return PROSPECT_CORRUPT_EMPTY
 
-    fm = _prospect_parse_frontmatter(text)
+    if fm is _PROSPECT_FM_UNSET:
+        fm = _prospect_parse_frontmatter(text)
     if fm is None:
         return PROSPECT_CORRUPT_NO_FRONTMATTER
 
@@ -8266,7 +8337,11 @@ def get_prospects_dir() -> Path:
 
 
 def _prospect_artifact_status(
-    path: Path, corruption: Optional[str], today: Optional[date] = None
+    path: Path,
+    corruption: Optional[str],
+    today: Optional[date] = None,
+    text: Optional[str] = None,
+    fm: Any = _PROSPECT_FM_UNSET,
 ) -> tuple[str, Optional[int]]:
     """Derive (status, age_days) for an artifact.
 
@@ -8275,9 +8350,10 @@ def _prospect_artifact_status(
     Stale = >30 days old AND frontmatter status is `active`/absent. Archived
     = frontmatter status explicitly set to `archived`.
 
-    Pure function — no I/O beyond a single read of the file (callers already
-    invoke `_prospect_detect_corruption` which reads it; the small extra cost
-    of a second open is the price of keeping this stateless).
+    Pure function - stateless. fn-109: callers that already read the artifact
+    pass `text` (and optionally `fm` - the result of
+    `_prospect_parse_frontmatter(text)`) to avoid re-reading/re-parsing;
+    without them the function reads/parses itself, semantics identical.
     """
     if corruption is not None:
         return ("corrupt", None)
@@ -8285,12 +8361,15 @@ def _prospect_artifact_status(
     if today is None:
         today = datetime.now(timezone.utc).date()
 
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return ("corrupt", None)
+    if text is None:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            return ("corrupt", None)
 
-    fm = _prospect_parse_frontmatter(text) or {}
+    if fm is _PROSPECT_FM_UNSET:
+        fm = _prospect_parse_frontmatter(text)
+    fm = fm or {}
     raw_status = (fm.get("status") or "active")
     status = str(raw_status).strip().lower() or "active"
 
@@ -11009,6 +11088,67 @@ def cmd_memory_discoverability_patch(args: argparse.Namespace) -> None:
 _PROSPECT_LIST_AGE_THRESHOLD_DAYS = 30
 
 
+def _prospect_build_descriptor(
+    path: Path, in_archive: bool, today: Optional[date] = None
+) -> dict[str, Any]:
+    """Build one artifact descriptor (shape documented on
+    `_prospect_iter_artifacts`).
+
+    fn-109: the artifact is read ONCE and its frontmatter parsed ONCE here;
+    corruption detection, status derivation, and field extraction all
+    consume that single read (previously each performed its own).
+    """
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+
+    try:
+        text = path.read_text(encoding="utf-8")
+        read_failed = False
+    except OSError:
+        text = ""
+        read_failed = True
+    parsed_fm = None if read_failed else _prospect_parse_frontmatter(text)
+    if read_failed:
+        corruption: Optional[str] = PROSPECT_CORRUPT_UNREADABLE
+    else:
+        corruption = _prospect_detect_corruption(path, text=text, fm=parsed_fm)
+    status, age_days = _prospect_artifact_status(
+        path, corruption, today, text=text, fm=parsed_fm
+    )
+    artifact_id = path.stem  # filename stem == artifact id
+    fm = parsed_fm or {}
+    # Robustly read survivor / promoted counts; fall back to body scan
+    # only when the frontmatter is missing (corrupt-but-readable case).
+    survivor_count = fm.get("survivor_count")
+    if not isinstance(survivor_count, int):
+        try:
+            survivor_count = int(survivor_count)
+        except (TypeError, ValueError):
+            survivor_count = None
+    promoted_raw = fm.get("promoted_ideas")
+    if isinstance(promoted_raw, list):
+        promoted_count = len(promoted_raw)
+    else:
+        promoted_count = 0
+    focus_hint = fm.get("focus_hint") or ""
+    date_field = fm.get("date") or ""
+    title = fm.get("title") or ""
+    return {
+        "artifact_id": artifact_id,
+        "path": str(path),
+        "status": status,
+        "corruption": corruption,
+        "age_days": age_days,
+        "frontmatter": fm,
+        "survivor_count": survivor_count,
+        "promoted_count": promoted_count,
+        "focus_hint": str(focus_hint) if focus_hint else "",
+        "date": str(date_field) if date_field else "",
+        "in_archive": in_archive,
+        "title": str(title) if title else "",
+    }
+
+
 def _prospect_iter_artifacts(
     prospects_dir: Path,
     include_archive: bool = False,
@@ -11034,46 +11174,7 @@ def _prospect_iter_artifacts(
     out: list[dict[str, Any]] = []
 
     def _emit(path: Path, in_archive: bool) -> None:
-        corruption = _prospect_detect_corruption(path)
-        status, age_days = _prospect_artifact_status(path, corruption, today)
-        artifact_id = path.stem  # filename stem == artifact id
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
-            text = ""
-        fm = _prospect_parse_frontmatter(text) or {}
-        # Robustly read survivor / promoted counts; fall back to body scan
-        # only when the frontmatter is missing (corrupt-but-readable case).
-        survivor_count = fm.get("survivor_count")
-        if not isinstance(survivor_count, int):
-            try:
-                survivor_count = int(survivor_count)
-            except (TypeError, ValueError):
-                survivor_count = None
-        promoted_raw = fm.get("promoted_ideas")
-        if isinstance(promoted_raw, list):
-            promoted_count = len(promoted_raw)
-        else:
-            promoted_count = 0
-        focus_hint = fm.get("focus_hint") or ""
-        date_field = fm.get("date") or ""
-        title = fm.get("title") or ""
-        out.append(
-            {
-                "artifact_id": artifact_id,
-                "path": str(path),
-                "status": status,
-                "corruption": corruption,
-                "age_days": age_days,
-                "frontmatter": fm,
-                "survivor_count": survivor_count,
-                "promoted_count": promoted_count,
-                "focus_hint": str(focus_hint) if focus_hint else "",
-                "date": str(date_field) if date_field else "",
-                "in_archive": in_archive,
-                "title": str(title) if title else "",
-            }
-        )
+        out.append(_prospect_build_descriptor(path, in_archive, today))
 
     if not prospects_dir.is_dir():
         return out
@@ -11125,18 +11226,33 @@ def _prospect_resolve_id(
         return None
 
     # Direct filename hit (handles full id, including same-day suffixes).
-    for in_archive, base in [
-        (False, prospects_dir),
-        (True, prospects_dir / PROSPECTS_ARCHIVE_DIR) if include_archive else (False, None),  # type: ignore[misc]
-    ]:
-        if base is None or not isinstance(base, Path):
-            continue
-        candidate = base / f"{artifact_id}.md"
+    # fn-109: build the single descriptor directly instead of enumerating
+    # the whole dir. The guards replicate the `_prospect_iter_artifacts`
+    # walk filters exactly, so ids the walk would have skipped (dot-prefixed
+    # names, top-level underscore-prefixed names) still fall through to the
+    # slug logic below unchanged. Ids containing path separators keep the
+    # pre-fn-109 enumerate-and-match path (it resolved e.g. `_archive/<id>`
+    # by textual path equality; the fast path must not change that).
+    if (
+        "/" not in artifact_id
+        and "\\" not in artifact_id
+        and not artifact_id.startswith(".")
+    ):
+        bases: list[tuple[bool, Path]] = [(False, prospects_dir)]
+        if include_archive:
+            bases.append((True, prospects_dir / PROSPECTS_ARCHIVE_DIR))
+        for in_archive, base in bases:
+            if not in_archive and artifact_id.startswith("_"):
+                continue  # top-level walk skips underscore-prefixed files
+            candidate = base / f"{artifact_id}.md"
+            if candidate.is_file():
+                return _prospect_build_descriptor(candidate, in_archive)
+    else:
+        candidate = prospects_dir / f"{artifact_id}.md"
         if candidate.is_file():
-            artifacts = _prospect_iter_artifacts(
+            for a in _prospect_iter_artifacts(
                 prospects_dir, include_archive=include_archive
-            )
-            for a in artifacts:
+            ):
                 if a["path"] == str(candidate):
                     return a
 
@@ -15914,6 +16030,12 @@ _EXPORT_REMOVED_DEF_RES: tuple[re.Pattern, ...] = (
 
 _EXPORT_REMOVED_REFS_MAX_SYMBOLS = 40
 _EXPORT_REMOVED_REFS_MAX_PER_SYMBOL = 25
+# fn-109: symbols per batched `git grep` call (multiple -e patterns are OR'd),
+# replacing one spawn per symbol - 40 symbols -> 2 invocations. 20 keeps argv
+# comfortably inside platform limits even with long symbol names plus the
+# extension pathspecs.
+_EXPORT_REMOVED_REFS_GREP_CHUNK = 20
+
 
 
 def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
@@ -16031,15 +16153,40 @@ def _export_removed_export_refs(
     # by the symbol caps; the wider pathspec costs nothing (index-backed grep).
     pathspecs = sorted("*" + ext for ext in _EXPORT_SOURCE_EXTENSIONS)
 
-    results: list[dict[str, Any]] = []
-    for sym in sorted(removed)[:_EXPORT_REMOVED_REFS_MAX_SYMBOLS]:
-        grep_args = ["grep", "-n", "-w", "-F", "-e", sym]
+    symbols = sorted(removed)[:_EXPORT_REMOVED_REFS_MAX_SYMBOLS]
+
+    # fn-109: ONE `git grep` per _EXPORT_REMOVED_REFS_GREP_CHUNK-symbol chunk
+    # (patterns OR'd via repeated -e) instead of one spawn per symbol.
+    # Per-symbol attribution is recovered by post-filtering each returned
+    # line in Python with the exact semantics the per-symbol grep used
+    # (-w -F: fixed string at word boundaries, word chars = [0-9A-Za-z_]);
+    # a line matching several symbols is attributed to every one, exactly as
+    # each symbol's own grep would have returned it. Symbol iteration order
+    # (sorted), the per-symbol ref cap, and the output shape are unchanged.
+    refs_by_symbol: dict[str, list[dict[str, Any]]] = {s: [] for s in symbols}
+    for start in range(0, len(symbols), _EXPORT_REMOVED_REFS_GREP_CHUNK):
+        chunk = symbols[start : start + _EXPORT_REMOVED_REFS_GREP_CHUNK]
+        # --color=never: a forced-color config (`color.grep=always`) wraps
+        # matches in SGR escapes whose trailing `m` is a word char - it would
+        # defeat the attribution lookbehind below and silently drop refs the
+        # per-symbol grep kept (and the batched call colors EVERY chunk
+        # symbol on a shared line, so colored output is per-invocation-
+        # dependent anyway). Disabling color at the source keeps the
+        # attribution regex on the exact raw bytes git matched.
+        grep_args = ["grep", "--color=never", "-n", "-w", "-F"]
+        for sym in chunk:
+            grep_args += ["-e", sym]
         if pathspecs:
             grep_args += ["--", *pathspecs]
         rc_g, out_g, _ = _export_run_git(grep_args, cwd=repo_root)
         if rc_g != 0:  # 1 == no matches; other == error; both → skip
             continue
-        refs: list[dict[str, Any]] = []
+        word_res = {
+            sym: re.compile(
+                r"(?<![0-9A-Za-z_])" + re.escape(sym) + r"(?![0-9A-Za-z_])"
+            )
+            for sym in chunk
+        }
         for gline in out_g.splitlines():
             # git grep -n prints `path:line:content`.
             parts = gline.split(":", 2)
@@ -16049,12 +16196,24 @@ def _export_removed_export_refs(
                 ref_lineno = int(parts[1])
             except ValueError:
                 continue
-            snippet = parts[2].strip() if len(parts) > 2 else ""
-            refs.append(
-                {"path": parts[0], "line": ref_lineno, "text": snippet[:200]}
-            )
-            if len(refs) >= _EXPORT_REMOVED_REFS_MAX_PER_SYMBOL:
-                break
+            content = parts[2] if len(parts) > 2 else ""
+            snippet = content.strip()
+            for sym in chunk:
+                refs = refs_by_symbol[sym]
+                if len(refs) >= _EXPORT_REMOVED_REFS_MAX_PER_SYMBOL:
+                    continue
+                if word_res[sym].search(content):
+                    refs.append(
+                        {
+                            "path": parts[0],
+                            "line": ref_lineno,
+                            "text": snippet[:200],
+                        }
+                    )
+
+    results: list[dict[str, Any]] = []
+    for sym in symbols:
+        refs = refs_by_symbol[sym]
         if refs:
             results.append(
                 {"symbol": sym, "defined_in": removed[sym], "refs": refs}

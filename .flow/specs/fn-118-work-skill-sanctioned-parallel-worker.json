@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-118-work-skill-sanctioned-parallel-worker",
+  "created_at": "2026-07-19T20:18:04.642828Z",
+  "depends_on_epics": [],
+  "id": "fn-118-work-skill-sanctioned-parallel-worker",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-118-work-skill-sanctioned-parallel-worker.md",
+  "status": "open",
+  "title": "work skill: sanctioned parallel worker dispatch for file-disjoint tasks",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-19T20:18:53.193676Z"
+}

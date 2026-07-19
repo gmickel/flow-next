@@ -409,6 +409,8 @@ Output:
 
 List all specs with their tasks grouped together.
 
+Perf: repo-root/state-dir git lookups are memoized per process (fn-109), so listing hundreds of tasks costs a handful of subprocess spawns instead of two per task (30.8s -> <1s at 400 tasks).
+
 ```bash
 flowctl list [--json]
 ```
@@ -1418,6 +1420,8 @@ Checkpoints preserve full spec + task state. Useful when compaction occurs durin
 ### status
 
 Show `.flow/` state summary.
+
+Perf: rides the same per-process repo-root/state-dir memoization as `list` (fn-109) - 32s -> <1.5s on a 400-task repo.
 
 ```bash
 flowctl status [--json]
