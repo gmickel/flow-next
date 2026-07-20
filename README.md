@@ -18,9 +18,13 @@
 The workflow layer for AI coding agents: durable specs, re-anchored workers, adversarial reviews, receipts.
 Everything lives in your repo. Zero external dependencies. Uninstall: `rm -rf .flow/`.
 
+<img src="assets/flow-next-pipeline.gif" alt="A real pipeline run: pilot plans the spec, cross-model plan review catches a gap and ships, the worker implements with tests, impl review ships, ending on the task receipt" width="860">
+
+*Proof, not adjectives: a real recorded run - plan → cross-model plan review (catches a missing guard, fix, SHIP) → implement + tests → impl review SHIP → the receipt. Nothing staged; every frame is live output.*
+
 <img src="assets/flow-next-plan.png" alt="/flow-next:plan output — dependency-ordered tasks, cross-model review passed, key decisions documented" width="720">
 
-*Proof, not adjectives: a real `/flow-next:plan` result - dependency-ordered tasks, cross-model review iterated to SHIP, key decisions documented.*
+*A real `/flow-next:plan` result - dependency-ordered tasks, cross-model review iterated to SHIP, key decisions documented.*
 
 </div>
 
