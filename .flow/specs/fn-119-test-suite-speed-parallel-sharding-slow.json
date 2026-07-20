@@ -15,7 +15,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-119-test-suite-speed-parallel-sharding-slow.md",
-  "status": "open",
+  "status": "done",
   "title": "test-suite speed: parallel sharding + slow-test diet",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-20T13:30:18.757230Z"
+  "updated_at": "2026-07-20T15:55:25.598253Z"
 }
