@@ -23,9 +23,8 @@ Docs across repo + docs-site, written in the post-fn-117 register: mechanical pr
 - [ ] docs-site pages updated, cookbook scanned, pnpm build green; copy passes the register check (no speed-brag phrasing) (R8)
 
 ## Done summary
-TBD
-
+Docs pass for fn-110 in the post-fn-117 register: flowctl.md documents the three config get read forms (scalar/subtree/root, --raw shapes, snapshot parse contract), task create's --description-file/--satisfies (R-ID grammar, error-before-write) and create-time --branch vs set-branch renames; CHANGELOG gains the fn-110 Unreleased entry (incl. the 1e8353d0 Foreground-rule fence-embedding rider); usage.md + setup template example lines carry the one-call flags (codex mirror regenerated, x2 idempotent). flow-next.dev: cli-reference two-call create+set-branch collapsed to create-time --branch, configuration.mdx gains a Reading-configuration section with exact JSON shapes, cookbook scan clean; pnpm build green; committed on its main (b12897c, 99812d9), not pushed. Codex impl-review: SHIP first pass (one non-blocking wording FYI applied in both repos).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 85a1716880961c8ce8ff9d81bf01da1b85790da7, c063bb47714ce4cc7e4d1802b4f998d54086b132, e01dcc954b0f9f27ff1bb1d82f4064feb4f7d3a7, e9dcd13da8dbde91a3420241941e25cf4d8449e5, 755ff7ef3459554881119b58c5775b1f1a704292
+- Tests: GATE_SKIPPED:unittest:green-receipt 2bb41aca - baseline reused from prior post-gate pass, GATE_SKIPPED:smoke:green-receipt 2bb41aca - baseline reused from prior post-gate pass, python3 -m unittest discover -s plugins/flow-next/tests -q (rc=0, green receipt 755ff7ef-unittest), (cd $(mktemp -d) && bash .../plugins/flow-next/scripts/smoke_test.sh) (rc=0, green receipt c063bb47-smoke), ./scripts/sync-codex.sh x2 (idempotent, mirror committed), cmp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py (dual-copy OK), cd ~/work/flow-next.dev && pnpm build (rc=0, 74 pages; docs-site commits b12897c, 99812d9 on its main, not pushed)
 - PRs:
