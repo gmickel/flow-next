@@ -1422,9 +1422,12 @@ def load_flow_config() -> dict:
         return defaults
 
 
-def get_config(key: str, default=None):
-    """Get nested config value like 'memory.enabled'."""
-    config = load_flow_config()
+def _walk_config_value(config, key: str, default=None):
+    """Nested-key walk shared by `get_config` and the fn-110 snapshot reads.
+
+    Extracted verbatim from `get_config` — semantics (including the
+    empty-dict-means-default quirk) are byte-identical.
+    """
     for part in key.split("."):
         if not isinstance(config, dict):
             return default
@@ -1432,6 +1435,11 @@ def get_config(key: str, default=None):
         if config == {}:
             return default
     return config if config != {} else default
+
+
+def get_config(key: str, default=None):
+    """Get nested config value like 'memory.enabled'."""
+    return _walk_config_value(load_flow_config(), key, default)
 
 
 _CONFIG_RAW_SENTINEL = object()
@@ -1463,7 +1471,121 @@ def _get_config_from_file(key: str):
     return current
 
 
-def resolve_config_key_for_read(key: str):
+# --- Command-scoped config snapshot (fn-110.1) -----------------------------
+#
+# One read + one parse of .flow/config.json per CLI invocation, threaded into
+# the existing read paths via optional parameters. The snapshot never
+# outlives the command (no staleness after `config set`). This block sits
+# BESIDE the alias resolvers, not inside them — fn-111 removes the alias
+# machinery next door and rebases on this.
+
+
+class ConfigSnapshot:
+    """Command-scoped view of .flow/config.json.
+
+    - ``raw``    — the parsed on-disk dict, or ``None`` when the file is
+      absent, unreadable, or not a JSON object (mirrors the failure modes of
+      `_get_config_from_file` / `load_flow_config`).
+    - ``merged`` — defaults deep-merged with the CANONICALIZED raw tree
+      (legacy alias leaves surfaced under their canonical names; see
+      `_canonicalize_config_tree`). With the alias map empty (2.0.0 removal)
+      this is byte-equal to `load_flow_config()`.
+    """
+
+    __slots__ = ("raw", "merged")
+
+    def __init__(self, raw, merged) -> None:
+        self.raw = raw
+        self.merged = merged
+
+
+def _copy_config_tree(tree: dict) -> dict:
+    """Recursively copy the dict spine of a config tree (leaves shared)."""
+    return {
+        k: _copy_config_tree(v) if isinstance(v, dict) else v
+        for k, v in tree.items()
+    }
+
+
+def _tree_probe(tree: dict, key: str):
+    """Probe a nested key in an already-parsed tree (sentinel when absent)."""
+    current = tree
+    for part in key.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return _CONFIG_RAW_SENTINEL
+        current = current[part]
+    return current
+
+
+def _canonicalize_config_tree(tree: dict) -> dict:
+    """Return `tree` with legacy alias leaves surfaced under canonical names.
+
+    Subtree/root reads always emit CANONICAL keys (fn-110.1): a persisted
+    legacy leaf is relocated to its canonical path; when both are persisted,
+    canonical wins and the legacy leaf is dropped from the emission. The
+    alias map is empty today (fn-62 removal) — the machinery stays for
+    future renames; no warning fires here (the existing read-warning
+    semantics key off the *typed* legacy form, handled by the callers).
+    """
+    if not _CONFIG_KEY_ALIASES:
+        return tree
+    result = _copy_config_tree(tree)
+    for legacy, canonical in _CONFIG_KEY_ALIASES.items():
+        legacy_val = _tree_probe(result, legacy)
+        if legacy_val is _CONFIG_RAW_SENTINEL:
+            continue
+        # Pop the legacy leaf (walk to its parent dict).
+        parts = legacy.split(".")
+        parent = result
+        for part in parts[:-1]:
+            parent = parent[part]
+        parent.pop(parts[-1], None)
+        if _tree_probe(result, canonical) is _CONFIG_RAW_SENTINEL:
+            # Canonical absent: legacy fills in, under the canonical name.
+            cparts = canonical.split(".")
+            current = result
+            for part in cparts[:-1]:
+                nxt = current.get(part)
+                if not isinstance(nxt, dict):
+                    nxt = {}
+                    current[part] = nxt
+                current = nxt
+            current[cparts[-1]] = legacy_val
+    return result
+
+
+def load_config_snapshot() -> ConfigSnapshot:
+    """Read + parse .flow/config.json AT MOST once and build the snapshot.
+
+    Exactly one parse when the file exists; zero when it does not. Callers
+    thread the result through `resolve_config_key_for_read(..., snapshot=)`
+    and the root/subtree emission paths instead of re-reading per key.
+    """
+    config_path = get_flow_dir() / CONFIG_FILE
+    raw = None
+    if config_path.exists():
+        try:
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                raw = data
+        except (json.JSONDecodeError, Exception):
+            raw = None
+    defaults = get_default_config()
+    if raw is None:
+        merged = defaults
+    else:
+        merged = deep_merge(defaults, _canonicalize_config_tree(raw))
+    return ConfigSnapshot(raw, merged)
+
+
+def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
+    """Snapshot analogue of `_get_config_from_file` (same sentinel contract)."""
+    if snapshot.raw is None:
+        return _CONFIG_RAW_SENTINEL
+    return _tree_probe(snapshot.raw, key)
+
+
+def resolve_config_key_for_read(key: str, snapshot: "Optional[ConfigSnapshot]" = None):
     """Resolve a config-key read, honoring legacy aliases.
 
     Returns a 3-tuple ``(effective_key, value, deprecation_legacy_form)``:
@@ -1486,7 +1608,28 @@ def resolve_config_key_for_read(key: str):
     canonical wins when present in the raw file; legacy fills in when
     canonical is absent. The only thing the input key changes is which
     label is returned and whether a deprecation fires.
+
+    ``snapshot`` (fn-110.1, optional): a command-scoped `ConfigSnapshot`.
+    When provided, raw-file probes and merged-default reads come from the
+    snapshot instead of re-reading .flow/config.json per call. Default
+    ``None`` preserves the existing per-call read behavior for every other
+    caller. One deliberate semantic difference on the snapshot path: merged
+    reads are sentinel-aware (`_tree_probe`), so an empty-dict value (e.g.
+    the `tracker.perTracker.labelMap` default `{}`) surfaces as `{}` per the
+    dict-subtree contract — the snapshot-less `get_config` path keeps its
+    historical empty-dict-means-default quirk.
     """
+
+    def _snapshot_merged_get(k: str):
+        value = _tree_probe(snapshot.merged, k)
+        return None if value is _CONFIG_RAW_SENTINEL else value
+
+    _raw_probe = (
+        (lambda k: _snapshot_raw_probe(snapshot, k))
+        if snapshot is not None
+        else _get_config_from_file
+    )
+    _merged_get = _snapshot_merged_get if snapshot is not None else get_config
     # Identify the canonical/legacy pair regardless of which side the caller
     # supplied. `key` may be legacy (looked up via `_CONFIG_KEY_ALIASES`) or
     # canonical (reverse-lookup against alias targets).
@@ -1504,23 +1647,23 @@ def resolve_config_key_for_read(key: str):
         )
         if legacy_match is None:
             # Not part of any alias pair — standard lookup.
-            return key, get_config(key), ""
+            return key, _merged_get(key), ""
         canonical = key
         legacy = legacy_match
         user_typed_legacy = False
 
-    canonical_raw = _get_config_from_file(canonical)
+    canonical_raw = _raw_probe(canonical)
     if canonical_raw is not _CONFIG_RAW_SENTINEL:
         # Canonical wins value precedence; warn only when the user typed the
         # legacy form (canonical reads remain the migration path).
         return canonical, canonical_raw, legacy if user_typed_legacy else ""
-    legacy_raw = _get_config_from_file(legacy)
+    legacy_raw = _raw_probe(legacy)
     if legacy_raw is not _CONFIG_RAW_SENTINEL:
         # Legacy supplies the value via fallback. Warn only when the user
         # typed the legacy form (reading canonical is the migration path).
         return legacy, legacy_raw, legacy if user_typed_legacy else ""
     # Neither key set; fall back to merged defaults via the canonical key.
-    return canonical, get_config(canonical), ""
+    return canonical, _merged_get(canonical), ""
 
 
 def resolve_config_key_for_write(key: str) -> tuple[str, str]:
@@ -6371,13 +6514,71 @@ def create_epic_spec(id_str: str, title: str) -> str:
     )
 
 
-def create_task_spec(id_str: str, title: str, acceptance: Optional[str] = None) -> str:
+# fn-110.1: canonical R-ID token grammar for `task create --satisfies`.
+# Matches the spec template's sibling ids (R4a/R4b); rejects R0, uppercase
+# suffixes (R4A), and multi-letter suffixes (R4ab).
+_SATISFIES_TOKEN_RE = re.compile(r"R[1-9][0-9]*[a-z]?")
+
+
+def parse_satisfies_tokens(raw: str) -> list[str]:
+    """Parse + validate a `--satisfies` comma list (fn-110.1).
+
+    Grammar: comma-separated tokens, whitespace-trimmed; empty tokens
+    rejected; duplicates rejected (error, not dedupe); input order
+    preserved; each token must fullmatch `R[1-9][0-9]*[a-z]?`.
+    Raises ValueError on any malformed input — callers must validate
+    BEFORE any file is written.
+    """
+    tokens = [t.strip() for t in raw.split(",")]
+    seen = set()
+    for token in tokens:
+        if not token:
+            raise ValueError(
+                "--satisfies: empty token (expected comma-separated R-IDs, e.g. R1,R3)"
+            )
+        if not _SATISFIES_TOKEN_RE.fullmatch(token):
+            raise ValueError(
+                f"--satisfies: invalid R-ID '{token}' "
+                "(expected R<n> or R<n><letter>, e.g. R1, R10, R4a)"
+            )
+        if token in seen:
+            raise ValueError(f"--satisfies: duplicate R-ID '{token}'")
+        seen.add(token)
+    return tokens
+
+
+def render_task_frontmatter(satisfies: list[str]) -> str:
+    """Render the task-spec YAML frontmatter block (fn-110.1).
+
+    Zero-dependency writer for `satisfies:` — the shape the existing reader
+    (`_export_parse_task_satisfies`) and `task set-spec --file` documents
+    already carry: an inline list between `---` delimiters, placed above the
+    document body. Callers validate tokens via `parse_satisfies_tokens`
+    first; this renders only.
+    """
+    return "---\nsatisfies: [" + ", ".join(satisfies) + "]\n---\n"
+
+
+def create_task_spec(
+    id_str: str,
+    title: str,
+    acceptance: Optional[str] = None,
+    description: Optional[str] = None,
+    satisfies: "Optional[list[str]]" = None,
+) -> str:
     """Create task spec markdown content."""
     acceptance_content = acceptance if acceptance else "- [ ] TBD"
-    return f"""# {id_str} {title}
+    # New fn-110.1 surface — rstrip like set-spec's section patching does
+    # (`--acceptance-file` embeds as-is for byte-compat with 2.20.0).
+    # `is not None` (not truthiness): an explicitly EMPTY description file
+    # writes an intentionally empty section, matching `task set-spec
+    # --description` — only an omitted flag falls back to the TBD stub.
+    description_content = description.rstrip() if description is not None else "TBD"
+    frontmatter = render_task_frontmatter(satisfies) if satisfies else ""
+    return f"""{frontmatter}# {id_str} {title}
 
 ## Description
-TBD
+{description_content}
 
 ## Acceptance
 {acceptance_content}
@@ -7241,14 +7442,29 @@ def cmd_ralph_status(args: argparse.Namespace) -> None:
 
 
 def cmd_config_get(args: argparse.Namespace) -> None:
-    """Get a config value.
+    """Get a config value (scalar), a subtree, or the whole root.
 
-    By default, merges built-in defaults (via `load_flow_config()`) so an
-    unset key like `planSync.crossSpec` returns its default `False`. Setup
-    skills (and any caller that needs to know whether a key is set in the
-    on-disk file) pass `--raw` to bypass the merge and get `null` for
-    truly-absent keys. See fn-46.1: the merge-defaults path was the source
-    of the cycle-1 setup-prompt regression on PR #135.
+    Three read forms, one mechanism — a command-scoped `ConfigSnapshot`
+    (fn-110.1) that parses .flow/config.json AT MOST once per invocation
+    (exactly once when the file exists):
+
+    - keyed scalar   — byte-identical to the pre-snapshot behavior.
+    - keyed subtree  — when the key resolves to a dict, the merged subtree
+      is emitted (`--raw`: set-only values, absent leaves omitted).
+    - keyless root   — no key argument: the entire merged config as
+      `{"key": null, "value": {...}}` (`--raw`: set-only values).
+
+    Subtree/root output always emits CANONICAL keys: a persisted legacy
+    alias leaf surfaces under its canonical name (canonical wins when both
+    are set); the read-warning fires only on a *typed* legacy key, exactly
+    as before.
+
+    By default, merges built-in defaults so an unset key like
+    `planSync.crossSpec` returns its default `False`. Setup skills (and any
+    caller that needs to know whether a key is set in the on-disk file)
+    pass `--raw` to bypass the merge and get `null` for truly-absent keys.
+    See fn-46.1: the merge-defaults path was the source of the cycle-1
+    setup-prompt regression on PR #135.
     """
     if not ensure_flow_exists():
         error_exit(
@@ -7256,31 +7472,53 @@ def cmd_config_get(args: argparse.Namespace) -> None:
         )
 
     raw = getattr(args, "raw", False)
+    key = getattr(args, "key", None)
+    snapshot = load_config_snapshot()
+
+    if key is None:
+        # Keyless root read (fn-110.1): the whole config in one call.
+        if raw:
+            value = (
+                _canonicalize_config_tree(snapshot.raw)
+                if snapshot.raw is not None
+                else {}
+            )
+            if args.json:
+                json_output({"key": None, "value": value, "raw": True})
+            else:
+                print(json.dumps(value, indent=2, default=str))
+        else:
+            value = snapshot.merged
+            if args.json:
+                json_output({"key": None, "value": value})
+            else:
+                print(json.dumps(value, indent=2, default=str))
+        return
 
     if raw:
-        # Bypass merge; resolve via the canonical/legacy raw-file probe so
+        # Bypass merge; resolve via the canonical/legacy raw probe so
         # callers see `null` exactly when neither the canonical nor the
         # legacy key is persisted to .flow/config.json. Deprecation still
         # fires when the user typed the legacy alias and only legacy is set.
-        canonical_from_alias = _CONFIG_KEY_ALIASES.get(args.key)
+        canonical_from_alias = _CONFIG_KEY_ALIASES.get(key)
         if canonical_from_alias is not None:
             canonical = canonical_from_alias
-            legacy = args.key
+            legacy = key
             user_typed_legacy = True
         else:
             legacy_match = next(
-                (lg for lg, cn in _CONFIG_KEY_ALIASES.items() if cn == args.key),
+                (lg for lg, cn in _CONFIG_KEY_ALIASES.items() if cn == key),
                 None,
             )
-            canonical = args.key
+            canonical = key
             legacy = legacy_match
             user_typed_legacy = False
 
-        canonical_raw = _get_config_from_file(canonical)
+        canonical_raw = _snapshot_raw_probe(snapshot, canonical)
         if canonical_raw is not _CONFIG_RAW_SENTINEL:
             value = canonical_raw
         elif legacy is not None:
-            legacy_raw = _get_config_from_file(legacy)
+            legacy_raw = _snapshot_raw_probe(snapshot, legacy)
             if legacy_raw is not _CONFIG_RAW_SENTINEL:
                 value = legacy_raw
                 if user_typed_legacy:
@@ -7290,31 +7528,43 @@ def cmd_config_get(args: argparse.Namespace) -> None:
         else:
             value = None
 
+        if isinstance(value, dict) and snapshot.raw is not None:
+            # Subtree emission is always canonical-keyed: re-probe the
+            # canonicalized raw tree at the canonical path so any legacy
+            # leaves nested below surface under their canonical names.
+            reprobed = _tree_probe(
+                _canonicalize_config_tree(snapshot.raw), canonical
+            )
+            if reprobed is not _CONFIG_RAW_SENTINEL:
+                value = reprobed
+
         if args.json:
-            json_output({"key": args.key, "value": value, "raw": True})
+            json_output({"key": key, "value": value, "raw": True})
         else:
             if value is None:
-                print(f"{args.key}: (not set)")
+                print(f"{key}: (not set)")
             elif isinstance(value, bool):
-                print(f"{args.key}: {'true' if value else 'false'}")
+                print(f"{key}: {'true' if value else 'false'}")
             else:
-                print(f"{args.key}: {value}")
+                print(f"{key}: {value}")
         return
 
-    _, value, deprecation_legacy = resolve_config_key_for_read(args.key)
+    # Merged read. snapshot.merged is built from the CANONICALIZED raw tree,
+    # so a dict-valued result is already the canonical-keyed subtree.
+    _, value, deprecation_legacy = resolve_config_key_for_read(key, snapshot=snapshot)
     if deprecation_legacy:
         canonical = _CONFIG_KEY_ALIASES[deprecation_legacy]
         _emit_rename_deprecation(deprecation_legacy, canonical)
 
     if args.json:
-        json_output({"key": args.key, "value": value})
+        json_output({"key": key, "value": value})
     else:
         if value is None:
-            print(f"{args.key}: (not set)")
+            print(f"{key}: (not set)")
         elif isinstance(value, bool):
-            print(f"{args.key}: {'true' if value else 'false'}")
+            print(f"{key}: {'true' if value else 'false'}")
         else:
-            print(f"{args.key}: {value}")
+            print(f"{key}: {value}")
 
 
 def cmd_config_set(args: argparse.Namespace) -> None:
@@ -13765,6 +14015,9 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 )
             deps.append(dep)
 
+    # fn-110.1: ALL inputs are read + validated BEFORE any write — a
+    # malformed flag or unreadable file must never leave a half-created task.
+
     # Read acceptance from file if provided
     acceptance = None
     if args.acceptance_file:
@@ -13775,6 +14028,25 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         # own `## Acceptance Criteria …` H2 must not plant a rogue sibling
         # section in the skeleton.
         acceptance = normalize_section_content("## Acceptance", acceptance)
+
+    # Read description from file if provided (fn-110.1: create-time
+    # equivalent of set-spec's description path, same normalization).
+    description = None
+    description_file = getattr(args, "description_file", None)
+    if description_file:
+        description = read_text_or_exit(
+            Path(description_file), "Description file", use_json=args.json
+        )
+        description = normalize_section_content("## Description", description)
+
+    # Parse + validate --satisfies (fn-110.1) — errors before any write.
+    satisfies = None
+    satisfies_arg = getattr(args, "satisfies", None)
+    if satisfies_arg is not None:
+        try:
+            satisfies = parse_satisfies_tokens(satisfies_arg)
+        except ValueError as e:
+            error_exit(str(e), use_json=args.json)
 
     # fn-43.2: persisted task JSON uses canonical "spec" key only. Read paths
     # accept legacy "epic" via normalize_task() for 0.x task files that
@@ -13796,7 +14068,9 @@ def cmd_task_create(args: argparse.Namespace) -> None:
     atomic_write_json(flow_dir / TASKS_DIR / f"{task_id}.json", task_data)
 
     # Create task spec
-    spec_content = create_task_spec(task_id, args.title, acceptance)
+    spec_content = create_task_spec(
+        task_id, args.title, acceptance, description=description, satisfies=satisfies
+    )
     atomic_write(flow_dir / TASKS_DIR / f"{task_id}.md", spec_content)
 
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
@@ -31720,7 +31994,16 @@ def main() -> None:
     config_sub = p_config.add_subparsers(dest="config_cmd", required=True)
 
     p_config_get = config_sub.add_parser("get", help="Get config value")
-    p_config_get.add_argument("key", help="Config key (e.g., memory.enabled)")
+    p_config_get.add_argument(
+        "key",
+        nargs="?",
+        default=None,
+        help=(
+            "Config key (e.g., memory.enabled). A key resolving to a dict "
+            "returns the merged subtree; omit the key entirely for the "
+            "whole merged config (root read)."
+        ),
+    )
     p_config_get.add_argument("--json", action="store_true", help="JSON output")
     p_config_get.add_argument(
         "--raw",
@@ -32972,6 +33255,17 @@ def main() -> None:
     p_task_create.add_argument("--deps", help="Comma-separated dependency IDs")
     p_task_create.add_argument(
         "--acceptance-file", help="Markdown file with acceptance criteria"
+    )
+    p_task_create.add_argument(
+        "--description-file",
+        help="Markdown file with the task description (fn-110.1)",
+    )
+    p_task_create.add_argument(
+        "--satisfies",
+        help=(
+            "Comma-separated spec R-IDs this task advances (e.g. R1,R3); "
+            "written as `satisfies:` frontmatter at create time (fn-110.1)"
+        ),
     )
     p_task_create.add_argument(
         "--priority", type=int, help="Priority (lower = earlier)"

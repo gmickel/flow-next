@@ -51,6 +51,8 @@ Parse the spec carefully. Identify:
 
 **Baseline check (before any edit — run the spec's Quick commands, record the result):**
 ```bash
+# FOREGROUND RULE: run each gate suite as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 # Run the parent spec's Quick commands (the test/lint/build listed above) to establish
 # the pre-edit baseline, and RECORD it so a task-CAUSED failure is distinguishable from
 # an INHERITED one at review time (the impl-review "Tests" criterion judges blind otherwise):
@@ -155,6 +157,7 @@ host's counter stays untouched - not a failure, not a strike).
    path does not exist. Pick the per-run effort (floored at
    `DELEGATE_EFFORT_FLOOR`), and **launch `codex exec` via the Bash
    `run_in_background` tool parameter** (NOT shell `&`) using `DELEGATE_MODEL` +
+   <!-- DELEGATION-ONLY exception: this is the ONE sanctioned background codex launch (result polled via foreground file reads). REVIEW commands are NEVER backgrounded - see the Foreground rule in Phase 3.5. -->
    the **literal** sandbox flag inlined from `DELEGATE_SANDBOX` (yolo →
    `--dangerously-bypass-approvals-and-sandbox`, full-auto → `-s workspace-write`).
    Inline the literal flag — NOT a `$SANDBOX_FLAG` variable: ralph-guard inspects
@@ -405,6 +408,8 @@ BASE_COMMIT=$(cat .flow/tmp/base_commit)
 # same `(gate_id, exact command string)` vocabulary as the baseline and then run:
 #   <FLOWCTL> gate receipt --gate <gate_id> --command "<cmd>"
 # Receipt failure is non-blocking: log it and continue. Must pass before marking done.
+# FOREGROUND RULE: run each gate suite as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 # When this Verify block runs a full suite, apply the Suite-output capture rule above:
 # capture output to a log, observe green from `suite_rc`, and read any summary
 # from that log; never run the suite a second time just to observe greenness.

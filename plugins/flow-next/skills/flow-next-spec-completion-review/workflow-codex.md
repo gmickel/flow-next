@@ -12,6 +12,8 @@ $FLOWCTL show "$SPEC_ID" --json
 ## Step 2: Execute Review
 
 ```bash
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}"  # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 $FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"

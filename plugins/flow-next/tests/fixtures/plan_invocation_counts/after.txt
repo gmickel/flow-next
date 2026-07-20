@@ -1,0 +1,18 @@
+# flowctl invocations on the SAME standard Route B happy path (4 tasks, all with
+# satisfies frontmatter), as prescribed by flow-next-plan/steps.md AFTER fn-110.2:
+# one root config snapshot replaces the 4 scattered config reads, spec create
+# carries the default branch (no set-branch), and each task is created in ONE
+# call (--description-file --acceptance-file --satisfies; no follow-up set-spec).
+# One invocation per line; '#' lines are ignored.
+flowctl init --json
+flowctl config get --json
+flowctl show <arg> --json
+flowctl strategy status --json
+flowctl spec create --title <title> --json
+flowctl spec set-plan <spec-id> --file - --json
+flowctl task create --spec <spec-id> --title <t1> --description-file <d1> --acceptance-file <a1> --satisfies R1 --json
+flowctl task create --spec <spec-id> --title <t2> --deps <spec-id>.1 --description-file <d2> --acceptance-file <a2> --satisfies R2 --json
+flowctl task create --spec <spec-id> --title <t3> --deps <spec-id>.2 --description-file <d3> --acceptance-file <a3> --satisfies R3 --json
+flowctl task create --spec <spec-id> --title <t4> --deps <spec-id>.3 --description-file <d4> --acceptance-file <a4> --satisfies R4 --json
+flowctl validate --spec <spec-id> --json
+flowctl sync active --json

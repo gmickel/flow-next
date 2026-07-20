@@ -38,6 +38,8 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)
 **Spec-form env var (optional):** `FLOW_REVIEW_BACKEND` accepts bare or full spec:
 
 ```bash
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 # Cursor folds effort into the model name (no :<effort>):
@@ -58,18 +60,18 @@ Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 
 Use when `BACKEND="codex"`.
 
-### Step 0: Save Checkpoint
+### Step 1: Execute Review — ONE atomic fence
 
-**Before review** (protects against context compaction):
-```bash
-SPEC_ID="${1:-}"
-$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
-```
-
-### Step 1: Execute Review
+Checkpoint, spec id, receipt path, reviewer anchors, and the dispatch stay in a SINGLE fence — bash vars do not survive across tool calls, so splitting them can review an empty spec id with a non-scoped receipt path.
 
 ```bash
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
+SPEC_ID="${1:-}"   # re-declare the canonical spec id in THIS fence (vars die across tool calls)
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}"  # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+
+# Save checkpoint before review (recovery point if context compacts)
+$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 
 # --files: comma-separated CODE files for reviewer context
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
@@ -85,19 +87,16 @@ $FLOWCTL codex plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_
 ### Step 2: Update Status
 
 ```bash
+SPEC_ID="${1:-}"   # re-declare in THIS fence too — vars die across tool calls; an empty id would mutate nothing
 # Based on verdict
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
 ```
 
-### Step 3: Handle Verdict
+### Step 3: Return the verdict — do NOT loop here
 
-If `VERDICT=NEEDS_WORK`:
-1. Parse issues from output
-2. Fix plan via `$FLOWCTL spec set-plan`
-3. Re-run step 1 (receipt enables session continuity)
-4. Repeat until SHIP
+One dispatch per entry. Return to SKILL.md's shared **Fix Loop** with the verdict — that loop is the ONLY owner of NEEDS_WORK handling (spec fix + affected-task-spec sync + re-review), MAJOR_RETHINK escalation, and the fn-90 deterministic cap. A re-review re-enters Step 1 (the receipt enables session continuity).
 
 ### Step 4: Receipt
 
@@ -110,18 +109,18 @@ Format: `{"type":"plan_review","id":"<spec-id>","mode":"codex","verdict":"<verdi
 
 Use when `BACKEND="copilot"`.
 
-### Step 0: Save Checkpoint
+### Step 1: Execute Review — ONE atomic fence
 
-**Before review** (protects against context compaction):
-```bash
-SPEC_ID="${1:-}"
-$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
-```
-
-### Step 1: Execute Review
+Checkpoint, spec id, receipt path, reviewer anchors, and the dispatch stay in a SINGLE fence — bash vars do not survive across tool calls, so splitting them can review an empty spec id with a non-scoped receipt path.
 
 ```bash
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
+SPEC_ID="${1:-}"   # re-declare the canonical spec id in THIS fence (vars die across tool calls)
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}"  # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+
+# Save checkpoint before review (recovery point if context compacts)
+$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 
 # --files: comma-separated CODE files for reviewer context
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
@@ -142,19 +141,16 @@ $FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIP
 ### Step 2: Update Status
 
 ```bash
+SPEC_ID="${1:-}"   # re-declare in THIS fence too — vars die across tool calls; an empty id would mutate nothing
 # Based on verdict
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
 ```
 
-### Step 3: Handle Verdict
+### Step 3: Return the verdict — do NOT loop here
 
-If `VERDICT=NEEDS_WORK`:
-1. Parse issues from output
-2. Fix plan via `$FLOWCTL spec set-plan`
-3. Re-run step 1 (receipt enables session continuity when `mode == "copilot"`)
-4. Repeat until SHIP
+One dispatch per entry; SKILL.md's shared Fix Loop owns NEEDS_WORK handling, MAJOR_RETHINK escalation, and the fn-90 deterministic cap. A re-review re-enters Step 1 (session resumes only when the prior receipt has `mode == "copilot"`).
 
 ### Step 4: Receipt
 
@@ -171,18 +167,18 @@ Session resume guard: re-review only resumes the copilot session when the existi
 
 Use when `BACKEND="cursor"`.
 
-### Step 0: Save Checkpoint
+### Step 1: Execute Review — ONE atomic fence
 
-**Before review** (protects against context compaction):
-```bash
-SPEC_ID="${1:-}"
-$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
-```
-
-### Step 1: Execute Review
+Checkpoint, spec id, receipt path, reviewer anchors, and the dispatch stay in a SINGLE fence — bash vars do not survive across tool calls, so splitting them can review an empty spec id with a non-scoped receipt path.
 
 ```bash
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
+SPEC_ID="${1:-}"   # re-declare the canonical spec id in THIS fence (vars die across tool calls)
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}"  # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+
+# Save checkpoint before review (recovery point if context compacts)
+$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 
 # --files: comma-separated CODE files for reviewer context
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
@@ -205,19 +201,16 @@ The runner invokes `cursor-agent -p --output-format json --trust --mode ask` wit
 ### Step 2: Update Status
 
 ```bash
+SPEC_ID="${1:-}"   # re-declare in THIS fence too — vars die across tool calls; an empty id would mutate nothing
 # Based on verdict
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
 ```
 
-### Step 3: Handle Verdict
+### Step 3: Return the verdict — do NOT loop here
 
-If `VERDICT=NEEDS_WORK`:
-1. Parse issues from output
-2. Fix plan via `$FLOWCTL spec set-plan`
-3. Re-run step 1 (receipt enables session continuity when `mode == "cursor"`)
-4. Repeat until SHIP
+One dispatch per entry; SKILL.md's shared Fix Loop owns NEEDS_WORK handling, MAJOR_RETHINK escalation, and the fn-90 deterministic cap. A re-review re-enters Step 1 (session resumes only when the prior receipt has `mode == "cursor"`).
 
 ### Step 4: Receipt
 

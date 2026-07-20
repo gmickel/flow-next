@@ -122,6 +122,8 @@ Output:
 
 `--tracker-first` (requires `--tracker-identifier WOR-17`) keys the spec by the tracker key — canonical id `wor-17-slug`, tasks `wor-17-slug.M`, branch `wor-17-slug`; bare `wor-17` / `wor-17.M` resolve as aliases. Used by the `/flow-next:tracker-sync` "grab issue X and spec it" flow. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model. No fresh `fn-NN` is allocated; ids never rename.
 
+Pass `--branch` at create time to set `branch_name` in the same call; [`spec set-branch`](#spec-set-branch) is for renaming the branch of an existing spec.
+
 ### spec set-plan
 
 Overwrite spec markdown from file.
@@ -251,10 +253,12 @@ flowctl spec export-cognitive-aid fn-1 --base origin/main [--section spec|tasks|
 Create task under spec.
 
 ```bash
-flowctl task create --spec fn-1 --title "Task title" [--deps fn-1.2,fn-1.3] [--acceptance-file accept.md] [--priority 10] [--json]
+flowctl task create --spec fn-1 --title "Task title" [--deps fn-1.2,fn-1.3] [--description-file desc.md] [--acceptance-file accept.md] [--satisfies R1,R3] [--priority 10] [--json]
 ```
 
 Section content is normalized on write (here and in `task set-description` / `set-acceptance` / `set-spec`): a leading title-like H2 (e.g. `## Acceptance Criteria (…)`) is stripped, and any remaining `## ` headings in the content are demoted to `### ` (fenced code blocks untouched) so they never become section boundaries.
+
+`--description-file` writes the `## Description` section at create time through the same normalization pipeline as `task set-spec`'s description path. `--satisfies` writes the `satisfies:` YAML frontmatter block: a comma-separated list of spec R-IDs, whitespace-trimmed, each token matching `R[1-9][0-9]*[a-z]?` (`R1`, `R10`, `R4a`; `R0`, `R4A`, and `R4ab` are invalid); empty tokens and duplicates are rejected (error, not dedupe) and input order is preserved. All inputs are read and validated before any file is written; a malformed value leaves no partial task on disk. With these flags a freshly planned task is complete in one call; `task set-spec` remains the path for later edits to an existing task.
 
 Output:
 ```json
@@ -652,9 +656,15 @@ Exits with code 1 if validation fails (for CI use).
 Manage project configuration stored in `.flow/config.json`.
 
 ```bash
-# Get a config value
+# Get a config value (scalar key)
 flowctl config get memory.enabled [--json]
 flowctl config get review.backend [--json]
+
+# Get a namespace subtree (key resolving to a dict)
+flowctl config get land [--json]
+
+# Get the whole merged config (no key: root read)
+flowctl config get [--json]
 
 # Set a config value
 flowctl config set memory.enabled true [--json]
@@ -663,6 +673,14 @@ flowctl config set review.backend codex [--json]  # rp, codex, copilot, cursor, 
 # Toggle boolean config
 flowctl config toggle memory.enabled [--json]
 ```
+
+`config get` has three read forms, all backed by one command-scoped snapshot (config.json is parsed at most once per invocation; exactly one parse when the file exists):
+
+- **Keyed scalar** (`config get memory.enabled --json`): returns `{"success": true, "key": "memory.enabled", "value": true}`. A missing key returns `"value": null` with exit 0.
+- **Keyed subtree** (`config get land --json`): when the key resolves to a dict, returns the merged namespace as `{"success": true, "key": "land", "value": {...}}`. One call captures a whole namespace for callers that need several leaves.
+- **Keyless root** (`config get --json`): returns the entire merged config as `{"success": true, "key": null, "value": {...}}`. This is the form for callers spanning namespaces with no common prefix.
+
+`--raw` applies to all three forms and bypasses merged defaults: scalar reads return `null` for keys absent from the on-disk `.flow/config.json` (distinguishing unset from explicitly-false), and subtree/root reads return only set values with absent leaves omitted (not defaulted). Raw output carries `"raw": true`. Subtree and root output always emit canonical key names; a persisted legacy leaf surfaces silently under its canonical name, and the deprecation warning fires only when the legacy key itself is read as a scalar.
 
 **Available settings:**
 

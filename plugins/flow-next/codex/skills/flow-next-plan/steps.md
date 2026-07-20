@@ -68,6 +68,14 @@ List expected files in each task's `**Files:**` field. If multiple tasks must to
 ```bash
 # Ensure .flow exists (FLOWCTL defined once in SKILL.md preamble)
 $FLOWCTL init --json
+
+# ONE root config snapshot for the whole run (fn-110): {"key":null,"value":{<merged config>}}.
+# Every later config lookup (readiness, memory/scout gates, tracker leaf, HTML lens)
+# derives from this file via jq — no further `config get` calls on the plan path.
+# Path-persistence rule: compose the literal path with an agent-chosen 4-char suffix
+# and type it verbatim in every later block that reads it.
+PLAN_CFG="${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" # literal path
+$FLOWCTL config get --json > "$PLAN_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$PLAN_CFG"
 ```
 
 ## Step 1: Fast research (parallel)
@@ -94,7 +102,8 @@ if [[ "$SPEC_READY" != "true" ]]; then
  # Adoption gate (husk-vs-presence pattern, like the STRATEGY guard below): fire only
  # when readiness is in use — any spec marked ready OR tracker.readyState configured.
  # Probe failures degrade to "not adopted" → silence (non-adopters never see this).
- READY_STATE=$($FLOWCTL config get tracker.readyState --json 2>/dev/null | jq -r '.value // empty')
+ # Derived from the Step 0 root snapshot (same literal path) — NOT a config get call.
+ READY_STATE=$(jq -r '.value.tracker.readyState // empty' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)
  READY_ADOPTED=$($FLOWCTL specs --json 2>/dev/null | jq '[.specs[] | select(.ready == true)] | length' 2>/dev/null || echo 0)
  if [[ -n "$READY_STATE" || "$READY_ADOPTED" -ge 1 ]]; then
  READINESS_WARN=true
@@ -124,10 +133,9 @@ When `READINESS_WARN=true`:
 
 Never a hard block — `abort` / `update-tracker-state-then-rerun` are user choices, not skill-imposed stops (R6).
 
-**Check if memory and github-scout are enabled:**
+**Check if memory and github-scout are enabled** (from the Step 0 root snapshot — no config get calls):
 ```bash
-$FLOWCTL config get memory.enabled --json
-$FLOWCTL config get scouts.github --json
+jq '{memory_enabled: .value.memory.enabled, scouts_github: .value.scouts.github}' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json"
 ```
 
 **Check for STRATEGY.md (husk-vs-presence — uses `sections_filled >= 1`, NOT `[[ -f STRATEGY.md ]]`):**
@@ -253,7 +261,7 @@ Default to standard unless complexity demands more or less.
 
 **Calibration (read first):** before writing task specs, read [`examples.md`](examples.md) — good/bad task-spec shapes, investigation-target formats, T-shirt sizing, and coverage-table examples. It is the few-shot anchor that keeps task specs well-sized and well-shaped; skipping it is why plans drift toward vague or over-split tasks.
 
-**Efficiency note**: Use stdin (`--file -`) with heredocs to avoid temp files. Use `task set-spec` to set description + acceptance in one call.
+**Efficiency note**: Use stdin (`--file -`) with heredocs to avoid temp files where a command accepts stdin. On the create path, `task create --description-file --acceptance-file --satisfies` writes the whole task spec (sections + frontmatter) in ONE call — no follow-up `task set-spec`. `task set-spec` remains the tool for editing tasks that already exist (Route A edits, interview write-backs, review fix loops).
 
 **Route A - Input was an existing Flow ID**:
 
@@ -280,16 +288,9 @@ Default to standard unless complexity demands more or less.
  ```bash
  $FLOWCTL spec create --title "<Short title>" --json
  ```
- This returns the spec ID (e.g., fn-1-add-oauth).
+ This returns the spec ID (e.g., fn-1-add-oauth). `branch_name` defaults to the spec ID at create time — no follow-up `spec set-branch` call on the create path. Only when the user specified a custom branch, pass it at create: `$FLOWCTL spec create --title "<Short title>" --branch "<custom-branch>" --json` (`spec set-branch` remains the tool for renaming an existing spec's branch later).
 
-2. Set spec branch_name (deterministic):
- - Default: use spec ID (e.g., fn-1-add-oauth)
- ```bash
- $FLOWCTL spec set-branch <spec-id> --branch "<spec-id>" --json
- ```
- - If user specified a branch, use that instead.
-
-3. Write spec (use stdin heredoc):
+2. Write spec (use stdin heredoc):
 
  The canonical scaffold lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — section list, scope-owner annotations, and the `## Decision Context` flat-vs-H3 conditional. At runtime the template is resolved via the 4-tier discovery cascade (first match wins): `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. The full walker (case-insensitive FS probe, both-exist warning, plugin-root fallback) is single-sourced in [`plugins/flow-next/references/spec-template-discovery.md`](../../references/spec-template-discovery.md). Read the resolved template before authoring; never duplicate its section list inline. The plan skill extends that scaffold with the plan-specific sections shown below (Overview, Quick commands, Strategy Alignment, Strategy drift, Early proof point, Requirement coverage).
 
@@ -390,7 +391,7 @@ Default to standard unless complexity demands more or less.
  - `[user]` / `[paraphrase]` / `[strategy:*]` → user- or strategy-grounded; plan normally.
  - `[inferred]` → **unconfirmed**. Route it through the Step-1 scouts (does the codebase actually support/need it?). A scout-confirmed inference becomes a normal criterion (drop the tag); an **unconfirmed** one moves to `## Open Questions` (or renders as a `⚠️ unconfirmed inference` coverage-table row) rather than being silently planned as a requirement. This closes capture→plan: the provenance capture records is otherwise dropped at the one consumer built to read it.
 
-4. Set spec dependencies (from spec-scout findings) — BOTH directions:
+3. Set spec dependencies (from spec-scout findings) — BOTH directions:
 
  ```bash
  # (a) FORWARD — the new plan depends on an existing spec (spec-scout "Dependencies"):
@@ -410,39 +411,21 @@ Default to standard unless complexity demands more or less.
  - fn-7-notify → fn-N-slug (Notifications): waits for the event system this plan adds [reverse]
  ```
 
-5. Create child tasks:
+4. Create child tasks — ONE `task create` call per task writes title, deps, description, acceptance, AND `satisfies:` frontmatter at create time (fn-110; zero follow-up `task set-spec` on the plan path):
  ```bash
- # Task with no dependencies:
- $FLOWCTL task create --spec <spec-id> --title "<Task title>" --json
-
- # Task with dependencies (use --deps for inline dependency declaration):
- $FLOWCTL task create --spec <spec-id> --title "<Task title>" --deps <dep1>,<dep2> --json
+ # For each task. Write description and acceptance to UNIQUE per-task temp files
+ # (path-persistence rule: literal agent-composed paths; write + consume in one
+ # bash block), then:
+ $FLOWCTL task create --spec <spec-id> --title "<Task title>" \
+ --deps <dep1>,<dep2> \
+ --description-file "${TMPDIR:-/tmp}/flow-plan-desc-<task-id>.md" \
+ --acceptance-file "${TMPDIR:-/tmp}/flow-plan-acc-<task-id>.md" \
+ --satisfies R1,R3 --json
  ```
+
+ Omit `--deps` for tasks with no dependencies, and `--satisfies` for tasks that advance no specific R-IDs. `--satisfies` takes a comma list of bare R-ID tokens (`R1,R3` — grammar `R[1-9][0-9]*[a-z]?`; duplicates and malformed tokens error before anything is written) and renders the `satisfies:` YAML frontmatter block. `task set-spec` is NOT part of the create path — it is for editing tasks that already exist.
 
  **TIP**: Use `--deps` to declare dependencies inline when creating tasks. Tasks must exist before being referenced, so create in dependency order.
-
-6. Write task specs (use combined set-spec):
- ```bash
- # For each task - single call sets both sections
- # Write description and acceptance to UNIQUE per-task temp files (path-persistence
- # rule: literal agent-composed paths; write + consume in one bash block), then:
- $FLOWCTL task set-spec <task-id> --description "${TMPDIR:-/tmp}/flow-plan-desc-<task-id>.md" --acceptance "${TMPDIR:-/tmp}/flow-plan-acc-<task-id>.md" --json
- ```
-
- **When the task needs `satisfies:` frontmatter**, use `--file` mode instead (frontmatter lives above the sections, not inside them):
- ```bash
- $FLOWCTL task set-spec <task-id> --file - --json <<'EOF'
- ---
- satisfies: [R1, R3]
- ---
-
- ## Description
- ...
-
- ## Acceptance
- - [ ] ...
- EOF
- ```
 
  **Task spec content** (remember: NO implementation code):
  ```markdown
@@ -502,14 +485,14 @@ Default to standard unless complexity demands more or less.
  - Targets come from repo-scout/context-scout findings in Step 1
 
  **`satisfies` frontmatter rules (optional, additive):**
- - Populate `satisfies: [R1, R3]` only when the task obviously advances specific R-IDs from the spec's `## Acceptance Criteria` section.
- - Tasks that do infrastructure, refactoring, shared plumbing, or docs-only work may legitimately have **no** `satisfies` entry — omit the frontmatter entirely.
- - Use bare R-ID tokens (`[R1, R3]`), not quoted strings.
+ - Populate `--satisfies` only when the task obviously advances specific R-IDs from the spec's `## Acceptance Criteria` section.
+ - Tasks that do infrastructure, refactoring, shared plumbing, or docs-only work may legitimately have **no** `satisfies` entry — omit the flag entirely.
+ - Use bare R-ID tokens (`--satisfies R1,R3`; rendered as `satisfies: [R1, R3]`), not quoted strings.
  - Frontmatter is additive — tasks created without it parse unchanged.
 
-7. Add task dependencies (if not already set via `--deps`):
+5. Add task dependencies (if not already set via `--deps`):
 
- **Preferred**: Use `--deps` flag during task creation (step 5). This saves prompt turns.
+ **Preferred**: Use `--deps` flag during task creation (step 4). This saves prompt turns.
 
  **Alternative**: Use `dep add` to add dependencies after task creation:
  ```bash
@@ -535,7 +518,7 @@ Fix any errors before proceeding.
 **Optional. Runs only when the tracker bridge is active AND `plan` is opted in. With no tracker configured this is a no-op — planning behaves exactly as today.** When opted in, planning projects the spec to the tracker issue. **If the spec is not yet linked (e.g. you started straight from `/flow-next:plan`, no `/flow-next:capture`), the tracker-sync skill flow-first-pushes — it creates the issue + links it — then reconciles** (tracker-sync §Phase 3 "create-if-unlinked"); an active bridge therefore never silently leaves a planned spec untracked. Planning **never auto-creates tracker sub-issues per task** — tasks stay flow-local (R3, Grain); the spec ↔ one-issue grain holds. The only optional task-level effect is rendering the task list as a **checklist inside the issue body** (off by default; a body-format concern owned by the merge engine).
 
 ```bash
-LEAF="$($FLOWCTL config get tracker.perEvent.plan --json | jq -r '.value')" # read the leaf ONCE (shared gating predicate — work SKILL.md)
+LEAF="$(jq -r '.value.tracker.perEvent.plan' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)" # leaf from the Step 0 root snapshot (shared gating predicate — work SKILL.md); missing → literal "null", same as the old per-key read
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
  && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill to push/reconcile the spec body
@@ -598,7 +581,7 @@ Under `AUTONOMOUS=1` there is no options menu — run Step 8.5 directly after St
 **Gated on `artifacts.html.enabled` — this check is the ONLY addition when the mode is off.**
 
 ```bash
-HTML_LENS=$($FLOWCTL config get artifacts.html.enabled --json | jq -r 'if .value == true then "true" else "false" end')
+HTML_LENS=$(jq -r 'if .value.artifacts.html.enabled == true then "true" else "false" end' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null || echo false) # from the Step 0 root snapshot — not a config get call
 ```
 
 When `HTML_LENS != true` (off or unset): **skip this entire step.** Load no reference file, write no artifact, open no session, print no artifact-related output — the gate read above is the only cost.

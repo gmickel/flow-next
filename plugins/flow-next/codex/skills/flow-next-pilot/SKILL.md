@@ -108,10 +108,24 @@ No branch flag exists in v1. Branch resolution is pilot-owned from the selected 
 
 ### Autonomy mode resolution (R1) — gate the wide backlog behavior
 
-Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single value. The gate is a **strict scalar string-enum** — backlog mode activates **only** on the literal `backlog` (config `pilot.autonomy`), or when the per-run `--backlog` / `--auto` flag forced the override. Any other config value (`ready`, `null`, a coerced bool `true`, a typo) leaves pilot in `ready` mode — **byte-for-byte unchanged behavior** (the `references/backlog-mode.md` file is never even read):
+Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single value. This block also captures the tick's ROOT CONFIG SNAPSHOT (fn-110) — the ONLY `config get` invocation across all pilot files (SKILL.md, workflow.md, references/backlog-mode.md): workflow.md's `pipeline.qa` probe and the `pilot.gateClasses` reads derive from the snapshot file via jq, never a second config call. The gate is a **strict scalar string-enum** — backlog mode activates **only** on the literal `backlog` (config `pilot.autonomy`), or when the per-run `--backlog` / `--auto` flag forced the override. Any other config value (`ready`, `null`, a coerced bool `true`, a typo) leaves pilot in `ready` mode — **byte-for-byte unchanged behavior** (the `references/backlog-mode.md` file is never even read):
 
 ```bash
-PILOT_AUTONOMY="$($FLOWCTL config get pilot.autonomy --json | jq -r '.value')"
+# Root config snapshot: {"key":null,"value":{<merged config>}}. Persisted to a file
+# because bash vars do not survive across prompt turns; later fences RECOMPUTE this
+# same deterministic repo-hash-keyed path and jq it. The path lives under
+# ${TMPDIR} — NEVER under repo-controlled .flow/tmp (autonomous symlink safety:
+# a committed symlink must not redirect this write out of tree) — so a dry-run
+# tick mutates nothing inside the repo; dry-run terminals also `rm -f` this
+# snapshot (workflow.md), leaving no persistent scratch state. On capture
+# FAILURE remove the file —
+# downstream jq reads then error, which keeps the pipeline.qa probe's fail-open
+# contract (probe error ⇒ ACTIVE) intact.
+PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
+rm -f "$PILOT_CFG_SNAPSHOT" 2>/dev/null # drop any stale/planted file (incl. a symlinked leaf) before the fresh write
+$FLOWCTL config get --json > "$PILOT_CFG_SNAPSHOT" 2>/dev/null \
+ || rm -f "$PILOT_CFG_SNAPSHOT"
+PILOT_AUTONOMY="$(jq -r '.value.pilot.autonomy' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)"
 if [ "$PILOT_BACKLOG_OVERRIDE" = "1" ]; then
  PILOT_AUTONOMY="backlog" # --backlog / --auto forces backlog this run
 elif [ "$PILOT_AUTONOMY" != "backlog" ]; then
@@ -135,6 +149,14 @@ PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec
 Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (opt-in — only when `pipeline.qa==on`), `make-pr`, `land`, plus `triage`/`ask` (backlog mode only), or `-`.
 
 **SETUP_STALE line.** Whenever the pre-check detected a setup-version mismatch it wrote `.flow/tmp/setup_stale`. At EVERY terminal `PILOT_VERDICT` emission - the Phase 6 line, each hard-guard exit, the backlog invariant-assert exits (Phase 0.5 / 1.5), and the dry-run early-terminal lines (Phase 1.6 `TRIAGED`, Phase 2 classification stop) - first print that file's `SETUP_STALE: local v<X>, plugin v<Y>, run /flow-next:setup` line, so it lands in the same output block immediately before the verdict and survives into driver logs. Emit it verbatim (`cat .flow/tmp/setup_stale` in bash blocks; a plain preceding line when the verdict is printed as text). It never blocks, is never suppressed, and fail-opens to nothing when the file is absent.
+
+**Dry-run snapshot cleanup.** Under `--dry-run` (`PILOT_DRY_RUN=1`), at EVERY terminal `PILOT_VERDICT` emission — the classification stop, the diagnostic `TRIAGED` exit, every `NO_WORK` / `DEFERRED_TO_LAND` / hard-guard exit — remove the root config snapshot BEFORE printing the verdict, so a dry-run leaves no persistent scratch state:
+
+```bash
+rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
+```
+
+Recompute the path exactly as above (vars die across prompt turns). Live (non-dry-run) ticks keep the snapshot for the tick's remaining fences; it is overwritten fresh by the next tick's capture. Never blocks, fail-open (`rm -f` on a missing file is a no-op).
 
 `DEFERRED_TO_LAND` is a distinct *non-terminal-work* verdict (stage `land`): every remaining all-done candidate has an open PR that land — not pilot — owns. It is deliberately separated from `NO_WORK` so a driver can route it to `/flow-next:land` instead of stopping; an all-done spec with an open PR is real outstanding work, never absence of work.
 

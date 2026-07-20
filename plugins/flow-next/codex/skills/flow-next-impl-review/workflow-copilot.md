@@ -22,6 +22,8 @@ git log ${DIFF_BASE}..HEAD --oneline
 ## Step 2: Execute Review
 
 ```bash
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}" # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # Runtime config:

@@ -254,10 +254,13 @@ Fall through to the existing terminal split **only when the pool is genuinely em
 **Optional force-gate (R5).** Read the sibling key `pilot.gateClasses` (an array — NOT `pilot.autonomy.gate`). When the selected item matches a configured gate class (the agent's read, like triage — no scorer), route it to `ask` even when otherwise workable:
 
 ```bash
+# Derived from the SKILL.md root snapshot (fn-110) — NOT a config get call. The
+# path is RECOMPUTED here (deterministic repo-hash key; vars don't survive fences).
 # Tolerate BOTH shapes: a JSON array (`["risky"]`) AND a scalar set through the
 # CLI — `flowctl config set pilot.gateClasses risky` persists the bare string
 # "risky", which `.value[]?` would silently drop. Normalize string→single-class.
-GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '(.value // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end' 2>/dev/null)"
+PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
+GATE_CLASSES="$(jq -r '(.value.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)"
 ```
 
 An empty/unset `gateClasses` (the default) gates nothing — full-auto is unconditional. A scalar `flowctl config set pilot.gateClasses risky` is read as the single class `risky`; multiple classes use a JSON array.
@@ -271,6 +274,8 @@ An empty/unset `gateClasses` (the default) gates nothing — full-auto is uncond
 ```bash
 if [ "${PILOT_DRY_RUN:-0}" = "1" ]; then
   # $TRIAGE_CLASS = the class resolved above (workable | ready-but-thin | needs-spec | dep-unsatisfied | needs-human).
+  # Dry-run leaves NO persistent scratch state: remove the root config snapshot (recomputed path).
+  rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
   [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale   # verdict contract: SETUP_STALE before EVERY terminal
   echo "PILOT_VERDICT=TRIAGED spec=$SUBJECT_ID stage=triage reason=\"dry-run: classified $TRIAGE_CLASS, nothing dispatched or parked\""
   exit 0
@@ -301,13 +306,13 @@ Resolve the optional QA-stage gate (fn-72). **Strict** string-enum knob (default
 QA_STAGE_ENABLED=0
 QA_GATE=""
 ACTIVE=0
-# NO pipelines in the probe — a failed producer masked by a healthy consumer
-# (flowctl … | jq …) fails CLOSED. Capture first, rc-checked; parse separately.
-RAW="$($FLOWCTL config get pipeline.qa --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
-if [ "$ACTIVE" = "0" ]; then
-  QA_GATE="$(printf '%s' "$RAW" | jq -r '.value' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
-  [ "$QA_GATE" = "on" ] && ACTIVE=1
-fi
+# Derived from the SKILL.md root snapshot (fn-110) — NOT a config get call. The
+# path is RECOMPUTED here (deterministic repo-hash key; vars don't survive fences).
+# A missing/unreadable snapshot (SKILL.md removes it on capture failure) makes the
+# jq read ERROR, which preserves the probe's fail-open contract (error ⇒ ACTIVE).
+PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
+QA_GATE="$(jq -r '.value.pipeline.qa' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || ACTIVE=1   # snapshot/parse ERROR ⇒ ACTIVE (fail open)
+[ "$QA_GATE" = "on" ] && ACTIVE=1
 [ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1   # ONLY the literal `on` activates — never bool true / typos
 if [ "$ACTIVE" = "1" ]; then
   echo "GATE ACTIVE — STOP. Read references/qa-stage.md#qa-stage-freshness-probe before continuing."
@@ -350,7 +355,7 @@ Classification outcomes for the all-done branch (the all-done invariant: an all-
 - CLOSED PR exists and no OPEN PR exists: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
 - MERGED PR exists while the spec is still open: `NEEDS_HUMAN`, because the state is inconsistent and pilot must not create a second PR.
 
-Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Emit the stashed setup-mismatch line first if present, so it sits immediately before this terminal (SKILL.md verdict contract): `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`.
+Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so a dry-run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`. Emit the stashed setup-mismatch line first if present, so it sits immediately before this terminal (SKILL.md verdict contract): `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`.
 
 ```text
 PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification only, nothing dispatched"

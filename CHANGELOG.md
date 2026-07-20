@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **flowctl config snapshots and one-call task creation (fn-110).**
+  - **Snapshot-based `config get`.** Three read forms backed by one command-scoped snapshot: keyed scalar (byte-identical to 2.20.0), keyed subtree (`config get land --json` returns the merged namespace dict), and keyless root (`config get --json` returns the whole merged config). `--raw` parity on all three (set-only values, absent leaves omitted); subtree/root output emits canonical key names.
+  - **Create-time task completeness.** `task create` gains `--description-file` (same normalization as `task set-spec`) and `--satisfies R1,R3` (strict R-ID grammar `R[1-9][0-9]*[a-z]?`, duplicates rejected, order preserved, validation before any write), so a freshly planned task is complete in one call.
+  - **Skill callsites consume the snapshot forms.** land captures its configuration as one subtree read; plan takes one root snapshot and creates each task in a single call; pilot's configuration read is owned by SKILL.md and shared across its split files; make-pr consolidates its Phase 0 reads; impl-review parses arguments in one fence; plan-review's per-backend blocks are single-sourced (Foreground rule and the fn-90 deterministic-cap sentence byte-preserved). `test_skill_prose_diet.py` pins every invariant on canonical files and the codex mirror.
+  - **Foreground rule embedded in review and gate-suite fences.** Review-command and gate-suite fences carry the rule inline where the invocation happens (fn-78 stall-class hardening).
+  - Dual-copy flowctl mirrored.
+
 ## [flow-next 2.20.0] - 2026-07-19
 
 ### Fixed

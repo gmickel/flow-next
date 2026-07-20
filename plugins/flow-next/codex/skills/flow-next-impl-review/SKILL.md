@@ -147,43 +147,41 @@ Parse $ARGUMENTS for:
 
 If `--base` not provided, `BASE_COMMIT` stays empty (will fall back to main/master).
 
-**Validate flag + env var:**
+**Opt-in flags + env vars — ONE parse fence (fn-110) for `--validate` / `--deep` / `--interactive`:**
 
 ```bash
 VALIDATE=false
-# Parse --validate from $ARGUMENTS (same pattern as --base)
+DEEP=false
+DEEP_PASSES="" # optional CSV: "adversarial,security"
+INTERACTIVE=false
 for arg in $ARGUMENTS; do
  case "$arg" in
  --validate) VALIDATE=true ;;
+ --deep) DEEP=true ;;
+ --deep=*) DEEP=true; DEEP_PASSES="${arg#--deep=}" ;;
+ --interactive) INTERACTIVE=true ;;
  esac
 done
 
-# Env opt-in (Ralph-friendly)
+# Env opt-ins (Ralph-friendly). --interactive has NO env var form — per-invocation only.
 if [[ "${FLOW_VALIDATE_REVIEW:-}" == "1" ]]; then
  VALIDATE=true
+fi
+if [[ "${FLOW_REVIEW_DEEP:-}" == "1" ]]; then
+ DEEP=true
+fi
+
+# Ralph-block (fn-32.3): Ralph must never engage interactive.
+if [[ "$INTERACTIVE" == "true" ]]; then
+ if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+ echo "Error: --interactive requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
+ exit 2
+ fi
 fi
 ```
 
 `VALIDATE` gates the validator pass in [workflow-common.md](workflow-common.md). When false (default),
 behavior is unchanged.
-
-**Deep flag + env var:**
-
-```bash
-DEEP=false
-DEEP_PASSES="" # optional CSV: "adversarial,security"
-for arg in $ARGUMENTS; do
- case "$arg" in
- --deep) DEEP=true ;;
- --deep=*) DEEP=true; DEEP_PASSES="${arg#--deep=}" ;;
- esac
-done
-
-# Env opt-in (Ralph-friendly)
-if [[ "${FLOW_REVIEW_DEEP:-}" == "1" ]]; then
- DEEP=true
-fi
-```
 
 `DEEP` gates the deep-pass phase in [workflow-common.md](workflow-common.md). When false (default),
 behavior is unchanged.
@@ -212,24 +210,7 @@ echo "Deep passes selected: $SELECTED_PASSES"
 See [deep-passes.md](deep-passes.md) for the pass prompt templates, the
 auto-enable globs, and merge/promotion rules.
 
-**Interactive flag + Ralph-block (fn-32.3):**
-
-```bash
-INTERACTIVE=false
-for arg in $ARGUMENTS; do
- case "$arg" in
- --interactive) INTERACTIVE=true ;;
- esac
-done
-
-# No env var form — per-invocation only. Ralph must never engage interactive.
-if [[ "$INTERACTIVE" == "true" ]]; then
- if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
- echo "Error: --interactive requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
- exit 2
- fi
-fi
-```
+**Interactive flag + Ralph-block (fn-32.3):** parsed and Ralph-blocked in the single fence above (no env var form — per-invocation only).
 
 `INTERACTIVE` gates the walkthrough phase in [walkthrough.md](walkthrough.md).
 When false (default), behavior is unchanged. When true + verdict is
