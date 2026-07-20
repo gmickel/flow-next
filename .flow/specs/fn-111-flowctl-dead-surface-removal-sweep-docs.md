@@ -1,6 +1,12 @@
 # fn-111 flowctl dead-surface removal sweep + docs drift
 
-> STUB from the fn-101 audit (2026-07-19). ~2.7k LOC with zero fleet callers, plus 11 docs-drift items. Interview/plan before building (a few keep-or-kill calls need the maintainer).
+> STUB from the fn-101 audit (2026-07-19). ~2.7k LOC with zero fleet callers, plus 11 docs-drift items.
+>
+> MAINTAINER CALLS RESOLVED (2026-07-20, planning interview):
+> - Epic/epics aliases + --epic* flags + R31 dual-emit JSON keys: REMOVE ALL. flow-swarm currently reads the `epics` JSON key (src/lib/flowctl.ts:259) and forwards `--epic` flags - the maintainer adapts flow-swarm himself; the release notes must flag the flow-swarm migration requirement.
+> - backend `check` triplet: KILL (no troubleshooting doc directs users to it - verified by grep).
+> - `pilot-log summary`: KILL (reader only; `append` + the .flow/pilot-runs/ rows stay - the fn-102 measurement reads row files directly).
+> - `scope suggest`: stays out of this spec (fn-113 owns it), per the stub.
 
 ## Goal & Context
 
