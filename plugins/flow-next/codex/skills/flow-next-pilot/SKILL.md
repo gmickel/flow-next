@@ -150,6 +150,14 @@ Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `
 
 **SETUP_STALE line.** Whenever the pre-check detected a setup-version mismatch it wrote `.flow/tmp/setup_stale`. At EVERY terminal `PILOT_VERDICT` emission - the Phase 6 line, each hard-guard exit, the backlog invariant-assert exits (Phase 0.5 / 1.5), and the dry-run early-terminal lines (Phase 1.6 `TRIAGED`, Phase 2 classification stop) - first print that file's `SETUP_STALE: local v<X>, plugin v<Y>, run /flow-next:setup` line, so it lands in the same output block immediately before the verdict and survives into driver logs. Emit it verbatim (`cat .flow/tmp/setup_stale` in bash blocks; a plain preceding line when the verdict is printed as text). It never blocks, is never suppressed, and fail-opens to nothing when the file is absent.
 
+**Dry-run snapshot cleanup.** Under `--dry-run` (`PILOT_DRY_RUN=1`), at EVERY terminal `PILOT_VERDICT` emission — the classification stop, the diagnostic `TRIAGED` exit, every `NO_WORK` / `DEFERRED_TO_LAND` / hard-guard exit — remove the root config snapshot BEFORE printing the verdict, so a dry-run leaves no persistent scratch state:
+
+```bash
+rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
+```
+
+Recompute the path exactly as above (vars die across prompt turns). Live (non-dry-run) ticks keep the snapshot for the tick's remaining fences; it is overwritten fresh by the next tick's capture. Never blocks, fail-open (`rm -f` on a missing file is a no-op).
+
 `DEFERRED_TO_LAND` is a distinct *non-terminal-work* verdict (stage `land`): every remaining all-done candidate has an open PR that land — not pilot — owns. It is deliberately separated from `NO_WORK` so a driver can route it to `/flow-next:land` instead of stopping; an all-done spec with an open PR is real outstanding work, never absence of work.
 
 ### Backlog-mode verdict grammar (R10 — only when `PILOT_AUTONOMY=backlog`)

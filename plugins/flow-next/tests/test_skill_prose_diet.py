@@ -170,10 +170,18 @@ class PilotSnapshotTestCase(unittest.TestCase):
                                  f"pilot {rel} ({variant}) must make zero config calls")
 
     def test_dry_run_terminals_remove_the_snapshot(self):
-        # Dry-run leaves no persistent scratch state: both dry-run terminals
-        # (Phase 1.6 fence + Phase 2 classification stop) remove the snapshot.
+        # Dry-run leaves no persistent scratch state. The CENTRAL rule lives in
+        # SKILL.md's verdict contract (EVERY dry-run terminal removes the
+        # snapshot — same "at every terminal" pattern as SETUP_STALE), and the
+        # two fenced/inline dry-run terminals in workflow.md carry it verbatim.
         rm_expr = ('rm -f "${TMPDIR:-/tmp}/flow-pilot-config-'
                    "$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json\"")
+        for path in both_copies("flow-next-pilot/SKILL.md"):
+            text = read(path)
+            self.assertIn("Dry-run snapshot cleanup.", text,
+                          f"{path}: verdict-contract cleanup rule missing")
+            self.assertIn(rm_expr, text,
+                          f"{path}: verdict-contract rule must carry the rm line")
         for path in both_copies("flow-next-pilot/workflow.md"):
             self.assertGreaterEqual(
                 read(path).count(rm_expr), 2,
