@@ -39,7 +39,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
+from unittest import mock
 
 HERE = Path(__file__).resolve()
 TESTS_DIR = HERE.parent
@@ -52,12 +53,20 @@ PRIME_SKILL_DIR = PLUGIN_DIR / "skills" / "flow-next-prime"
 PRIME_MIRROR_DIR = PLUGIN_DIR / "codex" / "skills" / "flow-next-prime"
 
 
+_FLOWCTL_MOD: Any = None
+_EMPTY_REPO_TEMPLATE: Optional[Path] = None
+
+
 def _load_flowctl() -> Any:
-    spec = importlib.util.spec_from_file_location("flowctl_prime_under_test", FLOWCTL_PY)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    """Load flowctl once per process (fn-119.2: avoid re-exec per TestCase)."""
+    global _FLOWCTL_MOD
+    if _FLOWCTL_MOD is None:
+        spec = importlib.util.spec_from_file_location("flowctl_prime_under_test", FLOWCTL_PY)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        _FLOWCTL_MOD = mod
+    return _FLOWCTL_MOD
 
 
 def _pinned_env() -> dict:
@@ -82,11 +91,33 @@ def _git(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def _empty_repo_template() -> Path:
+    """One empty `git init` + identity config, shared via copytree (fn-119.2)."""
+    global _EMPTY_REPO_TEMPLATE
+    if _EMPTY_REPO_TEMPLATE is None:
+        root = Path(tempfile.mkdtemp(prefix="prime-git-tmpl-")).resolve()
+        repo = root / "repo"
+        repo.mkdir(parents=True)
+        _git(repo, "init", "-q")
+        _git(repo, "config", "user.email", "t@example.com")
+        _git(repo, "config", "user.name", "t")
+        _git(repo, "config", "gc.auto", "0")
+        _git(repo, "config", "maintenance.auto", "false")
+        _EMPTY_REPO_TEMPLATE = repo
+    return _EMPTY_REPO_TEMPLATE
+
+
 def _init_repo(repo: Path) -> None:
-    repo.mkdir(parents=True, exist_ok=True)
-    _git(repo, "init", "-q")
-    _git(repo, "config", "user.email", "t@example.com")
-    _git(repo, "config", "user.name", "t")
+    """Materialize an empty git repo. Prefer copytree of a process-level template."""
+    if repo.exists():
+        if not (repo / ".git").exists():
+            _git(repo, "init", "-q")
+            _git(repo, "config", "user.email", "t@example.com")
+            _git(repo, "config", "user.name", "t")
+        return
+    repo.parent.mkdir(parents=True, exist_ok=True)
+    # ignore transient .git lock files (background git maintenance race)
+    shutil.copytree(_empty_repo_template(), repo, ignore=shutil.ignore_patterns("*.lock"))
 
 
 def _write(repo: Path, rel: str, content: str) -> None:
@@ -106,25 +137,29 @@ def _commit_all(repo: Path, msg: str) -> None:
 
 
 class SchemaShapeTestCase(unittest.TestCase):
-    """The emitted payload matches the pinned schema field structure."""
+    """The emitted payload matches the pinned schema field structure.
+
+    Read-only against a shared seeded repo (fn-119.2 setUpClass diet): one
+    classify for the class, not one git-init + classify per test.
+    """
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.flowctl = _load_flowctl()
+        cls.tmp = Path(tempfile.mkdtemp()).resolve()
+        cls.repo = cls.tmp / "acme-api"
+        _init_repo(cls.repo)
+        _write(cls.repo, "src/main.py", "def main():\n    return 1\n")
+        _write(cls.repo, "README.md", "# acme-api\n")
+        _commit_all(cls.repo, "seed")
+        cls.payload = cls.flowctl._prime_classify(cls.repo)
 
-    def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp()).resolve()
-        self.repo = self.tmp / "acme-api"
-        _init_repo(self.repo)
-        _write(self.repo, "src/main.py", "def main():\n    return 1\n")
-        _write(self.repo, "README.md", "# acme-api\n")
-        _commit_all(self.repo, "seed")
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.tmp, ignore_errors=True)
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def test_top_level_field_order_and_presence(self) -> None:
-        payload = self.flowctl._prime_classify(self.repo)
+        payload = self.payload
         self.assertEqual(
             list(payload.keys()),
             ["schema_version", "assessment_scope", "axes", "shape_markers", "substance", "collectors"],
@@ -132,7 +167,7 @@ class SchemaShapeTestCase(unittest.TestCase):
         self.assertEqual(payload["schema_version"], self.flowctl.PRIME_SCHEMA_VERSION)
 
     def test_axes_structure(self) -> None:
-        axes = self.flowctl._prime_classify(self.repo)["axes"]
+        axes = self.payload["axes"]
         self.assertEqual(list(axes.keys()), ["lifecycle", "topology", "size", "stacks"])
         for key in ("value", "confidence", "signals", "evidence"):
             self.assertIn(key, axes["lifecycle"], key)
@@ -141,7 +176,7 @@ class SchemaShapeTestCase(unittest.TestCase):
         self.assertIsInstance(axes["stacks"], list)
 
     def test_topology_two_independent_bits(self) -> None:
-        topo = self.flowctl._prime_classify(self.repo)["axes"]["topology"]
+        topo = self.payload["axes"]["topology"]
         for bit in ("monorepo", "constellation_member"):
             self.assertIn("value", topo[bit], bit)
             self.assertIn("confidence", topo[bit], bit)
@@ -150,16 +185,16 @@ class SchemaShapeTestCase(unittest.TestCase):
         self.assertIn("workspace_parent", topo["constellation_member"])
 
     def test_shape_markers_are_raw_markers_only(self) -> None:
-        markers = self.flowctl._prime_classify(self.repo)["shape_markers"]
+        markers = self.payload["shape_markers"]
         self.assertEqual(
             set(markers.keys()),
             {"bin_exports", "framework_markers", "serve_health_code", "desktop_markers", "prose_ratio"},
         )
         # Axis 5 shape VALUES are never resolved by the emitter - only markers.
-        self.assertNotIn("shape", self.flowctl._prime_classify(self.repo)["axes"])
+        self.assertNotIn("shape", self.payload["axes"])
 
     def test_every_collector_carries_full_envelope(self) -> None:
-        collectors = self.flowctl._prime_classify(self.repo)["collectors"]
+        collectors = self.payload["collectors"]
         self.assertTrue(collectors)
         for col in collectors:
             self.assertEqual(
@@ -181,7 +216,7 @@ class SchemaShapeTestCase(unittest.TestCase):
             self.assertIsInstance(col["operations"], int)
 
     def test_assessment_scope_repository(self) -> None:
-        scope = self.flowctl._prime_classify(self.repo)["assessment_scope"]
+        scope = self.payload["assessment_scope"]
         self.assertEqual(scope["value"], "repository")
         self.assertEqual(scope["confidence"], "high")
 
@@ -1306,8 +1341,72 @@ class _SubstanceBase(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _classify(self) -> dict:
+        """Default: substance-fast path (fn-119.2). PerformanceAccounting overrides."""
+        return self._classify_substance()
+
+    def _classify_full(self) -> dict:
+        """Full emitter path (axes + substance) for tests that assert on axes/op totals."""
         _commit_all(self.repo, "seed")
         return self.flowctl._prime_classify(self.repo)
+
+    def _classify_substance(self) -> dict:
+        """fn-119.2 diet: inventory + substance collectors only (skip axes git probes).
+
+        Same substance row shapes and substance-* collector envelopes as the
+        full path; lifecycle/topology/size/stacks/shape are omitted. Use for
+        tests that only assert on `payload["substance"]` / substance collectors.
+        """
+        _commit_all(self.repo, "seed")
+        f = self.flowctl
+        ls_collector = f._PrimeCollector("inventory", budget=2)
+        staged, ls_truncated = f._prime_parse_ls_files_staged(self.repo, ls_collector)
+        pre_dedup = [p for _sha, p in staged if f._prime_exclusion_category(p) is None]
+        destructive, destr_c = f._prime_collect_destructive(self.repo, pre_dedup)
+        regenerated_dirs = set()
+        for h in destructive.get("hits", []):
+            if h.get("pattern") not in ("recursive-delete", "git-clean"):
+                continue
+            if h.get("context_class") != "self-managed" or not h.get("target"):
+                continue
+            t = h["target"].rstrip("/")
+            while t.startswith("./"):
+                t = t[2:]
+            if t and not t.startswith(".."):
+                regenerated_dirs.add(t)
+        _size, _size_c, deduped, _loc = f._prime_collect_size(
+            self.repo, staged, ls_truncated, regenerated_dirs
+        )
+        shape_markers, _shape_c = f._prime_collect_shape_markers(self.repo, deduped)
+        # Skip docs-freshness git-log probes unless this case asserts on them
+        # (fn-119.2): those probes dominate tiny-repo classify wall time.
+        if type(self).__name__ == "SubstanceDocsFreshnessTestCase":
+            substance, substance_collectors = f._prime_collect_substance(
+                self.repo,
+                deduped,
+                shape_markers["framework_markers"],
+                pre_dedup,
+                destructive=(destructive, destr_c),
+            )
+        else:
+            empty_docs_c = f._PrimeCollector("substance-docs-freshness", budget=30)
+            docs_stub = (
+                {"instruction_files": [], "src_last_commit_ts": None},
+                empty_docs_c,
+            )
+            with mock.patch.object(
+                f, "_prime_collect_docs_freshness", return_value=docs_stub
+            ):
+                substance, substance_collectors = f._prime_collect_substance(
+                    self.repo,
+                    deduped,
+                    shape_markers["framework_markers"],
+                    pre_dedup,
+                    destructive=(destructive, destr_c),
+                )
+        return {
+            "substance": substance,
+            "collectors": [sc.to_dict() for sc in substance_collectors],
+        }
 
 
 class SubstanceSchemaTestCase(_SubstanceBase):
@@ -1406,7 +1505,7 @@ class SubstanceDestructiveTestCase(_SubstanceBase):
         # never self-managed, never a regenerated-dir sizing exclusion.
         _write(self.repo, "scripts/clean.sh", "#!/bin/sh\nrm -rf ../sibling\n")
         _write(self.repo, "sibling/keep.py", "x = 1\n")
-        payload = self._classify()
+        payload = self._classify_full()
         hits = payload["substance"]["destructive_scan"]["hits"]
         hit = next(h for h in hits if h["target"].startswith(".."))
         self.assertEqual(hit["context_class"], "unbounded")
@@ -1871,10 +1970,11 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
             "    steps:\n"
             "      - run: npm ci # pytest lint gitleaks later\n",
         )
-        ci = self._classify()["substance"]["ci_gate"]
+        payload = self._classify()
+        ci = payload["substance"]["ci_gate"]
         self.assertFalse(ci["has_test_step"])
         self.assertFalse(ci["has_lint_step"])
-        sec = self._classify()["substance"]["secrets_gate"]
+        sec = payload["substance"]["secrets_gate"]
         self.assertEqual(sec["tools_found"], [])
 
     def test_command_chained_after_echo_still_counts(self) -> None:
@@ -2440,6 +2540,10 @@ class SubstanceLegacyRowsTestCase(_SubstanceBase):
 
 
 class PerformanceAccountingTestCase(_SubstanceBase):
+    def _classify(self) -> dict:
+        # Op-count / envelope completeness assertions need the full collector set.
+        return self._classify_full()
+
     def test_op_counts_stay_within_budget(self) -> None:
         # Every collector's operations must respect its declared budget - this
         # is host-INDEPENDENT (op counts), unlike wall-time. cap_hit ⇒ the

@@ -20,9 +20,8 @@ Repo-specific verification conventions + corpus hygiene. MAINTAINER DIRECTIVE: n
 - [ ] Full parallel suite green; evidence records timings
 
 ## Done summary
-TBD
-
+Scoped-verification convention + slow-file diet. CLAUDE.md carries the repo-specific focused-vs-full rule (full suite = python3 scripts/run_tests_parallel.py at the final gate only); canonical + dogfood spec template and usage.md carry one portable generic sentence (dogfood byte-parity kept, sync-codex x2 clean). Diet (same test counts): test_prime_eval 189 tests 109.6s -> ~20s (template copytree, SchemaShape setUpClass, substance-fast classify with docs-freshness stub); test_gate_receipt 49 tests 52.3s -> ~9s (module repo template, in-process cmd_gate_* dispatch, batched gate-id validation). Stale sweep: all known candidates still have live machinery -> deferred wholly to fn-111, zero deletions, zero overlap. Host review (session model per maintainer directive): restored TTL-race sleep margin to 2s (0.4s margin was inside subprocess startup - the race would never be exercised); genericized shipped-template carriers. Full parallel suite at bccdcdf8: 87 files, 1945 tests, 0 failures, skipped=3, wall 90.7s.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: bccdcdf8e2ba9f28b24188a514b029af6fd724ba
+- Tests: python3 scripts/run_tests_parallel.py (87 files, 1945 tests, 0 failures, wall 90.7s), python3 scripts/run_tests_parallel.py --pattern test_prime_eval.py (189 tests, ~20s), python3 scripts/run_tests_parallel.py --pattern test_gate_receipt.py (49 tests, ~9s), python3 scripts/run_tests_parallel.py --pattern test_dogfood_template_parity.py (green after genericization)
 - PRs:

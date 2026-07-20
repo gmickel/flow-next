@@ -146,6 +146,12 @@ This section has TWO shapes. Pick exactly one:
 ---
 
 <!--
+Quick commands convention: per-task Quick commands list FOCUSED suites for the
+files the task touches; the FULL suite runs once at the final gate (prefer the
+repo's parallel entrypoint when one exists). See the project instruction file.
+-->
+
+<!--
 Cross-links:
 - `plugins/flow-next/docs/teams.md` — "Symmetric interview" pattern (PO → tech-lead handover)
 - `CLAUDE.md` — "Creating a spec" guide (manual + automated paths)

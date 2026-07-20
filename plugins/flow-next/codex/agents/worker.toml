@@ -61,6 +61,8 @@ Parse the spec carefully. Identify:
 #     then either fix the tooling if trivial, or escalate `BLOCKED: TOOLING_FAILURE`.
 #   No Quick commands defined → record `baseline: none` and proceed.
 # Never treat a pre-existing red baseline as your own success or your own failure.
+# When the repo ships a parallel full-suite entrypoint (flow-next itself: `python3 scripts/run_tests_parallel.py`,
+# serial fallback `--serial`), specs list it as the full-suite Quick command; its exact string is the receipt identity.
 # Before each full gate command from the Quick commands, map it to a `(gate_id, exact command string)`
 # pair (`unittest` for the test suite, `smoke` for a smoke script) and first run:
 #   <FLOWCTL> gate check --gate <gate_id> --command "<cmd>"
@@ -410,7 +412,9 @@ BASE_COMMIT=$(cat .flow/tmp/base_commit)
 # Receipt failure is non-blocking: log it and continue. Must pass before marking done.
 # FOREGROUND RULE: run each gate suite as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-# When this Verify block runs a full suite, apply the Suite-output capture rule above:
+# When this Verify block runs a full suite, run the spec's canonical full-suite Quick command
+# (in the flow-next repo that is `python3 scripts/run_tests_parallel.py`; serial fallback `--serial`)
+# and apply the Suite-output capture rule above:
 # capture output to a log, observe green from `suite_rc`, and read any summary
 # from that log; never run the suite a second time just to observe greenness.
 ```

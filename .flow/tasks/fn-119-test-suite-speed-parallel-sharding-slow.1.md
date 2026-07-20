@@ -21,9 +21,8 @@ The parallel shard runner + everything that makes it canonical. MAINTAINER DIREC
 - [ ] CHANGELOG Unreleased entry (register-conformant); NO version bump, NO release
 
 ## Done summary
-TBD
-
+File-level parallel shard runner shipped: scripts/run_tests_parallel.py (stdlib only, shard-by-file, default jobs=cores-2, --serial fallback, --shuffle/--seed ordering canary, --pattern scoping, zero-match = exit 2). CI's ~30 per-file unittest steps collapsed into one parallel step with a workflow_dispatch shuffle input; path triggers include the runner. worker.md (+ codex mirror via sync-codex x2) names the entrypoint with portable phrasing (consumer repos without the script are unaffected). CHANGELOG Unreleased entry; no version bump per directive. Equivalence at 06faf106: serial 1945 tests OK (skipped=3) in 313.6s; parallel 87 files / 1945 tests / 0 failures / skipped=3 in 82.1s wall (jobs=14, measured under concurrent-baseline contention). Review: host session model (maintainer-directed self-review); fixed shipped-prose portability + step-name style in the delegate's draft.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 06faf1066a95332c7de784f37bb951cdb87c8490
+- Tests: python3 scripts/run_tests_parallel.py (87 files, 1945 tests, 0 failures, skipped=3, wall 82.1s jobs=14), python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' -q (serial baseline, Ran 1945 OK skipped=3, 313.6s, same HEAD), python3 scripts/run_tests_parallel.py --pattern test_worker_anchor_prose.py|test_foreground_rule_fences.py|test_skill_prose_diet.py (green)
 - PRs:

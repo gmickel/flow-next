@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Test-suite speed: file-level parallel shard runner (fn-119).** New stdlib entrypoint `scripts/run_tests_parallel.py` discovers top-level `test_*.py` files and runs them concurrently (default jobs = cores-2; `--serial` for the serial fallback; `--shuffle` for the ordering canary; per-file hard timeout `--file-timeout`, default 900s - a hung file fails loudly as rc=124 instead of stalling the suite; repeatable `--exclude`, every exclusion printed). Windows CI runs 81/87 files (was 29/87 pre-fn-119): 6 latent windows incompatibilities surfaced by the first full-corpus run are excluded with per-file causes and tracked in fn-120. CI matrix unit tests use this entrypoint; `workflow_dispatch` exposes a manual shuffle canary (no new scheduled workflow). `worker.md` names it as the canonical full-suite command. `smoke_test.sh` untouched. Repo-local scoped-verification convention (CLAUDE.md / `.flow/templates/spec.md` / `.flow/usage.md`): per-task Quick commands are focused suites; the parallel full suite runs once at the final gate. Slow-file diet on `test_prime_eval` + `test_gate_receipt` (template copytree / setUpClass / in-process gate dispatch; same test counts). Stale-test sweep deferred known candidates to fn-111's fallout list (zero overlap deletions). No version bump (batched).
+
 ## [flow-next 2.21.0] - 2026-07-20
 
 ### Changed
