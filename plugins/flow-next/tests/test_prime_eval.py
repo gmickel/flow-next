@@ -101,6 +101,8 @@ def _empty_repo_template() -> Path:
         _git(repo, "init", "-q")
         _git(repo, "config", "user.email", "t@example.com")
         _git(repo, "config", "user.name", "t")
+        _git(repo, "config", "gc.auto", "0")
+        _git(repo, "config", "maintenance.auto", "false")
         _EMPTY_REPO_TEMPLATE = repo
     return _EMPTY_REPO_TEMPLATE
 
@@ -114,7 +116,8 @@ def _init_repo(repo: Path) -> None:
             _git(repo, "config", "user.name", "t")
         return
     repo.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(_empty_repo_template(), repo)
+    # ignore transient .git lock files (background git maintenance race)
+    shutil.copytree(_empty_repo_template(), repo, ignore=shutil.ignore_patterns("*.lock"))
 
 
 def _write(repo: Path, rel: str, content: str) -> None:

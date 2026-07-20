@@ -79,6 +79,20 @@ def _ensure_gate_template() -> Path:
             capture_output=True,
             env=_pinned_env(),
         )
+        # Background auto-maintenance drops transient .git lock files that race
+        # copytree (seen: macos-latest, objects/maintenance.lock vanished mid-copy).
+        subprocess.run(
+            ["git", "config", "gc.auto", "0"],
+            check=True,
+            capture_output=True,
+            env=_pinned_env(),
+        )
+        subprocess.run(
+            ["git", "config", "maintenance.auto", "false"],
+            check=True,
+            capture_output=True,
+            env=_pinned_env(),
+        )
         path = repo / "src" / "app.py"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("print('seed')\n", encoding="utf-8")
@@ -116,7 +130,11 @@ class GateReceiptHarness(unittest.TestCase):
         parent = Path(tempfile.mkdtemp(prefix="gate-case-")).resolve()
         self._tmpdir_parent = parent
         self.tmpdir = parent / "repo"
-        shutil.copytree(_ensure_gate_template(), self.tmpdir)
+        shutil.copytree(
+            _ensure_gate_template(),
+            self.tmpdir,
+            ignore=shutil.ignore_patterns("*.lock"),
+        )
         self.prev_cwd = Path.cwd()
         os.chdir(self.tmpdir)
 
