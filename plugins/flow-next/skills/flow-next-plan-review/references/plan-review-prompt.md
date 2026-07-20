@@ -1,4 +1,4 @@
-<!-- placeholders: plan_quality_block, protected_artifacts_block -->
+<!-- placeholders: plan_quality_block, protected_artifacts_block, review_json_tally_block -->
 ## Context Gathering
 
 This review includes:
@@ -72,6 +72,7 @@ After the issues list, emit a `Protected-path filter:` line tallying findings dr
 
 Be critical. Find real issues.
 
+{review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:
 <verdict>SHIP</verdict> - Plan is solid, ready to implement
 <verdict>NEEDS_WORK</verdict> - Plan has gaps that need addressing

@@ -3731,7 +3731,181 @@ def parse_codex_verdict(output: str) -> Optional[str]:
     return matches[-1] if matches else None
 
 
+
+# --- Reviewer fenced-JSON tallies contract (fn-112.4) ---
+#
+# Preferred path: one ```json block with suppressed_count / classification_counts /
+# unaddressed / deep_findings. Prose-regex parsers below are the logged fallback
+# when the block is omitted (deletable once field data shows the block is reliable).
+# The <verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict> tag contract is UNCHANGED.
+
+_REVIEW_JSON_FENCE_RE = re.compile(
+    r"```json\s*\n(.*?)```",
+    re.DOTALL | re.IGNORECASE,
+)
+_VALID_SUPPRESSED_ANCHORS = frozenset({"0", "25", "50", "75", "100"})
+
+
+def _log_review_parse_path(field: str, path: str) -> None:
+    """Log which tallies path fired (json vs prose-fallback)."""
+    print(f"review-parse: {field} via {path}", file=sys.stderr)
+
+
+def extract_review_json_block(output: str) -> Optional[dict]:
+    """Return the first fenced ```json object in reviewer output, or None.
+
+    Schema (all keys optional):
+      suppressed_count: {anchor_str: int}  # anchors 0/25/50/75/100
+      classification_counts: {introduced: int, pre_existing: int}
+      unaddressed: [R-ID, ...]
+      deep_findings: [{id, severity, confidence, classification, file, line,
+                       title, suggested_fix}, ...]
+    """
+    if not output:
+        return None
+    match = _REVIEW_JSON_FENCE_RE.search(output)
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group(1))
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if not _review_json_block_schema_ok(data):
+        return None
+    return data
+
+
+def _review_json_block_schema_ok(data: dict) -> bool:
+    """Validate optional keys; unknown keys are ignored."""
+    if "suppressed_count" in data:
+        raw = data["suppressed_count"]
+        if not isinstance(raw, dict):
+            return False
+        for k, v in raw.items():
+            key = str(k)
+            if key not in _VALID_SUPPRESSED_ANCHORS:
+                return False
+            if not isinstance(v, int) or isinstance(v, bool):
+                return False
+    if "classification_counts" in data:
+        raw = data["classification_counts"]
+        if not isinstance(raw, dict):
+            return False
+        for key in ("introduced", "pre_existing"):
+            if key in raw and (
+                not isinstance(raw[key], int) or isinstance(raw[key], bool)
+            ):
+                return False
+    if "unaddressed" in data:
+        raw = data["unaddressed"]
+        if not isinstance(raw, list):
+            return False
+        if not all(isinstance(x, str) for x in raw):
+            return False
+    if "deep_findings" in data:
+        raw = data["deep_findings"]
+        if not isinstance(raw, list):
+            return False
+        if not all(isinstance(x, dict) for x in raw):
+            return False
+    return True
+
+
+def _suppressed_from_json(block: dict) -> Optional[dict[str, int]]:
+    raw = block.get("suppressed_count")
+    if raw is None:
+        return None
+    counts: dict[str, int] = {}
+    for k, v in raw.items():
+        counts[str(k)] = int(v)
+    return counts or None
+
+
+def _classification_from_json(block: dict) -> Optional[dict[str, int]]:
+    raw = block.get("classification_counts")
+    if raw is None:
+        return None
+    found = {
+        "introduced": int(raw.get("introduced", 0)),
+        "pre_existing": int(raw.get("pre_existing", 0)),
+    }
+    # Mirror prose path: None when both zero and key was empty-ish? Keep zeros
+    # when the key is present so callers can gate on introduced_count.
+    return found
+
+
+def _unaddressed_from_json(block: dict) -> Optional[list[str]]:
+    if "unaddressed" not in block:
+        return None
+    raw = block["unaddressed"]
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in raw:
+        rid = item.strip()
+        if not rid or rid in seen:
+            continue
+        seen.add(rid)
+        ordered.append(rid)
+    return ordered
+
+
+def _deep_findings_from_json(block: dict, pass_name: str) -> list[dict]:
+    raw = block.get("deep_findings")
+    if not isinstance(raw, list):
+        return []
+    findings: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        fid = str(item.get("id") or "").strip().lower()
+        title = str(item.get("title") or item.get("issue") or "").strip()
+        file_path = str(item.get("file") or "").strip()
+        if not fid or not (title or file_path):
+            continue
+        conf = item.get("confidence", "")
+        if isinstance(conf, str) and conf.isdigit():
+            conf = int(conf)
+        line_val = item.get("line")
+        if isinstance(line_val, str) and line_val.isdigit():
+            line_val = int(line_val)
+        elif not isinstance(line_val, int):
+            line_val = None
+        findings.append({
+            "id": fid,
+            "pass": str(item.get("pass") or pass_name),
+            "severity": str(item.get("severity") or ""),
+            "confidence": conf,
+            "classification": str(item.get("classification") or "introduced"),
+            "file": file_path,
+            "line": line_val,
+            "title": title,
+            "suggested_fix": str(
+                item.get("suggested_fix") or item.get("suggestion") or ""
+            ),
+        })
+    return findings
+
+
 def parse_suppressed_count(output: str) -> Optional[dict[str, int]]:
+    """Extract suppression-gate counts (fn-112.4: JSON block preferred).
+
+    Preferred: fenced ```json `suppressed_count`. Fallback: prose line
+    `Suppressed findings: N at anchor A, ...` (logged). Returns {anchor: count}
+    with string keys, or None when no signal.
+    """
+    block = extract_review_json_block(output)
+    if block is not None:
+        _log_review_parse_path("suppressed_count", "json")
+        return _suppressed_from_json(block)
+    result = _parse_suppressed_count_prose(output)
+    if result is not None:
+        _log_review_parse_path("suppressed_count", "prose-fallback")
+    return result
+
+
+def _parse_suppressed_count_prose(output: str) -> Optional[dict[str, int]]:
     """Extract suppression-gate counts from review output (fn-29.3).
 
     Looks for a line like:
@@ -3778,6 +3952,22 @@ def parse_suppressed_count(output: str) -> Optional[dict[str, int]]:
 
 
 def parse_classification_counts(output: str) -> Optional[dict[str, int]]:
+    """Extract introduced/pre_existing tallies (fn-112.4: JSON block preferred).
+
+    Preferred: fenced ```json `classification_counts`. Fallback: prose
+    `Classification counts:` line or per-finding markers (logged).
+    """
+    block = extract_review_json_block(output)
+    if block is not None:
+        _log_review_parse_path("classification_counts", "json")
+        return _classification_from_json(block)
+    result = _parse_classification_counts_prose(output)
+    if result is not None:
+        _log_review_parse_path("classification_counts", "prose-fallback")
+    return result
+
+
+def _parse_classification_counts_prose(output: str) -> Optional[dict[str, int]]:
     """Extract introduced/pre_existing tallies from review output (fn-29.4).
 
     Primary signal: a summary line the reviewer is asked to emit, e.g.
@@ -3847,6 +4037,22 @@ def parse_classification_counts(output: str) -> Optional[dict[str, int]]:
 
 
 def parse_unaddressed_rids(output: str) -> Optional[list[str]]:
+    """Extract unaddressed R-IDs (fn-112.4: JSON block preferred).
+
+    Preferred: fenced ```json `unaddressed` array. Fallback: prose
+    `Unaddressed R-IDs:` line or requirements-coverage table (logged).
+    """
+    block = extract_review_json_block(output)
+    if block is not None:
+        _log_review_parse_path("unaddressed", "json")
+        return _unaddressed_from_json(block)
+    result = _parse_unaddressed_rids_prose(output)
+    if result is not None:
+        _log_review_parse_path("unaddressed", "prose-fallback")
+    return result
+
+
+def _parse_unaddressed_rids_prose(output: str) -> Optional[list[str]]:
     """Extract unaddressed R-IDs from review output (fn-29.2).
 
     Primary signal: a summary line the reviewer is asked to emit, e.g.
@@ -5180,6 +5386,26 @@ Classify each finding: **introduced** (this diff caused or newly exposed it) or 
 Verdict gate: only `introduced` findings affect the verdict — a review whose survivors are all `pre_existing` ships. List pre-existing under `## Pre-existing issues (not blocking this verdict)` as `[sev, confidence N, introduced=false] file:line — summary`; never drop them. End with `Classification counts: N introduced, M pre_existing.`"""
 
 
+REVIEW_JSON_TALLY_BLOCK = """## Structured tallies (fenced JSON)
+After the findings (and before the verdict tag), emit exactly ONE fenced json
+code block containing a single JSON object. Omit keys that do not apply; never
+invent counts. Do NOT put the <verdict> tag inside the block.
+
+Schema keys (all optional):
+- `suppressed_count`: object mapping anchor strings ("0"|"25"|"50"|"75"|"100") to ints
+- `classification_counts`: `{"introduced": int, "pre_existing": int}`
+- `unaddressed`: array of R-ID strings (use [] when none remain unaddressed)
+- `deep_findings`: array of finding objects (deep-pass only; omit on primary reviews)
+
+Example (wrap the next line in a json fence):
+{"suppressed_count":{"50":3,"25":7},"classification_counts":{"introduced":2,"pre_existing":4},"unaddressed":["R3","R5"]}
+
+Prose tally lines (`Suppressed findings:`, `Classification counts:`, `Unaddressed R-IDs:`)
+remain accepted as a logged fallback when this block is omitted."""
+
+
+
+
 # --- Protected artifacts (fn-29.5) ---
 #
 # Safety rail: external reviewers (codex/copilot on unfamiliar projects) routinely
@@ -5264,7 +5490,7 @@ COMPLETION_REVIEW_PROMPT_TEMPLATE_REL = (
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md"
 )
 
-IMPL_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block -->
+IMPL_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
 ## Context Gathering
 
 This review includes:
@@ -5346,14 +5572,16 @@ Then, under a separate `## Pre-existing issues (not blocking this verdict)` head
 After the findings, add (only when applicable): the `## Requirements coverage` table + `Unaddressed R-IDs:` line, and the `Suppressed findings:` / `Classification counts:` / `Protected-path filter:` tally lines named above.
 **Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
 
+{review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:
 <verdict>SHIP</verdict> - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
 <verdict>NEEDS_WORK</verdict> - `introduced` issues or unaddressed R-IDs must be fixed
 <verdict>MAJOR_RETHINK</verdict> - Fundamental approach problems
 
-Do NOT skip this tag. The automation depends on it."""
+Do NOT skip this tag. The automation depends on it.
+"""
 
-STANDALONE_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: base_branch, context_guidance, focus_section, diff_summary, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block -->
+STANDALONE_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: base_branch, context_guidance, focus_section, diff_summary, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
 # Implementation Review: Branch Changes vs {base_branch}
 
 Review all changes on the current branch compared to {base_branch}.
@@ -5426,13 +5654,14 @@ Be critical. Find real issues.
 
 **Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
 
+{review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:
 - `<verdict>SHIP</verdict>` - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
 - `<verdict>NEEDS_WORK</verdict>` - `introduced` issues or unaddressed R-IDs must be fixed first
 - `<verdict>MAJOR_RETHINK</verdict>` - Fundamental problems, reconsider approach
 """
 
-PLAN_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: plan_quality_block, protected_artifacts_block -->
+PLAN_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: plan_quality_block, protected_artifacts_block, review_json_tally_block -->
 ## Context Gathering
 
 This review includes:
@@ -5506,14 +5735,16 @@ After the issues list, emit a `Protected-path filter:` line tallying findings dr
 
 Be critical. Find real issues.
 
+{review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:
 <verdict>SHIP</verdict> - Plan is solid, ready to implement
 <verdict>NEEDS_WORK</verdict> - Plan has gaps that need addressing
 <verdict>MAJOR_RETHINK</verdict> - Fundamental approach problems
 
-Do NOT skip this tag. The automation depends on it."""
+Do NOT skip this tag. The automation depends on it.
+"""
 
-COMPLETION_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block -->
+COMPLETION_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
 ## Context Gathering
 
 This review includes:
@@ -5621,11 +5852,13 @@ After the findings list, emit:
 **SHIP** - All requirements covered (all R-IDs met or deferred). Spec can close.
 **NEEDS_WORK** - Gaps found (or unaddressed R-IDs). Must fix before closing.
 
+{review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:
 <verdict>SHIP</verdict> - All requirements implemented (R-IDs all met or deferred)
 <verdict>NEEDS_WORK</verdict> - Gaps or unaddressed R-IDs need addressing
 
-Do NOT skip this tag. The automation depends on it."""
+Do NOT skip this tag. The automation depends on it.
+"""
 
 def _load_review_prompt_template(rel_path: str, skill_rel: str, fallback: str) -> str:
     """Load a review-prompt .md template; file wins, embedded fallback last.
@@ -5717,12 +5950,14 @@ def build_review_prompt(
             confidence_rubric_block=CONFIDENCE_RUBRIC_BLOCK,
             classification_rubric_block=CLASSIFICATION_RUBRIC_BLOCK,
             protected_artifacts_block=PROTECTED_ARTIFACTS_BLOCK,
+            review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
         )
     else:  # plan
         raw = load_plan_review_template()
         instruction = _strip_review_prompt_placeholder_doc(raw).format(
             plan_quality_block=PLAN_QUALITY_BLOCK,
             protected_artifacts_block=PROTECTED_ARTIFACTS_BLOCK,
+            review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
         )
 
     parts = []
@@ -18616,6 +18851,7 @@ implementations.
         confidence_rubric_block=CONFIDENCE_RUBRIC_BLOCK,
         classification_rubric_block=CLASSIFICATION_RUBRIC_BLOCK,
         protected_artifacts_block=PROTECTED_ARTIFACTS_BLOCK,
+        review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
     )
 
 # Fallback template body if the on-disk file is missing (global installs, Codex
@@ -19332,6 +19568,22 @@ _DEEP_FINDING_HEADER_RE = re.compile(
 
 
 def parse_deep_findings(output: str, pass_name: str) -> list[dict]:
+    """Parse deep-pass findings (fn-112.4: JSON block preferred).
+
+    Preferred: fenced ```json `deep_findings` array. Fallback: structured
+    header prose form (logged). Returns [] when nothing found.
+    """
+    block = extract_review_json_block(output)
+    if block is not None:
+        _log_review_parse_path("deep_findings", "json")
+        return _deep_findings_from_json(block, pass_name)
+    result = _parse_deep_findings_prose(output, pass_name)
+    if result:
+        _log_review_parse_path("deep_findings", "prose-fallback")
+    return result
+
+
+def _parse_deep_findings_prose(output: str, pass_name: str) -> list[dict]:
     """Parse deep-pass LLM output into a list of finding dicts.
 
     Best-effort parser that recognizes the structured-header form from the
@@ -22309,6 +22561,7 @@ def build_completion_review_prompt(
         confidence_rubric_block=CONFIDENCE_RUBRIC_BLOCK,
         classification_rubric_block=CLASSIFICATION_RUBRIC_BLOCK,
         protected_artifacts_block=PROTECTED_ARTIFACTS_BLOCK,
+        review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
     )
 
     parts = []

@@ -158,14 +158,15 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
 
-## Step 3: Record the verdict (MANDATORY — every backend, every terminal outcome)
+## Step 3: Record the verdict (MANDATORY for rp / repair; handler-owned otherwise)
 
-The moment the fix loop terminates, write the outcome back so the rest of the pipeline sees it — exactly as `/flow-next:plan-review` writes `set-plan-review-status`. **Without this, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.**
+`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.** The standalone command remains for rp and for repairing a missed write:
 
 ```bash
 # Final verdict resolved to SHIP → ship; NEEDS_WORK at the iteration cap → needs_work.
+# Skip when the backend handler already wrote status (codex/copilot/cursor).
 $FLOWCTL spec set-completion-review-status "$SPEC_ID" --status ship --json # on SHIP
 $FLOWCTL spec set-completion-review-status "$SPEC_ID" --status needs_work --json # on NEEDS_WORK at cap
 ```
 
-Write it on BOTH terminal paths (SHIP and capped-NEEDS_WORK). This is the same write `/flow-next:work` performs when it runs completion-review inline; a standalone invocation must not skip it.
+On rp (or if the JSON payload lacks `plan_review_status`/`completion_review_status`), write on BOTH terminal paths (SHIP and capped-NEEDS_WORK).

@@ -1134,6 +1134,12 @@ flowctl rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.
 flowctl rp prompt-export --window "$W" --tab "$T" --out /tmp/export.md
 ```
 
+### Review command architecture (fn-112)
+
+All nine `flowctl {codex,copilot,cursor} {impl,plan,completion}-review` commands are thin wrappers over one driver: `cmd_backend_review(backend, kind)`. Per-backend variance (sandbox flags, session markers, argv-budget fit, receipt shape) lives as hooks on `BACKEND_REGISTRY` entries, wired lazily by `_wire_backend_review_hooks`. Adding a fourth review backend is a registry entry (hooks + models/efforts), not a new clone of the pipeline.
+
+Reviewer tallies prefer one fenced `json` block (`suppressed_count`, `classification_counts`, `unaddressed`, `deep_findings`); prose tally lines remain a logged fallback. The `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` tag contract is unchanged. Plan/completion handlers self-write `*_review_status` from the verdict; the standalone `spec set-*-review-status` commands still work.
+
 ### codex
 
 OpenAI Codex CLI wrappers — cross-platform alternative to RepoPrompt.

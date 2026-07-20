@@ -1,4 +1,4 @@
-<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block -->
+<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
 ## Context Gathering
 
 This review includes:
@@ -106,6 +106,7 @@ After the findings list, emit:
 **SHIP** - All requirements covered (all R-IDs met or deferred). Spec can close.
 **NEEDS_WORK** - Gaps found (or unaddressed R-IDs). Must fix before closing.
 
+{review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:
 <verdict>SHIP</verdict> - All requirements implemented (R-IDs all met or deferred)
 <verdict>NEEDS_WORK</verdict> - Gaps or unaddressed R-IDs need addressing

@@ -90,6 +90,22 @@ Be critical. Find real issues.
 
 **Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
 
+## Structured tallies (fenced JSON)
+After the findings (and before the verdict tag), emit exactly ONE fenced json
+code block containing a single JSON object. Omit keys that do not apply; never
+invent counts. Do NOT put the <verdict> tag inside the block.
+
+Schema keys (all optional):
+- `suppressed_count`: object mapping anchor strings ("0"|"25"|"50"|"75"|"100") to ints
+- `classification_counts`: `{"introduced": int, "pre_existing": int}`
+- `unaddressed`: array of R-ID strings (use [] when none remain unaddressed)
+- `deep_findings`: array of finding objects (deep-pass only; omit on primary reviews)
+
+Example (wrap the next line in a json fence):
+{"suppressed_count":{"50":3,"25":7},"classification_counts":{"introduced":2,"pre_existing":4},"unaddressed":["R3","R5"]}
+
+Prose tally lines (`Suppressed findings:`, `Classification counts:`, `Unaddressed R-IDs:`)
+remain accepted as a logged fallback when this block is omitted.
 **REQUIRED**: End your response with exactly one verdict tag:
 - `<verdict>SHIP</verdict>` - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
 - `<verdict>NEEDS_WORK</verdict>` - `introduced` issues or unaddressed R-IDs must be fixed first

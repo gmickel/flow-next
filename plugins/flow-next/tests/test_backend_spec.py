@@ -1805,6 +1805,156 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
         self.assertTrue(callable(flowctl._backend_completion_review))
         self.assertTrue(callable(flowctl._self_write_review_status))
 
+    def test_fourth_backend_registry_entry_only(self) -> None:
+        """fn-112.4 extensibility proof: a 4th backend is a registry entry.
+
+        Register a hypothetical backend with only BACKEND_REGISTRY hooks
+        (mock run_exec) and drive cmd_backend_review through impl kind
+        end-to-end. No new cmd_* clone required.
+        """
+        import subprocess
+
+        backend = "mockreview"
+        self.assertNotIn(backend, BACKEND_REGISTRY)
+
+        review_out = (
+            "Reviewed.\n\n"
+            "```json\n"
+            '{"suppressed_count":{"50":1},"classification_counts":'
+            '{"introduced":1,"pre_existing":0},"unaddressed":["R1"]}\n'
+            "```\n"
+            "<verdict>NEEDS_WORK</verdict>\n"
+        )
+        calls: list[dict] = []
+
+        def _mock_run_exec(
+            prompt,
+            *,
+            session_id=None,
+            repo_root,
+            spec,
+            resolution_out=None,
+            args=None,
+        ):
+            calls.append({"prompt": prompt, "spec": spec, "session_id": session_id})
+            if resolution_out is not None:
+                resolution_out["model"] = "mock-1"
+                resolution_out["effort"] = "high"
+            return review_out, "mock-sid-1", 0, ""
+
+        def _mock_resolve(args, task_id, spec_id=None):
+            return BackendSpec(
+                backend, model="mock-1", effort="high"
+            ).resolve()
+
+        entry = {
+            "models": ["mock-1"],
+            "efforts": {"high"},
+            "default_model": "mock-1",
+            "default_effort": "high",
+            "run_exec": _mock_run_exec,
+            "resolve_spec": _mock_resolve,
+            "check_probe": lambda: "0.0.1",
+            "gather_diff": flowctl._gather_review_diff_capped,
+            "resume_modes": ("mockreview",),
+            "track_prior_receipt_model": False,
+            "require_nonempty_sid": False,
+            "mint_session_id": False,
+            "has_sandbox": False,
+            "include_effort": True,
+            "extract_review": lambda output: output,
+            "display_name": "MockReview",
+            "cli_label": "mockreview",
+            "no_verdict_label": "MockReview",
+            "prompt_fit": "none",
+            "build_impl_prompt": "default",
+        }
+
+        prev_cwd = os.getcwd()
+        with tempfile.TemporaryDirectory(prefix="fn112-4th-") as td:
+            repo = Path(td)
+            subprocess.run(
+                ["git", "init", "-q"], cwd=repo, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "t@t.t"],
+                cwd=repo, check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "t"],
+                cwd=repo, check=True, capture_output=True,
+            )
+            (repo / "src").mkdir()
+            (repo / "src" / "a.py").write_text("x=1\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "-A"], cwd=repo, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "base"],
+                cwd=repo, check=True, capture_output=True,
+            )
+            base = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo, check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            (repo / "src" / "a.py").write_text("x=2\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "-A"], cwd=repo, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "change"],
+                cwd=repo, check=True, capture_output=True,
+            )
+
+            flow = repo / ".flow"
+            (flow / "specs").mkdir(parents=True)
+            (flow / "tasks").mkdir(parents=True)
+            epic = "fn-112-demo"
+            task = f"{epic}.1"
+            (flow / "specs" / f"{epic}.md").write_text(
+                "# Demo\n\n## Acceptance Criteria\n\n- **R1:** do\n",
+                encoding="utf-8",
+            )
+            (flow / "specs" / f"{epic}.json").write_text(
+                json.dumps({"id": epic, "title": "Demo", "status": "in_progress"}),
+                encoding="utf-8",
+            )
+            (flow / "tasks" / f"{task}.md").write_text(
+                "---\nsatisfies: [R1]\n---\n\n## Description\n\nDo.\n",
+                encoding="utf-8",
+            )
+
+            receipt = repo / "receipt.json"
+            args = argparse.Namespace(
+                task=task,
+                base=base,
+                focus=None,
+                receipt=str(receipt),
+                json=False,
+                spec=None,
+            )
+
+            BACKEND_REGISTRY[backend] = entry
+            try:
+                os.chdir(repo)
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    flowctl.cmd_backend_review(args, backend=backend, kind="impl")
+                self.assertEqual(len(calls), 1)
+                self.assertTrue(receipt.is_file())
+                data = json.loads(receipt.read_text(encoding="utf-8"))
+                self.assertEqual(data["mode"], backend)
+                self.assertEqual(data["verdict"], "NEEDS_WORK")
+                self.assertEqual(data["type"], "impl_review")
+                self.assertEqual(data["session_id"], "mock-sid-1")
+                self.assertEqual(data["suppressed_count"], {"50": 1})
+                self.assertEqual(data["introduced_count"], 1)
+                self.assertEqual(data["pre_existing_count"], 0)
+                self.assertEqual(data["unaddressed"], ["R1"])
+                self.assertEqual(data["effort"], "high")
+            finally:
+                os.chdir(prev_cwd)
+                BACKEND_REGISTRY.pop(backend, None)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

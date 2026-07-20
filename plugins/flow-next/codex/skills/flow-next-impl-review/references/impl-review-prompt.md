@@ -1,4 +1,4 @@
-<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block -->
+<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
 ## Context Gathering
 
 This review includes:
@@ -80,6 +80,7 @@ Then, under a separate `## Pre-existing issues (not blocking this verdict)` head
 After the findings, add (only when applicable): the `## Requirements coverage` table + `Unaddressed R-IDs:` line, and the `Suppressed findings:` / `Classification counts:` / `Protected-path filter:` tally lines named above.
 **Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
 
+{review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:
 <verdict>SHIP</verdict> - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
 <verdict>NEEDS_WORK</verdict> - `introduced` issues or unaddressed R-IDs must be fixed

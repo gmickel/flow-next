@@ -84,11 +84,14 @@ $FLOWCTL codex plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**
 
-### Step 2: Update Status
+### Step 2: Status write (handler-owned on codex/copilot/cursor)
+
+`flowctl <backend> plan-review` self-writes `plan_review_status` / `plan_reviewed_at` from the parsed verdict (fn-112). The standalone command still works for rp / manual repair:
 
 ```bash
 SPEC_ID="${1:-}"   # re-declare in THIS fence too — vars die across tool calls; an empty id would mutate nothing
-# Based on verdict
+# Optional when the backend handler already wrote status (codex/copilot/cursor).
+# Required for rp, or to repair a missed write:
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
@@ -138,11 +141,14 @@ $FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIP
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**
 
-### Step 2: Update Status
+### Step 2: Status write (handler-owned on codex/copilot/cursor)
+
+`flowctl <backend> plan-review` self-writes `plan_review_status` / `plan_reviewed_at` from the parsed verdict (fn-112). The standalone command still works for rp / manual repair:
 
 ```bash
 SPEC_ID="${1:-}"   # re-declare in THIS fence too — vars die across tool calls; an empty id would mutate nothing
-# Based on verdict
+# Optional when the backend handler already wrote status (codex/copilot/cursor).
+# Required for rp, or to repair a missed write:
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
@@ -198,11 +204,14 @@ $FLOWCTL cursor plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT
 
 The runner invokes `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (`--mode ask` is read-only).
 
-### Step 2: Update Status
+### Step 2: Status write (handler-owned on codex/copilot/cursor)
+
+`flowctl <backend> plan-review` self-writes `plan_review_status` / `plan_reviewed_at` from the parsed verdict (fn-112). The standalone command still works for rp / manual repair:
 
 ```bash
 SPEC_ID="${1:-}"   # re-declare in THIS fence too — vars die across tool calls; an empty id would mutate nothing
-# Based on verdict
+# Optional when the backend handler already wrote status (codex/copilot/cursor).
+# Required for rp, or to repair a missed write:
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
