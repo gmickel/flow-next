@@ -313,11 +313,6 @@ scripts/ralph/ralph.sh          # Run from terminal
 
 ## What adopters say
 
-Every quote below links to its public source - unlinked testimonials don't ship here, on principle.
-
-> *"This should not make hard tasks cheap. The expensive loop remains because it is the quality mechanism."*
-> — [Claire Novotny](https://github.com/gmickel/flow-next/issues/111) (.NET Foundation), after instrumenting two production Ralph runs totaling ~18 active hours (35 iterations, real repo) and finding *"the observed high-value review findings were mostly not cosmetic. They caught false confidence."*
-
 > *"I am enjoying your version of all these cool new plugins. So far yours has worked the best."*
 > — [@patrickmichalina](https://github.com/gmickel/flow-next/issues/5#issuecomment-3734228766)
 
@@ -331,9 +326,9 @@ Featured in [awesome-claude-code-workflows](https://github.com/ithiria894/awesom
 
 ## Field-hardened in enterprise environments
 
-**A CAD software vendor. A proptech platform. An education-sector group. A construction-software portco.** flow-next's ways of working are coached and run in enterprise environments worldwide - GitHub Enterprise orgs, GitLab + Jira shops, Windows toolchains with non-UTF-8 encodings. Discovery interviews of 2-3 hours produce 8-11 structured, buildable specs; the edge cases surface in the interview, not the sprint.
+flow-next's ways of working are coached and run in enterprise environments worldwide - from CAD and construction software to proptech and education, from modern monorepos and hundred-repo microservice estates to 30-year-old legacy stacks, on GitHub Enterprise, GitLab, and Jira. Discovery interviews of 2-3 hours produce 8-11 structured, buildable specs; the edge cases surface in the interview, not the sprint.
 
-The field drives the hardening backlog in public: Windows/cp1252 robustness landed from real reports ([#123](https://github.com/gmickel/flow-next/issues/123), [#167](https://github.com/gmickel/flow-next/issues/167)), and twice a morning field report became a released fix the same day (2.9.0, 2.10.0 - see [CHANGELOG](CHANGELOG.md)). Receipts, evidence JSON, and review gates are the audit trail enterprise adoption asks for - approval checkpoints and traceability are built in, not bolted on.
+The field drives the hardening backlog in public: legacy-encoding and Windows robustness landed from real enterprise reports ([#123](https://github.com/gmickel/flow-next/issues/123), [#167](https://github.com/gmickel/flow-next/issues/167)), and twice a morning field report became a released fix the same day (2.9.0, 2.10.0 - see [CHANGELOG](CHANGELOG.md)). Receipts, evidence JSON, and review gates are the audit trail enterprise adoption asks for - approval checkpoints and traceability are built in, not bolted on.
 
 **For teams:** six named handover objects, **Spec-as-PR** (review the 50-line spec before the 500-line diff exists), and tracker projection to Linear / GitHub / GitLab / Jira. → [`docs/teams.md`](plugins/flow-next/docs/teams.md) · [flow-next.dev](https://flow-next.dev)
 
