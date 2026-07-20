@@ -1,6 +1,11 @@
 # fn-119 test-suite speed: parallel sharding + slow-test diet
 
-> STUB (2026-07-20, maintainer pain: full suite ~15-20 min serial, and workers run it at least once per task even with gate receipts honoring baselines). Interview/plan before building.
+> STUB (2026-07-20, maintainer pain: full suite ~15-20 min serial, and workers run it at least once per task even with gate receipts honoring baselines).
+>
+> EXECUTION DIRECTIVE (maintainer, 2026-07-20): run this IMMEDIATELY AFTER fn-110 lands, and run it FAST:
+> - NO cross-model review (--review=none): the work is self-verifying - the parallel runner either produces the same pass/fail results as the serial run in a fraction of the wall time, or it does not. Verification = run both, compare result sets + timings; that evidence goes in the task done JSON.
+> - NO release: land the PR (merge + spec close) but SKIP release-follow; the CHANGELOG entry stays under ## Unreleased and rides the next optimization release.
+> - Rationale: this is the menu-not-a-rail flexibility applied to ourselves - skip gates whose value is zero when the artifact self-verifies; landing it first makes every subsequent spec's verification cycles faster.
 
 ## Goal & Context
 
