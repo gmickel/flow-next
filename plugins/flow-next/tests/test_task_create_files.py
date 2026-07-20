@@ -190,6 +190,27 @@ class TaskCreateFilesTestCase(unittest.TestCase):
             h2s, ["## Description", "## Acceptance", "## Done summary", "## Evidence"]
         )
 
+    def test_empty_description_file_writes_empty_section(self) -> None:
+        # Review round 1: an explicitly empty file is an intentional empty
+        # section (matching `task set-spec --description`), never TBD.
+        desc = self._write("empty.md", "")
+        result = self._create(title="EmptyDesc", description_file=desc)
+        md = self._task_md(result["id"])
+        self.assertIn("## Description\n\n\n## Acceptance", md)
+        self.assertNotIn("## Description\nTBD", md)
+
+    def test_heading_only_description_file_writes_empty_section(self) -> None:
+        # Normalization strips the own-title H2; nothing remains → empty
+        # section, not TBD.
+        desc = self._write("heading_only.md", "## Description\n")
+        result = self._create(title="HeadingOnly", description_file=desc)
+        md = self._task_md(result["id"])
+        self.assertNotIn("## Description\nTBD", md)
+        h2s = [line for line in md.splitlines() if line.startswith("## ")]
+        self.assertEqual(
+            h2s, ["## Description", "## Acceptance", "## Done summary", "## Evidence"]
+        )
+
     def test_description_and_acceptance_together(self) -> None:
         desc = self._write("desc.md", "The description.\n")
         acc = self._write("acc.md", "- [ ] the criterion\n")

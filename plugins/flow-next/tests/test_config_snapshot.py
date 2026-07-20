@@ -126,6 +126,29 @@ class ConfigSnapshotTestCase(unittest.TestCase):
         self.assertEqual(result["key"], "planSync")
         self.assertEqual(result["value"], {"enabled": False, "crossSpec": False})
 
+    def test_empty_dict_default_subtree_returns_empty_dict(self) -> None:
+        # Review round 1: `_walk_config_value`'s empty-dict-means-default
+        # quirk must not leak into subtree reads — a real `{}` default like
+        # tracker.perTracker.labelMap is `{}`, not null.
+        self._write_config({"memory": {"enabled": True}})
+        result = self._get_json(key="tracker.perTracker.labelMap")
+        self.assertEqual(result["value"], {})
+        # Root read agrees.
+        root = self._get_json()
+        self.assertEqual(root["value"]["tracker"]["perTracker"]["labelMap"], {})
+
+    def test_snapshot_merged_read_is_sentinel_aware(self) -> None:
+        # The documented snapshot-path divergence: empty-dict values surface
+        # as {} via the snapshot, while the snapshot-less get_config keeps
+        # its historical empty-dict-means-default quirk.
+        self._write_config({"memory": {"enabled": True}})
+        snapshot = self.flowctl.load_config_snapshot()
+        _, via_snapshot, _ = self.flowctl.resolve_config_key_for_read(
+            "tracker.perTracker.labelMap", snapshot=snapshot
+        )
+        self.assertEqual(via_snapshot, {})
+        self.assertIsNone(self.flowctl.get_config("tracker.perTracker.labelMap"))
+
     def test_subtree_raw_read_is_set_only(self) -> None:
         self._write_config({"planSync": {"enabled": False}})
         result = self._get_json(key="planSync", raw=True)

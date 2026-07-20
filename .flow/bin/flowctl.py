@@ -1613,18 +1613,23 @@ def resolve_config_key_for_read(key: str, snapshot: "Optional[ConfigSnapshot]" =
     When provided, raw-file probes and merged-default reads come from the
     snapshot instead of re-reading .flow/config.json per call. Default
     ``None`` preserves the existing per-call read behavior for every other
-    caller.
+    caller. One deliberate semantic difference on the snapshot path: merged
+    reads are sentinel-aware (`_tree_probe`), so an empty-dict value (e.g.
+    the `tracker.perTracker.labelMap` default `{}`) surfaces as `{}` per the
+    dict-subtree contract — the snapshot-less `get_config` path keeps its
+    historical empty-dict-means-default quirk.
     """
+
+    def _snapshot_merged_get(k: str):
+        value = _tree_probe(snapshot.merged, k)
+        return None if value is _CONFIG_RAW_SENTINEL else value
+
     _raw_probe = (
         (lambda k: _snapshot_raw_probe(snapshot, k))
         if snapshot is not None
         else _get_config_from_file
     )
-    _merged_get = (
-        (lambda k: _walk_config_value(snapshot.merged, k))
-        if snapshot is not None
-        else get_config
-    )
+    _merged_get = _snapshot_merged_get if snapshot is not None else get_config
     # Identify the canonical/legacy pair regardless of which side the caller
     # supplied. `key` may be legacy (looked up via `_CONFIG_KEY_ALIASES`) or
     # canonical (reverse-lookup against alias targets).
@@ -6565,7 +6570,10 @@ def create_task_spec(
     acceptance_content = acceptance if acceptance else "- [ ] TBD"
     # New fn-110.1 surface — rstrip like set-spec's section patching does
     # (`--acceptance-file` embeds as-is for byte-compat with 2.20.0).
-    description_content = description.rstrip() if description else "TBD"
+    # `is not None` (not truthiness): an explicitly EMPTY description file
+    # writes an intentionally empty section, matching `task set-spec
+    # --description` — only an omitted flag falls back to the TBD stub.
+    description_content = description.rstrip() if description is not None else "TBD"
     frontmatter = render_task_frontmatter(satisfies) if satisfies else ""
     return f"""{frontmatter}# {id_str} {title}
 
