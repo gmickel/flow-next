@@ -134,6 +134,8 @@ Your plugin manager updates the *plugin* (`/plugin` update on Claude Code, `droi
 
 The 5-command path is the opinionated default - rails for your first week, not a prohibition on anything else. Every stage is a composable primitive: skip stages, reorder them, chain them in one sentence, prompt *into* any of them - and whichever subset you run, the same execution, evidence, and review contracts hold. (Directly answers [#28](https://github.com/gmickel/flow-next/issues/28) and [#91](https://github.com/gmickel/flow-next/issues/91).)
 
+**You never have to type a slash command or a `--flag`.** Every skill runs from plain language and every argument has a plain-language equivalent - "implement fn-12 on a new branch and review it with codex" *is* `/flow-next:work fn-12 --branch=new --review=codex`. The explicit forms below are the precise, copy-pasteable version. And the skills compose beyond the pipeline: research a competitor's pricing, then "capture a spec for it"; run a load test, then "spec the fixes the numbers point to" - the exploration is the input, the spec is the durable output.
+
 ```text
 Skip stages       Tiny fix? plan + work, nothing else: /flow-next:plan "rename the config key" → /flow-next:work fn-N
 One-shot chain    "Plan fn-12, run plan-review until SHIP, work every task, then make-pr." One sentence, full pipeline.
