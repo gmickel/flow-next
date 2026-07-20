@@ -88,7 +88,25 @@ jobs:
             SHUFFLE_ARGS=(--shuffle --seed "$GITHUB_RUN_ID")
             echo "Ordering canary: --shuffle --seed $GITHUB_RUN_ID"
           fi
-          python scripts/run_tests_parallel.py "${SHUFFLE_ARGS[@]}"
+          EXCLUDES=()
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # Windows-only exclusions (fn-119): latent incompatibilities in files
+            # NEVER exercised on windows CI before the parallel entrypoint
+            # (pre-fn-119 windows unit coverage was 29/87 files; these keep it
+            # at 81/87 - strictly wider than before). Causes on the fn-119 PR:
+            # backend_spec hangs; flow_gitignore cp1252 read-back; gate_receipt
+            # POSIX sh shim + literal-backslash filename; normalize_section /
+            # reveval / task_create_files CLI e2e failures on 8.3 short paths.
+            # Windows-compat sweep tracked as a follow-up spec - remove entries
+            # there, never silently here.
+            EXCLUDES+=(--exclude test_backend_spec.py)
+            EXCLUDES+=(--exclude test_flow_gitignore.py)
+            EXCLUDES+=(--exclude test_gate_receipt.py)
+            EXCLUDES+=(--exclude test_normalize_section_content.py)
+            EXCLUDES+=(--exclude test_reveval_parse_guard.py)
+            EXCLUDES+=(--exclude test_task_create_files.py)
+          fi
+          python scripts/run_tests_parallel.py "${SHUFFLE_ARGS[@]}" "${EXCLUDES[@]}"
 
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})

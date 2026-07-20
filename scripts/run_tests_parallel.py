@@ -65,12 +65,16 @@ def _default_jobs() -> int:
     return max(1, cpus - 2)
 
 
-def _discover(tests_dir: Path, pattern: str) -> List[Path]:
-    """Return sorted top-level test files matching the glob pattern."""
+def _discover(
+    tests_dir: Path, pattern: str, excludes: Sequence[str]
+) -> Tuple[List[Path], List[str]]:
+    """Return (sorted matching test files, excluded names actually matched)."""
     if not tests_dir.is_dir():
         raise FileNotFoundError("tests dir not found: {}".format(tests_dir))
     files = sorted(p for p in tests_dir.glob(pattern) if p.is_file())
-    return files
+    excluded = [p.name for p in files if p.name in set(excludes)]
+    files = [p for p in files if p.name not in set(excludes)]
+    return files, excluded
 
 
 def _parse_unittest_output(text: str) -> Tuple[int, int, int, int]:
@@ -173,8 +177,12 @@ def run_suite(
     verbose: bool,
     list_only: bool,
     file_timeout: int,
+    excludes: Sequence[str],
 ) -> int:
-    files = _discover(tests_dir, pattern)
+    files, excluded = _discover(tests_dir, pattern, excludes)
+    for name in excluded:
+        # Never a silent cap: every exclusion is printed on every run.
+        print("EXCLUDED  {}  (--exclude)".format(name))
     if not files:
         print(
             "ERROR: zero test files matched pattern {!r} under {}".format(
@@ -312,6 +320,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pass -v to unittest and print failing-file output inline",
     )
     p.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="FILENAME",
+        help="Exclude a test file by exact name (repeatable; every exclusion is printed)",
+    )
+    p.add_argument(
         "--file-timeout",
         type=int,
         default=900,
@@ -347,6 +362,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             verbose=args.verbose,
             list_only=args.list_only,
             file_timeout=args.file_timeout,
+            excludes=args.exclude,
         )
     except FileNotFoundError as exc:
         print("ERROR: {}".format(exc), file=sys.stderr)
