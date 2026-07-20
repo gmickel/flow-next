@@ -316,7 +316,7 @@ scripts/ralph/ralph.sh          # Run from terminal
 Every quote below links to its public source - unlinked testimonials don't ship here, on principle.
 
 > *"This should not make hard tasks cheap. The expensive loop remains because it is the quality mechanism."*
-> — [Claire Novotny](https://github.com/gmickel/flow-next/issues/111) (.NET Foundation), after instrumenting two ~18-hour production Ralph runs (35 iterations, real repo) and finding *"the observed high-value review findings were mostly not cosmetic. They caught false confidence."*
+> — [Claire Novotny](https://github.com/gmickel/flow-next/issues/111) (.NET Foundation), after instrumenting two production Ralph runs totaling ~18 active hours (35 iterations, real repo) and finding *"the observed high-value review findings were mostly not cosmetic. They caught false confidence."*
 
 > *"I am enjoying your version of all these cool new plugins. So far yours has worked the best."*
 > — [@patrickmichalina](https://github.com/gmickel/flow-next/issues/5#issuecomment-3734228766)
