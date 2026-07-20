@@ -25,9 +25,8 @@ Docs-drift sweep + CHANGELOG rider + final full gate.
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Docs-drift sweep: all 11 fn-101 section-6 items addressed (setup-block/scope/strategy/spec-skeleton/codex classify-result+rollback-plan/rp setup-review+chat-send/done --summary+--evidence documented; pilot-log append + review-rounds listed; File Structure + architecture.md .flow/ layout completed; ralph state.json claim fixed to PAUSE/STOP sentinels + progress.txt; guard table expanded; removed commands scrubbed from all docs). CHANGELOG consolidated into ONE Unreleased entry with both breaking notes (pre-1.0 porting prose pointer; flow-swarm epics-key migration, maintainer-owned). Host review fixed final-gate fallout in the smoke harness: legacy epic/legacy_reason/blocked_epics/epic_blocked_by asserts updated to canonical keys WITH resurface guards, and a syntax-broken copilot availability probe introduced in .3 (bash -n added to review checks; the script's rc=0-on-midfile-syntax-error masked it). Final gates all green: full parallel suite 83 files / 1815 tests / 0 failures / 90.5s; smoke_test.sh All tests passed (end-to-end this time); ci_test.sh 67/67.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e7b0e239aa0109e1b7d783d61ff4aa179dda6c21
+- Tests: python3 scripts/run_tests_parallel.py (83 files, 1815 tests, 0 failures, 90.5s), bash smoke_test.sh (All tests passed, rc=0), bash ci_test.sh (67 passed, 0 failed), bash -n smoke_test.sh (syntax clean)
 - PRs:
