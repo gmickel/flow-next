@@ -25,9 +25,8 @@ Embedded review prompts move out of flowctl into visible skill templates.
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Review prompts extracted to 4 skill reference templates (impl-review-prompt / standalone-review-prompt / plan-review-prompt / completion-review-prompt) with documented placeholder contracts; XML wrapping and rubric blocks stay single-source in Python. Embedded fallbacks kept byte-identical to templates - REQUIRED, not optional: setup-installed .flow/bin/flowctl runs without the plugin root, same rationale as the existing load_validator_template pattern - so flowctl LOC does not shrink here (+64; the spec's >=1500 cumulative gate is measured at .4 where the parser shrink lands). test_review_prompt_template_parity pins fallback==template (9 tests) and 8 golden fixtures pin rendered-prompt byte-identity; HOST PROVENANCE CHECK: all 8 goldens re-rendered from the pre-extraction module with the exact test-matched calls - byte-identical, so the goldens are honest (initial mismatch was the host's own call-signature error, documented). Host review also caught via the full-corpus gate: the delegate deleted VALIDATOR_TEMPLATE_FALLBACK while load_validator_template still returned it (NameError landmine on the plugin-less path) - restored verbatim, DEEP_PASSES_FALLBACK verified intact. Full parallel suite 84 files / 1841 tests / 0 failures / 85.8s (new parity file +9); dual-copy identical; sync-codex x2 (mirror ships the templates).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 6a929ee5, c9542f332010ddf7e6486cb5faf089425abcf7a7
+- Tests: python3 scripts/run_tests_parallel.py (84 files, 1841 tests, 0 failures, 85.8s), test_review_prompt_template_parity.py 9 (parity + 8 goldens), host provenance: 8 goldens re-rendered from pre-extraction module, byte-identical, test_cursor_review_commands.py 32 (fallback path restored)
 - PRs:
