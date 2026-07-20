@@ -4013,6 +4013,10 @@ def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
 # model). Every validation error lists the valid set sorted alphabetically so
 # users get a deterministic, copy-pasteable hint.
 #
+# fn-112 review-driver hooks (run_exec / resolve_spec / check_probe / gather_diff
+# / prompt_fit / …) are attached lazily by ``_wire_backend_review_hooks`` so this
+# static table stays free of forward references to helpers defined later.
+#
 # Codex ``minimal`` effort caveat: passes codex config validation but the server
 # returns 400 when the ``web_search`` tool is enabled. flowctl reviews do not
 # enable web_search, so ``minimal`` is safe here — documented for the day we do.
@@ -20976,37 +20980,26 @@ def spec_md_rel_path(spec_id: str) -> str:
     return f"{FLOW_DIR}/{SPECS_DIR}/{spec_id}.md"
 
 
-def cmd_codex_impl_review(args: argparse.Namespace) -> None:
-    """Run implementation review via codex exec."""
-    task_id = args.task
-    base_branch = args.base
-    focus = getattr(args, "focus", None)
+# --- Review backend driver (fn-112) ---
+#
+# Shared pipeline for codex/copilot/cursor x impl/plan/completion. Task .1
+# migrates impl only; plan/completion keep their cmd_* bodies until task .2.
+# Genuine per-backend variance lives in BACKEND_REGISTRY hooks (wired lazily
+# by _wire_backend_review_hooks once the resolve_* / run_* helpers exist).
 
-    # Standalone mode (no task ID) - review branch without task context
-    standalone = task_id is None
 
-    if not standalone:
-        # Task-specific review requires .flow/
-        if not ensure_flow_exists():
-            error_exit(".flow/ does not exist", use_json=args.json)
+def _gather_review_diff(
+    base_branch: str,
+    *,
+    max_diff_bytes: int = 50000,
+    truncate_marker: Optional[str] = "... [diff truncated at 50KB]",
+) -> tuple[str, str]:
+    """Gather (diff_summary, diff_content) for review prompts.
 
-        # Validate task ID
-        if not is_task_id(task_id):
-            error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
-
-        # Load task spec
-        flow_dir = get_flow_dir()
-        # Canonicalize a short/legacy/tracker handle (`fn-74.1`) to its slugged on-disk id BEFORE
-        # the spec-path lookup + downstream per-task `review:` resolution (no-op on a full id).
-        task_id = resolve_task_arg(flow_dir, task_id) or task_id
-        task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
-
-        if not task_spec_path.exists():
-            error_exit(f"Task spec not found: {task_spec_path}", use_json=args.json)
-
-        task_spec = task_spec_path.read_text(encoding="utf-8")
-
-    # Get diff summary (--stat) - use base..HEAD for committed changes only
+    Hoisted from the byte-identical git-diff blocks that used to sit inside
+    each review command. ``truncate_marker`` None means silently truncate
+    without appending a marker (cursor: the argv-budget fit owns truncation).
+    """
     diff_summary = ""
     try:
         diff_result = subprocess.run(
@@ -21020,10 +21013,7 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     except (subprocess.CalledProcessError, OSError):
         pass
 
-    # Get actual diff content with size cap (avoid memory spike on large diffs)
-    # Use base..HEAD for committed changes only (not working tree)
     diff_content = ""
-    max_diff_bytes = 50000
     try:
         proc = subprocess.Popen(
             ["git", "diff", f"{base_branch}...HEAD"],
@@ -21031,12 +21021,10 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
             stderr=subprocess.PIPE,
             cwd=get_repo_root(),
         )
-        # Read only up to max_diff_bytes
         diff_bytes = proc.stdout.read(max_diff_bytes + 1)
         was_truncated = len(diff_bytes) > max_diff_bytes
         if was_truncated:
             diff_bytes = diff_bytes[:max_diff_bytes]
-        # Consume remaining stdout in chunks (avoid allocating the entire diff)
         while proc.stdout.read(65536):
             pass
         stderr_bytes = proc.stderr.read()
@@ -21045,58 +21033,92 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
         returncode = proc.wait()
 
         if returncode != 0 and stderr_bytes:
-            # Include error info but don't fail - diff is optional context
-            diff_content = f"[git diff failed: {stderr_bytes.decode('utf-8', errors='replace').strip()}]"
+            diff_content = (
+                f"[git diff failed: "
+                f"{stderr_bytes.decode('utf-8', errors='replace').strip()}]"
+            )
         else:
             diff_content = diff_bytes.decode("utf-8", errors="replace").strip()
-            if was_truncated:
-                diff_content += "\n\n... [diff truncated at 50KB]"
+            if was_truncated and truncate_marker:
+                diff_content += f"\n\n{truncate_marker}"
     except (subprocess.CalledProcessError, OSError):
         pass
+    return diff_summary, diff_content
 
-    # Agentic: the reviewer reads changed files from disk itself (cwd=repo_root); we never embed file contents into the prompt (PR #184).
-    if standalone:
-        prompt = build_standalone_review_prompt(base_branch, focus, diff_summary)
-        # Append diff content to standalone prompt
-        if diff_content:
-            prompt += f"\n\n<diff_content>\n{diff_content}\n</diff_content>"
-    else:
-        # Get context hints for task-specific review
-        context_hints = gather_context_hints(base_branch)
-        prompt = build_review_prompt(
-            "impl", task_spec, context_hints, diff_summary,
-            diff_content=diff_content,
-        )
 
-    # Check for existing session in receipt (indicates re-review)
-    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
-    session_id = None
+def _gather_review_diff_capped(base_branch: str) -> tuple[str, str]:
+    """Codex/copilot gather: 50KB hard cap + truncation marker."""
+    return _gather_review_diff(base_branch)
+
+
+def _gather_review_diff_cursor(base_branch: str) -> tuple[str, str]:
+    """Cursor gather: generous read cap; argv-budget fit owns truncation."""
+    return _gather_review_diff(
+        base_branch,
+        max_diff_bytes=CURSOR_ARGV_PROMPT_MAX * 2,
+        truncate_marker=None,
+    )
+
+
+def _clear_stale_review_receipt(receipt_path: Optional[str]) -> None:
+    """Best-effort unlink of a stale receipt (shared failure-path cleanup)."""
+    if not receipt_path:
+        return
+    try:
+        Path(receipt_path).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _resume_session_from_receipt(
+    receipt_path: Optional[str],
+    *,
+    allowed_modes: tuple,
+    track_prior_model: bool = False,
+    require_nonempty_sid: bool = False,
+) -> tuple[Optional[str], bool, Optional[str], Optional[str]]:
+    """Load session resume state from a prior receipt.
+
+    Returns (session_id, is_rereview, prior_model, prior_effort).
+    ``allowed_modes`` is the set of receipt ``mode`` values that may resume
+    (codex includes ``None`` for legacy receipts).
+    """
+    session_id: Optional[str] = None
     is_rereview = False
-    prior_receipt_model = None
-    prior_receipt_effort = None
-    if receipt_path:
-        receipt_file = Path(receipt_path)
-        if receipt_file.exists():
-            try:
-                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
-                # Resume only sessions minted by THIS backend — a cross-backend
-                # session id is meaningless to codex resume. Legacy receipts
-                # predate the mode field and were codex-written (mode is None).
-                if receipt_data.get("mode") in (None, "codex"):
-                    session_id = receipt_data.get("session_id")
-                    is_rereview = session_id is not None
-                    # PR #203 r2: a resumed session runs the PRIOR dispatch's
-                    # model — keep it for honest receipt stamping on resume.
-                    prior_receipt_model = receipt_data.get("model")
-                    prior_receipt_effort = receipt_data.get("effort")
-            except (json.JSONDecodeError, Exception):
-                pass
+    prior_model: Optional[str] = None
+    prior_effort: Optional[str] = None
+    if not receipt_path:
+        return session_id, is_rereview, prior_model, prior_effort
+    receipt_file = Path(receipt_path)
+    if not receipt_file.exists():
+        return session_id, is_rereview, prior_model, prior_effort
+    try:
+        receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+        if receipt_data.get("mode") in allowed_modes:
+            prior_sid = receipt_data.get("session_id")
+            if require_nonempty_sid:
+                if prior_sid:
+                    session_id = prior_sid
+                    is_rereview = True
+            else:
+                session_id = prior_sid
+                is_rereview = session_id is not None
+            if track_prior_model:
+                prior_model = receipt_data.get("model")
+                prior_effort = receipt_data.get("effort")
+    except (json.JSONDecodeError, Exception):
+        pass
+    return session_id, is_rereview, prior_model, prior_effort
 
-    # For re-reviews, prepend instruction to re-read changed files.
-    # fn-90 R4: the convergence ratchet fires whenever the receipt carries
-    # prior review text — regardless of the receipt's backend mode (resume is
-    # mode-gated above; the ratchet is not) and even when git diff reports no
-    # changed paths.
+
+def _apply_impl_rereview_preamble(
+    prompt: str,
+    *,
+    base_branch: str,
+    is_rereview: bool,
+    receipt_path: Optional[str],
+) -> str:
+    """Prepend the fn-90 R4 convergence ratchet when re-reviewing."""
     prior_findings = _read_prior_findings(receipt_path)
     if is_rereview or prior_findings is not None:
         changed_files = get_changed_files(base_branch)
@@ -21105,111 +21127,412 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
             prior_findings=prior_findings,
         )
         prompt = rereview_preamble + prompt
+    return prompt
 
-    # Resolve sandbox mode (never pass 'auto' to Codex CLI)
+
+def _build_impl_prompt_default(
+    *,
+    standalone: bool,
+    base_branch: str,
+    focus: Optional[str],
+    task_spec: str,
+    diff_summary: str,
+    diff_content: str,
+) -> str:
+    """Codex/copilot impl prompt builder (embed diff; no argv budget)."""
+    if standalone:
+        prompt = build_standalone_review_prompt(base_branch, focus, diff_summary)
+        if diff_content:
+            prompt += f"\n\n<diff_content>\n{diff_content}\n</diff_content>"
+        return prompt
+    context_hints = gather_context_hints(base_branch)
+    return build_review_prompt(
+        "impl", task_spec, context_hints, diff_summary,
+        diff_content=diff_content,
+    )
+
+
+def _build_impl_prompt_cursor(
+    *,
+    standalone: bool,
+    base_branch: str,
+    focus: Optional[str],
+    task_spec: str,
+    diff_summary: str,
+    diff_content: str,
+    rereview_preamble: str,
+) -> str:
+    """Cursor impl prompt: diff dynamically sized under CURSOR_ARGV_PROMPT_MAX."""
+    if standalone:
+        base_prompt = build_standalone_review_prompt(base_branch, focus, diff_summary)
+        fitted_diff = fit_cursor_diff_to_budget(
+            rereview_preamble + base_prompt, diff_content
+        )
+        prompt = base_prompt
+        if fitted_diff:
+            prompt += f"\n\n<diff_content>\n{fitted_diff}\n</diff_content>"
+    else:
+        context_hints = gather_context_hints(base_branch)
+        prompt_without_diff = build_review_prompt(
+            "impl", task_spec, context_hints, diff_summary,
+            diff_content="",
+        )
+        fitted_diff = fit_cursor_diff_to_budget(
+            rereview_preamble + prompt_without_diff, diff_content
+        )
+        prompt = build_review_prompt(
+            "impl", task_spec, context_hints, diff_summary,
+            diff_content=fitted_diff,
+        )
+    if rereview_preamble:
+        prompt = rereview_preamble + prompt
+    return prompt
+
+
+def _codex_run_exec(
+    prompt: str,
+    *,
+    session_id: Optional[str],
+    repo_root: Path,
+    spec: "BackendSpec",
+    resolution_out: dict,
+    args: argparse.Namespace,
+) -> tuple[str, Optional[str], int, str]:
+    """Codex spawn: resolve sandbox from args, then run_codex_exec."""
     try:
         sandbox = resolve_codex_sandbox(getattr(args, "sandbox", "auto"))
     except ValueError as e:
         error_exit(str(e), use_json=args.json, code=2)
+    return run_codex_exec(
+        prompt, session_id=session_id, sandbox=sandbox, spec=spec,
+        repo_root=repo_root, resolution_out=resolution_out,
+    )
 
-    # Resolve review spec (--spec overrides task/epic/env/config resolution)
-    resolved_spec = _resolve_codex_review_spec(args, task_id)
 
-    # fn-90 R5: deterministic cap — enforce + increment the per-task impl-review
-    # round counter BEFORE dispatch (task-scoped; standalone/branch reviews have
-    # no spec state so the cap is skipped). Refuses (exit 4) at the cap.
+def _copilot_run_exec(
+    prompt: str,
+    *,
+    session_id: Optional[str],
+    repo_root: Path,
+    spec: "BackendSpec",
+    resolution_out: dict,
+    args: argparse.Namespace,
+) -> tuple[str, Optional[str], int, str]:
+    """Copilot spawn: session_id is always a UUID (marker-based create-or-resume)."""
+    return run_copilot_exec(
+        prompt, session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out,
+    )
+
+
+def _cursor_run_exec(
+    prompt: str,
+    *,
+    session_id: Optional[str],
+    repo_root: Path,
+    spec: "BackendSpec",
+    resolution_out: dict,
+    args: argparse.Namespace,
+) -> tuple[str, Optional[str], int, str]:
+    """Cursor spawn: resume-only (session_id None omits --resume)."""
+    return run_cursor_exec(
+        prompt, session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out,
+    )
+
+
+def _wire_backend_review_hooks() -> None:
+    """Attach run_exec / resolve_spec / check_probe / prompt-fit hooks.
+
+    Idempotent. Called at the top of cmd_backend_review so the static
+    BACKEND_REGISTRY (defined before run_copilot_exec / resolve_* helpers)
+    stays free of forward references.
+    """
+    if BACKEND_REGISTRY["codex"].get("run_exec") is not None:
+        return
+
+    BACKEND_REGISTRY["codex"].update({
+        # Spawn shape: sandbox flags via resolve_codex_sandbox.
+        "run_exec": _codex_run_exec,
+        "resolve_spec": _resolve_codex_review_spec,
+        "check_probe": get_codex_version,
+        "gather_diff": _gather_review_diff_capped,
+        # Resume legacy receipts (mode None) + mode "codex"; track prior model.
+        "resume_modes": (None, "codex"),
+        "track_prior_receipt_model": True,
+        "require_nonempty_sid": False,
+        "mint_session_id": False,
+        "has_sandbox": True,
+        "include_effort": True,
+        "extract_review": extract_codex_final_message,
+        "display_name": "Codex",
+        "cli_label": "codex exec",
+        "no_verdict_label": "Codex",
+        # Prompt-fit: none (stdin delivery; no argv budget).
+        "prompt_fit": "none",
+        "build_impl_prompt": "default",
+    })
+    BACKEND_REGISTRY["copilot"].update({
+        # Spawn shape: session marker under .flow/tmp/copilot-sessions/.
+        "run_exec": _copilot_run_exec,
+        "resolve_spec": _resolve_copilot_review_spec,
+        "check_probe": get_copilot_version,
+        "gather_diff": _gather_review_diff_capped,
+        "resume_modes": ("copilot",),
+        "track_prior_receipt_model": False,
+        "require_nonempty_sid": False,
+        # Client-minted UUID — copilot --resume is create-or-resume via marker.
+        "mint_session_id": True,
+        "has_sandbox": False,
+        "include_effort": True,
+        "extract_review": lambda output: output,
+        "display_name": "Copilot",
+        "cli_label": "copilot",
+        "no_verdict_label": "Copilot",
+        "prompt_fit": "none",
+        "build_impl_prompt": "default",
+    })
+    BACKEND_REGISTRY["cursor"].update({
+        # Spawn shape: positional argv + CURSOR_ARGV_PROMPT_MAX budget handling.
+        "run_exec": _cursor_run_exec,
+        "resolve_spec": _resolve_cursor_review_spec,
+        "check_probe": get_cursor_version,
+        "gather_diff": _gather_review_diff_cursor,
+        "resume_modes": ("cursor",),
+        "track_prior_receipt_model": False,
+        # Resume-only: non-empty prior sid required; never mint a UUID.
+        "require_nonempty_sid": True,
+        "mint_session_id": False,
+        "has_sandbox": False,
+        "include_effort": False,
+        "extract_review": lambda output: output,
+        "display_name": "Cursor",
+        "cli_label": "cursor",
+        "no_verdict_label": "Cursor",
+        # Prompt-fit: dynamic diff fit + persona override + final argv backstop.
+        "prompt_fit": "cursor_argv",
+        "build_impl_prompt": "cursor",
+    })
+
+
+def cmd_backend_review(
+    args: argparse.Namespace,
+    backend: Optional[str] = None,
+    kind: Optional[str] = None,
+) -> None:
+    """Generic review driver: ``cmd_backend_review(backend, kind)``.
+
+    ``backend`` / ``kind`` come from explicit kwargs (thin cmd_* wrappers) or
+    from ``args.review_backend`` / ``args.review_kind`` (parameterized argparse).
+    Designed for impl/plan/completion; task .1 migrates impl only.
+    """
+    _wire_backend_review_hooks()
+    backend = backend or getattr(args, "review_backend", None)
+    kind = kind or getattr(args, "review_kind", None)
+    if backend not in BACKEND_REGISTRY or BACKEND_REGISTRY[backend].get("run_exec") is None:
+        error_exit(
+            f"cmd_backend_review: backend {backend!r} has no review hooks",
+            use_json=getattr(args, "json", False),
+            code=2,
+        )
+    if kind == "impl":
+        _backend_impl_review(args, backend)
+    elif kind in ("plan", "completion"):
+        # Task .2 migrates these; keep the message explicit if somehow reached.
+        error_exit(
+            f"cmd_backend_review kind={kind!r} not migrated yet "
+            f"(use cmd_{backend}_{kind}_review)",
+            use_json=getattr(args, "json", False),
+            code=2,
+        )
+    else:
+        error_exit(
+            f"cmd_backend_review: unknown kind {kind!r}",
+            use_json=getattr(args, "json", False),
+            code=2,
+        )
+
+
+def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
+    """Shared impl-review pipeline; per-backend variance via registry hooks."""
+    reg = BACKEND_REGISTRY[backend]
+    task_id = args.task
+    base_branch = args.base
+    focus = getattr(args, "focus", None)
+    standalone = task_id is None
+    task_spec = ""
+
+    if not standalone:
+        if not ensure_flow_exists():
+            error_exit(".flow/ does not exist", use_json=args.json)
+        if not is_task_id(task_id):
+            error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
+        flow_dir = get_flow_dir()
+        # Canonicalize a short/legacy/tracker handle before path lookup.
+        task_id = resolve_task_arg(flow_dir, task_id) or task_id
+        task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+        if not task_spec_path.exists():
+            error_exit(f"Task spec not found: {task_spec_path}", use_json=args.json)
+        task_spec = task_spec_path.read_text(encoding="utf-8")
+
+    diff_summary, diff_content = reg["gather_diff"](base_branch)
+
+    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+
+    # Cursor detects re-review BEFORE prompt build so the preamble is reserved
+    # in the argv budget. Codex/copilot build the prompt first, then resume.
+    if reg["prompt_fit"] == "cursor_argv":
+        session_id, is_rereview, prior_receipt_model, prior_receipt_effort = (
+            _resume_session_from_receipt(
+                receipt_path,
+                allowed_modes=reg["resume_modes"],
+                track_prior_model=reg["track_prior_receipt_model"],
+                require_nonempty_sid=reg["require_nonempty_sid"],
+            )
+        )
+        # Resume-only: NO uuid fallback.
+        rereview_preamble = ""
+        prior_findings = _read_prior_findings(receipt_path)
+        if is_rereview or prior_findings is not None:
+            changed_files = get_changed_files(base_branch)
+            rereview_preamble = build_rereview_preamble(
+                changed_files, "implementation",
+                prior_findings=prior_findings,
+            )
+        prompt = _build_impl_prompt_cursor(
+            standalone=standalone,
+            base_branch=base_branch,
+            focus=focus,
+            task_spec=task_spec,
+            diff_summary=diff_summary,
+            diff_content=diff_content,
+            rereview_preamble=rereview_preamble,
+        )
+    else:
+        prompt = _build_impl_prompt_default(
+            standalone=standalone,
+            base_branch=base_branch,
+            focus=focus,
+            task_spec=task_spec,
+            diff_summary=diff_summary,
+            diff_content=diff_content,
+        )
+        session_id, is_rereview, prior_receipt_model, prior_receipt_effort = (
+            _resume_session_from_receipt(
+                receipt_path,
+                allowed_modes=reg["resume_modes"],
+                track_prior_model=reg["track_prior_receipt_model"],
+                require_nonempty_sid=reg["require_nonempty_sid"],
+            )
+        )
+        if reg["mint_session_id"] and not session_id:
+            session_id = str(uuid.uuid4())
+        prompt = _apply_impl_rereview_preamble(
+            prompt,
+            base_branch=base_branch,
+            is_rereview=is_rereview,
+            receipt_path=receipt_path,
+        )
+
+    resolved_spec = reg["resolve_spec"](args, task_id)
+
+    # Cursor: persona override + final argv-cap backstop (after resolve so
+    # task_id is canonicalized; order matches the pre-migration handler).
+    if reg["prompt_fit"] == "cursor_argv":
+        prompt = build_cursor_persona_override() + prompt
+        repo_root = get_repo_root()
+        prompt = fit_cursor_prompt_to_budget(
+            prompt,
+            repo_root=repo_root,
+            task_ids=[task_id] if task_id else None,
+        )
+    else:
+        repo_root = get_repo_root()
+
+    # fn-90 R5: deterministic cap — enforce + increment BEFORE dispatch.
     if not standalone:
         enforce_and_increment_review_cap(
             spec_id_from_task(task_id), "impl", task_id=task_id, use_json=args.json
         )
 
-    # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
-    # any subdir; codex reads files from disk — never embedded into the prompt).
-    repo_root = get_repo_root()
     _resolution: dict = {}
-    output, thread_id, exit_code, stderr = run_codex_exec(
-        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec,
-        repo_root=repo_root, resolution_out=_resolution,
+    output, returned_session_id, exit_code, stderr = reg["run_exec"](
+        prompt,
+        session_id=session_id,
+        repo_root=repo_root,
+        spec=resolved_spec,
+        resolution_out=_resolution,
+        args=args,
     )
-    # fn-76 R5: rebind resolved_spec to the model actually run so the receipt +
-    # JSON reflect any ladder downgrade / floor (else the requested spec's own).
-    _rm, _re = _receipt_model_effort(
-        resolved_spec, _resolution,
-        prior_model=prior_receipt_model, prior_effort=prior_receipt_effort,
-    )
-    resolved_spec = dataclass_replace(resolved_spec, model=_rm, effort=_re)
 
-    # Check for sandbox failures (clear stale receipt and exit)
-    if is_sandbox_failure(exit_code, output, stderr):
-        # Clear any stale receipt to prevent false gate satisfaction
-        if receipt_path:
-            try:
-                Path(receipt_path).unlink(missing_ok=True)
-            except OSError:
-                pass  # Best effort - proceed to error_exit regardless
+    # Receipt model/effort: codex rebinds resolved_spec; copilot/cursor use
+    # effective_* locals. Preserve each shape.
+    if backend == "codex":
+        _rm, _re = _receipt_model_effort(
+            resolved_spec, _resolution,
+            prior_model=prior_receipt_model, prior_effort=prior_receipt_effort,
+        )
+        resolved_spec = dataclass_replace(resolved_spec, model=_rm, effort=_re)
+        effective_model = resolved_spec.model
+        effective_effort = resolved_spec.effort
+    else:
+        effective_model, effective_effort = _receipt_model_effort(
+            resolved_spec, _resolution,
+            prior_model=prior_receipt_model, prior_effort=prior_receipt_effort,
+        )
+
+    # Codex sandbox failure → exit 3 (unique to codex).
+    if reg["has_sandbox"] and is_sandbox_failure(exit_code, output, stderr):
+        _clear_stale_review_receipt(receipt_path)
         msg = (
             "Codex sandbox blocked operations. "
-            "Try --sandbox danger-full-access (or auto) or set CODEX_SANDBOX=danger-full-access"
+            "Try --sandbox danger-full-access (or auto) or set "
+            "CODEX_SANDBOX=danger-full-access"
         )
         error_exit(msg, use_json=args.json, code=3)
 
-    # Handle non-sandbox failures
     if exit_code != 0:
-        # Clear any stale receipt to prevent false gate satisfaction
-        if receipt_path:
-            try:
-                Path(receipt_path).unlink(missing_ok=True)
-            except OSError:
-                pass
-        msg = (stderr or output or "codex exec failed").strip()
-        error_exit(f"codex exec failed: {msg}", use_json=args.json, code=2)
+        _clear_stale_review_receipt(receipt_path)
+        msg = (stderr or output or f"{reg['cli_label']} failed").strip()
+        error_exit(f"{reg['cli_label']} failed: {msg}", use_json=args.json, code=2)
 
-    # Parse verdict
     verdict = parse_codex_verdict(output)
-
-    # Fail if no verdict found (don't let UNKNOWN pass as success)
     if not verdict:
-        # Clear any stale receipt
-        if receipt_path:
-            try:
-                Path(receipt_path).unlink(missing_ok=True)
-            except OSError:
-                pass
+        _clear_stale_review_receipt(receipt_path)
         error_exit(
-            "Codex review completed but no verdict found in output. "
-            "Expected <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>",
+            f"{reg['no_verdict_label']} review completed but no verdict found "
+            f"in output. Expected <verdict>SHIP</verdict> or "
+            f"<verdict>NEEDS_WORK</verdict>",
             use_json=args.json,
             code=2,
         )
 
-    # fn-90 R5: convergence — reset the per-task counter on SHIP.
     if verdict == "SHIP" and not standalone:
         reset_review_cap(spec_id_from_task(task_id), "impl", task_id=task_id)
 
-    # Determine review id (task_id for task reviews, "branch" for standalone)
     review_id = task_id if task_id else "branch"
+    review_text = reg["extract_review"](output)
 
-    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
     suppressed_count = parse_suppressed_count(output)
     classification_counts = parse_classification_counts(output)
     unaddressed_rids = parse_unaddressed_rids(output)
 
-    # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
-        receipt_data = {
-            "type": "impl_review",  # Required by Ralph
-            "id": review_id,  # Required by Ralph
-            "mode": "codex",
+        receipt_data: dict = {
+            "type": "impl_review",
+            "id": review_id,
+            "mode": backend,
             "base": base_branch,
             "verdict": verdict,
-            "session_id": thread_id,
-            "model": resolved_spec.model,
-            "effort": resolved_spec.effort,
-            "spec": str(resolved_spec),
-            "timestamp": now_iso(),
-            "review": extract_codex_final_message(output),  # Full review feedback for fix loop
+            "session_id": returned_session_id,
+            "model": effective_model,
         }
-        # Add iteration if running under Ralph
+        if reg["include_effort"]:
+            receipt_data["effort"] = effective_effort
+        receipt_data["spec"] = str(resolved_spec)
+        receipt_data["timestamp"] = now_iso()
+        receipt_data["review"] = review_text
+        # RALPH_ITERATION stamping kept inline (task .2 extracts the shared helper).
         ralph_iter = os.environ.get("RALPH_ITERATION")
         if ralph_iter:
             try:
@@ -21229,20 +21552,20 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
 
-    # Output
     if args.json:
-        json_payload = {
+        json_payload: dict = {
             "type": "impl_review",
             "id": review_id,
             "verdict": verdict,
-            "session_id": thread_id,
-            "mode": "codex",
-            "model": resolved_spec.model,
-            "effort": resolved_spec.effort,
-            "spec": str(resolved_spec),
-            "standalone": standalone,
-            "review": extract_codex_final_message(output),  # Full review feedback for fix loop
+            "session_id": returned_session_id,
+            "mode": backend,
+            "model": effective_model,
         }
+        if reg["include_effort"]:
+            json_payload["effort"] = effective_effort
+        json_payload["spec"] = str(resolved_spec)
+        json_payload["standalone"] = standalone
+        json_payload["review"] = review_text
         if suppressed_count:
             json_payload["suppressed_count"] = suppressed_count
         if classification_counts is not None:
@@ -21250,13 +21573,15 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
             json_payload["pre_existing_count"] = classification_counts["pre_existing"]
         if unaddressed_rids is not None:
             json_payload["unaddressed"] = unaddressed_rids
-        json_output(
-            json_payload
-        )
+        json_output(json_payload)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
 
+
+def cmd_codex_impl_review(args: argparse.Namespace) -> None:
+    """Run implementation review via codex exec."""
+    cmd_backend_review(args, backend="codex", kind="impl")
 
 def _resolve_codex_review_spec(
     args: argparse.Namespace,
@@ -22001,243 +22326,7 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
     - Client-generated session UUID (``run_copilot_exec`` is create-or-resume).
     - Receipt stamps ``mode: "copilot"`` + ``model`` + ``effort``.
     """
-    task_id = args.task
-    base_branch = args.base
-    focus = getattr(args, "focus", None)
-
-    # Standalone mode (no task ID) - review branch without task context
-    standalone = task_id is None
-
-    if not standalone:
-        if not ensure_flow_exists():
-            error_exit(".flow/ does not exist", use_json=args.json)
-
-        if not is_task_id(task_id):
-            error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
-
-        flow_dir = get_flow_dir()
-        # Canonicalize a short/legacy/tracker handle (`fn-74.1`) to its slugged on-disk id BEFORE
-        # the spec-path lookup + downstream per-task `review:` resolution (resolve_task_arg no-ops
-        # on a full/unresolvable id) — else `flowctl <backend> impl-review fn-74.1` misses the file.
-        task_id = resolve_task_arg(flow_dir, task_id) or task_id
-        task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
-
-        if not task_spec_path.exists():
-            error_exit(f"Task spec not found: {task_spec_path}", use_json=args.json)
-
-        task_spec = task_spec_path.read_text(encoding="utf-8")
-
-    # Get diff summary (--stat) - use base..HEAD for committed changes only
-    diff_summary = ""
-    try:
-        diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
-            capture_output=True,
-            text=True, encoding="utf-8",
-            cwd=get_repo_root(),
-        )
-        if diff_result.returncode == 0:
-            diff_summary = diff_result.stdout.strip()
-    except (subprocess.CalledProcessError, OSError):
-        pass
-
-    # Get actual diff content with size cap (avoid memory spike on large diffs)
-    diff_content = ""
-    max_diff_bytes = 50000
-    try:
-        proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}...HEAD"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=get_repo_root(),
-        )
-        diff_bytes = proc.stdout.read(max_diff_bytes + 1)
-        was_truncated = len(diff_bytes) > max_diff_bytes
-        if was_truncated:
-            diff_bytes = diff_bytes[:max_diff_bytes]
-        while proc.stdout.read(65536):
-            pass
-        stderr_bytes = proc.stderr.read()
-        proc.stdout.close()
-        proc.stderr.close()
-        returncode = proc.wait()
-
-        if returncode != 0 and stderr_bytes:
-            diff_content = f"[git diff failed: {stderr_bytes.decode('utf-8', errors='replace').strip()}]"
-        else:
-            diff_content = diff_bytes.decode("utf-8", errors="replace").strip()
-            if was_truncated:
-                diff_content += "\n\n... [diff truncated at 50KB]"
-    except (subprocess.CalledProcessError, OSError):
-        pass
-
-    # Agentic: the reviewer reads changed files from disk itself (cwd=repo_root); we never embed file contents into the prompt (PR #184).
-    if standalone:
-        prompt = build_standalone_review_prompt(base_branch, focus, diff_summary)
-        if diff_content:
-            prompt += f"\n\n<diff_content>\n{diff_content}\n</diff_content>"
-    else:
-        context_hints = gather_context_hints(base_branch)
-        prompt = build_review_prompt(
-            "impl", task_spec, context_hints, diff_summary,
-            diff_content=diff_content,
-        )
-
-    # Check for existing session in receipt (indicates re-review). Copilot
-    # receipts only use the session_id if they were written by the copilot
-    # backend (mode == "copilot"); cross-backend receipt confusion would
-    # silently feed a codex thread_id to copilot --resume.
-    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
-    session_id: Optional[str] = None
-    is_rereview = False
-    if receipt_path:
-        receipt_file = Path(receipt_path)
-        if receipt_file.exists():
-            try:
-                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
-                if receipt_data.get("mode") == "copilot":
-                    session_id = receipt_data.get("session_id")
-                    is_rereview = session_id is not None
-            except (json.JSONDecodeError, Exception):
-                pass
-
-    # Generate fresh UUID when no prior session (copilot --resume is create-or-resume)
-    if not session_id:
-        session_id = str(uuid.uuid4())
-
-    # For re-reviews, prepend instruction to re-read changed files.
-    # fn-90 R4: the convergence ratchet fires whenever the receipt carries
-    # prior review text — regardless of the receipt's backend mode (resume is
-    # mode-gated above; the ratchet is not) and even when git diff reports no
-    # changed paths.
-    prior_findings = _read_prior_findings(receipt_path)
-    if is_rereview or prior_findings is not None:
-        changed_files = get_changed_files(base_branch)
-        rereview_preamble = build_rereview_preamble(
-            changed_files, "implementation",
-            prior_findings=prior_findings,
-        )
-        prompt = rereview_preamble + prompt
-
-    # Resolve review spec (task/epic/env/config/defaults or --spec override)
-    resolved_spec = _resolve_copilot_review_spec(args, task_id)
-    effective_model = resolved_spec.model or "gpt-5.5"
-    effective_effort = resolved_spec.effort or "high"
-
-    # fn-90 R5: deterministic cap — enforce + increment the per-task impl-review
-    # round counter BEFORE dispatch (task-scoped; standalone skipped).
-    if not standalone:
-        enforce_and_increment_review_cap(
-            spec_id_from_task(task_id), "impl", task_id=task_id, use_json=args.json
-        )
-
-    # Run copilot
-    repo_root = get_repo_root()
-    _resolution: dict = {}
-    output, returned_session_id, exit_code, stderr = run_copilot_exec(
-        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec,
-        resolution_out=_resolution,
-    )
-    # fn-76 R5: reflect any ladder downgrade / floor ("auto") on the receipt.
-    effective_model, effective_effort = _receipt_model_effort(
-        resolved_spec, _resolution
-    )
-
-    # Handle failures (no sandbox branch — copilot has no sandbox)
-    if exit_code != 0:
-        if receipt_path:
-            try:
-                Path(receipt_path).unlink(missing_ok=True)
-            except OSError:
-                pass
-        msg = (stderr or output or "copilot failed").strip()
-        error_exit(f"copilot failed: {msg}", use_json=args.json, code=2)
-
-    # Parse verdict
-    verdict = parse_codex_verdict(output)
-
-    if not verdict:
-        if receipt_path:
-            try:
-                Path(receipt_path).unlink(missing_ok=True)
-            except OSError:
-                pass
-        error_exit(
-            "Copilot review completed but no verdict found in output. "
-            "Expected <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>",
-            use_json=args.json,
-            code=2,
-        )
-
-    # fn-90 R5: convergence — reset the per-task counter on SHIP.
-    if verdict == "SHIP" and not standalone:
-        reset_review_cap(spec_id_from_task(task_id), "impl", task_id=task_id)
-
-    review_id = task_id if task_id else "branch"
-
-    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
-    suppressed_count = parse_suppressed_count(output)
-    classification_counts = parse_classification_counts(output)
-    unaddressed_rids = parse_unaddressed_rids(output)
-
-    if receipt_path:
-        receipt_data = {
-            "type": "impl_review",
-            "id": review_id,
-            "mode": "copilot",
-            "base": base_branch,
-            "verdict": verdict,
-            "session_id": returned_session_id,
-            "model": effective_model,
-            "effort": effective_effort,
-            "spec": str(resolved_spec),
-            "timestamp": now_iso(),
-            "review": output,
-        }
-        ralph_iter = os.environ.get("RALPH_ITERATION")
-        if ralph_iter:
-            try:
-                receipt_data["iteration"] = int(ralph_iter)
-            except ValueError:
-                pass
-        if focus:
-            receipt_data["focus"] = focus
-        if suppressed_count:
-            receipt_data["suppressed_count"] = suppressed_count
-        if classification_counts is not None:
-            receipt_data["introduced_count"] = classification_counts["introduced"]
-            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
-        if unaddressed_rids is not None:
-            receipt_data["unaddressed"] = unaddressed_rids
-        Path(receipt_path).write_text(
-            json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
-        )
-
-    if args.json:
-        json_payload = {
-            "type": "impl_review",
-            "id": review_id,
-            "verdict": verdict,
-            "session_id": returned_session_id,
-            "mode": "copilot",
-            "model": effective_model,
-            "effort": effective_effort,
-            "spec": str(resolved_spec),
-            "standalone": standalone,
-            "review": output,
-        }
-        if suppressed_count:
-            json_payload["suppressed_count"] = suppressed_count
-        if classification_counts is not None:
-            json_payload["introduced_count"] = classification_counts["introduced"]
-            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
-        if unaddressed_rids is not None:
-            json_payload["unaddressed"] = unaddressed_rids
-        json_output(json_payload)
-    else:
-        print(output)
-        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
-
+    cmd_backend_review(args, backend="copilot", kind="impl")
 
 def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
     """Run plan review via copilot -p."""
@@ -22708,279 +22797,7 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
     - Receipt stamps ``mode: "cursor"`` + ``model`` — **no ``effort`` key**
       (effort is folded into the cursor model name and is not a cursor field).
     """
-    task_id = args.task
-    base_branch = args.base
-    focus = getattr(args, "focus", None)
-
-    # Standalone mode (no task ID) - review branch without task context
-    standalone = task_id is None
-
-    if not standalone:
-        if not ensure_flow_exists():
-            error_exit(".flow/ does not exist", use_json=args.json)
-
-        if not is_task_id(task_id):
-            error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
-
-        flow_dir = get_flow_dir()
-        # Canonicalize a short/legacy/tracker handle (`fn-74.1`) to its slugged on-disk id BEFORE
-        # the spec-path lookup + downstream per-task `review:` resolution (resolve_task_arg no-ops
-        # on a full/unresolvable id) — else `flowctl <backend> impl-review fn-74.1` misses the file.
-        task_id = resolve_task_arg(flow_dir, task_id) or task_id
-        task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
-
-        if not task_spec_path.exists():
-            error_exit(f"Task spec not found: {task_spec_path}", use_json=args.json)
-
-        task_spec = task_spec_path.read_text(encoding="utf-8")
-
-    # Get diff summary (--stat) - use base..HEAD for committed changes only
-    diff_summary = ""
-    try:
-        diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
-            capture_output=True,
-            text=True, encoding="utf-8",
-            cwd=get_repo_root(),
-        )
-        if diff_result.returncode == 0:
-            diff_summary = diff_result.stdout.strip()
-    except (subprocess.CalledProcessError, OSError):
-        pass
-
-    # Read the diff with a cheap upper bound (memory guard). The real fit is
-    # computed dynamically below from the budget left under CURSOR_ARGV_PROMPT_MAX.
-    diff_content = ""
-    max_diff_bytes = CURSOR_ARGV_PROMPT_MAX * 2  # generous read cap; budget trims to fit below
-    try:
-        proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}...HEAD"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=get_repo_root(),
-        )
-        diff_bytes = proc.stdout.read(max_diff_bytes + 1)
-        if len(diff_bytes) > max_diff_bytes:
-            diff_bytes = diff_bytes[:max_diff_bytes]
-        while proc.stdout.read(65536):
-            pass
-        stderr_bytes = proc.stderr.read()
-        proc.stdout.close()
-        proc.stderr.close()
-        returncode = proc.wait()
-
-        if returncode != 0 and stderr_bytes:
-            diff_content = f"[git diff failed: {stderr_bytes.decode('utf-8', errors='replace').strip()}]"
-        else:
-            diff_content = diff_bytes.decode("utf-8", errors="replace").strip()
-    except (subprocess.CalledProcessError, OSError):
-        pass
-
-    # Detect re-review FIRST (before building the prompt) so the re-review
-    # preamble is reserved in the cursor argv budget. A resumed review prepends
-    # preamble text; if it isn't counted, the prompt can exceed
-    # CURSOR_ARGV_PROMPT_MAX and fail closed. Cursor only resumes when the prior
-    # receipt was written by THIS backend (mode == "cursor"); a cross-backend
-    # receipt would feed a foreign id to cursor --resume, so it starts fresh.
-    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
-    session_id: Optional[str] = None
-    is_rereview = False
-    if receipt_path:
-        receipt_file = Path(receipt_path)
-        if receipt_file.exists():
-            try:
-                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
-                if receipt_data.get("mode") == "cursor":
-                    prior_sid = receipt_data.get("session_id")
-                    if prior_sid:  # non-empty id ⇒ resume
-                        session_id = prior_sid
-                        is_rereview = True
-            except (json.JSONDecodeError, Exception):
-                pass
-
-    # Resume-only: NO uuid fallback. session_id stays None on a first review;
-    # run_cursor_exec omits --resume and captures the id Cursor mints.
-
-    # Re-review preamble (empty on a first review) is prepended to the final
-    # prompt and MUST be reserved in the diff budget below.
-    rereview_preamble = ""
-    # fn-90 R4: ratchet fires on prior review text regardless of receipt mode
-    # (resume above stays gated on mode == "cursor" — a cross-backend fix
-    # round must NOT behave like a fresh review) or an empty changed-file list.
-    prior_findings = _read_prior_findings(receipt_path)
-    if is_rereview or prior_findings is not None:
-        changed_files = get_changed_files(base_branch)
-        rereview_preamble = build_rereview_preamble(
-            changed_files, "implementation",
-            prior_findings=prior_findings,
-        )
-
-    # Cursor reviews are AGENTIC: cursor-agent runs read-only (`--mode ask`) with
-    # cwd=repo_root and reads the changed files from disk itself. The embedded
-    # diff is DYNAMICALLY sized to the space left under CURSOR_ARGV_PROMPT_MAX
-    # (positional-argv cap) AFTER reserving the re-review preamble — a static cap
-    # can't (overhead varies per task; a big changed file like flowctl.py
-    # overflowed, PR #184). cursor reads full files from disk, so a budget-trimmed
-    # embedded diff loses only a convenience signal.
-    if standalone:
-        base_prompt = build_standalone_review_prompt(base_branch, focus, diff_summary)
-        fitted_diff = fit_cursor_diff_to_budget(
-            rereview_preamble + base_prompt, diff_content
-        )
-        prompt = base_prompt
-        if fitted_diff:
-            prompt += f"\n\n<diff_content>\n{fitted_diff}\n</diff_content>"
-    else:
-        context_hints = gather_context_hints(base_branch)
-        prompt_without_diff = build_review_prompt(
-            "impl", task_spec, context_hints, diff_summary,
-            diff_content="",
-        )
-        fitted_diff = fit_cursor_diff_to_budget(
-            rereview_preamble + prompt_without_diff, diff_content
-        )
-        prompt = build_review_prompt(
-            "impl", task_spec, context_hints, diff_summary,
-            diff_content=fitted_diff,
-        )
-
-    # Prepend the re-review preamble (already reserved in the budget above).
-    if rereview_preamble:
-        prompt = rereview_preamble + prompt
-
-    # Resolve review spec (task/epic/env/config/defaults or --spec override)
-    resolved_spec = _resolve_cursor_review_spec(args, task_id)
-    effective_model = resolved_spec.model or "gpt-5.6-sol-high"
-
-    # fn-90 R7: prepend the cursor persona-override preamble (cursor-agent has no
-    # system-prompt mechanism; the rubric rides in the user prompt on top of
-    # Cursor's built-in persona + auto-attached AGENTS.md/skills/MCP blocks).
-    # Prepend BEFORE the budget fit so the total length accounts for it; it sits
-    # at the head of the prompt where head-preserving truncation keeps it intact.
-    prompt = build_cursor_persona_override() + prompt
-
-    # Final argv-cap backstop: the diff fit above pre-trims the diff, but a large
-    # task spec can still overflow CURSOR_ARGV_PROMPT_MAX. Cap the whole prompt,
-    # naming the on-disk sources cursor reads for full context (it runs read-only
-    # with cwd=repo_root). Rubric/verdict grammar is preserved verbatim.
-    repo_root = get_repo_root()
-    prompt = fit_cursor_prompt_to_budget(
-        prompt,
-        repo_root=repo_root,
-        task_ids=[task_id] if task_id else None,
-    )
-
-    # fn-90 R5: deterministic cap — enforce + increment the per-task impl-review
-    # round counter BEFORE dispatch (task-scoped; standalone skipped).
-    if not standalone:
-        enforce_and_increment_review_cap(
-            spec_id_from_task(task_id), "impl", task_id=task_id, use_json=args.json
-        )
-
-    # Run cursor (resume-only; spec carries no effort)
-    _resolution: dict = {}
-    output, returned_session_id, exit_code, stderr = run_cursor_exec(
-        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec,
-        resolution_out=_resolution,
-    )
-    # fn-76 R5: reflect any list-models downgrade / floor ("auto") on the receipt.
-    effective_model, effective_effort = _receipt_model_effort(
-        resolved_spec, _resolution
-    )
-
-    # Handle failures
-    if exit_code != 0:
-        if receipt_path:
-            try:
-                Path(receipt_path).unlink(missing_ok=True)
-            except OSError:
-                pass
-        msg = (stderr or output or "cursor failed").strip()
-        error_exit(f"cursor failed: {msg}", use_json=args.json, code=2)
-
-    # Parse verdict
-    verdict = parse_codex_verdict(output)
-
-    if not verdict:
-        if receipt_path:
-            try:
-                Path(receipt_path).unlink(missing_ok=True)
-            except OSError:
-                pass
-        error_exit(
-            "Cursor review completed but no verdict found in output. "
-            "Expected <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>",
-            use_json=args.json,
-            code=2,
-        )
-
-    # fn-90 R5: convergence — reset the per-task counter on SHIP.
-    if verdict == "SHIP" and not standalone:
-        reset_review_cap(spec_id_from_task(task_id), "impl", task_id=task_id)
-
-    review_id = task_id if task_id else "branch"
-
-    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
-    suppressed_count = parse_suppressed_count(output)
-    classification_counts = parse_classification_counts(output)
-    unaddressed_rids = parse_unaddressed_rids(output)
-
-    if receipt_path:
-        receipt_data = {
-            "type": "impl_review",
-            "id": review_id,
-            "mode": "cursor",
-            "base": base_branch,
-            "verdict": verdict,
-            "session_id": returned_session_id,
-            "model": effective_model,
-            "spec": str(resolved_spec),
-            "timestamp": now_iso(),
-            "review": output,
-        }
-        ralph_iter = os.environ.get("RALPH_ITERATION")
-        if ralph_iter:
-            try:
-                receipt_data["iteration"] = int(ralph_iter)
-            except ValueError:
-                pass
-        if focus:
-            receipt_data["focus"] = focus
-        if suppressed_count:
-            receipt_data["suppressed_count"] = suppressed_count
-        if classification_counts is not None:
-            receipt_data["introduced_count"] = classification_counts["introduced"]
-            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
-        if unaddressed_rids is not None:
-            receipt_data["unaddressed"] = unaddressed_rids
-        Path(receipt_path).write_text(
-            json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
-        )
-
-    if args.json:
-        json_payload = {
-            "type": "impl_review",
-            "id": review_id,
-            "verdict": verdict,
-            "session_id": returned_session_id,
-            "mode": "cursor",
-            "model": effective_model,
-            "spec": str(resolved_spec),
-            "standalone": standalone,
-            "review": output,
-        }
-        if suppressed_count:
-            json_payload["suppressed_count"] = suppressed_count
-        if classification_counts is not None:
-            json_payload["introduced_count"] = classification_counts["introduced"]
-            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
-        if unaddressed_rids is not None:
-            json_payload["unaddressed"] = unaddressed_rids
-        json_output(json_payload)
-    else:
-        print(output)
-        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
-
+    cmd_backend_review(args, backend="cursor", kind="impl")
 
 def cmd_cursor_plan_review(args: argparse.Namespace) -> None:
     """Run plan review via cursor-agent -p (resume-only, mode:cursor)."""
@@ -28273,6 +28090,62 @@ def cmd_prime_classify(args: argparse.Namespace) -> None:
     print(f"stacks:           {stack_names}")
 
 
+
+def _add_impl_review_parser(sub, backend: str):
+    """Register ``impl-review`` for a backend (fn-112 parameterized argparse).
+
+    CLI surface (names, flags, help) is byte-compatible with the pre-migration
+    per-backend blocks. Codex alone gets ``--sandbox``.
+    """
+    p = sub.add_parser("impl-review", help="Implementation review")
+    p.add_argument(
+        "task",
+        nargs="?",
+        default=None,
+        help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
+    )
+    p.add_argument("--base", required=True, help="Base branch for diff")
+    p.add_argument(
+        "--focus", help="Focus areas for standalone review (comma-separated)"
+    )
+    p.add_argument(
+        "--receipt", help="Receipt file path for session continuity"
+    )
+    p.add_argument("--json", action="store_true", help="JSON output")
+    if backend == "codex":
+        p.add_argument(
+            "--sandbox",
+            choices=["read-only", "workspace-write", "danger-full-access", "auto"],
+            default="auto",
+            help="Sandbox mode (auto: danger-full-access on Windows, read-only on Unix)",
+        )
+        spec_help = (
+            "Backend spec override (e.g. 'codex:gpt-5.2:medium'). "
+            "Overrides task/epic/env/config resolution. Strict parse."
+        )
+    elif backend == "copilot":
+        spec_help = (
+            "Backend spec override (e.g. 'copilot:claude-opus-4.5:xhigh'). "
+            "Overrides task/epic/env/config resolution. Strict parse."
+        )
+    else:  # cursor
+        spec_help = (
+            "Backend spec override (e.g. 'cursor:gpt-5.5-high'). "
+            "Overrides task/epic/env/config resolution. Strict parse. "
+            "Cursor folds effort into the model name (no ':<effort>')."
+        )
+    p.add_argument("--spec", help=spec_help)
+    # Thin wrapper keeps the historical cmd_* name for tests / direct callers;
+    # argparse also stamps review_backend/kind for the generic driver.
+    func = {
+        "codex": cmd_codex_impl_review,
+        "copilot": cmd_copilot_impl_review,
+        "cursor": cmd_cursor_impl_review,
+    }[backend]
+    p.set_defaults(func=func, review_backend=backend, review_kind="impl")
+    return p
+
+
 def main() -> None:
     _reconfigure_stdio_utf8()
     parser = argparse.ArgumentParser(
@@ -29836,33 +29709,7 @@ def main() -> None:
     p_codex = subparsers.add_parser("codex", help="Codex CLI helpers")
     codex_sub = p_codex.add_subparsers(dest="codex_cmd", required=True)
 
-    p_codex_impl = codex_sub.add_parser("impl-review", help="Implementation review")
-    p_codex_impl.add_argument(
-        "task",
-        nargs="?",
-        default=None,
-        help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
-    )
-    p_codex_impl.add_argument("--base", required=True, help="Base branch for diff")
-    p_codex_impl.add_argument(
-        "--focus", help="Focus areas for standalone review (comma-separated)"
-    )
-    p_codex_impl.add_argument(
-        "--receipt", help="Receipt file path for session continuity"
-    )
-    p_codex_impl.add_argument("--json", action="store_true", help="JSON output")
-    p_codex_impl.add_argument(
-        "--sandbox",
-        choices=["read-only", "workspace-write", "danger-full-access", "auto"],
-        default="auto",
-        help="Sandbox mode (auto: danger-full-access on Windows, read-only on Unix)",
-    )
-    p_codex_impl.add_argument(
-        "--spec",
-        help="Backend spec override (e.g. 'codex:gpt-5.2:medium'). "
-        "Overrides task/epic/env/config resolution. Strict parse.",
-    )
-    p_codex_impl.set_defaults(func=cmd_codex_impl_review)
+    p_codex_impl = _add_impl_review_parser(codex_sub, "codex")
 
     p_codex_plan = codex_sub.add_parser("plan-review", help="Plan review")
     p_codex_plan.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
@@ -30025,27 +29872,7 @@ def main() -> None:
     p_copilot = subparsers.add_parser("copilot", help="GitHub Copilot CLI helpers")
     copilot_sub = p_copilot.add_subparsers(dest="copilot_cmd", required=True)
 
-    p_copilot_impl = copilot_sub.add_parser("impl-review", help="Implementation review")
-    p_copilot_impl.add_argument(
-        "task",
-        nargs="?",
-        default=None,
-        help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
-    )
-    p_copilot_impl.add_argument("--base", required=True, help="Base branch for diff")
-    p_copilot_impl.add_argument(
-        "--focus", help="Focus areas for standalone review (comma-separated)"
-    )
-    p_copilot_impl.add_argument(
-        "--receipt", help="Receipt file path for session continuity"
-    )
-    p_copilot_impl.add_argument("--json", action="store_true", help="JSON output")
-    p_copilot_impl.add_argument(
-        "--spec",
-        help="Backend spec override (e.g. 'copilot:claude-opus-4.5:xhigh'). "
-        "Overrides task/epic/env/config resolution. Strict parse.",
-    )
-    p_copilot_impl.set_defaults(func=cmd_copilot_impl_review)
+    p_copilot_impl = _add_impl_review_parser(copilot_sub, "copilot")
 
     p_copilot_plan = copilot_sub.add_parser("plan-review", help="Plan review")
     p_copilot_plan.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
@@ -30145,28 +29972,7 @@ def main() -> None:
     p_cursor = subparsers.add_parser("cursor", help="Cursor (cursor-agent CLI) helpers")
     cursor_sub = p_cursor.add_subparsers(dest="cursor_cmd", required=True)
 
-    p_cursor_impl = cursor_sub.add_parser("impl-review", help="Implementation review")
-    p_cursor_impl.add_argument(
-        "task",
-        nargs="?",
-        default=None,
-        help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
-    )
-    p_cursor_impl.add_argument("--base", required=True, help="Base branch for diff")
-    p_cursor_impl.add_argument(
-        "--focus", help="Focus areas for standalone review (comma-separated)"
-    )
-    p_cursor_impl.add_argument(
-        "--receipt", help="Receipt file path for session continuity"
-    )
-    p_cursor_impl.add_argument("--json", action="store_true", help="JSON output")
-    p_cursor_impl.add_argument(
-        "--spec",
-        help="Backend spec override (e.g. 'cursor:gpt-5.5-high'). "
-        "Overrides task/epic/env/config resolution. Strict parse. "
-        "Cursor folds effort into the model name (no ':<effort>').",
-    )
-    p_cursor_impl.set_defaults(func=cmd_cursor_impl_review)
+    p_cursor_impl = _add_impl_review_parser(cursor_sub, "cursor")
 
     p_cursor_plan = cursor_sub.add_parser("plan-review", help="Plan review")
     p_cursor_plan.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")

@@ -16,6 +16,7 @@ import inspect
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -1678,6 +1679,86 @@ class TestReviewBackendTaskAware(unittest.TestCase):
             _write_task(td / ".flow", "fn-9-cool-slug.1", "fn-9-cool-slug",
                         review="cursor:gpt-5.3-codex")
             self.assertEqual(self._rb("fn-9.1"), "cursor")   # bare task handle canonicalized
+
+
+# --- fn-112 review-driver hooks + generic cmd_backend_review ---
+
+
+class TestBackendReviewDriverHooks(unittest.TestCase):
+    """Registry hooks + driver entry points for the impl-review migration."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        flowctl._wire_backend_review_hooks()
+
+    def test_review_backends_expose_required_hooks(self) -> None:
+        required = {
+            "run_exec",
+            "resolve_spec",
+            "check_probe",
+            "gather_diff",
+            "prompt_fit",
+            "resume_modes",
+            "mint_session_id",
+            "include_effort",
+            "extract_review",
+            "has_sandbox",
+        }
+        for backend in ("codex", "copilot", "cursor"):
+            with self.subTest(backend=backend):
+                reg = BACKEND_REGISTRY[backend]
+                for key in required:
+                    self.assertIn(key, reg, f"{backend} missing hook {key}")
+                self.assertTrue(callable(reg["run_exec"]))
+                self.assertTrue(callable(reg["resolve_spec"]))
+                self.assertTrue(callable(reg["check_probe"]))
+                self.assertTrue(callable(reg["gather_diff"]))
+
+    def test_hook_variance_preserved(self) -> None:
+        # Genuine differences stay as hooks, not collapsed to one behavior.
+        self.assertTrue(BACKEND_REGISTRY["codex"]["has_sandbox"])
+        self.assertFalse(BACKEND_REGISTRY["copilot"]["has_sandbox"])
+        self.assertFalse(BACKEND_REGISTRY["cursor"]["has_sandbox"])
+
+        self.assertFalse(BACKEND_REGISTRY["codex"]["mint_session_id"])
+        self.assertTrue(BACKEND_REGISTRY["copilot"]["mint_session_id"])
+        self.assertFalse(BACKEND_REGISTRY["cursor"]["mint_session_id"])
+
+        self.assertTrue(BACKEND_REGISTRY["codex"]["include_effort"])
+        self.assertTrue(BACKEND_REGISTRY["copilot"]["include_effort"])
+        self.assertFalse(BACKEND_REGISTRY["cursor"]["include_effort"])
+
+        self.assertEqual(BACKEND_REGISTRY["codex"]["prompt_fit"], "none")
+        self.assertEqual(BACKEND_REGISTRY["copilot"]["prompt_fit"], "none")
+        self.assertEqual(BACKEND_REGISTRY["cursor"]["prompt_fit"], "cursor_argv")
+
+        self.assertEqual(
+            BACKEND_REGISTRY["codex"]["resume_modes"], (None, "codex")
+        )
+        self.assertEqual(BACKEND_REGISTRY["copilot"]["resume_modes"], ("copilot",))
+        self.assertEqual(BACKEND_REGISTRY["cursor"]["resume_modes"], ("cursor",))
+
+    def test_impl_wrappers_route_through_driver(self) -> None:
+        # Thin wrappers must call cmd_backend_review (not re-implement the body).
+        for fn in (
+            flowctl.cmd_codex_impl_review,
+            flowctl.cmd_copilot_impl_review,
+            flowctl.cmd_cursor_impl_review,
+        ):
+            src = inspect.getsource(fn)
+            self.assertIn("cmd_backend_review(", src)
+            # Strip docstrings so historical prose mentioning run_*_exec is ignored.
+            body = re.sub(r'""".*?"""', "", src, flags=re.S)
+            body = re.sub(r"'''.*?'''", "", body, flags=re.S)
+            self.assertNotIn("run_codex_exec(", body)
+            self.assertNotIn("run_copilot_exec(", body)
+            self.assertNotIn("run_cursor_exec(", body)
+
+    def test_cmd_backend_review_exists(self) -> None:
+        self.assertTrue(callable(flowctl.cmd_backend_review))
+        sig = inspect.signature(flowctl.cmd_backend_review)
+        self.assertIn("backend", sig.parameters)
+        self.assertIn("kind", sig.parameters)
 
 
 if __name__ == "__main__":
