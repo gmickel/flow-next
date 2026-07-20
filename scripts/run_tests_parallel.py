@@ -90,7 +90,7 @@ def _parse_unittest_output(text: str) -> Tuple[int, int, int, int]:
     return ran, failures, errors, skipped
 
 
-def _run_one(tests_dir: Path, test_file: Path, verbose: bool) -> FileResult:
+def _run_one(tests_dir: Path, test_file: Path, verbose: bool, file_timeout: int) -> FileResult:
     """Run one test file via unittest discover (file-level shard)."""
     cmd = [
         sys.executable,
@@ -108,19 +108,32 @@ def _run_one(tests_dir: Path, test_file: Path, verbose: bool) -> FileResult:
         cmd.append("-q")
 
     t0 = time.perf_counter()
-    proc = subprocess.run(
-        cmd,
-        cwd=str(REPO_ROOT),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        universal_newlines=True,
-    )
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(REPO_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            timeout=file_timeout,
+        )
+        returncode = proc.returncode
+        output = proc.stdout or ""
+    except subprocess.TimeoutExpired as exc:
+        # A hung file must fail LOUDLY with its name, never stall the suite
+        # (first seen: windows-latest CI hang on the first full-corpus run).
+        returncode = 124
+        partial = exc.output or b""
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", errors="replace")
+        output = "TIMEOUT after {}s (per-file limit, --file-timeout)\n{}".format(
+            file_timeout, partial
+        )
     elapsed = time.perf_counter() - t0
-    output = proc.stdout or ""
     ran, failures, errors, skipped = _parse_unittest_output(output)
     return FileResult(
         path=test_file,
-        returncode=proc.returncode,
+        returncode=returncode,
         ran=ran,
         failures=failures,
         errors=errors,
@@ -159,6 +172,7 @@ def run_suite(
     seed: Optional[int],
     verbose: bool,
     list_only: bool,
+    file_timeout: int,
 ) -> int:
     files = _discover(tests_dir, pattern)
     if not files:
@@ -191,7 +205,7 @@ def run_suite(
 
     if jobs <= 1:
         for f in files:
-            results.append(_run_one(tests_dir, f, verbose))
+            results.append(_run_one(tests_dir, f, verbose, file_timeout))
             print(_format_status(results[-1]), flush=True)
             if not results[-1].ok and verbose:
                 sys.stdout.write(results[-1].output)
@@ -201,7 +215,7 @@ def run_suite(
         # Preserve discovery/shuffle order in the printed summary via index map.
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
             future_map = {
-                pool.submit(_run_one, tests_dir, f, verbose): idx
+                pool.submit(_run_one, tests_dir, f, verbose, file_timeout): idx
                 for idx, f in enumerate(files)
             }
             ordered: List[Optional[FileResult]] = [None] * len(files)
@@ -298,6 +312,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pass -v to unittest and print failing-file output inline",
     )
     p.add_argument(
+        "--file-timeout",
+        type=int,
+        default=900,
+        help="Per-file hard timeout in seconds; a hung file fails as rc=124 (default: %(default)s)",
+    )
+    p.add_argument(
         "--list-only",
         action="store_true",
         help="Print matched files and exit 0 (no tests run)",
@@ -326,6 +346,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             seed=args.seed,
             verbose=args.verbose,
             list_only=args.list_only,
+            file_timeout=args.file_timeout,
         )
     except FileNotFoundError as exc:
         print("ERROR: {}".format(exc), file=sys.stderr)
