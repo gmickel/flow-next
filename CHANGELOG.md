@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Test-suite speed: file-level parallel shard runner (fn-119).** New stdlib entrypoint `scripts/run_tests_parallel.py` discovers top-level `test_*.py` files and runs them concurrently (default jobs = cores-2; `--serial` for the serial fallback; `--shuffle` for the ordering canary). CI matrix unit tests use this entrypoint; `workflow_dispatch` exposes a manual shuffle canary (no new scheduled workflow). `worker.md` names it as the canonical full-suite command. `smoke_test.sh` untouched. No version bump (batched).
+
 ## [flow-next 2.21.0] - 2026-07-20
 
 ### Changed

@@ -14,6 +14,8 @@ on:
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/ci/verify_cursor_install.py"
+      # fn-119 parallel unit-suite entrypoint
+      - "scripts/run_tests_parallel.py"
   pull_request:
     branches: [main]
     paths:
@@ -24,7 +26,14 @@ on:
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/ci/verify_cursor_install.py"
+      - "scripts/run_tests_parallel.py"
   workflow_dispatch:
+    inputs:
+      shuffle:
+        description: "Ordering canary - run unit suite with --shuffle (manual/weekly; file-level only)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -65,225 +74,29 @@ jobs:
       - name: Syntax check — ralph.sh
         run: bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh
 
-      # ──────────── Python unit tests (sub-second, fail fast) ────────────
-      # fn-43.17 — fast invariants for migrate-rename, lockfile, read-compat,
-      # banner suppression, and write-location selector. Runs the migrate +
-      # lockfile + read-compat + write-location + banner suites explicitly so
-      # an unrelated pre-existing failure in a sibling test file doesn't gate
-      # this signal.
+      # ──────────── Python unit tests (file-level parallel, fn-119) ────────────
+      # Canonical full-suite entrypoint: scripts/run_tests_parallel.py
+      # Shards by FILE only (never within a file). Default jobs = cores-2.
+      # --serial is the equivalence fallback. workflow_dispatch.inputs.shuffle
+      # is the ordering canary (manual / weekly; do not schedule a new workflow).
 
-      - name: Python unit tests — fn-43 invariants
+      - name: Python unit tests - parallel suite (fn-119)
         run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_migrate_rename.py" \
-            -v
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_lockfile.py" \
-            -v
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_read_compat.py" \
-            -v
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_write_location.py" \
-            -v
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_banner.py" \
-            -v
-
-      - name: Python unit tests — work.delegate config foundation (fn-55.1)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_work_delegate_config.py" \
-            -v
-        # Codex implementation-delegation config defaults + activation
-        # resolution precedence (arg > config > default off; generic
-        # "use codex" is NOT a delegation trigger).
-
-      - name: Python unit tests — Codex-delegation pre-flight gates (fn-55.2)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_codex_delegation_gates.py" \
-            -v
-        # Executes the shipped platform-gate + recursion-guard bash from
-        # references/codex-delegation.md (CODEX_SANDBOX=auto stays eligible —
-        # the Ralph case; runtime values like `seatbelt` trip the guard) and
-        # locks the progressive-disclosure + disambiguation prose contract.
-
-      - name: Python unit tests — Codex-delegation classify + rollback (fn-55.4)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_codex_delegation_classify.py" \
-            -v
-        # Deterministic `flowctl codex classify-result` (5-row table + malformed/
-        # missing) + `rollback-plan` (post−pre untracked-snapshot diff, path
-        # sanitization, nested-dir, whitespace, .flow/ exclusion) driven by the
-        # mock-codex fixture; dual-copy invariant (both flowctl.py copies carry
-        # the helpers + live .flow/bin/flowctl resolves them); orchestration/
-        # safety prose contract; clean-baseline-excludes-.flow predicate
-        # (multi-task plan-sync stays delegatable after task 1).
-
-      - name: Python unit tests — ralph-guard amendment + circuit breaker (fn-55.5)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_ralph_guard_codex_delegation.py" \
-            -v
-        # ralph-guard.py `is_canonical_codex_delegation` allows ONLY the FULL
-        # canonical delegation shape (sentinel + codex exec + --ignore-user-config
-        # + --output-schema + -o .flow/tmp/codex-* + sandbox flag, NO --last/
-        # resume/review) — a sentinel-prefixed arbitrary command STILL blocks;
-        # copilot + --last blocks stay intact; RALPH_GUARD_VERSION bumped. Drives
-        # the SHIPPED hook end-to-end (PreToolUse Bash, FLOW_RALPH=1). Also locks
-        # the host-owned circuit-breaker + worker DELEGATION_RESULT/ACTION signal
-        # + evidence.delegation inline + attribution trailers + REVIEW_MODE=none
-        # verification-backstop prose contract.
-
-      # ──────────── fn-83 (plan-sync gate: probe + frozen-key corpus) ────────────
-
-      - name: Python unit tests — worker anchor-call prose + gate-removal guards + done-evidence provenance (fn-83.4)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_worker_anchor_prose.py" \
-            -v
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_anchor_bundle.py" \
-            -v
-        # The plan-sync skip-gate was proven non-viable (fn-83.6 cross-repo
-        # verdict FAIL; decision record plan-sync-skip-gate-not-viable-
-        # 2026-07-03.md) and its machinery removed from the shipped CLI.
-        # Locks: worker Phase 1 = single `flowctl anchor` call (floor, not
-        # ceiling) in canonical AND Codex mirror; CROSS_SPEC passed to the
-        # (still unconditional) plan-sync spawn; both gate-removal grep
-        # guards (user-surface + symbol-level, `_psp_run_git`-only
-        # whitelist); PLAN_DEVIATION fully deleted; BASE_COMMIT + done-
-        # evidence provenance (base_commit + full commit list) retained,
-        # fixture-verified round-trip.
-
-      # ──────────── fn-50 (clawpatch wrap) ────────────
-      # New readers + scout-fallback contract land here so they run on the full
-      # ubuntu / macos / windows matrix. Tests use checked-in fixtures (no
-      # clawpatch CLI invocation), so runners do not need Node 22+.
-
-      - name: Python unit tests — repo-map readers (fn-50.2)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_repo_map.py" \
-            -v
-
-      - name: Python unit tests — scout fallback contract (fn-50.3)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_scout_fallback_contract.py" \
-            -v
-
-      - name: Python unit tests — review-output R-ID parser suffix (1.3.4)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_unaddressed_rids_parser.py" \
-            -v
-
-      - name: Python unit tests — dogfood template parity (1.5.1)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_dogfood_template_parity.py" \
-            -v
-        # Guards .flow/usage.md ≡ canonical setup template (and spec.md) so the
-        # fn-52 desync — tracker-sync docs added to the dogfood copy but not the
-        # bundled template — hard-fails CI instead of shipping to consumers.
-
-      - name: Python unit tests — cp1252 / non-UTF-8 robustness (1.10.1, #167)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_cp1252_robustness.py" \
-            -v
-        # find_references decodes git-grep bytes defensively (no UnicodeDecodeError
-        # on a legacy cp1252 source subtree — the read-side counterpart to #123),
-        # flowctl forces UTF-8 stdout/stderr at startup, and phase-3d carries the
-        # lost-worker-result recovery heuristic (canonical + Codex mirror). Runs on
-        # the full ubuntu/macos/windows matrix — the fault is Windows-codepage-born.
-
-      # ──────────── fn-57 (tracker-sync lifecycle observability) ────────────
-
-      - name: Python unit tests — sync check lifecycle audit (fn-57.1)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_sync_check.py" \
-            -v
-        # Read-only `sync check` over `.flow/sync-runs/` receipts: R8 silent
-        # constant-time exit when the bridge is inactive (gate precedes id
-        # resolution), MISSING predicate (triggered ∩ perEvent-enabled ∩
-        # no event-matching receipt ≥ --since), any-status clears, null-event
-        # receipts never clear, nested work.* keys, Z-suffix --since on 3.8,
-        # tracker-handle id resolution, exit-0-always contract.
-
-      - name: Python unit tests — tracker receipts (fn-52.1 / fn-57.1)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_tracker_receipts.py" \
-            -v
-        # Sync receipt schema + guard isolation + tracker-handle
-        # canonicalization, extended in fn-57.1 with the `--event` lifecycle
-        # tag (free-form, `event: null` back-compat for pre-flag callers).
-
-      # ──────────── fn-58 (spec readiness signal) ────────────
-
-      - name: Python unit tests — spec ready flag (fn-58.1)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_spec_ready.py" \
-            -v
-        # Lazy on-disk `ready` flag: `spec create` never writes the key,
-        # `normalize_epic` never backfills it, all three JSON read surfaces
-        # (show/specs/list) emit explicit false, toggles are idempotent
-        # no-ops (byte-identical sidecar, no updated_at churn), `.M` ids
-        # rejected, tracker handles resolve, done specs allowed, human
-        # listings badge ready specs only.
-
-      # ──────────── fn-60 (land ship loop) ────────────
-
-      - name: Python unit tests — land.* config defaults (fn-60.2)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_land_config.py" \
-            -v
-        # Seeded land.* defaults (release/patienceMinutes/reviewSignal/
-        # automatedReviewers/ciFixBudget) — `config get` returns values, not
-        # null, on fresh repos; set/get round-trips; dual flowctl.py copies
-        # stay in lockstep.
+          SHUFFLE_ARGS=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] \
+            && [ "${{ github.event.inputs.shuffle }}" = "true" ]; then
+            SHUFFLE_ARGS=(--shuffle --seed "$GITHUB_RUN_ID")
+            echo "Ordering canary: --shuffle --seed $GITHUB_RUN_ID"
+          fi
+          python scripts/run_tests_parallel.py "${SHUFFLE_ARGS[@]}"
 
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})
       # must not drift, and must actually produce a complete + clean install on
-      # each OS. The parity test is cross-platform (text-only). The real-install
-      # smoke runs the platform's OWN installer (rsync on Unix, robocopy on
-      # Windows) into ~/.cursor/plugins/local and verifies the result against the
-      # source tree (component trees match 1:1; codex/ tests/ *.pyc excluded).
-
-      - name: Python unit tests — Cursor installer parity (1.9.0)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_install_cursor_parity.py" \
-            -v
+      # each OS. Installer-parity unit tests ride the parallel suite above; the
+      # real-install smoke runs the platform's OWN installer (rsync on Unix,
+      # robocopy on Windows) into ~/.cursor/plugins/local and verifies against
+      # the source tree (component trees match 1:1; codex/ tests/ *.pyc excluded).
 
       - name: install-cursor.sh real-install smoke (Unix)
         if: always() && runner.os != 'Windows'
@@ -298,96 +111,6 @@ jobs:
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
           ./scripts/install-cursor.ps1
           python ./scripts/ci/verify_cursor_install.py
-
-      - name: Python unit tests — PNPM_HOME hint prose contract (fn-50.1, Windows-coverage)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_pnpm_home_hint_prose.py" \
-            -v
-        # map_smoke_test.sh Case 4b skips on Windows (POSIX-only `chmod +x`
-        # pnpm stub). This prose-contract test runs on all three OSes and
-        # locks the PNPM_HOME hint structure — guard, tokens, re-source
-        # instruction — across Claude canonical + Codex mirror.
-
-      # ──────────── Copilot stdin path (1.1.9) ────────────
-      # Mocked unit tests run on all three platforms; the real-subprocess
-      # Windows smoke fires only on windows-latest (skipUnless gate). The
-      # smoke validates that subprocess.run(input=prompt) delivers a 60 KB
-      # prompt through CreateProcessW + stdin pipe without hitting the
-      # 32,767-char argv cap — the Simon Flauger / SEMA-CAD failure mode.
-
-      - name: Python unit tests — copilot run-exec (1.1.9 stdin path)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_copilot_run_exec.py" \
-            -v
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_copilot_windows_smoke.py" \
-            -v
-
-      - name: Python unit tests — Cua native-rung headless/CI determination (fn-71)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_drive_headless_determination.py" \
-            -v
-        # Executes the shipped `cua-driver call get_screen_size` display probe from
-        # references/cua.md against a stubbed driver (present → attended, error/zero
-        # → headless) on macOS+ubuntu; the prose-contract class runs on Windows too
-        # (the $CI short-circuit, the probe, the macOS $DISPLAY caveat, doctor≠display).
-        # Real no-display behavior on Linux/Windows stays verify-at-build (driver opt-in).
-
-      # ──────────── fn-68 (pilot backlog mode) ────────────
-
-      - name: Python unit tests — pilot backlog mode (fn-68.1 / .2 / .5)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_pilot_backlog_substrate.py" \
-            -v
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_tracker_sync_backlog_mode.py" \
-            -v
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_pilot_backlog_mirror_safety.py" \
-            -v
-        # .1 — flowctl substrate (pilot.autonomy scalar default, `ready --all`
-        #   eligibility FACTS only, pilot-log decision rows under .flow/pilot-runs/).
-        # .2 — tracker-sync R14 Phase-0 autonomy parity + the listOpenIssues 9th
-        #   adapter method + the R15 question-valve anchor contract (prose).
-        # .5 — cross-platform Codex-mirror parity + autonomous-safety: the R14 fix
-        #   + triage/ask stages + ASKED verdict + backlog-mode.md survive the
-        #   sync-codex.sh rewrite; ZERO Claude-native tool-name leakage; the R2
-        #   numbered-prompt block is NEVER injected into pilot (it only negates);
-        #   /goal stop-clause verbs (NO_WORK/DEFERRED_TO_LAND) grep-able; the
-        #   never-merge / never-author enforcing guards + the byte-identical
-        #   gate-off path survive in the mirror.
-
-      # ──────────── fn-92 (opinionated prime: classify emitter) ────────────
-
-      - name: Python unit tests — prime classify emitter framework (fn-92.4)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_prime_eval.py" \
-            -v
-        # Deterministic Phase-0.5 `flowctl prime classify` emitter FRAMEWORK:
-        # pinned-schema field structure + the per-collector completeness-
-        # diagnostics envelope (resolution 21b confidence ceiling), axes 1-4 raw
-        # signals + Axis-5 shape MARKERS (never shape values) + assessment_scope,
-        # blob-ID content-hash dedup via `git ls-files -s` (no content read),
-        # per-collector budget scaffolding, path exclusions (own-tooling never
-        # pollutes classification), lifecycle greenfield/unborn-HEAD, monorepo /
-        # workspace-parent-dampener / worktree-sibling-exclusion topology,
-        # manifest-gated stacks, workspace-member + non-git home-base scope, the
-        # byte-identical dual-copy invariant, and the live-subcommand smoke.
-        # Substance-grep collectors + redaction + the full R19 fixture corpus +
-        # perf accounting land in fn-92.13.
 
       # ──────────── Functional smokes (ordered cheap-first) ────────────
       # All smokes refuse to run from the main plugin repo, so cd into the
