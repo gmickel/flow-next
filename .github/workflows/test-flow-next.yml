@@ -152,12 +152,6 @@ jobs:
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/ci_test.sh"
 
-      - name: alias_smoke.sh (deprecation alias paths + fn-77 9009-stub bypass, ~5s)
-        if: always()
-        run: |
-          cd "$RUNNER_TEMP"
-          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/alias_smoke.sh"
-
       - name: resolve-pr_smoke_test.sh (58 cases, ~1s)
         if: always()
         run: |

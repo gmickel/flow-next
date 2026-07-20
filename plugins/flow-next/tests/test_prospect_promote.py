@@ -11,7 +11,7 @@ Covers:
   - Corrupt artifact refuses (exit 3, matches `read`).
   - promoted_ideas + promoted_to round-trip via the canonical reader.
   - Slug-only id resolves to latest dated artifact.
-  - --epic-title override.
+  - --spec-title override.
   - Frontmatter dict rendering survives PyYAML round-trip.
   - Inline-yaml fallback parser handles the rendered dict (no-PyYAML safety).
   - `_prospect_rewrite_in_place` writes atomically and is reused by archive.
@@ -290,8 +290,10 @@ class PromoteBasic(unittest.TestCase):
             self.assertEqual(code, 0, result)
             self.assertTrue(result.get("success"))
             self.assertEqual(result["idea"], 1)
-            self.assertIn("fn-1", result["epic_id"])
-            self.assertEqual(result["epic_title"], "Cache scout output")
+            self.assertIn("fn-1", result["spec_id"])
+            self.assertEqual(result["spec_title"], "Cache scout output")
+            self.assertNotIn("epic_id", result)
+            self.assertNotIn("epic_title", result)
             self.assertEqual(
                 result["source_link"],
                 ".flow/prospects/dx-improvements-2026-04-24.md#idea-1",
@@ -372,7 +374,7 @@ class Idempotency(unittest.TestCase):
                 tdp, "dx-improvements-2026-04-24", 1, force=True
             )
             self.assertEqual(c2, 0)
-            self.assertNotEqual(r1["epic_id"], r2["epic_id"])
+            self.assertNotEqual(r1["spec_id"], r2["spec_id"])
             text = target.read_text(encoding="utf-8")
             parsed = flowctl._prospect_parse_frontmatter(text)
             assert parsed is not None
@@ -380,8 +382,8 @@ class Idempotency(unittest.TestCase):
             keys_as_str = {str(k): v for k, v in promoted_to.items()}
             ids = keys_as_str["1"]
             self.assertEqual(len(ids), 2)
-            self.assertIn(r1["epic_id"], ids)
-            self.assertIn(r2["epic_id"], ids)
+            self.assertIn(r1["spec_id"], ids)
+            self.assertIn(r2["spec_id"], ids)
 
 
 # ---------- Edge cases -----------------------------------------------
@@ -466,7 +468,7 @@ class EdgeCases(unittest.TestCase):
                 result["artifact_id"], "dx-improvements-2026-04-24"
             )
 
-    def test_epic_title_override(self) -> None:
+    def test_spec_title_override(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)
             _seed_project(tdp)
@@ -477,8 +479,10 @@ class EdgeCases(unittest.TestCase):
                 epic_title="Custom Override Title",
             )
             self.assertEqual(code, 0, result)
-            self.assertEqual(result["epic_title"], "Custom Override Title")
-            self.assertIn("custom-override-title", result["epic_id"])
+            self.assertEqual(result["spec_title"], "Custom Override Title")
+            self.assertIn("custom-override-title", result["spec_id"])
+            self.assertNotIn("epic_title", result)
+            self.assertNotIn("epic_id", result)
 
 
 if __name__ == "__main__":

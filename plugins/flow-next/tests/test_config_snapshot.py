@@ -11,12 +11,10 @@ Pins the three `config get` read forms and the snapshot mechanism:
     behavior, JSON and human forms, including missing-key output.
   * parse contract — AT MOST one config.json parse per invocation;
     exactly one when the file exists, zero when it does not.
-  * alias seam — subtree/root output always emits CANONICAL keys (legacy
-    leaf surfaced under its canonical name, canonical wins when both set);
-    the read-warning still fires only on a *typed* legacy key. The alias
-    map is empty today, so these tests inject a synthetic alias.
   * `resolve_config_key_for_read(key, snapshot=...)` returns the same
     result as the snapshot-less call (default None path unchanged).
+
+Alias-injection cases removed in fn-111.2 (empty alias map; identity resolvers).
 
 Run:
     python3 -m unittest discover -s plugins/flow-next/tests -p "test_config_snapshot.py" -v
@@ -59,14 +57,10 @@ class ConfigSnapshotTestCase(unittest.TestCase):
         os.chdir(self.tmpdir)
         self.flowctl = _load_flowctl()
         (self.tmpdir / ".flow").mkdir(parents=True, exist_ok=True)
-        self.flowctl._RENAME_DEPRECATION_EMITTED.clear()
-        self._prev_no_depr = os.environ.pop("FLOW_NO_DEPRECATION", None)
 
     def tearDown(self) -> None:
         os.chdir(self.prev_cwd)
         shutil.rmtree(self.tmpdir, ignore_errors=True)
-        if self._prev_no_depr is not None:
-            os.environ["FLOW_NO_DEPRECATION"] = self._prev_no_depr
 
     # --- helpers -------------------------------------------------------------
 
@@ -227,64 +221,6 @@ class ConfigSnapshotTestCase(unittest.TestCase):
             with self.subTest(**kwargs):
                 n = self._count_json_loads(lambda kw=kwargs: self._get(**kw))
                 self.assertEqual(n, 0)
-
-    def test_exactly_one_parse_on_injected_alias_read(self) -> None:
-        # The alias seam is where the pre-snapshot code paid extra parses
-        # (raw probe canonical + raw probe legacy + merged fallback).
-        self.flowctl._CONFIG_KEY_ALIASES["planSync.crossEpic"] = "planSync.crossSpec"
-        try:
-            self._write_config({"planSync": {"crossEpic": True}})
-            n = self._count_json_loads(
-                lambda: self._get(key="planSync.crossEpic")
-            )
-            self.assertEqual(n, 1)
-        finally:
-            self.flowctl._CONFIG_KEY_ALIASES.clear()
-
-    # --- alias seam: canonical emission (map empty today; inject one) ---------
-
-    def _with_alias(self):
-        self.flowctl._CONFIG_KEY_ALIASES["planSync.crossEpic"] = "planSync.crossSpec"
-        self.addCleanup(self.flowctl._CONFIG_KEY_ALIASES.clear)
-
-    def test_subtree_surfaces_legacy_leaf_under_canonical_name(self) -> None:
-        self._with_alias()
-        self._write_config({"planSync": {"crossEpic": True}})
-        result = self._get_json(key="planSync")
-        self.assertEqual(result["value"], {"enabled": True, "crossSpec": True})
-        self.assertNotIn("crossEpic", result["value"])
-        # No typed legacy key → no read-warning.
-        self.assertNotIn("crossEpic", self._last_stderr)
-
-    def test_subtree_raw_mirrors_canonicalization(self) -> None:
-        self._with_alias()
-        self._write_config({"planSync": {"crossEpic": True}})
-        result = self._get_json(key="planSync", raw=True)
-        self.assertEqual(result["value"], {"crossSpec": True})
-
-    def test_canonical_wins_when_both_persisted(self) -> None:
-        self._with_alias()
-        self._write_config({"planSync": {"crossEpic": True, "crossSpec": False}})
-        result = self._get_json(key="planSync")
-        self.assertIs(result["value"]["crossSpec"], False)
-        self.assertNotIn("crossEpic", result["value"])
-
-    def test_root_read_emits_canonical_keys(self) -> None:
-        self._with_alias()
-        self._write_config({"planSync": {"crossEpic": True}})
-        result = self._get_json()
-        self.assertIs(result["value"]["planSync"]["crossSpec"], True)
-        self.assertNotIn("crossEpic", result["value"]["planSync"])
-
-    def test_typed_legacy_scalar_still_warns(self) -> None:
-        # Existing read-warning semantics unchanged: fires on the *typed*
-        # legacy form, exactly as before the snapshot.
-        self._with_alias()
-        self._write_config({"planSync": {"crossEpic": True}})
-        result = self._get_json(key="planSync.crossEpic")
-        self.assertIs(result["value"], True)
-        self.assertIn("planSync.crossEpic", self._last_stderr)
-        self.assertIn("planSync.crossSpec", self._last_stderr)
 
     # --- resolver snapshot parameter -------------------------------------------
 

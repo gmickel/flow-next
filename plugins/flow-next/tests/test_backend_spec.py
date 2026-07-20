@@ -826,47 +826,6 @@ class TestSetBackendValidation(unittest.TestCase):
                 before, after, "disk must be untouched on validation failure"
             )
 
-    def test_epic_set_backend_rejects_unknown_backend(self) -> None:
-        with _flow_fixture() as td:
-            _write_epic(td / ".flow", "fn-9-e")
-            out = io.StringIO()
-            with self.assertRaises(SystemExit), redirect_stdout(out):
-                flowctl.cmd_epic_set_backend(
-                    _ns(
-                        id="fn-9-e",
-                        impl="bogus:foo",
-                        review=None,
-                        sync=None,
-                        json=True,
-                    )
-                )
-            payload = json.loads(out.getvalue())
-            self.assertFalse(payload["success"])
-            self.assertIn("--impl", payload["error"])
-            self.assertIn("Unknown backend", payload["error"])
-
-    def test_epic_set_backend_clears_with_empty_string(self) -> None:
-        # Empty string means "clear" — must NOT validate (nothing to validate).
-        with _flow_fixture() as td:
-            _write_epic(
-                td / ".flow", "fn-9-e", default_review="codex:gpt-5.4"
-            )
-            out = io.StringIO()
-            with redirect_stdout(out):
-                flowctl.cmd_epic_set_backend(
-                    _ns(
-                        id="fn-9-e",
-                        impl=None,
-                        review="",
-                        sync=None,
-                        json=True,
-                    )
-                )
-            raw = json.loads(
-                (td / ".flow" / "epics" / "fn-9-e.json").read_text()
-            )
-            self.assertIsNone(raw["default_review"])
-
 
 class TestShowBackendResolution(unittest.TestCase):
     """``cmd_task_show_backend`` emits raw + resolved + per-field sources and

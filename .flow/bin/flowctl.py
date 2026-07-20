@@ -1348,12 +1348,8 @@ def _init_persisted_defaults() -> dict:
     return defaults
 
 
-# Canonical mapping for legacy config keys. Reads of a legacy key resolve to the
-# canonical key when present in the raw file; writes always target the canonical.
-# Mirrors the fn-43 epic→spec rename cadence.
-# Empty since 2.0.0: the `planSync.crossEpic` → `planSync.crossSpec` alias
-# (deprecated 1.1.3+) was removed per the documented 1.x deprecation promise.
-# The resolution machinery below stays for future key renames.
+# Empty alias map reserved for future config-key renames (fn-111.2).
+# Identity resolvers below; no redirect / deprecation / canonicalize walk.
 _CONFIG_KEY_ALIASES: dict[str, str] = {}
 
 
@@ -1413,7 +1409,7 @@ def _get_config_from_file(key: str):
     `_CONFIG_RAW_SENTINEL` when the key is absent (or the file itself
     is absent / unreadable). The sentinel distinguishes "user explicitly
     set the key to None / false" from "key never written" — load-bearing
-    for the legacy-alias fallback semantic (see `_CONFIG_KEY_ALIASES`).
+    for distinguishing unset keys from explicit false/null.
     """
     config_path = get_flow_dir() / CONFIG_FILE
     if not config_path.exists():
@@ -1437,8 +1433,7 @@ def _get_config_from_file(key: str):
 # One read + one parse of .flow/config.json per CLI invocation, threaded into
 # the existing read paths via optional parameters. The snapshot never
 # outlives the command (no staleness after `config set`). This block sits
-# BESIDE the alias resolvers, not inside them — fn-111 removes the alias
-# machinery next door and rebases on this.
+# Alias resolvers are identity (empty map); snapshot is the single parse.
 
 
 class ConfigSnapshot:
@@ -1447,10 +1442,8 @@ class ConfigSnapshot:
     - ``raw``    — the parsed on-disk dict, or ``None`` when the file is
       absent, unreadable, or not a JSON object (mirrors the failure modes of
       `_get_config_from_file` / `load_flow_config`).
-    - ``merged`` — defaults deep-merged with the CANONICALIZED raw tree
-      (legacy alias leaves surfaced under their canonical names; see
-      `_canonicalize_config_tree`). With the alias map empty (2.0.0 removal)
-      this is byte-equal to `load_flow_config()`.
+    - ``merged`` — defaults deep-merged with the raw tree (alias map empty;
+      byte-equal to `load_flow_config()`).
     """
 
     __slots__ = ("raw", "merged")
@@ -1458,14 +1451,6 @@ class ConfigSnapshot:
     def __init__(self, raw, merged) -> None:
         self.raw = raw
         self.merged = merged
-
-
-def _copy_config_tree(tree: dict) -> dict:
-    """Recursively copy the dict spine of a config tree (leaves shared)."""
-    return {
-        k: _copy_config_tree(v) if isinstance(v, dict) else v
-        for k, v in tree.items()
-    }
 
 
 def _tree_probe(tree: dict, key: str):
@@ -1476,43 +1461,6 @@ def _tree_probe(tree: dict, key: str):
             return _CONFIG_RAW_SENTINEL
         current = current[part]
     return current
-
-
-def _canonicalize_config_tree(tree: dict) -> dict:
-    """Return `tree` with legacy alias leaves surfaced under canonical names.
-
-    Subtree/root reads always emit CANONICAL keys (fn-110.1): a persisted
-    legacy leaf is relocated to its canonical path; when both are persisted,
-    canonical wins and the legacy leaf is dropped from the emission. The
-    alias map is empty today (fn-62 removal) — the machinery stays for
-    future renames; no warning fires here (the existing read-warning
-    semantics key off the *typed* legacy form, handled by the callers).
-    """
-    if not _CONFIG_KEY_ALIASES:
-        return tree
-    result = _copy_config_tree(tree)
-    for legacy, canonical in _CONFIG_KEY_ALIASES.items():
-        legacy_val = _tree_probe(result, legacy)
-        if legacy_val is _CONFIG_RAW_SENTINEL:
-            continue
-        # Pop the legacy leaf (walk to its parent dict).
-        parts = legacy.split(".")
-        parent = result
-        for part in parts[:-1]:
-            parent = parent[part]
-        parent.pop(parts[-1], None)
-        if _tree_probe(result, canonical) is _CONFIG_RAW_SENTINEL:
-            # Canonical absent: legacy fills in, under the canonical name.
-            cparts = canonical.split(".")
-            current = result
-            for part in cparts[:-1]:
-                nxt = current.get(part)
-                if not isinstance(nxt, dict):
-                    nxt = {}
-                    current[part] = nxt
-                current = nxt
-            current[cparts[-1]] = legacy_val
-    return result
 
 
 def load_config_snapshot() -> ConfigSnapshot:
@@ -1535,7 +1483,7 @@ def load_config_snapshot() -> ConfigSnapshot:
     if raw is None:
         merged = defaults
     else:
-        merged = deep_merge(defaults, _canonicalize_config_tree(raw))
+        merged = deep_merge(defaults, raw)
     return ConfigSnapshot(raw, merged)
 
 
@@ -1547,100 +1495,25 @@ def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
 
 
 def resolve_config_key_for_read(key: str, snapshot: "Optional[ConfigSnapshot]" = None):
-    """Resolve a config-key read, honoring legacy aliases.
+    """Identity config-key read (alias map empty since fn-111.2).
 
-    Returns a 3-tuple ``(effective_key, value, deprecation_legacy_form)``:
-
-    - ``effective_key`` — the key actually used to obtain the value.
-    - ``value`` — the resolved value, honoring "canonical wins over legacy"
-      and "legacy falls back when canonical absent from the raw file."
-    - ``deprecation_legacy_form`` — when non-empty, the caller should emit
-      `_emit_rename_deprecation(deprecation_legacy_form, canonical)`.
-      Populated whenever the user typed the legacy alias by name, even if
-      canonical is also present in the raw file. Canonical value precedence
-      is unchanged — the deprecation fires on the legacy *input form*, not on
-      where the value came from, so scripts still asking for a legacy key
-      after switching their writes to the canonical keep getting the
-      migration signal until the alias is removed. When the user reads the
-      canonical key, no warning fires even if the legacy key supplied the
-      value via fallback — they're already on the new name.
-
-    Canonical-vs-legacy precedence is identical in both directions:
-    canonical wins when present in the raw file; legacy fills in when
-    canonical is absent. The only thing the input key changes is which
-    label is returned and whether a deprecation fires.
-
-    ``snapshot`` (fn-110.1, optional): a command-scoped `ConfigSnapshot`.
-    When provided, raw-file probes and merged-default reads come from the
-    snapshot instead of re-reading .flow/config.json per call. Default
-    ``None`` preserves the existing per-call read behavior for every other
-    caller. One deliberate semantic difference on the snapshot path: merged
-    reads are sentinel-aware (`_tree_probe`), so an empty-dict value (e.g.
-    the `tracker.perTracker.labelMap` default `{}`) surfaces as `{}` per the
-    dict-subtree contract — the snapshot-less `get_config` path keeps its
-    historical empty-dict-means-default quirk.
+    Returns ``(key, value, "")``. ``snapshot`` (optional): when provided,
+    merged reads come from the snapshot (sentinel-aware empty-dict contract)
+    instead of re-reading .flow/config.json. Default ``None`` keeps the
+    snapshot-less `get_config` path for other callers.
     """
-
-    def _snapshot_merged_get(k: str):
-        value = _tree_probe(snapshot.merged, k)
-        return None if value is _CONFIG_RAW_SENTINEL else value
-
-    _raw_probe = (
-        (lambda k: _snapshot_raw_probe(snapshot, k))
-        if snapshot is not None
-        else _get_config_from_file
-    )
-    _merged_get = _snapshot_merged_get if snapshot is not None else get_config
-    # Identify the canonical/legacy pair regardless of which side the caller
-    # supplied. `key` may be legacy (looked up via `_CONFIG_KEY_ALIASES`) or
-    # canonical (reverse-lookup against alias targets).
-    canonical_from_alias = _CONFIG_KEY_ALIASES.get(key)
-    if canonical_from_alias is not None:
-        # User typed the legacy name.
-        canonical = canonical_from_alias
-        legacy = key
-        user_typed_legacy = True
-    else:
-        # User typed something else; may be canonical for a known alias, or
-        # an unrelated key entirely.
-        legacy_match = next(
-            (lg for lg, cn in _CONFIG_KEY_ALIASES.items() if cn == key), None
-        )
-        if legacy_match is None:
-            # Not part of any alias pair — standard lookup.
-            return key, _merged_get(key), ""
-        canonical = key
-        legacy = legacy_match
-        user_typed_legacy = False
-
-    canonical_raw = _raw_probe(canonical)
-    if canonical_raw is not _CONFIG_RAW_SENTINEL:
-        # Canonical wins value precedence; warn only when the user typed the
-        # legacy form (canonical reads remain the migration path).
-        return canonical, canonical_raw, legacy if user_typed_legacy else ""
-    legacy_raw = _raw_probe(legacy)
-    if legacy_raw is not _CONFIG_RAW_SENTINEL:
-        # Legacy supplies the value via fallback. Warn only when the user
-        # typed the legacy form (reading canonical is the migration path).
-        return legacy, legacy_raw, legacy if user_typed_legacy else ""
-    # Neither key set; fall back to merged defaults via the canonical key.
-    return canonical, _merged_get(canonical), ""
+    if snapshot is not None:
+        value = _tree_probe(snapshot.merged, key)
+        return key, (None if value is _CONFIG_RAW_SENTINEL else value), ""
+    return key, get_config(key), ""
 
 
 def resolve_config_key_for_write(key: str) -> tuple[str, str]:
-    """Resolve a config-key write, redirecting legacy aliases to canonical.
+    """Identity config-key write (alias map empty since fn-111.2).
 
-    Returns ``(canonical_key, deprecation_legacy_form)``. When the user wrote
-    a known legacy key, ``deprecation_legacy_form`` is non-empty and the
-    caller should emit a deprecation warning. The actual write must target
-    the canonical key; the legacy entry (if present in the file) is left
-    untouched — it becomes "wins-on-fallback-only" until the alias is
-    removed at the next major.
+    Returns ``(key, "")`` — no redirect, no deprecation.
     """
-    canonical = _CONFIG_KEY_ALIASES.get(key)
-    if canonical is None:
-        return key, ""
-    return canonical, key
+    return key, ""
 
 
 def set_config(key: str, value) -> dict:
@@ -2975,10 +2848,6 @@ def is_spec_id(id_str: str) -> bool:
     return parsed is not None and parsed[3] is None
 
 
-# Backward-compat alias for is_spec_id (removed in 2.0).
-is_epic_id = is_spec_id
-
-
 def is_task_id(id_str: str) -> bool:
     """Check if ID is a task ID (fn-N.M, fn-N-slug.M, or tracker wor-N.M / wor-N-slug.M)."""
     parsed = parse_any_id(id_str)
@@ -2997,10 +2866,6 @@ def spec_id_from_task(task_id: str) -> str:
         raise ValueError(f"Invalid task ID: {task_id}")
     # Split on '.' and take spec part (preserves suffix if present)
     return task_id.rsplit(".", 1)[0]
-
-
-# Backward-compat alias for spec_id_from_task (removed in 2.0).
-epic_id_from_task = spec_id_from_task
 
 
 # --- Context Hints (for codex reviews) ---
@@ -6240,11 +6105,7 @@ def expand_bare_spec_id(
 def resolve_spec_arg(
     args: argparse.Namespace, flow_dir: Optional[Path] = None
 ) -> Optional[str]:
-    """Resolve the spec id from --spec or its legacy alias --epic.
-
-    Canonical --spec wins when both are passed. When only --epic is set, T2
-    emits a one-shot stderr deprecation warning (per process per legacy form)
-    via `_emit_rename_deprecation`. Suppressed when `FLOW_NO_DEPRECATION=1`.
+    """Resolve the spec id from --spec.
 
     When `flow_dir` is provided, the resolved id is run through
     `expand_bare_spec_id` so callers automatically support bare-id prefix
@@ -6252,11 +6113,6 @@ def resolve_spec_arg(
     schema-only contexts) get the raw resolved id.
     """
     spec = getattr(args, "spec", None)
-    if not spec:
-        legacy = getattr(args, "epic", None)
-        if legacy:
-            _emit_rename_deprecation("--epic", "--spec")
-            spec = legacy
     if not spec:
         return None
     if flow_dir is not None:
@@ -6323,40 +6179,6 @@ def resolve_task_arg(
     if canonical_spec == spec_part:
         return task_id  # No spec expansion available — return unchanged.
     return f"{canonical_spec}.{task_num}"
-
-
-# Track which legacy forms have already emitted a deprecation warning in this
-# process. One warning per legacy form keeps Ralph logs / pipelines clean
-# while still surfacing the rename path on first contact.
-_RENAME_DEPRECATION_EMITTED: set[str] = set()
-
-
-def _emit_rename_deprecation(
-    legacy_form: str, canonical_form: str, extra: str = ""
-) -> None:
-    """Print a one-shot stderr deprecation for a legacy `epic`-named surface.
-
-    Suppress with `FLOW_NO_DEPRECATION=1`. Mirrors the `_memory_emit_deprecation`
-    pattern but is keyed on a `legacy_form` string so a single process emits
-    each warning at most once (the rename touches enough call-sites that
-    per-call emission would spam Ralph logs).
-
-    `extra` is an optional trailing fragment appended after the standard
-    deprecation prose (e.g. ``"Removed in 2.0."``). Kept as a parameter so
-    future deprecations can opt into the same suffix without diverging
-    wording across call-sites.
-    """
-    if legacy_form in _RENAME_DEPRECATION_EMITTED:
-        return
-    _RENAME_DEPRECATION_EMITTED.add(legacy_form)
-    if os.environ.get("FLOW_NO_DEPRECATION") == "1":
-        return
-    suffix = f" {extra}" if extra else ""
-    print(
-        f"Warning: {legacy_form} is deprecated; use {canonical_form}. "
-        f"(Suppress with FLOW_NO_DEPRECATION=1.){suffix}",
-        file=sys.stderr,
-    )
 
 
 def iter_spec_json_files(flow_dir: Path):
@@ -7259,21 +7081,17 @@ def cmd_status(args: argparse.Namespace) -> None:
     active_runs = find_active_runs()
 
     if args.json:
-        # fn-43.2 R31: co-emit canonical "specs" + legacy "epics" alias.
-        # Same shape for `current_spec`/`current_epic` on each active run.
         json_output(
             {
                 "success": True,
                 "flow_exists": flow_exists,
                 "specs": epic_counts,
-                "epics": epic_counts,
                 "tasks": task_counts,
                 "runs": [
                     {
                         "id": r["id"],
                         "iteration": r["iteration"],
                         "current_spec": r["current_epic"],
-                        "current_epic": r["current_epic"],
                         "current_task": r["current_task"],
                         "paused": r["paused"],
                         "stopped": r["stopped"],
@@ -7373,14 +7191,12 @@ def cmd_ralph_status(args: argparse.Namespace) -> None:
             current_task = task_match.group(1)
 
     if args.json:
-        # fn-43.2 R31: co-emit canonical "current_spec" + legacy "current_epic" alias.
         json_output(
             {
                 "success": True,
                 "run": run_id,
                 "iteration": iteration,
                 "current_spec": current_epic,
-                "current_epic": current_epic,
                 "current_task": current_task,
                 "paused": paused,
                 "stopped": stopped,
@@ -7439,11 +7255,7 @@ def cmd_config_get(args: argparse.Namespace) -> None:
     if key is None:
         # Keyless root read (fn-110.1): the whole config in one call.
         if raw:
-            value = (
-                _canonicalize_config_tree(snapshot.raw)
-                if snapshot.raw is not None
-                else {}
-            )
+            value = snapshot.raw if snapshot.raw is not None else {}
             if args.json:
                 json_output({"key": None, "value": value, "raw": True})
             else:
@@ -7457,47 +7269,10 @@ def cmd_config_get(args: argparse.Namespace) -> None:
         return
 
     if raw:
-        # Bypass merge; resolve via the canonical/legacy raw probe so
-        # callers see `null` exactly when neither the canonical nor the
-        # legacy key is persisted to .flow/config.json. Deprecation still
-        # fires when the user typed the legacy alias and only legacy is set.
-        canonical_from_alias = _CONFIG_KEY_ALIASES.get(key)
-        if canonical_from_alias is not None:
-            canonical = canonical_from_alias
-            legacy = key
-            user_typed_legacy = True
-        else:
-            legacy_match = next(
-                (lg for lg, cn in _CONFIG_KEY_ALIASES.items() if cn == key),
-                None,
-            )
-            canonical = key
-            legacy = legacy_match
-            user_typed_legacy = False
-
-        canonical_raw = _snapshot_raw_probe(snapshot, canonical)
-        if canonical_raw is not _CONFIG_RAW_SENTINEL:
-            value = canonical_raw
-        elif legacy is not None:
-            legacy_raw = _snapshot_raw_probe(snapshot, legacy)
-            if legacy_raw is not _CONFIG_RAW_SENTINEL:
-                value = legacy_raw
-                if user_typed_legacy:
-                    _emit_rename_deprecation(legacy, canonical)
-            else:
-                value = None
-        else:
+        # Bypass merge: null when the key is absent from the on-disk file.
+        value = _snapshot_raw_probe(snapshot, key)
+        if value is _CONFIG_RAW_SENTINEL:
             value = None
-
-        if isinstance(value, dict) and snapshot.raw is not None:
-            # Subtree emission is always canonical-keyed: re-probe the
-            # canonicalized raw tree at the canonical path so any legacy
-            # leaves nested below surface under their canonical names.
-            reprobed = _tree_probe(
-                _canonicalize_config_tree(snapshot.raw), canonical
-            )
-            if reprobed is not _CONFIG_RAW_SENTINEL:
-                value = reprobed
 
         if args.json:
             json_output({"key": key, "value": value, "raw": True})
@@ -7510,12 +7285,8 @@ def cmd_config_get(args: argparse.Namespace) -> None:
                 print(f"{key}: {value}")
         return
 
-    # Merged read. snapshot.merged is built from the CANONICALIZED raw tree,
-    # so a dict-valued result is already the canonical-keyed subtree.
-    _, value, deprecation_legacy = resolve_config_key_for_read(key, snapshot=snapshot)
-    if deprecation_legacy:
-        canonical = _CONFIG_KEY_ALIASES[deprecation_legacy]
-        _emit_rename_deprecation(deprecation_legacy, canonical)
+    # Merged read via identity resolver (alias map empty).
+    _, value, _ = resolve_config_key_for_read(key, snapshot=snapshot)
 
     if args.json:
         json_output({"key": key, "value": value})
@@ -7535,9 +7306,7 @@ def cmd_config_set(args: argparse.Namespace) -> None:
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
 
-    canonical_key, deprecation_legacy = resolve_config_key_for_write(args.key)
-    if deprecation_legacy:
-        _emit_rename_deprecation(deprecation_legacy, canonical_key)
+    canonical_key, _ = resolve_config_key_for_write(args.key)
 
     set_config(canonical_key, args.value)
     new_value = get_config(canonical_key)
@@ -12077,7 +11846,7 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
     frontmatter `promoted_ideas` (R14 / R20); `--force` overrides and
     tracks the additional epic-id under `promoted_to`.
 
-    Epic creation goes through `cmd_epic_create` indirectly: this command
+    Epic creation goes through `cmd_spec_create` indirectly: this command
     inlines the same scan-based allocation + spec write so the survivor
     context is in the spec from the first byte (no two-step write that
     leaves a default skeleton on disk if the spec write fails).
@@ -12319,13 +12088,9 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
     source_link = f".flow/prospects/{descriptor['artifact_id']}.md#idea-{idea_n}"
 
     if args.json:
-        # fn-43.2 R31: co-emit canonical "spec_id"/"spec_title" + legacy
-        # "epic_id"/"epic_title" alias keys.
         payload: dict[str, Any] = {
             "spec_id": epic_id,
-            "epic_id": epic_id,
             "spec_title": epic_title,
-            "epic_title": epic_title,
             "idea": idea_n,
             "artifact_id": descriptor["artifact_id"],
             "source_link": source_link,
@@ -13917,7 +13682,6 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_create = cmd_spec_create
 
 
 def cmd_task_create(args: argparse.Namespace) -> None:
@@ -14038,12 +13802,10 @@ def cmd_task_create(args: argparse.Namespace) -> None:
     # is the source of truth. This reduces merge conflicts.
 
     if args.json:
-        # R31: co-emit canonical "spec" key + legacy "epic" alias key.
         json_output(
             {
                 "id": task_id,
                 "spec": spec_id,
-                "epic": spec_id,
                 "title": args.title,
                 "depends_on": deps,
                 "spec_path": task_data["spec_path"],
@@ -14269,14 +14031,10 @@ def cmd_show(args: argparse.Namespace) -> None:
         args.id = resolve_task_arg(flow_dir, args.id, use_json=args.json)
         # Load task with merged runtime state
         task_data = load_task_with_state(args.id, use_json=args.json)
-        # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias on
-        # task --json output. normalize_task() already promotes 0.x "epic"
-        # to "spec" on read, so spec_value is always populated even for
-        # legacy task JSON files.
         spec_value = task_data.get("spec") or task_data.get("epic")
         if spec_value is not None:
             task_data["spec"] = spec_value
-            task_data["epic"] = spec_value
+        task_data.pop("epic", None)
 
         if args.json:
             json_output(task_data)
@@ -14343,12 +14101,10 @@ def cmd_specs(args: argparse.Namespace) -> None:
     specs.sort(key=lambda e: id_sort_key(e["id"]))
 
     if args.json:
-        # R31: co-emit canonical "specs" + legacy "epics" alias key (same array).
         json_output(
             {
                 "success": True,
                 "specs": specs,
-                "epics": specs,
                 "count": len(specs),
             }
         )
@@ -14368,7 +14124,6 @@ def cmd_specs(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epics = cmd_specs
 
 
 def cmd_tasks(args: argparse.Namespace) -> None:
@@ -14404,9 +14159,7 @@ def cmd_tasks(args: argparse.Namespace) -> None:
             tasks.append(
                 {
                     "id": task_data["id"],
-                    # R31: co-emit canonical "spec" + legacy "epic" alias.
                     "spec": spec_value,
-                    "epic": spec_value,
                     "title": task_data["title"],
                     "status": task_data["status"],
                     "priority": task_data.get("priority"),
@@ -14479,9 +14232,7 @@ def cmd_list(args: argparse.Namespace) -> None:
             all_tasks.append(
                 {
                     "id": task_data["id"],
-                    # R31: co-emit canonical "spec" + legacy "epic" alias.
                     "spec": spec_value,
-                    "epic": spec_value,
                     "title": task_data["title"],
                     "status": task_data["status"],
                     "priority": task_data.get("priority"),
@@ -14511,15 +14262,12 @@ def cmd_list(args: argparse.Namespace) -> None:
                     "done": done_count,
                 }
             )
-        # R31: co-emit canonical "specs" + legacy "epics" alias.
         json_output(
             {
                 "success": True,
                 "specs": specs_out,
-                "epics": specs_out,
                 "tasks": all_tasks,
                 "spec_count": len(specs),
-                "epic_count": len(specs),
                 "task_count": len(all_tasks),
             }
         )
@@ -14620,7 +14368,6 @@ def cmd_spec_set_plan(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_set_plan = cmd_spec_set_plan
 
 
 def cmd_spec_set_plan_review_status(args: argparse.Namespace) -> None:
@@ -14660,7 +14407,6 @@ def cmd_spec_set_plan_review_status(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_set_plan_review_status = cmd_spec_set_plan_review_status
 
 
 def cmd_spec_set_completion_review_status(args: argparse.Namespace) -> None:
@@ -14700,7 +14446,6 @@ def cmd_spec_set_completion_review_status(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_set_completion_review_status = cmd_spec_set_completion_review_status
 
 
 def cmd_spec_reset_review_rounds(args: argparse.Namespace) -> None:
@@ -14746,7 +14491,6 @@ def cmd_spec_reset_review_rounds(args: argparse.Namespace) -> None:
         print(f"Spec {args.id} plan-review round counter reset{extra}")
 
 
-cmd_epic_reset_review_rounds = cmd_spec_reset_review_rounds
 
 
 def _resolve_review_rounds_args(args: argparse.Namespace) -> "tuple[str, Optional[str]]":
@@ -14894,8 +14638,6 @@ def cmd_spec_unready(args: argparse.Namespace) -> None:
 
 
 # Backward-compat aliases (T2 layers the deprecation warning).
-cmd_epic_ready = cmd_spec_ready
-cmd_epic_unready = cmd_spec_unready
 
 
 def cmd_spec_set_branch(args: argparse.Namespace) -> None:
@@ -14933,7 +14675,6 @@ def cmd_spec_set_branch(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_set_branch = cmd_spec_set_branch
 
 
 def cmd_spec_set_title(args: argparse.Namespace) -> None:
@@ -15157,7 +14898,6 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_set_title = cmd_spec_set_title
 
 
 def cmd_spec_add_dep(args: argparse.Namespace) -> None:
@@ -15239,7 +14979,6 @@ def cmd_spec_add_dep(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_add_dep = cmd_spec_add_dep
 
 
 def cmd_spec_rm_dep(args: argparse.Namespace) -> None:
@@ -15307,7 +15046,6 @@ def cmd_spec_rm_dep(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_rm_dep = cmd_spec_rm_dep
 
 
 def cmd_spec_set_backend(args: argparse.Namespace) -> None:
@@ -15382,7 +15120,6 @@ def cmd_spec_set_backend(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_set_backend = cmd_spec_set_backend
 
 
 # --- spec export-cognitive-aid (fn-42.1; renamed in fn-43.1) ---
@@ -15402,11 +15139,9 @@ cmd_epic_set_backend = cmd_spec_set_backend
 # Pure deterministic plumbing — no LLM judgment in the export step itself.
 # Body-rendering happens in the skill (host agent reasoning over this payload).
 
-# Section names accepted by --section filter (R6 / R31). "spec" is canonical
-# in 1.x; "epic" is the legacy alias kept through 1.x for back-compat.
+# Section names accepted by --section filter (R6).
 EXPORT_COGNITIVE_AID_SECTIONS: tuple[str, ...] = (
     "spec",
-    "epic",  # legacy alias (T2 adds the deprecation warning).
     "tasks",
     "memory",
     "glossary",
@@ -15415,12 +15150,9 @@ EXPORT_COGNITIVE_AID_SECTIONS: tuple[str, ...] = (
     "reviews",
 )
 
-# Top-level keys in the full payload (used by --section filter). Both "spec"
-# and "epic" sections map to the same payload keys (the payload co-emits both
-# top-level keys in 1.x — see _build_cognitive_aid_payload).
+# Top-level keys in the full payload (used by --section filter).
 _EXPORT_COGNITIVE_AID_SECTION_KEYS: dict[str, tuple[str, ...]] = {
-    "spec": ("spec", "epic"),
-    "epic": ("spec", "epic"),
+    "spec": ("spec",),
     "tasks": ("tasks", "tasks_summary"),
     "memory": ("memory_during_epic",),
     "glossary": ("glossary_changes",),
@@ -17001,12 +16733,6 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
             use_json=use_json,
             code=2,
         )
-    # fn-43.2: legacy `--section epic` is silently aliased in T1 (it filters
-    # to the same payload keys as `--section spec`). T2 surfaces the rename
-    # path on first use.
-    if section == "epic":
-        _emit_rename_deprecation("--section epic", "--section spec")
-
     flow_dir = get_flow_dir()
     spec_json_path = find_spec_json_path(flow_dir, spec_id)
     if not spec_json_path.exists():
@@ -17240,10 +16966,8 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         repo_root, branch_slug
     )
 
-    # R31: co-emit canonical "spec" key + legacy "epic" alias key (same value).
     payload: dict[str, Any] = {
         "spec": spec_section,
-        "epic": spec_section,
         "tasks": task_entries,
         "tasks_summary": tasks_summary,
         "memory_during_epic": memory_during_epic,
@@ -17265,7 +16989,7 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
     # Text mode: compact summary so humans can sanity-check the aggregate
     # without piping through `jq`.
     print(f"Spec: {spec_id}")
-    if "spec" in payload or "epic" in payload:
+    if "spec" in payload:
         print(f"  Title: {spec_section['title']}")
         print(f"  Status: {spec_section['status']}")
         print(
@@ -17318,7 +17042,6 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_export_cognitive_aid = cmd_spec_export_cognitive_aid
 
 
 def cmd_task_set_backend(args: argparse.Namespace) -> None:
@@ -17525,12 +17248,10 @@ def cmd_task_show_backend(args: argparse.Namespace) -> None:
     sync_field = resolve_field(sync_raw, sync_source)
 
     if args.json:
-        # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
         json_output(
             {
                 "id": task_id,
                 "spec": epic_id,
-                "epic": epic_id,
                 "impl": impl_field,
                 "review": review_field,
                 "sync": sync_field,
@@ -18027,18 +17748,14 @@ def cmd_ready(args: argparse.Namespace) -> None:
             blocked_by_specs.append(dep)
     if blocked_by_specs:
         if args.json:
-            # R31: co-emit canonical "spec"/"blocked_by_specs" + legacy
-            # "epic"/"epic_blocked_by" alias keys.
             json_output(
                 {
                     "spec": spec_id,
-                    "epic": spec_id,
                     "actor": current_actor,
                     "ready": [],
                     "in_progress": [],
                     "blocked": [],
                     "blocked_by_specs": blocked_by_specs,
-                    "epic_blocked_by": blocked_by_specs,
                 }
             )
         else:
@@ -18110,11 +17827,9 @@ def cmd_ready(args: argparse.Namespace) -> None:
     blocked.sort(key=lambda x: sort_key(x["task"]))
 
     if args.json:
-        # R31: co-emit canonical "spec" + legacy "epic" alias key.
         json_output(
             {
                 "spec": spec_id,
-                "epic": spec_id,
                 "actor": current_actor,
                 "ready": [
                     {"id": t["id"], "title": t["title"], "depends_on": t["depends_on"]}
@@ -18164,41 +17879,17 @@ def cmd_next(args: argparse.Namespace) -> None:
 
     flow_dir = get_flow_dir()
 
-    # Resolve specs list. T2 layers a one-shot stderr deprecation when only
-    # the legacy --epics-file flag (or EPICS_FILE env var) is set; canonical
-    # --specs-file / SPECS_FILE is silent. Skill tooling has historically
-    # passed the legacy --epics-file form; both flags route here. CLI flag
-    # wins over env var; canonical wins over legacy alias in each tier.
-    canonical_specs_file = getattr(args, "specs_file", None)
-    legacy_specs_file = getattr(args, "epics_file", None)
-    canonical_specs_env = os.environ.get("SPECS_FILE")
-    legacy_specs_env = os.environ.get("EPICS_FILE")
-    specs_file = (
-        canonical_specs_file
-        or legacy_specs_file
-        or canonical_specs_env
-        or legacy_specs_env
-    )
-    if not canonical_specs_file and legacy_specs_file:
-        _emit_rename_deprecation("--epics-file", "--specs-file")
-    elif (
-        not canonical_specs_file
-        and not legacy_specs_file
-        and not canonical_specs_env
-        and legacy_specs_env
-    ):
-        _emit_rename_deprecation("EPICS_FILE", "SPECS_FILE")
+    # Resolve specs list: --specs-file flag wins over SPECS_FILE env.
+    specs_file = getattr(args, "specs_file", None) or os.environ.get("SPECS_FILE")
     epic_ids: list[str] = []
     if specs_file:
         data = load_json_or_exit(
             Path(specs_file), "Specs file", use_json=args.json
         )
         specs_val = data.get("specs")
-        if specs_val is None:
-            specs_val = data.get("epics")
         if not isinstance(specs_val, list):
             error_exit(
-                "Specs file must be JSON with key 'specs' (or legacy 'epics') as a list", use_json=args.json
+                "Specs file must be JSON with key 'specs' as a list", use_json=args.json
             )
         for e in specs_val:
             if not isinstance(e, str) or not is_spec_id(e):
@@ -18255,12 +17946,10 @@ def cmd_next(args: argparse.Namespace) -> None:
 
         if args.require_plan_review and epic_data.get("plan_review_status") != "ship":
             if args.json:
-                # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
                 json_output(
                     {
                         "status": "plan",
                         "spec": epic_id,
-                        "epic": epic_id,
                         "task": None,
                         "reason": "needs_plan_review",
                     }
@@ -18297,12 +17986,10 @@ def cmd_next(args: argparse.Namespace) -> None:
         if in_progress:
             task_id = in_progress[0]["id"]
             if args.json:
-                # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
                 json_output(
                     {
                         "status": "work",
                         "spec": epic_id,
-                        "epic": epic_id,
                         "task": task_id,
                         "reason": "resume_in_progress",
                     }
@@ -18331,12 +18018,10 @@ def cmd_next(args: argparse.Namespace) -> None:
         if ready:
             task_id = ready[0]["id"]
             if args.json:
-                # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
                 json_output(
                     {
                         "status": "work",
                         "spec": epic_id,
-                        "epic": epic_id,
                         "task": task_id,
                         "reason": "ready_task",
                     }
@@ -18353,12 +18038,10 @@ def cmd_next(args: argparse.Namespace) -> None:
             and epic_data.get("completion_review_status") != "ship"
         ):
             if args.json:
-                # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
                 json_output(
                     {
                         "status": "completion_review",
                         "spec": epic_id,
-                        "epic": epic_id,
                         "task": None,
                         "reason": "needs_completion_review",
                     }
@@ -18368,22 +18051,15 @@ def cmd_next(args: argparse.Namespace) -> None:
             return
 
     if args.json:
-        # fn-43.2 R31: co-emit canonical "spec" key + legacy "epic" alias.
-        # Reason codes also dual-emit: canonical `reason: "blocked_by_spec_deps"`
-        # alongside legacy `reason: "blocked_by_epic_deps"` carried as
-        # `legacy_reason` (existing 1.x consumers grep for "blocked_by_epic_deps").
         payload = {
             "status": "none",
             "spec": None,
-            "epic": None,
             "task": None,
             "reason": "none",
         }
         if blocked_epics:
             payload["reason"] = "blocked_by_spec_deps"
-            payload["legacy_reason"] = "blocked_by_epic_deps"
             payload["blocked_specs"] = blocked_epics
-            payload["blocked_epics"] = blocked_epics
         json_output(payload)
     else:
         if blocked_epics:
@@ -18782,7 +18458,6 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
-cmd_epic_close = cmd_spec_close
 
 
 def validate_flow_root(flow_dir: Path) -> list[str]:
@@ -26985,10 +26660,8 @@ def cmd_checkpoint_save(args: argparse.Namespace) -> None:
     atomic_write_json(checkpoint_path, checkpoint)
 
     if args.json:
-        # fn-43.2 R31: co-emit canonical "spec_id" + legacy "epic_id" alias.
         json_output({
             "spec_id": epic_id,
-            "epic_id": epic_id,
             "checkpoint_path": str(checkpoint_path),
             "task_count": len(tasks),
             "message": f"Checkpoint saved: {checkpoint_path}",
@@ -27086,10 +26759,8 @@ def cmd_checkpoint_restore(args: argparse.Namespace) -> None:
         restored_tasks.append(task_id)
 
     if args.json:
-        # fn-43.2 R31: co-emit canonical "spec_id" + legacy "epic_id" alias.
         json_output({
             "spec_id": epic_id,
-            "epic_id": epic_id,
             "checkpoint_created_at": checkpoint.get("created_at"),
             "tasks_restored": restored_tasks,
             "message": f"Restored {epic_id} from checkpoint ({len(restored_tasks)} tasks)",
@@ -27118,10 +26789,8 @@ def cmd_checkpoint_delete(args: argparse.Namespace) -> None:
 
     if not checkpoint_path.exists():
         if args.json:
-            # fn-43.2 R31: co-emit canonical "spec_id" + legacy "epic_id" alias.
             json_output({
                 "spec_id": epic_id,
-                "epic_id": epic_id,
                 "deleted": False,
                 "message": f"No checkpoint found for {epic_id}",
             })
@@ -27132,10 +26801,8 @@ def cmd_checkpoint_delete(args: argparse.Namespace) -> None:
     checkpoint_path.unlink()
 
     if args.json:
-        # fn-43.2 R31: co-emit canonical "spec_id" + legacy "epic_id" alias.
         json_output({
             "spec_id": epic_id,
-            "epic_id": epic_id,
             "deleted": True,
             "message": f"Deleted checkpoint for {epic_id}",
         })
@@ -27151,9 +26818,9 @@ def cmd_validate(args: argparse.Namespace) -> None:
         )
 
     spec_id_arg = resolve_spec_arg(args, get_flow_dir())
-    # Require either --spec (canonical) / --epic (legacy alias) or --all
+    # Require either --spec or --all
     if not spec_id_arg and not getattr(args, "all", False):
-        error_exit("Must specify --spec (legacy alias: --epic) or --all", use_json=args.json)
+        error_exit("Must specify --spec or --all", use_json=args.json)
 
     flow_dir = get_flow_dir()
 
@@ -27215,9 +26882,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
             total_tasks += task_count
             epic_results.append(
                 {
-                    # R31: co-emit canonical "spec" + legacy "epic" alias.
                     "spec": epic_id,
-                    "epic": epic_id,
                     "valid": len(errors) == 0,
                     "errors": errors,
                     "warnings": warnings,
@@ -27232,9 +26897,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
                 {
                     "valid": valid,
                     "root_errors": root_errors,
-                    # R31: co-emit canonical "specs" + legacy "epics" alias.
                     "specs": epic_results,
-                    "epics": epic_results,
                     "total_specs": len(epic_ids),
                     "total_epics": len(epic_ids),
                     "total_tasks": total_tasks,
@@ -27274,11 +26937,9 @@ def cmd_validate(args: argparse.Namespace) -> None:
     valid = len(errors) == 0
 
     if args.json:
-        # R31: co-emit canonical "spec" + legacy "epic" alias.
         json_output(
             {
                 "spec": spec_id_arg,
-                "epic": spec_id_arg,
                 "valid": valid,
                 "errors": errors,
                 "warnings": warnings,
@@ -31134,7 +30795,7 @@ def main() -> None:
     # prospect promote (fn-33 task 5)
     p_prospect_promote = prospect_sub.add_parser(
         "promote",
-        help="Promote a survivor to a new epic with pre-filled skeleton",
+        help="Promote a survivor to a new spec with pre-filled skeleton",
     )
     p_prospect_promote.add_argument(
         "artifact_id",
@@ -31146,20 +30807,10 @@ def main() -> None:
         type=int,
         help="Survivor position number (1-based) to promote",
     )
-    # fn-43.2: --spec-title is canonical post-1.0; --epic-title kept as a
-    # silent alias (the prospect-promote skill is internal enough that an
-    # explicit deprecation would just spam Ralph; the verb-level
-    # `flowctl epic *` deprecation already surfaces the rename path).
     p_prospect_promote.add_argument(
         "--spec-title",
         dest="epic_title",
         help="Override the spec title (defaults to the survivor's title)",
-    )
-    # Legacy alias flag definition (removed in 2.0); R30 guard skips this line.
-    p_prospect_promote.add_argument(
-        "--epic-title",
-        dest="epic_title",
-        help="Override the spec title (alias for --spec-title; removed in 2.0)",
     )
     p_prospect_promote.add_argument(
         "--force",
@@ -31402,17 +31053,8 @@ def main() -> None:
     p_strategy_list.add_argument("--json", action="store_true", help="JSON output")
     p_strategy_list.set_defaults(func=cmd_strategy_list)
 
-    # fn-43.1: register `flowctl spec *` (canonical) plus its legacy
-    # alias `flowctl epic *` as parallel subparsers (R30 alias context).
-    # Both dispatch to the same cmd_spec_* handlers (the cmd_epic_* names
-    # are aliases assigned post-function-definition). T2 layers the
-    # deprecation emission on the epic-side dispatch via a SubParserAction
-    # wrapper; T1 ships them silently.
     def _add_spec_subparsers(parent_sub, *, noun: str, dest: str) -> None:
-        """Register the 13 sub-subcommands on a `spec` or `epic` parent.
-
-        `noun` is the user-visible verb in help text ("spec" or "epic").
-        """
+        """Register the spec sub-subcommands on a `spec` parent."""
         p_create = parent_sub.add_parser("create", help=f"Create new {noun}")
         p_create.add_argument("--title", required=True, help=f"{noun.capitalize()} title")
         p_create.add_argument("--branch", help=f"Branch name to store on {noun}")
@@ -31750,24 +31392,12 @@ def main() -> None:
     )
     p_scope_suggest.set_defaults(func=cmd_scope_suggest)
 
-    # epic — alias (T2 layers stderr deprecation; T1 ships silently).
-    p_epic = subparsers.add_parser(
-        "epic", help="Epic commands (alias for `spec`; removed in 2.0)"
-    )
-    epic_sub = p_epic.add_subparsers(dest="epic_cmd", required=True)
-    _add_spec_subparsers(epic_sub, noun="epic", dest="epic_cmd")
-
     # task create
     p_task = subparsers.add_parser("task", help="Task commands")
     task_sub = p_task.add_subparsers(dest="task_cmd", required=True)
 
     p_task_create = task_sub.add_parser("create", help="Create new task")
-    # fn-43.1: --spec is canonical, --epic is the back-compat alias (T2
-    # layers the stderr warning). Either flag is required; argparse can't
-    # express "exactly one of these required" cleanly, so we leave both
-    # optional and validate in the command body via resolve_spec_arg.
-    p_task_create.add_argument("--spec", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
-    p_task_create.add_argument("--epic", help="Spec ID (alias for --spec; removed in 2.0)")
+    p_task_create.add_argument("--spec", required=True, help="Spec ID (e.g., fn-1, fn-1-add-auth)")
     p_task_create.add_argument("--title", required=True, help="Task title")
     p_task_create.add_argument("--deps", help="Comma-separated dependency IDs")
     p_task_create.add_argument(
@@ -31821,7 +31451,7 @@ def main() -> None:
     p_task_reset = task_sub.add_parser("reset", help="Reset task to todo")
     p_task_reset.add_argument("task_id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_reset.add_argument(
-        "--cascade", action="store_true", help="Also reset dependent tasks (same epic)"
+        "--cascade", action="store_true", help="Also reset dependent tasks (same spec)"
     )
     p_task_reset.add_argument("--json", action="store_true", help="JSON output")
     p_task_reset.set_defaults(func=cmd_task_reset)
@@ -31843,7 +31473,7 @@ def main() -> None:
     p_task_set_backend.set_defaults(func=cmd_task_set_backend)
 
     p_task_show_backend = task_sub.add_parser(
-        "show-backend", help="Show effective backend specs (task + epic levels)"
+        "show-backend", help="Show effective backend specs (task + spec levels)"
     )
     p_task_show_backend.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_show_backend.add_argument("--json", action="store_true", help="JSON output")
@@ -31870,28 +31500,17 @@ def main() -> None:
     p_dep_add.set_defaults(func=cmd_dep_add)
 
     # show
-    p_show = subparsers.add_parser("show", help="Show epic or task")
+    p_show = subparsers.add_parser("show", help="Show spec or task")
     p_show.add_argument("id", help="Spec or task ID (e.g., fn-1-add-auth, fn-1-add-auth.2)")
     p_show.add_argument("--json", action="store_true", help="JSON output")
     p_show.set_defaults(func=cmd_show)
 
-    # specs (canonical, post-1.0) + epics (alias).
     p_specs = subparsers.add_parser("specs", help="List all specs")
     p_specs.add_argument("--json", action="store_true", help="JSON output")
     p_specs.set_defaults(func=cmd_specs)
 
-    p_epics = subparsers.add_parser(
-        "epics", help="List all specs (alias for `specs`; removed in 2.0)"
-    )
-    p_epics.add_argument("--json", action="store_true", help="JSON output")
-    p_epics.set_defaults(func=cmd_specs)
-
-    # tasks — accepts both --spec (canonical) and --epic (alias).
     p_tasks = subparsers.add_parser("tasks", help="List tasks")
     p_tasks.add_argument("--spec", help="Filter by spec ID (e.g., fn-1, fn-1-add-auth)")
-    p_tasks.add_argument(
-        "--epic", help="Filter by spec ID (alias for --spec; removed in 2.0)"
-    )
     p_tasks.add_argument(
         "--status",
         choices=["todo", "in_progress", "blocked", "done"],
@@ -31913,13 +31532,9 @@ def main() -> None:
     )
     p_cat.set_defaults(func=cmd_cat)
 
-    # ready — accepts --spec (canonical) and --epic (alias).
     p_ready = subparsers.add_parser("ready", help="List ready tasks")
     p_ready.add_argument(
         "--spec", help="Spec ID (e.g., fn-1, fn-1-add-auth)"
-    )
-    p_ready.add_argument(
-        "--epic", help="Spec ID (alias for --spec; removed in 2.0)"
     )
     # fn-68.1: spec-level eligibility-facts mode for the whole backlog. A
     # DISTINCT branch from task-within-spec ready — emits {id, ready,
@@ -31932,13 +31547,8 @@ def main() -> None:
     p_ready.add_argument("--json", action="store_true", help="JSON output")
     p_ready.set_defaults(func=cmd_ready)
 
-    # next — accepts --specs-file (canonical) and --epics-file (alias).
     p_next = subparsers.add_parser("next", help="Select next plan/work unit")
     p_next.add_argument("--specs-file", help="JSON file with ordered spec list")
-    p_next.add_argument(
-        "--epics-file",
-        help="JSON file with ordered spec list (alias for --specs-file; removed in 2.0)",
-    )
     p_next.add_argument(
         "--require-plan-review",
         action="store_true",
@@ -31994,9 +31604,6 @@ def main() -> None:
     p_validate = subparsers.add_parser("validate", help="Validate spec or all")
     p_validate.add_argument(
         "--spec", help="Spec ID (e.g., fn-1, fn-1-add-auth)"
-    )
-    p_validate.add_argument(
-        "--epic", help="Spec ID (alias for --spec; removed in 2.0)"
     )
     p_validate.add_argument(
         "--all", action="store_true", help="Validate all specs and tasks"
@@ -32100,9 +31707,6 @@ def main() -> None:
     p_checkpoint_save.add_argument(
         "--spec", help="Spec ID (e.g., fn-1, fn-1-add-auth)"
     )
-    p_checkpoint_save.add_argument(
-        "--epic", help="Spec ID (alias for --spec; removed in 2.0)"
-    )
     p_checkpoint_save.add_argument("--json", action="store_true", help="JSON output")
     p_checkpoint_save.set_defaults(func=cmd_checkpoint_save)
 
@@ -32111,9 +31715,6 @@ def main() -> None:
     )
     p_checkpoint_restore.add_argument(
         "--spec", help="Spec ID (e.g., fn-1, fn-1-add-auth)"
-    )
-    p_checkpoint_restore.add_argument(
-        "--epic", help="Spec ID (alias for --spec; removed in 2.0)"
     )
     p_checkpoint_restore.add_argument("--json", action="store_true", help="JSON output")
     p_checkpoint_restore.set_defaults(func=cmd_checkpoint_restore)
@@ -32124,9 +31725,6 @@ def main() -> None:
     p_checkpoint_delete.add_argument(
         "--spec", help="Spec ID (e.g., fn-1, fn-1-add-auth)"
     )
-    p_checkpoint_delete.add_argument(
-        "--epic", help="Spec ID (alias for --spec; removed in 2.0)"
-    )
     p_checkpoint_delete.add_argument("--json", action="store_true", help="JSON output")
     p_checkpoint_delete.set_defaults(func=cmd_checkpoint_delete)
 
@@ -32135,7 +31733,7 @@ def main() -> None:
         "prep-chat", help="Prepare JSON for rp-cli chat_send"
     )
     p_prep.add_argument(
-        "id", nargs="?", help="(ignored) Epic/task ID for compatibility"
+        "id", nargs="?", help="(ignored) Spec/task ID for compatibility"
     )
     p_prep.add_argument(
         "--message-file", required=True, help="File containing message text"
@@ -32892,16 +32490,6 @@ def main() -> None:
         )
 
     args = parser.parse_args()
-    # fn-43.2: emit deprecation for legacy `flowctl epic *` / `flowctl epics`
-    # invocations once per process. The `epic` parent + `epics` list-alias
-    # both dispatch to the same canonical handlers (`cmd_spec_*` / `cmd_specs`)
-    # via parallel-subparser registration; this is the single chokepoint that
-    # fires the warning regardless of which sub-subcommand was selected.
-    cmd = getattr(args, "command", None)
-    if cmd == "epic":
-        _emit_rename_deprecation("flowctl epic", "flowctl spec")
-    elif cmd == "epics":
-        _emit_rename_deprecation("flowctl epics", "flowctl specs")
     args.func(args)
 
 

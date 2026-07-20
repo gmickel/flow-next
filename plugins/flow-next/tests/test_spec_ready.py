@@ -261,10 +261,6 @@ class SpecReadyTestCase(unittest.TestCase):
 
     # --- epic aliases -------------------------------------------------------------
 
-    def test_epic_aliases_are_same_handlers(self) -> None:
-        self.assertIs(self.flowctl.cmd_epic_ready, self.flowctl.cmd_spec_ready)
-        self.assertIs(self.flowctl.cmd_epic_unready, self.flowctl.cmd_spec_unready)
-
 
 if __name__ == "__main__":
     unittest.main()
