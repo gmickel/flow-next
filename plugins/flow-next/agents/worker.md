@@ -155,6 +155,7 @@ host's counter stays untouched - not a failure, not a strike).
    path does not exist. Pick the per-run effort (floored at
    `DELEGATE_EFFORT_FLOOR`), and **launch `codex exec` via the Bash
    `run_in_background` tool parameter** (NOT shell `&`) using `DELEGATE_MODEL` +
+   <!-- DELEGATION-ONLY exception: this is the ONE sanctioned background codex launch (result polled via foreground file reads). REVIEW commands are NEVER backgrounded - see the Foreground rule in Phase 3.5. -->
    the **literal** sandbox flag inlined from `DELEGATE_SANDBOX` (yolo →
    `--dangerously-bypass-approvals-and-sandbox`, full-auto → `-s workspace-write`).
    Inline the literal flag — NOT a `$SANDBOX_FLAG` variable: ralph-guard inspects
