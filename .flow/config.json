@@ -28,7 +28,7 @@
     "enabled": true
   },
   "review": {
-    "backend": "codex"
+    "backend": "codex:gpt-5.6-sol:medium"
   },
   "scouts": {
     "github": false
