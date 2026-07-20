@@ -169,6 +169,16 @@ class PilotSnapshotTestCase(unittest.TestCase):
                 self.assertEqual(counts[(rel, variant)], 0,
                                  f"pilot {rel} ({variant}) must make zero config calls")
 
+    def test_dry_run_terminals_remove_the_snapshot(self):
+        # Dry-run leaves no persistent scratch state: both dry-run terminals
+        # (Phase 1.6 fence + Phase 2 classification stop) remove the snapshot.
+        rm_expr = ('rm -f "${TMPDIR:-/tmp}/flow-pilot-config-'
+                   "$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json\"")
+        for path in both_copies("flow-next-pilot/workflow.md"):
+            self.assertGreaterEqual(
+                read(path).count(rm_expr), 2,
+                f"{path}: dry-run terminals must remove the config snapshot")
+
     def test_backlog_mode_has_zero_flowctl_config_calls(self):
         for path in both_copies("flow-next-pilot/references/backlog-mode.md"):
             self.assertNotRegex(read(path), r'\$FLOWCTL"?\s+config\b',
@@ -247,6 +257,20 @@ class PlanReviewSingleSourceTestCase(unittest.TestCase):
                       "plan-review Foreground rule bullet drifted (must stay byte-exact)")
         self.assertIn(CAP_SENTENCE, text,
                       "fn-90 deterministic-cap sentence drifted (must stay byte-exact)")
+
+    def test_status_fences_redeclare_spec_id(self):
+        # Vars die across tool calls: every set-plan-review-status fence must
+        # re-declare SPEC_ID or the mutation targets an empty id.
+        for path in both_copies("flow-next-plan-review/workflow.md"):
+            text = read(path)
+            status_calls = text.count('set-plan-review-status "$SPEC_ID" --status ship')
+            self.assertEqual(status_calls, 3, f"{path}: expected one status fence per backend")
+            # Substring tolerant of the sync rewrite (spacing + "tool calls" →
+            # "prompt turns" in the codex mirror).
+            redeclares = len(re.findall(
+                r'SPEC_ID="\$\{1:-\}"\s+# re-declare in THIS fence too', text))
+            self.assertEqual(redeclares, 3,
+                             f"{path}: every status fence must re-declare SPEC_ID")
 
     def test_no_agent_side_iteration_counting(self):
         for rel in ("flow-next-plan-review/SKILL.md", "flow-next-plan-review/workflow.md"):

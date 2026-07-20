@@ -114,6 +114,7 @@ $FLOWCTL codex plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_
 ### Step 2: Update Status
 
 ```bash
+SPEC_ID="${1:-}" # re-declare in THIS fence too — vars die across prompt turns; an empty id would mutate nothing
 # Based on verdict
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
@@ -167,6 +168,7 @@ $FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIP
 ### Step 2: Update Status
 
 ```bash
+SPEC_ID="${1:-}" # re-declare in THIS fence too — vars die across prompt turns; an empty id would mutate nothing
 # Based on verdict
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
@@ -226,6 +228,7 @@ The runner invokes `cursor-agent -p --output-format json --trust --mode ask` wit
 ### Step 2: Update Status
 
 ```bash
+SPEC_ID="${1:-}" # re-declare in THIS fence too — vars die across prompt turns; an empty id would mutate nothing
 # Based on verdict
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR

@@ -274,6 +274,8 @@ An empty/unset `gateClasses` (the default) gates nothing — full-auto is uncond
 ```bash
 if [ "${PILOT_DRY_RUN:-0}" = "1" ]; then
  # $TRIAGE_CLASS = the class resolved above (workable | ready-but-thin | needs-spec | dep-unsatisfied | needs-human).
+ # Dry-run leaves NO persistent scratch state: remove the root config snapshot (recomputed path).
+ rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
  [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale # verdict contract: SETUP_STALE before EVERY terminal
  echo "PILOT_VERDICT=TRIAGED spec=$SUBJECT_ID stage=triage reason=\"dry-run: classified $TRIAGE_CLASS, nothing dispatched or parked\""
  exit 0
@@ -353,7 +355,7 @@ Classification outcomes for the all-done branch (the all-done invariant: an all-
 - CLOSED PR exists and no OPEN PR exists: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
 - MERGED PR exists while the spec is still open: `NEEDS_HUMAN`, because the state is inconsistent and pilot must not create a second PR.
 
-Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Emit the stashed setup-mismatch line first if present, so it sits immediately before this terminal (SKILL.md verdict contract): `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`.
+Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so a dry-run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`. Emit the stashed setup-mismatch line first if present, so it sits immediately before this terminal (SKILL.md verdict contract): `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`.
 
 ```text
 PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification only, nothing dispatched"

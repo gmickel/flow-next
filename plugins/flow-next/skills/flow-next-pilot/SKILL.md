@@ -116,7 +116,9 @@ Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single
 # same deterministic repo-hash-keyed path and jq it. The path lives under
 # ${TMPDIR} — NEVER under repo-controlled .flow/tmp (autonomous symlink safety:
 # a committed symlink must not redirect this write out of tree) — so a dry-run
-# tick mutates nothing inside the repo. On capture FAILURE remove the file —
+# tick mutates nothing inside the repo; dry-run terminals also `rm -f` this
+# snapshot (workflow.md), leaving no persistent scratch state. On capture
+# FAILURE remove the file —
 # downstream jq reads then error, which keeps the pipeline.qa probe's fail-open
 # contract (probe error ⇒ ACTIVE) intact.
 PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
