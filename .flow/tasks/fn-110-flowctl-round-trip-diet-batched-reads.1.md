@@ -35,9 +35,8 @@ The flowctl half: snapshot-based `config get` (root + subtree reads) and create-
 - [ ] Dual-copy cmp clean; full unittest + smoke (temp dir) green (R7)
 
 ## Done summary
-TBD
-
+Snapshot-based config get (root + subtree merged/raw reads via a command-scoped ConfigSnapshot, exactly one config.json parse) and create-time task completeness (task create --description-file/--acceptance-file/--satisfies with set-spec-equivalent normalization). Review round 2 fixes: sentinel-aware snapshot merged reads ({} defaults no longer become null) and is-not-None description semantics (empty/heading-only file writes an intentionally empty section, not TBD). Codex impl-review verdict: SHIP. Dual-copy flowctl mirrored byte-identical.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9de909c719c1b3de3f486755cc47d794324c25ec, 8d300471dbf0a9307ed6474fafda862fa3a2755e, 1e8353d0db1697e126d21b2c1757935d60a7a1a3, 3bc81e009752e7c4e1345fca03e7fad6248554c1, 5eb5e92ac76a9499541deabbd7aa7b2a3b639d68, 85954cb2a48ccf7e1bbfe799358110cc242c1d5e
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -q (1930 passed, 3 skipped; baseline: green pre-edit at handoff), (cd $(mktemp -d) && bash plugins/flow-next/scripts/smoke_test.sh) (142/142 passed), python3 -m unittest tests.test_config_snapshot tests.test_task_create_files -v (42 tests, focused), ./scripts/sync-codex.sh x2 (idempotent, no mirror diff), cmp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py (byte-identical)
 - PRs:
