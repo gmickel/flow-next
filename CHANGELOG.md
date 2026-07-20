@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [Unreleased]
+
+### Removed
+
+- **Pre-1.0 migration machinery (fn-111.1).** `flowctl migrate-rename` / `migrate-rollback` / `migrate-state`, the auto-detect banner hook, and `/flow-next:setup` Step 1b are gone (~1.5k LOC). Port a pre-1.0 `.flow/epics/` repo by hand: see `.flow/usage.md` "Pre-1.0 layout porting" (and the same section in the setup-managed template) plus one line in `docs/troubleshooting.md`. Orphaned tests deleted (`test_migrate_rename.py`, `test_banner.py`, `test_lockfile.py`, `migration_smoke.sh` + CI step). Capture/make-pr no longer scan legacy `epics/`. Dual-copy flowctl mirrored. No version bump (batched).
+
 ## [flow-next 2.22.0] - 2026-07-20
 
 ### Changed

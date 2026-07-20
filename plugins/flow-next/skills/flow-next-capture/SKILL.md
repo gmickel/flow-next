@@ -120,7 +120,7 @@ The goal is automated synthesis with human oversight on judgment calls — not a
 - **Setting `context: fork`** — blocking-question tools must stay reachable.
 - **Calling `flowctl spec create` before Phase 4 approval.** Phase 5 is the only write phase.
 - **Writing glossary terms without consent, or in autofix mode.** Term-adds require the Phase 4.2 `Glossary?` approval; autofix prints suggestions only (`--yes` consents to the spec write, not to vocabulary changes). The gate is husk-aware (`glossary list --json` `total_terms > 0`) — seeding an empty glossary is `/flow-next:prime`'s job, never capture's.
-- **Using `git add -A` from this skill.** When committing the new spec, stage only the JSON sidecar (`.flow/specs/<id>.json` post-1.0; `.flow/epics/<id>.json` on alias-mode 0.x repos that haven't migrated yet) + `.flow/specs/<id>.md` (and `.flow/meta.json` if the next-id counter mutated). Other working-tree changes are not capture's concern.
+- **Using `git add -A` from this skill.** When committing the new spec, stage only the JSON sidecar (`.flow/specs/<id>.json`) + `.flow/specs/<id>.md` (and `.flow/meta.json` if the next-id counter mutated). Other working-tree changes are not capture's concern.
 
 ## Pre-check: Local setup version
 
@@ -158,7 +158,7 @@ Any other output (the one-line differs notice, or nothing) is non-blocking: cont
 
 Execute the phases in [workflow.md](workflow.md) in order:
 
-0. **Pre-flight** — duplicate detection (scan `.flow/specs/` + `.flow/epics/` for legacy alias-mode repos + `flowctl memory search` on extracted keywords); compaction detection (scan transcript for truncation markers); idempotency (refuse silent overwrite without `--rewrite`).
+0. **Pre-flight** — duplicate detection (scan `.flow/specs/` + `flowctl memory search` on extracted keywords); compaction detection (scan transcript for truncation markers); idempotency (refuse silent overwrite without `--rewrite`).
 1. **Extract conversation evidence** — build a verbatim `## Conversation Evidence` block FIRST (raw quotes from recent user turns, capped ~30 lines). Spec sections refer to it by line, not from agent memory.
 2. **Source-tagged synthesis** — draft each section with per-line tags (`[user]` / `[paraphrase]` / `[inferred]`). Apply the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — cross-link, never re-embed the section list inline). At runtime the template is resolved via the 4-tier discovery cascade — first match wins: `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. Route explicit biz-context signals (nine SIGNAL CATEGORIES per fn-44 R24, only `[user]` / `[paraphrase]` tags) to their destinations; sections without conversation signal stay absent. Compute `BIZ_SIGNAL_CATEGORIES` (0..9) for Phase 6's R25 dispatch.
 3. **Must-ask cases (R9)** — interactive only; autofix exits 2 if any fire. Hard-error conditions: ambiguous title / untestable acceptance / scope-conflict. Optional ambiguities use lead-with-recommendation + confidence tier.

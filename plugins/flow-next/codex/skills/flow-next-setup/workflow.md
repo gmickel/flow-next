@@ -47,75 +47,11 @@ Use flowctl init (idempotent - safe to re-run, handles upgrades):
 ```
 
 This creates/upgrades:
-- `.flow/` directory structure (specs/, tasks/, memory/; legacy `epics/` is preserved when present, see Step 1b for migration)
+- `.flow/` directory structure (specs/, tasks/, memory/)
 - `meta.json` with schema version
 - `config.json` with defaults (merges new keys on upgrade)
 
-## Step 1b: Pre-1.0 layout detection (interactive migration arm)
-
-Detect the pre-1.0 `.flow/` layout (epic-named directories from the 0.x era). When detected, prompt the user to migrate now, defer, or suppress the auto-detect banner permanently. This is the **interactive arm** of the consented-migrate design — the deterministic arm is `flowctl migrate-rename --yes`.
-
-Detection rule:
-- `.flow/epics/` exists AND `.flow/.flow_version` (the post-migration sentinel) is absent → pre-1.0 layout, prompt the user.
-- `.flow/.flow_version` present → already migrated, skip this step entirely.
-- `.flow/epics/` absent → fresh-install repo, skip this step entirely.
-
-```bash
-PRE_1_0_LAYOUT=0
-if [[ -d .flow/epics && ! -f .flow/.flow_version ]]; then
- PRE_1_0_LAYOUT=1
-fi
-```
-
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
-When `PRE_1_0_LAYOUT=1`, prompt via `plain-text numbered prompt`:
-
-- **header**: `Migrate .flow/?`
-- **body**: `Detected pre-1.0 .flow/ layout (.flow/epics/ present, no .flow/.flow_version sentinel). flow-next 1.0 renames .flow/epics/ to .flow/specs/ on disk; alias mode keeps the old layout working but new tooling (flow-swarm, future specs) targets the canonical layout. Recommended: Migrate now — backup is automatic and rollback is one command. Confidence: [high].`
-- **options**:
- - `Migrate now` — apply migration via `flowctl migrate-rename --yes`. Safe (backup written to `.flow/.backup-pre-1.0/`, rollback via `flowctl migrate-rollback`).
- - `Defer` — keep alias mode, suppress the auto-detect banner for 7 days. Re-prompted on the next `flowctl` invocation after the window expires.
- - `Suppress permanently` — keep alias mode, never auto-prompt. Print instructions for the `FLOW_NO_AUTO_MIGRATE=1` env var so the user can suppress the banner across the whole machine.
- - `abort` — exit cleanly. No migration, no banner-ack write, no Step 2-onward setup changes. Step 1's `flowctl init` may already have run (idempotent — safe to leave). Re-run `/flow-next:setup` later to complete setup.
-
-### Routing the answer
-
-**Migrate now** (recommended):
-```bash
-"${PLUGIN_ROOT}/scripts/flowctl" migrate-rename --yes --json
-```
-Surface the JSON output to the user (renamed entries + sentinel write). On error, print stderr verbatim and continue to Step 2 — the user can re-run setup or use `flowctl migrate-rollback` if needed. Migration failure is non-fatal for the rest of setup.
-
-**Defer** (suppress banner 7 days):
-```bash
-# migrate-rename --dry-run writes .flow/.banner-acknowledged with an ISO-8601 UTC
-# timestamp ending in `Z` as a side effect (T4's banner ack contract). It also
-# prints the migration plan to stdout, which is value-add for the defer experience.
-"${PLUGIN_ROOT}/scripts/flowctl" migrate-rename --dry-run --json
-```
-The dry-run output shows the user exactly what would change if they reconsidered, and the side-effect ack-file write is the canonical way to start the 7-day re-nudge window. Do NOT hand-roll the timestamp via `Edit` / `Write` — the format must match `now_iso()` exactly (`2026-05-08T14:23:11.123456Z`).
-
-**Suppress permanently**:
-Print the user-facing instructions verbatim:
-```
-To suppress the migration banner permanently, set FLOW_NO_AUTO_MIGRATE=1 in your shell profile:
-
- export FLOW_NO_AUTO_MIGRATE=1 # ~/.bashrc / ~/.zshrc / ~/.profile
-
-Alias mode keeps your existing .flow/epics/ layout working indefinitely.
-You can still migrate later via: flowctl migrate-rename --yes
-```
-
-**abort**:
-Exit 0 immediately — no migration, no banner-ack file write, no Step 2-onward setup changes. Step 1's `flowctl init --json` ran before Step 1b, so `.flow/` (meta.json, config.json, directory scaffold) may already have been created or upgraded by `init` — that work is **not** rolled back; `init` is idempotent on re-run. Only the migration + remaining setup phases (Step 2 onward — version pin, file copy, docs update) are skipped. Print:
-```
-Setup cancelled at migration prompt. .flow/ may have been initialized/upgraded
-by Step 1 (idempotent — safe to leave). No migration applied; Step 2 onward
-skipped. Re-run /flow-next:setup later to complete setup.
-```
-
-**Continue to Step 2 regardless of answer (except `abort`, which exits 0).** Migration choice is otherwise independent of the rest of setup.
+If the repo still has a pre-1.0 `.flow/epics/` layout, port it by hand before continuing (see `.flow/usage.md` "Pre-1.0 layout porting").
 
 ## Step 2: Check existing setup
 
@@ -172,6 +108,8 @@ HITS=$(ls -1 SPEC.md spec.md 2>/dev/null | sort -u | wc -l | tr -d ' ')
 ```
 
 Then branch:
+
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
 **1. `HITS=0` (neither file exists)** — ask the user via `plain-text numbered prompt`:
 

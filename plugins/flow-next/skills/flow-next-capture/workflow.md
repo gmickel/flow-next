@@ -9,7 +9,6 @@ set -e
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-EPICS_DIR="$REPO_ROOT/.flow/epics"
 SPECS_DIR="$REPO_ROOT/.flow/specs"
 TODAY="$(date -u +%Y-%m-%d)"
 ```
@@ -39,11 +38,11 @@ Cap the candidate keyword list at the top **10** by frequency. These feed both 0
 
 ### 0.2 — Duplicate detection: spec title overlap
 
-Scan both `.flow/specs/*.json` (post-1.0 canonical) and `.flow/epics/*.json` (legacy alias dir on unmigrated 0.x repos). Both paths are walked because `flowctl init` (post-1.0) writes only `.flow/specs/`, but pre-migration repos still keep their JSON metadata under `.flow/epics/` until `flowctl migrate-rename` runs.
+Scan `.flow/specs/*.json` for title overlap. (Pre-1.0 `.flow/epics/` repos: port first per `.flow/usage.md` "Pre-1.0 layout porting".)
 
 ```bash
 shopt -s nullglob
-SPEC_FILES=( "$SPECS_DIR"/*.json "$EPICS_DIR"/*.json )
+SPEC_FILES=( "$SPECS_DIR"/*.json )
 shopt -u nullglob
 ```
 
@@ -199,7 +198,7 @@ If `REWRITE_TARGET` is empty, also scan the visible conversation for prior-captu
 ### Done when
 
 - Conversation keywords are extracted (top-10).
-- Spec-title overlap scan ran (`.flow/specs/` + legacy `.flow/epics/`); matches recorded.
+- Spec-title overlap scan ran (`.flow/specs/`); matches recorded.
 - Memory cross-check ran (if memory initialized) and aggregated.
 - Compaction check passed (or `--from-compacted-ok` overrode it).
 - Idempotency resolution is clear: either `REWRITE_TARGET` is set + validated, or no prior-capture artifact conflict, or the user chose proceed/supersede.
@@ -774,9 +773,8 @@ If `spec set-plan` fails: the spec JSON sidecar exists but the markdown body is 
 
 ```text
 Error: spec set-plan failed for <id>. The spec JSON sidecar was created but the
-markdown body write failed. To roll back: rm .flow/specs/<id>.json .flow/specs/<id>.md
-(or .flow/epics/<id>.json on alias-mode 0.x repos). Or re-run capture with
---rewrite <id> to retry the body write.
+markdown body write failed. To roll back: rm .flow/specs/<id>.json .flow/specs/<id>.md.
+Or re-run capture with --rewrite <id> to retry the body write.
 ```
 
 This mirrors the failure semantics in other flowctl commands — partial-state recovery is on the user, but the error is loud.
@@ -970,7 +968,7 @@ The `Readiness:` announcement line appears ONLY when §5.3's reset actually chan
 
 The skill itself is markdown — there's no unit-test surface. The validation is invoking `/flow-next:capture` in a real session. Expected behavior:
 
-- Phase 0 walks `.flow/specs/` and the legacy `.flow/epics/` alias dir, runs memory search if memory is initialized, detects compaction, applies idempotency. Branches into duplicate-detection question if ≥2 strong matches; exits cleanly on `abort`.
+- Phase 0 walks `.flow/specs/`, runs memory search if memory is initialized, detects compaction, applies idempotency. Branches into duplicate-detection question if ≥2 strong matches; exits cleanly on `abort`.
 - Phase 1 emits a `## Conversation Evidence` block with verbatim user quotes (≤30 lines).
 - Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`. Biz-context signals (R24) route to their destinations using only `[user]` / `[paraphrase]` tags; categories without conversation signal leave their destinations absent. `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6.
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
