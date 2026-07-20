@@ -26,9 +26,8 @@ Remove the epic/epics alias surface end to end (maintainer resolution: remove AL
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Epic-alias surface removed end to end: epic/epics commands, all --epic* flag aliases, R31 dual-emit JSON keys (epics/epic/epic_id/epic_title/epic_count/epic_blocked_by/legacy_reason/current_epic/blocked_epics), _emit_rename_deprecation + callers, cmd_epic_* Python aliases; config-alias triple-parse gone (empty-map resolver seam kept with comment). depends_on_epics stays - canonical on-disk field. alias_smoke.sh + CI step deleted; test_config_alias no-op cases (3) and test_config_snapshot alias-injection cases (6) deleted, live cases kept. BREAKING rider for task 4 CHANGELOG: flow-swarm reads the epics JSON key + forwards --epic flags; maintainer migrates flow-swarm before consuming. Host review: (1) restored task create --title (delegate dropped it while collapsing the spec/epic/title argparse block - real canonical-surface regression, caught by the full-corpus gate, one-line fix + dual-copy sync); (2) pruned 3 stale alias-pinning tests the delegate missed (test_spec_ready handler-identity, test_backend_spec cmd_epic_set_backend x2). Full parallel suite green: 83 files, 1841 tests, 0 failures, 79.3s; sync-codex x2 idempotent.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 5d95eec909a8c15cc5e035127090a78bd082801d
+- Tests: python3 scripts/run_tests_parallel.py (83 files, 1841 tests, 0 failures, 79.3s), focused: test_config*.py 33 OK / test_hot_path*.py 18 OK / test_export*.py 31 OK / test_backend_spec.py 138 OK / test_spec_ready.py 13 OK / test_normalize_section_content.py 26 OK
 - PRs:
