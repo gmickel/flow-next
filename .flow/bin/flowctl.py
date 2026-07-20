@@ -18618,6 +18618,40 @@ implementations.
         protected_artifacts_block=PROTECTED_ARTIFACTS_BLOCK,
     )
 
+# Fallback template body if the on-disk file is missing (global installs, Codex
+# mirror, or stripped-down deployments). Keep in sync with validate-pass.md.
+VALIDATOR_TEMPLATE_FALLBACK = """# Validator prompt (fn-32.1 --validate)
+
+You are validating review findings for false positives. For each finding below,
+independently re-check it against the **current code** and decide whether the
+finding is actually valid.
+
+**Conservative bias — only drop findings that are clearly wrong.** When
+uncertain, keep the finding. A kept false-positive is cheap; a dropped real bug
+is expensive.
+
+For each finding: open the cited file, read ±20 lines around the cited line,
+check whether the claimed issue is actually present, and look for guards /
+handlers / assumptions that address the concern elsewhere.
+
+Do **not** re-score confidence, re-classify severity, or invent new findings.
+
+Return exactly one line per finding in this strict format:
+
+```
+<finding-id>: validated: <true|false> -- <one-sentence reason>
+```
+
+Rules:
+- One line per finding id. Missing ids default to `validated: true`.
+- Use the literal tokens `validated: true` or `validated: false`.
+
+## Findings to validate
+
+<!-- FINDINGS_BLOCK -->
+"""
+
+
 def load_validator_template() -> str:
     """Load validate-pass.md template, falling back to the embedded copy."""
     # Try repo-root plugin path first (dev / local install).
