@@ -328,7 +328,7 @@ Featured in [awesome-claude-code-workflows](https://github.com/ithiria894/awesom
 
 flow-next's ways of working are coached and run in enterprise environments worldwide - from CAD and construction software to proptech and education, from modern monorepos and hundred-repo microservice estates to 30-year-old legacy stacks, on GitHub Enterprise, GitLab, and Jira. Discovery interviews of 2-3 hours produce 8-11 structured, buildable specs; the edge cases surface in the interview, not the sprint.
 
-The field drives the hardening backlog in public: legacy-encoding and Windows robustness landed from real enterprise reports ([#123](https://github.com/gmickel/flow-next/issues/123), [#167](https://github.com/gmickel/flow-next/issues/167)), and twice a morning field report became a released fix the same day (2.9.0, 2.10.0 - see [CHANGELOG](CHANGELOG.md)). Receipts, evidence JSON, and review gates are the audit trail enterprise adoption asks for - approval checkpoints and traceability are built in, not bolted on.
+Receipts, evidence JSON, and review gates are the audit trail enterprise adoption asks for - approval checkpoints and traceability are built in, not bolted on.
 
 **For teams:** six named handover objects, **Spec-as-PR** (review the 50-line spec before the 500-line diff exists), and tracker projection to Linear / GitHub / GitLab / Jira. → [`docs/teams.md`](plugins/flow-next/docs/teams.md) · [flow-next.dev](https://flow-next.dev)
 
