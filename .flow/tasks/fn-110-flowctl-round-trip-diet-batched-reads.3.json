@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-20T08:06:23.757826Z",
+  "depends_on": [
+    "fn-110-flowctl-round-trip-diet-batched-reads.2"
+  ],
+  "id": "fn-110-flowctl-round-trip-diet-batched-reads.3",
+  "priority": null,
+  "spec": "fn-110-flowctl-round-trip-diet-batched-reads",
+  "spec_path": ".flow/tasks/fn-110-flowctl-round-trip-diet-batched-reads.3.md",
+  "status": "todo",
+  "title": "Docs per post-fn-117 register: flowctl.md, CHANGELOG, usage.md, docs-site",
+  "updated_at": "2026-07-20T08:07:07.905422Z"
+}

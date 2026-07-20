@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-20T08:06:23.055504Z",
+  "depends_on": [],
+  "id": "fn-110-flowctl-round-trip-diet-batched-reads.1",
+  "priority": null,
+  "spec": "fn-110-flowctl-round-trip-diet-batched-reads",
+  "spec_path": ".flow/tasks/fn-110-flowctl-round-trip-diet-batched-reads.1.md",
+  "status": "todo",
+  "title": "flowctl: subtree config get + task create file flags (tests, dual-copy)",
+  "updated_at": "2026-07-20T08:07:07.192736Z"
+}
