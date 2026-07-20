@@ -139,8 +139,8 @@ Skip stages       Tiny fix? plan + work, nothing else: /flow-next:plan "rename t
 One-shot chain    "Plan fn-12, run plan-review until SHIP, work every task, then make-pr." One sentence, full pipeline.
 Prompt into steps "/flow-next:work fn-12 - keep the UI tasks yourself; delegate the API plumbing to codex"
 Reorder / re-run  Interview again after planning; /flow-next:sync re-aligns tasks after implementation drift.
-Parallelize       "Run fn-12.2 and fn-12.3 in parallel - disjoint files" (one session, batched workers), or teammates
-                  each /flow-next:work a task from the same spec - atomic claims make it race-safe.
+Parallelize       "Run fn-12.2 and fn-12.3 in parallel - disjoint files" (prompted: the host dispatches a worker
+                  per task), or teammates each /flow-next:work a task from the same spec - atomic claims make it race-safe.
 Route models      flowctl config set review.backend codex · per-task review: pins · delegate:codex for implementation.
 ```
 

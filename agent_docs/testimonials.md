@@ -36,7 +36,8 @@ All URLs verified resolving 2026-07-19 via `gh issue view` / `gh api` (public, n
 
 - **Author:** Claire Novotny (GitHub `clairernovotny`; .NET Foundation / former Microsoft)
 - **Source:** issue [#111 "Reduce Ralph review churn with task quality proof packets"](https://github.com/gmickel/flow-next/issues/111)
-- **Context:** data-driven writeup of two ~18-hour production Ralph runs (35 iterations, real repo), arguing for keeping the review loop because it is the quality mechanism. This is adoption proof of the strongest kind: an experienced engineer instrumenting flow-next on real work.
+- **Context:** data-driven writeup of two production Ralph runs totaling ~18.3 active hours (35 iterations, real repo - the issue's own total row: 1,097.9 min), arguing for keeping the review loop because it is the quality mechanism.
+- **PULLED FROM PUBLIC COPY (maintainer, 2026-07-20):** do not use as a testimonial on any property - the duration reads unimpressive stated accurately, and the quotes read ambivalent out of context. The issue stays valuable as a technical reference; this entry stays for provenance only.
 - **Verbatim quotables:**
   - "Recent Ralph runs show that the expensive loop is also the reason output quality is high"
   - "The observed high-value review findings were mostly not cosmetic. They caught false confidence"
