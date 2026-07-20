@@ -35,7 +35,6 @@ flowctl strategy status --json
 flowctl strategy read                            # full file
 flowctl strategy read --section approach
 flowctl strategy read --json
-flowctl strategy list --json                     # parallel to flowctl glossary list
 ```
 
 ## Husk semantics

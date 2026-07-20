@@ -181,7 +181,7 @@ import json, sys
 data = json.loads(sys.argv[1])
 expected_epic = sys.argv[2]
 assert data["status"] == "plan"
-assert data["epic"] == expected_epic, f"Expected {expected_epic}, got {data['epic']}"
+assert data["spec"] == expected_epic, f"Expected {expected_epic}, got {data['spec']}"
 PY
 echo -e "${GREEN}✓${NC} next plan"
 PASS=$((PASS + 1))
@@ -1640,7 +1640,7 @@ echo -e "${YELLOW}--- copilot e2e (requires copilot CLI) ---${NC}"
 # request on availability detection; the real review below exercises auth for
 # real. With --skip-probe, `authed` is null (can't know without a probe), so
 # we gate on `available` alone and let a real auth failure fail the e2e below.
-copilot_available="$(command -v copilot >/dev/null && echo True || echo False)" 2>/dev/null || echo "False")"
+copilot_available="$(command -v copilot >/dev/null 2>&1 && echo True || echo False)"
 if [[ "$copilot_available" == "True" ]]; then
   # Use gpt-5-mini + effort=low to minimize premium-request cost and wall time.
   # Note: claude-family models reject --effort (task-1 finding), so GPT is required.
@@ -1812,16 +1812,13 @@ import json, sys
 child_id = sys.argv[1]
 data = json.loads(sys.argv[2])
 assert data["status"] == "none"
-# fn-43.2 R31: reason is canonical (`blocked_by_spec_deps`); legacy
-# `blocked_by_epic_deps` is co-emitted under `legacy_reason` through 1.x
-# (consumers can grep either key during the transition; `legacy_reason`
-# drops in 2.0).
+# fn-111.2: canonical keys only (legacy_reason / blocked_epics dual-emit removed).
 assert data["reason"] == "blocked_by_spec_deps"
-assert data["legacy_reason"] == "blocked_by_epic_deps"
+assert "legacy_reason" not in data, "removed dual-emit key resurfaced"
 assert child_id in data.get("blocked_specs", {})
-assert child_id in data.get("blocked_epics", {})
+assert "blocked_epics" not in data, "removed dual-emit key resurfaced"
 PY
-echo -e "${GREEN}✓${NC} depends_on_specs blocks (R31 dual-emit)"
+echo -e "${GREEN}✓${NC} depends_on_specs blocks (canonical keys)"
 PASS=$((PASS + 1))
 
 # GH PR #95 regression: per-spec `ready` must honor the same spec-level dep
@@ -1835,7 +1832,7 @@ base_id = sys.argv[1]
 data = json.loads(sys.argv[2])
 assert data["ready"] == [], f"blocked spec leaked ready tasks: {data['ready']}"
 assert data["blocked_by_specs"] == [base_id], data.get("blocked_by_specs")
-assert data["epic_blocked_by"] == [base_id], data.get("epic_blocked_by")
+assert "epic_blocked_by" not in data, "removed dual-emit key resurfaced"
 PY
 # Unblock: base spec done → child task becomes ready again.
 DEP_BASE_JSON_PATH="$(spec_json_path "$DEP_BASE_ID")"
