@@ -29,9 +29,8 @@ Remove the pre-1.0 migration machinery entirely (maintainer decision 2026-07-19:
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Pre-1.0 migration machinery fully removed: flowctl dual-copy -1543 LOC (migrate-rename/rollback/migrate-state + banner hook + lock/sentinel plumbing), setup workflow Step 1b deleted, capture/make-pr legacy-epics clauses gone, migration_smoke.sh + CI step removed. Replacement: 3-sentence agent-portable porting prose in the setup-managed usage.md template (byte-identical dogfood copy) + troubleshooting.md line. Orphaned tests deleted with named causes; shared sleep/monotonic helpers kept for the pilot-log lock (renamed _migrate_sleep -> _sleep_secs). Host review: pulled test_read_compat.py deletion forward from task 2 fallout - it executes the removed migrate-rename command, keeping it would leave the corpus red between tasks. Full parallel suite green post-change: 83 files, 1853 tests, 0 failures, 80.7s (accounting reconciles: -92 tests / -4 files vs pre-task corpus).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: be3edb00b0346ba18e99938a07089d5af47efd52
+- Tests: python3 scripts/run_tests_parallel.py (83 files, 1853 tests, 0 failures, 80.7s), python3 scripts/run_tests_parallel.py --pattern test_dogfood_template_parity.py|test_setup*.py|test_flow_gitignore.py (green, via delegate + host)
 - PRs:
