@@ -27,9 +27,8 @@ Fenced-JSON reviewer output contract + registry extensibility proof + docs + CHA
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Fenced-JSON reviewer output contract: templates (+byte-identical fallbacks, goldens regenerated - host verified the fixture delta is ONLY the new JSON-instruction block) instruct ONE fenced json block for tallies (suppressed_count/classification_counts/unaddressed/deep_findings, all keys optional); public parsers try the block first (json.loads + schema) and fall back to the renamed _*_prose parsers with a stderr log - host review gated that log on actual yield so tally-less reviews stay silent (Ralph-loop noise). <verdict> tag contract untouched, outside the block. Extensibility proven: test_fourth_backend_registry_entry_only drives cmd_backend_review end-to-end with a mock registry entry. Docs: flowctl.md review-architecture section + orchestration.md registry note. Consolidated CHANGELOG Unreleased rider. LOC OUTCOME RECORDED HONESTLY: cumulative -909 vs the >=1500 acceptance target - the miss is the price of keeping BOTH fallback layers (embedded prompt fallbacks for plugin-less .flow/bin installs; prose parsers as the safety net until field data proves the JSON block reliable). The dedupe/extensibility/visibility goals all landed; the LOC number was an audit estimate that assumed deletion. Final gates: full parallel suite 85 files / 1850 tests / 0 failures / 80.3s; smoke_test.sh All tests passed; ci_test.sh 67/67; sync-codex x2; dual-copy identical; zero em dashes in new prose.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 80740ff91ea2f9683229b7afcc0d25e408ae52ef
+- Tests: python3 scripts/run_tests_parallel.py (85 files, 1850 tests, 0 failures, 80.3s), bash smoke_test.sh (All tests passed), bash ci_test.sh (67/67), test_fourth_backend_registry_entry_only (registry extensibility), golden regeneration delta verified = JSON-instruction block only
 - PRs:
