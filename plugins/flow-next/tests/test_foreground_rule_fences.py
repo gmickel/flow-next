@@ -95,6 +95,22 @@ class ForegroundRuleFenceTestCase(unittest.TestCase):
                 self.assertNotIn(RULE, path.read_text(encoding="utf-8"),
                                  f"{rel}: rp workflow should not carry the CLI foreground comment")
 
+
+    def test_worker_suite_fences_carry_the_rule(self):
+        """fn-110.3 recurrence: the SUITE foreground rule (fn-116, worker.md prose)
+        failed the same way the review rule did - a worker backgrounded its unittest
+        run + monitor. Both gate-suite fences must carry the rule inline."""
+        text = (PLUGIN / "agents" / "worker.md").read_text(encoding="utf-8")
+        suite_rule = "# FOREGROUND RULE: run each gate suite as ONE blocking foreground Bash call"
+        self.assertEqual(
+            text.count(suite_rule), 2,
+            "worker.md must carry the suite foreground rule in exactly 2 fences (Baseline + Verify)",
+        )
+        # Both occurrences must be INSIDE code fences.
+        for i, part in enumerate(text.split("```")):
+            if suite_rule in part:
+                self.assertEqual(i % 2, 1, "suite foreground rule found outside a code fence")
+
     def test_worker_delegation_disambiguation_present_once(self):
         text = (PLUGIN / "agents" / "worker.md").read_text(encoding="utf-8")
         marker = "DELEGATION-ONLY exception"
