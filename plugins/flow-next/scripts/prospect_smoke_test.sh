@@ -474,8 +474,8 @@ PROMOTE_JSON="$TEST_DIR/case6-promote.json"
 ( cd "$CASE6_REPO" && "$FLOWCTL" prospect promote "dxwins-$TODAY" --idea 2 --json > "$PROMOTE_JSON" ) \
   || fail "Case 6: promote --idea 2 failed (rc=$?)"
 
-# Required JSON keys per task 5 spec: success/epic_id/epic_title/idea/artifact_id/source_link/spec_path/artifact_updated
-for key in success epic_id epic_title idea artifact_id source_link spec_path artifact_updated; do
+# Required JSON keys (fn-111.2 canonical): success/spec_id/spec_title/idea/artifact_id/source_link/spec_path/artifact_updated
+for key in success spec_id spec_title idea artifact_id source_link spec_path artifact_updated; do
   if "${FLOW_PY[@]}" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$PROMOTE_JSON')) else 1)"; then
     ok "Case 6: promote JSON has key '$key'"
   else
@@ -488,7 +488,7 @@ assert_eq_jq "$PROMOTE_JSON" "d['idea']" "2" "Case 6: idea=2"
 assert_eq_jq "$PROMOTE_JSON" "d['artifact_id']" "dxwins-$TODAY" "Case 6: artifact_id roundtrip"
 assert_eq_jq "$PROMOTE_JSON" "d['artifact_updated']" "True" "Case 6: artifact_updated=True"
 
-EPIC_ID="$(json_get "$PROMOTE_JSON" "d['epic_id']")"
+EPIC_ID="$(json_get "$PROMOTE_JSON" "d['spec_id']")"
 assert_grep_re '^fn-[0-9]+-' "$EPIC_ID" "Case 6: epic_id matches fn-N-slug shape"
 
 # Spec JSON written. Probe canonical .flow/specs/<id>.json then legacy
