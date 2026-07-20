@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Fixed
+
+- **fn-111/fn-119 follow-ups (PR-review findings).** The parallel runner fails loudly on files where unittest discovers zero tests (rc-0 no-op guard); `test_codex_hooks_normalize.py` converted from pytest-style module functions to unittest (its 10 tests had silently never run in CI); the bundled TUI migrated off the removed epic aliases (`specs --json`, `--spec` flags, boundary mapping of the canonical `spec` wire key).
+
 ### Removed
 
 - **flowctl dead-surface sweep (fn-111).** ~2.7k LOC of zero-caller CLI surface removed across three cuts, plus docs drift corrected. Dual-copy flowctl mirrored. No version bump (batched).

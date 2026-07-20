@@ -110,12 +110,12 @@ describe('isFlowctlAvailable', () => {
 describe('flowctl', () => {
   it('parses JSON output from flowctl command', async () => {
     if (!canRunFlowctlJson) return;
-    const result = await flowctl<{ success: boolean; epics: unknown[] }>([
-      'epics',
+    const result = await flowctl<{ success: boolean; specs: unknown[] }>([
+      'specs',
       '--json',
     ]);
     expect(result).toHaveProperty('success');
-    expect(result).toHaveProperty('epics');
+    expect(result).toHaveProperty('specs');
   });
 });
 

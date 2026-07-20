@@ -57,7 +57,9 @@ class FileResult:
 
     @property
     def ok(self) -> bool:
-        return self.returncode == 0
+        # ran == 0 with a zero exit is a silent no-op file (e.g. pytest-style
+        # module-level functions unittest cannot discover) - fail it loudly.
+        return self.returncode == 0 and self.ran > 0
 
 
 def _default_jobs() -> int:
@@ -157,6 +159,10 @@ def _format_status(result: FileResult) -> str:
             ran=result.ran,
             extra=extra,
             elapsed=result.elapsed_s,
+        )
+    if result.returncode == 0 and result.ran == 0:
+        return "FAIL  {name}  rc=0 ran=0 (no tests discovered - unittest cannot see pytest-style module functions)  {elapsed:.2f}s".format(
+            name=result.path.name, elapsed=result.elapsed_s
         )
     return "FAIL  {name}  rc={rc} ran={ran} failures={f} errors={e}  {elapsed:.2f}s".format(
         name=result.path.name,

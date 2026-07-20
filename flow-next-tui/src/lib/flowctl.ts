@@ -338,20 +338,21 @@ function assertSuccess<T extends { success: boolean; error?: string }>(
  * Get all epics (list items with counts)
  */
 export async function getEpics(): Promise<EpicListItem[]> {
-  const args = ['epics', '--json'];
+  const args = ['specs', '--json'];
   const { result, cmd } = await flowctlWithCmd<EpicsResponse>(args);
   assertSuccess(result, cmd, args);
-  return result.epics;
+  return result.specs;
 }
 
 /**
  * Get tasks for an epic
  */
 export async function getTasks(epicId: string): Promise<TaskListItem[]> {
-  const args = ['tasks', '--epic', epicId, '--json'];
+  const args = ['tasks', '--spec', epicId, '--json'];
   const { result, cmd } = await flowctlWithCmd<TasksResponse>(args);
   assertSuccess(result, cmd, args);
-  return result.tasks;
+  // fn-111: wire is canonical `spec`; TUI internals still use `epic` naming.
+  return result.tasks.map((t) => ({ ...t, epic: (t as { spec?: string }).spec ?? t.epic }));
 }
 
 /**
@@ -375,7 +376,7 @@ export async function getTaskSpec(taskId: string): Promise<string> {
  * Get ready/in_progress/blocked tasks for an epic
  */
 export async function getReadyTasks(epicId: string): Promise<ReadyResponse> {
-  const args = ['ready', '--epic', epicId, '--json'];
+  const args = ['ready', '--spec', epicId, '--json'];
   const { result, cmd } = await flowctlWithCmd<ReadyResponse>(args);
   assertSuccess(result, cmd, args);
   return result;
@@ -400,7 +401,9 @@ export async function getTask(taskId: string): Promise<Task> {
   const { result, cmd } = await flowctlWithCmd<TaskShowResponse>(args);
   assertSuccess(result, cmd, args);
   const { success: _, ...task } = result;
-  return task as Task;
+  // fn-111: wire is canonical `spec`; TUI internals still use `epic` naming.
+  const spec = (task as { spec?: string }).spec;
+  return { ...task, epic: spec ?? (task as { epic?: string }).epic } as Task;
 }
 
 /**

@@ -83,7 +83,7 @@ export interface TasksResponse {
 }
 
 /**
- * Epic list item as returned by flowctl epics --json
+ * Spec list item as returned by flowctl specs --json (fn-111: epics alias removed)
  * (minimal fields for listing)
  */
 export interface EpicListItem {
@@ -95,11 +95,11 @@ export interface EpicListItem {
 }
 
 /**
- * Response from flowctl epics command
+ * Response from flowctl specs command
  */
 export interface EpicsResponse {
   success: boolean;
-  epics: EpicListItem[];
+  specs: EpicListItem[];
   count: number;
 }
 
