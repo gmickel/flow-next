@@ -680,7 +680,7 @@ flowctl config toggle memory.enabled [--json]
 - **Keyed subtree** (`config get land --json`): when the key resolves to a dict, returns the merged namespace as `{"success": true, "key": "land", "value": {...}}`. One call captures a whole namespace for callers that need several leaves.
 - **Keyless root** (`config get --json`): returns the entire merged config as `{"success": true, "key": null, "value": {...}}`. This is the form for callers spanning namespaces with no common prefix.
 
-`--raw` applies to all three forms and bypasses merged defaults: scalar reads return `null` for keys absent from the on-disk `.flow/config.json` (distinguishing unset from explicitly-false), and subtree/root reads return only set values with absent leaves omitted (not defaulted). Raw output carries `"raw": true`. Subtree and root output always emit canonical key names; a persisted legacy leaf surfaces under its canonical name with the existing read warning.
+`--raw` applies to all three forms and bypasses merged defaults: scalar reads return `null` for keys absent from the on-disk `.flow/config.json` (distinguishing unset from explicitly-false), and subtree/root reads return only set values with absent leaves omitted (not defaulted). Raw output carries `"raw": true`. Subtree and root output always emit canonical key names; a persisted legacy leaf surfaces silently under its canonical name, and the deprecation warning fires only when the legacy key itself is read as a scalar.
 
 **Available settings:**
 
