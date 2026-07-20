@@ -301,6 +301,11 @@ class CursorPlanReview(unittest.TestCase):
             self.assertEqual(data["mode"], "cursor")
             self.assertEqual(data["session_id"], MINTED_SID)
             self.assertNotIn("effort", data)
+            # fn-112.2: handler self-writes plan_review_status from the verdict.
+            spec_json = json.loads(
+                (repo / ".flow" / "specs" / f"{EPIC_ID}.json").read_text()
+            )
+            self.assertEqual(spec_json["plan_review_status"], "needs_work")
 
 
 class CursorCompletionReview(unittest.TestCase):

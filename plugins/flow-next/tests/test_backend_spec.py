@@ -1760,6 +1760,51 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
         self.assertIn("backend", sig.parameters)
         self.assertIn("kind", sig.parameters)
 
+    def test_plan_completion_wrappers_route_through_driver(self) -> None:
+        for fn in (
+            flowctl.cmd_codex_plan_review,
+            flowctl.cmd_copilot_plan_review,
+            flowctl.cmd_cursor_plan_review,
+            flowctl.cmd_codex_completion_review,
+            flowctl.cmd_copilot_completion_review,
+            flowctl.cmd_cursor_completion_review,
+        ):
+            src = inspect.getsource(fn)
+            self.assertIn("cmd_backend_review(", src)
+            body = re.sub(r'""".*?"""', "", src, flags=re.S)
+            body = re.sub(r"'''.*?'''", "", body, flags=re.S)
+            self.assertNotIn("run_codex_exec(", body)
+            self.assertNotIn("run_copilot_exec(", body)
+            self.assertNotIn("run_cursor_exec(", body)
+
+    def test_stamp_ralph_iteration_helper(self) -> None:
+        self.assertTrue(callable(flowctl.stamp_ralph_iteration))
+        src = Path(flowctl.__file__).read_text(encoding="utf-8")
+        self.assertEqual(src.count("def stamp_ralph_iteration("), 1)
+        self.assertEqual(
+            len(re.findall(r'os\.environ\.get\("RALPH_ITERATION"\)', src)), 1
+        )
+        receipt: dict = {}
+        old = os.environ.get("RALPH_ITERATION")
+        try:
+            os.environ["RALPH_ITERATION"] = "7"
+            flowctl.stamp_ralph_iteration(receipt)
+            self.assertEqual(receipt["iteration"], 7)
+            receipt2: dict = {}
+            os.environ["RALPH_ITERATION"] = "nope"
+            flowctl.stamp_ralph_iteration(receipt2)
+            self.assertNotIn("iteration", receipt2)
+        finally:
+            if old is None:
+                os.environ.pop("RALPH_ITERATION", None)
+            else:
+                os.environ["RALPH_ITERATION"] = old
+
+    def test_plan_completion_pipelines_exist(self) -> None:
+        self.assertTrue(callable(flowctl._backend_plan_review))
+        self.assertTrue(callable(flowctl._backend_completion_review))
+        self.assertTrue(callable(flowctl._self_write_review_status))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
