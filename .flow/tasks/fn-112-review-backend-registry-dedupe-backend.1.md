@@ -26,9 +26,8 @@ Registry hook extension + the generic review driver, migrated first for the thre
 - [ ] TBD
 
 ## Done summary
-TBD
-
+BACKEND_REGISTRY extended with per-backend hooks (run_exec/resolve_spec/check_probe/gather_diff/prompt_fit/resume policy/receipt-shape flags/extract_review/labels) wired lazily by _wire_backend_review_hooks; cmd_backend_review(args, backend, kind) generic driver implements the shared impl-review pipeline and the three impl-review commands route through it as thin wrappers. Genuine variance preserved as hooks: codex sandbox + prior-receipt-model tracking (PR #203 r2), copilot minted-UUID session marker, cursor argv-budget fit + persona override + resume-only sid. Receipts byte-compatible - key order verified exactly against HEAD~1 per backend (effort conditional matches old cursor omission). -194 LOC this task (large cut comes with plan/completion in .2). 4 new registry/driver tests. Host review: all four delegate-flagged uncertainty points resolved (receipt order proven, unused keys deferred to .2, diff-hoist pending .2 by design, codex asymmetry intentional); test-count reconciliation 132 baseline + 4 new = 136 (fn-111.3 prunes account for the 138->132 memory). OPERATIONAL NOTE: the delegate dispatch inherited a drifted cwd and edited the MAIN repo working tree; work was transferred to the worktree via patch (commit 83392e53), main cleaned via labeled stash (fn112-t1-duplicate..., safe to drop). All dispatch/gate blocks now carry explicit cd. Full parallel suite 83 files / 1829 tests / 0 failures / 81.4s.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 83392e53
+- Tests: python3 scripts/run_tests_parallel.py (83 files, 1829 tests, 0 failures, 81.4s), focused: test_backend_spec.py 136 / test_cursor_review_commands.py 32 / test_review* 45 / test_r22_invariant.py 38 all green, receipt key-order parity vs HEAD~1 verified per backend
 - PRs:
