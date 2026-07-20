@@ -149,7 +149,7 @@ Run backend detection from SKILL.md above. Then branch:
 
 **⚠️ STOP: You MUST read and execute [workflow.md](workflow.md) now.** The per-backend execution blocks are single-sourced there (fn-110) — go to the matching "Codex Backend Workflow" / "Copilot Backend Workflow" / "Cursor Backend Workflow" section and execute it. Do not reconstruct the commands from memory here.
 
-Each workflow covers: checkpoint save → derive `CODE_FILES` reviewer anchors from the spec → `$FLOWCTL <backend> plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"` (Foreground rule applies) → update status → handle verdict → receipt semantics.
+Each workflow is ONE atomic dispatch fence (checkpoint + spec id + receipt path + `CODE_FILES` reviewer anchors + `$FLOWCTL <backend> plan-review …`; Foreground rule applies) → update status → RETURN the verdict here. The workflow files never loop — the Fix Loop below is the single owner of NEEDS_WORK handling, MAJOR_RETHINK escalation, and the fn-90 deterministic cap.
 
 **Return here only after workflow.md execution is complete.**
 

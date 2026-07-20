@@ -100,6 +100,13 @@ class LandConfigDietTestCase(unittest.TestCase):
             )
             # The one call is the subtree capture, and it is the only one anywhere.
             self.assertIn("config get land --json", phase0)
+            # Explicit status-branch capture: `|| echo '{}'` would APPEND to partial
+            # JSON a failing flowctl printed, yielding two documents per jq lookup.
+            self.assertIn("if ! LAND_CFG=", phase0,
+                          f"{path}: land capture must use the explicit status branch")
+            self.assertNotRegex(
+                phase0, r'LAND_CFG="\$\([^)]*\|\|',
+                f"{path}: appending-fallback LAND_CFG capture reintroduced")
             self.assertEqual(len(CONFIG_GET.findall(text)), 1,
                              f"{path}: land workflow has stray config get calls")
             # The old bare cfg() helper (7 per-key startups) must not come back.
@@ -167,12 +174,21 @@ class PilotSnapshotTestCase(unittest.TestCase):
             self.assertNotRegex(read(path), r'\$FLOWCTL"?\s+config\b',
                                 f"{path}: backlog-mode.md must be config-call-free")
 
-    def test_snapshot_consumers_read_the_skill_owned_file(self):
-        snapshot = ".flow/tmp/pilot-config-snapshot.json"
+    def test_snapshot_consumers_recompute_the_deterministic_path(self):
+        # The snapshot lives under ${TMPDIR} (never repo-controlled .flow/tmp —
+        # autonomous symlink safety + dry-run mutates nothing in the repo) at a
+        # deterministic repo-hash-keyed path each fence recomputes identically.
+        snapshot_expr = (
+            'PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-'
+            '$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d\' \' -f1).json"'
+        )
         for rel in ("SKILL.md", "workflow.md", "references/backlog-mode.md"):
             for path in both_copies(f"flow-next-pilot/{rel}"):
-                self.assertIn(snapshot, read(path),
-                              f"{path}: must reference the shared root snapshot file")
+                text = read(path)
+                self.assertIn(snapshot_expr, text,
+                              f"{path}: must recompute the deterministic snapshot path")
+                self.assertNotIn(".flow/tmp/pilot-config", text,
+                                 f"{path}: snapshot must not live under repo-controlled .flow/tmp")
 
 
 class MakePrFenceTestCase(unittest.TestCase):
@@ -189,6 +205,11 @@ class MakePrFenceTestCase(unittest.TestCase):
             self.assertIn("Autonomous context cannot open PRs for incomplete specs", phase0)
             # The old validation-only show must not come back.
             self.assertNotIn('show "$SPEC_ID" --json >/dev/null', phase0)
+            # Interactive asks happen OUTSIDE fences: the fence exits with a
+            # NEED_INPUT marker and is re-run with the value preset (a Bash call
+            # cannot pause for AskUserQuestion).
+            self.assertIn("NEED_INPUT:", phase0,
+                          f"{path}: interactive-ask exemption marker missing")
 
 
 class ImplReviewArgFenceTestCase(unittest.TestCase):

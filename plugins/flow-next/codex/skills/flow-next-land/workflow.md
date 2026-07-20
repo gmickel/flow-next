@@ -50,7 +50,11 @@ fi
 Read the `land.*` config — ONE subtree read (fn-110), then jq lookups from the captured JSON. fn-60.2 seeds defaults, but tolerate `null` (pre-seed / pre-subtree flowctl copies, where the whole capture degrades to `{}` or `"value": null`) with hard fallbacks:
 
 ```bash
-LAND_CFG="$("$FLOWCTL" config get land --json 2>/dev/null || echo '{}')" # {"key":"land","value":{...}} — the only config invocation in this skill
+# ONE subtree read: {"key":"land","value":{...}} — the only config invocation in
+# this skill. Explicit status branch (NOT `|| echo '{}'`): a failing flowctl can
+# still print partial JSON to stdout, and appending '{}' to it would make every
+# jq lookup emit two documents, bypassing the "null" fallbacks below.
+if ! LAND_CFG="$("$FLOWCTL" config get land --json 2>/dev/null)"; then LAND_CFG='{}'; fi
 lcfg() { printf '%s\n' "$LAND_CFG" | jq -r ".value.$1"; } # missing key → literal "null"; explicit "" → empty line (same as the old per-key reads)
 LAND_RELEASE="$(lcfg release)"; [[ -z "$LAND_RELEASE" || "$LAND_RELEASE" == "null" ]] && LAND_RELEASE=true
 PATIENCE_MIN="$(lcfg patienceMinutes)"; [[ -z "$PATIENCE_MIN" || "$PATIENCE_MIN" == "null" ]] && PATIENCE_MIN=30

@@ -112,13 +112,18 @@ Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single
 
 ```bash
 # Root config snapshot: {"key":null,"value":{<merged config>}}. Persisted to a file
-# because bash vars do not survive across tool calls; later fences jq this file.
-# On capture FAILURE remove the file — downstream jq reads then error, which keeps
-# the pipeline.qa probe's fail-open contract (probe error ⇒ ACTIVE) intact.
-mkdir -p .flow/tmp
-$FLOWCTL config get --json > .flow/tmp/pilot-config-snapshot.json 2>/dev/null \
-  || rm -f .flow/tmp/pilot-config-snapshot.json
-PILOT_AUTONOMY="$(jq -r '.value.pilot.autonomy' .flow/tmp/pilot-config-snapshot.json 2>/dev/null)"
+# because bash vars do not survive across tool calls; later fences RECOMPUTE this
+# same deterministic repo-hash-keyed path and jq it. The path lives under
+# ${TMPDIR} — NEVER under repo-controlled .flow/tmp (autonomous symlink safety:
+# a committed symlink must not redirect this write out of tree) — so a dry-run
+# tick mutates nothing inside the repo. On capture FAILURE remove the file —
+# downstream jq reads then error, which keeps the pipeline.qa probe's fail-open
+# contract (probe error ⇒ ACTIVE) intact.
+PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
+rm -f "$PILOT_CFG_SNAPSHOT" 2>/dev/null   # drop any stale/planted file (incl. a symlinked leaf) before the fresh write
+$FLOWCTL config get --json > "$PILOT_CFG_SNAPSHOT" 2>/dev/null \
+  || rm -f "$PILOT_CFG_SNAPSHOT"
+PILOT_AUTONOMY="$(jq -r '.value.pilot.autonomy' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)"
 if [ "$PILOT_BACKLOG_OVERRIDE" = "1" ]; then
   PILOT_AUTONOMY="backlog"                       # --backlog / --auto forces backlog this run
 elif [ "$PILOT_AUTONOMY" != "backlog" ]; then

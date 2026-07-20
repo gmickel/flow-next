@@ -378,11 +378,13 @@ it to `ask` (Phase 3) instead of advancing — even when it is otherwise workabl
 empty / unset `gateClasses` (the default) gates nothing; full-auto is unconditional.
 
 ```bash
-# Derived from the SKILL.md root snapshot (fn-110) — NOT a config get call.
+# Derived from the SKILL.md root snapshot (fn-110) — NOT a config get call. The
+# path is RECOMPUTED here (deterministic repo-hash key; vars don't survive fences).
 # Tolerate BOTH a JSON array (`["risky"]`) AND a scalar set via the CLI —
 # `flowctl config set pilot.gateClasses risky` persists the bare string "risky",
 # which the array-only `.value[]?` would silently drop.
-GATE_CLASSES="$(jq -r '(.value.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end' .flow/tmp/pilot-config-snapshot.json 2>/dev/null)"
+PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
+GATE_CLASSES="$(jq -r '(.value.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)"
 ```
 
 (Matching an item to a gate class is the agent's read of the item, like triage —

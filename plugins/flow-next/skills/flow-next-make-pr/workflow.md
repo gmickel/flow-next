@@ -22,7 +22,7 @@ If `.flow/` does not exist, print `No .flow/ directory — this command runs ins
 
 **Goal:** every external dependency is resolved (gh installed + authed; spec id known; base ref valid; branch ahead of base; tasks done; no existing OPEN PR) before any rendering work starts. Phase 0 has the heaviest external-state dependencies; failing fast here keeps Phases 1-4 deterministic.
 
-**Fence discipline (fn-110):** Phase 0 runs as exactly THREE bash fences — §0.0–0.1 (context + gh), §0.2–0.4 (spec id, base ref, branch validity), §0.5–0.7 (single `flowctl show` capture + tasks-done + existing-PR + context). The subsection headers below describe the parts of each fence; do not split them back into per-subsection calls.
+**Fence discipline (fn-110):** on the happy path Phase 0 runs as exactly THREE bash fences — §0.0–0.1 (context + gh), §0.2–0.4 (spec id, base ref, branch validity), §0.5–0.7 (single `flowctl show` capture + tasks-done + existing-PR + context). The subsection headers below describe the parts of each fence; do not split them back into per-subsection calls. **Interactive-ask exemption:** a Bash fence cannot pause for `AskUserQuestion`. When the §0.2–0.4 fence prints a `NEED_INPUT:` line and exits, ask the user OUTSIDE the fence, then RE-RUN that same fence with the supplied `SPEC_ID` / `BASE_REF` preset — the re-run does not count against the three-fence happy path (Ralph/autonomous never reaches it; those contexts hard-error inside the fence instead).
 
 ### 0.0 — Detect Ralph / autonomous context
 
@@ -123,11 +123,13 @@ if [[ -z "$SPEC_ID" ]]; then
     echo "Error: no spec id supplied and no .flow/specs/*.json or .flow/epics/*.json branch_name matches '$CURRENT_BRANCH'. Autonomous context cannot prompt — pass an explicit spec id." >&2
     exit 2
   fi
-  # Interactive: ask via AskUserQuestion.
-  # Question: "No spec detected from current branch. Provide a spec id (fn-N-slug) or abort?"
-  # Options: 1. Type spec id  2. Abort
-  # On "Type spec id" — accept user input; §0.5's single `flowctl show` capture validates it.
-  : "ask user for SPEC_ID (AskUserQuestion); abort exits 1"
+  # Interactive: STOP this fence — a Bash call cannot pause for AskUserQuestion.
+  # Ask outside the fence ("No spec detected from current branch. Provide a spec id
+  # (fn-N-slug) or abort?" — options: 1. Type spec id  2. Abort; abort exits 1),
+  # then RE-RUN this fence with SPEC_ID preset (interactive-ask exemption above).
+  # §0.5's single `flowctl show` capture validates the typed id.
+  echo "NEED_INPUT: SPEC_ID (no branch_name match for '$CURRENT_BRANCH')"
+  exit 3
 fi
 
 # Spec existence is validated by §0.5's single `flowctl show` capture (fn-110) —
@@ -148,9 +150,12 @@ if [[ -z "$BASE_REF" ]]; then
     echo "Error: no base ref detected (origin/main, main, origin/master, master all missing). Pass --base <ref> explicitly." >&2
     exit 2
   fi
-  # Interactive: ask user for the base ref via AskUserQuestion. No frozen options —
-  # accept a typed branch name; validate via git rev-parse --verify --quiet.
-  : "ask user for BASE_REF; on abort exit 1"
+  # Interactive: STOP this fence — ask for the base ref outside it (AskUserQuestion,
+  # no frozen options — accept a typed branch name; on abort exit 1), then RE-RUN
+  # this fence with BASE_REF preset (interactive-ask exemption above). The re-run's
+  # final validation below rejects an invalid typed ref.
+  echo "NEED_INPUT: BASE_REF (origin/main, main, origin/master, master all missing)"
+  exit 3
 fi
 
 # Final validation — base must exist whether detected or supplied.
