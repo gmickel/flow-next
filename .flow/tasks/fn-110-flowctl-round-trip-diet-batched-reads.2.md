@@ -38,9 +38,8 @@ Per the spec Approach items 3-4, with these hard rules:
 - [ ] sync-codex x2 idempotent, mirror committed; smoke + unittest green (R7)
 
 ## Done summary
-TBD
-
+Skill callsite round-trip diet across 6 hot skills: land Phase 0 = 1 config-get subtree capture (was 7), plan = 1 root snapshot + one-call task create (fixture 20->12 invocations, 40%), pilot = exactly 1 config call (SKILL.md-owned TMPDIR snapshot; symlink-safe, dry-run-clean), make-pr Phase 0 = 3 fences with NEED_INPUT ask exemption, impl-review = 1 arg fence, plan-review backend blocks single-sourced as atomic dispatch fences (Foreground rule + fn-90 cap sentence byte-preserved, stale agent-counter prose removed). Pilot re-scout: 4 config fences found (SKILL:114, workflow:260/306, backlog-mode:384), no repeated-show dup remained. test_skill_prose_diet.py (14 tests) pins every invariant on canonical + codex mirror. Codex impl-review: SHIP after 3 fix rounds (symlink/dry-run/var-atomicity/fix-loop-ownership regressions fixed).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 29d728fae8e522bdeaf738e32478fe2ee8e71e2e, e66c2e938822f4ee24e3b1d18673bf818a1a4247, 4294a7845b84fdbb9e0dc86b020ac122d21dc77a, 2bb41aca84e873ce3e31f261c9d51979d0d50306
+- Tests: baseline: green via receipts - GATE_SKIPPED:unittest:green-receipt 85954cb2 - baseline reused from prior post-gate pass, GATE_SKIPPED:smoke:green-receipt 85954cb2 - baseline reused from prior post-gate pass (baseline only; final gates ran full), python3 -m unittest discover -s plugins/flow-next/tests -q (1944 tests OK, receipts 2bb41aca), (cd $(mktemp -d) && bash .../plugins/flow-next/scripts/smoke_test.sh) (142 passed, 0 failed), ./scripts/sync-codex.sh x2 (idempotent, rc=0), cmp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py (dual-copy parity)
 - PRs:
