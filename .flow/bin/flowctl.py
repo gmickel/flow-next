@@ -3763,18 +3763,26 @@ def extract_review_json_block(output: str) -> Optional[dict]:
     """
     if not output:
         return None
-    match = _REVIEW_JSON_FENCE_RE.search(output)
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group(1))
-    except (json.JSONDecodeError, ValueError, TypeError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    if not _review_json_block_schema_ok(data):
-        return None
-    return data
+    # Scan candidates LAST-first and require at least one KNOWN schema key:
+    # reviewer output quotes attacker-influenced diff/spec text, so an early
+    # injected or merely-quoted fence (e.g. a package.json example inside a
+    # finding) must not shadow the real tally block, which the prompt places
+    # after the findings. Tallies are advisory counts only - the verdict tag
+    # stays the sanctioned edge and is never read from this block.
+    known = ("suppressed_count", "classification_counts", "unaddressed", "deep_findings")
+    for match in reversed(list(_REVIEW_JSON_FENCE_RE.finditer(output))):
+        try:
+            data = json.loads(match.group(1))
+        except (json.JSONDecodeError, ValueError, TypeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        if not any(k in data for k in known):
+            continue
+        if not _review_json_block_schema_ok(data):
+            continue
+        return data
+    return None
 
 
 def _review_json_block_schema_ok(data: dict) -> bool:
@@ -19201,7 +19209,10 @@ def _dispatch_session_pass(
             use_json=use_json,
             code=2,
         )
-    return output
+    # Return the EXTRACTED reviewer message (codex: final message out of the
+    # JSONL stream; cursor/copilot: identity) so fenced-JSON and prose parsing
+    # both see clean text (same class as the PR #222 tally-scope finding).
+    return reg["extract_review"](output)
 
 def _run_validator_pass(
     backend: str,
@@ -22045,9 +22056,12 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     review_id = task_id if task_id else "branch"
     review_text = reg["extract_review"](output)
 
-    suppressed_count = parse_suppressed_count(output)
-    classification_counts = parse_classification_counts(output)
-    unaddressed_rids = parse_unaddressed_rids(output)
+    # Tallies parse from the EXTRACTED reviewer message (codex returns a JSONL
+    # event stream in `output`; a compliant fenced block lives escaped inside
+    # it and is only visible in review_text).
+    suppressed_count = parse_suppressed_count(review_text)
+    classification_counts = parse_classification_counts(review_text)
+    unaddressed_rids = parse_unaddressed_rids(review_text)
 
     if receipt_path:
         _write_backend_review_receipt(
@@ -22434,10 +22448,11 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     # Preserve session_id for continuity (avoid clobbering on resumed sessions).
     session_id_to_write = returned_session_id or session_id
 
-    suppressed_count = parse_suppressed_count(output)
-    classification_counts = parse_classification_counts(output)
-    unaddressed_rids = parse_unaddressed_rids(output)
     review_text = reg["extract_review"](output)
+    # Extracted-message scope: see the impl-review call site.
+    suppressed_count = parse_suppressed_count(review_text)
+    classification_counts = parse_classification_counts(review_text)
+    unaddressed_rids = parse_unaddressed_rids(review_text)
 
     if receipt_path:
         _write_backend_review_receipt(
