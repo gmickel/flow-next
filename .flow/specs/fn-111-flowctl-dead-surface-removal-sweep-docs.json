@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-111-flowctl-dead-surface-removal-sweep-docs.md",
-  "status": "open",
+  "status": "done",
   "title": "flowctl dead-surface removal sweep + docs drift",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T13:00:51.172720Z"
+  "updated_at": "2026-07-20T19:55:16.367761Z"
 }
