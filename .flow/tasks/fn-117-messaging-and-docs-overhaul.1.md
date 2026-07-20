@@ -30,9 +30,8 @@ Foundation assets every other task consumes: the verified testimonial set, the m
 - [ ] Private CLAUDE.md carries the narrative layer; mechanical chain unchanged (R12); diff reviewed against the Workstream F list
 
 ## Done summary
-TBD
-
+Foundation for fn-117: agent_docs/testimonials.md canonical manifest created. GitHub pool (6 entries, Novotny #111 lead) verified resolving and is the active R5 proof set; the d7a4024 X set is EXCLUDED with evidence that its status ids are fabricated (snowflake dates predate the repo's first commit, duplicate id, all seven 404 against a resolving control) with a manual-recovery procedure per entry - the spec's early-proof-point fallback (GitHub-pool-only) is triggered. Client-name boundary gate added to spec Quick commands via a private pattern file (~/.claude/flow-next-client-names.txt, kept out of the public repo); both boundary greps run clean. Private ~/.claude/CLAUDE.md gained the Workstream F narrative layer (claim hierarchy, story-beat habit, hard boundaries, per-property tone map, Messaging Library pointer) with the mechanical chain untouched.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 55ee30af9a82870cb82c316d9be9d515a5bfa798
+- Tests: baseline: green (boundary greps clean pre-edit; external build gates n/a - diff touches no flow-next.dev/mickel.tech files), grep -ri "PSVI\|Velocity Index" ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/ (exit 1 = clean, pre+post edit), grep -riwf ~/.claude/flow-next-client-names.txt ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/ (exit 1 = clean, pre+post edit), GATE_SKIPPED:docs-site-build:docs-only - cumulative diff classified tier-B (no executable paths touched), GATE_SKIPPED:microsite-build:docs-only - cumulative diff classified tier-B (no executable paths touched), gh issue/pr view for #111 #5 #95 #4 #54 #96 (all URLs resolve), agent-browser logged-out title check: 7/7 d7a4024 status URLs 404 vs resolving control x.com/jack/status/20
 - PRs:

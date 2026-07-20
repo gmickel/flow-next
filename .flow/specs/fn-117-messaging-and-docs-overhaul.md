@@ -117,6 +117,7 @@ Task breakdown at /flow-next:plan time follows these phases; A and B1 are parall
 cd ~/work/flow-next.dev && pnpm build                        # docs-site gate (MDX + mermaid render)
 cd ~/work/mickel.tech && bun x biome check && bun run build  # microsite gate
 grep -ri "PSVI\|Velocity Index" ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/  # boundary gate: MUST be empty
+grep -riwf ~/.claude/flow-next-client-names.txt ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/  # boundary gate: client names - MUST be empty (pattern list is private, deliberately outside this public repo; see agent_docs/testimonials.md)
 ```
 
 ## Acceptance Criteria

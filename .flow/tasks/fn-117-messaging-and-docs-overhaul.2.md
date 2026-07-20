@@ -37,9 +37,11 @@ Work the spec's Workstream A list 1-10 in order. Key mechanics:
 - [ ] docs-linkcheck workflow green
 
 ## Done summary
-TBD
+GitHub front door reworked per Workstream A: README leads with "Agents generate. flow-next proves." + above-fold plan screenshot + proof badges (stars/3-OS CI/dynamic release/awesome); new "The pipeline is a menu, not a rail" section; testimonials rebuilt GitHub-pool-only (all linked, Novotny #111 lead - excluded X set removed); anonymized-bold enterprise strip; quick-start de-frictioned (setup-refresh below happy path, Grok to platforms.md pointer, stages in details blocks); real PR-body screenshot from merged PR #215; CODE_OF_CONDUCT.md (Contributor Covenant 2.1); Discussions ENABLED + Wiki DISABLED via gh api; consistency sweep (teams.md 22 commands + role-label backend examples, platforms.md marketplace URL + 22 agents + stale review-default id, README 22 agents, prime index row de-jargoned). "Why this exists" + tenets byte-identical.
 
+MANUAL STEP (maintainer): upload assets/social-preview.png at Settings -> General -> Social preview (GitHub has no API for this).
+Follow-ups noted: asciinema hero gif (static hero shipped per task fallback); 4 pre-existing broken relative links in flow-next-interview/flow-next-capture reference files (outside the CI linkcheck gate's effective scope); awesome-list upstream entry still cites the old repo name (upstream correction PR candidate).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b231944a44c85d7fa04b78633721c5e53d3c47da
+- Tests: baseline: green (boundary greps clean pre-edit, exit 1; spec Quick commands define no repo test suite - other-repo builds untouched by this task), python3 -m unittest discover -s plugins/flow-next/tests -q (1883 tests OK, skipped=3; gate receipt b231944a-unittest), grep -ri 'PSVI|Velocity Index' <all fn-117 surfaces> -> clean (exit 1), grep -riwf ~/.claude/flow-next-client-names.txt <all fn-117 surfaces + CODE_OF_CONDUCT + agent_docs> -> clean (exit 1), lychee --offline (docs-linkcheck workflow args + CODE_OF_CONDUCT.md) -> 0 errors; changed-files pass (README, CoC, teams, platforms, docs/README) -> 0 errors, grep '18 command|all 18' README+docs -> clean; excluded X-set names absent from README (grep clean), diff of '## Why this exists' through tenets table vs base commit -> byte-identical
 - PRs:
