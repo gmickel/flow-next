@@ -119,7 +119,7 @@ Per-task Quick commands list FOCUSED suites for the files you touch - that is wh
 
 ## Parallel Worktrees
 
-Runtime state (status, assignee, etc.) is stored in `.git/flow-state/`, shared across worktrees. Show the resolved path with `.flow/bin/flowctl state-path`.
+Runtime state (status, assignee, etc.) is stored in `.git/flow-state/` (or `$FLOW_STATE_DIR` when set), shared across worktrees.
 
 ## Pre-1.0 layout porting
 

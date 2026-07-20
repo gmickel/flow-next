@@ -4329,7 +4329,7 @@ def parse_backend_spec_lenient(
 ) -> Optional[BackendSpec]:
     """Parse a stored spec, degrading to bare backend on validation failure.
 
-    Used at read time (show-backend, runtime resolution) so pre-epic stored
+    Used at read time (runtime resolution) so pre-epic stored
     values like ``codex:gpt-5.4-high`` (no colon between model and effort) do
     not crash. On ValueError we:
 
@@ -8178,8 +8178,8 @@ def _prospect_parse_frontmatter(text: str) -> Optional[dict[str, Any]]:
     `validate_prospect_frontmatter`.
 
     The Phase 0 inline classifier hand-rolls a similar shallow parser; this
-    helper is the canonical implementation that `flowctl prospect list` and
-    `flowctl prospect read` defer to. Phase 0 may import / shell out to this
+    helper is the canonical implementation that prospect archive/promote
+    (and Phase 0) defer to. Phase 0 may import / shell out to this
     helper in a follow-on touch-up.
     """
     if not text or not text.startswith("---"):
@@ -10711,361 +10711,8 @@ def cmd_memory_migrate(args: argparse.Namespace) -> None:
                 print(f"  warning: {w}")
 
 
-# ---------- fn-30.6: memory discoverability-patch ---------------------------
-
-MEMORY_DISCOVERABILITY_MARKERS = (
-    ".flow/memory/",
-    "flowctl memory",
-)
-
-MEMORY_DISCOVERABILITY_SECTION = (
-    "## Memory / Learnings\n"
-    "\n"
-    "`.flow/memory/` — categorized learnings store (bug + knowledge tracks). "
-    "Relevant when implementing or debugging in documented areas.\n"
-    "\n"
-    "Commands:\n"
-    "- `flowctl memory search <query>` — find entries\n"
-    "- `flowctl memory list --category <cat>` — list by category\n"
-)
-
-MEMORY_DISCOVERABILITY_LISTING_LINE = (
-    ".flow/memory/       # categorized learnings (flowctl memory search)\n"
-)
-
-
-def _discoverability_read(path: Path) -> Optional[str]:
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-
-
-def _discoverability_is_shim(path: Path, content: str) -> bool:
-    """Return True when the file is a one-line shim pointing elsewhere.
-
-    Covers two common shapes:
-      - `@AGENTS.md` / `@CLAUDE.md` single-line includes
-      - symlinks to the sibling file (handled via path.is_symlink() elsewhere)
-
-    Blank/whitespace-only files also count as shims (nothing substantive).
-    """
-    stripped = content.strip()
-    if not stripped:
-        return True
-    # Single @include line (allow trailing comment / whitespace).
-    lines = [ln for ln in stripped.splitlines() if ln.strip()]
-    if len(lines) == 1 and re.match(r"^@[A-Za-z0-9_.-]+\.md\s*$", lines[0].strip()):
-        return True
-    return False
-
-
-def _discoverability_pick_target(
-    repo_root: Path, requested: str
-) -> tuple[Optional[Path], str, list[str]]:
-    """Identify the instruction file to patch.
-
-    Returns (path, reason, notes). `path` is None when no suitable file exists.
-
-    Resolution rules:
-      - requested='agents' or 'claude' forces that file (if present).
-      - requested='auto' (default):
-          * If AGENTS.md is a symlink to CLAUDE.md → substantive is CLAUDE.md.
-          * If CLAUDE.md is a shim (`@AGENTS.md` or empty) and AGENTS.md has
-            real content → substantive is AGENTS.md.
-          * If AGENTS.md is a shim and CLAUDE.md has real content →
-            substantive is CLAUDE.md.
-          * Both substantive → prefer AGENTS.md (industry default).
-          * Only one exists → that file.
-    """
-    agents = repo_root / "AGENTS.md"
-    claude = repo_root / "CLAUDE.md"
-    notes: list[str] = []
-
-    def _exists(path: Path) -> bool:
-        return path.exists() or path.is_symlink()
-
-    if requested == "agents":
-        if not _exists(agents):
-            return (None, "AGENTS.md not found", notes)
-        return (agents, "forced AGENTS.md (--target agents)", notes)
-    if requested == "claude":
-        if not _exists(claude):
-            return (None, "CLAUDE.md not found", notes)
-        return (claude, "forced CLAUDE.md (--target claude)", notes)
-
-    # auto
-    agents_exists = _exists(agents)
-    claude_exists = _exists(claude)
-    if not agents_exists and not claude_exists:
-        return (None, "neither AGENTS.md nor CLAUDE.md at repo root", notes)
-
-    # Symlink detection — the link itself is a shim; the target is substantive.
-    if agents_exists and agents.is_symlink():
-        try:
-            resolved = agents.resolve()
-            if resolved.name == "CLAUDE.md" and _exists(claude):
-                notes.append("AGENTS.md is a symlink to CLAUDE.md")
-                return (claude, "AGENTS.md is a symlink → patching CLAUDE.md", notes)
-        except OSError:
-            pass
-    if claude_exists and claude.is_symlink():
-        try:
-            resolved = claude.resolve()
-            if resolved.name == "AGENTS.md" and _exists(agents):
-                notes.append("CLAUDE.md is a symlink to AGENTS.md")
-                return (agents, "CLAUDE.md is a symlink → patching AGENTS.md", notes)
-        except OSError:
-            pass
-
-    agents_content = _discoverability_read(agents) if agents_exists else None
-    claude_content = _discoverability_read(claude) if claude_exists else None
-
-    agents_shim = (
-        agents_content is not None
-        and _discoverability_is_shim(agents, agents_content)
-    )
-    claude_shim = (
-        claude_content is not None
-        and _discoverability_is_shim(claude, claude_content)
-    )
-
-    if agents_exists and claude_exists:
-        if claude_shim and not agents_shim:
-            notes.append("CLAUDE.md is a shim")
-            return (agents, "CLAUDE.md is a shim → patching AGENTS.md", notes)
-        if agents_shim and not claude_shim:
-            notes.append("AGENTS.md is a shim")
-            return (claude, "AGENTS.md is a shim → patching CLAUDE.md", notes)
-        # Both substantive (or both shims, unusual) — prefer AGENTS.md.
-        return (agents, "both present → preferring AGENTS.md", notes)
-
-    if agents_exists:
-        return (agents, "only AGENTS.md present", notes)
-    return (claude, "only CLAUDE.md present", notes)
-
-
-def _discoverability_already_present(content: str) -> bool:
-    lowered = content.lower()
-    return any(marker.lower() in lowered for marker in MEMORY_DISCOVERABILITY_MARKERS)
-
-
-def _discoverability_plan_edit(content: str) -> tuple[str, str]:
-    """Return (new_content, strategy).
-
-    Strategies:
-      - 'listing': inject single `.flow/memory/` line into an existing
-        `.flow/` directory listing inside a fenced code block.
-      - 'append': append a new `## Memory / Learnings` section at EOF.
-    """
-    # Look for a fenced code block whose body references `.flow/` paths —
-    # treat it as a project directory listing and slot the memory line in.
-    fence_re = re.compile(r"(^|\n)```[^\n]*\n(.*?)\n```", re.DOTALL)
-    for match in fence_re.finditer(content):
-        block = match.group(2)
-        block_lines = block.splitlines()
-        flow_line_idxs = [
-            i
-            for i, line in enumerate(block_lines)
-            if re.match(r"\s*\.flow/[A-Za-z0-9_.-]+/?", line)
-        ]
-        if not flow_line_idxs:
-            continue
-        if any(".flow/memory/" in line for line in block_lines):
-            # Shouldn't hit here (caller checks already-present), but guard anyway.
-            continue
-        # Insert after the last `.flow/` line, matching its indent.
-        insert_after = flow_line_idxs[-1]
-        sample = block_lines[insert_after]
-        indent_match = re.match(r"^(\s*)", sample)
-        indent = indent_match.group(1) if indent_match else ""
-        new_line = f"{indent}.flow/memory/       # categorized learnings (flowctl memory search)"
-        new_block_lines = (
-            block_lines[: insert_after + 1] + [new_line] + block_lines[insert_after + 1 :]
-        )
-        new_block = "\n".join(new_block_lines)
-        # Rebuild content with the block swapped in.
-        start, end = match.span(2)
-        new_content = content[:start] + new_block + content[end:]
-        return (new_content, "listing")
-
-    # Append strategy — ensure exactly one blank line before the new section.
-    if content and not content.endswith("\n"):
-        content = content + "\n"
-    sep = "" if content.endswith("\n\n") or content == "" else "\n"
-    new_content = content + sep + MEMORY_DISCOVERABILITY_SECTION
-    if not new_content.endswith("\n"):
-        new_content += "\n"
-    return (new_content, "append")
-
-
-def _discoverability_unified_diff(
-    old: str, new: str, rel_path: str
-) -> str:
-    diff = difflib.unified_diff(
-        old.splitlines(keepends=True),
-        new.splitlines(keepends=True),
-        fromfile=f"a/{rel_path}",
-        tofile=f"b/{rel_path}",
-        n=3,
-    )
-    return "".join(diff)
-
-
-def cmd_memory_discoverability_patch(args: argparse.Namespace) -> None:
-    """Patch project AGENTS.md / CLAUDE.md with a `.flow/memory/` reference.
-
-    Default: interactive confirmation. Flags:
-      --apply        write without prompting (non-interactive)
-      --dry-run      print proposed diff, never write
-      --target       auto | agents | claude (default: auto)
-      --json         machine-readable output
-    """
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.",
-            use_json=bool(getattr(args, "json", False)),
-        )
-
-    is_json = bool(getattr(args, "json", False))
-    apply_flag = bool(getattr(args, "apply", False))
-    dry_run = bool(getattr(args, "dry_run", False))
-    target_choice = getattr(args, "target", "auto") or "auto"
-
-    if apply_flag and dry_run:
-        if is_json:
-            json_output(
-                {"error": "--apply and --dry-run are mutually exclusive"},
-                success=False,
-            )
-        else:
-            print("Error: --apply and --dry-run are mutually exclusive.", file=sys.stderr)
-        sys.exit(2)
-
-    repo_root = get_repo_root()
-    target_path, reason, notes = _discoverability_pick_target(repo_root, target_choice)
-    if target_path is None:
-        msg = (
-            "No AGENTS.md or CLAUDE.md at repo root. "
-            "Create one first, then re-run."
-            if target_choice == "auto"
-            else reason
-        )
-        if is_json:
-            json_output({"error": msg, "target": None}, success=False)
-        else:
-            print(msg)
-        sys.exit(1)
-
-    rel_path = str(target_path.relative_to(repo_root))
-    content = _discoverability_read(target_path)
-    if content is None:
-        msg = f"Could not read {rel_path}"
-        if is_json:
-            json_output({"error": msg, "target": rel_path}, success=False)
-        else:
-            print(f"Error: {msg}", file=sys.stderr)
-        sys.exit(1)
-
-    if _discoverability_already_present(content):
-        message = (
-            f"Discoverability already present in {rel_path}. No changes needed."
-        )
-        if is_json:
-            json_output(
-                {
-                    "target": rel_path,
-                    "action": "exists",
-                    "reason": reason,
-                    "notes": notes,
-                    "diff": "",
-                    "message": message,
-                }
-            )
-        else:
-            print(message)
-        return
-
-    new_content, strategy = _discoverability_plan_edit(content)
-    diff_text = _discoverability_unified_diff(content, new_content, rel_path)
-
-    if not is_json:
-        print(f"Target: {rel_path} ({reason})")
-        for note in notes:
-            print(f"  note: {note}")
-        print(f"Strategy: {strategy}\n")
-        print(diff_text if diff_text else "(no diff)")
-
-    if dry_run:
-        message = f"Dry run — {rel_path} not modified."
-        if is_json:
-            json_output(
-                {
-                    "target": rel_path,
-                    "action": "dry-run",
-                    "reason": reason,
-                    "notes": notes,
-                    "strategy": strategy,
-                    "diff": diff_text,
-                    "message": message,
-                }
-            )
-        else:
-            print(f"\n{message}")
-        return
-
-    if not apply_flag:
-        if is_json:
-            # JSON callers must opt in explicitly — avoid destructive auto-apply.
-            json_output(
-                {
-                    "error": (
-                        "Refusing to patch without --apply (or interactive "
-                        "confirmation). Re-run with --apply or --dry-run."
-                    ),
-                    "target": rel_path,
-                    "action": "skipped",
-                    "reason": reason,
-                    "notes": notes,
-                    "strategy": strategy,
-                    "diff": diff_text,
-                },
-                success=False,
-            )
-            sys.exit(1)
-        try:
-            answer = input("\nApply? [y/N] ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print("\nAborted.")
-            sys.exit(1)
-        if answer not in ("y", "yes"):
-            print("Aborted — no changes written.")
-            sys.exit(1)
-
-    atomic_write(target_path, new_content)
-
-    if is_json:
-        json_output(
-            {
-                "target": rel_path,
-                "action": "applied",
-                "reason": reason,
-                "notes": notes,
-                "strategy": strategy,
-                "diff": diff_text,
-                "message": f"Patched {rel_path} ({strategy}).",
-            }
-        )
-    else:
-        print(f"\nPatched {rel_path}.")
-
-
 # ---------- Prospect CLI commands (fn-33 task 4) ------------------------
 
-
-# Sentinel reasons that should sort *after* normal-case corruption messages
-# in `list --all` output (defensive — the Phase 0 contract owns the order).
-_PROSPECT_LIST_AGE_THRESHOLD_DAYS = 30
 
 
 def _prospect_build_descriptor(
@@ -11346,36 +10993,6 @@ def _prospect_extract_survivors(body: str) -> list[dict[str, Any]]:
     return survivors
 
 
-def _prospect_extract_rejected(body: str) -> list[dict[str, Any]]:
-    """Extract rejected entries from a `## Rejected` body slice.
-
-    Format mirrors `render_prospect_body`'s `- <title> — <taxonomy>: <reason>`
-    or `- <title> — <taxonomy>` lines. Returns empty list if section is
-    `_(none)_` or absent.
-    """
-    rejected: list[dict[str, Any]] = []
-    if not body:
-        return rejected
-    line_re = re.compile(
-        r"^-\s+(?P<title>.+?)\s+—\s+(?P<taxonomy>[^:]+?)(?::\s+(?P<reason>.+))?$"
-    )
-    for raw_line in body.splitlines():
-        line = raw_line.rstrip()
-        if not line.startswith("- "):
-            continue
-        m = line_re.match(line)
-        if not m:
-            continue
-        rejected.append(
-            {
-                "title": m.group("title").strip(),
-                "taxonomy": m.group("taxonomy").strip(),
-                "reason": (m.group("reason") or "").strip(),
-            }
-        )
-    return rejected
-
-
 def _prospect_rewrite_in_place(
     src: Path, frontmatter: dict[str, Any], body: str
 ) -> None:
@@ -11416,245 +11033,6 @@ def _prospect_rewrite_in_place(
                 os.unlink(tmp)
         except OSError:
             pass
-
-
-def cmd_prospect_list(args: argparse.Namespace) -> None:
-    """List prospect artifacts under `.flow/prospects/`.
-
-    Default filter (fn-33 R5/R15):
-      - Active artifacts (≤30 days old, status: active) only.
-      - `_archive/` excluded.
-      - Stale (>30 days) and corrupt artifacts hidden.
-    `--all` lifts every filter and includes archived entries.
-
-    Sort: newest first by frontmatter date (corrupt sort last with a note).
-    """
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.",
-            use_json=args.json,
-        )
-    show_all = bool(getattr(args, "all", False))
-    prospects_dir = get_prospects_dir()
-    today = datetime.now(timezone.utc).date()
-    artifacts = _prospect_iter_artifacts(
-        prospects_dir, include_archive=show_all, today=today
-    )
-
-    if not show_all:
-        artifacts = [a for a in artifacts if a["status"] == "active"]
-
-    # Sort: corrupt last; everyone else newest-first by date (descending).
-    def _sort_key(a: dict[str, Any]) -> tuple[int, str, str]:
-        is_corrupt = 1 if a["status"] == "corrupt" else 0
-        # Reverse-sort newest first: invert the date.
-        date_key = a["date"] or ""
-        return (is_corrupt, date_key, a["artifact_id"])
-
-    artifacts.sort(key=_sort_key, reverse=True)
-    # Reverse leaves corrupt at the *top*; flip back so corrupt sorts last.
-    actives = [a for a in artifacts if a["status"] != "corrupt"]
-    corrupts = [a for a in artifacts if a["status"] == "corrupt"]
-    actives.sort(key=lambda a: (a["date"] or "", a["artifact_id"]), reverse=True)
-    corrupts.sort(key=lambda a: (a["date"] or "", a["artifact_id"]), reverse=True)
-    artifacts = actives + corrupts
-
-    if args.json:
-        payload = {
-            "artifacts": [
-                {
-                    "artifact_id": a["artifact_id"],
-                    "date": a["date"],
-                    "focus_hint": a["focus_hint"],
-                    "title": a["title"],
-                    "survivor_count": a["survivor_count"],
-                    "promoted_count": a["promoted_count"],
-                    "status": a["status"],
-                    "path": a["path"],
-                    "in_archive": a["in_archive"],
-                    "age_days": a["age_days"],
-                    "corruption": a["corruption"],
-                }
-                for a in artifacts
-            ],
-            "count": len(artifacts),
-            "show_all": show_all,
-        }
-        json_output(payload)
-        return
-
-    if not artifacts:
-        print("No prospect artifacts.")
-        if not show_all:
-            print("  (run with --all to include stale/corrupt/archived)")
-        return
-
-    # Human output.
-    headers = (
-        ["id", "date", "focus", "survivors", "promoted", "status"]
-        if not show_all
-        else ["id", "date", "focus", "survivors", "promoted", "status", "path"]
-    )
-    rows: list[list[str]] = []
-    for a in artifacts:
-        survivor_disp = (
-            str(a["survivor_count"]) if a["survivor_count"] is not None else "?"
-        )
-        promoted_disp = f"{a['promoted_count']}"
-        status_disp = a["status"]
-        if a["status"] == "corrupt" and a["corruption"]:
-            status_disp = f"corrupt ({a['corruption']})"
-        elif a["in_archive"]:
-            status_disp = f"{a['status']} (archived)"
-        row = [
-            a["artifact_id"],
-            a["date"] or "?",
-            a["focus_hint"] or "(open-ended)",
-            survivor_disp,
-            promoted_disp,
-            status_disp,
-        ]
-        if show_all:
-            row.append(a["path"])
-        rows.append(row)
-
-    widths = [len(h) for h in headers]
-    for r in rows:
-        for i, cell in enumerate(r):
-            widths[i] = max(widths[i], len(cell))
-
-    line_fmt = "  ".join(f"{{:<{w}}}" for w in widths)
-    print(line_fmt.format(*headers))
-    print(line_fmt.format(*["-" * w for w in widths]))
-    for r in rows:
-        print(line_fmt.format(*r))
-
-
-def cmd_prospect_read(args: argparse.Namespace) -> None:
-    """Read a prospect artifact body or a single section.
-
-    Id resolution (parallels `cmd_memory_read`):
-      - Full id (`dx-improvements-2026-04-24`) → direct filename hit.
-      - Slug only (`dx-improvements`) → latest date wins.
-      - `<slug>-<date>` always disambiguates same-day collisions via the
-        `-N` suffix retained in the artifact_id.
-
-    `--section <name>` extracts one of `focus | grounding | survivors |
-    rejected` body slices.
-    `--json` emits structured frontmatter + survivors + rejected.
-    Corrupt artifacts: print frontmatter (best-effort) plus a
-    `[ARTIFACT CORRUPT: <reason>]` marker; exit code 3 (distinct from
-    Ralph-block 2).
-    """
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.",
-            use_json=args.json,
-        )
-
-    artifact_id = getattr(args, "artifact_id", None)
-    if not artifact_id:
-        error_exit("artifact_id required", use_json=args.json)
-
-    section = getattr(args, "section", None)
-    if section is not None and section not in (
-        "focus",
-        "grounding",
-        "survivors",
-        "rejected",
-    ):
-        error_exit(
-            f"invalid --section '{section}' (valid: focus, grounding, survivors, rejected)",
-            use_json=args.json,
-        )
-
-    prospects_dir = get_prospects_dir()
-    descriptor = _prospect_resolve_id(
-        prospects_dir, artifact_id, include_archive=True
-    )
-    if descriptor is None:
-        error_exit(
-            f"prospect artifact '{artifact_id}' not found",
-            use_json=args.json,
-        )
-
-    path = Path(descriptor["path"])
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        error_exit(
-            f"failed to read {path}: {exc}", use_json=args.json, code=3
-        )
-
-    if descriptor["status"] == "corrupt":
-        reason = descriptor["corruption"] or "unknown"
-        if args.json:
-            json_output(
-                {
-                    "artifact_id": descriptor["artifact_id"],
-                    "path": str(path),
-                    "status": "corrupt",
-                    "corruption": reason,
-                    "frontmatter": descriptor["frontmatter"],
-                },
-                success=False,
-            )
-        else:
-            # Print frontmatter (raw block) when present, then marker.
-            if text.startswith("---"):
-                parts = text.split("---", 2)
-                if len(parts) >= 3:
-                    print("---")
-                    print(parts[1].strip("\n"))
-                    print("---")
-            print(f"[ARTIFACT CORRUPT: {reason}]")
-        sys.exit(3)
-
-    if section is not None:
-        slice_text = _prospect_extract_section(text, section)
-        if slice_text is None:
-            error_exit(
-                f"section '{section}' not found in {path.name}",
-                use_json=args.json,
-                code=3,
-            )
-        if args.json:
-            json_output(
-                {
-                    "artifact_id": descriptor["artifact_id"],
-                    "path": str(path),
-                    "section": section,
-                    "body": slice_text,
-                }
-            )
-        else:
-            sys.stdout.write(slice_text)
-        return
-
-    if args.json:
-        # Body without frontmatter.
-        body = ""
-        if text.startswith("---"):
-            parts = text.split("---", 2)
-            if len(parts) >= 3:
-                body = parts[2].lstrip("\n")
-        survivors_section = _prospect_extract_section(text, "survivors") or ""
-        rejected_section = _prospect_extract_section(text, "rejected") or ""
-        json_output(
-            {
-                "artifact_id": descriptor["artifact_id"],
-                "path": str(path),
-                "status": descriptor["status"],
-                "frontmatter": descriptor["frontmatter"],
-                "body": body,
-                "survivors": _prospect_extract_survivors(survivors_section),
-                "rejected": _prospect_extract_rejected(rejected_section),
-            }
-        )
-    else:
-        sys.stdout.write(text)
-        if not text.endswith("\n"):
-            sys.stdout.write("\n")
 
 
 def cmd_prospect_archive(args: argparse.Namespace) -> None:
@@ -11842,7 +11220,7 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
     Reuses `_prospect_resolve_id` + `_prospect_parse_frontmatter` +
     `_prospect_extract_section`/`_prospect_extract_survivors` (task 4) for
     artifact load + survivor extraction. Refuses on corrupt artifacts
-    (exit 3, matches `cmd_prospect_read`). Idempotency guard via
+    (exit 3 on missing artifact). Idempotency guard via
     frontmatter `promoted_ideas` (R14 / R20); `--force` overrides and
     tracks the additional epic-id under `promoted_to`.
 
@@ -12333,246 +11711,6 @@ def cmd_repo_map_list(args: argparse.Namespace) -> None:
         print(f"\n({skipped} file(s) skipped — see stderr for details)")
 
 
-def cmd_repo_map_show(args: argparse.Namespace) -> None:
-    """Show one feature by `featureId`. Bypasses `ensure_flow_exists()`.
-
-    Exit codes:
-      - 0 on success.
-      - 3 when `--feature <id>` does not resolve (distinct from generic 1
-        so callers can branch).
-    """
-    use_json = bool(getattr(args, "json", False))
-    feature_id = getattr(args, "feature", None)
-    if not feature_id:
-        error_exit("--feature <id> required", use_json=use_json)
-
-    if not _clawpatch_dir().is_dir():
-        error_exit(
-            ".clawpatch/ not found — run /flow-next:map first",
-            use_json=use_json,
-            code=3,
-        )
-
-    features, _skipped = _repo_map_load_features(_clawpatch_features_dir())
-    match = next(
-        (f for f in features if str(f.get("featureId")) == feature_id), None
-    )
-    if match is None:
-        error_exit(
-            f"feature '{feature_id}' not found",
-            use_json=use_json,
-            code=3,
-        )
-
-    if use_json:
-        # Strip internal `_path` and surface as top-level `path` for clarity.
-        out = {k: v for k, v in match.items() if k != "_path"}
-        out["path"] = match.get("_path")
-        json_output(out)
-        return
-
-    title = match.get("title") or "(no title)"
-    print(f"{match.get('featureId')}: {title}")
-    print(f"  path:       {match.get('_path')}")
-    print(f"  kind:       {match.get('kind')}")
-    print(f"  confidence: {match.get('confidence')}")
-    print(f"  updatedAt:  {match.get('updatedAt')}")
-    tags = match.get("tags")
-    if isinstance(tags, list) and tags:
-        print(f"  tags:       {', '.join(str(t) for t in tags)}")
-    owned = _repo_map_feature_paths(
-        {"ownedFiles": match.get("ownedFiles"), "entrypoints": []}
-    )
-    if owned:
-        print("  ownedFiles:")
-        for p in owned:
-            print(f"    - {p}")
-    entries = _repo_map_feature_paths(
-        {"ownedFiles": [], "entrypoints": match.get("entrypoints")}
-    )
-    if entries:
-        print("  entrypoints:")
-        for p in entries:
-            print(f"    - {p}")
-
-
-def _repo_map_resolve_ref(ref: str) -> tuple[bool, str]:
-    """Resolve a git ref. Returns (ok, error_kind). Error kinds:
-      - "not-a-git-repo" — no `.git/` reachable from cwd / no rev-parse.
-      - "unknown-ref"    — the ref does not resolve to a commit.
-    """
-    # First check: are we in a git repo at all?
-    try:
-        probe = subprocess.run(
-            ["git", "rev-parse", "--git-dir"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            cwd=get_repo_root(),
-        )
-    except (OSError, FileNotFoundError):
-        return False, "not-a-git-repo"
-    if probe.returncode != 0:
-        return False, "not-a-git-repo"
-
-    # Second check: does the ref resolve to a commit?
-    try:
-        rp = subprocess.run(
-            ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            cwd=get_repo_root(),
-        )
-    except (OSError, FileNotFoundError):
-        return False, "unknown-ref"
-    if rp.returncode != 0:
-        return False, "unknown-ref"
-    return True, ""
-
-
-def _repo_map_git_diff_names(ref: str) -> list[str]:
-    """Return repo-relative paths of files changed on HEAD since branching from `ref`.
-
-    Uses three-dot diff (`<ref>...HEAD`) so the result is symmetric-difference-free:
-    only files HEAD changed since diverging from `<ref>` are returned. The previous
-    two-dot form (`<ref>..HEAD` = `git diff <ref> HEAD`) compared the two tip trees
-    and surfaced files changed *only* on `<ref>` after the branch cut (e.g.
-    `origin/main` advancing post-branch), polluting overlap results with false
-    positives. Caught by chatgpt-codex-connector[bot] on PR #148.
-
-    Caller MUST validate the ref via `_repo_map_resolve_ref` first. Returns `[]`
-    if `git diff` fails for any reason (treated as no overlap).
-    """
-    try:
-        result = subprocess.run(
-            ["git", "diff", "--name-only", f"{ref}...HEAD"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            cwd=get_repo_root(),
-        )
-    except (OSError, FileNotFoundError):
-        return []
-    if result.returncode != 0:
-        return []
-    return [
-        line.strip()
-        for line in result.stdout.splitlines()
-        if line.strip()
-    ]
-
-
-def cmd_repo_map_since_ref(args: argparse.Namespace) -> None:
-    """List features overlapping files touched since `<ref>..HEAD`.
-
-    Failure handling per spec edge cases:
-      - Non-git repo: stderr one-liner, JSON `success:false`,
-        `error:"not-a-git-repo"`, exit 0.
-      - Unknown ref:  stderr one-liner, JSON `success:false`,
-        `error:"unknown-ref"`,  exit 0.
-
-    The 0-exit-on-error contract lets skill bash branch on the JSON
-    `success` field rather than the exit code — same pattern as
-    `flowctl scope suggest` (R22 invariant).
-    """
-    use_json = bool(getattr(args, "json", False))
-    ref = getattr(args, "ref", None)
-    if not ref:
-        error_exit("<ref> required", use_json=use_json)
-
-    if not _clawpatch_dir().is_dir():
-        # Absent .clawpatch/ → same "0 features, success" envelope as `list`.
-        if use_json:
-            json_output(
-                {
-                    "count": 0,
-                    "features": [],
-                    "clawpatch_present": False,
-                    "ref": ref,
-                }
-            )
-            return
-        print("No .clawpatch/ directory — run /flow-next:map to create one.")
-        return
-
-    ok, err_kind = _repo_map_resolve_ref(ref)
-    if not ok:
-        if err_kind == "not-a-git-repo":
-            print(
-                "[flowctl repo-map since-ref] not a git repository — "
-                "since-ref unavailable; use 'list' instead",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                f"[flowctl repo-map since-ref] unknown ref: {ref}",
-                file=sys.stderr,
-            )
-        if use_json:
-            json_output(
-                {
-                    "count": 0,
-                    "features": [],
-                    "ref": ref,
-                    "error": err_kind,
-                },
-                success=False,
-            )
-            return
-        # Plain mode: messages already on stderr; exit 0 to match JSON contract.
-        return
-
-    changed = set(_repo_map_git_diff_names(ref))
-    features, skipped = _repo_map_load_features(_clawpatch_features_dir())
-
-    overlapping: list[dict[str, Any]] = []
-    for f in features:
-        paths = _repo_map_feature_paths(f)
-        if any(p in changed for p in paths):
-            overlapping.append(f)
-
-    if use_json:
-        payload: dict[str, Any] = {
-            "count": len(overlapping),
-            "features": [_repo_map_summarize(f) for f in overlapping],
-            "ref": ref,
-            "changed_files": sorted(changed),
-            "clawpatch_present": True,
-        }
-        if skipped:
-            payload["parse_skipped"] = skipped
-        json_output(payload)
-        return
-
-    if not overlapping:
-        print(f"No features overlap files changed since {ref}.")
-        if skipped:
-            print(f"  ({skipped} file(s) skipped — see stderr for details)")
-        return
-
-    headers = ["featureId", "kind", "title"]
-    rows = [
-        [
-            str(f.get("featureId") or "?"),
-            str(f.get("kind") or "?"),
-            str(f.get("title") or ""),
-        ]
-        for f in overlapping
-    ]
-    widths = [len(h) for h in headers]
-    for r in rows:
-        for i, cell in enumerate(r):
-            widths[i] = max(widths[i], len(cell))
-    line_fmt = "  ".join(f"{{:<{w}}}" for w in widths)
-    print(line_fmt.format(*headers))
-    print(line_fmt.format(*["-" * w for w in widths]))
-    for r in rows:
-        print(line_fmt.format(*r))
-    if skipped:
-        print(f"\n({skipped} file(s) skipped — see stderr for details)")
-
-
 # --- Glossary subcommands (fn-38.2) ---
 
 
@@ -13005,67 +12143,6 @@ def cmd_strategy_read(args: argparse.Namespace) -> None:
             print(body)
         else:
             print("(empty)")
-        print()
-
-
-def cmd_strategy_list(args: argparse.Namespace) -> None:
-    """List strategy files (single-root, degenerate single-element group).
-
-    Kept for parallel symmetry with `cmd_glossary_list` so downstream
-    skills can iterate `groups` generically. v1: 0 or 1 element.
-    """
-    use_json = bool(getattr(args, "json", False))
-    path, _repo_root = find_strategy_file()
-
-    groups: list[dict[str, Any]] = []
-    if path is not None:
-        parsed = _strategy_load(path)
-        section_filled = parsed.get("_section_filled", {})
-        # Build sections list (name + filled flag) for display.
-        sections = []
-        for section_name, key in (
-            STRATEGY_REQUIRED_SECTIONS + STRATEGY_OPTIONAL_SECTIONS
-        ):
-            sections.append(
-                {
-                    "name": section_name,
-                    "key": key,
-                    "filled": section_filled.get(key, False),
-                }
-            )
-        count = sum(1 for s in sections if s["filled"])
-        groups.append(
-            {
-                "path": str(path),
-                "sections": sections,
-                "count": count,
-            }
-        )
-
-    if use_json:
-        total = sum(g["count"] for g in groups)
-        json_output(
-            {
-                "groups": groups,
-                "file_count": len(groups),
-                "total_sections": total,
-            }
-        )
-        return
-
-    if not groups:
-        print("No STRATEGY.md found (single-root walk to repo root).")
-        return
-
-    for g in groups:
-        print(
-            f"# {g['path']}  "
-            f"({g['count']} populated section"
-            f"{'s' if g['count'] != 1 else ''})"
-        )
-        for section in g["sections"]:
-            mark = "x" if section["filled"] else " "
-            print(f"  [{mark}] {section['name']}")
         print()
 
 
@@ -13684,6 +12761,36 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
 # Backward-compat alias (T2 layers the deprecation warning).
 
 
+def _resolve_same_spec_deps(
+    flow_dir: Path,
+    target_spec_id: str,
+    raw_deps: list[str],
+    *,
+    use_json: bool = False,
+) -> list[str]:
+    """Casefold, validate, canonicalize, and same-spec-check dependency IDs.
+
+    Shared by ``task create --deps`` and ``dep add``. Returns canonical
+    task ids in input order. Callers own write/idempotency behavior.
+    """
+    resolved: list[str] = []
+    for dep in raw_deps:
+        dep = casefold_handle(dep)
+        if not is_task_id(dep):
+            error_exit(
+                f"Invalid dependency ID: {dep}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)",
+                use_json=use_json,
+            )
+        dep = resolve_task_arg(flow_dir, dep, use_json=use_json)
+        if spec_id_from_task(dep) != target_spec_id:
+            error_exit(
+                f"Dependency {dep} must be within the same spec ({target_spec_id})",
+                use_json=use_json,
+            )
+        resolved.append(dep)
+    return resolved
+
+
 def cmd_task_create(args: argparse.Namespace) -> None:
     """Create a new task under a spec."""
     if not ensure_flow_exists():
@@ -13718,27 +12825,13 @@ def cmd_task_create(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    # Parse dependencies
+    # Parse dependencies (shared same-spec canonicalize helper).
     deps = []
     if args.deps:
-        raw_deps = [d.strip() for d in args.deps.split(",")]
-        # Validate deps are valid task IDs within same spec. fn-52.10:
-        # canonicalize each dep alias so `depends_on` persists the canonical id
-        # (never the alias), then enforce the same-spec invariant.
-        for dep in raw_deps:
-            dep = casefold_handle(dep)  # fn-52.10 case rule.
-            if not is_task_id(dep):
-                error_exit(
-                    f"Invalid dependency ID: {dep}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)",
-                    use_json=args.json,
-                )
-            dep = resolve_task_arg(flow_dir, dep, use_json=args.json)
-            if spec_id_from_task(dep) != spec_id:
-                error_exit(
-                    f"Dependency {dep} must be within the same spec ({spec_id})",
-                    use_json=args.json,
-                )
-            deps.append(dep)
+        raw_deps = [d.strip() for d in args.deps.split(",") if d.strip()]
+        deps = _resolve_same_spec_deps(
+            flow_dir, spec_id, raw_deps, use_json=args.json
+        )
 
     # fn-110.1: ALL inputs are read + validated BEFORE any write — a
     # malformed flag or unreadable file must never leave a half-created task.
@@ -13825,35 +12918,20 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
 
     # fn-52.10 case rule: fold uppercase tracker handles before the gates.
     args.task = casefold_handle(args.task)
-    args.depends_on = casefold_handle(args.depends_on)
     if not is_task_id(args.task):
         error_exit(
             f"Invalid task ID: {args.task}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)", use_json=args.json
         )
 
-    if not is_task_id(args.depends_on):
-        error_exit(
-            f"Invalid dependency ID: {args.depends_on}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)",
-            use_json=args.json,
-        )
-
     flow_dir = get_flow_dir()
-    # fn-52.10: canonicalize BOTH the task and its dep alias BEFORE the
-    # same-spec compare + persist. Task deps stay same-spec (existing
-    # invariant); aliasing only means `dep add wor-17.2 wor-17.1` canonicalizes
-    # to `wor-17-slug.2`/`.1`. `depends_on` persists the canonical id, never
-    # the alias.
+    # Canonicalize the task, then the dep via the shared same-spec helper.
+    # `depends_on` persists the canonical id, never the alias.
     args.task = resolve_task_arg(flow_dir, args.task, use_json=args.json)
-    args.depends_on = resolve_task_arg(flow_dir, args.depends_on, use_json=args.json)
-
-    # Validate same spec (post-canonicalization)
     task_spec = spec_id_from_task(args.task)
-    dep_spec = spec_id_from_task(args.depends_on)
-    if task_spec != dep_spec:
-        error_exit(
-            f"Dependencies must be within the same spec. Task {args.task} is in {task_spec}, dependency {args.depends_on} is in {dep_spec}",
-            use_json=args.json,
-        )
+    deps = _resolve_same_spec_deps(
+        flow_dir, task_spec, [args.depends_on], use_json=args.json
+    )
+    args.depends_on = deps[0]
 
     task_path = flow_dir / TASKS_DIR / f"{args.task}.json"
 
@@ -13879,87 +12957,6 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
         )
     else:
         print(f"Dependency {args.depends_on} added to {args.task}")
-
-
-def cmd_task_set_deps(args: argparse.Namespace) -> None:
-    """Set dependencies for a task (convenience wrapper for dep add)."""
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
-        )
-
-    # fn-52.10 case rule: fold an uppercase tracker handle before the gate.
-    args.task_id = casefold_handle(args.task_id)
-    if not is_task_id(args.task_id):
-        error_exit(
-            f"Invalid task ID: {args.task_id}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)",
-            use_json=args.json,
-        )
-
-    if not args.deps:
-        error_exit("--deps is required", use_json=args.json)
-
-    # Parse comma-separated deps
-    dep_ids = [d.strip() for d in args.deps.split(",") if d.strip()]
-    if not dep_ids:
-        error_exit("--deps cannot be empty", use_json=args.json)
-
-    flow_dir = get_flow_dir()
-    # fn-52.10: canonicalize the task alias BEFORE the same-spec compare, path
-    # lookup, and persist so `task set-deps wor-17.2 --deps wor-17.1` works and
-    # depends_on stores canonical ids only (never the alias).
-    args.task_id = resolve_task_arg(flow_dir, args.task_id, use_json=args.json)
-    task_spec = spec_id_from_task(args.task_id)
-    task_path = flow_dir / TASKS_DIR / f"{args.task_id}.json"
-
-    task_data = load_json_or_exit(
-        task_path, f"Task {args.task_id}", use_json=args.json
-    )
-
-    # Migrate old 'deps' key if needed
-    if "depends_on" not in task_data:
-        task_data["depends_on"] = task_data.pop("deps", [])
-
-    added = []
-    for dep_id in dep_ids:
-        dep_id = casefold_handle(dep_id)  # fn-52.10 case rule.
-        if not is_task_id(dep_id):
-            error_exit(
-                f"Invalid dependency ID: {dep_id}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)",
-                use_json=args.json,
-            )
-        # Canonicalize each dep alias before same-spec compare + persist.
-        dep_id = resolve_task_arg(flow_dir, dep_id, use_json=args.json)
-        dep_spec = spec_id_from_task(dep_id)
-        if dep_spec != task_spec:
-            error_exit(
-                f"Dependencies must be within same spec. Task {args.task_id} is in {task_spec}, dependency {dep_id} is in {dep_spec}",
-                use_json=args.json,
-            )
-        if dep_id not in task_data["depends_on"]:
-            task_data["depends_on"].append(dep_id)
-            added.append(dep_id)
-
-    if added:
-        task_data["updated_at"] = now_iso()
-        canonicalize_task_for_write(task_data)
-        atomic_write_json(task_path, task_data)
-
-    if args.json:
-        json_output(
-            {
-                "success": True,
-                "task": args.task_id,
-                "depends_on": task_data["depends_on"],
-                "added": added,
-                "message": f"Dependencies set for {args.task_id}",
-            }
-        )
-    else:
-        if added:
-            print(f"Added dependencies to {args.task_id}: {', '.join(added)}")
-        else:
-            print(f"No new dependencies added (already set)")
 
 
 def cmd_show(args: argparse.Namespace) -> None:
@@ -15139,27 +14136,7 @@ def cmd_spec_set_backend(args: argparse.Namespace) -> None:
 # Pure deterministic plumbing — no LLM judgment in the export step itself.
 # Body-rendering happens in the skill (host agent reasoning over this payload).
 
-# Section names accepted by --section filter (R6).
-EXPORT_COGNITIVE_AID_SECTIONS: tuple[str, ...] = (
-    "spec",
-    "tasks",
-    "memory",
-    "glossary",
-    "strategy",
-    "diff",
-    "reviews",
-)
-
-# Top-level keys in the full payload (used by --section filter).
-_EXPORT_COGNITIVE_AID_SECTION_KEYS: dict[str, tuple[str, ...]] = {
-    "spec": ("spec",),
-    "tasks": ("tasks", "tasks_summary"),
-    "memory": ("memory_during_epic",),
-    "glossary": ("glossary_changes",),
-    "strategy": ("strategy_alignment",),
-    "diff": ("diff_summary", "removed_export_refs"),
-    "reviews": ("review_receipts", "deferred_findings"),
-}
+# (fn-111: --section export filter removed; always emit the full payload.)
 
 # Hardcoded list — high-signal paths that warrant explicit reviewer focus.
 # Match against any path component (case-insensitive); also check filename
@@ -16627,30 +15604,27 @@ def _export_memory_during_epic(
     return result
 
 
-def _export_review_receipts(
+def _export_deferred_findings(
     repo_root: Path,
     branch_slug: str,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Read review receipts + deferred findings sink (when present).
+) -> list[dict[str, Any]]:
+    """Read deferred findings sink (when present).
 
-    Returns (review_receipts, deferred_findings). v1: review_receipts is
-    always empty (per-task review receipts aren't stored in a stable
-    location flowctl owns yet — added when the receipt-store lands).
-    deferred_findings checks `.flow/review-deferred/<branch-slug>.md` for
-    presence + count of `- [` bullets (one per finding).
+    Checks `.flow/review-deferred/<branch-slug>.md` for presence + count of
+    `- [` bullets (one per finding). The always-empty ``review_receipts``
+    export field was removed in fn-111.
     """
-    review_receipts: list[dict[str, Any]] = []
     deferred_findings: list[dict[str, Any]] = []
 
     sink_path = repo_root / DEFER_SINK_DIR_REL / f"{branch_slug}.md"
     if sink_path.is_file():
         try:
-            text = sink_path.read_text(encoding="utf-8")
+            sink_text = sink_path.read_text(encoding="utf-8")
         except OSError:
-            text = ""
+            sink_text = ""
         # Each finding is a top-level `- [` bullet.
         items: list[dict[str, Any]] = []
-        for line in text.splitlines():
+        for line in sink_text.splitlines():
             stripped = line.lstrip()
             if stripped.startswith("- [") and "]" in stripped:
                 items.append({"raw": stripped})
@@ -16672,13 +15646,7 @@ def _export_review_receipts(
                 }
             )
 
-    return review_receipts, deferred_findings
-
-
-def _export_filter_section(payload: dict[str, Any], section: str) -> dict[str, Any]:
-    """Return a subset of the payload limited to the keys for `section`."""
-    keys = _EXPORT_COGNITIVE_AID_SECTION_KEYS[section]
-    return {k: payload[k] for k in keys if k in payload}
+    return deferred_findings
 
 
 def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
@@ -16692,7 +15660,7 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
 
     Exit codes:
       1: missing spec / generic failure
-      2: invalid args (unrecognized --section, missing --base, etc.)
+      2: invalid args (missing --base, etc.)
       3: corrupt spec JSON
     """
     use_json = bool(getattr(args, "json", False))
@@ -16725,14 +15693,6 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
             code=2,
         )
 
-    section = getattr(args, "section", None)
-    if section is not None and section not in EXPORT_COGNITIVE_AID_SECTIONS:
-        error_exit(
-            f"invalid --section '{section}' (valid: "
-            f"{', '.join(EXPORT_COGNITIVE_AID_SECTIONS)})",
-            use_json=use_json,
-            code=2,
-        )
     flow_dir = get_flow_dir()
     spec_json_path = find_spec_json_path(flow_dir, spec_id)
     if not spec_json_path.exists():
@@ -16960,11 +15920,9 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         merge_base_sha, repo_root, diff_summary["files"]
     )
 
-    # --- Review receipts + deferred findings ---
+    # --- Deferred findings ---
     branch_slug = _branch_slug(spec_data.get("branch_name") or None)
-    review_receipts, deferred_findings = _export_review_receipts(
-        repo_root, branch_slug
-    )
+    deferred_findings = _export_deferred_findings(repo_root, branch_slug)
 
     payload: dict[str, Any] = {
         "spec": spec_section,
@@ -16975,12 +15933,8 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         "strategy_alignment": strategy_alignment,
         "diff_summary": diff_summary,
         "removed_export_refs": removed_export_refs,
-        "review_receipts": review_receipts,
         "deferred_findings": deferred_findings,
     }
-
-    if section is not None:
-        payload = _export_filter_section(payload, section)
 
     if use_json:
         json_output(payload)
@@ -17118,184 +16072,6 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
         )
     else:
         print(f"Task {task_id} backend specs updated: {', '.join(updated)}")
-
-
-def cmd_task_show_backend(args: argparse.Namespace) -> None:
-    """Show effective backend specs for a task (task + epic levels only)."""
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
-        )
-
-    task_id = args.id
-    if not is_task_id(task_id):
-        error_exit(
-            f"Invalid task ID: {task_id}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)",
-            use_json=args.json,
-        )
-
-    flow_dir = get_flow_dir()
-    task_path = flow_dir / TASKS_DIR / f"{task_id}.json"
-
-    if not task_path.exists():
-        error_exit(f"Task {task_id} not found", use_json=args.json)
-
-    task_data = normalize_task(
-        load_json_or_exit(task_path, f"Task {task_id}", use_json=args.json)
-    )
-
-    # Get spec data for defaults
-    epic_id = task_data.get("spec") or task_data.get("epic")
-    epic_data = None
-    if epic_id:
-        epic_path = find_spec_json_path(flow_dir, epic_id)
-        if epic_path.exists():
-            epic_data = normalize_epic(
-                load_json_or_exit(epic_path, f"Spec {epic_id}", use_json=args.json)
-            )
-
-    # Compute effective values with source tracking.
-    def resolve_spec(task_key: str, epic_key: str) -> tuple:
-        """Return (raw_spec, source) tuple for a given field."""
-        task_val = task_data.get(task_key)
-        if task_val:
-            return (task_val, "task")
-        if epic_data:
-            epic_val = epic_data.get(epic_key)
-            if epic_val:
-                return (epic_val, "epic")
-        return (None, None)
-
-    def resolve_field(raw: Optional[str], spec_source: Optional[str]) -> dict:
-        """Build the richer JSON shape: raw + resolved + per-field sources.
-
-        ``raw`` is what's stored (possibly invalid legacy data). ``spec_source``
-        is where it came from ("task" / "epic" / None when unset).
-
-        Per-field sources ("model_source" / "effort_source") distinguish
-        between an explicit spec value ("spec"), env-var fill
-        ("env:FLOW_<BACKEND>_<FIELD>"), registry default
-        ("registry_default"), or n/a when the backend rejects the field.
-
-        Returns a dict with keys: ``raw``, ``source``, ``resolved``,
-        ``model_source``, ``effort_source``. On legacy-data parse failure we
-        degrade to bare backend (warning already went to stderr from
-        parse_backend_spec_lenient) so callers don't crash on old values.
-        """
-        if raw is None:
-            return {
-                "raw": None,
-                "source": None,
-                "resolved": None,
-                "model_source": None,
-                "effort_source": None,
-            }
-
-        parsed = parse_backend_spec_lenient(raw, warn=True)
-        if parsed is None:
-            # Unrecognizable — surface what we have without a resolved form.
-            return {
-                "raw": raw,
-                "source": spec_source,
-                "resolved": None,
-                "model_source": None,
-                "effort_source": None,
-            }
-
-        resolved = parsed.resolve()
-        reg = BACKEND_REGISTRY[parsed.backend]
-        env_model_key = f"FLOW_{parsed.backend.upper()}_MODEL"
-        env_effort_key = f"FLOW_{parsed.backend.upper()}_EFFORT"
-
-        # Derive per-field source to mirror resolve()'s precedence.
-        if reg["models"] is None:
-            model_source: Optional[str] = None
-        elif parsed.model is not None:
-            model_source = "spec"
-        elif os.environ.get(env_model_key):
-            model_source = f"env:{env_model_key}"
-        else:
-            model_source = "registry_default"
-
-        if reg["efforts"] is None:
-            effort_source: Optional[str] = None
-        elif parsed.effort is not None:
-            effort_source = "spec"
-        elif os.environ.get(env_effort_key):
-            effort_source = f"env:{env_effort_key}"
-        else:
-            effort_source = "registry_default"
-
-        return {
-            "raw": raw,
-            "source": spec_source,
-            "resolved": {
-                "backend": resolved.backend,
-                "model": resolved.model,
-                "effort": resolved.effort,
-                "str": str(resolved),
-            },
-            "model_source": model_source,
-            "effort_source": effort_source,
-        }
-
-    impl_raw, impl_source = resolve_spec("impl", "default_impl")
-    review_raw, review_source = resolve_spec("review", "default_review")
-    sync_raw, sync_source = resolve_spec("sync", "default_sync")
-
-    impl_field = resolve_field(impl_raw, impl_source)
-    review_field = resolve_field(review_raw, review_source)
-    sync_field = resolve_field(sync_raw, sync_source)
-
-    if args.json:
-        json_output(
-            {
-                "id": task_id,
-                "spec": epic_id,
-                "impl": impl_field,
-                "review": review_field,
-                "sync": sync_field,
-            }
-        )
-    else:
-        def _short_src(src: Optional[str]) -> Optional[str]:
-            """Compact a per-field source tag for non-JSON display.
-
-            ``env:FLOW_CODEX_EFFORT`` → ``env`` (keeps line short; JSON output
-            still has the full key for anyone who cares).
-            """
-            if src is None:
-                return None
-            if src.startswith("env:"):
-                return "env"
-            if src == "registry_default":
-                return "registry"
-            return src
-
-        def fmt(field: dict) -> str:
-            raw = field["raw"]
-            if raw is None:
-                return "null"
-            src = field["source"] or "unknown"
-            resolved = field["resolved"]
-            if resolved is None:
-                return f"{raw} ({src}) [unresolved - invalid spec]"
-            # Use str(resolved) so empty-model slot round-trips honestly
-            # (e.g. codex::high stays codex::high, not codex:high).
-            resolved_str = resolved["str"]
-            annotations = []
-            ms = field.get("model_source")
-            if ms and ms != "spec":
-                annotations.append(f"model: {_short_src(ms)}")
-            es = field.get("effort_source")
-            if es and es != "spec":
-                annotations.append(f"effort: {_short_src(es)}")
-            suffix = f" ({', '.join(annotations)})" if annotations else ""
-            return f"{raw} ({src}) -> {resolved_str}{suffix}"
-
-        print(f"impl: {fmt(impl_field)}")
-        print(f"review: {fmt(review_field)}")
-        print(f"sync: {fmt(sync_field)}")
 
 
 def cmd_task_set_description(args: argparse.Namespace) -> None:
@@ -18371,28 +17147,6 @@ def cmd_block(args: argparse.Namespace) -> None:
         print(f"Task {args.id} blocked")
 
 
-def cmd_state_path(args: argparse.Namespace) -> None:
-    """Show resolved state directory path."""
-    state_dir = get_state_dir()
-
-    if args.task:
-        if not is_task_id(args.task):
-            error_exit(
-                f"Invalid task ID: {args.task}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)",
-                use_json=args.json,
-            )
-        state_path = state_dir / "tasks" / f"{args.task}.state.json"
-        if args.json:
-            json_output({"state_dir": str(state_dir), "task_state_path": str(state_path)})
-        else:
-            print(state_path)
-    else:
-        if args.json:
-            json_output({"state_dir": str(state_dir)})
-        else:
-            print(state_dir)
-
-
 def _monotonic_now() -> float:
     """Indirection so tests can override timing without monkeypatching `time`."""
     import time as _time
@@ -18614,199 +17368,6 @@ def validate_epic(
     return errors, warnings, len(tasks)
 
 
-def cmd_prep_chat(args: argparse.Namespace) -> None:
-    """Prepare JSON payload for rp-cli chat_send. Handles escaping safely."""
-    # Read message from file
-    message = read_text_or_exit(Path(args.message_file), "Message file", use_json=False)
-    json_str = build_chat_payload(
-        message=message,
-        mode=args.mode,
-        new_chat=args.new_chat,
-        chat_name=args.chat_name,
-        selected_paths=args.selected_paths,
-    )
-
-    if args.output:
-        atomic_write(Path(args.output), json_str)
-        print(f"Wrote {args.output}", file=sys.stderr)
-    else:
-        print(json_str)
-
-
-def cmd_rp_windows(args: argparse.Namespace) -> None:
-    result = run_rp_cli(["--raw-json", "-e", "windows"])
-    raw = result.stdout or ""
-    if args.json:
-        windows = parse_windows(raw)
-        print(json.dumps(windows))
-    else:
-        print(raw, end="")
-
-
-def cmd_rp_pick_window(args: argparse.Namespace) -> None:
-    repo_root = args.repo_root
-    roots = normalize_repo_root(repo_root)
-
-    win_id = bind_context_window(repo_root)
-    if win_id is not None:
-        if args.json:
-            print(json.dumps({"window": win_id}))
-        else:
-            print(win_id)
-        return
-
-    result = run_rp_cli(["--raw-json", "-e", "windows"])
-    windows = parse_windows(result.stdout or "")
-    if len(windows) == 1 and not extract_root_paths(windows[0]):
-        win_id = extract_window_id(windows[0])
-        if win_id is None:
-            error_exit("No window matches repo root", use_json=False, code=2)
-        if args.json:
-            print(json.dumps({"window": win_id}))
-        else:
-            print(win_id)
-        return
-    for win in windows:
-        win_id = extract_window_id(win)
-        if win_id is None:
-            continue
-        for path in extract_root_paths(win):
-            if path in roots:
-                if args.json:
-                    print(json.dumps({"window": win_id}))
-                else:
-                    print(win_id)
-                return
-
-    workspaces_res = run_rp_cli(
-        [
-            "--raw-json",
-            "-e",
-            f"call manage_workspaces {json.dumps({'action': 'list'})}",
-        ]
-    )
-    workspace = find_workspace_for_repo(parse_manage_workspaces(workspaces_res.stdout or ""), roots)
-    if workspace:
-        window_ids = extract_workspace_window_ids(workspace)
-        if window_ids:
-            win_id = sorted(window_ids)[0]
-            if args.json:
-                print(json.dumps({"window": win_id}))
-            else:
-                print(win_id)
-            return
-
-    error_exit("No window matches repo root", use_json=False, code=2)
-
-
-def cmd_rp_ensure_workspace(args: argparse.Namespace) -> None:
-    window = args.window
-    repo_root = os.path.realpath(args.repo_root)
-    ws_name = os.path.basename(repo_root)
-
-    list_cmd = [
-        "--raw-json",
-        "-w",
-        str(window),
-        "-e",
-        f"call manage_workspaces {json.dumps({'action': 'list'})}",
-    ]
-    list_res = run_rp_cli(list_cmd)
-    workspaces = parse_manage_workspaces(list_res.stdout or "")
-    roots = normalize_repo_root(repo_root)
-    workspace = find_workspace_for_repo(workspaces, roots, preferred_window=window)
-
-    if workspace is None:
-        create_cmd = [
-            "-w",
-            str(window),
-            "-e",
-            f"call manage_workspaces {json.dumps({'action': 'create', 'name': ws_name, 'folder_path': repo_root})}",
-        ]
-        run_rp_cli(create_cmd)
-        list_res = run_rp_cli(list_cmd)
-        workspaces = parse_manage_workspaces(list_res.stdout or "")
-        workspace = find_workspace_for_repo(workspaces, roots, preferred_window=window)
-
-    workspace_ref = None
-    if workspace is not None:
-        workspace_ref = extract_workspace_id(workspace) or extract_workspace_name(workspace)
-    if workspace_ref is None:
-        workspace_ref = ws_name
-
-    switch_cmd = [
-        "-w",
-        str(window),
-        "-e",
-        f"call manage_workspaces {json.dumps({'action': 'switch', 'workspace': workspace_ref, 'window_id': window})}",
-    ]
-    run_rp_cli(switch_cmd)
-
-
-def cmd_rp_builder(args: argparse.Namespace) -> None:
-    window = args.window
-    summary = args.summary
-    response_type = getattr(args, "response_type", None)
-
-    builder_expr = f"builder {json.dumps(summary)}"
-    if response_type:
-        builder_expr += f" --type {response_type}"
-
-    cmd = [
-        "-w",
-        str(window),
-        "--raw-json",
-        "-e",
-        builder_expr,
-    ]
-    res = run_rp_cli(cmd)
-    output = (res.stdout or "") + ("\n" + res.stderr if res.stderr else "")
-
-    if response_type == "review":
-        try:
-            data = json.loads(res.stdout or "{}")
-            tab = extract_builder_tab_from_payload(data) or ""
-            chat_id = data.get("review", {}).get("chat_id", "")
-            review_response = data.get("review", {}).get("response", "")
-            if args.json:
-                print(
-                    json.dumps(
-                        {
-                            "window": window,
-                            "tab": tab,
-                            "chat_id": chat_id,
-                            "review": review_response,
-                            "file_count": data.get("file_count", 0),
-                            "total_tokens": data.get("total_tokens", 0),
-                        }
-                    )
-                )
-            else:
-                print(f"T={tab} CHAT_ID={chat_id}")
-                if review_response:
-                    print(review_response)
-        except json.JSONDecodeError:
-            tab = parse_builder_tab(output)
-            if args.json:
-                print(json.dumps({"window": window, "tab": tab, "error": "parse_failed"}))
-            else:
-                print(tab)
-    else:
-        # Try JSON first (RP 2.1.4+), fall back to regex for older versions
-        tab = ""
-        try:
-            data = json.loads(res.stdout or "{}")
-            tab = extract_builder_tab_from_payload(data) or ""
-        except json.JSONDecodeError:
-            pass
-        if not tab:
-            tab = parse_builder_tab(output)
-        if args.json:
-            print(json.dumps({"window": window, "tab": tab}))
-        else:
-            print(tab)
-
-
 def cmd_rp_prompt_get(args: argparse.Namespace) -> None:
     cmd = ["-w", str(args.window), "-t", args.tab, "-e", "prompt get"]
     res = run_rp_cli(cmd)
@@ -18906,18 +17467,13 @@ def cmd_rp_prompt_export(args: argparse.Namespace) -> None:
 
 
 def cmd_rp_setup_review(args: argparse.Namespace) -> None:
-    """Atomic setup: pick-window + builder.
+    """Atomic RP setup: resolve matching window, then open a builder tab.
 
     Returns W=<window> T=<tab> on success, exits non-zero on failure.
     With --response-type review, also returns CHAT_ID and review findings.
-    Writes state file for ralph-guard to verify pick-window ran.
-
-    Note: ensure-workspace removed - if user opens RP on a folder, workspace
-    already exists. pick-window matches by folder path.
 
     Requires RepoPrompt 1.6.0+ for --response-type review.
     """
-    import hashlib
 
     repo_root = os.path.realpath(args.repo_root)
     summary = args.summary
@@ -19012,11 +17568,6 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         else:
             error_exit("No RepoPrompt window matches repo root", use_json=False, code=2)
 
-    # Write state file for ralph-guard verification
-    repo_hash = hashlib.sha256(repo_root.encode()).hexdigest()[:16]
-    state_file = Path(tempfile.gettempdir()) / f".ralph-pick-window-{repo_hash}"
-    state_file.write_text(f"{win_id}\n{repo_root}\n")
-
     # Step 2: builder (with optional --type flag for RP 1.6.0+)
     builder_expr = f"builder {json.dumps(summary)}"
     if response_type:
@@ -19085,21 +17636,6 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
 
 
 # --- Codex Commands ---
-
-
-def cmd_codex_check(args: argparse.Namespace) -> None:
-    """Check if codex CLI is available and return version."""
-    codex = shutil.which("codex")
-    available = codex is not None
-    version = get_codex_version() if available else None
-
-    if args.json:
-        json_output({"available": available, "version": version})
-    else:
-        if available:
-            print(f"codex available: {version or 'unknown version'}")
-        else:
-            print("codex not available")
 
 
 # --- Codex implementation-delegation helpers (fn-55.4) ---
@@ -19746,235 +18282,7 @@ def cmd_anchor(args: argparse.Namespace) -> None:
 # --- Copilot Commands ---
 
 
-def cmd_copilot_check(args: argparse.Namespace) -> None:
-    """Check if copilot CLI is available, returning version + live auth probe.
-
-    Unlike ``cmd_codex_check`` which only verifies binary presence, copilot
-    MUST probe live auth — a present binary with stale/missing credentials
-    still fails on first real invocation, and catching that at check-time
-    is the whole point of this command.
-
-    Probe model: ``gpt-5-mini`` — cheap, fast, accepts ``--effort`` (required
-    by ``run_copilot_exec``). Claude-family models accessible via Copilot
-    (e.g. ``claude-haiku-4.5``) reject ``--effort`` with
-    ``Error: Model ... does not support reasoning effort configuration``,
-    so they can't be used here without plumbing a skip-effort path through
-    ``run_copilot_exec`` (out of scope for this task).
-
-    Probe behavior:
-    - Trivial prompt ("ok"), fresh UUID, 60s timeout.
-    - ``authed: true`` iff exit_code == 0.
-    - ``error`` captures first stderr line on failure.
-    - ``--skip-probe`` bypasses the live call (fast CI path where auth
-      already verified).
-
-    JSON output schema:
-        {
-          "available": bool,      # binary on PATH
-          "version": str|null,    # parsed from --version
-          "authed": bool,         # live probe succeeded (null if skipped)
-          "model_used": str,      # probe model (even when skipped)
-          "error": str|null       # first stderr line or timeout message
-        }
-    """
-    copilot = shutil.which("copilot")
-    available = copilot is not None
-    version = get_copilot_version() if available else None
-
-    # Probe model: MUST accept --effort. gpt-5-mini is the cheapest option
-    # in the copilot catalog that accepts --effort. See docstring.
-    probe_model = "gpt-5-mini"
-    probe_effort = "low"
-
-    authed: Optional[bool] = None
-    error: Optional[str] = None
-
-    if available and not getattr(args, "skip_probe", False):
-        # Live probe — trivial prompt, short timeout. Fresh UUID per probe via
-        # --session-id (CREATE): Copilot's --resume is resume-only, so probing a
-        # fresh uuid with --resume errors "No session matched" and would falsely
-        # report auth failure even with valid credentials.
-        repo_root = get_repo_root() if ensure_flow_exists() else Path.cwd()
-        # Use a short, dedicated timeout for the probe (60s) rather than
-        # the 600s default inside run_copilot_exec. We do this by calling
-        # subprocess.run directly with our own timeout, because
-        # run_copilot_exec hard-codes 600s.
-        probe_prompt = "ok"
-        session_id = str(uuid.uuid4())
-        cmd = [
-            copilot,
-            "-p",
-            probe_prompt,
-            f"--session-id={session_id}",
-            "--output-format",
-            "text",
-            "-s",
-            "--no-ask-user",
-            "--allow-all-tools",
-            "--add-dir",
-            str(repo_root),
-            "--disable-builtin-mcps",
-            "--no-custom-instructions",
-            "--log-level",
-            "error",
-            "--no-auto-update",
-            "--model",
-            probe_model,
-            "--effort",
-            probe_effort,
-        ]
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True, encoding="utf-8",
-                check=False,
-                timeout=60,
-            )
-            authed = result.returncode == 0
-            if not authed:
-                stderr_first = (result.stderr or "").strip().splitlines()
-                error = stderr_first[0] if stderr_first else f"exit {result.returncode}"
-        except subprocess.TimeoutExpired:
-            authed = False
-            error = "copilot probe timed out (60s)"
-        except OSError as e:
-            authed = False
-            error = f"copilot probe failed to launch: {e}"
-
-    if args.json:
-        json_output(
-            {
-                "available": available,
-                "version": version,
-                "authed": authed,
-                "model_used": probe_model,
-                "error": error,
-            }
-        )
-    else:
-        if not available:
-            print("copilot not available")
-            return
-        version_str = version or "unknown version"
-        if authed is None:
-            print(f"copilot available: {version_str} (auth probe skipped)")
-        elif authed:
-            print(f"copilot available: {version_str} (authed via {probe_model})")
-        else:
-            print(
-                f"copilot available: {version_str} but auth probe failed: "
-                f"{error or 'unknown error'}"
-            )
-
-
 # --- Cursor Commands (fn-74) ---
-
-
-def cmd_cursor_check(args: argparse.Namespace) -> None:
-    """Check cursor-agent availability + live auth probe.
-
-    Schema-aligned to ``cmd_copilot_check``: a present binary with missing /
-    stale credentials (no stored login + no ``CURSOR_API_KEY``) still fails on
-    first real invocation, so we probe live auth. ``--skip-probe`` bypasses the
-    live call (fast CI path where auth is already verified).
-
-    Probe: trivial prompt ("ok"), read-only ``--mode ask --trust``, the cheap
-    ``auto`` model (Cursor routes to an appropriate small model), fresh session
-    (no ``--resume``), 60s timeout, run with ``cwd=repo_root`` (same
-    workspace-scope requirement as ``run_cursor_exec``). ``authed: true`` iff
-    exit_code == 0.
-
-    JSON output schema (aligned to copilot's ``check``):
-        {
-          "available": bool,      # binary on PATH
-          "version": str|null,    # parsed from --version
-          "authed": bool|null,    # live probe succeeded (null if skipped)
-          "model_used": str,      # probe model (even when skipped)
-          "error": str|null       # first stderr line or timeout message
-        }
-    """
-    cursor = shutil.which("cursor-agent")
-    available = cursor is not None
-    version = get_cursor_version() if available else None
-
-    # ``auto`` lets Cursor route to a small/fast model — the probe just verifies
-    # auth round-trips, so the exact model is immaterial and cost is negligible.
-    probe_model = "auto"
-
-    authed: Optional[bool] = None
-    error: Optional[str] = None
-
-    if available and not getattr(args, "skip_probe", False):
-        repo_root = get_repo_root() if ensure_flow_exists() else Path.cwd()
-        probe_prompt = "ok"
-        cmd = [
-            cursor,
-            "-p",
-            "--output-format",
-            "json",
-            "--trust",
-            "--mode",
-            "ask",
-            "--model",
-            probe_model,
-            probe_prompt,
-        ]
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True, encoding="utf-8",
-                check=False,
-                timeout=60,
-                cwd=str(repo_root),
-            )
-            authed = result.returncode == 0
-            if authed:
-                # Exit 0 alone is not auth — cursor-agent signals failures via
-                # ``is_error`` in the JSON result (a clean exit + is_error:true is
-                # a backend/auth failure, never a pass). Mirrors run_cursor_exec.
-                _, _, probe_is_error = _parse_cursor_result(result.stdout)
-                if probe_is_error:
-                    authed = False
-                    error = (
-                        "cursor-agent probe returned is_error "
-                        "(check login / CURSOR_API_KEY)"
-                    )
-            if not authed and error is None:
-                stderr_first = (result.stderr or "").strip().splitlines()
-                error = stderr_first[0] if stderr_first else f"exit {result.returncode}"
-        except subprocess.TimeoutExpired:
-            authed = False
-            error = "cursor-agent probe timed out (60s)"
-        except OSError as e:
-            authed = False
-            error = f"cursor-agent probe failed to launch: {e}"
-
-    if args.json:
-        json_output(
-            {
-                "available": available,
-                "version": version,
-                "authed": authed,
-                "model_used": probe_model,
-                "error": error,
-            }
-        )
-    else:
-        if not available:
-            print("cursor-agent not available")
-            return
-        version_str = version or "unknown version"
-        if authed is None:
-            print(f"cursor-agent available: {version_str} (auth probe skipped)")
-        elif authed:
-            print(f"cursor-agent available: {version_str} (authed via {probe_model})")
-        else:
-            print(
-                f"cursor-agent available: {version_str} but auth probe failed: "
-                f"{error or 'unknown error'}"
-            )
 
 
 def build_standalone_review_prompt(
@@ -22287,65 +20595,6 @@ def cmd_sync_set_dep_relation(args: argparse.Namespace) -> None:
         print(f"Recorded dep relation {key} ({args.id} → {dep_spec})")
 
 
-def cmd_sync_clear_dep_relation(args: argparse.Namespace) -> None:
-    """Remove a projected dependency relation from the `depRelations` ledger (fn-64, R7).
-
-    Selects the entry by `--key` (the opaque edge token) OR by `--dep-spec`
-    (canonicalized). Removing a non-existent entry is a no-op success. Writes
-    atomically via `_write_sync_state`.
-    """
-    if not ensure_flow_exists():
-        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
-    args.id = casefold_handle(args.id)
-    if not is_spec_id(args.id):
-        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
-
-    key = getattr(args, "key", None)
-    dep_spec_arg = getattr(args, "dep_spec", None)
-    if not key and not dep_spec_arg:
-        error_exit(
-            "clear-dep-relation needs --key <token> or --dep-spec <id>.",
-            use_json=args.json,
-        )
-
-    flow_dir = get_flow_dir()
-    dep_spec = (
-        expand_bare_spec_id(flow_dir, casefold_handle(dep_spec_arg), use_json=args.json)
-        if dep_spec_arg
-        else None
-    )
-
-    spec_json_path, spec_data = _resolve_sync_spec(args)
-    state = spec_data["tracker"]
-    ledger = state.get("depRelations") or []
-
-    def _keep(entry: dict) -> bool:
-        if key and entry.get("key") == key:
-            return False
-        if dep_spec and entry.get("dep_spec") == dep_spec:
-            return False
-        return True
-
-    remaining = [e for e in ledger if _keep(e)]
-    removed = len(ledger) - len(remaining)
-    if removed:
-        state["depRelations"] = remaining
-        _write_sync_state(spec_json_path, spec_data)
-
-    if args.json:
-        json_output(
-            {
-                "success": True,
-                "id": args.id,
-                "removed": removed,
-                "depRelations": remaining,
-                "message": f"removed {removed} dep relation(s)",
-            }
-        )
-    else:
-        print(f"Removed {removed} dep relation(s) from {args.id}")
-
-
 def cmd_sync_active(args: argparse.Namespace) -> None:
     """Report whether the tracker bridge is active (value-checked predicate, R1).
 
@@ -22566,64 +20815,6 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     else:
         cost = f", cost {row['costTokens']}" if row["costTokens"] is not None else ""
         print(f"Pilot-log row appended (tick {tick}, {action}{cost}): {row_path}")
-
-
-def cmd_pilot_log_summary(args: argparse.Namespace) -> None:
-    """Summarize pilot decision-log rows (fn-68.1, R8) — pure enumeration.
-
-    Emits every `{tick, id, action, stage, costTokens}` row under
-    `.flow/pilot-runs/`, ordered by (id, tick). No judgment, no aggregation
-    beyond a flat count — the host skill reads the facts and decides.
-    """
-    if not ensure_flow_exists():
-        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
-
-    repo_root = get_repo_root()
-    run_dir = repo_root / PILOT_RUNS_DIR_REL
-
-    rows = []
-    if run_dir.exists():
-        for row_file in run_dir.glob("pilot-*.json"):
-            try:
-                data = json.loads(row_file.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                continue  # Skip a corrupt/partial row rather than failing the read.
-            if not isinstance(data, dict):
-                continue
-            rows.append(
-                {
-                    "tick": data.get("tick"),
-                    "id": data.get("id"),
-                    "action": data.get("action"),
-                    "stage": data.get("stage"),
-                    "costTokens": data.get("costTokens"),
-                }
-            )
-
-    # Stable order: by id, then tick. The sort key COERCES tick to int so a
-    # hand-edited/corrupt row carrying a non-int tick (e.g. "x") can't raise a
-    # str-vs-int TypeError and crash the whole read (review finding #2). The
-    # emitted `tick` value stays verbatim — we sort on a safe view, not a
-    # mutation.
-    def _tick_sort(value: Any) -> int:
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return 0
-
-    rows.sort(key=lambda r: (str(r.get("id") or ""), _tick_sort(r.get("tick"))))
-
-    if args.json:
-        json_output({"success": True, "rows": rows, "count": len(rows)})
-    else:
-        if not rows:
-            print("No pilot-log rows.")
-        else:
-            print(f"Pilot-log rows ({len(rows)}):\n")
-            for r in rows:
-                stage = r["stage"] or "-"
-                cost = "" if r["costTokens"] is None else f" cost={r['costTokens']}"
-                print(f"  [{r['tick']}] {r['id']} {r['action']} stage={stage}{cost}")
 
 
 def cmd_sync_defer(args: argparse.Namespace) -> None:
@@ -26770,46 +24961,6 @@ def cmd_checkpoint_restore(args: argparse.Namespace) -> None:
         print(f"Checkpoint was created at: {checkpoint.get('created_at', 'unknown')}")
 
 
-def cmd_checkpoint_delete(args: argparse.Namespace) -> None:
-    """Delete checkpoint file for a spec."""
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
-        )
-
-    epic_id = resolve_spec_arg(args, get_flow_dir())
-    if not epic_id or not is_spec_id(epic_id):
-        error_exit(
-            f"Invalid spec ID: {epic_id}. Expected format: fn-N or fn-N-slug (e.g., fn-1, fn-1-add-auth)",
-            use_json=args.json,
-        )
-
-    flow_dir = get_flow_dir()
-    checkpoint_path = flow_dir / f".checkpoint-{epic_id}.json"
-
-    if not checkpoint_path.exists():
-        if args.json:
-            json_output({
-                "spec_id": epic_id,
-                "deleted": False,
-                "message": f"No checkpoint found for {epic_id}",
-            })
-        else:
-            print(f"No checkpoint found for {epic_id}")
-        return
-
-    checkpoint_path.unlink()
-
-    if args.json:
-        json_output({
-            "spec_id": epic_id,
-            "deleted": True,
-            "message": f"Deleted checkpoint for {epic_id}",
-        })
-    else:
-        print(f"Deleted checkpoint for {epic_id}")
-
-
 def cmd_validate(args: argparse.Namespace) -> None:
     """Validate spec structure or all specs."""
     if not ensure_flow_exists():
@@ -30315,16 +28466,6 @@ def main() -> None:
     p_sync_setdep.add_argument("--json", action="store_true", help="JSON output")
     p_sync_setdep.set_defaults(func=cmd_sync_set_dep_relation)
 
-    p_sync_cleardep = sync_sub.add_parser(
-        "clear-dep-relation",
-        help="Remove a projected dependency relation from the depRelations ledger (by --key or --dep-spec)",
-    )
-    p_sync_cleardep.add_argument("id", help="Spec ID")
-    p_sync_cleardep.add_argument("--dep-spec", dest="dep_spec", default=None, help="Dependency spec ID to remove")
-    p_sync_cleardep.add_argument("--key", default=None, help="Opaque edge key to remove")
-    p_sync_cleardep.add_argument("--json", action="store_true", help="JSON output")
-    p_sync_cleardep.set_defaults(func=cmd_sync_clear_dep_relation)
-
     p_sync_receipt = sync_sub.add_parser(
         "receipt", help="Write a sync run receipt (guard-safe path, type: sync)"
     )
@@ -30418,12 +28559,6 @@ def main() -> None:
     )
     p_pilot_log_append.add_argument("--json", action="store_true", help="JSON output")
     p_pilot_log_append.set_defaults(func=cmd_pilot_log_append)
-
-    p_pilot_log_summary = pilot_log_sub.add_parser(
-        "summary", help="List all decision-log rows ({tick,id,action,stage,costTokens})"
-    )
-    p_pilot_log_summary.add_argument("--json", action="store_true", help="JSON output")
-    p_pilot_log_summary.set_defaults(func=cmd_pilot_log_summary)
 
     # review-backend (helper for skills)
     p_review_backend = subparsers.add_parser(
@@ -30723,66 +28858,9 @@ def main() -> None:
     )
     p_memory_list_legacy.set_defaults(func=cmd_memory_list_legacy)
 
-    # memory discoverability-patch (fn-30.6)
-    p_memory_disc = memory_sub.add_parser(
-        "discoverability-patch",
-        help=(
-            "Patch the project's AGENTS.md / CLAUDE.md with a one-line "
-            "reference to .flow/memory/ so agents without flow-next skills "
-            "can still discover the learnings store."
-        ),
-    )
-    p_memory_disc.add_argument(
-        "--apply",
-        action="store_true",
-        help="Write the change without prompting (non-interactive)",
-    )
-    p_memory_disc.add_argument(
-        "--dry-run",
-        dest="dry_run",
-        action="store_true",
-        help="Print proposed diff without writing",
-    )
-    p_memory_disc.add_argument(
-        "--target",
-        choices=["auto", "agents", "claude"],
-        default="auto",
-        help="Which file to patch (default: auto — picks substantive file)",
-    )
-    p_memory_disc.add_argument("--json", action="store_true", help="JSON output")
-    p_memory_disc.set_defaults(func=cmd_memory_discoverability_patch)
-
-    # prospect list / read / archive (fn-33 task 4)
+    # prospect archive / promote (fn-33)
     p_prospect = subparsers.add_parser("prospect", help="Prospect artifact commands")
     prospect_sub = p_prospect.add_subparsers(dest="prospect_cmd", required=True)
-
-    p_prospect_list = prospect_sub.add_parser(
-        "list",
-        help="List prospect artifacts (default: <30d active; --all for everything)",
-    )
-    p_prospect_list.add_argument(
-        "--all",
-        action="store_true",
-        help="Include archived, stale, and corrupt artifacts",
-    )
-    p_prospect_list.add_argument("--json", action="store_true", help="JSON output")
-    p_prospect_list.set_defaults(func=cmd_prospect_list)
-
-    p_prospect_read = prospect_sub.add_parser(
-        "read",
-        help="Read a prospect artifact (full id or slug-only)",
-    )
-    p_prospect_read.add_argument(
-        "artifact_id",
-        help="Artifact id (e.g. dx-improvements-2026-04-24 or dx-improvements)",
-    )
-    p_prospect_read.add_argument(
-        "--section",
-        choices=["focus", "grounding", "survivors", "rejected"],
-        help="Print just one body section",
-    )
-    p_prospect_read.add_argument("--json", action="store_true", help="JSON output")
-    p_prospect_read.set_defaults(func=cmd_prospect_read)
 
     p_prospect_archive = prospect_sub.add_parser(
         "archive",
@@ -30847,7 +28925,7 @@ def main() -> None:
     )
     p_anchor.set_defaults(func=cmd_anchor)
 
-    # repo-map list / show / since-ref (fn-50.2)
+    # repo-map list (fn-50.2)
     p_repo_map = subparsers.add_parser(
         "repo-map",
         help=(
@@ -30868,28 +28946,6 @@ def main() -> None:
     )
     p_repo_map_list.add_argument("--json", action="store_true", help="JSON output")
     p_repo_map_list.set_defaults(func=cmd_repo_map_list)
-
-    p_repo_map_show = repo_map_sub.add_parser(
-        "show",
-        help="Show one feature by featureId",
-    )
-    p_repo_map_show.add_argument(
-        "--feature",
-        required=True,
-        help="featureId to look up",
-    )
-    p_repo_map_show.add_argument("--json", action="store_true", help="JSON output")
-    p_repo_map_show.set_defaults(func=cmd_repo_map_show)
-
-    p_repo_map_since_ref = repo_map_sub.add_parser(
-        "since-ref",
-        help="List features whose owned files / entrypoints changed since <ref>",
-    )
-    p_repo_map_since_ref.add_argument("ref", help="git ref (e.g. origin/main)")
-    p_repo_map_since_ref.add_argument(
-        "--json", action="store_true", help="JSON output"
-    )
-    p_repo_map_since_ref.set_defaults(func=cmd_repo_map_since_ref)
 
     # prime classify (fn-92.4) — deterministic Phase-0.5 classification emitter.
     # Bounded, pure-stdlib, no LLM/judgment. Schema pinned in
@@ -31042,16 +29098,6 @@ def main() -> None:
     )
     p_strategy_read.add_argument("--json", action="store_true", help="JSON output")
     p_strategy_read.set_defaults(func=cmd_strategy_read)
-
-    p_strategy_list = strategy_sub.add_parser(
-        "list",
-        help=(
-            "List STRATEGY.md (degenerate single-root group, kept for "
-            "symmetry with `glossary list`)"
-        ),
-    )
-    p_strategy_list.add_argument("--json", action="store_true", help="JSON output")
-    p_strategy_list.set_defaults(func=cmd_strategy_list)
 
     def _add_spec_subparsers(parent_sub, *, noun: str, dest: str) -> None:
         """Register the spec sub-subcommands on a `spec` parent."""
@@ -31225,7 +29271,7 @@ def main() -> None:
             "export-cognitive-aid",
             help=(
                 f"Aggregate {noun} markdown, tasks, memory, glossary diff, "
-                "strategy alignment, diff stats, and review receipts into one "
+                "strategy alignment, diff stats, and deferred findings into one "
                 "structured payload (consumed by /flow-next:make-pr)."
             ),
         )
@@ -31236,14 +29282,6 @@ def main() -> None:
             "--base",
             required=True,
             help="Base ref to diff against (e.g., origin/main, main)",
-        )
-        p_export.add_argument(
-            "--section",
-            choices=list(EXPORT_COGNITIVE_AID_SECTIONS),
-            help=(
-                "Filter output to one section (spec|epic|tasks|memory|glossary|"
-                "strategy|diff|reviews). Without --section returns the full payload."
-            ),
         )
         p_export.add_argument("--json", action="store_true", help="JSON output")
         p_export.set_defaults(func=cmd_spec_export_cognitive_aid)
@@ -31472,23 +29510,6 @@ def main() -> None:
     p_task_set_backend.add_argument("--json", action="store_true", help="JSON output")
     p_task_set_backend.set_defaults(func=cmd_task_set_backend)
 
-    p_task_show_backend = task_sub.add_parser(
-        "show-backend", help="Show effective backend specs (task + spec levels)"
-    )
-    p_task_show_backend.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
-    p_task_show_backend.add_argument("--json", action="store_true", help="JSON output")
-    p_task_show_backend.set_defaults(func=cmd_task_show_backend)
-
-    p_task_set_deps = task_sub.add_parser(
-        "set-deps", help="Set task dependencies (comma-separated)"
-    )
-    p_task_set_deps.add_argument("task_id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
-    p_task_set_deps.add_argument(
-        "--deps", required=True, help="Comma-separated dependency IDs (e.g., fn-1-add-auth.1,fn-1-add-auth.2)"
-    )
-    p_task_set_deps.add_argument("--json", action="store_true", help="JSON output")
-    p_task_set_deps.set_defaults(func=cmd_task_set_deps)
-
     # dep add
     p_dep = subparsers.add_parser("dep", help="Dependency commands")
     dep_sub = p_dep.add_subparsers(dest="dep_cmd", required=True)
@@ -31591,14 +29612,6 @@ def main() -> None:
     )
     p_block.add_argument("--json", action="store_true", help="JSON output")
     p_block.set_defaults(func=cmd_block)
-
-    # state-path
-    p_state_path = subparsers.add_parser(
-        "state-path", help="Show resolved state directory path"
-    )
-    p_state_path.add_argument("--task", help="Task ID to show state file path for")
-    p_state_path.add_argument("--json", action="store_true", help="JSON output")
-    p_state_path.set_defaults(func=cmd_state_path)
 
     # validate
     p_validate = subparsers.add_parser("validate", help="Validate spec or all")
@@ -31719,36 +29732,6 @@ def main() -> None:
     p_checkpoint_restore.add_argument("--json", action="store_true", help="JSON output")
     p_checkpoint_restore.set_defaults(func=cmd_checkpoint_restore)
 
-    p_checkpoint_delete = checkpoint_sub.add_parser(
-        "delete", help="Delete checkpoint for spec"
-    )
-    p_checkpoint_delete.add_argument(
-        "--spec", help="Spec ID (e.g., fn-1, fn-1-add-auth)"
-    )
-    p_checkpoint_delete.add_argument("--json", action="store_true", help="JSON output")
-    p_checkpoint_delete.set_defaults(func=cmd_checkpoint_delete)
-
-    # prep-chat (for rp-cli chat_send JSON escaping)
-    p_prep = subparsers.add_parser(
-        "prep-chat", help="Prepare JSON for rp-cli chat_send"
-    )
-    p_prep.add_argument(
-        "id", nargs="?", help="(ignored) Spec/task ID for compatibility"
-    )
-    p_prep.add_argument(
-        "--message-file", required=True, help="File containing message text"
-    )
-    p_prep.add_argument(
-        "--mode", default="chat", choices=["chat", "ask"], help="Chat mode"
-    )
-    p_prep.add_argument("--new-chat", action="store_true", help="Start new chat")
-    p_prep.add_argument("--chat-name", help="Name for new chat")
-    p_prep.add_argument(
-        "--selected-paths", nargs="*", help="Files to include in context"
-    )
-    p_prep.add_argument("--output", "-o", help="Output file (default: stdout)")
-    p_prep.set_defaults(func=cmd_prep_chat)
-
     # ralph (Ralph run control)
     p_ralph = subparsers.add_parser("ralph", help="Ralph run control commands")
     ralph_sub = p_ralph.add_subparsers(dest="ralph_cmd", required=True)
@@ -31776,36 +29759,6 @@ def main() -> None:
     # rp (RepoPrompt wrappers)
     p_rp = subparsers.add_parser("rp", help="RepoPrompt helpers")
     rp_sub = p_rp.add_subparsers(dest="rp_cmd", required=True)
-
-    p_rp_windows = rp_sub.add_parser(
-        "windows", help="List RepoPrompt windows (raw JSON)"
-    )
-    p_rp_windows.add_argument("--json", action="store_true", help="JSON output (raw)")
-    p_rp_windows.set_defaults(func=cmd_rp_windows)
-
-    p_rp_pick = rp_sub.add_parser("pick-window", help="Pick window by repo root")
-    p_rp_pick.add_argument("--repo-root", required=True, help="Repo root path")
-    p_rp_pick.add_argument("--json", action="store_true", help="JSON output")
-    p_rp_pick.set_defaults(func=cmd_rp_pick_window)
-
-    p_rp_ws = rp_sub.add_parser(
-        "ensure-workspace", help="Ensure workspace and switch window"
-    )
-    p_rp_ws.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_ws.add_argument("--repo-root", required=True, help="Repo root path")
-    p_rp_ws.set_defaults(func=cmd_rp_ensure_workspace)
-
-    p_rp_builder = rp_sub.add_parser("builder", help="Run builder and return tab")
-    p_rp_builder.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_builder.add_argument("--summary", required=True, help="Builder summary")
-    p_rp_builder.add_argument(
-        "--response-type",
-        dest="response_type",
-        choices=["review", "plan", "question", "clarify"],
-        help="Builder response type (requires RP 1.6.0+)",
-    )
-    p_rp_builder.add_argument("--json", action="store_true", help="JSON output")
-    p_rp_builder.set_defaults(func=cmd_rp_builder)
 
     p_rp_prompt_get = rp_sub.add_parser("prompt-get", help="Get current prompt")
     p_rp_prompt_get.add_argument("--window", type=int, required=True, help="Window id")
@@ -31861,7 +29814,7 @@ def main() -> None:
     p_rp_export.set_defaults(func=cmd_rp_prompt_export)
 
     p_rp_setup = rp_sub.add_parser(
-        "setup-review", help="Atomic: pick-window + workspace + builder"
+        "setup-review", help="Atomic: resolve window + open builder tab"
     )
     p_rp_setup.add_argument("--repo-root", required=True, help="Repo root path")
     p_rp_setup.add_argument("--summary", required=True, help="Builder summary/instructions")
@@ -31882,10 +29835,6 @@ def main() -> None:
     # codex (Codex CLI wrappers)
     p_codex = subparsers.add_parser("codex", help="Codex CLI helpers")
     codex_sub = p_codex.add_subparsers(dest="codex_cmd", required=True)
-
-    p_codex_check = codex_sub.add_parser("check", help="Check codex availability")
-    p_codex_check.add_argument("--json", action="store_true", help="JSON output")
-    p_codex_check.set_defaults(func=cmd_codex_check)
 
     p_codex_impl = codex_sub.add_parser("impl-review", help="Implementation review")
     p_codex_impl.add_argument(
@@ -32072,22 +30021,9 @@ def main() -> None:
     p_codex_rollback.set_defaults(func=cmd_codex_rollback_plan)
 
     # copilot (GitHub Copilot CLI helpers). Subcommand surface mirrors codex;
-    # review subcommands (impl-review/plan-review/completion-review) are
-    # added in task fn-27-copilot-review-backend.3.
+    # review subcommands (impl-review/plan-review/completion-review).
     p_copilot = subparsers.add_parser("copilot", help="GitHub Copilot CLI helpers")
     copilot_sub = p_copilot.add_subparsers(dest="copilot_cmd", required=True)
-
-    p_copilot_check = copilot_sub.add_parser(
-        "check",
-        help="Check copilot availability + live auth probe",
-    )
-    p_copilot_check.add_argument("--json", action="store_true", help="JSON output")
-    p_copilot_check.add_argument(
-        "--skip-probe",
-        action="store_true",
-        help="Skip live auth probe (fast CI path when auth already verified)",
-    )
-    p_copilot_check.set_defaults(func=cmd_copilot_check)
 
     p_copilot_impl = copilot_sub.add_parser("impl-review", help="Implementation review")
     p_copilot_impl.add_argument(
@@ -32204,22 +30140,10 @@ def main() -> None:
     p_copilot_deep.set_defaults(func=cmd_copilot_deep_pass)
 
     # cursor (cursor-agent CLI helpers — fn-74). Subcommand surface mirrors
-    # codex/copilot: check + impl-review/plan-review/completion-review/validate/
+    # codex/copilot: impl-review/plan-review/completion-review/validate/
     # deep-pass (NOT classify-result/rollback-plan — those are codex-only).
     p_cursor = subparsers.add_parser("cursor", help="Cursor (cursor-agent CLI) helpers")
     cursor_sub = p_cursor.add_subparsers(dest="cursor_cmd", required=True)
-
-    p_cursor_check = cursor_sub.add_parser(
-        "check",
-        help="Check cursor-agent availability + live auth probe",
-    )
-    p_cursor_check.add_argument("--json", action="store_true", help="JSON output")
-    p_cursor_check.add_argument(
-        "--skip-probe",
-        action="store_true",
-        help="Skip live auth probe (fast CI path when auth already verified)",
-    )
-    p_cursor_check.set_defaults(func=cmd_cursor_check)
 
     p_cursor_impl = cursor_sub.add_parser("impl-review", help="Implementation review")
     p_cursor_impl.add_argument(

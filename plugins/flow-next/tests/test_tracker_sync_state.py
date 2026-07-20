@@ -343,7 +343,7 @@ class TrackerSyncStateTestCase(unittest.TestCase):
 
 
 class TrackerDepRelationsTestCase(unittest.TestCase):
-    """fn-64: depRelations ledger + list/set/clear-dep-relation plumbing."""
+    """fn-64: depRelations ledger + list/set-dep-relation plumbing."""
 
     def setUp(self) -> None:
         self.tmpdir = Path(tempfile.mkdtemp())
@@ -442,51 +442,6 @@ class TrackerDepRelationsTestCase(unittest.TestCase):
         self.assertEqual(len(ledger), 1)
         self.assertEqual(ledger[0]["updatedAt"], first_ts)
 
-    def test_clear_dep_relation_by_dep_spec(self) -> None:
-        parent = self._create_spec("Parent clear")
-        dep = self._create_spec("Dep clear")
-        self._set_dep_relation(parent, dep, "node-p", "node-d")
-        res = self._call(
-            func=self.flowctl.cmd_sync_clear_dep_relation,
-            id=parent,
-            dep_spec=dep,
-            key=None,
-        )
-        self.assertEqual(res["removed"], 1)
-        self.assertEqual(self._state(parent)["depRelations"], [])
-
-    def test_clear_dep_relation_by_key(self) -> None:
-        parent = self._create_spec("Parent clearkey")
-        dep = self._create_spec("Dep clearkey")
-        set_res = self._set_dep_relation(parent, dep, "node-p", "node-d")
-        res = self._call(
-            func=self.flowctl.cmd_sync_clear_dep_relation,
-            id=parent,
-            dep_spec=None,
-            key=set_res["key"],
-        )
-        self.assertEqual(res["removed"], 1)
-        self.assertEqual(self._state(parent)["depRelations"], [])
-
-    def test_clear_missing_dep_relation_is_noop(self) -> None:
-        parent = self._create_spec("Parent noclear")
-        res = self._call(
-            func=self.flowctl.cmd_sync_clear_dep_relation,
-            id=parent,
-            dep_spec=None,
-            key="nope",
-        )
-        self.assertEqual(res["removed"], 0)
-
-    def test_clear_dep_relation_requires_selector(self) -> None:
-        parent = self._create_spec("Parent noselect")
-        with self.assertRaises(SystemExit):
-            self._call(
-                func=self.flowctl.cmd_sync_clear_dep_relation,
-                id=parent,
-                dep_spec=None,
-                key=None,
-            )
 
     def test_self_edge_dep_relation_rejected(self) -> None:
         parent = self._create_spec("Parent self")

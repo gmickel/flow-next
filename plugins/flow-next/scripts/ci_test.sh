@@ -677,12 +677,10 @@ PYTEST
 echo -e "\n${YELLOW}--- RepoPrompt Setup Review ---${NC}"
 
 "${FLOW_PY[@]}" - "$TEST_DIR" << 'PYTEST'
-import hashlib
 import importlib.util
 import io
 import json
 import sys
-import tempfile
 from argparse import Namespace
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -712,16 +710,9 @@ def make_result(stdout="", stderr=""):
     return SimpleNamespace(stdout=stdout, stderr=stderr)
 
 
-def cleanup_state(repo_root: str) -> None:
-    state_file = Path(tempfile.gettempdir()) / f".ralph-pick-window-{hashlib.sha256(repo_root.encode()).hexdigest()[:16]}"
-    if state_file.exists():
-        state_file.unlink()
-
-
 def run_setup(fake_run, repo_root: str, summary: str, fake_try_run=None):
     flowctl.run_rp_cli = fake_run
     flowctl.try_run_rp_cli = fake_try_run or (lambda args, timeout=None: None)
-    cleanup_state(repo_root)
     output = io.StringIO()
     with redirect_stdout(output):
         flowctl.cmd_rp_setup_review(
@@ -733,7 +724,6 @@ def run_setup(fake_run, repo_root: str, summary: str, fake_try_run=None):
                 json=False,
             )
         )
-    cleanup_state(repo_root)
     return output.getvalue().strip()
 
 

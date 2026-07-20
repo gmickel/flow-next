@@ -10,7 +10,7 @@
 # Cases (T1-T11 from spec R29):
 #   T1.  `flowctl spec export-cognitive-aid <epic> --base main --json` returns
 #        valid JSON with all top-level keys.
-#   T2.  `--section diff` returns only the diff slice; full payload reachable
+#   T2.  (removed fn-111: --section export filter deleted)
 #        without flag.
 #   T3.  `diff_summary.files[]` populated; per-file additions/deletions match
 #        `git diff --numstat`.
@@ -525,7 +525,7 @@ assert_rc "T1" 0 "$T1_RC" "export-cognitive-aid full payload exits 0"
 # from fn-43.2 R31 dual-emit; legacy "epic" co-emit is verified separately
 # in alias_smoke.sh Case 4).
 for key in spec tasks tasks_summary memory_during_epic glossary_changes \
-           strategy_alignment diff_summary review_receipts deferred_findings; do
+           strategy_alignment diff_summary deferred_findings; do
   assert_eq_jq "T1" "$T1_OUT" "'$key' in d" "True" "top-level key '$key' present"
 done
 
@@ -539,25 +539,6 @@ T1_EPIC_ID="$(json_get "$T1_OUT" "d['spec']['id']")"
 assert_eq_jq "T1" "$T1_OUT" "d['tasks_summary']['total']" "2" "tasks_summary.total == 2"
 assert_eq_jq "T1" "$T1_OUT" "d['tasks_summary']['done']"  "2" "tasks_summary.done == 2"
 assert_eq_jq "T1" "$T1_OUT" "d['tasks_summary']['open']"  "0" "tasks_summary.open == 0"
-
-# =============================================================================
-# T2: --section diff returns only diff slice
-# =============================================================================
-echo -e "${YELLOW}--- T2: --section diff returns only diff slice ---${NC}"
-T2_OUT="$TEST_DIR/t2-section-diff.json"
-set +e
-( cd "$REPO" && "$FLOWCTL" spec export-cognitive-aid "$EPIC_ID" --base main --section diff --json > "$T2_OUT" )
-T2_RC=$?
-set -e
-assert_rc "T2" 0 "$T2_RC" "--section diff exits 0"
-
-# Section-filtered payload contains diff_summary, not other top-level keys
-assert_eq_jq "T2" "$T2_OUT" "'diff_summary' in d" "True"  "section=diff: diff_summary present"
-assert_eq_jq "T2" "$T2_OUT" "'spec' in d"         "False" "section=diff: spec NOT present"
-assert_eq_jq "T2" "$T2_OUT" "'tasks' in d"        "False" "section=diff: tasks NOT present"
-assert_eq_jq "T2" "$T2_OUT" "'memory_during_epic' in d" "False" "section=diff: memory_during_epic NOT present"
-
-# Full payload still reachable without --section (already proved in T1).
 
 # =============================================================================
 # T3: diff_summary.files[] populated with cross-module changes

@@ -1003,17 +1003,6 @@ echo -e "${GREEN}✓${NC} schema v1 validate"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- codex commands ---${NC}"
-# Test codex check (may or may not have codex installed)
-codex_check_json="$(scripts/flowctl codex check --json 2>/dev/null || echo '{"success":true}')"
-"${FLOW_PY[@]}" - <<'PY' "$codex_check_json"
-import json, sys
-data = json.loads(sys.argv[1])
-assert data["success"] == True, f"codex check failed: {data}"
-# available can be true or false depending on codex install
-PY
-echo -e "${GREEN}✓${NC} codex check"
-PASS=$((PASS + 1))
-
 # Test codex impl-review help (no codex required for argparse check)
 set +e
 scripts/flowctl codex impl-review --help >/dev/null 2>&1
@@ -1041,17 +1030,6 @@ else
 fi
 
 echo -e "${YELLOW}--- copilot commands ---${NC}"
-# Test copilot check (may or may not have copilot installed)
-copilot_check_json="$(scripts/flowctl copilot check --skip-probe --json 2>/dev/null || echo '{"success":true}')"
-"${FLOW_PY[@]}" - <<'PY' "$copilot_check_json"
-import json, sys
-data = json.loads(sys.argv[1])
-assert data["success"] == True, f"copilot check failed: {data}"
-# available can be true or false depending on copilot install
-PY
-echo -e "${GREEN}✓${NC} copilot check"
-PASS=$((PASS + 1))
-
 # Test copilot impl-review help (no copilot required for argparse check)
 set +e
 scripts/flowctl copilot impl-review --help >/dev/null 2>&1
@@ -1555,7 +1533,7 @@ PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- codex e2e (requires codex CLI) ---${NC}"
 # Check if codex is available (handles its own auth)
-codex_available="$(scripts/flowctl codex check --json 2>/dev/null | "${FLOW_PY[@]}" -c "import sys,json; print(json.load(sys.stdin).get('available', False))" 2>/dev/null || echo "False")"
+codex_available="$(command -v codex >/dev/null && echo True || echo False)"
 if [[ "$codex_available" == "True" ]]; then
   # Create a simple epic + task for testing
   EPIC3_JSON="$(scripts/flowctl spec create --title "Codex test epic" --json)"
@@ -1662,7 +1640,7 @@ echo -e "${YELLOW}--- copilot e2e (requires copilot CLI) ---${NC}"
 # request on availability detection; the real review below exercises auth for
 # real. With --skip-probe, `authed` is null (can't know without a probe), so
 # we gate on `available` alone and let a real auth failure fail the e2e below.
-copilot_available="$(scripts/flowctl copilot check --skip-probe --json 2>/dev/null | "${FLOW_PY[@]}" -c "import sys,json; d=json.load(sys.stdin); print(bool(d.get('available', False)))" 2>/dev/null || echo "False")"
+copilot_available="$(command -v copilot >/dev/null && echo True || echo False)" 2>/dev/null || echo "False")"
 if [[ "$copilot_available" == "True" ]]; then
   # Use gpt-5-mini + effort=low to minimize premium-request cost and wall time.
   # Note: claude-family models reject --effort (task-1 finding), so GPT is required.
@@ -1975,10 +1953,7 @@ scripts/flowctl checkpoint restore --spec "$STDIN_EPIC" --json >/dev/null
 # Verify original content restored
 restored_spec="$(scripts/flowctl cat "$STDIN_EPIC")"
 echo "$restored_spec" | grep -q "Testing stdin support" || { echo "checkpoint restore failed"; FAIL=$((FAIL + 1)); }
-# Delete checkpoint
-scripts/flowctl checkpoint delete --spec "$STDIN_EPIC" --json >/dev/null
-[[ ! -f ".flow/.checkpoint-${STDIN_EPIC}.json" ]] || { echo "checkpoint delete failed"; FAIL=$((FAIL + 1)); }
-echo -e "${GREEN}✓${NC} checkpoint save/restore/delete"
+echo -e "${GREEN}✓${NC} checkpoint save/restore"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- sync command files ---${NC}"
@@ -2136,45 +2111,10 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Test 5: show-backend json has raw + resolved + sources
-show_out="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json)"
-raw_val="$(echo "$show_out" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
-resolved_str="$(echo "$show_out" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["resolved"]["str"])')"
-effort_src="$(echo "$show_out" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["effort_source"])')"
-if [[ "$raw_val" == "copilot:claude-opus-4.5:xhigh" && "$resolved_str" == "copilot:claude-opus-4.5:xhigh" && "$effort_src" == "spec" ]]; then
-  echo -e "${GREEN}✓${NC} show-backend emits raw + resolved + source fields"
-  PASS=$((PASS + 1))
-else
-  echo -e "${RED}✗${NC} show-backend output wrong: raw=$raw_val resolved=$resolved_str effort_src=$effort_src"
-  FAIL=$((FAIL + 1))
-fi
-
-# Test 6: legacy stored value (codex:gpt-5.4-high dash form) falls back with warning
-# Directly patch the task JSON to simulate pre-epic stored data.
-"${FLOW_PY[@]}" -c "
-import json
-p = '.flow/tasks/${BSPEC_TASK}.json'
-d = json.load(open(p))
-d['review'] = 'codex:gpt-5.4-high'
-json.dump(d, open(p, 'w'))
-"
-legacy_stdout="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json 2>/tmp/legacy_stderr_$$.txt)"
-legacy_stderr="$(cat /tmp/legacy_stderr_$$.txt)"
-legacy_backend="$(echo "$legacy_stdout" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["resolved"]["backend"])')"
-legacy_raw="$(echo "$legacy_stdout" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
-trash /tmp/legacy_stderr_$$.txt 2>/dev/null || rm -f /tmp/legacy_stderr_$$.txt
-if [[ "$legacy_backend" == "codex" && "$legacy_raw" == "codex:gpt-5.4-high" ]] && echo "$legacy_stderr" | grep -qi "warning:"; then
-  echo -e "${GREEN}✓${NC} legacy spec codex:gpt-5.4-high falls back to bare codex with stderr warning"
-  PASS=$((PASS + 1))
-else
-  echo -e "${RED}✗${NC} legacy fallback broken: backend=$legacy_backend raw=$legacy_raw stderr=$legacy_stderr"
-  FAIL=$((FAIL + 1))
-fi
-
 # Test 7: empty-string clears field without validation
 if scripts/flowctl task set-backend "$BSPEC_TASK" --review "" --json >/dev/null 2>&1; then
-  cleared="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
-  if [[ "$cleared" == "None" ]]; then
+  cleared="$("${FLOW_PY[@]}" -c "import json; print(json.load(open('.flow/tasks/${BSPEC_TASK}.json')).get('review'))")"
+  if [[ "$cleared" == "None" || "$cleared" == "" ]]; then
     echo -e "${GREEN}✓${NC} empty string clears backend spec"
     PASS=$((PASS + 1))
   else
@@ -2324,124 +2264,6 @@ LEGEOF
   echo "$text_out" | grep -q "default bug/build-errors" || { echo "FAIL: text mode missing mechanical default suffix"; echo "$text_out"; exit 1; }
 )
 echo -e "${GREEN}✓${NC} memory list-legacy: empty dir, two-entry parse, mechanical defaults, text mode"
-PASS=$((PASS + 1))
-
-echo -e "${YELLOW}--- memory discoverability-patch (fn-30.6) ---${NC}"
-DISC_TEST_DIR="$TEST_DIR/memory-disc"
-rm -rf "$DISC_TEST_DIR"
-mkdir -p "$DISC_TEST_DIR"
-(
-  cd "$DISC_TEST_DIR"
-  git init -q
-  git config user.email t@t
-  git config user.name t
-  "$SCRIPT_DIR/flowctl" init --json >/dev/null
-
-  # Case 1: no instruction files → clear error, exit 1.
-  rc=0
-  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --json 2>&1) || rc=$?
-  [ "$rc" -ne 0 ] || { echo "FAIL: missing files should exit nonzero"; echo "$out"; exit 1; }
-  echo "$out" | jq -e '.success == false and (.error | contains("AGENTS.md"))' >/dev/null \
-    || { echo "FAIL: missing-files error JSON shape"; echo "$out"; exit 1; }
-
-  # Case 2: AGENTS.md present, dry-run does not write.
-  cat > AGENTS.md <<'DISCEOF'
-# Project
-
-## Overview
-
-Some project.
-DISCEOF
-  before=$(cat AGENTS.md)
-  dry=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --dry-run --json)
-  echo "$dry" | jq -e '.action == "dry-run" and .strategy == "append" and (.diff | length) > 0' >/dev/null \
-    || { echo "FAIL: dry-run JSON shape"; echo "$dry"; exit 1; }
-  after=$(cat AGENTS.md)
-  [ "$before" = "$after" ] || { echo "FAIL: dry-run modified AGENTS.md"; exit 1; }
-
-  # Case 3: --apply writes the section.
-  apply=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
-  echo "$apply" | jq -e '.action == "applied" and .target == "AGENTS.md" and .strategy == "append"' >/dev/null \
-    || { echo "FAIL: apply JSON shape"; echo "$apply"; exit 1; }
-  grep -q ".flow/memory/" AGENTS.md || { echo "FAIL: apply did not write reference"; cat AGENTS.md; exit 1; }
-
-  # Case 4: idempotent — second apply reports action=exists.
-  second=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
-  echo "$second" | jq -e '.action == "exists" and .success == true' >/dev/null \
-    || { echo "FAIL: idempotent rerun should report exists"; echo "$second"; exit 1; }
-)
-echo -e "${GREEN}✓${NC} memory discoverability-patch: missing files, dry-run, apply, idempotent"
-PASS=$((PASS + 1))
-
-# Shim detection: CLAUDE.md = @AGENTS.md shim → patches AGENTS.md.
-DISC_SHIM_DIR="$TEST_DIR/memory-disc-shim"
-rm -rf "$DISC_SHIM_DIR"
-mkdir -p "$DISC_SHIM_DIR"
-(
-  cd "$DISC_SHIM_DIR"
-  git init -q
-  git config user.email t@t
-  git config user.name t
-  "$SCRIPT_DIR/flowctl" init --json >/dev/null
-  cat > AGENTS.md <<'DISCEOF2'
-# Substantive
-
-## Tooling
-
-Real.
-DISCEOF2
-  printf '@AGENTS.md\n' > CLAUDE.md
-  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
-  echo "$out" | jq -e '.target == "AGENTS.md" and (.reason | contains("shim"))' >/dev/null \
-    || { echo "FAIL: shim detection should patch AGENTS.md"; echo "$out"; exit 1; }
-  grep -q ".flow/memory/" AGENTS.md || { echo "FAIL: AGENTS.md not patched"; exit 1; }
-  grep -q ".flow/memory/" CLAUDE.md && { echo "FAIL: CLAUDE.md shim should not be patched"; exit 1; } || true
-)
-echo -e "${GREEN}✓${NC} memory discoverability-patch: shim detection (CLAUDE.md=@AGENTS.md → patch AGENTS.md)"
-PASS=$((PASS + 1))
-
-# Listing strategy: fenced code block with .flow/ paths gets an inline line.
-DISC_LIST_DIR="$TEST_DIR/memory-disc-list"
-rm -rf "$DISC_LIST_DIR"
-mkdir -p "$DISC_LIST_DIR"
-(
-  cd "$DISC_LIST_DIR"
-  git init -q
-  git config user.email t@t
-  git config user.name t
-  "$SCRIPT_DIR/flowctl" init --json >/dev/null
-  cat > AGENTS.md <<'DISCEOF3'
-# Listing project
-
-## Layout
-
-```
-.flow/specs/       # epic specs
-.flow/tasks/       # task specs
-```
-
-## Other
-
-Body.
-DISCEOF3
-  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
-  echo "$out" | jq -e '.strategy == "listing" and .action == "applied"' >/dev/null \
-    || { echo "FAIL: expected listing strategy"; echo "$out"; exit 1; }
-  # Inline line must sit inside the code block (between ``` fences).
-  awk '/^```/{f=!f; next} f' AGENTS.md | grep -q ".flow/memory/" \
-    || { echo "FAIL: memory line not inside code block"; cat AGENTS.md; exit 1; }
-)
-echo -e "${GREEN}✓${NC} memory discoverability-patch: listing strategy (injects into .flow/ code block)"
-PASS=$((PASS + 1))
-
-# --apply + --dry-run mutually exclusive.
-(
-  cd "$DISC_TEST_DIR"
-  rc=0
-  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --dry-run --json 2>&1) || rc=$?
-  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for conflicting flags, got $rc"; echo "$out"; exit 1; }
-)
-echo -e "${GREEN}✓${NC} memory discoverability-patch: --apply + --dry-run rejected with exit 2"
 PASS=$((PASS + 1))
 
 # --- validator pass subcommands (fn-32.1 --validate) ---
