@@ -145,106 +145,13 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 Run backend detection from SKILL.md above. Then branch:
 
-### Codex Backend
+### Codex / Copilot / Cursor Backends
 
-```bash
-# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
-# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-SPEC_ID="${1:-}"
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}" # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+**⚠️ STOP: You MUST read and execute [workflow.md](workflow.md) now.** The per-backend execution blocks are single-sourced there (fn-110) — go to the matching "Codex Backend Workflow" / "Copilot Backend Workflow" / "Cursor Backend Workflow" section and execute it. Do not reconstruct the commands from memory here.
 
-# Save checkpoint before review (recovery point if context compacts)
-$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
+Each workflow covers: checkpoint save → derive `CODE_FILES` reviewer anchors from the spec → `$FLOWCTL <backend> plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"` (Foreground rule applies) → update status → handle verdict → receipt semantics.
 
-# --files: comma-separated CODE files for reviewer context
-# Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
-# How to identify: read the spec, find files mentioned or directories affected
-# Example: spec touches auth → pass existing auth files for context
-#
-# Dynamic approach (if spec mentions specific paths):
-# CODE_FILES=$(grep -oE 'src/[^ ]+\.(ts|py|js)' .flow/specs/${SPEC_ID}.md | sort -u | paste -sd,)
-# Or list key files manually:
-# Derive REAL reviewer anchors from the spec's `## Key files / interfaces` (the canonical,
-# scaffold-mandated source); fall back to any file-like tokens in the spec. NEVER a hardcoded
-# guess — the cross-platform backends need real code paths or they only catch spec-internal
-# inconsistency, not "this plan contradicts how the codebase actually works."
-CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_ID}.md" | grep -oE '`[^`]+\.[A-Za-z0-9]+`' | tr -d '`' | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
-[ -z "$CODE_FILES" ] && CODE_FILES="$(grep -oE '[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|php|c|cpp|h|md|sh)' ".flow/specs/${SPEC_ID}.md" | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
-
-$FLOWCTL codex plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
-# Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
-```
-
-On NEEDS_WORK: fix plan via `$FLOWCTL spec set-plan` AND sync affected task specs via `$FLOWCTL task set-spec`, then re-run (receipt enables session continuity).
-
-**Note**: `codex plan-review` automatically includes task specs in the review prompt.
-
-### Copilot Backend
-
-```bash
-# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
-# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-SPEC_ID="${1:-}"
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}" # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
-
-# Save checkpoint before review (recovery point if context compacts)
-$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
-
-# --files: comma-separated CODE files for reviewer context (same shape as codex)
-# Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
-# Derive REAL reviewer anchors from the spec's `## Key files / interfaces` (the canonical,
-# scaffold-mandated source); fall back to any file-like tokens in the spec. NEVER a hardcoded
-# guess — the cross-platform backends need real code paths or they only catch spec-internal
-# inconsistency, not "this plan contradicts how the codebase actually works."
-CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_ID}.md" | grep -oE '`[^`]+\.[A-Za-z0-9]+`' | tr -d '`' | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
-[ -z "$CODE_FILES" ] && CODE_FILES="$(grep -oE '[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|php|c|cpp|h|md|sh)' ".flow/specs/${SPEC_ID}.md" | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
-
-# Override model + effort (pick one):
-# --spec copilot:claude-opus-4.5:xhigh (preferred)
-# FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
-# FLOW_COPILOT_MODEL=gpt-5.5 FLOW_COPILOT_EFFORT=high
-
-$FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
-# Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
-```
-
-On NEEDS_WORK: fix plan via `$FLOWCTL spec set-plan` AND sync affected task specs via `$FLOWCTL task set-spec`, then re-run. Session resume only when prior receipt has `mode == "copilot"`.
-
-**Note**: `copilot plan-review` automatically includes task specs in the review prompt (same as codex).
-
-### Cursor Backend
-
-```bash
-# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
-# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-SPEC_ID="${1:-}"
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}" # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
-
-# Save checkpoint before review (recovery point if context compacts)
-$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
-
-# --files: comma-separated CODE files for reviewer context (same shape as codex)
-# Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
-# Derive REAL reviewer anchors from the spec's `## Key files / interfaces` (the canonical,
-# scaffold-mandated source); fall back to any file-like tokens in the spec. NEVER a hardcoded
-# guess — the cross-platform backends need real code paths or they only catch spec-internal
-# inconsistency, not "this plan contradicts how the codebase actually works."
-CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_ID}.md" | grep -oE '`[^`]+\.[A-Za-z0-9]+`' | tr -d '`' | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
-[ -z "$CODE_FILES" ] && CODE_FILES="$(grep -oE '[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|php|c|cpp|h|md|sh)' ".flow/specs/${SPEC_ID}.md" | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
-
-# Override model (pick one):
-# --spec cursor:gpt-5.5-high (preferred)
-# FLOW_REVIEW_BACKEND=cursor:gpt-5.5-high
-# FLOW_CURSOR_MODEL=composer-2.5
-# Cursor folds effort into the model name — no :<effort> and no FLOW_CURSOR_EFFORT.
-
-$FLOWCTL cursor plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
-# Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
-```
-
-On NEEDS_WORK: fix plan via `$FLOWCTL spec set-plan` AND sync affected task specs via `$FLOWCTL task set-spec`, then re-run. Session resume only when prior receipt has `mode == "cursor"`.
-
-**Note**: `cursor plan-review` automatically includes task specs in the review prompt (same as codex).
+**Return here only after workflow.md execution is complete.**
 
 ### RepoPrompt Backend
 
@@ -266,7 +173,7 @@ The workflow covers:
 
 **MAJOR_RETHINK is NOT a fix-loop input.** Every backend can emit `MAJOR_RETHINK` (a valid verdict tag), but it means the *plan/approach* is wrong — not something to patch finding-by-finding. Do NOT enter the fix loop on it. Escalate immediately: surface the reviewer's rationale to the caller and stop with a typed **`BLOCKED: DESIGN_CONFLICT`** (Ralph mode: output `<promise>RETRY</promise>`). A re-plan is a human decision, never an ad-hoc patch. Only `NEEDS_WORK` drives the loop below.
 
-**MAX ITERATIONS (backend-agnostic — applies to ALL backends: rp, codex, copilot, cursor):** keep an iteration counter in agent context, starting at 0. Each fix+re-review cycle increments it. When the counter reaches **${MAX_REVIEW_ITERATIONS:-4}** (default 4; env-overridable, configurable in Ralph's config.env) and the verdict is still NEEDS_WORK, BREAK the loop and escalate: surface the surviving findings to the caller and stop (in Ralph mode output `<promise>RETRY</promise>` so the next iteration starts fresh). Never loop unbounded. The per-backend workflow files defer to this cap. **The cap is now ALSO enforced deterministically by flowctl (fn-90 R5): each `flowctl <backend> plan-review` dispatch increments a cumulative spec-scoped counter (`plan_review_rounds`) and REFUSES at `${MAX_REVIEW_ITERATIONS:-4}` with an `ESCALATE:` marker + exit 4 — the flowctl counter survives across fresh `/flow-next:plan-review` invocations, so a caller-side "re-invoke until SHIP" outer loop can no longer reset the cap by re-entering. This loop is INTERNAL — the caller (e.g. `/flow-next:plan`, pilot) invokes plan-review ONCE and acts on the terminal verdict; the flowctl counter resets ONLY on a SHIP verdict or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>`), never on a fresh invocation or a spec edit.**
+**MAX ITERATIONS (backend-agnostic — applies to ALL backends: rp, codex, copilot, cursor):** fix+re-review cycles are bounded at **${MAX_REVIEW_ITERATIONS:-4}** (default 4; env-overridable, configurable in Ralph's config.env) — the counter is flowctl-owned (below), never kept in agent context. When the cap is reached and the verdict is still NEEDS_WORK, BREAK the loop and escalate: surface the surviving findings to the caller and stop (in Ralph mode output `<promise>RETRY</promise>` so the next iteration starts fresh). Never loop unbounded. The per-backend workflow files defer to this cap. **The cap is now ALSO enforced deterministically by flowctl (fn-90 R5): each `flowctl <backend> plan-review` dispatch increments a cumulative spec-scoped counter (`plan_review_rounds`) and REFUSES at `${MAX_REVIEW_ITERATIONS:-4}` with an `ESCALATE:` marker + exit 4 — the flowctl counter survives across fresh `/flow-next:plan-review` invocations, so a caller-side "re-invoke until SHIP" outer loop can no longer reset the cap by re-entering. This loop is INTERNAL — the caller (e.g. `/flow-next:plan`, pilot) invokes plan-review ONCE and acts on the terminal verdict; the flowctl counter resets ONLY on a SHIP verdict or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>`), never on a fresh invocation or a spec edit.**
 
 If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 

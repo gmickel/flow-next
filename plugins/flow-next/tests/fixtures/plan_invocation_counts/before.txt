@@ -1,0 +1,23 @@
+# flowctl invocations on the standard Route B happy path (4 tasks, all with
+# satisfies frontmatter), as prescribed by flow-next-plan/steps.md BEFORE fn-110.2
+# (branch base ae495344). One invocation per line; '#' lines are ignored.
+flowctl init --json
+flowctl show <arg> --json
+flowctl config get memory.enabled --json
+flowctl config get scouts.github --json
+flowctl strategy status --json
+flowctl spec create --title <title> --json
+flowctl spec set-branch <spec-id> --branch <spec-id> --json
+flowctl spec set-plan <spec-id> --file - --json
+flowctl task create --spec <spec-id> --title <t1> --json
+flowctl task set-spec <spec-id>.1 --file - --json
+flowctl task create --spec <spec-id> --title <t2> --deps <spec-id>.1 --json
+flowctl task set-spec <spec-id>.2 --file - --json
+flowctl task create --spec <spec-id> --title <t3> --deps <spec-id>.2 --json
+flowctl task set-spec <spec-id>.3 --file - --json
+flowctl task create --spec <spec-id> --title <t4> --deps <spec-id>.3 --json
+flowctl task set-spec <spec-id>.4 --file - --json
+flowctl validate --spec <spec-id> --json
+flowctl config get tracker.perEvent.plan --json
+flowctl sync active --json
+flowctl config get artifacts.html.enabled --json

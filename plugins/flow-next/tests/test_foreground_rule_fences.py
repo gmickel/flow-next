@@ -34,7 +34,9 @@ CANONICAL_FILES = [
     "skills/flow-next-impl-review/workflow-copilot.md",
     "skills/flow-next-impl-review/workflow-cursor.md",
     "skills/flow-next-impl-review/workflow-common.md",
-    "skills/flow-next-plan-review/SKILL.md",
+    # plan-review/SKILL.md intentionally absent: fn-110.2 single-sourced the
+    # per-backend execution blocks into plan-review/workflow.md; SKILL.md keeps
+    # the prose Foreground-rule bullet but no review-invoking fences.
     "skills/flow-next-plan-review/workflow.md",
     "skills/flow-next-spec-completion-review/workflow-codex.md",
     "skills/flow-next-spec-completion-review/workflow-copilot.md",

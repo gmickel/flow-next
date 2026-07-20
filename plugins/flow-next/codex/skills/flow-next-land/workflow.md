@@ -47,16 +47,17 @@ if git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' >/dev/null; th
 fi
 ```
 
-Read the `land.*` config. fn-60.2 seeds defaults, but tolerate `null` (pre-seed flowctl copies) with hard fallbacks:
+Read the `land.*` config — ONE subtree read (fn-110), then jq lookups from the captured JSON. fn-60.2 seeds defaults, but tolerate `null` (pre-seed / pre-subtree flowctl copies, where the whole capture degrades to `{}` or `"value": null`) with hard fallbacks:
 
 ```bash
-cfg() { "$FLOWCTL" config get "$1" --json 2>/dev/null | jq -r '.value'; }
-LAND_RELEASE="$(cfg land.release)"; [[ -z "$LAND_RELEASE" || "$LAND_RELEASE" == "null" ]] && LAND_RELEASE=true
-PATIENCE_MIN="$(cfg land.patienceMinutes)"; [[ -z "$PATIENCE_MIN" || "$PATIENCE_MIN" == "null" ]] && PATIENCE_MIN=30
-REVIEW_SIGNAL="$(cfg land.reviewSignal)"; [[ -z "$REVIEW_SIGNAL" || "$REVIEW_SIGNAL" == "null" ]] && REVIEW_SIGNAL=silence
-AUTOMATED_REVIEWERS="$(cfg land.automatedReviewers)"; [[ "$AUTOMATED_REVIEWERS" == "null" ]] && AUTOMATED_REVIEWERS=""
-REVIEW_TRIGGER="$(cfg land.reviewTrigger)"; [[ "$REVIEW_TRIGGER" == "null" ]] && REVIEW_TRIGGER=""
-CI_FIX_BUDGET="$(cfg land.ciFixBudget)"; [[ -z "$CI_FIX_BUDGET" || "$CI_FIX_BUDGET" == "null" ]] && CI_FIX_BUDGET=3
+LAND_CFG="$("$FLOWCTL" config get land --json 2>/dev/null || echo '{}')" # {"key":"land","value":{...}} — the only config invocation in this skill
+lcfg() { printf '%s\n' "$LAND_CFG" | jq -r ".value.$1"; } # missing key → literal "null"; explicit "" → empty line (same as the old per-key reads)
+LAND_RELEASE="$(lcfg release)"; [[ -z "$LAND_RELEASE" || "$LAND_RELEASE" == "null" ]] && LAND_RELEASE=true
+PATIENCE_MIN="$(lcfg patienceMinutes)"; [[ -z "$PATIENCE_MIN" || "$PATIENCE_MIN" == "null" ]] && PATIENCE_MIN=30
+REVIEW_SIGNAL="$(lcfg reviewSignal)"; [[ -z "$REVIEW_SIGNAL" || "$REVIEW_SIGNAL" == "null" ]] && REVIEW_SIGNAL=silence
+AUTOMATED_REVIEWERS="$(lcfg automatedReviewers)"; [[ "$AUTOMATED_REVIEWERS" == "null" ]] && AUTOMATED_REVIEWERS=""
+REVIEW_TRIGGER="$(lcfg reviewTrigger)"; [[ "$REVIEW_TRIGGER" == "null" ]] && REVIEW_TRIGGER=""
+CI_FIX_BUDGET="$(lcfg ciFixBudget)"; [[ -z "$CI_FIX_BUDGET" || "$CI_FIX_BUDGET" == "null" ]] && CI_FIX_BUDGET=3
 # fn-65.1 — clean-review COMMENT pattern (silence-signal supplement, §2.6).
 # CONTRACT (distinct from the keys above — do NOT collapse `""` into the
 # default): the seeded built-in default is a STRUCTURED ERE; an unseeded
@@ -65,7 +66,7 @@ CI_FIX_BUDGET="$(cfg land.ciFixBudget)"; [[ -z "$CI_FIX_BUDGET" || "$CI_FIX_BUDG
 # the comment scan; any other value → use it verbatim. `jq -r` prints the
 # literal "null" for JSON null and an EMPTY line for "", so the two are
 # distinguishable — guard ONLY the "null" case, never `-z`.
-CLEAN_REVIEW_PATTERN="$(cfg land.cleanReviewCommentPattern)"
+CLEAN_REVIEW_PATTERN="$(lcfg cleanReviewCommentPattern)"
 if [[ "$CLEAN_REVIEW_PATTERN" == "null" ]]; then
  # pre-seed flowctl (key absent) → the canonical built-in default
  CLEAN_REVIEW_PATTERN="(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit"

@@ -22,16 +22,11 @@ If `.flow/` does not exist, print `No .flow/ directory — this command runs ins
 
 **Goal:** every external dependency is resolved (gh installed + authed; spec id known; base ref valid; branch ahead of base; tasks done; no existing OPEN PR) before any rendering work starts. Phase 0 has the heaviest external-state dependencies; failing fast here keeps Phases 1-4 deterministic.
 
+**Fence discipline (fn-110):** Phase 0 runs as exactly THREE bash fences — §0.0–0.1 (context + gh), §0.2–0.4 (spec id, base ref, branch validity), §0.5–0.7 (single `flowctl show` capture + tasks-done + existing-PR + context). The subsection headers below describe the parts of each fence; do not split them back into per-subsection calls.
+
 ### 0.0 — Detect Ralph / autonomous context
 
 Detect once, route deterministically downstream. Per spec R24, the skill is **not** Ralph-blocked — autonomous loops opening draft PRs is the intended use.
-
-```bash
-RALPH=0
-if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
- RALPH=1
-fi
-```
 
 `AUTONOMOUS` comes from SKILL.md mode detection (`mode:autonomous` token or `FLOW_AUTONOMOUS=1`). It is a separate flag — autonomous drivers (e.g. /flow-next:pilot) are NOT Ralph; neither signal here may ever set `RALPH`, and `FLOW_AUTONOMOUS` activates no ralph-guard hooks.
 
@@ -51,6 +46,13 @@ There is no `FLOW_MAKE_PR_ALLOW_QUESTIONS_IN_RALPH` opt-in. Ralph is determinist
 Skip both checks under `--dry-run`. Rationale: dry-run renders the PR body to stdout and exits before any `git push` / `gh pr create` (Phase 4.0), so requiring `gh` to be installed + authed there blocks the documented inspection path on machines / CI jobs that only want to preview the body. The same checks fire on the real path because Phase 4.6 invokes `gh pr create` unconditionally.
 
 ```bash
+# --- §0.0: Ralph / autonomous context ---
+RALPH=0
+if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+ RALPH=1
+fi
+
+# --- §0.1: gh pre-flight (skipped under --dry-run) ---
 if [[ "$DRY_RUN" != "1" ]]; then
  if ! command -v gh >/dev/null 2>&1; then
  cat <<'EOF' >&2
@@ -88,7 +90,18 @@ Resolution order:
 2. **Branch-match** — derive current branch and match against `.flow/specs/*.json` (post-1.0 canonical) and `.flow/epics/*.json` (legacy alias dir) `branch_name` field. Both paths are scanned because `flowctl init` (post-1.0) writes only `.flow/specs/`, but pre-migration repos still keep their JSON metadata under `.flow/epics/` until `flowctl migrate-rename` runs. Markdown sidecars always live at `.flow/specs/<id>.md`.
 3. **Ask** — interactive only. Ralph hard-errors.
 
+### 0.3 — Base-branch detection cascade
+
+Cascade: `--base` → `origin/main` → `main` → `origin/master` → `master` → ask (interactive) / exit 2 (Ralph/autonomous); the detected-or-supplied ref is then validated via `git rev-parse --verify --quiet`.
+
+### 0.4 — Branch validity
+
+HEAD must be a real commit, distinct from base, share a merge-base with base, and have at least one commit since that merge-base. **The base is NOT required to be an ancestor of HEAD** — feature branches commonly fork from older `main` while `origin/main` advances; `gh pr create` happily handles this case (GitHub computes the diff against the merge-base, not against `BASE_REF` head). The strict-ancestor check would falsely reject the everyday "branch is behind base on linear history but has its own commits" scenario.
+
+The combined §0.2–0.4 fence:
+
 ```bash
+# --- §0.2: resolve spec id ---
 if [[ -z "$SPEC_ID" ]]; then
  CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
  if [[ -n "$CURRENT_BRANCH" ]]; then
@@ -113,23 +126,14 @@ if [[ -z "$SPEC_ID" ]]; then
  # Interactive: ask via plain-text numbered prompt.
  # Question: "No spec detected from current branch. Provide a spec id (fn-N-slug) or abort?"
  # Options: 1. Type spec id 2. Abort
- # On "Type spec id" — accept user input, validate via flowctl show.
+ # On "Type spec id" — accept user input; §0.5's single `flowctl show` capture validates it.
  : "ask user for SPEC_ID (plain-text numbered prompt); abort exits 1"
 fi
-```
 
-Validate the resolved spec exists:
+# Spec existence is validated by §0.5's single `flowctl show` capture (fn-110) —
+# no separate validation-only `show >/dev/null` call here.
 
-```bash
-if ! "$FLOWCTL" show "$SPEC_ID" --json >/dev/null 2>&1; then
- echo "Error: spec '$SPEC_ID' not found in .flow/specs/ or .flow/epics/. Check id with: $FLOWCTL specs" >&2
- exit 1
-fi
-```
-
-### 0.3 — Base-branch detection cascade
-
-```bash
+# --- §0.3: base-branch detection cascade ---
 if [[ -z "$BASE_REF" ]]; then
  for candidate in origin/main main origin/master master; do
  if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
@@ -154,13 +158,8 @@ if ! git -C "$REPO_ROOT" rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1;
  echo "Error: base ref '$BASE_REF' is not a valid git ref. Check with: git rev-parse --verify $BASE_REF" >&2
  exit 1
 fi
-```
 
-### 0.4 — Branch validity
-
-HEAD must be a real commit, distinct from base, share a merge-base with base, and have at least one commit since that merge-base. **The base is NOT required to be an ancestor of HEAD** — feature branches commonly fork from older `main` while `origin/main` advances; `gh pr create` happily handles this case (GitHub computes the diff against the merge-base, not against `BASE_REF` head). The strict-ancestor check would falsely reject the everyday "branch is behind base on linear history but has its own commits" scenario.
-
-```bash
+# --- §0.4: branch validity (same fence continues) ---
 HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD 2>/dev/null) || {
  echo "Error: HEAD does not resolve to a commit. Repo state is broken; run from a normal branch." >&2; exit 1; }
 
@@ -189,13 +188,7 @@ fi
 
 ### 0.5 — Tasks-done validation
 
-Every task under the spec should be `done` before opening a PR. The cognitive-aid R-ID coverage table assumes done-tasks; in-progress tasks produce gaps.
-
-```bash
-SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json)
-OPEN_TASKS=$(printf '%s' "$SPEC_JSON" | jq -r '[.tasks[]? | select(.status != "done") | .id] | join(", ")')
-OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done")] | length')
-```
+Every task under the spec should be `done` before opening a PR. The cognitive-aid R-ID coverage table assumes done-tasks; in-progress tasks produce gaps. The single `flowctl show` capture in the combined fence below is ALSO the spec-existence validation (fn-110 — the old §0.2 validation-only `show >/dev/null` folded into it): a failed capture errors out with the spec-not-found message.
 
 | Context | Behavior |
 |---------|----------|
@@ -204,7 +197,27 @@ OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done
 | `OPEN_COUNT > 0` AND (`RALPH == 1` OR `AUTONOMOUS == 1`) | Hard-error with the open-task list. Autonomous loops should not open PRs for incomplete specs. |
 | `OPEN_COUNT > 0` AND interactive | **Warn on stderr and proceed** (no prompt — autonomous create). The open items make the PR a **draft** via the §4.2 heuristic, which is exactly the "open a draft early" workflow; the warning names the open tasks + suggests `/flow-next:work` so the user can finish + flip to `--ready`. |
 
+### 0.6 — Existing-PR refusal
+
+**Critical: filter on `.state == "OPEN"`.** A bare `gh pr view --json url 2>/dev/null` returns rc=0 for both CLOSED and MERGED PRs — a "JSON returned = refuse" check would false-positive on reused branches (branch had a previous PR closed without merge, or merged + pushed-again-to). Filter via jq so closed/merged PRs don't trigger refusal.
+
+**`--update` mode inverts this check.** After resolve-pr / land fix rounds, the created PR body goes stale — the R-ID coverage SHAs, Review-plan buckets, churn numbers, and SHA-pinned blob links all describe a diff that no longer exists (worst on the most-reviewed PRs). `--update` (parsed from `$ARGUMENTS` alongside `--dry-run`/`--ready` → `UPDATE_MODE=1`) re-renders Phases 1-3 against the CURRENT payload and `gh pr edit`s the EXISTING open PR's body (§4.6). So under `--update` an existing OPEN PR is REQUIRED — its number is the edit target — and its absence is the error. resolve-pr / land may invoke `/flow-next:make-pr <spec-id> --update` after committing fixes to refresh the cognitive aid.
+
+`gh pr view` exit 1 with stderr "no pull requests found" = clean to proceed. CLOSED/MERGED PRs with rc=0 are filtered out by the `select(.state == "OPEN")` clause — `EXISTING` will be empty, refusal won't fire.
+
+### 0.7 — Capture pre-flight context for downstream phases
+
+The combined §0.5–0.7 fence:
+
 ```bash
+# --- §0.5: tasks-done validation (single show capture = spec-existence validation) ---
+if ! SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null); then
+ echo "Error: spec '$SPEC_ID' not found in .flow/specs/ or .flow/epics/. Check id with: $FLOWCTL specs" >&2
+ exit 1
+fi
+OPEN_TASKS=$(printf '%s' "$SPEC_JSON" | jq -r '[.tasks[]? | select(.status != "done") | .id] | join(", ")')
+OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done")] | length')
+
 if [[ "$OPEN_COUNT" -gt 0 ]]; then
  if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
  echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Autonomous context cannot open PRs for incomplete specs." >&2
@@ -214,15 +227,8 @@ if [[ "$OPEN_COUNT" -gt 0 ]]; then
  echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS) — opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
  fi
 fi
-```
 
-### 0.6 — Existing-PR refusal
-
-**Critical: filter on `.state == "OPEN"`.** A bare `gh pr view --json url 2>/dev/null` returns rc=0 for both CLOSED and MERGED PRs — a "JSON returned = refuse" check would false-positive on reused branches (branch had a previous PR closed without merge, or merged + pushed-again-to). Filter via jq so closed/merged PRs don't trigger refusal.
-
-**`--update` mode inverts this check.** After resolve-pr / land fix rounds, the created PR body goes stale — the R-ID coverage SHAs, Review-plan buckets, churn numbers, and SHA-pinned blob links all describe a diff that no longer exists (worst on the most-reviewed PRs). `--update` (parsed from `$ARGUMENTS` alongside `--dry-run`/`--ready` → `UPDATE_MODE=1`) re-renders Phases 1-3 against the CURRENT payload and `gh pr edit`s the EXISTING open PR's body (§4.6). So under `--update` an existing OPEN PR is REQUIRED — its number is the edit target — and its absence is the error. resolve-pr / land may invoke `/flow-next:make-pr <spec-id> --update` after committing fixes to refresh the cognitive aid.
-
-```bash
+# --- §0.6: existing-PR refusal (or --update target resolution) ---
 EXISTING_JSON=$(gh pr view --json url,state,number 2>/dev/null | jq -c 'select(.state == "OPEN")' || true)
 EXISTING=$(printf '%s' "$EXISTING_JSON" | jq -r '.url // empty' 2>/dev/null || true)
 UPDATE_PR_NUMBER=$(printf '%s' "$EXISTING_JSON" | jq -r '.number // empty' 2>/dev/null || true)
@@ -248,13 +254,8 @@ one first: gh pr close <number> --comment "Replaced by upcoming /flow-next:make-
 EOF
  exit 1
 fi
-```
 
-`gh pr view` exit 1 with stderr "no pull requests found" = clean to proceed. CLOSED/MERGED PRs with rc=0 are filtered out by the `select(.state == "OPEN")` clause — `EXISTING` will be empty, refusal won't fire.
-
-### 0.7 — Capture pre-flight context for downstream phases
-
-```bash
+# --- §0.7: capture pre-flight context (same fence continues) ---
 PHASE0_CONTEXT=$(jq -n \
  --arg spec "$SPEC_ID" \
  --arg base "$BASE_REF" \

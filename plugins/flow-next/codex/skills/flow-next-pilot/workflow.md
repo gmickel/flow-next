@@ -254,10 +254,11 @@ Fall through to the existing terminal split **only when the pool is genuinely em
 **Optional force-gate (R5).** Read the sibling key `pilot.gateClasses` (an array — NOT `pilot.autonomy.gate`). When the selected item matches a configured gate class (the agent's read, like triage — no scorer), route it to `ask` even when otherwise workable:
 
 ```bash
+# Derived from the SKILL.md root snapshot (fn-110) — NOT a config get call.
 # Tolerate BOTH shapes: a JSON array (`["risky"]`) AND a scalar set through the
 # CLI — `flowctl config set pilot.gateClasses risky` persists the bare string
 # "risky", which `.value[]?` would silently drop. Normalize string→single-class.
-GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '(.value // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end' 2>/dev/null)"
+GATE_CLASSES="$(jq -r '(.value.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end' .flow/tmp/pilot-config-snapshot.json 2>/dev/null)"
 ```
 
 An empty/unset `gateClasses` (the default) gates nothing — full-auto is unconditional. A scalar `flowctl config set pilot.gateClasses risky` is read as the single class `risky`; multiple classes use a JSON array.
@@ -301,13 +302,11 @@ Resolve the optional QA-stage gate (fn-72). **Strict** string-enum knob (default
 QA_STAGE_ENABLED=0
 QA_GATE=""
 ACTIVE=0
-# NO pipelines in the probe — a failed producer masked by a healthy consumer
-# (flowctl … | jq …) fails CLOSED. Capture first, rc-checked; parse separately.
-RAW="$($FLOWCTL config get pipeline.qa --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
-if [ "$ACTIVE" = "0" ]; then
- QA_GATE="$(printf '%s' "$RAW" | jq -r '.value' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "$QA_GATE" = "on" ] && ACTIVE=1
-fi
+# Derived from the SKILL.md root snapshot (fn-110) — NOT a config get call. A
+# missing/unreadable snapshot (SKILL.md removes it on capture failure) makes the
+# jq read ERROR, which preserves the probe's fail-open contract (error ⇒ ACTIVE).
+QA_GATE="$(jq -r '.value.pipeline.qa' .flow/tmp/pilot-config-snapshot.json 2>/dev/null)" || ACTIVE=1 # snapshot/parse ERROR ⇒ ACTIVE (fail open)
+[ "$QA_GATE" = "on" ] && ACTIVE=1
 [ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1 # ONLY the literal `on` activates — never bool true / typos
 if [ "$ACTIVE" = "1" ]; then
  echo "GATE ACTIVE — STOP. Read references/qa-stage.md#qa-stage-freshness-probe before continuing."

@@ -108,10 +108,17 @@ No branch flag exists in v1. Branch resolution is pilot-owned from the selected 
 
 ### Autonomy mode resolution (R1) — gate the wide backlog behavior
 
-Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single value. The gate is a **strict scalar string-enum** — backlog mode activates **only** on the literal `backlog` (config `pilot.autonomy`), or when the per-run `--backlog` / `--auto` flag forced the override. Any other config value (`ready`, `null`, a coerced bool `true`, a typo) leaves pilot in `ready` mode — **byte-for-byte unchanged behavior** (the `references/backlog-mode.md` file is never even read):
+Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single value. This block also captures the tick's ROOT CONFIG SNAPSHOT (fn-110) — the ONLY `config get` invocation across all pilot files (SKILL.md, workflow.md, references/backlog-mode.md): workflow.md's `pipeline.qa` probe and the `pilot.gateClasses` reads derive from the snapshot file via jq, never a second config call. The gate is a **strict scalar string-enum** — backlog mode activates **only** on the literal `backlog` (config `pilot.autonomy`), or when the per-run `--backlog` / `--auto` flag forced the override. Any other config value (`ready`, `null`, a coerced bool `true`, a typo) leaves pilot in `ready` mode — **byte-for-byte unchanged behavior** (the `references/backlog-mode.md` file is never even read):
 
 ```bash
-PILOT_AUTONOMY="$($FLOWCTL config get pilot.autonomy --json | jq -r '.value')"
+# Root config snapshot: {"key":null,"value":{<merged config>}}. Persisted to a file
+# because bash vars do not survive across prompt turns; later fences jq this file.
+# On capture FAILURE remove the file — downstream jq reads then error, which keeps
+# the pipeline.qa probe's fail-open contract (probe error ⇒ ACTIVE) intact.
+mkdir -p .flow/tmp
+$FLOWCTL config get --json > .flow/tmp/pilot-config-snapshot.json 2>/dev/null \
+ || rm -f .flow/tmp/pilot-config-snapshot.json
+PILOT_AUTONOMY="$(jq -r '.value.pilot.autonomy' .flow/tmp/pilot-config-snapshot.json 2>/dev/null)"
 if [ "$PILOT_BACKLOG_OVERRIDE" = "1" ]; then
  PILOT_AUTONOMY="backlog" # --backlog / --auto forces backlog this run
 elif [ "$PILOT_AUTONOMY" != "backlog" ]; then
