@@ -22,6 +22,8 @@ Everything lives in your repo. Zero external dependencies. Uninstall: `rm -rf .f
 
 *Proof, not adjectives: a real recorded run - plan → cross-model plan review (catches a missing guard, fix, SHIP) → implement + tests → impl review SHIP → the receipt. Nothing staged; every frame is live output.*
 
+<sub>ℹ️ The recording drives each tick with `claude -p "…"` (Claude Code's non-interactive / headless mode) so the whole run captures unattended. In normal use you just type the prompt or `/flow-next:…` command in your interactive session — same pipeline, same gates.</sub>
+
 <img src="assets/flow-next-plan.png" alt="/flow-next:plan output — dependency-ordered tasks, cross-model review passed, key decisions documented" width="720">
 
 *A real `/flow-next:plan` result - dependency-ordered tasks, cross-model review iterated to SHIP, key decisions documented.*
