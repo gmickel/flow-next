@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-20T20:09:59.460289Z",
+  "depends_on": [
+    "fn-112-review-backend-registry-dedupe-backend.1"
+  ],
+  "id": "fn-112-review-backend-registry-dedupe-backend.2",
+  "priority": null,
+  "spec": "fn-112-review-backend-registry-dedupe-backend",
+  "spec_path": ".flow/tasks/fn-112-review-backend-registry-dedupe-backend.2.md",
+  "status": "todo",
+  "title": "Plan/completion migration + cursor folds + inherited dedupes",
+  "updated_at": "2026-07-20T20:10:12.994368Z"
+}

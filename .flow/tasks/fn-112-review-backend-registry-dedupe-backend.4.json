@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-20T20:10:00.192935Z",
+  "depends_on": [
+    "fn-112-review-backend-registry-dedupe-backend.3"
+  ],
+  "id": "fn-112-review-backend-registry-dedupe-backend.4",
+  "priority": null,
+  "spec": "fn-112-review-backend-registry-dedupe-backend",
+  "spec_path": ".flow/tasks/fn-112-review-backend-registry-dedupe-backend.4.md",
+  "status": "todo",
+  "title": "Fenced-JSON output contract + extensibility proof + docs",
+  "updated_at": "2026-07-20T20:10:13.650365Z"
+}
