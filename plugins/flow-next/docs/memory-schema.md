@@ -175,13 +175,7 @@ flowctl memory migrate --yes          # apply (mechanical-only)
 
 ## Surface the store in AGENTS.md / CLAUDE.md
 
-```bash
-flowctl memory discoverability-patch              # auto-detect target, dry-run
-flowctl memory discoverability-patch --apply      # write
-flowctl memory discoverability-patch --target agents --strategy listing --apply
-```
-
-Two strategies: `listing` (injects `.flow/memory/` into an existing `.flow/` fenced code block) and `append` (adds a `## Memory / Learnings` section). Auto-detect prefers AGENTS.md when both are substantive; handles `@AGENTS.md` / `@CLAUDE.md` shims and symlinks. JSON callers must pass `--apply` explicitly — the command refuses destructive auto-writes.
+Point agents at `.flow/memory/` with a one-line note in `AGENTS.md` / `CLAUDE.md` (or both). `/flow-next:audit` and setup already handle discoverability via Edit; there is no dedicated `flowctl memory` patch command.
 
 ## When enabled
 
@@ -196,7 +190,7 @@ Config lives in `.flow/config.json`, separate from Ralph's `scripts/ralph/config
 1. `git pull && (reinstall plugin)`.
 2. **Recommended:** run `/flow-next:memory-migrate` for agent-native per-entry classification (host agent reads each legacy entry and picks the right `(track, category)` with full repo context). Or `/flow-next:memory-migrate mode:autofix` to accept mechanical defaults without prompts.
 3. **Automation alternative:** `flowctl memory migrate --dry-run` then `flowctl memory migrate --yes` for deterministic mechanical-only classification (legacy files move to `.flow/memory/_legacy/`; migration is idempotent).
-4. Optional: `flowctl memory discoverability-patch --apply` to surface the tree in AGENTS.md.
+4. Optional: add a one-line `.flow/memory/` pointer in `AGENTS.md` / `CLAUDE.md` so agents without flow-next skills still find the store.
 
 Until migration runs, legacy flat files continue to work; `list` / `read` / `search` read both.
 

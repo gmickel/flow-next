@@ -16,7 +16,7 @@ Three thin, judgment-free additions to flowctl — pure enumeration + storage:
      fn-58 boolean, ``readySignal ∈ {local, none}``. NO ``triageClass`` /
      completeness / judgment field (that read is the host skill's).
 
-  3. ``pilot-log append`` / ``summary`` — a FROZEN decision-log CLI writing
+  3. ``pilot-log append`` — a FROZEN decision-log CLI writing
      ``{tick, id, action, stage, costTokens}`` rows under ``.flow/pilot-runs/``
      (sync-runs-style; NEVER a ``receipts/`` path the ralph-guard validates).
      ``--id`` accepts an OPAQUE id (spec id OR bare tracker key), safe-filename
@@ -294,7 +294,35 @@ class PilotLogTestCase(_FlowctlTmpRepo):
         return self._run(self.flowctl.cmd_pilot_log_append, **ns_kw)
 
     def _summary(self) -> dict:
-        return self._run(self.flowctl.cmd_pilot_log_summary, json=True)
+        """Read pilot-runs rows from disk (summary CLI removed in fn-111)."""
+        run_dir = self.tmpdir / ".flow" / "pilot-runs"
+        rows = []
+        if run_dir.is_dir():
+            for path in sorted(run_dir.glob("pilot-*.json")):
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                rows.append(
+                    {
+                        "tick": data.get("tick"),
+                        "id": data.get("id"),
+                        "action": data.get("action"),
+                        "stage": data.get("stage"),
+                        "costTokens": data.get("costTokens"),
+                    }
+                )
+
+        def _tick_key(tick):
+            try:
+                return int(tick)
+            except (TypeError, ValueError):
+                return 0
+
+        rows.sort(key=lambda r: (str(r.get("id") or ""), _tick_key(r.get("tick"))))
+        return {"success": True, "rows": rows, "count": len(rows)}
 
     def test_append_writes_row_under_pilot_runs(self) -> None:
         out = self._append(id="fn-68", action="triaged", stage="plan", cost_tokens=1500)

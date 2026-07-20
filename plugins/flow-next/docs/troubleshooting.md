@@ -13,6 +13,10 @@ The **single most common post-update issue.** `flowctl` (in `.flow/bin/`) and `.
 
 It is idempotent and non-destructive (your specs/tasks/memory/config are untouched). Re-run it in **each project** after every flow-next update - not just once globally, because the copies live per-repo under `.flow/`.
 
+## Pre-1.0 `.flow/epics/` layout still present?
+
+`flowctl migrate-rename` / `migrate-rollback` are gone. Port by hand: rename `.flow/epics/` -> `.flow/specs/`, rewrite `next_epic`/`epic`/`epic_id` keys per `.flow/usage.md` "Pre-1.0 layout porting", then `flowctl validate --all`.
+
 ## Reset a stuck task
 
 ```bash

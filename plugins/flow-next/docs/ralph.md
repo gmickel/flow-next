@@ -554,21 +554,19 @@ Externally-set env vars are preserved (the resolver does not clobber `SPECS_FILE
 When using `PLAN_REVIEW=rp` or `WORK_REVIEW=rp`:
 
 ```bash
-flowctl rp pick-window --repo-root .  # Find window
-flowctl rp builder ...                 # Build context
-flowctl rp chat-send ...               # Send to reviewer
+eval "$(flowctl rp setup-review --repo-root . --summary "Review ...")"  # W= window, T= tab
+flowctl rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md
 ```
 
 > **Never call `rp-cli` directly in Ralph mode.** Use flowctl wrappers.
 
-Window selection is automatic. With RP 1.5.68+, `--create` auto-opens windows.
+Window selection is atomic inside `setup-review`. With RP 1.5.68+, `--create` auto-opens windows.
 
 ### Codex Integration
 
 When using `PLAN_REVIEW=codex` or `WORK_REVIEW=codex`:
 
 ```bash
-flowctl codex check                    # Verify available
 flowctl codex impl-review ...          # Run impl review
 flowctl codex plan-review <id> --files "src/auth.ts,src/config.ts"
 ```
@@ -774,8 +772,15 @@ Plugin hooks enforce workflow rules deterministically.
 |------|---------|
 | No `--json` on chat-send | Preserve review text output |
 | No `--new-chat` on re-reviews | Keep conversation context |
-| Receipt before Stop | Prevent skipping reviews |
-| Required flags on setup | Ensure proper targeting |
+| Receipt written after SHIP; Stop blocked without it | Prevent skipping reviews |
+| `setup-review` requires `--repo-root` + `--summary` | Ensure proper targeting |
+| Direct `codex` / `copilot` blocked (use `flowctl` wrappers) | Receipt + session continuity |
+| Canonical `FLOW_DELEGATE_CODEX=1 codex exec …` allowlist | fn-55 delegation carve-out only |
+| No `--last` (codex) / no `--continue` (copilot) | Session continuity via receipt `session_id` |
+| `flowctl done` requires `--summary-file` + `--evidence-json` | Structured completion |
+| Receipt schema + ordering (`type`/`id`/`verdict`; no write before review) | Honest Ralph gate |
+| Impl receipt requires prior `flowctl done` for that task | Done-before-receipt ordering |
+| Edit/Write of protected workflow files blocked | Ralph must not self-modify guard/flowctl/hooks |
 
 **Location:**
 

@@ -5,7 +5,7 @@ it adds no new judgment to the CLI. Its three load-bearing flowctl touchpoints
 must resolve through the **production CLI** (the bundled `cmd_*` argparse
 dispatch the host agent actually shells), not an in-process import:
 
-  1. `spec export-cognitive-aid <id> --base <ref> --section spec --json`
+  1. `spec export-cognitive-aid <id> --base <ref> --json`
      — the scenario-derivation source (workflow.md Phase 1.2 / Phase 2). The
      skill maps `spec.spec_sections.{acceptance_criteria,boundaries,
      decision_context}` into scenarios + the R-ID coverage spine, so the
@@ -129,7 +129,7 @@ class QaTouchpointSmokeTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    # ── (1) scenario-derivation source: export-cognitive-aid --section spec ──
+    # ── (1) scenario-derivation source: export-cognitive-aid (full payload) ──
 
     def test_export_cognitive_aid_spec_section_resolves(self) -> None:
         """The Phase 1.2/2 derivation payload resolves with the exact flags the
@@ -141,8 +141,6 @@ class QaTouchpointSmokeTestCase(unittest.TestCase):
             self.spec_id,
             "--base",
             "HEAD",
-            "--section",
-            "spec",
         )
         self.assertIn("spec", out)
         sections = out["spec"]["spec_sections"]
@@ -162,8 +160,6 @@ class QaTouchpointSmokeTestCase(unittest.TestCase):
             self.spec_id,
             "--base",
             "HEAD",
-            "--section",
-            "spec",
         )
         acs = out["spec"]["spec_sections"]["acceptance_criteria"]
         self.assertTrue(acs, "no acceptance_criteria parsed from the plan")

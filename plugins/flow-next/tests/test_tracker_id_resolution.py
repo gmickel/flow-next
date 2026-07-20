@@ -403,18 +403,18 @@ class ResolutionTestCase(unittest.TestCase):
         ids = [t["id"] for t in res["tasks"]]
         self.assertEqual(ids, ["wor-17-fix-login.1"])
 
-    # --- task set-deps + spec deps via handle — review-cycle additions ------
+    # --- task dep add + spec deps via handle — review-cycle additions ------
 
-    def test_task_set_deps_via_aliases(self) -> None:
+    def test_task_dep_add_via_aliases(self) -> None:
+        """Shared same-spec dep helper (fn-111): dep add via tracker aliases."""
         spec_id = self._create_tracker_spec("Fix login", "WOR-17")
         self._add_task(spec_id, "Step one")
         self._add_task(spec_id, "Step two")
         res = self._call(
-            func=self.flowctl.cmd_task_set_deps,
-            task_id="wor-17.2",
-            deps="wor-17.1",
+            func=self.flowctl.cmd_dep_add,
+            task="wor-17.2",
+            depends_on="wor-17.1",
         )
-        # Canonical task + canonical dep persisted; no alias leakage.
         self.assertEqual(res["task"], "wor-17-fix-login.2")
         data = json.loads(
             (self.flow_dir / "tasks" / "wor-17-fix-login.2.json").read_text(

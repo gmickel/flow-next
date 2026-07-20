@@ -560,40 +560,6 @@ class CursorPromptArgvCap(unittest.TestCase):
             self.assertEqual(_read_receipt(receipt)["verdict"], "NEEDS_WORK")
 
 
-class CursorCheckIsError(unittest.TestCase):
-    """fn-74 completion-review fix — ``cursor check`` honors ``is_error`` (R4).
-
-    A cursor-agent probe can exit 0 yet carry ``is_error:true`` in its JSON
-    result (an auth/backend failure); that must NOT report ``authed:true``.
-    """
-
-    def _probe(self, returncode: int, stdout: str) -> dict:
-        fake = subprocess.CompletedProcess(args=[], returncode=returncode,
-                                           stdout=stdout, stderr="")
-        args = argparse.Namespace(json=True, skip_probe=False)
-        buf = io.StringIO()
-        with mock.patch.object(flowctl.shutil, "which",
-                               return_value="/fake/cursor-agent"), \
-                mock.patch.object(flowctl, "get_cursor_version",
-                                  return_value="2026.06"), \
-                mock.patch.object(flowctl.subprocess, "run", return_value=fake), \
-                contextlib.redirect_stdout(buf):
-            flowctl.cmd_cursor_check(args)
-        return json.loads(buf.getvalue())
-
-    def test_exit0_with_is_error_is_not_authed(self):
-        out = self._probe(
-            0, '{"type":"result","is_error":true,"result":"","session_id":"x"}')
-        self.assertFalse(out["authed"])
-        self.assertIsNotNone(out["error"])
-
-    def test_clean_result_is_authed(self):
-        out = self._probe(
-            0, '{"type":"result","is_error":false,"result":"ok","session_id":"x"}')
-        self.assertTrue(out["authed"])
-        self.assertIsNone(out["error"])
-
-
 class CursorFallbackCoercion(unittest.TestCase):
     """PR #184 — the no-``--spec`` cursor resolve fallback coerces ANY non-cursor
     resolved spec (env/config default OR a stored per-task/epic ``review: codex:...``)

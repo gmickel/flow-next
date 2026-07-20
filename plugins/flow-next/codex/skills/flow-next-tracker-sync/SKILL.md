@@ -79,7 +79,7 @@ The canonical flow-next split. flowctl provides atomic, deterministic helpers; t
 | `spec create --tracker-first` / `config set` — id + config write | choose the hybrid id origin (tracker-first vs flow-first) |
 | `sync list-dep-relations` — enumerate `depends_on_epics` edges + resolved tracker links + local dep status | `projectDepRelations`: drive `setIssueRelation` / `listIssueRelations`, warn on unlinked deps, keep completed blockers visible, defer the missing-remotely collision (steps.md § projectDepRelations) |
 | `ready --all` — flow-side open specs + eligibility facts | **`list-open`**: union in the tracker-only items via `listOpenIssues`, no-op when `readyState` unset; **`list-relations`**: READ one issue's dep relations via `listIssueRelations` (dep-ordering edges, never a write); **`question`**: author the stable question-valve anchor + post via `postComment`, detect/import the matched answer (steps.md Phase 7) |
-| `sync set-dep-relation` / `clear-dep-relation` — atomic provenance-ledger write | decide *which* edges are ours-to-touch (ledger / fenced-block provenance — never clobber a manual relation) |
+| `sync set-dep-relation` — atomic provenance-ledger write | decide *which* edges are ours-to-touch (ledger / fenced-block provenance — never clobber a manual relation) |
 
 Never reimplement a flowctl helper inline; never push a merge/judgment decision into flowctl.
 

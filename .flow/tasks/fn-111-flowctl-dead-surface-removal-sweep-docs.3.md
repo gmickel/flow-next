@@ -26,9 +26,8 @@ Remove the remaining dead command surfaces + dead fields, extract the shared dep
 - [ ] TBD
 
 ## Done summary
-TBD
-
+All remaining dead command surfaces removed (-2075 LOC flowctl dual-copy, ~5.1k LOC total with smokes+tests): rp windows/pick-window/ensure-workspace/builder + state-file write, prep-chat, memory discoverability-patch, task show-backend, task set-deps (third dep copy deleted after extracting _resolve_same_spec_deps shared by task create --deps and dep add), sync clear-dep-relation, strategy list, repo-map show/since-ref, prospect list/read, checkpoint delete, state-path, pilot-log summary (append + rows stay), backend check triplet, always-empty review_receipts export field, dead --section export filter. scope suggest untouched (fn-113). Delegate applied both task-2 lessons (smoked neighboring flags; grepped tests for removed symbols - rewrote set-deps tests to dep add, pilot substrate to row files). Host review found 2 stale prose refs via fleet-caller sweep: tracker-sync SKILL.md still named clear-dep-relation (no live caller - set-dep-relation, the live one, was correctly kept), and the usage.md template still pointed at flowctl state-path (reworded to name .git/flow-state/ directly; template+dogfood byte-identical). Full parallel suite green: 83 files, 1815 tests, 0 failures, 81.5s; ci_test.sh 67/67; sync-codex x2 idempotent.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 576bc6792e5d26aa2b8e826a07ca81def0728965
+- Tests: python3 scripts/run_tests_parallel.py (83 files, 1815 tests, 0 failures, 81.5s), bash ci_test.sh from temp dir (67 passed, 0 failed), focused: test_task* 19 / test_memory* 136 / test_export* 31 / test_prospect* 90 / parity suites green
 - PRs:

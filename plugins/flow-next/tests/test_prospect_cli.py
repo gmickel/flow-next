@@ -10,7 +10,7 @@ Covers:
   - `_prospect_artifact_status` derivation (active / stale / archived)
   - `_prospect_iter_artifacts` (default vs include_archive) listing
   - `_prospect_resolve_id` precedence (full id, slug-only, suffixed)
-  - section / survivors / rejected extractors
+  - section / survivors extractors
   - archive move + frontmatter rewrite
 
 Tests do not exercise the argparse layer end-to-end (those go through
@@ -492,17 +492,6 @@ class SectionExtractor(unittest.TestCase):
         self.assertEqual(survivors[0]["title"], "Cache scout output")
         self.assertEqual(survivors[0]["size"], "S")
         self.assertEqual(survivors[0]["bucket"], "High leverage (1-3)")
-
-    def test_extract_rejected(self) -> None:
-        section = "## Rejected\n\n- A — out-of-scope: covered\n- B — too-large\n"
-        rejected = flowctl._prospect_extract_rejected(section)
-        self.assertEqual(len(rejected), 2)
-        self.assertEqual(rejected[0]["title"], "A")
-        self.assertEqual(rejected[0]["taxonomy"], "out-of-scope")
-        self.assertEqual(rejected[0]["reason"], "covered")
-        self.assertEqual(rejected[1]["title"], "B")
-        self.assertEqual(rejected[1]["taxonomy"], "too-large")
-        self.assertEqual(rejected[1]["reason"], "")
 
 
 # ---------- archive move + frontmatter rewrite ------------------------

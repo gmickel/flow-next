@@ -119,15 +119,11 @@ Per-task Quick commands list FOCUSED suites for the files you touch - that is wh
 
 ## Parallel Worktrees
 
-Runtime state (status, assignee, etc.) is stored in `.git/flow-state/`, shared across worktrees:
+Runtime state (status, assignee, etc.) is stored in `.git/flow-state/` (or `$FLOW_STATE_DIR` when set), shared across worktrees.
 
-```bash
-.flow/bin/flowctl state-path              # Show state directory
-.flow/bin/flowctl migrate-state           # Migrate existing repo
-.flow/bin/flowctl migrate-state --clean   # Migrate + remove runtime from tracked files
-```
+## Pre-1.0 layout porting
 
-Migration is optional — existing repos work without changes.
+Rename `.flow/epics/` to `.flow/specs/` (merge JSON into an existing `specs/` if present). Rewrite keys: `meta.json` `next_epic` -> `next_spec` and `schema_version` -> 3; each task JSON `epic`/`epic_id` -> `spec`/`spec_id`; write `.flow/.flow_version` with payload `1.0.0`. Run `.flow/bin/flowctl validate --all`.
 
 ## More Info
 

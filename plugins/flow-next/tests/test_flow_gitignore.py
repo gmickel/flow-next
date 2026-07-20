@@ -1,6 +1,5 @@
-"""Unit tests for `_ensure_flow_gitignore` and its integration into `cmd_init`
-and `cmd_migrate_rename`. Covers fresh write, idempotency, user-pattern
-preservation, and the migrate-rename hook."""
+"""Unit tests for `_ensure_flow_gitignore` and its integration into `cmd_init`.
+Covers fresh write, idempotency, user-pattern preservation, and pattern sets."""
 
 from __future__ import annotations
 

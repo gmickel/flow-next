@@ -5,13 +5,13 @@
 # Covers the 11 cases enumerated in the task spec:
 #   1. Skeleton + slash command registered
 #   2. Ralph-block (FLOW_RALPH=1 and REVIEW_RECEIPT_PATH)
-#   3. Phase 0 resume / list classification (active / stale / corrupt)
+#   3. Phase 0 resume / artifact classification via helpers (active / stale / corrupt)
 #   4. Artifact writer (collision suffix + atomic + roundtrip)
 #   5. Graceful degradation (no git / no epics / no CHANGELOG)
 #   6. Promote happy path (epic creation + ## Source + JSON shape + frontmatter)
 #   7. Promote idempotency (refuse + --force + promoted_to)
 #   8. Promote errors (out-of-range / 0 / non-int / corrupt)
-#   9. list / read / archive (sections, corrupt branch, slug-only, re-archive)
+#   9. archive (list/read CLI removed fn-111)
 #  10. Numbered-options fallback frozen format (R19)
 #  11. Ralph regression sweep (ralph_smoke_test.sh still green)
 #
@@ -288,9 +288,9 @@ bash "$RALPH_GUARD" >/dev/null 2>&1 || rc=$?
 assert_rc 0 "$rc" "Case 2c: no Ralph env → exit 0 (terminal OK)"
 
 # =============================================================================
-# CASE 3: Phase 0 list classification — active vs stale vs corrupt
+# CASE 3: Phase 0 helper classification — active vs stale vs corrupt
 # =============================================================================
-echo -e "${YELLOW}--- Case 3: list classification (active/stale/corrupt) ---${NC}"
+echo -e "${YELLOW}--- Case 3: helper classification (active/stale/corrupt) ---${NC}"
 
 CASE3_REPO="$TEST_DIR/case3"
 init_test_repo "$CASE3_REPO"
@@ -308,40 +308,42 @@ just body, no frontmatter
 ## Survivors
 EOF
 
-# 3a: default list — only fresh
-LIST_DEFAULT_JSON="$TEST_DIR/case3-list-default.json"
-( cd "$CASE3_REPO" && "$FLOWCTL" prospect list --json > "$LIST_DEFAULT_JSON" ) || fail "Case 3a: list --json failed"
-assert_eq_jq "$LIST_DEFAULT_JSON" "d['count']" "1" "Case 3a: default list returns exactly 1 (fresh) artifact"
-assert_eq_jq "$LIST_DEFAULT_JSON" "d['artifacts'][0]['status']" "active" "Case 3a: fresh artifact status=active"
-assert_eq_jq "$LIST_DEFAULT_JSON" "d['artifacts'][0]['artifact_id']" "fresh-$TODAY" "Case 3a: fresh id surfaced"
-
-# 3b: --all list — all three with correct statuses
+# 3a-c: classify via _prospect_iter_artifacts (list CLI removed in fn-111)
 LIST_ALL_JSON="$TEST_DIR/case3-list-all.json"
-( cd "$CASE3_REPO" && "$FLOWCTL" prospect list --all --json > "$LIST_ALL_JSON" )
-assert_eq_jq "$LIST_ALL_JSON" "d['count']" "3" "Case 3b: --all list returns 3 artifacts"
-# Verify status set
-all_statuses="$(json_get "$LIST_ALL_JSON" "sorted([a['status'] for a in d['artifacts']])")"
-if [[ "$all_statuses" == "['active', 'corrupt', 'stale']" ]]; then
-  ok "Case 3b: status set is {active, corrupt, stale}"
-else
-  fail "Case 3b: expected statuses {active, corrupt, stale}; got $all_statuses"
-fi
+( cd "$CASE3_REPO" && "${FLOW_PY[@]}" - "$FLOWCTL_PY" "$LIST_ALL_JSON" <<'PYEOF'
+import importlib.util, json, sys
+from datetime import datetime, timezone
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+today = datetime.now(timezone.utc).date()
+arts = m._prospect_iter_artifacts(Path(".flow/prospects"), include_archive=True, today=today)
+payload = {"artifacts": arts, "count": len(arts)}
+Path(sys.argv[2]).write_text(json.dumps(payload))
+active = [a for a in arts if a["status"] == "active"]
+assert len(active) == 1, active
+assert active[0]["artifact_id"].startswith("fresh-"), active[0]
+statuses = sorted(a["status"] for a in arts)
+assert statuses == ["active", "corrupt", "stale"], statuses
+corrupt = [a for a in arts if a["status"] == "corrupt"][0]
+reason = corrupt.get("corruption") or ""
+ok_reasons = (
+    "no frontmatter block", "unparseable date",
+    "missing Grounding snapshot section", "missing Survivors section",
+    "unreadable", "empty",
+)
+assert reason in ok_reasons or reason.startswith("missing frontmatter field:"), reason
+print("ok")
+PYEOF
+) || fail "Case 3: helper classification failed"
+assert_eq_jq "$LIST_ALL_JSON" "d['count']" "3" "Case 3b: helper returns 3 artifacts"
+ok "Case 3a-c: active/stale/corrupt classification via _prospect_iter_artifacts"
 
-# 3c: corrupt artifact carries one of the canonical PROSPECT_CORRUPT_* reasons
-corruption_reason="$(json_get "$LIST_ALL_JSON" "[a['corruption'] for a in d['artifacts'] if a['status']=='corrupt'][0]")"
-case "$corruption_reason" in
-  "no frontmatter block"|"unparseable date"|"missing Grounding snapshot section"|"missing Survivors section"|"unreadable"|"empty"|"missing frontmatter field:"*)
-    ok "Case 3c: corruption reason '$corruption_reason' matches PROSPECT_CORRUPT_* contract"
-    ;;
-  *)
-    fail "Case 3c: corruption reason '$corruption_reason' not in canonical set"
-    ;;
-esac
-
-# 3d: human list --all renders archived rows as 'archived (archived)' suffix
+# 3d: archive moves fresh artifact under _archive/
 ( cd "$CASE3_REPO" && "$FLOWCTL" prospect archive "fresh-$TODAY" --json >/dev/null )
-LIST_HUMAN="$( cd "$CASE3_REPO" && "$FLOWCTL" prospect list --all 2>&1 )"
-assert_grep "archived (archived)" "$LIST_HUMAN" "Case 3d: --all human row renders 'archived (archived)' suffix"
+[[ -f "$CASE3_REPO/.flow/prospects/_archive/fresh-${TODAY}.md" ]] \
+  && ok "Case 3d: archive moves fresh artifact under _archive/" \
+  || fail "Case 3d: archive target missing"
 
 # =============================================================================
 # CASE 4: Artifact writer — collision suffix + roundtrip + atomic
@@ -472,8 +474,8 @@ PROMOTE_JSON="$TEST_DIR/case6-promote.json"
 ( cd "$CASE6_REPO" && "$FLOWCTL" prospect promote "dxwins-$TODAY" --idea 2 --json > "$PROMOTE_JSON" ) \
   || fail "Case 6: promote --idea 2 failed (rc=$?)"
 
-# Required JSON keys per task 5 spec: success/epic_id/epic_title/idea/artifact_id/source_link/spec_path/artifact_updated
-for key in success epic_id epic_title idea artifact_id source_link spec_path artifact_updated; do
+# Required JSON keys (fn-111.2 canonical): success/spec_id/spec_title/idea/artifact_id/source_link/spec_path/artifact_updated
+for key in success spec_id spec_title idea artifact_id source_link spec_path artifact_updated; do
   if "${FLOW_PY[@]}" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$PROMOTE_JSON')) else 1)"; then
     ok "Case 6: promote JSON has key '$key'"
   else
@@ -486,7 +488,7 @@ assert_eq_jq "$PROMOTE_JSON" "d['idea']" "2" "Case 6: idea=2"
 assert_eq_jq "$PROMOTE_JSON" "d['artifact_id']" "dxwins-$TODAY" "Case 6: artifact_id roundtrip"
 assert_eq_jq "$PROMOTE_JSON" "d['artifact_updated']" "True" "Case 6: artifact_updated=True"
 
-EPIC_ID="$(json_get "$PROMOTE_JSON" "d['epic_id']")"
+EPIC_ID="$(json_get "$PROMOTE_JSON" "d['spec_id']")"
 assert_grep_re '^fn-[0-9]+-' "$EPIC_ID" "Case 6: epic_id matches fn-N-slug shape"
 
 # Spec JSON written. Probe canonical .flow/specs/<id>.json then legacy
@@ -609,85 +611,64 @@ assert_rc 3 "$rc" "Case 8d: promote corrupt → exit 3"
 assert_grep "[ARTIFACT CORRUPT:" "$err" "Case 8d: stderr carries [ARTIFACT CORRUPT: …] marker"
 
 # =============================================================================
-# CASE 9: list / read / archive (sections, slug-only, re-archive, corrupt read)
+# CASE 9: archive (list/read CLI removed in fn-111)
 # =============================================================================
-echo -e "${YELLOW}--- Case 9: list / read / archive ---${NC}"
+echo -e "${YELLOW}--- Case 9: archive (list/read CLI removed in fn-111) ---${NC}"
 
 CASE9_REPO="$TEST_DIR/case9"
 init_test_repo "$CASE9_REPO"
 synthetic_artifact "$CASE9_REPO" "alpha-$TODAY" "$TODAY" "alpha hint" 2
-
-# 9a: list shows it (default)
-LIST_TEXT="$( cd "$CASE9_REPO" && "$FLOWCTL" prospect list 2>&1 )"
-assert_grep "alpha-$TODAY" "$LIST_TEXT" "Case 9a: default list surfaces fresh artifact"
-
-# 9b: read (full body)
-READ_TEXT="$( cd "$CASE9_REPO" && "$FLOWCTL" prospect read "alpha-$TODAY" 2>&1 )"
-assert_grep "## Survivors"  "$READ_TEXT" "Case 9b: read prints full body (Survivors)"
-assert_grep "## Focus"      "$READ_TEXT" "Case 9b: read prints full body (Focus)"
-
-# 9c: --section survivors filters
-SECTION_TEXT="$( cd "$CASE9_REPO" && "$FLOWCTL" prospect read "alpha-$TODAY" --section survivors 2>&1 )"
-assert_grep "## Survivors" "$SECTION_TEXT" "Case 9c: --section survivors yields Survivors"
-if echo "$SECTION_TEXT" | grep -q '## Focus'; then
-  fail "Case 9c: --section survivors leaked '## Focus' from neighboring section"
-else
-  ok "Case 9c: --section survivors does not leak adjacent sections"
-fi
-
-# 9d: --section invalid → error
-rc=0
-out="$( cd "$CASE9_REPO" && "$FLOWCTL" prospect read "alpha-$TODAY" --section bogus --json 2>&1 )" || rc=$?
-assert_grep_re "(invalid|valid:)" "$out" "Case 9d: invalid --section reports valid set"
-
-# 9e: slug-only resolves to latest
 synthetic_artifact "$CASE9_REPO" "alpha-2024-01-01" "2024-01-01" "alpha hint" 1
-SLUGREAD="$( cd "$CASE9_REPO" && "$FLOWCTL" prospect read alpha 2>&1 | head -8 )"
-assert_grep "$TODAY" "$SLUGREAD" "Case 9e: slug-only 'alpha' resolves to today's date (latest wins)"
 
-# 9f: archive moves to _archive/ + sets status: archived
+# 9a: slug resolve still works via helper (promote/archive front door)
+( cd "$CASE9_REPO" && "${FLOW_PY[@]}" - "$FLOWCTL_PY" "alpha" "$TODAY" <<'PYEOF'
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+desc = m._prospect_resolve_id(Path(".flow/prospects"), sys.argv[2])
+assert desc is not None
+assert sys.argv[3] in desc["artifact_id"], desc
+print("ok")
+PYEOF
+) || fail "Case 9a: slug-only resolve via helper failed"
+ok "Case 9a: slug-only resolve picks latest date"
+
+# 9b: archive moves to _archive/ + sets status: archived
 ARCH_JSON="$TEST_DIR/case9-archive.json"
 ( cd "$CASE9_REPO" && "$FLOWCTL" prospect archive "alpha-$TODAY" --json > "$ARCH_JSON" )
-assert_eq_jq "$ARCH_JSON" "d['success']" "True" "Case 9f: archive success=True"
-assert_eq_jq "$ARCH_JSON" "d['status']" "archived" "Case 9f: archive returns status=archived"
+assert_eq_jq "$ARCH_JSON" "d['success']" "True" "Case 9b: archive success=True"
+assert_eq_jq "$ARCH_JSON" "d['status']" "archived" "Case 9b: archive returns status=archived"
 [[ -f "$CASE9_REPO/.flow/prospects/_archive/alpha-${TODAY}.md" ]] \
-  && ok "Case 9f: archive file moved under _archive/" \
-  || fail "Case 9f: archive target missing"
+  && ok "Case 9b: archive file moved under _archive/" \
+  || fail "Case 9b: archive target missing"
 
-# 9g: list default no longer shows archived alpha-$TODAY
-LIST_AFTER="$( cd "$CASE9_REPO" && "$FLOWCTL" prospect list 2>&1 )"
-if echo "$LIST_AFTER" | grep -q "alpha-$TODAY"; then
-  fail "Case 9g: default list still shows archived artifact"
-else
-  ok "Case 9g: default list hides archived alpha-$TODAY"
-fi
+# 9c: helper default iter hides archived (include_archive=False)
+( cd "$CASE9_REPO" && "${FLOW_PY[@]}" - "$FLOWCTL_PY" "alpha-$TODAY" <<'PYEOF'
+import importlib.util, sys
+from datetime import datetime, timezone
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+today = datetime.now(timezone.utc).date()
+default = m._prospect_iter_artifacts(Path(".flow/prospects"), include_archive=False, today=today)
+assert all(a["artifact_id"] != sys.argv[2] for a in default), default
+with_arch = m._prospect_iter_artifacts(Path(".flow/prospects"), include_archive=True, today=today)
+assert any(a["artifact_id"] == sys.argv[2] and a.get("in_archive") for a in with_arch), with_arch
+print("ok")
+PYEOF
+) || fail "Case 9c: archive visibility via helper failed"
+ok "Case 9c: default iter hides archived; include_archive surfaces it"
 
-# 9h: --all surfaces archived row with '(archived)' suffix
-LIST_ALL_AFTER="$( cd "$CASE9_REPO" && "$FLOWCTL" prospect list --all 2>&1 )"
-assert_grep "alpha-$TODAY" "$LIST_ALL_AFTER" "Case 9h: --all surfaces archived alpha-$TODAY"
-assert_grep "(archived)"   "$LIST_ALL_AFTER" "Case 9h: --all decorates archived row with '(archived)'"
-
-# 9i: re-archive errors clearly (already archived)
+# 9d: re-archive errors clearly (already archived)
 rc=0
 out="$( cd "$CASE9_REPO" && "$FLOWCTL" prospect archive "alpha-$TODAY" --json 2>&1 )" || rc=$?
 if [[ "$rc" -ne 0 ]]; then
-  ok "Case 9i: re-archive returns non-zero (rc=$rc)"
+  ok "Case 9d: re-archive returns non-zero (rc=$rc)"
 else
-  fail "Case 9i: re-archive unexpectedly succeeded"
+  fail "Case 9d: re-archive unexpectedly succeeded"
 fi
-assert_grep "already archived" "$out" "Case 9i: error mentions 'already archived'"
-
-# 9j: read on corrupt → exit 3 + [ARTIFACT CORRUPT: …]
-mkdir -p "$CASE9_REPO/.flow/prospects"
-cat > "$CASE9_REPO/.flow/prospects/broken-$TODAY.md" <<'EOF'
-no frontmatter
-
-## Survivors
-EOF
-rc=0
-out="$( cd "$CASE9_REPO" && "$FLOWCTL" prospect read "broken-$TODAY" 2>&1 )" || rc=$?
-assert_rc 3 "$rc" "Case 9j: read corrupt → exit 3"
-assert_grep "[ARTIFACT CORRUPT:" "$out" "Case 9j: read corrupt prints marker"
+assert_grep "already archived" "$out" "Case 9d: error mentions 'already archived'"
 
 # =============================================================================
 # CASE 10: Numbered-options fallback frozen format (R19)

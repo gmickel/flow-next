@@ -87,7 +87,7 @@ fi
 Resolution order:
 
 1. **Explicit `$SPEC_ID` argument** — if non-empty after flag parsing, use it directly.
-2. **Branch-match** — derive current branch and match against `.flow/specs/*.json` (post-1.0 canonical) and `.flow/epics/*.json` (legacy alias dir) `branch_name` field. Both paths are scanned because `flowctl init` (post-1.0) writes only `.flow/specs/`, but pre-migration repos still keep their JSON metadata under `.flow/epics/` until `flowctl migrate-rename` runs. Markdown sidecars always live at `.flow/specs/<id>.md`.
+2. **Branch-match** — derive current branch and match against `.flow/specs/*.json` `branch_name` field. Markdown sidecars live at `.flow/specs/<id>.md`. (Pre-1.0 `.flow/epics/` repos: port first per `.flow/usage.md` "Pre-1.0 layout porting".)
 3. **Ask** — interactive only. Ralph hard-errors.
 
 ### 0.3 — Base-branch detection cascade
@@ -105,13 +105,10 @@ The combined §0.2–0.4 fence:
 if [[ -z "$SPEC_ID" ]]; then
   CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
   if [[ -n "$CURRENT_BRANCH" ]]; then
-    # Match against `.flow/specs/*.json` (canonical) + `.flow/epics/*.json`
-    # (legacy alias dir) `branch_name` field. flowctl's spec store writes
-    # branch_name on spec create; jq across both dirs finds the match.
+    # Match against `.flow/specs/*.json` `branch_name` field. flowctl's spec
+    # store writes branch_name on spec create; jq across specs/ finds the match.
     SPEC_ID=$(
-      { find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null
-        find "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' 2>/dev/null
-      } \
+      find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null \
       | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
           'select(.branch_name == $b) | .id' {} 2>/dev/null \
       | head -1)
@@ -120,7 +117,7 @@ fi
 
 if [[ -z "$SPEC_ID" ]]; then
   if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
-    echo "Error: no spec id supplied and no .flow/specs/*.json or .flow/epics/*.json branch_name matches '$CURRENT_BRANCH'. Autonomous context cannot prompt — pass an explicit spec id." >&2
+    echo "Error: no spec id supplied and no .flow/specs/*.json branch_name matches '$CURRENT_BRANCH'. Autonomous context cannot prompt — pass an explicit spec id." >&2
     exit 2
   fi
   # Interactive: STOP this fence — a Bash call cannot pause for AskUserQuestion.
@@ -217,7 +214,7 @@ The combined §0.5–0.7 fence:
 ```bash
 # --- §0.5: tasks-done validation (single show capture = spec-existence validation) ---
 if ! SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null); then
-  echo "Error: spec '$SPEC_ID' not found in .flow/specs/ or .flow/epics/. Check id with: $FLOWCTL specs" >&2
+  echo "Error: spec '$SPEC_ID' not found in .flow/specs/. Check id with: $FLOWCTL specs" >&2
   exit 1
 fi
 OPEN_TASKS=$(printf '%s' "$SPEC_JSON" | jq -r '[.tasks[]? | select(.status != "done") | .id] | join(", ")')
@@ -287,7 +284,7 @@ Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values.
 
 - Ralph context detected (`RALPH=1` if `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set). Autonomous context detected (`AUTONOMOUS=1` if the `mode:autonomous` token was parsed or `FLOW_AUTONOMOUS=1`) — never sets `RALPH`; prompt sites hard-error under `RALPH || AUTONOMOUS`.
 - When `DRY_RUN != 1`: `gh` installed AND `gh auth status --hostname github.com` succeeds. Skipped under `--dry-run` (Phase 4.0 short-circuits before any `gh pr create`, so requiring `gh` there blocks the documented inspection path on machines / CI jobs that only render the body).
-- `SPEC_ID` resolved (positional arg → branch-match against `.flow/specs/*.json` + `.flow/epics/*.json` `branch_name` → interactive prompt / Ralph-or-autonomous exit 2) and validated via `flowctl show <spec-id> --json` (spec exists).
+- `SPEC_ID` resolved (positional arg → branch-match against `.flow/specs/*.json` `branch_name` → interactive prompt / Ralph-or-autonomous exit 2) and validated via `flowctl show <spec-id> --json` (spec exists).
 - `BASE_REF` resolved through the cascade (`--base` → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph-or-autonomous exit 2) and validated via `git rev-parse --verify --quiet`.
 - HEAD resolves; HEAD ≠ BASE; `git merge-base BASE HEAD` succeeds (shared history); `COMMITS_AHEAD >= 1` since that merge-base. (Base is NOT required to be an ancestor of HEAD — see §0.4 / §0.5.)
 - Open-task validation: silent when all done; otherwise a stderr warning + **proceed as draft** (no prompt) — interactively and under `--dry-run` alike. Ralph/autonomous hard-errors (exit 2).
@@ -1328,7 +1325,7 @@ The skill itself is markdown — no unit-test surface. Phase 0 validation is exe
 - `command -v gh` missing → exit 1 with install instructions.
 - `gh auth status` failing → exit 1 with login instructions.
 - `--base <bad-ref>` → exit 1 with `git rev-parse --verify` failure message.
-- Branch with no `branch_name` match in any `.flow/specs/*.json` or `.flow/epics/*.json` AND no positional spec id → interactive `AskUserQuestion`; Ralph hard-errors with exit 2.
+- Branch with no `branch_name` match in any `.flow/specs/*.json` AND no positional spec id → interactive `AskUserQuestion`; Ralph hard-errors with exit 2.
 - Tasks not all done + interactive → warn on stderr + proceed (open items force a draft via §4.2); Ralph exits 2; `--dry-run` warns and continues. No `AskUserQuestion` for open tasks.
 - Branch with an OPEN PR → exit 1 with `/flow-next:resolve-pr` hint.
 - Branch with a CLOSED or MERGED PR (no OPEN) → continues cleanly. **This is the load-bearing check** — fn-42 spike validated empirically that bare `gh pr view --json url` rc=0 for closed/merged PRs would false-positive without the `select(.state == "OPEN")` filter.
