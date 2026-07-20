@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-119-test-suite-speed-parallel-sharding-slow",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-07-20T12:37:40.165726Z",
+  "default_impl": null,
+  "default_review": "none",
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-119-test-suite-speed-parallel-sharding-slow",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-119-test-suite-speed-parallel-sharding-slow.md",
   "status": "open",
   "title": "test-suite speed: parallel sharding + slow-test diet",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-20T12:58:42.525588Z"
+  "updated_at": "2026-07-20T13:30:18.757230Z"
 }
