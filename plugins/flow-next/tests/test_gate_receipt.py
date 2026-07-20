@@ -1,12 +1,18 @@
 """Hermetic green-receipt and honor-probe tests for `flowctl gate` (fn-102).
 
-Every assertion drives the production CLI via subprocess against a temporary
-real git repository. No network, no package installation, no shared state.
+Every assertion drives the production CLI surface (`cmd_gate_receipt` /
+`cmd_gate_check`) against a temporary real git repository. Default path is
+in-process (fn-119.2 diet: amortize flowctl load + avoid per-call spawn);
+PATH-shim cases still subprocess. No network, no package installation, no
+shared mutable state across tests.
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
+import importlib.util
+import io
 import json
 import os
 import shutil
@@ -14,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -23,33 +30,99 @@ FLOWCTL_PY = Path(__file__).resolve().parent.parent / "scripts" / "flowctl.py"
 COMMAND = "python3 -m unittest discover -s plugins/flow-next/tests -p 'test_gate_*.py' -q"
 GATE_ID = "full-gate"
 
+_FLOWCTL_MOD = None
+_GATE_TEMPLATE_ROOT: Optional[Path] = None
+_GATE_TEMPLATE_REPO: Optional[Path] = None
+
+
+def _load_flowctl():
+    global _FLOWCTL_MOD
+    if _FLOWCTL_MOD is None:
+        spec = importlib.util.spec_from_file_location("flowctl_gate_under_test", FLOWCTL_PY)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        _FLOWCTL_MOD = mod
+    return _FLOWCTL_MOD
+
+
+def _pinned_env() -> dict:
+    env = dict(os.environ)
+    env["GIT_AUTHOR_DATE"] = "2026-01-01T00:00:00Z"
+    env["GIT_COMMITTER_DATE"] = "2026-01-01T00:00:00Z"
+    return env
+
+
+def _ensure_gate_template() -> Path:
+    """One seeded git repo for the module; tests copytree it (fn-119.2)."""
+    global _GATE_TEMPLATE_ROOT, _GATE_TEMPLATE_REPO
+    if _GATE_TEMPLATE_REPO is not None:
+        return _GATE_TEMPLATE_REPO
+    _GATE_TEMPLATE_ROOT = Path(tempfile.mkdtemp(prefix="gate-tmpl-")).resolve()
+    repo = _GATE_TEMPLATE_ROOT / "repo"
+    repo.mkdir()
+    prev = Path.cwd()
+    try:
+        os.chdir(repo)
+        subprocess.run(
+            ["git", "init", "-q"], check=True, capture_output=True, env=_pinned_env()
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "gate@example.com"],
+            check=True,
+            capture_output=True,
+            env=_pinned_env(),
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Gate Test"],
+            check=True,
+            capture_output=True,
+            env=_pinned_env(),
+        )
+        path = repo / "src" / "app.py"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("print('seed')\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "add", "-A"], check=True, capture_output=True, env=_pinned_env()
+        )
+        subprocess.run(
+            ["git", "commit", "-qm", "seed"],
+            check=True,
+            capture_output=True,
+            env=_pinned_env(),
+        )
+    finally:
+        os.chdir(prev)
+    _GATE_TEMPLATE_REPO = repo
+    return repo
+
 
 class GateReceiptHarness(unittest.TestCase):
     """Temporary git repo with helpers that invoke the public CLI wire.
 
     Carries NO test_* methods - concrete test classes inherit it so unittest
     discovery never runs a shared case twice (PR #213 P3).
+
+    Module-level seeded template is copytree'd per test (fn-119.2): one
+    `git init` + seed commit for the file, not one per method.
     """
 
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.flowctl = _load_flowctl()
+        _ensure_gate_template()
+
     def setUp(self) -> None:
-        self.tmpdir = Path(tempfile.mkdtemp()).resolve()
+        parent = Path(tempfile.mkdtemp(prefix="gate-case-")).resolve()
+        self._tmpdir_parent = parent
+        self.tmpdir = parent / "repo"
+        shutil.copytree(_ensure_gate_template(), self.tmpdir)
         self.prev_cwd = Path.cwd()
         os.chdir(self.tmpdir)
-        self._git("init", "-q")
-        self._git("config", "user.email", "gate@example.com")
-        self._git("config", "user.name", "Gate Test")
-        self._commit("src/app.py", "print('seed')\n", "seed")
 
     def tearDown(self) -> None:
         os.chdir(self.prev_cwd)
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
-
-    @staticmethod
-    def _pinned_env() -> dict:
-        env = dict(os.environ)
-        env["GIT_AUTHOR_DATE"] = "2026-01-01T00:00:00Z"
-        env["GIT_COMMITTER_DATE"] = "2026-01-01T00:00:00Z"
-        return env
+        shutil.rmtree(self._tmpdir_parent, ignore_errors=True)
 
     def _git(self, *args: str) -> str:
         result = subprocess.run(
@@ -58,7 +131,7 @@ class GateReceiptHarness(unittest.TestCase):
             capture_output=True,
             text=True,
             check=True,
-            env=self._pinned_env(),
+            env=_pinned_env(),
         )
         return result.stdout.strip()
 
@@ -73,12 +146,52 @@ class GateReceiptHarness(unittest.TestCase):
     def _flowctl(
         self, *args: str, cwd: Optional[Path] = None, env: Optional[dict] = None
     ) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "gate"] + list(args),
-            cwd=cwd or self.tmpdir,
-            capture_output=True,
-            text=True,
-            env=env,
+        # PATH-shim / custom-env cases need a real subprocess so the shim is
+        # visible to child `git` lookups. Everything else runs in-process.
+        if env is not None:
+            return subprocess.run(
+                [sys.executable, str(FLOWCTL_PY), "gate"] + list(args),
+                cwd=cwd or self.tmpdir,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+        return self._flowctl_inprocess(*args, cwd=cwd or self.tmpdir)
+
+    def _flowctl_inprocess(
+        self, *args: str, cwd: Path
+    ) -> subprocess.CompletedProcess:
+        """Dispatch cmd_gate_* against cwd; capture stdout/stderr + exit code."""
+        parser = argparse.ArgumentParser()
+        parser.add_argument("gate_cmd")
+        parser.add_argument("--gate", dest="gate_id", required=True)
+        parser.add_argument("--command", required=True)
+        parser.add_argument("--json", action="store_true")
+        ns = parser.parse_args(list(args))
+        func = (
+            self.flowctl.cmd_gate_receipt
+            if ns.gate_cmd == "receipt"
+            else self.flowctl.cmd_gate_check
+        )
+        out_buf = io.StringIO()
+        err_buf = io.StringIO()
+        prev = Path.cwd()
+        code = 0
+        try:
+            os.chdir(cwd)
+            with redirect_stdout(out_buf), redirect_stderr(err_buf):
+                try:
+                    func(ns)
+                except SystemExit as exc:
+                    raw = 0 if exc.code is None else exc.code
+                    code = int(raw) if not isinstance(raw, bool) else int(raw)
+        finally:
+            os.chdir(prev)
+        return subprocess.CompletedProcess(
+            args=["gate"] + list(args),
+            returncode=code,
+            stdout=out_buf.getvalue(),
+            stderr=err_buf.getvalue(),
         )
 
     def _receipt(self, gate_id: str = GATE_ID, command: str = COMMAND) -> None:
@@ -277,14 +390,21 @@ class GateReceiptTestCase(GateReceiptHarness):
         self.assertEqual(result.returncode, 2, result.stderr or result.stdout)
 
     def test_gate_id_validation_at_both_boundaries(self) -> None:
+        # Batch in-process (fn-119.2): same `_gate_id_is_valid` the CLI uses;
+        # avoids 18 subprocess spawns for a pure predicate.
         invalid_ids = ["../x", "a/b", "..\\x", ".", "..", "", "a" * 65, "-x", ".x"]
         for gate_id in invalid_ids:
-            for command in ("receipt", "check"):
-                with self.subTest(gate_id=gate_id, command=command):
-                    result = self._flowctl(
-                        command, "--gate", gate_id, "--command", COMMAND
-                    )
-                    self.assertEqual(result.returncode, 2, result.stderr or result.stdout)
+            self.assertFalse(
+                self.flowctl._gate_id_is_valid(gate_id),
+                gate_id,
+            )
+        self.assertTrue(self.flowctl._gate_id_is_valid(GATE_ID))
+        # One subprocess smoke each side still exercises the CLI exit-2 path.
+        for command in ("receipt", "check"):
+            result = self._flowctl(
+                command, "--gate", "../x", "--command", COMMAND
+            )
+            self.assertEqual(result.returncode, 2, result.stderr or result.stdout)
 
 
 class GateReceiptAncestorWalkTestCase(GateReceiptHarness):
@@ -456,23 +576,31 @@ class GateReceiptAncestorWalkTestCase(GateReceiptHarness):
     def test_exact_receipt_ttl_evaluated_after_status(self) -> None:
         """A receipt that ages past 24h during a slow `git status` must reject.
 
-        The shim sleeps 3s on `git status`; the receipt is 24h minus 1.5s old
-        at launch, so it is fresh at the pre-status probe but stale by the
-        post-status verdict. Caching the pre-status age would wrongly honor it.
+        The shim sleeps briefly on `git status`; the receipt is 24h minus half
+        that sleep old at launch, so it is fresh at the pre-status probe but
+        stale by the post-status verdict. Caching the pre-status age would
+        wrongly honor it. (Sleep kept short for suite wall time; race shape
+        unchanged.)
         """
         real_git = shutil.which("git")
         assert real_git is not None
         shim_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, shim_dir, ignore_errors=True)
         shim = shim_dir / "git"
+        # Margin must exceed subprocess startup (python + flowctl load, ~0.3-0.5s):
+        # if the receipt is already stale at the pre-status probe, the test passes
+        # without exercising the pre/post-status race it exists to catch.
+        sleep_s = 2.0
         shim.write_text(
-            f'#!/bin/sh\n[ "$1" = "status" ] && sleep 3\nexec "{real_git}" "$@"\n',
+            f'#!/bin/sh\n[ "$1" = "status" ] && sleep {sleep_s}\nexec "{real_git}" "$@"\n',
             encoding="utf-8",
         )
         shim.chmod(0o755)
         head = self._git("rev-parse", "HEAD")
         almost_stale = (
-            datetime.now(timezone.utc) - timedelta(hours=24) + timedelta(seconds=1.5)
+            datetime.now(timezone.utc)
+            - timedelta(hours=24)
+            + timedelta(seconds=sleep_s / 2)
         ).isoformat()
         self._write_receipt(head, timestamp=almost_stale)
         env = dict(os.environ)

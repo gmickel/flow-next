@@ -20,9 +20,16 @@ Repo-specific verification conventions + corpus hygiene. MAINTAINER DIRECTIVE: n
 - [ ] Full parallel suite green; evidence records timings
 
 ## Done summary
-TBD
+fn-119.2: scoped verification convention + slow-file diet (+ stale sweep deferred to fn-111).
 
+Docs: CLAUDE.md focused-vs-full Quick commands rule; .flow/templates/spec.md comment; .flow/usage.md Verification section; CHANGELOG Unreleased note.
+
+Diet: test_prime_eval template copytree + SchemaShape setUpClass cache + substance-fast classify (skip axes git probes; stub docs-freshness except SubstanceDocsFreshnessTestCase). test_gate_receipt module template copytree + in-process cmd_gate_* (subprocess only for PATH shims) + batched gate-id validation + shorter TTL race sleep.
+
+Stale sweep: cross-checked fn-111 fallout (test_migrate_rename, test_banner, test_lockfile, alias_smoke, test_read_compat, test_config_alias no-ops, set-deps/show-backend/scope-suggest, pre-1.0 migrate). Machinery still present; DEFERRED all known candidates to fn-111. Zero deletions (zero overlap).
+
+Timings (same counts): prime 189 tests 109.6s -> 53.7s; gate 49 tests 52.3s -> 17.0s.
 ## Evidence
 - Commits:
-- Tests:
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prime_eval -q  # 189 in 53.7s (was 109.6s), cd plugins/flow-next/tests && python3 -m unittest test_gate_receipt -q  # 49 in 17.0s (was 52.3s)
 - PRs:

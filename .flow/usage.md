@@ -107,6 +107,10 @@ Make any of this durable by writing it into `CLAUDE.md`/`AGENTS.md` — the host
 
 If a sandbox denies `git commit`, still complete `done` with the evidence you have and record the restriction in the summary - never block the task on a commit you cannot make.
 
+## Verification scoping
+
+Per-task Quick commands list FOCUSED suites for the files you touch - that is what workers baseline and verify per task. The FULL suite runs once at the final gate; prefer the repo's parallel test entrypoint when one exists (see the project instruction file for the canonical command).
+
 ## Evidence JSON Format
 
 ```json
