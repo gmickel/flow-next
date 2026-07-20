@@ -10,5 +10,5 @@
   "spec_path": ".flow/tasks/fn-110-flowctl-round-trip-diet-batched-reads.1.md",
   "status": "todo",
   "title": "flowctl: subtree config get + task create file flags (tests, dual-copy)",
-  "updated_at": "2026-07-20T08:07:07.192736Z"
+  "updated_at": "2026-07-20T08:15:14.608353Z"
 }

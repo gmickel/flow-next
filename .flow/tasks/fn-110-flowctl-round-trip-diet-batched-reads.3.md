@@ -11,10 +11,10 @@ Docs across repo + docs-site, written in the post-fn-117 register: mechanical pr
 
 ## Approach
 
-- flowctl.md: `config get` subtree subsection (prose convention, not tables); `task create` flag list + one sentence on file-flags vs set-spec; `spec create` paragraph: create-time `--branch` is the path, `set-branch` is for renames.
+- flowctl.md: `config get` documents ALL THREE read forms (keyed scalar, keyed subtree, keyless root) with `--raw` behavior and exact JSON shapes per form (prose convention, not tables); `task create` flag list gains `--description-file` AND `--satisfies` (comma-list grammar, R-ID token rule, error-before-write, relationship to set-spec edits); `spec create` paragraph: create-time `--branch` is the path, `set-branch` is for renames.
 - CHANGELOG: new `## Unreleased` above 2.20.0; bold-lead + fn-110 id + mechanism sub-bullets + "Dual-copy flowctl mirrored." No version bump (batched).
-- usage.md: the two canonical example lines gain the flags inline; one-line diffs, keep terse.
-- flow-next.dev (post-overhaul site - read the CURRENT pages first): cli-reference.mdx collapse the create+set-branch two-call example; configuration.mdx subtree-read subsection after single-key examples; cookbook.mdx scanned for stale two-call recipes (fix any); note the register rules explicitly when writing (no "faster"/"fewer round-trips" marketing - state what the command does). pnpm build gate; commit separately in the flow-next.dev repo.
+- usage.md: the two canonical example lines gain the flags inline incl. --satisfies; one-line diffs, keep terse.
+- flow-next.dev (post-overhaul site - read the CURRENT pages first): cli-reference.mdx collapse the create+set-branch two-call example; configuration.mdx documents ALL THREE read forms (keyed scalar, keyed subtree, keyless root) with --raw behavior and exact JSON shapes per form, placed after the single-key examples; cookbook.mdx scanned for stale two-call recipes (fix any); note the register rules explicitly when writing (no "faster"/"fewer round-trips" marketing - state what the command does). pnpm build gate; commit separately in the flow-next.dev repo.
 
 ## Acceptance
 
