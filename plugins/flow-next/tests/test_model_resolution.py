@@ -603,5 +603,810 @@ class TestResumePreservesPriorModel(unittest.TestCase):
         model, effort = flowctl._receipt_model_effort(spec, {}, prior_model="gpt-5.5")
         self.assertEqual(model, spec.model)  # no resume marker -> spec values
 
+
+# --- fn-115.1 role-map config + resolution order + staleness nudge ---
+
+
+class TestRoleMapConfigSchema(unittest.TestCase):
+    """models.roles / verifiedAt validation on config set."""
+
+    def setUp(self) -> None:
+        self._env = os.environ.copy()
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env)
+
+    def test_defaults_carry_models_block(self) -> None:
+        defaults = flowctl.get_default_config()
+        self.assertIn("models", defaults)
+        self.assertEqual(defaults["models"]["roles"], {})
+        self.assertIsNone(defaults["models"]["verifiedAt"])
+        self.assertIsNone(defaults["models"]["verifiedWith"])
+
+    def test_known_roles_and_backends(self) -> None:
+        self.assertEqual(
+            list(flowctl.MODEL_ROLES),
+            [
+                "fastJudge",
+                "review",
+                "delegate",
+                "scoutFast",
+                "scoutIntelligent",
+            ],
+        )
+        self.assertEqual(
+            list(flowctl.MODEL_ROLE_BACKENDS), ["codex", "copilot", "cursor"]
+        )
+
+    def test_reject_unknown_role(self) -> None:
+        err = flowctl._validate_models_config_key(
+            "models.roles.mystery.codex", "gpt-5.6-luna"
+        )
+        self.assertIsNotNone(err)
+        self.assertIn("Unknown model role", err)
+        self.assertIn("fastJudge", err)
+
+    def test_reject_unknown_backend(self) -> None:
+        err = flowctl._validate_models_config_key(
+            "models.roles.review.rp", "anything"
+        )
+        self.assertIsNotNone(err)
+        self.assertIn("Unknown model-role backend", err)
+        self.assertIn("codex", err)
+
+    def test_reject_unknown_models_leaf(self) -> None:
+        err = flowctl._validate_models_config_key("models.foobar", "x")
+        self.assertIsNotNone(err)
+        self.assertIn("Unknown models key", err)
+
+    def test_accept_role_pin_and_verified_at(self) -> None:
+        self.assertIsNone(
+            flowctl._validate_models_config_key(
+                "models.roles.fastJudge.codex", "gpt-5.6-luna"
+            )
+        )
+        self.assertIsNone(
+            flowctl._validate_models_config_key(
+                "models.roles.review.codex", "gpt-5.6-sol:medium"
+            )
+        )
+        self.assertIsNone(
+            flowctl._validate_models_config_key("models.verifiedAt", "2026-07-19")
+        )
+        self.assertIsNone(
+            flowctl._validate_models_config_key(
+                "models.verifiedWith", {"codex": "0.144"}
+            )
+        )
+
+    def test_reject_bad_verified_at(self) -> None:
+        err = flowctl._validate_models_config_key(
+            "models.verifiedAt", "not-a-date"
+        )
+        self.assertIsNotNone(err)
+        self.assertIn("ISO date", err)
+
+    def test_config_set_round_trip_verified_at(self) -> None:
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text("{}", encoding="utf-8")
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                flowctl.set_config("models.verifiedAt", "2026-07-19")
+                flowctl.set_config(
+                    "models.roles.review.codex", "gpt-5.6-sol:medium"
+                )
+                self.assertEqual(
+                    flowctl.get_config("models.verifiedAt"), "2026-07-19"
+                )
+                self.assertEqual(
+                    flowctl.get_role_map_pin("review", "codex"),
+                    "gpt-5.6-sol:medium",
+                )
+            finally:
+                os.chdir(prev)
+
+    def test_config_set_cli_rejects_unknown_role(self) -> None:
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text("{}", encoding="utf-8")
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                ns = argparse.Namespace(
+                    key="models.roles.bogus.codex",
+                    value="x",
+                    json=True,
+                )
+                buf = io.StringIO()
+                with self.assertRaises(SystemExit) as cm:
+                    with redirect_stdout(buf):
+                        flowctl.cmd_config_set(ns)
+                self.assertNotEqual(cm.exception.code, 0)
+                payload = json.loads(buf.getvalue())
+                self.assertFalse(payload["success"])
+                self.assertIn("Unknown model role", payload["error"])
+            finally:
+                os.chdir(prev)
+
+
+class TestRoleMapResolutionOrder(unittest.TestCase):
+    """Resolution matrix per consumer: explicit/env/role-map/baseline."""
+
+    def setUp(self) -> None:
+        self._env = os.environ.copy()
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env)
+
+    # -- review consumer (BackendSpec.resolve / resolve_review_spec) --
+
+    def test_review_baseline_is_registry_default(self) -> None:
+        with _repo() as root:
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                r = BackendSpec("codex").resolve()
+                self.assertEqual(r.model, "gpt-5.6-sol")
+                self.assertEqual(r.effort, "high")
+                self.assertFalse(r.model_explicit)
+            finally:
+                os.chdir(prev)
+
+    def test_review_role_map_beats_registry_baseline(self) -> None:
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {
+                                "review": {"codex": "gpt-5.6-sol:medium"}
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                r = BackendSpec("codex").resolve()
+                self.assertEqual(r.model, "gpt-5.6-sol")
+                self.assertEqual(r.effort, "medium")
+                # Role-map fill stays ladder-eligible (pin-too-new heals).
+                self.assertFalse(r.model_explicit)
+            finally:
+                os.chdir(prev)
+
+    def test_review_env_beats_role_map(self) -> None:
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {"review": {"codex": "gpt-5.6-luna"}}
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            os.environ["FLOW_CODEX_MODEL"] = "gpt-5.5"
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                r = BackendSpec("codex").resolve()
+                self.assertEqual(r.model, "gpt-5.5")
+                self.assertTrue(r.model_explicit)
+            finally:
+                os.chdir(prev)
+
+    def test_review_explicit_spec_beats_env_and_role_map(self) -> None:
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {"review": {"codex": "gpt-5.6-luna"}}
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            os.environ["FLOW_CODEX_MODEL"] = "gpt-5.5"
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                r = BackendSpec.parse("codex:gpt-5.4:xhigh").resolve()
+                self.assertEqual(r.model, "gpt-5.4")
+                self.assertEqual(r.effort, "xhigh")
+                self.assertTrue(r.model_explicit)
+            finally:
+                os.chdir(prev)
+
+    def test_resolve_review_spec_role_map_via_bare_config_backend(self) -> None:
+        # review.backend=codex (no model) + role map pin → role map model.
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "review": {"backend": "codex"},
+                        "models": {
+                            "roles": {
+                                "review": {"codex": "gpt-5.6-terra"}
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                resolved = flowctl.resolve_review_spec("codex", None)
+                self.assertEqual(resolved.model, "gpt-5.6-terra")
+                self.assertFalse(resolved.model_explicit)
+            finally:
+                os.chdir(prev)
+
+    # -- fastJudge consumer (triage) --
+
+    def test_fast_judge_baseline_codex_and_copilot(self) -> None:
+        m, e, src = flowctl.resolve_fast_judge_model("codex")
+        self.assertEqual((m, e, src), ("gpt-5.6-luna", "high", "baseline"))
+        m, e, src = flowctl.resolve_fast_judge_model("copilot")
+        self.assertEqual((m, e, src), ("claude-haiku-4.5", "low", "baseline"))
+
+    def test_fast_judge_role_map_beats_baseline(self) -> None:
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {
+                                "fastJudge": {
+                                    "codex": "gpt-5.6-terra:medium"
+                                }
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                m, e, src = flowctl.resolve_fast_judge_model("codex")
+                self.assertEqual(m, "gpt-5.6-terra")
+                self.assertEqual(e, "medium")
+                self.assertEqual(src, "role-map")
+            finally:
+                os.chdir(prev)
+
+    def test_fast_judge_explicit_beats_role_map(self) -> None:
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {
+                                "fastJudge": {"codex": "gpt-5.6-terra"}
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                m, e, src = flowctl.resolve_fast_judge_model(
+                    "codex",
+                    explicit_model="gpt-5.5",
+                    explicit_effort="low",
+                )
+                self.assertEqual(m, "gpt-5.5")
+                self.assertEqual(e, "low")
+                self.assertEqual(src, "explicit")
+            finally:
+                os.chdir(prev)
+
+    def test_triage_judge_uses_role_map_default(self) -> None:
+        # Wire check: _triage_run_codex_judge argv carries the role-map model
+        # when --model is unset (CLI missing → early return after resolve).
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {
+                                "fastJudge": {"codex": "gpt-5.6-terra"}
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                with mock.patch.object(flowctl.shutil, "which", return_value=None):
+                    v, reason, model_used = flowctl._triage_run_codex_judge(
+                        "prompt", None, None
+                    )
+                # CLI absent: no model_used, but resolve still ran; prove via
+                # resolve_fast_judge_model that the wire prefers the role map.
+                m, _e, src = flowctl.resolve_fast_judge_model("codex")
+                self.assertEqual(m, "gpt-5.6-terra")
+                self.assertEqual(src, "role-map")
+                self.assertIsNone(v)
+                self.assertIsNone(model_used)
+                self.assertIn("not available", reason)
+            finally:
+                os.chdir(prev)
+
+    # -- delegate consumer --
+
+    def test_delegate_baseline(self) -> None:
+        with _repo() as root:
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                model, src = flowctl.resolve_delegate_model()
+                self.assertEqual(model, "gpt-5.6-terra")
+                self.assertEqual(src, "baseline")
+            finally:
+                os.chdir(prev)
+
+    def test_delegate_role_map_beats_baseline(self) -> None:
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {
+                                "delegate": {"codex": "gpt-5.6-sol"}
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                model, src = flowctl.resolve_delegate_model()
+                self.assertEqual(model, "gpt-5.6-sol")
+                self.assertEqual(src, "role-map")
+            finally:
+                os.chdir(prev)
+
+    def test_delegate_work_delegate_model_beats_role_map(self) -> None:
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "work": {"delegateModel": "gpt-5.5"},
+                        "models": {
+                            "roles": {
+                                "delegate": {"codex": "gpt-5.6-sol"}
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                model, src = flowctl.resolve_delegate_model()
+                self.assertEqual(model, "gpt-5.5")
+                self.assertEqual(src, "config")
+            finally:
+                os.chdir(prev)
+
+    def test_delegate_merged_default_does_not_beat_role_map(self) -> None:
+        # work.delegateModel only wins when RAW-set, not via defaults merge.
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {
+                                "delegate": {"codex": "gpt-5.6-sol"}
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                # Merged default still surfaces gpt-5.6-terra via config get,
+                # but resolve_delegate_model prefers the role map.
+                self.assertEqual(
+                    flowctl.get_config("work.delegateModel"), "gpt-5.6-terra"
+                )
+                model, src = flowctl.resolve_delegate_model()
+                self.assertEqual(model, "gpt-5.6-sol")
+                self.assertEqual(src, "role-map")
+            finally:
+                os.chdir(prev)
+
+
+class TestModelsStalenessNudge(unittest.TestCase):
+    """Mechanical date check only — never blocks, absent = quiet."""
+
+    def test_absent_verified_at_no_nudge(self) -> None:
+        self.assertIsNone(flowctl.models_pin_nudge_message(None))
+        self.assertIsNone(flowctl.models_pin_nudge_message(""))
+
+    def test_fresh_pin_no_nudge(self) -> None:
+        now = flowctl.datetime(2026, 7, 21, tzinfo=flowctl.timezone.utc)
+        self.assertIsNone(
+            flowctl.models_pin_nudge_message("2026-07-01", now=now)
+        )
+        # Age 89 days — still under the 90d threshold.
+        self.assertIsNone(
+            flowctl.models_pin_nudge_message("2026-04-23", now=now)
+        )
+
+    def test_stale_pin_one_line(self) -> None:
+        now = flowctl.datetime(2026, 7, 21, tzinfo=flowctl.timezone.utc)
+        # Exactly 90 days.
+        msg = flowctl.models_pin_nudge_message("2026-04-22", now=now)
+        self.assertEqual(
+            msg,
+            "model pins last verified 2026-04-22; re-run setup to refresh",
+        )
+        # Older than 90 days.
+        msg = flowctl.models_pin_nudge_message("2026-01-01", now=now)
+        self.assertIn("2026-01-01", msg)
+        self.assertIn("re-run setup to refresh", msg)
+
+    def test_iso_datetime_verified_at(self) -> None:
+        now = flowctl.datetime(2026, 7, 21, tzinfo=flowctl.timezone.utc)
+        msg = flowctl.models_pin_nudge_message(
+            "2026-01-01T12:00:00Z", now=now
+        )
+        self.assertIsNotNone(msg)
+        self.assertIn("2026-01-01", msg)
+
+    def test_status_prints_nudge_when_stale(self) -> None:
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps({"models": {"verifiedAt": "2025-01-01"}}),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                ns = argparse.Namespace(json=False)
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    flowctl.cmd_status(ns)
+                out = buf.getvalue()
+                self.assertIn("model pins last verified 2025-01-01", out)
+                self.assertIn("re-run setup to refresh", out)
+            finally:
+                os.chdir(prev)
+
+    def test_status_silent_when_verified_at_absent(self) -> None:
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text("{}", encoding="utf-8")
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                ns = argparse.Namespace(json=False)
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    flowctl.cmd_status(ns)
+                out = buf.getvalue()
+                self.assertNotIn("model pins last verified", out)
+            finally:
+                os.chdir(prev)
+
+
+class TestModelsResolveCli(unittest.TestCase):
+    """fn-115.3: thin read-only ``models resolve`` (map + precedence only)."""
+
+    def test_delegate_baseline_text_and_json(self) -> None:
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                ns = argparse.Namespace(
+                    role="delegate", backend="codex", json=False
+                )
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    flowctl.cmd_models_resolve(ns)
+                self.assertEqual(buf.getvalue().strip(), "gpt-5.6-terra")
+
+                ns.json = True
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    flowctl.cmd_models_resolve(ns)
+                payload = json.loads(buf.getvalue())
+                self.assertTrue(payload["success"])
+                self.assertEqual(payload["role"], "delegate")
+                self.assertEqual(payload["backend"], "codex")
+                self.assertEqual(payload["model"], "gpt-5.6-terra")
+                self.assertEqual(payload["source"], "baseline")
+            finally:
+                os.chdir(prev)
+
+    def test_delegate_role_map_beats_merged_default(self) -> None:
+        """Skill must not use config get work.delegateModel (merged default)."""
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {
+                                "delegate": {"codex": "gpt-5.6-sol"}
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                # Merged default still looks like terra via config get.
+                self.assertEqual(
+                    flowctl.get_config("work.delegateModel"), "gpt-5.6-terra"
+                )
+                ns = argparse.Namespace(
+                    role="delegate", backend="codex", json=True
+                )
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    flowctl.cmd_models_resolve(ns)
+                payload = json.loads(buf.getvalue())
+                self.assertEqual(payload["model"], "gpt-5.6-sol")
+                self.assertEqual(payload["source"], "role-map")
+            finally:
+                os.chdir(prev)
+
+    def test_delegate_raw_work_delegate_model_beats_role_map(self) -> None:
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "work": {"delegateModel": "gpt-5.5"},
+                        "models": {
+                            "roles": {
+                                "delegate": {"codex": "gpt-5.6-sol"}
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                ns = argparse.Namespace(
+                    role="delegate", backend="codex", json=True
+                )
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    flowctl.cmd_models_resolve(ns)
+                payload = json.loads(buf.getvalue())
+                self.assertEqual(payload["model"], "gpt-5.5")
+                self.assertEqual(payload["source"], "config")
+            finally:
+                os.chdir(prev)
+
+    def test_scout_role_map_and_env_precedence(self) -> None:
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {
+                                "scoutFast": {"codex": "gpt-5.6-luna"}
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                ns = argparse.Namespace(
+                    role="scoutFast", backend="codex", json=True
+                )
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    flowctl.cmd_models_resolve(ns)
+                payload = json.loads(buf.getvalue())
+                self.assertEqual(payload["model"], "gpt-5.6-luna")
+                self.assertEqual(payload["source"], "role-map")
+
+                # Env wins over role map.
+                with mock.patch.dict(
+                    os.environ, {"CODEX_MODEL_FAST": "gpt-5.5"}
+                ):
+                    buf = io.StringIO()
+                    with redirect_stdout(buf):
+                        flowctl.cmd_models_resolve(ns)
+                    payload = json.loads(buf.getvalue())
+                    self.assertEqual(payload["model"], "gpt-5.5")
+                    self.assertEqual(payload["source"], "env")
+            finally:
+                os.chdir(prev)
+
+    def test_scout_absent_returns_empty_baseline(self) -> None:
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                ns = argparse.Namespace(
+                    role="scoutIntelligent", backend="codex", json=True
+                )
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    flowctl.cmd_models_resolve(ns)
+                payload = json.loads(buf.getvalue())
+                self.assertIsNone(payload["model"])
+                self.assertEqual(payload["source"], "baseline")
+            finally:
+                os.chdir(prev)
+
+    def test_unknown_role_errors(self) -> None:
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                ns = argparse.Namespace(
+                    role="notARole", backend="codex", json=True
+                )
+                buf = io.StringIO()
+                with self.assertRaises(SystemExit) as cm:
+                    with redirect_stdout(buf):
+                        flowctl.cmd_models_resolve(ns)
+                self.assertNotEqual(cm.exception.code, 0)
+                payload = json.loads(buf.getvalue())
+                self.assertFalse(payload["success"])
+                self.assertIn("Unknown model role", payload["error"])
+            finally:
+                os.chdir(prev)
+
+    def test_fast_judge_and_review_resolve(self) -> None:
+        import argparse
+        from contextlib import redirect_stdout
+
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "roles": {
+                                "fastJudge": {
+                                    "codex": "gpt-5.6-terra:medium"
+                                },
+                                "review": {
+                                    "codex": "gpt-5.6-sol:medium"
+                                },
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                for role, expect_model, expect_effort in (
+                    ("fastJudge", "gpt-5.6-terra", "medium"),
+                    ("review", "gpt-5.6-sol", "medium"),
+                ):
+                    ns = argparse.Namespace(
+                        role=role, backend="codex", json=True
+                    )
+                    buf = io.StringIO()
+                    with redirect_stdout(buf):
+                        flowctl.cmd_models_resolve(ns)
+                    payload = json.loads(buf.getvalue())
+                    self.assertEqual(payload["model"], expect_model, role)
+                    self.assertEqual(payload["effort"], expect_effort, role)
+                    self.assertEqual(payload["source"], "role-map", role)
+            finally:
+                os.chdir(prev)
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReviewPinLadderStart(unittest.TestCase):
+    """PR #225 review: a role-map review pin must be the ladder START, not ignored."""
+
+    def test_ladder_reorders_to_start_at_pin(self) -> None:
+        flowctl = _load_flowctl()
+        ranking = list(flowctl.BACKEND_REGISTRY["codex"].get("models") or [])
+        self.assertGreater(len(ranking), 1)
+        pin = ranking[1]
+        calls = []
+
+        def dispatch(model, is_floor):
+            calls.append(model)
+            return ("<verdict>SHIP</verdict>", "sid", 0, "")
+
+        spec = flowctl.BackendSpec("codex", model=pin, model_explicit=False)
+        flowctl._dispatch_review_with_fallback(
+            backend="codex", spec=spec, explicit_model=False, repo_root=None,
+            dispatch=dispatch, is_unavailable=lambda o, e: False,
+            floor_model=None, version_fn=lambda: "v",
+        )
+        self.assertEqual(calls[0], pin, "ladder must start at the role-map pin")
+
+
+class TestDelegateSeededDefaultVsRoleMap(unittest.TestCase):
+    """PR #225 review: an init-materialized seeded default must not shadow the role map."""
+
+    def _resolve_with(self, config: dict):
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(config), encoding="utf-8"
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                return flowctl.resolve_delegate_model()
+            finally:
+                os.chdir(prev)
+
+    def test_seeded_default_yields_to_role_map(self) -> None:
+        model, source = self._resolve_with({
+            "work": {"delegateModel": "gpt-5.6-terra"},
+            "models": {"roles": {"delegate": {"codex": "gpt-5.6-sol"}}},
+        })
+        self.assertEqual(model, "gpt-5.6-sol")
+        self.assertEqual(source, "role-map")
+
+    def test_real_user_pin_beats_role_map(self) -> None:
+        model, source = self._resolve_with({
+            "work": {"delegateModel": "gpt-5.6-sol"},
+            "models": {"roles": {"delegate": {"codex": "gpt-5.6-terra"}}},
+        })
+        self.assertEqual(model, "gpt-5.6-sol")
+        self.assertEqual(source, "config")

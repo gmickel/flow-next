@@ -25,9 +25,8 @@ Setup refresh ceremony: the agent probes, judges, proposes, stamps.
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Refresh ceremony shipped as setup s6e prose: gated after the config questions on fresh AND re-runs, silently skipped under the three fn-113 autonomy markers plus the mode:autonomous token (ROUTING_ASK parity - deliberate extension of the task's literal three); probes only installed CLIs (cursor-agent --list-models, copilot -p /model, codex accept-smoke via short codex exec runs); scans .flow/review-receipts/ model-vs-pin for fallback-ladder activations as replacement bias; the agent judges all five roles x three backends; proposes current -> proposed with one-line reasons via Accept map / Stamp verifiedAt only / Skip; writes accepted pins via flowctl config set + stamps models.verifiedAt (optional verifiedWith); offers (never forces) the CLAUDE.md routing-table refresh. Receipt field correctly `model` (fn-76 shape). test_model_pin_ceremony_prose pins every element on canonical AND mirror; sync-codex x2 (ask rewritten to numbered prompt). Full parallel suite 90 files / 1923 tests / 0 failures.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: cd3764985c61733094ee17ee8322089614045e15
+- Tests: python3 scripts/run_tests_parallel.py (90 files, 1923 tests, 0 failures), test_model_pin_ceremony_prose + test_model_routing_scaffold + test_skill_prose_diet green
 - PRs:

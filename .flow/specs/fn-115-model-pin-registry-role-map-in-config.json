@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-115-model-pin-registry-role-map-in-config.md",
-  "status": "open",
+  "status": "done",
   "title": "model-pin registry: role map in config + agent refresh ceremony at setup",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T13:31:28.792430Z"
+  "updated_at": "2026-07-21T09:44:32.295986Z"
 }

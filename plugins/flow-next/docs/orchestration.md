@@ -36,7 +36,30 @@ The bundled agents are pre-tiered by task shape (each A/B-verified before downgr
 | heavy (`opus`) | quality-auditor | adversarial audit |
 | `inherit` | worker, pr-comment-resolver | implementation follows the session model |
 
-The Codex mirror maps these to `gpt-5.5` / `gpt-5.4-mini` at sync time (`scripts/sync-codex.sh` `map_model`, overridable via `CODEX_MODEL_INTELLIGENT` / `CODEX_MODEL_FAST`), The worker keeps `inherit` on both platforms (your session model rules); an OPT-IN sync-time pin (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`, recommended `gpt-5.6-terra` @ `medium`) lets Codex-host work threads ride the efficient tier. Details: [`platforms.md`](platforms.md).
+The Codex mirror maps these to `gpt-5.5` / `gpt-5.4-mini` at sync time (`scripts/sync-codex.sh` `map_model`). Precedence at regen: env (`CODEX_MODEL_INTELLIGENT` / `CODEX_MODEL_FAST`) > role-map pins (`models.roles.scoutIntelligent.codex` / `scoutFast.codex` when present in the repo `.flow/config.json`) > those baselines. The worker keeps `inherit` on both platforms (your session model rules); an OPT-IN sync-time pin (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`, recommended `gpt-5.6-terra` @ `medium`) lets Codex-host work threads ride the efficient tier. Details: [`platforms.md`](platforms.md).
+
+### Role map: the one place pins rot (fn-115)
+
+Hardcoded model pins used to scatter across the registry, triage defaults, `work.delegateModel`, and sync-codex scout constants. They all rot as providers ship tiers. The **role map** is the single config surface that is allowed to hold those pins:
+
+```bash
+flowctl config set models.roles.fastJudge.codex gpt-5.6-luna
+flowctl config set models.roles.review.codex gpt-5.6-sol:medium
+flowctl config set models.roles.delegate.codex gpt-5.6-terra
+flowctl config set models.roles.scoutFast.codex gpt-5.6-luna
+flowctl config set models.roles.scoutIntelligent.codex gpt-5.5
+flowctl config set models.verifiedAt 2026-07-21
+```
+
+Roles name **jobs** (`fastJudge` / `review` / `delegate` / `scoutFast` / `scoutIntelligent`), not call sites. Resolution order extends the existing review precedence: explicit CLI / per-task pin > env > role map > registry baseline. Registry ladders stay as availability fallbacks (they heal pin-too-new); the role map heals pin-too-old.
+
+**Refresh path is the setup ceremony**, not Python judgment. `/flow-next:setup` probes installed CLIs, the host agent judges which tiers fit each role, proposes Accept / Stamp-only / Skip, and writes accepted pins + `models.verifiedAt`. When `verifiedAt` is older than ~90 days, `flowctl status` prints one non-blocking line. Skills resolve pins with:
+
+```bash
+flowctl models resolve <role> [--backend codex] [--json]
+```
+
+Do not use `config get work.delegateModel` for the effective delegate model: the merged default bypasses the role map. Use `models resolve delegate`.
 
 **Known Codex limitation (Jul 2026):** on GPT-5.6 Sol / Multi-Agent V2 builds, per-spawn model steering is unreliable end to end - `spawn_agent` stripped `model`/`reasoning_effort`/`agent_type` from its schema (openai/codex#31814, partially restored by #32749; `agent_type` still missing per #32782), explicit overrides are silently dropped when the agent carries a role layer (#33268), and role-profile application is not verifiable (#33314). Until those settle, the ROBUST way to steer a different model from a Codex host is the **same-family self-bridge**: `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<self-contained prompt>"` - a fresh process taking `-m` on the command line, immune to the spawn_agent path entirely. Caveats: the child needs process-spawn + network inside the parent sandbox, and keep the child prompt flat (a child that spawns MAv2 subagents of its own can return undecodable results, #33267).
 

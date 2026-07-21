@@ -14,9 +14,59 @@ CODEX_DIR="$PLUGIN_DIR/codex"
 SRC_SKILLS="$PLUGIN_DIR/skills"
 SRC_AGENTS="$PLUGIN_DIR/agents"
 
-# Model defaults (same as install-codex.sh)
-CODEX_MODEL_INTELLIGENT="${CODEX_MODEL_INTELLIGENT:-gpt-5.5}"
-CODEX_MODEL_FAST="${CODEX_MODEL_FAST:-gpt-5.4-mini}"
+# Model defaults (same as install-codex.sh).
+# Precedence (fn-115.3, mirror-regen only): env > models.roles scout pin > baseline.
+# Role map is read from the dogfood/repo .flow/config.json when present; absent
+# or unparseable keeps the hardcoded baseline. No runtime coupling - env still
+# wins for one-shot overrides.
+_SCOUT_INTELLIGENT_BASELINE="gpt-5.5"
+_SCOUT_FAST_BASELINE="gpt-5.4-mini"
+
+# Read models.roles.<role>.codex model id (strip optional :effort). Silent on miss.
+_role_map_scout_model() {
+  local role="$1"
+  local cfg="$REPO_ROOT/.flow/config.json"
+  [ -f "$cfg" ] || return 0
+  python3 -c '
+import json, sys
+role = sys.argv[1]
+path = sys.argv[2]
+try:
+    data = json.load(open(path, encoding="utf-8"))
+except Exception:
+    sys.exit(0)
+pin = ((data.get("models") or {}).get("roles") or {}).get(role) or {}
+raw = pin.get("codex")
+if raw is None:
+    sys.exit(0)
+text = str(raw).strip()
+if not text:
+    sys.exit(0)
+# model or model:effort — scout map only needs the model id
+print(text.split(":", 1)[0].strip())
+' "$role" "$cfg" 2>/dev/null || true
+}
+
+_resolve_scout_pin() {
+  # $1 = role (scoutFast|scoutIntelligent), $2 = env value (may be empty), $3 = baseline
+  local role="$1"
+  local env_val="$2"
+  local baseline="$3"
+  if [ -n "$env_val" ]; then
+    printf '%s\n' "$env_val"
+    return
+  fi
+  local pin
+  pin="$(_role_map_scout_model "$role")"
+  if [ -n "$pin" ]; then
+    printf '%s\n' "$pin"
+    return
+  fi
+  printf '%s\n' "$baseline"
+}
+
+CODEX_MODEL_INTELLIGENT="$(_resolve_scout_pin scoutIntelligent "${CODEX_MODEL_INTELLIGENT:-}" "$_SCOUT_INTELLIGENT_BASELINE")"
+CODEX_MODEL_FAST="$(_resolve_scout_pin scoutFast "${CODEX_MODEL_FAST:-}" "$_SCOUT_FAST_BASELINE")"
 # Default reasoning effort for scout/analyst/editorial subagents.
 # Review-shaped agents (quality-auditor) override to a higher tier — see reasoning_effort_for().
 CODEX_REASONING_EFFORT="${CODEX_REASONING_EFFORT:-medium}"

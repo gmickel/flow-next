@@ -245,9 +245,17 @@ When **all** gates pass, the host marks delegation active for the loop and
 passes the resolved flags into each spawned worker's prompt (the
 `phases.md` Phase 3c injection point):
 
+```bash
+# Resolve model via role map (fn-115): do NOT use `config get work.delegateModel`
+# (merged default bypasses models.roles.delegate). Precedence: raw on-disk
+# work.delegateModel > models.roles.delegate.codex > baseline gpt-5.6-terra
+# (fn-97 eval-motivated; requires codex CLI >= 0.144).
+DELEGATE_MODEL="$($FLOWCTL models resolve delegate --json | jq -r '.model')"
+```
+
 ```text
 DELEGATE: codex # on; absent/`local` ⇒ standard in-session worker
-DELEGATE_MODEL: <work.delegateModel> # default gpt-5.6-terra (fn-97 eval-motivated default; requires codex CLI >= 0.144)
+DELEGATE_MODEL: <from models resolve delegate>
 DELEGATE_SANDBOX: <yolo|full-auto> # from consent
 DELEGATE_EFFORT_FLOOR: <work.delegateEffort> # default medium (per-run escalation floors here)
 DELEGATE_DECISION: <auto|ask>
@@ -303,10 +311,16 @@ FLOW_DELEGATE_CODEX=1 codex exec \
  `export`ed var would neither reach the hook nor persist across Bash prompt turns.
  Keep it in the command string verbatim.
 - **`-m` / `-c` are ALWAYS passed explicitly** from `DELEGATE_MODEL`
- (`work.delegateModel`, default `gpt-5.6-terra` — a controlled 2026-07 pipeline eval (n=3) had terra-medium match gpt-5.6-sol on correctness at ~2/3 the wall-clock on frontier-authored specs; one task, motivation not guarantee. Escalate to `gpt-5.6-sol` via config for gnarly tasks; needs codex CLI >= 0.144) and the per-run `effective_effort`
+ (resolved by `$FLOWCTL models resolve delegate`: raw on-disk
+ `work.delegateModel` > `models.roles.delegate.codex` > baseline
+ `gpt-5.6-terra`; a controlled 2026-07 pipeline eval (n=3) had terra-medium
+ match gpt-5.6-sol on correctness at ~2/3 the wall-clock on frontier-authored
+ specs; one task, motivation not guarantee. Escalate via
+ `config set work.delegateModel gpt-5.6-sol` or the role map for gnarly tasks;
+ needs codex CLI >= 0.144) and the per-run `effective_effort`
  (default `medium`, escalated below). **There is NO "defer to `~/.codex/config.toml`"
- path** — `--ignore-user-config` deliberately skips the user Codex config (MCP
- isolation wins), so model + effort MUST come from flow config, never the user's
+ path** - `--ignore-user-config` deliberately skips the user Codex config (MCP
+ isolation wins), so model + effort MUST come from flow resolution, never the user's
  codex config.
 - **Cross-check vs. the proven review-path invocation** in
  `run_codex_exec()` in `flowctl.py` (same `-m`, same `-c 'model_reasoning_effort="..."'`

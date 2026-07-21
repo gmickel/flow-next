@@ -7,7 +7,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, setup-block, detect, status, config, sync, pilot-log, review-backend, review-rounds,
+init, setup-block, detect, status, config, sync, pilot-log, review-backend, models, review-rounds,
 memory, prospect, anchor, repo-map, prime, glossary, strategy, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
 checkpoint, rp, codex, copilot, cursor,
@@ -718,7 +718,10 @@ flowctl config toggle memory.enabled [--json]
 | `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. In Ralph mode `always-ask` resolves to *queue*, not prompt. |
 | `tracker.readyState` | string | `null` | **Readiness projection (fn-58, 1.12.0+).** The tracker workflow state that means "ready for work" — a Linear workflow-state **name** or a **Jira status name** (both matched case-insensitive/trimmed against `status.raw`; names, not `state.type` — a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone; the Jira name is used RAW in the promoted-lane JQL, validated to exist at ceremony time), or a GitHub / GitLab **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready — a normal state, never an error). Set by the `/flow-next:tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag — **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/interview's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant); clear with `flowctl config set tracker.readyState null` (the literal `null` token is stored as JSON null, not the string). |
 | `work.delegate` | `codex \| false` | `false` | Opt-in `/flow-next:work` implementation-delegation to a local `codex exec`. **Set the value to the string `codex` to activate** (`flowctl config set work.delegate codex`) — **any other value, including bool `true`, is OFF**; the activation predicate is `value == "codex"`. **OFF by default** — with it off the work flow is byte-identical to today. Resolution: arg token `delegate:codex` / `delegate:local` > this config > hard default OFF. The generic fuzzy "use codex" is NOT a delegation trigger (it stays mapped to the review backend). See [`codex-delegation.md`](../skills/flow-next-work/references/codex-delegation.md). |
-| `work.delegateModel` | string | `gpt-5.6-terra` | Model passed to `codex exec` (`-m`) for delegated implementation. Default is eval-motivated (2026-07 controlled pipeline eval, n=3: terra-medium matched `gpt-5.6-sol` on correctness at ~2/3 the wall-clock on frontier-authored specs — one task, motivation not guarantee); escalate to `gpt-5.6-sol` for gnarly tasks. Hard floor, no fn-76 resolution ladder on this path: requires codex CLI >= 0.144 (older CLIs 400; set `gpt-5.5` until you upgrade). |
+| `work.delegateModel` | string | `gpt-5.6-terra` | On-disk override for the model passed to `codex exec` (`-m`) for delegated implementation. When **raw-set** on disk it wins over `models.roles.delegate.codex`; the merged default alone does **not** beat the role map (skills must call `flowctl models resolve delegate`, not `config get work.delegateModel`). Baseline is eval-motivated (2026-07 controlled pipeline eval, n=3: terra-medium matched `gpt-5.6-sol` on correctness at ~2/3 the wall-clock on frontier-authored specs; one task, motivation not guarantee); escalate to `gpt-5.6-sol` for gnarly tasks. Hard floor, no fn-76 ladder on this path: requires codex CLI >= 0.144 (older CLIs 400; set `gpt-5.5` until you upgrade). |
+| `models.roles.<role>.<backend>` | string | (none) | **Role-map pin (fn-115).** Semantic jobs, not call-site pins. Roles: `fastJudge`, `review`, `delegate`, `scoutFast`, `scoutIntelligent`. Backends: `codex`, `copilot`, `cursor`. Value is `model` or `model:effort`. Schema-validated on `config set` (unknown role/backend rejected with the valid list). Feeds triage judge, review dispatch defaults, work delegate resolution, and sync-codex scout pins (mirror-regen only). |
+| `models.verifiedAt` | string (ISO date) | (none) | Stamp written by `/flow-next:setup` after the model-pin refresh ceremony. When older than ~90 days, `flowctl status` / setup print one line (never blocks). Absent = no nudge (fresh repos stay quiet). |
+| `models.verifiedWith` | mixed | (none) | Optional free-form record of CLI versions probed during the refresh ceremony. |
 | `work.delegateEffort` | string | `medium` | Reasoning-effort floor (`none | low | medium | high | xhigh`), emitted as `-c model_reasoning_effort=` on the delegated `codex exec`. The per-run risk escalation floors against this; effort above `medium` was pure overhead in the same eval. The effort enum includes `none`, not `minimal`. |
 | `work.delegateSandbox` | string | `yolo` | Codex sandbox mode (`yolo | full-auto`). Persisted by the one-time consent gate. `yolo` has a wider blast radius — the gate surfaces this before first use. |
 | `work.delegateConsent` | bool | `false` | One-time-consent flag, written by the host consent gate after the user opts in. Headless/Ralph requires this pre-set to `true` (no live prompt path). |
@@ -740,6 +743,37 @@ flowctl config toggle memory.enabled [--json]
 Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.json` > error.
 
 No auto-detect. Run `/flow-next:setup` (or `flowctl config set review.backend ...`) to configure.
+
+### models resolve
+
+Read-only role-map lookup (fn-115). Pure map + precedence via the existing resolvers; no probing, no ranking, no LLM. The **one** new flowctl surface this spec adds: skills that previously read `config get work.delegateModel` (merged default, bypasses the role map) must call this for the `delegate` role instead.
+
+```bash
+flowctl models resolve <role> [--backend <codex|copilot|cursor>] [--json]
+```
+
+Roles: `fastJudge` | `review` | `delegate` | `scoutFast` | `scoutIntelligent`. Default backend is `codex`.
+
+Resolution order (extends fn-76):
+
+1. Role-specific overrides (raw on-disk `work.delegateModel` for `delegate`; CLI/env for other consumers)
+2. Env when the role has one (`FLOW_<BACKEND>_MODEL` for review; `CODEX_MODEL_FAST` / `CODEX_MODEL_INTELLIGENT` for scouts)
+3. Config role map `models.roles.<role>.<backend>`
+4. Registry / role baseline (`fastJudge` / `delegate` / review defaults; scouts have no flowctl baseline: empty model + `source: baseline` when unset; `sync-codex.sh` keeps its own baseline constants)
+
+Text mode prints the bare model id (empty when none). JSON:
+
+```json
+{"success": true, "role": "delegate", "backend": "codex", "model": "gpt-5.6-terra", "effort": null, "source": "baseline"}
+```
+
+`source` ∈ `env` | `role-map` | `config` | `baseline` (and `explicit` when a caller override is wired through the same resolvers).
+
+Work-skill callsite:
+
+```bash
+DELEGATE_MODEL="$($FLOWCTL models resolve delegate --json | jq -r '.model')"
+```
 
 ### review-backend
 

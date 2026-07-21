@@ -503,6 +503,120 @@ Print the prompt content built above and stop for the user's reply.
 
 **Note:** If none of rp-cli, codex, copilot, or cursor-agent is detected, add note to the Review question: "No review backend detected. Install rp-cli, codex, copilot, or cursor-agent for review support."
 
+### 6e: Model-pin refresh ceremony (fn-115.2)
+
+Runs on **fresh setup AND re-runs**, **after** the Step 6d config questions have been asked. flowctl only stores and validates pins (task .1); this ceremony is pure agent prose: the host probes, judges, proposes, and stamps. No new flowctl subcommands.
+
+**Autonomous skip (silent).** Under the same three autonomy markers fn-113 uses, this ceremony is skipped SILENTLY (no prompt, no probe, no write, no summary line noise). Set `MODELS_CEREMONY="skipped (autonomous)"` and continue to Step 7:
+
+```bash
+# fn-115.2: same three markers fn-113 uses (FLOW_RALPH / REVIEW_RECEIPT_PATH /
+# FLOW_AUTONOMOUS). mode:autonomous is also honored so pilot/headless setup
+# never blocks on a pin prompt.
+MODELS_ASK=1
+if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
+ || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
+ MODELS_ASK=0
+ MODELS_CEREMONY="skipped (autonomous)"
+fi
+```
+
+When `MODELS_ASK=0`, do **nothing else** in 6e (no CLI probes, no receipt scan, no plain-text numbered prompt, no `config set`). Proceed to Step 7.
+
+When `MODELS_ASK=1`, run (a) through (e) in order. All probes are **foreground**, short-timeout, and skipped when the matching CLI is absent (`HAVE_*=0` from 6a). A failed or timed-out probe is ground-truth "unknown for this install", never a hard setup failure.
+
+**(a) Probe installed CLIs for ground truth** (skip any probe whose CLI is absent):
+
+```bash
+# Read current role map + verifiedAt (raw = only on-disk pins; empty means unset).
+CURRENT_MODELS=$("${PLUGIN_ROOT}/scripts/flowctl" config get models --raw --json 2>/dev/null || echo '{"value":null}')
+CURRENT_VERIFIED_AT=$("${PLUGIN_ROOT}/scripts/flowctl" config get models.verifiedAt --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+
+# cursor-agent --list-models (HAVE_CURSOR=1 only; ~60s cap is fine, output is a list)
+if [[ "$HAVE_CURSOR" == "1" ]]; then
+ CURSOR_MODELS=$(cursor-agent --list-models 2>/dev/null | head -200 || true)
+fi
+
+# copilot -p "/model" (HAVE_COPILOT=1 only; short foreground; captures the
+# org-allowlisted roster this account actually sees)
+if [[ "$HAVE_COPILOT" == "1" ]]; then
+ COPILOT_MODELS=$(copilot -p "/model" 2>/dev/null | head -100 || true)
+fi
+
+# codex accept-probe (HAVE_CODEX=1 only): short foreground smoke against
+# candidate model ids the agent is considering for roles (not a long review).
+# Shape: try one candidate at a time with a tight timeout; treat "requires a
+# newer version of Codex" / model-not-found as reject, clean reply as accept.
+# Example (agent picks the candidates from its knowledge + the baseline seeds):
+# timeout 20 codex exec -m gpt-5.6-sol --skip-git-repo-check "reply: ok" </dev/null
+# Record which candidates this CLI accepts into CODEX_ACCEPTED.
+```
+
+Optional: capture CLI versions into a free-form `models.verifiedWith` note (string or small JSON object). Skip when a CLI is absent.
+
+**(b) Failure-feedback scan (zero new plumbing).** Before judging, scan recent review receipts under `.flow/review-receipts/` (and any receipt paths the agent already knows). Receipts record the model that actually ran in the `model` field (fn-76 ladder stamps the downgraded/floored model, never the fabricated ranking top). Compare each receipt's `model` against the current role-map pin for that backend (`models.roles.review.<backend>` when present, else the registry baseline the agent knows). When `model` is non-null and **differs** from the pinned model, treat it as a fallback-ladder activation. Fold "pin X keeps failing -> propose replacement" into the judgment in (c): prefer a pin that recent receipts actually ran successfully, and prefer replacing a pin that repeatedly laddered away. Missing receipt dir or empty `model` fields = no signal (do not invent failures).
+
+**(c) Judge.** From the agent's own knowledge (optionally a quick web check for brand-new tier names), plus the probe ground truth in (a) and the receipt signal in (b), pick current tiers for each role x backend that this install can actually reach. Role intent (do not invent extra roles):
+
+| Role | Intent | Seed direction (agent re-ranks) |
+|---|---|---|
+| `fastJudge` | fast/cheap triage | codex: luna-class; copilot: haiku-class; cursor: composer / luna-low |
+| `review` | strongest acceptable review gate | codex: sol:medium (sol:high is escalation via per-task `review:`); never mini/nano; never a weak default that silently ships |
+| `delegate` | value-tier implementer | codex: terra-class (feeds `work.delegateModel` when that leaf is unset on disk) |
+| `scoutFast` | cheap codex-mirror scout | luna-class (replaces the old sync-codex FAST pin) |
+| `scoutIntelligent` | judgment codex-mirror scout | stronger 5.6-family tier (replaces the old sync-codex INTELLIGENT pin) |
+
+Backends that accept role pins: `codex`, `copilot`, `cursor` only. Pin shape: `model` or `model:effort` (cursor bakes effort into the model id; prefer bare model there). Only propose pins for backends whose CLI is present **or** that already have an on-disk pin you are refreshing. Never invent speculative roles.
+
+**(d) Propose via plain-text numbered prompt.** Diff the judged map against the current on-disk `models.roles` tree. For each cell that would change (or is newly set), show `current -> proposed` with a **one-line reason** (probe evidence, receipt ladder signal, or tier fit). If nothing would change, still offer a "stamp verifiedAt only" path so re-runs refresh the date without churning pins.
+
+Ask via `plain-text numbered prompt`. Frozen option shape:
+
+```json
+{
+ "header": "Model pins",
+ "question": "Refresh models.roles pins from today's probe? (flowctl stores; you pick. Re-run setup anytime to refresh again.)",
+ "options": [
+ {"label": "Accept proposed map (Recommended)", "description": "Write the judged pins via flowctl config set and stamp models.verifiedAt today"},
+ {"label": "Stamp verifiedAt only", "description": "Keep every current pin; only refresh models.verifiedAt to today"},
+ {"label": "Skip", "description": "Write nothing; leave models.roles and models.verifiedAt untouched"}
+ ],
+ "multiSelect": false
+}
+```
+
+Before the ask, print a compact table (or bullet list) of the proposed diffs so the user can see every `current -> proposed (reason)` line. When the proposed map equals the current map, say so explicitly and lean on "Stamp verifiedAt only".
+
+**(e) Write accepted pins + stamp `models.verifiedAt`.** Only when the user accepted a write path:
+
+- **Accept proposed map:** for each accepted pin, write the exact keys task .1 validates:
+ ```bash
+ "${PLUGIN_ROOT}/scripts/flowctl" config set models.roles.<role>.<backend> "<pin>" --json
+ # roles: fastJudge | review | delegate | scoutFast | scoutIntelligent
+ # backends: codex | copilot | cursor
+ # pin: model OR model:effort
+ ```
+ Then stamp the date (ISO `YYYY-MM-DD`, UTC today is fine):
+ ```bash
+ "${PLUGIN_ROOT}/scripts/flowctl" config set models.verifiedAt "$(date -u +%Y-%m-%d)" --json
+ ```
+ Optional: `"${PLUGIN_ROOT}/scripts/flowctl" config set models.verifiedWith '<free-form note of CLI versions probed>' --json`
+
+- **Stamp verifiedAt only:** run only the `models.verifiedAt` set above; do not touch `models.roles.*`.
+
+- **Skip:** write nothing. `MODELS_CEREMONY="skipped"`.
+
+After any write, read back one sample key (e.g. `models.verifiedAt` and any pin you set) with `config get --raw --json` so a failed persist is visible. Set `MODELS_CEREMONY` to one of: `written` / `stamped` / `skipped` / `skipped (autonomous)`.
+
+**(f) Offer (not force) updating the CLAUDE.md / AGENTS.md routing table.** The model-routing scaffold block (Step 7's Model Routing section) is agent-owned prose ("this section is yours now"). After a successful pin write (`written` or `stamped`), offer via `plain-text numbered prompt` (sync-codex rewrites the ask) whether to refresh that block's scores/wiring to match the new pins in the same pass:
+
+- `Refresh routing table` - re-enter the Step 7 Model Routing scaffold pipeline (or, if the scaffold question was not offered this run, perform a focused edit of the existing `<!-- flow-next:model-routing:start -->` block so role-adjacent lines match the new pins). Never silent overwrite of a customized block; honor Keep mine / Overwrite the same way Step 7 already does.
+- `Leave routing table` (Recommended when the user did not ask for it) - no edit.
+
+When the user skipped the pin write, do not offer the routing-table refresh.
+
+**Doctrine boundary (load-bearing):** the agent probes/judges/proposes; flowctl only stores + schema-validates + does the mechanical 90-day staleness nudge (already in `flowctl status`). Never spawn a second LLM from setup to rank models. Never block setup on a probe failure.
+
 ## Step 7: Process Answers
 
 Only process answers for questions that were asked (config values that were unset). Skip processing for config that was already set.
@@ -735,6 +849,10 @@ Documentation updated:
 Model routing scaffold: <ROUTING_OUTCOME — e.g. "written to CLAUDE.md" | "kept (customized)" | "unchanged (already current)" | "skipped" | "skipped (shim)" | "not offered">
 <if Scaffold + enable codex delegation was chosen, also:>
 - Codex delegation: <ROUTING_DELEGATE — "enabled (work.delegate=codex; first-use consent still required)" | "failed">
+
+Model-pin ceremony (fn-115.2): <MODELS_CEREMONY — "written" | "stamped" | "skipped" | "skipped (autonomous)">
+- Role map keys: models.roles.<fastJudge|review|delegate|scoutFast|scoutIntelligent>.<codex|copilot|cursor>
+- Stamp key: models.verifiedAt (ISO date). Re-run setup to refresh; flowctl status nudges after ~90 days.
 
 Notes:
 - Re-run /flow-next:setup after plugin updates to refresh scripts
