@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Changed
+
+- **Review backend registry driver + fenced-JSON tallies (fn-112).** The nine `codex`/`copilot`/`cursor` × `impl`/`plan`/`completion` review commands collapse onto one `cmd_backend_review` driver; per-backend variance lives as `BACKEND_REGISTRY` hooks (sandbox, session marker, argv budget). Review prompts move to skill `references/*-prompt.md` templates with byte-identical embedded FALLBACKs. Reviewer tallies prefer one fenced `json` block (`suppressed_count`, `classification_counts`, `unaddressed`, `deep_findings`); prose-regex parsers remain a logged fallback. The `<verdict>` tag contract is unchanged. Plan/completion handlers self-write review status. Dual-copy flowctl mirrored. No version bump (batched).
+
 ### Fixed
 
 - **fn-111/fn-119 follow-ups (PR-review findings).** The parallel runner fails loudly on files where unittest discovers zero tests (rc-0 no-op guard); `test_codex_hooks_normalize.py` converted from pytest-style module functions to unittest (its 10 tests had silently never run in CI); the bundled TUI migrated off the removed epic aliases (`specs --json`, `--spec` flags, boundary mapping of the canonical `spec` wire key).

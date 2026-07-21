@@ -1,0 +1,112 @@
+# Implementation Review: Branch Changes vs main
+
+Review all changes on the current branch compared to main.
+
+**Context:** You have full access to read files from the repository. Use `<diff_content>` to
+identify what changed, then explore the codebase as needed to understand context and verify
+implementations.
+
+## Diff Summary
+```
+ 3 files changed, 10 insertions(+), 2 deletions(-)
+```
+
+## Review Criteria (Carmack-level)
+
+1. **Correctness** - Does the code do what it claims?
+2. **Reliability** - Can this fail silently or cause flaky behavior?
+3. **Simplicity** - Is this the simplest solution?
+4. **Security** - Injection, auth gaps, resource exhaustion?
+5. **Edge Cases** - Failure modes, race conditions, malformed input?
+
+## Scenario Exploration (for changed code only)
+
+Walk through these scenarios for new/modified code paths:
+- Happy path: Normal operation with valid inputs
+- Invalid inputs: Null, empty, malformed data
+- Boundary conditions: Min/max values, empty collections
+- Concurrent access: Race conditions, deadlocks
+- Network issues: Timeouts, partial failures
+- Resource exhaustion: Memory, disk, connections
+- Security attacks: Injection, overflow, DoS vectors
+- Data corruption: Partial writes, inconsistency
+- Cascading failures: Downstream service issues
+
+Only flag issues in the **changed code** - not pre-existing patterns.
+
+## Verdict Scope
+
+Your VERDICT must only consider issues in the **changed code**:
+- Issues **introduced** by this changeset
+- Issues **directly affected** by this changeset
+- Pre-existing issues that would **block shipping** this specific change
+
+Do NOT mark NEEDS_WORK for:
+- Pre-existing issues in untouched code
+- "Nice to have" improvements outside the diff
+- Style nitpicks in files you didn't change
+
+You MAY mention these as "FYI" observations without affecting the verdict.
+
+## Code-smell baseline (always-on, judgement calls — repo standards override; skip what tooling enforces)
+Beyond correctness, name any of these you spot and quote the hunk (each a heuristic, never a hard violation):
+Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality.
+
+## Requirements coverage (only if the spec has R-IDs like `- **R1:** ...`)
+If R-IDs are present, read the epic's `## Acceptance Criteria` (tolerate legacy `## Acceptance` / `## Acceptance criteria`) and emit:
+| R-ID | Status | Evidence |
+Status ∈ met / partial / not-addressed / deferred. After the table emit `Unaddressed R-IDs: [...]`. A non-deferred `not-addressed` R-ID forces NEEDS_WORK. If no R-IDs anywhere, skip this block entirely.
+## Confidence (pick ONE anchor; no interpolation)
+- **100** — definitive from code alone (mechanical: off-by-one, wrong type, swapped args).
+- **75** — full path traced; a normal caller hits it; reproducible from the diff.
+- **50** — depends on conditions visible but not confirmable here (e.g. can this be null? callers not in diff).
+- **25** — needs runtime conditions with no direct evidence.
+- **0** — speculative; don't file.
+Suppression gate: drop findings below 75, EXCEPT P0 at 50+ (those survive). Emit a `Suppressed findings:` count when any dropped.
+## Introduced vs pre-existing
+Classify each finding: **introduced** (this diff caused or newly exposed it) or **pre_existing** (already on base, untouched — a finding on an unchanged line is pre_existing by default; confirm with `git blame`/base-file read when cheap).
+Verdict gate: only `introduced` findings affect the verdict — a review whose survivors are all `pre_existing` ships. List pre-existing under `## Pre-existing issues (not blocking this verdict)` as `[sev, confidence N, introduced=false] file:line — summary`; never drop them. End with `Classification counts: N introduced, M pre_existing.`
+## Protected artifacts
+NEVER recommend deleting / gitignoring / removing these committed pipeline paths (flag bad CONTENT inside them, never their existence): `.flow/*`, `.flow/bin/*`, `.flow/memory/*`, `.flow/specs/*.md`, `.flow/tasks/*.md`, `docs/plans/*`, `docs/solutions/*`, `scripts/ralph/*`. Discard any such finding during synthesis; emit a `Protected-path filter:` count when any dropped.
+## Output Format
+
+For each surviving `introduced` finding:
+- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
+- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
+- **Classification**: introduced
+- **File:Line**: Exact location
+- **Problem**: What's wrong
+- **Suggestion**: How to fix
+
+Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding as `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+
+After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
+- A `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
+
+Be critical. Find real issues.
+
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
+
+## Structured tallies (fenced JSON)
+After the findings (and before the verdict tag), emit exactly ONE fenced json
+code block containing a single JSON object. Omit keys that do not apply; never
+invent counts. Do NOT put the <verdict> tag inside the block.
+
+Schema keys (all optional):
+- `suppressed_count`: object mapping anchor strings ("0"|"25"|"50"|"75"|"100") to ints
+- `classification_counts`: `{"introduced": int, "pre_existing": int}`
+- `unaddressed`: array of R-ID strings (use [] when none remain unaddressed)
+- `deep_findings`: array of finding objects (deep-pass only; omit on primary reviews)
+
+Example (wrap the next line in a json fence):
+{"suppressed_count":{"50":3,"25":7},"classification_counts":{"introduced":2,"pre_existing":4},"unaddressed":["R3","R5"]}
+
+Prose tally lines (`Suppressed findings:`, `Classification counts:`, `Unaddressed R-IDs:`)
+remain accepted as a logged fallback when this block is omitted.
+**REQUIRED**: End your response with exactly one verdict tag:
+- `<verdict>SHIP</verdict>` - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
+- `<verdict>NEEDS_WORK</verdict>` - `introduced` issues or unaddressed R-IDs must be fixed first
+- `<verdict>MAJOR_RETHINK</verdict>` - Fundamental problems, reconsider approach

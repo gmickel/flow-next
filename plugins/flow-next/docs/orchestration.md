@@ -42,7 +42,7 @@ The Codex mirror maps these to `gpt-5.5` / `gpt-5.4-mini` at sync time (`scripts
 
 ### Review backends — cross-model review
 
-The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | none`:
+The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | none`. The three CLI review backends (`codex` / `copilot` / `cursor`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline (fn-112); genuine variance is hooks, not cloned commands.
 
 ```bash
 flowctl config set review.backend codex                    # project default

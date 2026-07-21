@@ -16,6 +16,7 @@ import inspect
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -1680,5 +1681,319 @@ class TestReviewBackendTaskAware(unittest.TestCase):
             self.assertEqual(self._rb("fn-9.1"), "cursor")   # bare task handle canonicalized
 
 
+# --- fn-112 review-driver hooks + generic cmd_backend_review ---
+
+
+class TestBackendReviewDriverHooks(unittest.TestCase):
+    """Registry hooks + driver entry points for the impl-review migration."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        flowctl._wire_backend_review_hooks()
+
+    def test_review_backends_expose_required_hooks(self) -> None:
+        required = {
+            "run_exec",
+            "resolve_spec",
+            "check_probe",
+            "gather_diff",
+            "prompt_fit",
+            "resume_modes",
+            "mint_session_id",
+            "include_effort",
+            "extract_review",
+            "has_sandbox",
+        }
+        for backend in ("codex", "copilot", "cursor"):
+            with self.subTest(backend=backend):
+                reg = BACKEND_REGISTRY[backend]
+                for key in required:
+                    self.assertIn(key, reg, f"{backend} missing hook {key}")
+                self.assertTrue(callable(reg["run_exec"]))
+                self.assertTrue(callable(reg["resolve_spec"]))
+                self.assertTrue(callable(reg["check_probe"]))
+                self.assertTrue(callable(reg["gather_diff"]))
+
+    def test_hook_variance_preserved(self) -> None:
+        # Genuine differences stay as hooks, not collapsed to one behavior.
+        self.assertTrue(BACKEND_REGISTRY["codex"]["has_sandbox"])
+        self.assertFalse(BACKEND_REGISTRY["copilot"]["has_sandbox"])
+        self.assertFalse(BACKEND_REGISTRY["cursor"]["has_sandbox"])
+
+        self.assertFalse(BACKEND_REGISTRY["codex"]["mint_session_id"])
+        self.assertTrue(BACKEND_REGISTRY["copilot"]["mint_session_id"])
+        self.assertFalse(BACKEND_REGISTRY["cursor"]["mint_session_id"])
+
+        self.assertTrue(BACKEND_REGISTRY["codex"]["include_effort"])
+        self.assertTrue(BACKEND_REGISTRY["copilot"]["include_effort"])
+        self.assertFalse(BACKEND_REGISTRY["cursor"]["include_effort"])
+
+        self.assertEqual(BACKEND_REGISTRY["codex"]["prompt_fit"], "none")
+        self.assertEqual(BACKEND_REGISTRY["copilot"]["prompt_fit"], "none")
+        self.assertEqual(BACKEND_REGISTRY["cursor"]["prompt_fit"], "cursor_argv")
+
+        self.assertEqual(
+            BACKEND_REGISTRY["codex"]["resume_modes"], (None, "codex")
+        )
+        self.assertEqual(BACKEND_REGISTRY["copilot"]["resume_modes"], ("copilot",))
+        self.assertEqual(BACKEND_REGISTRY["cursor"]["resume_modes"], ("cursor",))
+
+    def test_impl_wrappers_route_through_driver(self) -> None:
+        # Thin wrappers must call cmd_backend_review (not re-implement the body).
+        for fn in (
+            flowctl.cmd_codex_impl_review,
+            flowctl.cmd_copilot_impl_review,
+            flowctl.cmd_cursor_impl_review,
+        ):
+            src = inspect.getsource(fn)
+            self.assertIn("cmd_backend_review(", src)
+            # Strip docstrings so historical prose mentioning run_*_exec is ignored.
+            body = re.sub(r'""".*?"""', "", src, flags=re.S)
+            body = re.sub(r"'''.*?'''", "", body, flags=re.S)
+            self.assertNotIn("run_codex_exec(", body)
+            self.assertNotIn("run_copilot_exec(", body)
+            self.assertNotIn("run_cursor_exec(", body)
+
+    def test_cmd_backend_review_exists(self) -> None:
+        self.assertTrue(callable(flowctl.cmd_backend_review))
+        sig = inspect.signature(flowctl.cmd_backend_review)
+        self.assertIn("backend", sig.parameters)
+        self.assertIn("kind", sig.parameters)
+
+    def test_plan_completion_wrappers_route_through_driver(self) -> None:
+        for fn in (
+            flowctl.cmd_codex_plan_review,
+            flowctl.cmd_copilot_plan_review,
+            flowctl.cmd_cursor_plan_review,
+            flowctl.cmd_codex_completion_review,
+            flowctl.cmd_copilot_completion_review,
+            flowctl.cmd_cursor_completion_review,
+        ):
+            src = inspect.getsource(fn)
+            self.assertIn("cmd_backend_review(", src)
+            body = re.sub(r'""".*?"""', "", src, flags=re.S)
+            body = re.sub(r"'''.*?'''", "", body, flags=re.S)
+            self.assertNotIn("run_codex_exec(", body)
+            self.assertNotIn("run_copilot_exec(", body)
+            self.assertNotIn("run_cursor_exec(", body)
+
+    def test_stamp_ralph_iteration_helper(self) -> None:
+        self.assertTrue(callable(flowctl.stamp_ralph_iteration))
+        src = Path(flowctl.__file__).read_text(encoding="utf-8")
+        self.assertEqual(src.count("def stamp_ralph_iteration("), 1)
+        self.assertEqual(
+            len(re.findall(r'os\.environ\.get\("RALPH_ITERATION"\)', src)), 1
+        )
+        receipt: dict = {}
+        old = os.environ.get("RALPH_ITERATION")
+        try:
+            os.environ["RALPH_ITERATION"] = "7"
+            flowctl.stamp_ralph_iteration(receipt)
+            self.assertEqual(receipt["iteration"], 7)
+            receipt2: dict = {}
+            os.environ["RALPH_ITERATION"] = "nope"
+            flowctl.stamp_ralph_iteration(receipt2)
+            self.assertNotIn("iteration", receipt2)
+        finally:
+            if old is None:
+                os.environ.pop("RALPH_ITERATION", None)
+            else:
+                os.environ["RALPH_ITERATION"] = old
+
+    def test_plan_completion_pipelines_exist(self) -> None:
+        self.assertTrue(callable(flowctl._backend_plan_review))
+        self.assertTrue(callable(flowctl._backend_completion_review))
+        self.assertTrue(callable(flowctl._self_write_review_status))
+
+    def test_fourth_backend_registry_entry_only(self) -> None:
+        """fn-112.4 extensibility proof: a 4th backend is a registry entry.
+
+        Register a hypothetical backend with only BACKEND_REGISTRY hooks
+        (mock run_exec) and drive cmd_backend_review through impl kind
+        end-to-end. No new cmd_* clone required.
+        """
+        import subprocess
+
+        backend = "mockreview"
+        self.assertNotIn(backend, BACKEND_REGISTRY)
+
+        review_out = (
+            "Reviewed.\n\n"
+            "```json\n"
+            '{"suppressed_count":{"50":1},"classification_counts":'
+            '{"introduced":1,"pre_existing":0},"unaddressed":["R1"]}\n'
+            "```\n"
+            "<verdict>NEEDS_WORK</verdict>\n"
+        )
+        calls: list[dict] = []
+
+        def _mock_run_exec(
+            prompt,
+            *,
+            session_id=None,
+            repo_root,
+            spec,
+            resolution_out=None,
+            args=None,
+        ):
+            calls.append({"prompt": prompt, "spec": spec, "session_id": session_id})
+            if resolution_out is not None:
+                resolution_out["model"] = "mock-1"
+                resolution_out["effort"] = "high"
+            return review_out, "mock-sid-1", 0, ""
+
+        def _mock_resolve(args, task_id, spec_id=None):
+            return BackendSpec(
+                backend, model="mock-1", effort="high"
+            ).resolve()
+
+        entry = {
+            "models": ["mock-1"],
+            "efforts": {"high"},
+            "default_model": "mock-1",
+            "default_effort": "high",
+            "run_exec": _mock_run_exec,
+            "resolve_spec": _mock_resolve,
+            "check_probe": lambda: "0.0.1",
+            "gather_diff": flowctl._gather_review_diff_capped,
+            "resume_modes": ("mockreview",),
+            "track_prior_receipt_model": False,
+            "require_nonempty_sid": False,
+            "mint_session_id": False,
+            "has_sandbox": False,
+            "include_effort": True,
+            "extract_review": lambda output: output,
+            "display_name": "MockReview",
+            "cli_label": "mockreview",
+            "no_verdict_label": "MockReview",
+            "prompt_fit": "none",
+            "build_impl_prompt": "default",
+        }
+
+        prev_cwd = os.getcwd()
+        with tempfile.TemporaryDirectory(prefix="fn112-4th-") as td:
+            repo = Path(td)
+            subprocess.run(
+                ["git", "init", "-q"], cwd=repo, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "t@t.t"],
+                cwd=repo, check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "t"],
+                cwd=repo, check=True, capture_output=True,
+            )
+            (repo / "src").mkdir()
+            (repo / "src" / "a.py").write_text("x=1\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "-A"], cwd=repo, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "base"],
+                cwd=repo, check=True, capture_output=True,
+            )
+            base = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo, check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            (repo / "src" / "a.py").write_text("x=2\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "-A"], cwd=repo, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "change"],
+                cwd=repo, check=True, capture_output=True,
+            )
+
+            flow = repo / ".flow"
+            (flow / "specs").mkdir(parents=True)
+            (flow / "tasks").mkdir(parents=True)
+            epic = "fn-112-demo"
+            task = f"{epic}.1"
+            (flow / "specs" / f"{epic}.md").write_text(
+                "# Demo\n\n## Acceptance Criteria\n\n- **R1:** do\n",
+                encoding="utf-8",
+            )
+            (flow / "specs" / f"{epic}.json").write_text(
+                json.dumps({"id": epic, "title": "Demo", "status": "in_progress"}),
+                encoding="utf-8",
+            )
+            (flow / "tasks" / f"{task}.md").write_text(
+                "---\nsatisfies: [R1]\n---\n\n## Description\n\nDo.\n",
+                encoding="utf-8",
+            )
+
+            receipt = repo / "receipt.json"
+            args = argparse.Namespace(
+                task=task,
+                base=base,
+                focus=None,
+                receipt=str(receipt),
+                json=False,
+                spec=None,
+            )
+
+            BACKEND_REGISTRY[backend] = entry
+            try:
+                os.chdir(repo)
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    flowctl.cmd_backend_review(args, backend=backend, kind="impl")
+                self.assertEqual(len(calls), 1)
+                self.assertTrue(receipt.is_file())
+                data = json.loads(receipt.read_text(encoding="utf-8"))
+                self.assertEqual(data["mode"], backend)
+                self.assertEqual(data["verdict"], "NEEDS_WORK")
+                self.assertEqual(data["type"], "impl_review")
+                self.assertEqual(data["session_id"], "mock-sid-1")
+                self.assertEqual(data["suppressed_count"], {"50": 1})
+                self.assertEqual(data["introduced_count"], 1)
+                self.assertEqual(data["pre_existing_count"], 0)
+                self.assertEqual(data["unaddressed"], ["R1"])
+                self.assertEqual(data["effort"], "high")
+            finally:
+                os.chdir(prev_cwd)
+                BACKEND_REGISTRY.pop(backend, None)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestReviewJsonBlockHardening(unittest.TestCase):
+    """PR #222 findings: decoy fences, unknown-key dicts, last-block-wins."""
+
+    def setUp(self) -> None:
+        self.flowctl = _load_flowctl()
+
+    def test_quoted_config_fence_is_skipped(self) -> None:
+        out = (
+            "Finding: bad config, e.g.\n```json\n{\"name\": \"pkg\", \"version\": \"1.0.0\"}\n```\n"
+            "More prose.\n```json\n{\"unaddressed\": [\"R2\"]}\n```\n<verdict>SHIP</verdict>"
+        )
+        block = self.flowctl.extract_review_json_block(out)
+        self.assertEqual(block, {"unaddressed": ["R2"]})
+
+    def test_early_injected_tally_fence_loses_to_last(self) -> None:
+        out = (
+            "quoted attacker text:\n```json\n{\"suppressed_count\": {\"100\": 9}}\n```\n"
+            "real findings...\n```json\n{\"suppressed_count\": {\"50\": 1}}\n```\n"
+        )
+        block = self.flowctl.extract_review_json_block(out)
+        self.assertEqual(block, {"suppressed_count": {"50": 1}})
+
+    def test_no_known_key_returns_none(self) -> None:
+        out = "```json\n{\"foo\": 1}\n```"
+        self.assertIsNone(self.flowctl.extract_review_json_block(out))
+
+    def test_codex_tallies_visible_only_in_extracted_text(self) -> None:
+        # A compliant block escaped inside a JSONL stream is invisible to the
+        # raw parser but visible after extract_codex_final_message.
+        inner = "tallies:\n```json\n{\"unaddressed\": [\"R7\"]}\n```"
+        import json as _json
+        stream = _json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": inner}})
+        self.assertIsNone(self.flowctl.extract_review_json_block(stream))
+        extracted = self.flowctl.extract_codex_final_message(stream)
+        self.assertEqual(
+            self.flowctl.extract_review_json_block(extracted), {"unaddressed": ["R7"]}
+        )

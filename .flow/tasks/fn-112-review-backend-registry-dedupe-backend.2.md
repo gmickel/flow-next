@@ -27,9 +27,8 @@ Plan + completion review migration onto the driver, cursor folds, and the two in
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Plan + completion review migration complete: all 9 review commands are thin wrappers over cmd_backend_review; cursor validate/deep-pass/completion folded into the shared pipeline (spawn via registry run_exec, old coerce rule intentionally preserved for session-pass paths). Shared _write_backend_review_receipt with stable key order - verified against ALL SIX pre-refactor plan/completion writers plus the three impl writers (base gated to impl/completion, effort conditional per backend). stamp_ralph_iteration: one def, two call sites (shared writer + triage-skip), replacing ~8 inline blocks (fn-114 coordination satisfied - we landed first). Review handlers self-write plan_review_status/completion_review_status + reviewed_at and surface review_rounds in JSON (fn-110 deferral; additive double-write until task .4 updates skill prose; standalone commands unchanged). Deep-pass math relocate-only: _apply_deep_passes_to_receipt, promote_confidence, parse_deep_findings, merge_deep_findings all byte-identical vs pre-spec baseline. LOC: -1251 cumulative vs the >=1500 acceptance target - MISS by 249, carried to .3 (prompt extraction ~780 closes it; recorded honestly, not waved through). Host review: plan --files error-copy unification accepted (unpinned, longer wording); focused suites green (backend_spec 139, cursor 32, review* 45, r22 38); full parallel suite 83 files / 1832 tests / 0 failures / 82.0s; dual-copy identical; sync-codex x2.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: dd43795433d3a232d918aa720c44ee1484635151
+- Tests: python3 scripts/run_tests_parallel.py (83 files, 1832 tests, 0 failures, 82.0s), receipt key-order parity verified vs all 9 pre-refactor writers, deep-pass 4-function byte-identity vs HEAD~2, focused: backend_spec 139 / cursor_review 32 / review* 45 / r22 38
 - PRs:
