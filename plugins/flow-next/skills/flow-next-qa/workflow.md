@@ -393,6 +393,20 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
     --symptoms "<observed actual>" \
     --root-cause "(observed via live QA — unconfirmed)" \
     --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
+  # fn-113.2: high-overlap match -> fold into the EXISTING entry and drop the
+  # just-created duplicate, so autonomous QA never commits a near-copy.
+  _lvl="$(printf '%s' "$_out" | jq -r '.overlap_level // empty')"
+  _dup="$(printf '%s' "$_out" | jq -r '.path // empty')"
+  if [ "$_lvl" = "high" ]; then
+    _mid="$(printf '%s' "$_out" | jq -r '.matches[0].id // empty')"
+    if [ -n "$_mid" ]; then
+      _out="$("$FLOWCTL" memory add --track bug --category "$_cat" \
+        --title "<same title>" --update "$_mid" \
+        --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
+      # Remove the duplicate WE just created (safe: our own fresh file).
+      [ -n "$_dup" ] && rm -f "$_dup"
+    fi
+  fi
   _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
   # Capture via command-substitution in the PARENT shell — a `… | { read … }` pipeline tail
   # runs in a subshell, so the assignment would be lost and the memory left uncommitted.

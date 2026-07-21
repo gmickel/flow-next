@@ -204,9 +204,13 @@ esac
 
 ### Step V.3: Re-compute verdict from validator result
 
-The `codex validate` and `copilot validate` subcommands already merge the
-validator result into the receipt and upgrade verdict to SHIP if all
-findings dropped. Read the updated receipt to pick up the new verdict:
+Mode split (fn-113): under autonomy markers the `codex validate` and
+`copilot validate` subcommands merge the validator result into the receipt
+and upgrade verdict to SHIP if all findings dropped - the read-back below
+applies there. In an INTERACTIVE session the call returns raw validator
+decisions with `host_judges: true` and does NOT mutate the receipt: read the
+JSON output (`.decisions[]`, `.dropped`, `.kept`), judge which findings
+survive yourself, and record your verdict. Autonomous read-back:
 
 ```bash
 NEW_VERDICT="$(jq -r '.verdict' "$RECEIPT_PATH" 2>/dev/null || echo NEEDS_WORK)"
