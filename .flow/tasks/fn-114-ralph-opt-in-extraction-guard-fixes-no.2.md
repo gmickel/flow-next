@@ -26,9 +26,8 @@ Extract the ralph surface out of flowctl core into the ralph-init scaffold.
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Ralph surface extracted: flowctl ralph pause/resume/stop/status and find_active_runs progress parsing moved into the ralph-init template ralphctl.py (~180 LOC out of flowctl core); ralph.sh callers updated; flowctl status soft-probes scripts/ralph/runs/ per the plan decision (absent directory = no scan, zero cost, JSON still carries an empty runs array; present = tolerant read excluding completed runs). sync-codex.sh no longer generates codex/hooks.json and asserts its absence; install-codex.sh no longer installs hooks - the codex zero-default story from .1 doubt 1 is complete ([features] hooks=true flag retained intentionally for later ralph-init use; docs note in .4). TUI checked: no flowctl-ralph/active_runs consumers, reads the runs dir directly - unaffected. stamp_ralph_iteration verified already-deduped by fn-112. ci_test.sh async section re-pointed at ralphctl.py. Full parallel suite 87 files / 1868 tests / 0 failures / 70.7s; ralph+hooks focused suites 81+6 green; ci_test 67/67; dual-copy identical; sync-codex x2.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c975ba820fdd18df30dc1b1ff0e76aa04b43e5b7
+- Tests: python3 scripts/run_tests_parallel.py (87 files, 1868 tests, 0 failures, 70.7s), test_ralph*.py 81 + test_no_default_hooks 6 green, bash ci_test.sh (67/67, async section on ralphctl.py)
 - PRs:
