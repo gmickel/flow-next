@@ -17194,7 +17194,10 @@ def _export_memory_during_epic(
 
     # Decisions: knowledge/decisions/*
     for entry in _memory_iter_entries(
-        memory_dir, track="knowledge", category="decisions"
+        memory_dir,
+        track="knowledge",
+        category="decisions",
+        include_body=True,
     ):
         if not _within_window(entry["date"]):
             continue
@@ -17213,7 +17216,9 @@ def _export_memory_during_epic(
         )
 
     # Bugs: every bug-track category.
-    for entry in _memory_iter_entries(memory_dir, track="bug"):
+    for entry in _memory_iter_entries(
+        memory_dir, track="bug", include_body=True
+    ):
         if not _within_window(entry["date"]):
             continue
         body_first = _export_first_sentence(entry.get("body", ""))
@@ -17228,7 +17233,10 @@ def _export_memory_during_epic(
 
     # Architecture-patterns: knowledge/architecture-patterns/*
     for entry in _memory_iter_entries(
-        memory_dir, track="knowledge", category="architecture-patterns"
+        memory_dir,
+        track="knowledge",
+        category="architecture-patterns",
+        include_body=True,
     ):
         if not _within_window(entry["date"]):
             continue
@@ -21476,8 +21484,9 @@ def _pilot_log_recover_next_tick(
     run_dir: Path,
     id_slug: str,
     raw_id: str,
+    state_hash: str,
 ) -> int:
-    """Reconstruct the next tick from rows after absent/corrupt state."""
+    """Reconstruct next tick and backfill deterministic committed slots."""
     max_tick = 0
     for candidate in run_dir.glob(f"pilot-{id_slug}-*.json"):
         try:
@@ -21487,15 +21496,46 @@ def _pilot_log_recover_next_tick(
         if not isinstance(row, dict) or row.get("id") != raw_id:
             continue
         tick = row.get("tick")
-        if isinstance(tick, int) and not isinstance(tick, bool) and tick > max_tick:
-            max_tick = tick
+        if not isinstance(tick, int) or isinstance(tick, bool) or tick < 1:
+            continue
+        max_tick = max(max_tick, tick)
+        slot_path = _pilot_log_tick_slot_path(run_dir, state_hash, tick)
+        if not slot_path.exists():
+            atomic_write_json(
+                slot_path,
+                {
+                    "version": PILOT_LOG_COUNTER_VERSION,
+                    "id": raw_id,
+                    "tick": tick,
+                    "row": candidate.name,
+                },
+            )
+    # Orphaned reservations (crash after slot, before row) remain consumed so
+    # recovery never reuses a tick that may have been observed by a caller.
+    slot_prefix = f".pilot-{state_hash}.tick-"
+    for slot_path in run_dir.glob(f"{slot_prefix}*.json"):
+        match = re.fullmatch(
+            re.escape(slot_prefix) + r"(\d+)\.json", slot_path.name
+        )
+        if match:
+            max_tick = max(max_tick, int(match.group(1)))
     return max_tick + 1
+
+
+def _pilot_log_tick_slot_path(
+    run_dir: Path,
+    state_hash: str,
+    tick: int,
+) -> Path:
+    """Return the deterministic hidden reservation path for one tick."""
+    return run_dir / f".pilot-{state_hash}.tick-{tick}.json"
 
 
 def _pilot_log_read_next_tick(
     counter_path: Path,
     run_dir: Path,
     raw_id: str,
+    state_hash: str,
 ) -> Optional[int]:
     """Read and validate counter state plus its one-row commit witness."""
     try:
@@ -21525,6 +21565,10 @@ def _pilot_log_read_next_tick(
     if not isinstance(last_row, dict):
         return None
     if last_row.get("id") != raw_id or last_row.get("tick") != next_tick - 1:
+        return None
+    # A committed/orphaned deterministic slot means this counter is stale even
+    # when its last-row witness is internally valid. Never reuse that tick.
+    if _pilot_log_tick_slot_path(run_dir, state_hash, next_tick).exists():
         return None
     return next_tick
 
@@ -22433,7 +22477,8 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     # Filename hash of the RAW id: stamped into both the lock-file name and the
     # row-file name so two distinct ids that normalize to the same slug never
     # share a lock OR clobber each other's path (review finding #1).
-    id_hash = hashlib.sha1(raw_id.encode("utf-8")).hexdigest()[:8]
+    full_id_hash = hashlib.sha1(raw_id.encode("utf-8")).hexdigest()
+    id_hash = full_id_hash[:8]
 
     # Tick reservation + write is serialized under a per-id CROSS-PLATFORM lock
     # so two concurrent same-id appends can't both reserve N+1 and both write
@@ -22446,14 +22491,27 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     # the summary glob ever sees it (and it still matches the `.pilot-*.lock`
     # glob a caller may use to spot the lock).
     lock_path = run_dir / f".pilot-{id_hash}.lock"
-    counter_path = run_dir / f".pilot-{id_hash}.counter.json"
+    counter_path = run_dir / f".pilot-{full_id_hash}.counter.json"
     with _pilot_log_lock(lock_path):
         # Steady state reads one counter + its one-row commit witness. Missing,
         # malformed, mismatched, or crash-ahead state reconstructs once from
         # historical rows, then self-heals the counter below.
-        tick = _pilot_log_read_next_tick(counter_path, run_dir, raw_id)
+        tick = _pilot_log_read_next_tick(
+            counter_path, run_dir, raw_id, full_id_hash
+        )
         if tick is None:
-            tick = _pilot_log_recover_next_tick(run_dir, id_slug, raw_id)
+            tick = _pilot_log_recover_next_tick(
+                run_dir, id_slug, raw_id, full_id_hash
+            )
+
+        slot_path = _pilot_log_tick_slot_path(run_dir, full_id_hash, tick)
+        if slot_path.exists():
+            tick = _pilot_log_recover_next_tick(
+                run_dir, id_slug, raw_id, full_id_hash
+            )
+            slot_path = _pilot_log_tick_slot_path(
+                run_dir, full_id_hash, tick
+            )
 
         timestamp = now_iso()
         ts_slug = timestamp.replace(":", "").replace("-", "").replace(".", "")
@@ -22468,9 +22526,20 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
             "timestamp": timestamp,
         }
 
-        # Reserve before publishing the row. If publication crashes, the next
-        # append rejects the missing witness and reconstructs from rows; it can
-        # never trust an ahead-of-disk counter or duplicate a committed tick.
+        # Reserve the deterministic tick slot before publishing the row. A
+        # crash leaves an occupied slot, so recovery skips rather than reuses
+        # a possibly observed tick. Counter publication comes last: it is only
+        # a fast pointer to a fully committed slot+row pair.
+        atomic_write_json(
+            slot_path,
+            {
+                "version": PILOT_LOG_COUNTER_VERSION,
+                "id": raw_id,
+                "tick": tick,
+                "row": row_path.name,
+            },
+        )
+        atomic_write_json(row_path, row)
         atomic_write_json(
             counter_path,
             {
@@ -22480,7 +22549,6 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
                 "lastRow": row_path.name,
             },
         )
-        atomic_write_json(row_path, row)
 
     if args.json:
         json_output(

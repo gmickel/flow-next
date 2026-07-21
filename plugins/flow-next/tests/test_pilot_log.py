@@ -98,6 +98,43 @@ class TestPilotLogCounter(unittest.TestCase):
         counter.write_text(json.dumps(state), encoding="utf-8")
         self.assertEqual(self._append()["tick"], 3)
 
+    def test_stale_but_internally_valid_counter_cannot_reuse_tick(self) -> None:
+        for _ in range(3):
+            self._append()
+        counter = next(self.run_dir.glob(".pilot-*.counter.json"))
+        row_one = next(
+            path
+            for path in self.run_dir.glob("pilot-*.json")
+            if json.loads(path.read_text(encoding="utf-8"))["tick"] == 1
+        )
+        stale = json.loads(counter.read_text(encoding="utf-8"))
+        stale["nextTick"] = 2
+        stale["lastRow"] = row_one.name
+        counter.write_text(json.dumps(stale), encoding="utf-8")
+
+        self.assertEqual(self._append()["tick"], 4)
+        ticks = sorted(
+            json.loads(path.read_text(encoding="utf-8"))["tick"]
+            for path in self.run_dir.glob("pilot-*.json")
+        )
+        self.assertEqual(ticks, [1, 2, 3, 4])
+
+    def test_orphaned_reservation_is_skipped_after_row_write_failure(self) -> None:
+        real_write = flowctl.atomic_write_json
+
+        def fail_row(path, payload):
+            if Path(path).name.startswith("pilot-"):
+                raise OSError("injected row failure")
+            return real_write(path, payload)
+
+        with mock.patch.object(flowctl, "atomic_write_json", side_effect=fail_row):
+            with self.assertRaises(OSError):
+                self._append()
+
+        # Tick 1 may have been observed/reserved before the failure. Recovery
+        # consumes the orphan slot and publishes tick 2, never a duplicate 1.
+        self.assertEqual(self._append()["tick"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
