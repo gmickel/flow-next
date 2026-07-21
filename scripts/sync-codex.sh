@@ -478,6 +478,7 @@ if [ -f "$setup_wf" ]; then
     {print}
   ' "$setup_wf" > "${setup_wf}.fn121tmp" && mv "${setup_wf}.fn121tmp" "$setup_wf"
   sed -i.bak \
+    -e 's/continue from Step 2b — the mode gate runs on EVERY pass (PR #227 review: a same-version re-run in a plugin-mode repo must not fall straight into Step 3.s copies); copy-mode repos then flow into Step 3.s re-copy/continue from the existing-mode guard (before Step 3) — it runs on EVERY pass, then copy-mode repos flow into Step 3'"'"'s re-copy/' \
     -e '/^- \*\*Claude Code in plugin mode\*\*/d' \
     -e '/^- CLAUDE.md on \*\*Claude Code in plugin mode\*\*/d' \
     -e 's/^Choose the correct template based on platform AND mode:/Choose the correct template based on platform:/' \

@@ -67,7 +67,7 @@ Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if
 
 **If `setup_version` exists (already set up):**
 - If **same version**: tell user "Already set up with v<VERSION>. Re-run to refresh files + docs? (y/n)"
-  - If yes: continue from Step 3 — re-copy bin + templates + docs (idempotent; same-version refresh should NOT skip the file copy, otherwise a project running an unchanged version number but a moved template lands docs that point at a missing path)
+  - If yes: continue from Step 2b — the mode gate runs on EVERY pass (PR #227 review: a same-version re-run in a plugin-mode repo must not fall straight into Step 3's copies); copy-mode repos then flow into Step 3's re-copy (idempotent; same-version refresh should NOT skip the file copy, otherwise a project running an unchanged version number but a moved template lands docs that point at a missing path)
   - If no: done
 - If **older version**: tell user "Updating from v<OLD> to v<NEW>" and continue
 
@@ -81,7 +81,7 @@ Two install modes exist. **Copy mode** (the only mode before fn-121, and the onl
 CURRENT_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
 ```
 
-**If `PLATFORM` is not `claude-code`:** plugin mode is Claude-Code-only (Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves `$HOME/.codex/scripts/flowctl`; Droid's bin support is unverified) — never OFFER it on these hosts. But never silently CONVERT either (PR #227 review): when `CURRENT_MODE` is `plugin` (a Claude-Code-managed repo visited from this host), ask via `AskUserQuestion` (sync-codex.sh carries an equivalent guard in the mirror): `Keep plugin mode (Recommended)` — skip Step 3, Step 4's copies, and the Step 7c stamp entirely (set `MODE=plugin-kept`; config/docs/ceremony steps still run) — or `Convert to copy mode` — proceed as copy (writes the snapshots; Step 7c stamps copy). When `CURRENT_MODE` is anything else, set `MODE=copy` silently and continue to Step 3.
+**If `PLATFORM` is not `claude-code`:** plugin mode is Claude-Code-only (Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves `$HOME/.codex/scripts/flowctl`; Droid's bin support is unverified) — never OFFER it on these hosts. But never silently CONVERT either (PR #227 review): when `CURRENT_MODE` is `plugin` (a Claude-Code-managed repo visited from this host), ask via `AskUserQuestion` (sync-codex.sh carries an equivalent guard in the mirror): `Keep plugin mode` — skip Step 3, Step 4's copies, and the Step 7c stamp entirely (set `MODE=plugin-kept`; config/docs/ceremony steps still run) — or `Convert to copy mode` — proceed as copy (writes the snapshots; Step 7c stamps copy). Recommend per host (PR #227 review): on Codex/Droid recommend Keep (Codex skills self-resolve flowctl from `$HOME/.codex/scripts/`; Droid reads the plugin root envs) — on Cursor recommend CONVERT and say why: Cursor exposes no plugin-root env vars, so with no `.flow/bin` the skill preambles cannot resolve flowctl and flow-next skills will not function on this host until the repo has copies. When `CURRENT_MODE` is anything else, set `MODE=copy` silently and continue to Step 3.
 
 **If `PLATFORM=claude-code` and `CURRENT_MODE` is empty (first mode decision):** ask via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror — unreachable in practice, since this branch requires `PLATFORM=claude-code`):
 

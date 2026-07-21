@@ -36,7 +36,7 @@ Carriers: 14 blocking skills (FLOW_SETUP_ASK; 3 bash variants - base, +`mode:aut
 - copy/absent → the original fn-95 behavior, byte-unchanged.
 - ralph-init keeps its version ask in BOTH modes: its `scripts/ralph/` flowctl copies genuinely drift and would otherwise never surface.
 - Notice-only carriers wrap their stale notice in `"$SETUP_MODE" != "plugin"`.
-- The plugin branch ships in the Codex mirror on purpose: it is inert unless meta says plugin, and it makes a plugin-mode repo workable for a visiting Codex/Cursor teammate (their preambles self-resolve flowctl).
+- The plugin branch ships in the Codex mirror on purpose: it is inert unless meta says plugin, and it keeps a plugin-mode repo workable for a visiting Codex teammate (Codex preambles self-resolve flowctl from `$HOME/.codex/scripts/`). Cursor CANNOT self-resolve (no env vars) - a Cursor visitor gets the consented convert-to-copy offer in setup instead; setup re-runs on any host route through the mode gate on every pass, including same-version refreshes.
 
 ## The commit-point state machine (`flowctl setup-mode set`)
 
