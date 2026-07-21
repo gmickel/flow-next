@@ -145,12 +145,9 @@ flowctl scope bank business|technical|both [--json]
 
 # Per-section write policy given existing-section-state JSON (path or '-' for stdin)
 flowctl scope write-policy business|technical|both --current-sections-json <file|-> [--json]
-
-# Capture biz-suggestion fire/no-fire (R25): fire iff 1 <= count < 3. Exit 0=fire, 1=no-fire.
-flowctl scope suggest --signal-categories-count N [--json]
 ```
 
-`scope resolve` falls back to `technical` when no scope flag is passed (sets `defaulted: true`); the interview skill asks before silently running that default. `scope suggest` is a thin threshold helper - judgment (counting signal categories) stays in the skill (fn-113 owns further eviction).
+`scope resolve` falls back to `technical` when no scope flag is passed (sets `defaulted: true`); the interview skill asks before silently running that default. The R25 capture biz-suggestion threshold (`1 <= n < 3`) lives in capture skill prose (fn-113 eviction), not a flowctl subcommand.
 
 ### spec create
 
@@ -788,12 +785,18 @@ Enable: `flowctl config set memory.enabled true`. Then `flowctl memory init`.
 # Initialize tree + templates
 flowctl memory init [--json]
 
-# Add entry — bug track
+# Add entry — bug track (always creates; JSON emits matches with scores)
 flowctl memory add --track bug --category runtime-errors \
   --title "subprocess UnicodeEncodeError on Windows cp1252" \
   --module flowctl.py --tags "windows,subprocess,unicode" \
   --problem-type runtime-error --root-cause "..." \
   --resolution-type fix --body-file body.md [--json]
+
+# Fold into an existing entry (explicit only — never auto-updates on high overlap)
+flowctl memory add --track bug --category runtime-errors \
+  --title "subprocess UnicodeEncodeError on Windows cp1252" \
+  --update bug/runtime-errors/subprocess-unicodeencodeerror-on-w-2026-07-01 \
+  --tags "windows,subprocess" --body-file body.md [--json]
 
 # Add entry — knowledge track
 flowctl memory add --track knowledge --category conventions \
@@ -1050,7 +1053,7 @@ Trivial-diff fast path that bypasses the configured review backend on whiteliste
 flowctl triage-skip --base main [--task fn-1.2] [--receipt /tmp/triage.json] [--json]
 
 # With LLM judge for ambiguous diffs (gated behind FLOW_TRIAGE_LLM=1 in Ralph)
-flowctl triage-skip --base main --backend codex --model gpt-5-mini --effort low [--json]
+flowctl triage-skip --base main --backend codex --model gpt-5.6-luna --effort high [--json]
 
 # Whitelist-only mode (ambiguous → REVIEW)
 flowctl triage-skip --base main --no-llm [--json]
@@ -1255,6 +1258,8 @@ flowctl codex validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3
 
 `--findings-file` is JSON-Lines (one finding per line, with at least `id`). Empty/missing → no-op. Receipt drives session resume via `session_id`.
 
+**Mode split (fn-113.4).** Autonomy markers (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, or `FLOW_AUTONOMOUS=1`) keep the deterministic path: validator decisions merge into the receipt and may upgrade `NEEDS_WORK` → `SHIP` when every finding is dropped. Interactive (no markers) surfaces raw validator decisions (`host_judges: true`) and does **not** mutate the receipt; the host agent judges keep/drop and any verdict change.
+
 #### codex deep-pass
 
 Specialized deep-review pass (`fn-32.2 --deep`). Runs after primary review in the same chat session.
@@ -1266,6 +1271,8 @@ flowctl codex deep-pass --pass performance --receipt /tmp/impl-fn-1.3.json --pri
 ```
 
 Pass options: `adversarial`, `security`, `performance`. Primary findings JSONL provides cross-pass agreement / dedup context. Receipt is required (provides `session_id` for resume).
+
+**Mode split (fn-113.4).** Same markers as validate. Autonomous: fingerprint merge, confidence promotion, `deep_*` receipt fields, and SHIP → NEEDS_WORK on blocking introduced findings. Interactive: raw deep findings only (`host_judges: true`); no merge/promotion math and no receipt mutation — the host judges.
 
 
 #### codex classify-result

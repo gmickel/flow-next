@@ -266,9 +266,9 @@ If `flowctl memory add` exits non-zero, capture stderr and surface in the report
 
 `flowctl memory add` already handles slug collisions by suffixing `-2`, `-3`, etc. — no special handling needed. Two entries titled "API rate limiting" land as `bug/integration/api-rate-limiting-2026-04-25.md` and `bug/integration/api-rate-limiting-2026-04-25-2.md`.
 
-### 2.3 — Override detection (`flowctl memory add` overlap-detection)
+### 2.3 — Overlap signal (`flowctl memory add` matches; skill decides)
 
-`flowctl memory add` runs overlap detection against existing entries. High overlap updates the existing entry in place (returns the existing id); moderate overlap creates a new entry with `related_to: [<existing-id>]`. This is desired behavior — don't suppress it. Surface the outcome in the report so the user knows when migration merged an entry rather than creating a fresh one.
+`flowctl memory add` always creates unless `--update <id>` is passed (fn-113). Overlap scoring still runs; the JSON response always emits `matches` (with scores). High overlap: re-run with `--update <match-id>` to fold into the existing entry AND delete the file the first call just created (its `.path` - a fresh duplicate of ours; `rm -f` it so migration never leaves a near-copy), or accept the create and surface the match in the report. Moderate overlap: creates a new entry with `related_to: [<existing-id>]`. Never pass `--no-overlap-check`. Surface the outcome (folded + duplicate removed vs created) in the report.
 
 ### 2.4 — Cleanup tempfile
 

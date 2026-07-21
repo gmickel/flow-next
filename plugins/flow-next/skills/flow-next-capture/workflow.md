@@ -358,7 +358,7 @@ Rules:
 - **Decision Context substructure** — capture only ever writes fresh specs (never a rewrite of an existing FLAT body), so there is no FLAT→substructured promotion to handle here (that's `/flow-next:interview`'s merge contract). Decision rule for capture: when category 3, 5, 7, or 8 routes content, write `## Decision Context` as SUBSTRUCTURED — emit the `### Motivation` H3 with the routed content. Leave `### Implementation Tradeoffs` absent (do NOT write the `*Pending technical-scope interview pass.*` placeholder; that's `/flow-next:interview --scope=business`'s responsibility on a rewrite, not capture's). When none of categories 3, 5, 7, 8 carry content, write `## Decision Context` as FLAT — preserves R22 (solo dev with zero biz signals sees no Motivation/Implementation Tradeoffs scaffolding) and matches the canonical template's "(A) FLAT (default, R22 backward-compat)" branch.
 - **Constraints / risks (categories 5, 8) pick one destination per signal** — `Goal & Context` when the constraint sets up framing, `### Motivation` when it's the reason behind a trade-off. Don't double-route to both for the same signal.
 
-After §2.2's section drafting completes, compute `BIZ_SIGNAL_CATEGORIES` — the count of distinct categories (out of nine) that received at least one `[user]` or `[paraphrase]` line. This count is Phase 6's input to `flowctl scope suggest`:
+After §2.2's section drafting completes, compute `BIZ_SIGNAL_CATEGORIES` — the count of distinct categories (out of nine) that received at least one `[user]` or `[paraphrase]` line. This count is Phase 6's input to the R25 fire/no-fire judgment (agent-owned; no flowctl helper):
 
 ```bash
 # Set after drafting §2.2's sections. Range: 0..9. Counts CATEGORIES, not destinations.
@@ -907,15 +907,12 @@ Autofix only: when the §4.2 visibility predicate holds and the spec was written
 
 ### Biz-suggestion footer (R25)
 
-When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:interview --scope=business`. The fire/no-fire decision is delegated to `flowctl scope suggest` (T1) — the skill MUST NOT re-implement the `1 <= N < 3` threshold math inline (skill-vs-flowctl architectural rule from `CLAUDE.md`). Input is `$BIZ_SIGNAL_CATEGORIES` — the count computed in [§2.6](#26--biz-context-signal-routing-r24--signal-category-count-for-r25) over the nine SIGNAL CATEGORIES from R24 (target user / problem framing / success metric / MVP boundary / business constraints / what-not-to-build / prioritization rationale / business risks / UX expectations). The count is over categories, not over markdown destinations.
+When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:interview --scope=business`. The R25 business-pass suggestion fires when the captured conversation names 1-2 distinct R24 signal categories (the same `1 <= n < 3` rule), agent-judged. Input is `$BIZ_SIGNAL_CATEGORIES` — the count computed in [§2.6](#26--biz-context-signal-routing-r24--signal-category-count-for-r25) over the nine SIGNAL CATEGORIES from R24 (target user / problem framing / success metric / MVP boundary / business constraints / what-not-to-build / prioritization rationale / business risks / UX expectations). The count is over categories, not over markdown destinations. R22: `BIZ_SIGNAL_CATEGORIES=0` → no-fire (solo-dev silence). Count `>= 3` → no-fire (biz layer adequately filled).
 
 ```bash
-# `scope suggest` plain-mode exit codes: 0 = fire, 1 = no-fire. Quiet stdout (`>/dev/null`)
-# keeps the shell branch token-free; `--json` is available when richer output is needed.
-# Threshold (`1 <= N < 3`) lives in flowctl — capture passes the count, flowctl decides.
-# R22 invariant: BIZ_SIGNAL_CATEGORIES=0 → no-fire (exit 1), keeping the solo-dev
-# zero-flag default silent.
-if "$FLOWCTL" scope suggest --signal-categories-count "$BIZ_SIGNAL_CATEGORIES" >/dev/null; then
+# R25 threshold is host-agent judgment (fn-113; former flowctl helper removed).
+# Fire when 1 <= BIZ_SIGNAL_CATEGORIES < 3; otherwise stay silent.
+if [ "$BIZ_SIGNAL_CATEGORIES" -ge 1 ] && [ "$BIZ_SIGNAL_CATEGORIES" -lt 3 ]; then
   cat <<EOF
 
 This conversation has business-requirements signals; consider
@@ -974,7 +971,7 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
 - Phase 4 materializes the draft ONCE via the Write tool to a literal unique path (§4.1 — render = read-back) and surfaces the summary payload (`[inferred]` count, 8+ split note if applicable, related-memory footer if applicable, glossary term-add proposals — only when `glossary list --json` reports `total_terms > 0` AND the conversation surfaced new vocabulary — Phase 2.7) in the question body. Interactive: user picks approve / edit / abort; edit cycles revise via the Edit tool + a full-file Read before re-approval; on approve with proposals, one follow-up `Glossary?` consent question; on approve with the readiness predicate met (≥1 ready spec, no `tracker.readyState`), one follow-up `Mark ready?` consent question (default keep-draft). Autofix: the Write render is the single full emission (summary payload printed) + require `--yes`; proposals print as suggestions, never written; readiness never written.
 - Phase 5 calls `flowctl spec create` + `spec set-plan --file <literal draft path>` (consumes the §4.1 draft file — no heredoc re-authoring). Approved term-adds written via `flowctl glossary add` (5.8, interactive only). Consented mark-ready written via `flowctl spec ready` (5.9, interactive only). Rewrite branch (5.3) runs idempotent `spec unready` unconditionally; `READY_RESET` gates the Phase 6 announcement. With no glossary (or a husk), 2.7/4.x/5.8 are silent no-ops; with readiness un-adopted, 4.2's mark-ready question / 5.9 / all readiness footer lines are silent no-ops — zero behavior change. With `artifacts.html.enabled` true, 5.10 regenerates `.flow/artifacts/<id>/spec.html` per the disclosure reference and leaves exactly one `<!-- flow-next:artifact-link -->` line in the spec md; off/unset, 5.10 is a single config read and nothing else.
-- Phase 6 prints the next-step footer. Calls `flowctl scope suggest --signal-categories-count "$BIZ_SIGNAL_CATEGORIES"`; on exit 0 (fire), appends the R25 `/flow-next:interview --scope=business` suggestion line. R22 invariant: `BIZ_SIGNAL_CATEGORIES=0` → no-fire → no suggestion.
+- Phase 6 prints the next-step footer. Agent-judges the R25 threshold (`1 <= BIZ_SIGNAL_CATEGORIES < 3`); on fire, appends the `/flow-next:interview --scope=business` suggestion line. R22 invariant: `BIZ_SIGNAL_CATEGORIES=0` → no-fire → no suggestion.
 
 In autofix without `--yes`, the draft is Written (render visible) and the skill exits 0 — no `.flow/` write, no spec allocated.
 In autofix with `--yes`, the §4.1 Write render substitutes for the read-back before Phase 5 writes.

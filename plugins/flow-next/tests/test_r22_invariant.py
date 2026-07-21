@@ -215,28 +215,33 @@ class TestR22C_TechWritePolicyFlatDC(unittest.TestCase):
 
 class TestR22D_CaptureZeroSignalNoFire(unittest.TestCase):
     """R22 (d): capture's biz-routing layer, given zero biz signals, fires
-    NO suggestion. Verified via `flowctl scope suggest --signal-categories-count 0`."""
+    NO suggestion. Prose contract after fn-113.3 eviction of `scope suggest`:
+    workflow.md must state the no-fire-at-zero rule and branch so count 0
+    never appends the business-pass suggestion."""
 
-    def test_zero_signals_no_fire_plain(self) -> None:
-        """Plain mode: exit 1, stdout `no-fire`. The `if scope suggest ...`
-        in workflow.md correctly skips appending the suggestion."""
-        proc = _run("scope", "suggest", "--signal-categories-count", "0")
-        self.assertEqual(proc.returncode, 1)
-        self.assertEqual(proc.stdout.strip(), "no-fire")
-
-    def test_zero_signals_no_fire_json(self) -> None:
-        """JSON mode: exit 0 (valid input) but `fire: false`."""
-        proc = _run(
-            "scope",
-            "suggest",
-            "--signal-categories-count",
-            "0",
-            "--json",
+    def test_zero_signals_no_fire_documented(self) -> None:
+        """workflow.md documents BIZ_SIGNAL_CATEGORIES=0 → no-fire (R22)."""
+        body = (CAPTURE_DIR / "workflow.md").read_text(encoding="utf-8")
+        # §2.6 worked example and/or Phase 6 footer both state the rule.
+        self.assertRegex(
+            body,
+            r"BIZ_SIGNAL_CATEGORIES\s*=\s*0.*no.fire",
+            "R22 (d): workflow.md must document no-fire at zero biz signals",
         )
-        self.assertEqual(proc.returncode, 0)
-        payload = json.loads(proc.stdout)
-        self.assertFalse(payload["fire"])
-        self.assertEqual(payload["decision"], "no-fire")
+
+    def test_zero_signals_branch_skips_suggestion(self) -> None:
+        """Phase 6 shell branch requires count >= 1, so zero never fires."""
+        body = (CAPTURE_DIR / "workflow.md").read_text(encoding="utf-8")
+        self.assertRegex(
+            body,
+            r'BIZ_SIGNAL_CATEGORIES"\s+-ge\s+1',
+            "R22 (d): Phase 6 must require BIZ_SIGNAL_CATEGORIES >= 1 to fire",
+        )
+        self.assertNotIn(
+            "scope suggest",
+            body,
+            "R22 (d): deleted flowctl scope suggest must not remain in capture",
+        )
 
 
 class TestR22E_SpecSkeletonByteForByte(unittest.TestCase):

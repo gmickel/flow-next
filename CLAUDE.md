@@ -54,6 +54,8 @@ Symptoms suggesting deterministic when you should build skill-based:
 
 If three or more apply, stop and convert to a skill. The deterministic path is harder to maintain, more brittle, and produces worse output.
 
+**Sanctioned carve-out (subprocess LLM judgment):** do not "fix" these licensed cases when the symptom list matches. Review-backend dispatch, the triage-skip judge, and fn-55 delegation classify may spawn a subprocess LLM for judgment. Rationale: cross-model verdicts about pipeline-written code must not be self-issued by the host.
+
 ## Cross-platform patterns
 
 **HOST PLATFORM ROSTER (memorize - do not forget any of these when building features):**

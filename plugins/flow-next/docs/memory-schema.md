@@ -102,7 +102,7 @@ flowctl memory add \
 
 `--type pitfall|convention|decision` (the old API) still works but emits a deprecation warning. Removed in 0.36.0.
 
-**Overlap detection** runs on every `add`. The command scans existing entries in the target category; high overlap updates the existing entry in place, moderate overlap creates a new entry with `related_to: [existing-id]` in its frontmatter. Prevents silent duplication drift.
+**Overlap scoring** runs on every `add` and the JSON response always emits `matches` (with scores) as a retrieval signal. `memory add` **always creates** a new entry unless the caller passes explicit `--update <id>` (fn-113 — flowctl never auto-mutates on high overlap). Moderate overlap may set `related_to: [existing-id]` on the new entry. Callers (skills) read `matches` and either re-run with `--update <id>` or accept the create.
 
 ## Query
 
@@ -181,7 +181,7 @@ Point agents at `.flow/memory/` with a one-line note in `AGENTS.md` / `CLAUDE.md
 
 - **Planning**: category-aware `memory-scout` runs in parallel with other scouts, returns track/category-tagged hits and prioritizes module matches.
 - **Work**: worker reads relevant entries during re-anchor.
-- **Ralph**: worker writes structured bug-track entries via `memory add --track bug --category <c>` on NEEDS_WORK → SHIP. Overlap detection handles duplicates.
+- **Ralph**: worker writes structured bug-track entries via `memory add --track bug --category <c>` on NEEDS_WORK → SHIP. Overlap scoring emits `matches`; the worker re-runs with `--update <id>` when folding into a known prior entry.
 
 Config lives in `.flow/config.json`, separate from Ralph's `scripts/ralph/config.env`.
 

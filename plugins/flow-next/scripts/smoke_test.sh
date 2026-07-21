@@ -646,7 +646,8 @@ PY
 echo -e "${GREEN}✓${NC} memory add --track bug --category runtime-errors (new schema)"
 PASS=$((PASS + 1))
 
-# Overlap detection: adding a similar entry (same title+tags+module) should update in place.
+# Overlap detection (fn-113.2): high overlap CREATES and surfaces matches; the
+# caller decides. Explicit --update <id> then mutates the matched entry.
 add_json="$(scripts/flowctl memory add \
   --track bug --category runtime-errors \
   --title "Null deref auth middleware" \
@@ -658,10 +659,26 @@ add_json="$(scripts/flowctl memory add \
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] is True, data
-assert data["action"] == "updated", data
+assert data["action"] == "created", data
 assert data["overlap_level"] == "high", data
+assert data["matches"], data
 PY
-echo -e "${GREEN}✓${NC} memory add high overlap updates existing entry"
+MATCH_ID="$(printf '%s' "$add_json" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["matches"][0]["id"])')"
+upd_json="$(scripts/flowctl memory add \
+  --track bug --category runtime-errors \
+  --title "Null deref auth middleware" \
+  --module "src/auth.ts" \
+  --tags "auth,nullcheck" \
+  --problem-type runtime-error \
+  --update "$MATCH_ID" \
+  --json 2>/dev/null)"
+"${FLOW_PY[@]}" - <<'PY' "$upd_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True, data
+assert data["action"] == "updated", data
+PY
+echo -e "${GREEN}✓${NC} memory add high overlap creates + explicit --update mutates"
 PASS=$((PASS + 1))
 
 # Overlap detection: --no-overlap-check always creates new.
@@ -2281,8 +2298,11 @@ echo -e "${GREEN}✓${NC} validate subcommands (codex + copilot): --help availab
 PASS=$((PASS + 1))
 
 # Test: no-findings no-op path writes validator block + preserves verdict.
+# fn-113.4 split-by-mode: receipt mutation is the AUTONOMOUS path - opt in
+# explicitly here (interactive default surfaces raw findings, no mutation).
 (
   cd "$VALIDATE_TEST_DIR"
+  export FLOW_AUTONOMOUS=1
   RPATH="$VALIDATE_TEST_DIR/receipt.json"
   cat > "$RPATH" <<'EOF'
 {"type":"impl_review","id":"fn-32.1","mode":"codex","verdict":"NEEDS_WORK","session_id":"sess-noop"}

@@ -81,8 +81,12 @@ done
 
 ### Step D.4: Re-compute verdict after merge
 
-Each `deep-pass` call writes the merged receipt in place. Final verdict
-is read back from the receipt:
+Mode split (fn-113): under autonomy markers (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`
+set, or `FLOW_AUTONOMOUS=1`) each `deep-pass` call writes the merged receipt in
+place and the final verdict is read back from the receipt as below. In an
+INTERACTIVE session the call instead returns raw findings with `host_judges: true`
+and does NOT mutate the receipt - read the JSON output, judge merge/promotion
+yourself, and record your verdict. The read-back applies to the autonomous path:
 
 ```bash
 NEW_VERDICT="$(jq -r '.verdict' "$RECEIPT_PATH" 2>/dev/null || echo NEEDS_WORK)"
@@ -200,9 +204,13 @@ esac
 
 ### Step V.3: Re-compute verdict from validator result
 
-The `codex validate` and `copilot validate` subcommands already merge the
-validator result into the receipt and upgrade verdict to SHIP if all
-findings dropped. Read the updated receipt to pick up the new verdict:
+Mode split (fn-113): under autonomy markers the `codex validate` and
+`copilot validate` subcommands merge the validator result into the receipt
+and upgrade verdict to SHIP if all findings dropped - the read-back below
+applies there. In an INTERACTIVE session the call returns raw validator
+decisions with `host_judges: true` and does NOT mutate the receipt: read the
+JSON output (`.decisions` - an object keyed by finding id, each value `{validated, reason}` - plus `.dropped`/`.kept`), judge which findings
+survive yourself, and record your verdict. Autonomous read-back:
 
 ```bash
 NEW_VERDICT="$(jq -r '.verdict' "$RECEIPT_PATH" 2>/dev/null || echo NEEDS_WORK)"

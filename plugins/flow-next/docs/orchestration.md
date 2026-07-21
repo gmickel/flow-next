@@ -167,7 +167,7 @@ Applies to **ad-hoc bridge reviews only** - a hand-rolled `codex exec` review wh
 - **P0-P3 severity tiers plus spec-grounded verdicts**, so an edge-case finding does not flip a ship gate. Reviewers reliably flag spec-gray edges as bugs (in the eval, behavior explicitly licensed by a plan amendment was reported as a defect by every reviewer) - severity tiers and "cite the spec line" are what keep those findings informative instead of gate-flipping.
 - Optionally **a minimal suggested fix and blast radius per finding** when no fix loop follows the review. Control runs showed this artifact is prompt-shaped: models produce it when the prompt demands it and omit it when not asked.
 
-The **packaged** `/flow-next:impl-review` prompt is deliberately NOT changed to this shape: its find-vs-fix split (the reviewer returns findings; the internal fix loop investigates and fixes, with validator and iteration caps) is by design, and its rubric already carries confidence anchors and introduced-vs-pre-existing classification.
+The **packaged** `/flow-next:impl-review` prompt is deliberately NOT changed to this shape: its find-vs-fix split (the reviewer returns findings; the internal fix loop investigates and fixes, with validator and iteration caps) is by design, and its rubric already carries confidence anchors and introduced-vs-pre-existing classification. Deep-pass/validator merge math is autonomous-only (fn-113.4): under `FLOW_RALPH` / `REVIEW_RECEIPT_PATH` / `FLOW_AUTONOMOUS` flowctl mutates the receipt; interactive surfaces raw findings and the host judges.
 
 ## Durable routing — a model table in CLAUDE.md
 

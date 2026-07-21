@@ -141,6 +141,11 @@ done
 # Drives the in-process write path via codex validate empty-findings shortcut
 # (no LLM call) plus a direct merge for the "all dropped → SHIP upgrade" branch.
 # =============================================================================
+# fn-113.4 split-by-mode: receipt mutation is the AUTONOMOUS path. Cases 2-4
+# exercise exactly that path, so opt in explicitly; unset before Case 5 (which
+# tests the Ralph-block with its own env expectations).
+export FLOW_AUTONOMOUS=1
+
 echo -e "${YELLOW}--- Case 2: --validate (validator block + upgrade path) ---${NC}"
 
 CASE2_DIR="$TEST_DIR/case2"
@@ -334,6 +339,8 @@ assert_eq_jq "$RECEIPT_4" "'adversarial' in d['deep_findings_count']" "False" "C
 # =============================================================================
 # CASE 5: --interactive Ralph-block (env var triggers + clean error)
 # =============================================================================
+unset FLOW_AUTONOMOUS
+
 echo -e "${YELLOW}--- Case 5: --interactive Ralph-block (FLOW_RALPH and REVIEW_RECEIPT_PATH) ---${NC}"
 
 # Reproduce the bash snippet from SKILL.md verbatim. Each call must:
@@ -414,6 +421,9 @@ assert_eq_jq "$RECEIPT_5" "d['verdict']" "NEEDS_WORK" "Case 5 walkthrough never 
 # =============================================================================
 # CASE 6: combination (--validate + --deep) — phase order + receipt composition
 # =============================================================================
+# Cases 6-7 also exercise the autonomous receipt-composition path.
+export FLOW_AUTONOMOUS=1
+
 echo -e "${YELLOW}--- Case 6: combination (--validate + --deep + --interactive) ---${NC}"
 
 CASE6_DIR="$TEST_DIR/case6"

@@ -100,7 +100,7 @@ flowctl triage-skip --base main
 # source=deterministic
 ```
 
-Optional LLM layer (gpt-5-mini / claude-haiku-4.5) for ambiguous diffs is gated behind `FLOW_TRIAGE_LLM=1`. On by default in Ralph mode; opt-out via `--no-triage` or `FLOW_RALPH_NO_TRIAGE=1`.
+Optional LLM layer (gpt-5.6-luna @high / claude-haiku-4.5 @low) for ambiguous diffs is gated behind `FLOW_TRIAGE_LLM=1`. On by default in Ralph mode; opt-out via `--no-triage` or `FLOW_RALPH_NO_TRIAGE=1`.
 
 ## Receipt schema (additive only)
 

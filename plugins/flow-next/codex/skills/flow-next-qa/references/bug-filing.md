@@ -55,7 +55,7 @@ Optional but valuable: the failing network request (method, URL, status, sanitiz
 
 ## Filing to bug memory
 
-flow-next stores findings in the **bug memory track** (not `BUG-NNN.md` files). File the moment a FAIL is confirmed (after reproduce-twice), **with overlap dedup left ON**:
+flow-next stores findings in the **bug memory track** (not `BUG-NNN.md` files). File the moment a FAIL is confirmed (after reproduce-twice), **with overlap scoring left ON** (never `--no-overlap-check`):
 
 ```bash
 # No-op cleanly when memory is disabled — still record the finding in the run notes
@@ -114,9 +114,13 @@ Map the observed failure to a bug-track category (`docs/memory-schema.md`):
 
 When ambiguous, pick the most specific that fits. `--root-cause` for a live finding is genuinely unconfirmed (QA observed a symptom, not a cause) — record `(observed via live QA — unconfirmed)` rather than guessing.
 
-## Dedup — NEVER `--no-overlap-check`
+## Dedup — NEVER `--no-overlap-check`; caller decides update-vs-create
 
-`memory add` runs overlap detection on every call (`docs/memory-schema.md`): **high** overlap updates the existing entry in place; **moderate** overlap creates a new entry with `related_to: [existing-id]`. This is the re-run idempotency mechanism — a second QA pass folds a recurring failure into the existing entry instead of re-filing it. **Never** pass `--no-overlap-check`. When the add reports a match, surface "matches existing entry X" in the run notes rather than treating it as a fresh finding.
+`memory add` always **creates** unless you pass explicit `--update <id>` (fn-113). Overlap scoring still runs and the JSON response always emits `matches` (with scores) as a retrieval signal (`docs/memory-schema.md`):
+
+- **high** (`score >= 3`): surface "matches existing entry X" in the run notes. If this is the same finding (re-run / known prior id), re-run with `--update <match-id>` to fold body/tags into the existing entry. Prefer passing `--update` on the first call when you already know the prior entry id from this run's notes.
+- **moderate** (`score == 2`): creates a new entry with `related_to: [existing-id]`.
+- **Never** pass `--no-overlap-check` — that blanks the match signal and breaks re-run awareness.
 
 ## Promote to a spec/task (the fix loop)
 
@@ -132,5 +136,5 @@ A finding worth fixing is **promoted to a flow spec/task** — compose from `flo
 | "I think this is broken" with no concrete steps | Untestable — not a finding |
 | File N separate findings for one root cause | File the highest-impact one; the overlap check links the rest |
 | Mark a P0 as P1 to "not stop the pass" | Hides severity; the verdict reads green when it isn't |
-| Pass `--no-overlap-check` | Breaks re-run dedup; re-files the same finding every pass |
+| Pass `--no-overlap-check` | Blanks match signal; re-files the same finding every pass without awareness |
 | Assert PASS by reading source | Forbidden (R1) — PASS rests on captured live-app evidence only |

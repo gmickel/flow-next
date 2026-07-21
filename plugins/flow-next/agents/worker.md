@@ -333,7 +333,7 @@ Only runs when **all** are true:
 **Skip capture when:**
 - Review was a triage-skip fast-path (`receipt.mode == "triage_skip"`)
 - Fix was mechanical (lockfile bump, typo, formatting-only)
-- Same fingerprint (title + module + primary tag) was already captured in this session — `flowctl memory add` handles duplicate detection, but skip the call entirely if you know it's a repeat
+- Same fingerprint (title + module + primary tag) was already captured in this session — skip the call entirely if you know it's a repeat; if you know the prior entry id, re-run with `memory add --update <id>` instead of creating a sibling
 
 Otherwise, synthesize a bug-track entry from the NEEDS_WORK findings + the fix you applied:
 
@@ -365,7 +365,7 @@ $FLOWCTL memory add \
   --body-file /tmp/memory-body.md
 ```
 
-The overlap-detection in `memory add` handles duplicates automatically — high overlap updates the existing entry in place, moderate overlap creates a new entry with `related_to` cross-reference. No dedup burden on the worker.
+`memory add` always creates unless you pass explicit `--update <id>` (fn-113). The JSON response always includes `matches` (scored retrieval signal): on high overlap, either re-run with `--update <match-id>` to fold into the existing entry, or accept the create. Moderate overlap creates a new entry with `related_to` cross-reference. The worker owns the update-vs-create judgment.
 
 Optional flags with sensible defaults (omit unless you need to override):
 - `--problem-type` — derived from `--category` (`runtime-errors` → `runtime-error`, `build-errors` → `build-error`, `test-failures` → `test-failure`; other categories default to `build-error`). Pass explicitly only when the derived default is wrong.

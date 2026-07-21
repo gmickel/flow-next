@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import tempfile
 import types
 import unittest
@@ -638,6 +639,284 @@ class TestRalphGateStability(unittest.TestCase):
             self.assertIn("deep_passes", receipt)
             for k in VALIDATOR_KEYS | WALKTHROUGH_KEYS:
                 self.assertNotIn(k, receipt)
+
+
+# --- fn-113.4: deep-pass/validator split-by-mode -------------------------
+
+
+# Frozen timestamp for autonomous receipt byte-identity fixture.
+_FIXED_TS = "2026-07-21T12:00:00Z"
+
+# Golden autonomous deep-pass receipt (SHIP + blocking deep finding flips
+# verdict; frozen deep_timestamp). Written by _apply_deep_passes_to_receipt
+# with indent=2 + trailing newline: the autonomous path must stay
+# byte-identical to this fixture.
+_AUTONOMOUS_DEEP_RECEIPT_FIXTURE = (
+    "{\n"
+    '  "type": "impl_review",\n'
+    '  "id": "fn-32.4",\n'
+    '  "mode": "codex",\n'
+    '  "verdict": "NEEDS_WORK",\n'
+    '  "session_id": "019ba000-0000-7000-8000-000000000001",\n'
+    '  "timestamp": "2026-04-24T10:00:00Z",\n'
+    '  "deep_passes": [\n'
+    '    "adversarial"\n'
+    "  ],\n"
+    '  "deep_findings_count": {\n'
+    '    "adversarial": 1\n'
+    "  },\n"
+    '  "verdict_before_deep": "SHIP",\n'
+    f'  "deep_timestamp": "{_FIXED_TS}"\n'
+    "}\n"
+)
+
+
+class TestSplitByMode(unittest.TestCase):
+    """fn-113.4: autonomous keeps receipt math; interactive surfaces raw only."""
+
+    def test_is_autonomous_context_uses_established_signals(self) -> None:
+        """Mode detection reuses FLOW_RALPH / REVIEW_RECEIPT_PATH / FLOW_AUTONOMOUS only."""
+        base = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("FLOW_RALPH", "REVIEW_RECEIPT_PATH", "FLOW_AUTONOMOUS")
+        }
+        with mock.patch.dict(os.environ, base, clear=True):
+            self.assertFalse(flowctl._is_autonomous_context())
+        with mock.patch.dict(os.environ, {**base, "FLOW_RALPH": "1"}, clear=True):
+            self.assertTrue(flowctl._is_autonomous_context())
+        with mock.patch.dict(
+            os.environ, {**base, "REVIEW_RECEIPT_PATH": "/tmp/r.json"}, clear=True
+        ):
+            self.assertTrue(flowctl._is_autonomous_context())
+        with mock.patch.dict(
+            os.environ, {**base, "FLOW_AUTONOMOUS": "1"}, clear=True
+        ):
+            self.assertTrue(flowctl._is_autonomous_context())
+        # Empty REVIEW_RECEIPT_PATH is not a marker (bash -n semantics).
+        with mock.patch.dict(
+            os.environ, {**base, "REVIEW_RECEIPT_PATH": ""}, clear=True
+        ):
+            self.assertFalse(flowctl._is_autonomous_context())
+        # FLOW_RALPH=0 is not autonomous.
+        with mock.patch.dict(os.environ, {**base, "FLOW_RALPH": "0"}, clear=True):
+            self.assertFalse(flowctl._is_autonomous_context())
+
+    def test_autonomous_deep_receipt_byte_identical_to_fixture(self) -> None:
+        """Autonomous deep-pass receipt bytes match the frozen fixture exactly.
+
+        Proves the deterministic math path (verdict flip + deep block) is
+        unchanged: same inputs + frozen now_iso → same receipt bytes.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            rp = Path(tmp) / "receipt.json"
+            _seed_primary_receipt(rp, verdict="SHIP")
+            deep_by_pass = {
+                "adversarial": [
+                    _finding("d1", severity="P0", confidence=75),
+                ]
+            }
+            merge = flowctl.merge_deep_findings([], deep_by_pass)
+            with mock.patch.object(flowctl, "now_iso", return_value=_FIXED_TS):
+                # Autonomous apply path (helpers are the math; run_* calls them
+                # only under autonomous markers; see test below).
+                flowctl._apply_deep_passes_to_receipt(
+                    str(rp),
+                    passes_run=["adversarial"],
+                    deep_by_pass=deep_by_pass,
+                    merge_result=merge,
+                    prior_verdict="SHIP",
+                )
+            actual = rp.read_text(encoding="utf-8")
+            self.assertEqual(
+                actual,
+                _AUTONOMOUS_DEEP_RECEIPT_FIXTURE,
+                "autonomous deep receipt drifted from fixture "
+                f"(actual={actual!r})",
+            )
+
+    def test_autonomous_run_deep_pass_matches_apply_fixture(self) -> None:
+        """FLOW_RALPH=1: _run_deep_pass mutates receipt byte-identically to apply."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rp = Path(tmp) / "receipt.json"
+            _seed_primary_receipt(rp, verdict="SHIP")
+            # Backend returns one blocking deep finding in the parseable shape
+            # parse_deep_findings expects; mock parse to keep fixture stable.
+            deep_findings = [_finding("d1", severity="P0", confidence=75)]
+            base_env = {
+                k: v
+                for k, v in os.environ.items()
+                if k not in ("FLOW_AUTONOMOUS", "REVIEW_RECEIPT_PATH")
+            }
+            base_env["FLOW_RALPH"] = "1"
+            with mock.patch.dict(os.environ, base_env, clear=True):
+                with mock.patch.object(
+                    flowctl, "_dispatch_session_pass", return_value="deep-output"
+                ), mock.patch.object(
+                    flowctl, "parse_deep_findings", return_value=deep_findings
+                ), mock.patch.object(
+                    flowctl, "now_iso", return_value=_FIXED_TS
+                ), mock.patch.object(
+                    flowctl, "json_output", lambda *_a, **_kw: None
+                ), mock.patch.object(
+                    flowctl, "load_deep_pass_template", return_value="tmpl"
+                ):
+                    flowctl._run_deep_pass(
+                        backend="codex",
+                        pass_name="adversarial",
+                        primary_findings_file=None,
+                        receipt_path=str(rp),
+                        spec_arg=None,
+                        use_json=True,
+                    )
+            actual = rp.read_text(encoding="utf-8")
+            self.assertEqual(
+                actual,
+                _AUTONOMOUS_DEEP_RECEIPT_FIXTURE,
+                "autonomous _run_deep_pass receipt drifted from fixture",
+            )
+
+    def test_interactive_deep_pass_no_receipt_mutation(self) -> None:
+        """Default (no autonomy markers): raw findings out; receipt untouched."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rp = Path(tmp) / "receipt.json"
+            _seed_primary_receipt(rp, verdict="SHIP")
+            before = rp.read_bytes()
+            deep_findings = [
+                _finding("d1", severity="P0", confidence=75, title="race")
+            ]
+            captured: list[dict] = []
+
+            def _capture(obj: dict) -> None:
+                captured.append(obj)
+
+            base = {
+                k: v
+                for k, v in os.environ.items()
+                if k
+                not in ("FLOW_RALPH", "REVIEW_RECEIPT_PATH", "FLOW_AUTONOMOUS")
+            }
+            with mock.patch.dict(os.environ, base, clear=True):
+                with mock.patch.object(
+                    flowctl, "_dispatch_session_pass", return_value="deep-output"
+                ), mock.patch.object(
+                    flowctl, "parse_deep_findings", return_value=deep_findings
+                ), mock.patch.object(
+                    flowctl, "json_output", side_effect=_capture
+                ), mock.patch.object(
+                    flowctl, "load_deep_pass_template", return_value="tmpl"
+                ):
+                    flowctl._run_deep_pass(
+                        backend="codex",
+                        pass_name="adversarial",
+                        primary_findings_file=None,
+                        receipt_path=str(rp),
+                        spec_arg=None,
+                        use_json=True,
+                    )
+            # Receipt byte-identical to seed (no mutation).
+            self.assertEqual(rp.read_bytes(), before)
+            self.assertEqual(len(captured), 1)
+            out = captured[0]
+            self.assertTrue(out.get("host_judges"))
+            self.assertEqual(out.get("note"), flowctl.HOST_JUDGES_NOTE)
+            self.assertEqual(out.get("findings"), deep_findings)
+            self.assertNotIn("promotions", out)
+            self.assertNotIn("verdict_before_deep", out)
+
+    def test_interactive_validator_no_receipt_mutation(self) -> None:
+        """Default: validator surfaces decisions; does not upgrade verdict."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rp = Path(tmp) / "receipt.json"
+            _seed_primary_receipt(rp, verdict="NEEDS_WORK")
+            before = rp.read_bytes()
+            findings = [
+                _finding("f1", severity="P1", confidence=75),
+                _finding("f2", severity="P2", confidence=50),
+            ]
+            findings_path = Path(tmp) / "findings.jsonl"
+            findings_path.write_text(
+                "\n".join(json.dumps(f) for f in findings) + "\n",
+                encoding="utf-8",
+            )
+            # All dropped → autonomous would SHIP; interactive must not.
+            validator_output = (
+                "f1: validated: false -- already guarded\n"
+                "f2: validated: false -- pre-existing\n"
+            )
+            captured: list[dict] = []
+
+            def _capture(obj: dict) -> None:
+                captured.append(obj)
+
+            base = {
+                k: v
+                for k, v in os.environ.items()
+                if k
+                not in ("FLOW_RALPH", "REVIEW_RECEIPT_PATH", "FLOW_AUTONOMOUS")
+            }
+            with mock.patch.dict(os.environ, base, clear=True):
+                with mock.patch.object(
+                    flowctl, "_dispatch_session_pass", return_value=validator_output
+                ), mock.patch.object(
+                    flowctl, "json_output", side_effect=_capture
+                ), mock.patch.object(
+                    flowctl, "load_validator_template", return_value="tmpl <!-- FINDINGS_BLOCK -->"
+                ):
+                    flowctl._run_validator_pass(
+                        backend="codex",
+                        findings_file=str(findings_path),
+                        receipt_path=str(rp),
+                        spec_arg=None,
+                        use_json=True,
+                    )
+            self.assertEqual(rp.read_bytes(), before)
+            self.assertEqual(len(captured), 1)
+            out = captured[0]
+            self.assertTrue(out.get("host_judges"))
+            self.assertEqual(out.get("note"), flowctl.HOST_JUDGES_NOTE)
+            self.assertEqual(out.get("dropped"), 2)
+            self.assertEqual(out.get("kept"), 0)
+            # Verdict field is prior (unchanged); no upgrade marker.
+            self.assertEqual(out.get("verdict"), "NEEDS_WORK")
+            self.assertNotIn("verdict_before_validate", out)
+
+    def test_autonomous_validator_still_mutates_receipt(self) -> None:
+        """FLOW_AUTONOMOUS=1: all-dropped still upgrades NEEDS_WORK → SHIP."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rp = Path(tmp) / "receipt.json"
+            _seed_primary_receipt(rp, verdict="NEEDS_WORK")
+            findings = [_finding("f1", severity="P1", confidence=75)]
+            findings_path = Path(tmp) / "findings.jsonl"
+            findings_path.write_text(json.dumps(findings[0]) + "\n", encoding="utf-8")
+            validator_output = "f1: validated: false -- already guarded\n"
+            base = {
+                k: v
+                for k, v in os.environ.items()
+                if k not in ("FLOW_RALPH", "REVIEW_RECEIPT_PATH")
+            }
+            base["FLOW_AUTONOMOUS"] = "1"
+            with mock.patch.dict(os.environ, base, clear=True):
+                with mock.patch.object(
+                    flowctl, "_dispatch_session_pass", return_value=validator_output
+                ), mock.patch.object(
+                    flowctl, "json_output", lambda *_a, **_kw: None
+                ), mock.patch.object(
+                    flowctl, "now_iso", return_value=_FIXED_TS
+                ), mock.patch.object(
+                    flowctl, "load_validator_template", return_value="tmpl <!-- FINDINGS_BLOCK -->"
+                ):
+                    flowctl._run_validator_pass(
+                        backend="codex",
+                        findings_file=str(findings_path),
+                        receipt_path=str(rp),
+                        spec_arg=None,
+                        use_json=True,
+                    )
+            receipt = json.loads(rp.read_text(encoding="utf-8"))
+            self.assertEqual(receipt["verdict"], "SHIP")
+            self.assertEqual(receipt["verdict_before_validate"], "NEEDS_WORK")
+            self.assertIn("validator", receipt)
 
 
 if __name__ == "__main__":
