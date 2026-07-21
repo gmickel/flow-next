@@ -25,9 +25,8 @@ Deep-pass/validator split-by-mode (maintainer decision) + docs + CHANGELOG + ful
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Split-by-mode shipped exactly per the interview decision: the three existing autonomy markers (FLOW_RALPH=1 / REVIEW_RECEIPT_PATH set / FLOW_AUTONOMOUS=1 - reused, none invented; empty REVIEW_RECEIPT_PATH is not a marker) gate the deterministic path - verdict-flip thresholds, fingerprint confidence promotion, validator receipt mutation - with receipts proven byte-identical to a frozen golden fixture both via the apply helpers and end-to-end through _run_deep_pass under FLOW_RALPH=1. Interactive impl-review surfaces raw findings/decisions with host_judges: true and never mutates the seed receipt (read_bytes-unchanged assertions). Consolidated CHANGELOG Unreleased rider covers all four fn-113 tasks. Host review closed the delegate's flagged prose lag (impl-review optional-phases.md Step D.4 now documents both modes) and fixed two smoke-harness pins the task lists missed: the memory high-overlap case re-pinned to created+matches with an explicit --update mutation leg, and the validator no-op smoke now exports FLOW_AUTONOMOUS=1 (receipt mutation is the autonomous path by design). Final gates: full parallel suite 85 files / 1852 tests / 0 failures / 70.9s; smoke_test.sh All tests passed (136 checks); ci_test.sh 67/67; focused review suites 244 green; dual-copy identical; sync-codex x2.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d4f78542450550ed27d5799d4b543d83cb761df1
+- Tests: python3 scripts/run_tests_parallel.py (85 files, 1852 tests, 0 failures, 70.9s), bash smoke_test.sh (All tests passed, 136 checks), bash ci_test.sh (67/67), receipt byte-identity fixture: helpers + end-to-end under FLOW_RALPH=1, interactive no-mutation: read_bytes-unchanged assertions
 - PRs:
