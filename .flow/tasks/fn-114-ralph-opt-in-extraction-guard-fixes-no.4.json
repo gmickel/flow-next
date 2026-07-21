@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-21T06:10:12.346752Z",
+  "depends_on": [
+    "fn-114-ralph-opt-in-extraction-guard-fixes-no.3"
+  ],
+  "id": "fn-114-ralph-opt-in-extraction-guard-fixes-no.4",
+  "priority": null,
+  "spec": "fn-114-ralph-opt-in-extraction-guard-fixes-no",
+  "spec_path": ".flow/tasks/fn-114-ralph-opt-in-extraction-guard-fixes-no.4.md",
+  "status": "todo",
+  "title": "Ralph docs truth-up + CHANGELOG rider + full gate",
+  "updated_at": "2026-07-21T06:10:13.302410Z"
+}
