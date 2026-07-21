@@ -93,6 +93,8 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 2. **Direct name**: Type `$flow-next-setup` in your prompt
 3. **Implicit**: Just describe the task — Codex matches the skill description automatically (for skills with `allow_implicit_invocation: true`)
 
+All user-facing skills ship `allow_implicit_invocation: true`, so prose like "plan this feature", "pilot fn-12 to completion", or "open a PR" resolves the matching skill from the model's skill catalog — Codex's naming rule then *requires* it to use that skill. Internal skills that only other skills dispatch (`drive`, `sync`, `export-context`, `rp-explorer`, `worktree-kit`, `deps`) ship `false`: they stay out of the shared skill-catalog context budget (min of 8,000 chars and 2% of the context window, shared with every other skill on your machine) but remain fully invocable by name. The mirror's catalog descriptions are dieted to ≤200 chars each for the same reason — the full skill body loads on invocation either way.
+
 | Claude Code | Codex (dropdown) | Codex (direct) |
 |-------------|-------------------|----------------|
 | `/flow-next:prospect` | Flow Prospect | `$flow-next-prospect` |

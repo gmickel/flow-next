@@ -1438,32 +1438,48 @@ generate_openai_yaml() {
   } > "$dir/openai.yaml"
 }
 
-# Workflow skills (blue, explicit)
-generate_openai_yaml "flow-next-plan"      "Flow Plan"      "Create structured build plans from feature requests" "#3B82F6" false "Plan out this feature: "
-generate_openai_yaml "flow-next-work"      "Flow Work"      "Execute planned tasks with worker subagents"          "#3B82F6" false "Work on: "
-generate_openai_yaml "flow-next-interview" "Flow Interview" "Deep Q&A to refine specs and requirements"            "#3B82F6" false
-generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" false
-generate_openai_yaml "flow-next-prospect"  "Flow Prospect"  "Generate ranked candidate ideas grounded in the repo" "#3B82F6" false "What should we build next? "
-generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next spec" "#3B82F6" false "Capture this as a spec: "
-generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" false
-generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" false
-generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" false
-generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" false
-generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync" "#3B82F6" false
-generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" false
-generate_openai_yaml "flow-next-pilot" "Flow Pilot" "Single-tick autonomous build-loop conductor — one ready spec, one stage per tick, terminal PILOT_VERDICT line" "#3B82F6" false
-generate_openai_yaml "flow-next-land" "Flow Land" "Cadence-tick autonomous PR babysitter — CI-fix, resolve, converge, merge, close, release; terminal LAND_VERDICT line" "#3B82F6" false
+# Workflow skills (blue, implicit - surfaced in the model catalog so prose
+# like "plan this feature" / "pilot this to completion" resolves the skill)
+generate_openai_yaml "flow-next-plan"      "Flow Plan"      "Create structured build plans from feature requests" "#3B82F6" true "Plan out this feature: "
+generate_openai_yaml "flow-next-work"      "Flow Work"      "Execute planned tasks with worker subagents"          "#3B82F6" true "Work on: "
+generate_openai_yaml "flow-next-interview" "Flow Interview" "Deep Q&A to refine specs and requirements"            "#3B82F6" true
+generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" true
+generate_openai_yaml "flow-next-prospect"  "Flow Prospect"  "Generate ranked candidate ideas grounded in the repo" "#3B82F6" true "What should we build next? "
+generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next spec" "#3B82F6" true "Capture this as a spec: "
+generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" true
+generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" true
+generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" true
+generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" true
+generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync" "#3B82F6" true
+generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" true
+generate_openai_yaml "flow-next-pilot" "Flow Pilot" "Single-tick autonomous build-loop conductor — one ready spec, one stage per tick, terminal PILOT_VERDICT line" "#3B82F6" true
+generate_openai_yaml "flow-next-land" "Flow Land" "Cadence-tick autonomous PR babysitter — CI-fix, resolve, converge, merge, close, release; terminal LAND_VERDICT line" "#3B82F6" true
 
-# Review skills (red, explicit)
-generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" false
-generate_openai_yaml "flow-next-plan-review" "Flow Plan Review"           "Carmack-level plan review via RepoPrompt"  "#EF4444" false
-generate_openai_yaml "flow-next-spec-completion-review" "Flow Spec Completion Review" "Verify spec implementation matches the spec" "#EF4444" false
-generate_openai_yaml "flow-next-resolve-pr"  "Flow Resolve PR"            "Resolve PR review feedback via GraphQL"    "#EF4444" false "Resolve PR "
+# Review skills (red, implicit)
+generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" true
+generate_openai_yaml "flow-next-plan-review" "Flow Plan Review"           "Carmack-level plan review via RepoPrompt"  "#EF4444" true
+generate_openai_yaml "flow-next-spec-completion-review" "Flow Spec Completion Review" "Verify spec implementation matches the spec" "#EF4444" true
+generate_openai_yaml "flow-next-resolve-pr"  "Flow Resolve PR"            "Resolve PR review feedback via GraphQL"    "#EF4444" true "Resolve PR "
 
 # Utility skills (blue/amber, implicit allowed)
 generate_openai_yaml "flow-next"       "Flow Tasks" "Manage .flow/ tasks and specs"                           "#3B82F6" true
-generate_openai_yaml "flow-next-prime" "Flow Prime" "Comprehensive codebase assessment for agent readiness"    "#F59E0B" false
-generate_openai_yaml "flow-next-map"   "Flow Map"   "Wrap clawpatch map for a semantic feature index (opt-in)" "#F59E0B" false
+generate_openai_yaml "flow-next-prime" "Flow Prime" "Comprehensive codebase assessment for agent readiness"    "#F59E0B" true
+generate_openai_yaml "flow-next-map"   "Flow Map"   "Wrap clawpatch map for a semantic feature index (opt-in)" "#F59E0B" true
+generate_openai_yaml "flow-next-ralph-init" "Flow Ralph Init" "Scaffold the repo-local Ralph autonomous harness" "#3B82F6" true
+
+# Internal skills (gray, explicit-only). These are spawned by other skills,
+# never by user prose. Codex defaults allow_implicit_invocation to TRUE when
+# no openai.yaml exists, silently injecting name+description into EVERY
+# session's skill catalog (a shared budget of min(8000 chars, 2% of context;
+# codex-rs/core-skills/src/render.rs) - overflow truncates ALL skills'
+# descriptions, including unrelated user skills). Hidden skills stay fully
+# invocable by the skills that dispatch them (paths in prose) and via $name.
+generate_openai_yaml "flow-next-drive"          "Flow Drive [internal]"          "Browser/app driver used by Flow QA"                 "#9CA3AF" false
+generate_openai_yaml "flow-next-sync"           "Flow Plan-Sync [internal]"      "Downstream task-spec sync used by Flow Work"        "#9CA3AF" false
+generate_openai_yaml "flow-next-export-context" "Flow Export Context [internal]" "Context bundle export used by reviews"              "#9CA3AF" false
+generate_openai_yaml "flow-next-rp-explorer"    "Flow RP Explorer [internal]"    "RepoPrompt exploration helper used by reviews"      "#9CA3AF" false
+generate_openai_yaml "flow-next-worktree-kit"   "Flow Worktree Kit [internal]"   "Worktree helper used by Flow Work"                  "#9CA3AF" false
+generate_openai_yaml "flow-next-deps"           "Flow Deps [internal]"           "Dependency-graph helper used by planning skills"    "#9CA3AF" false
 
 # --- Deprecation redirect skills (1.0 alias surface, removed in 2.0) ---
 # Codex resolves `$flow-next-<name>` and bare-skill-name lookups via the
@@ -1502,6 +1518,71 @@ EOF
 
 generate_redirect_skill "flow-next-epic-review" "flow-next-spec-completion-review" "Flow Epic Review"
 
+# --- Catalog description diet (surfaced skills only) ---
+# Codex injects each implicit skill's SKILL.md frontmatter `description` into
+# the model context verbatim (render.rs uses `description`, NOT openai.yaml's
+# short_description, capped 1024 chars each) under the shared skills budget.
+# Canonical descriptions are Claude-Code-length (250-700 chars, "Triggers on
+# /flow-next:..." tails); at 22 surfaced skills that alone would blow the
+# budget and truncate every skill on the user's machine. Rewrite the MIRROR
+# frontmatter description to a tight catalog line (target <=160 chars, no
+# colons so the unquoted YAML stays valid). Hidden (internal) skills keep
+# their canonical descriptions - they are never injected.
+# MAINTENANCE: a new user-facing skill needs an entry here; the validation
+# guard below hard-fails when a surfaced skill's description exceeds 200 chars.
+python3 - "$CODEX_DIR" <<'PYEOF'
+import sys, pathlib
+codex_dir = pathlib.Path(sys.argv[1])
+DIET = {
+    "flow-next-plan": "Plan a feature into a flow-next spec with tasks in .flow/. Use when asked to plan, spec out, or break down work (fn-N ids).",
+    "flow-next-work": "Execute a flow-next spec or task end-to-end with worker subagents, gates, and commits. Use when asked to work on, implement, or execute fn-N.",
+    "flow-next-pilot": "Single-tick autonomous build-loop conductor. Advances one ready spec one stage per tick, emits PILOT_VERDICT. Use when asked to pilot a spec or backlog.",
+    "flow-next-land": "Autonomous PR babysitter tick. Fixes CI, resolves feedback, merges when converged, closes the spec, releases. Emits LAND_VERDICT. Use when asked to land PRs.",
+    "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh. Use whenever asked to make or open a PR in a flow-next repo.",
+    "flow-next-resolve-pr": "Resolve PR review feedback. Fetches unresolved threads, triages, fixes, replies and resolves via GraphQL. Use when asked to address review comments.",
+    "flow-next-interview": "In-depth Q&A to refine a spec, task, or spec file before building. Use when asked to flesh out, refine, or interrogate requirements.",
+    "flow-next-capture": "Synthesize the current conversation into a flow-next spec with read-back gating. Use when asked to capture this as a spec.",
+    "flow-next-setup": "Install or refresh flowctl and project instructions for flow-next in this repo. Use when asked to set up flow-next.",
+    "flow-next-prospect": "Generate ranked candidate ideas grounded in the repo. Use when asked what to build next.",
+    "flow-next-strategy": "Create or update repo-root STRATEGY.md (problem, approach, users, metrics, tracks). Use for strategy or roadmap doc requests.",
+    "flow-next-audit": "Audit .flow/memory/ entries against current code and keep, update, consolidate, or delete each. Use when asked to audit or refresh memory.",
+    "flow-next-memory-migrate": "Migrate legacy flat .flow/memory files to the categorized YAML schema. One-time ceremony. Use when asked to migrate flow memory.",
+    "flow-next-tracker-sync": "Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, Jira) and reconcile two-way. Use when asked to sync to a tracker. NOT plan-sync.",
+    "flow-next-qa": "Live-app QA pass derived from the spec. Drives the running app, files P0/P1/P2 findings with evidence, emits a YES or NO qa_verdict receipt.",
+    "flow-next-prime": "Assess codebase agent and production readiness. Classifies the project, verifies commands run, leads with a verdict and ranked next actions.",
+    "flow-next-map": "Build a semantic feature index of the repo via clawpatch map (opt-in). Use when asked to map the repo.",
+    "flow-next-impl-review": "Carmack-level implementation review of changes via the configured backend. Use when asked to review code or a diff in a flow-next repo.",
+    "flow-next-plan-review": "Carmack-level review of a flow-next spec or plan via the configured backend. Use when asked to review a plan or spec.",
+    "flow-next-spec-completion-review": "Verify that a spec's completed tasks fully implement the spec requirements. Use at spec completion before close.",
+    "flow-next-ralph-init": "Scaffold the repo-local Ralph autonomous harness and project hooks. Use when asked to set up Ralph.",
+    "flow-next": "Manage .flow/ tasks and specs. Use for show or list tasks, task status, what is ready, show fn-N. NOT for planning or executing (use the plan and work skills).",
+}
+failed = 0
+for skill, desc in DIET.items():
+    p = codex_dir / "skills" / skill / "SKILL.md"
+    if not p.is_file():
+        print(f"DIET-FAIL: {skill}/SKILL.md missing")
+        failed += 1
+        continue
+    lines = p.read_text(encoding="utf-8").split("\n")
+    done = False
+    for i, line in enumerate(lines):
+        if line.startswith("description:"):
+            lines[i] = f"description: {desc}"
+            done = True
+            break
+        if i > 0 and line == "---":
+            break
+    if not done:
+        print(f"DIET-FAIL: no description line in {skill}/SKILL.md frontmatter")
+        failed += 1
+        continue
+    p.write_text("\n".join(lines), encoding="utf-8")
+if failed:
+    sys.exit(1)
+print(f"  diet applied to {len(DIET)} surfaced skill descriptions")
+PYEOF
+
 # REQUIRED list — every user-facing slash-command skill MUST have an
 # openai.yaml entry above. When you add a new skill, add it here AND add
 # a generate_openai_yaml call. Validation will fail otherwise.
@@ -1528,6 +1609,13 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next"
   "flow-next-prime"
   "flow-next-map"
+  "flow-next-ralph-init"
+  "flow-next-drive"
+  "flow-next-sync"
+  "flow-next-export-context"
+  "flow-next-rp-explorer"
+  "flow-next-worktree-kit"
+  "flow-next-deps"
 )
 
 openai_yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
@@ -2014,8 +2102,34 @@ for yf in $(find "$CODEX_DIR/skills" -name "openai.yaml"); do
     yaml_errors=$((yaml_errors + 1))
   fi
 done
+
+# Catalog-policy guard: EVERY mirror skill must declare an explicit
+# allow_implicit_invocation - Codex defaults ABSENT to true, so a skill
+# without one silently lands in every session's shared skill catalog
+# (that inversion shipped for months: internals injected, user verbs hidden).
+for sd in "$CODEX_DIR/skills"/*/; do
+  sname=$(basename "$sd")
+  if ! grep -q 'allow_implicit_invocation:' "$sd/agents/openai.yaml" 2>/dev/null; then
+    echo -e "  ${RED}✗${NC} $sname has no explicit allow_implicit_invocation (Codex defaults ABSENT to true) - add a generate_openai_yaml call"
+    yaml_errors=$((yaml_errors + 1))
+  fi
+done
+
+# Catalog-budget guard: surfaced (implicit true) skills' mirror descriptions
+# are injected verbatim into the shared skills context budget (min(8000 chars,
+# 2% of window)); the diet pass above must keep each <=200 chars.
+for sd in "$CODEX_DIR/skills"/*/; do
+  sname=$(basename "$sd")
+  grep -q 'allow_implicit_invocation: true' "$sd/agents/openai.yaml" 2>/dev/null || continue
+  dlen=$(awk '/^description:/{sub(/^description: */,""); print length($0); exit}' "$sd/SKILL.md" 2>/dev/null)
+  if [ -z "$dlen" ] || [ "$dlen" -gt 200 ]; then
+    echo -e "  ${RED}✗${NC} $sname is surfaced in the model catalog but its description is ${dlen:-missing} chars (max 200) - add/trim its DIET entry"
+    yaml_errors=$((yaml_errors + 1))
+  fi
+done
+
 if [ "$yaml_errors" -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} All openai.yaml files have required keys"
+  echo -e "  ${GREEN}✓${NC} All openai.yaml files have required keys, explicit catalog policy, and dieted surfaced descriptions"
 else
   errors=$((errors + yaml_errors))
 fi

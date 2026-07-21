@@ -1,6 +1,6 @@
 ---
 name: flow-next-resolve-pr
-description: Resolve PR review feedback — fetch unresolved threads, triage, dispatch per-thread resolver agents, validate, commit, reply + resolve via GraphQL. Triggers on /flow-next:resolve-pr.
+description: Resolve PR review feedback. Fetches unresolved threads, triages, fixes, replies and resolves via GraphQL. Use when asked to address review comments.
 user-invocable: false
 ---
 

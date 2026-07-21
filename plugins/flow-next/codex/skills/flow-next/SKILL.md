@@ -1,6 +1,6 @@
 ---
 name: flow-next
-description: "Manage .flow/ tasks and specs. Triggers: 'show me my tasks', 'list specs', 'what tasks are there', 'add a task', 'create task', 'what's ready', 'task status', 'show fn-1-add-oauth'. NOT for /flow-next:plan or /flow-next:work."
+description: Manage .flow/ tasks and specs. Use for show or list tasks, task status, what is ready, show fn-N. NOT for planning or executing (use the plan and work skills).
 ---
 
 # Flow-Next Task Management

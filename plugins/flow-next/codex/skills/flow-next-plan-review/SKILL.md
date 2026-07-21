@@ -1,6 +1,6 @@
 ---
 name: flow-next-plan-review
-description: Carmack-level plan review via RepoPrompt or Codex. Use when reviewing Flow specs or design docs. Triggers on /flow-next:plan-review.
+description: Carmack-level review of a flow-next spec or plan via the configured backend. Use when asked to review a plan or spec.
 user-invocable: false
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: flow-next-interview
-description: Interview user in-depth about a spec, task, or spec file to extract complete implementation details. Use when user wants to flesh out a spec, refine requirements, or clarify a feature before building. Triggers on /flow-next:interview with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2) or file paths.
+description: In-depth Q&A to refine a spec, task, or spec file before building. Use when asked to flesh out, refine, or interrogate requirements.
 user-invocable: false
 ---
 

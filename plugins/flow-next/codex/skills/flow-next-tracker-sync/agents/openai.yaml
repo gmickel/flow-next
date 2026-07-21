@@ -3,4 +3,4 @@ interface:
   short_description: "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync"
   brand_color: "#3B82F6"
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Plan-Sync [internal]"
+  short_description: "Downstream task-spec sync used by Flow Work"
+  brand_color: "#9CA3AF"
+policy:
+  allow_implicit_invocation: false

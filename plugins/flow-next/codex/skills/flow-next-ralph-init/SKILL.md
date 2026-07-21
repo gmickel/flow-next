@@ -1,6 +1,6 @@
 ---
 name: flow-next-ralph-init
-description: Scaffold repo-local Ralph autonomous harness under scripts/ralph/. Use when user runs /flow-next:ralph-init.
+description: Scaffold the repo-local Ralph autonomous harness and project hooks. Use when asked to set up Ralph.
 user-invocable: false
 ---
 

@@ -3,4 +3,4 @@ interface:
   short_description: "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)"
   brand_color: "#3B82F6"
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

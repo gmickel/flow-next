@@ -1,6 +1,6 @@
 ---
 name: flow-next-spec-completion-review
-description: Spec completion review - verifies all spec tasks implement the spec requirements. Triggers on /flow-next:spec-completion-review.
+description: Verify that a spec's completed tasks fully implement the spec requirements. Use at spec completion before close.
 user-invocable: false
 ---
 

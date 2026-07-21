@@ -1,6 +1,6 @@
 ---
 name: flow-next-memory-migrate
-description: Migrate pre-fn-30 legacy flat memory files (`.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md`) into the categorized YAML schema. Triggers on /flow-next:memory-migrate, "migrate memory", "convert legacy memory", "lift pitfalls into categorized schema", "convert old memory format". Optional `mode:autofix` token in arguments runs without questions and accepts mechanical defaults for ambiguous classifications. Optional scope hint after the mode token narrows the migration to a specific legacy file (e.g. `pitfalls.md`).
+description: Migrate legacy flat .flow/memory files to the categorized YAML schema. One-time ceremony. Use when asked to migrate flow memory.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---

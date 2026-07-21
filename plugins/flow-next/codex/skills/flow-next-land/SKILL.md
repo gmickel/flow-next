@@ -1,6 +1,6 @@
 ---
 name: flow-next-land
-description: Cadence-tick autonomous babysitter for build-loop-authored PRs (/loop-shaped ship loop). Each invocation is one tick over all open PRs the build loop authored — keep CI green (bounded fix budget), wait out the reviewer patience window, resolve feedback via resolve-pr, and once converged merge + close the spec + follow the project's release instructions. Ends with a terminal LAND_VERDICT line for the driver to read. Triggers on /flow-next:land, optionally with --dry-run. Autonomous by design — never asks the user questions; reports NEEDS_HUMAN instead.
+description: Autonomous PR babysitter tick. Fixes CI, resolves feedback, merges when converged, closes the spec, releases. Emits LAND_VERDICT. Use when asked to land PRs.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Skill
 ---

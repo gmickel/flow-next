@@ -1,6 +1,6 @@
 ---
 name: flow-next-qa
-description: Live-app real-user QA pass derived from the spec. Drives the running app via flow-next-drive, derives scenarios from the spec's AC / R-IDs / boundaries, files structured P0/P1/P2 findings with evidence, and ends with a YES/NO ship verdict receipt. Triggers on /flow-next:qa with a spec id. Runs user-invoked OR as the optional `pipeline.qa` pilot stage (default off). Augments — never replaces — CI/staging/manual QA. FORBIDDEN from marking PASS by reading source — the verdict rests on captured evidence from the live app, never on agent narration.
+description: Live-app QA pass derived from the spec. Drives the running app, files P0/P1/P2 findings with evidence, emits a YES or NO qa_verdict receipt.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---

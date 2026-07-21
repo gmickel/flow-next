@@ -3,4 +3,4 @@ interface:
   short_description: "Migrate legacy flat memory files to categorized YAML schema"
   brand_color: "#3B82F6"
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

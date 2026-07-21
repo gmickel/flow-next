@@ -1,6 +1,6 @@
 ---
 name: flow-next-make-pr
-description: Render a cognitive-aid PR body from flow-next state and open via gh. Triggers on /flow-next:make-pr with optional spec id and flags (--draft, --ready, --no-mermaid, --base <ref>, --memory, --dry-run). Auto-detects spec from current branch when no id given. NOT Ralph-blocked — autonomous loops can surface a draft PR for human review.
+description: Open a PR with a cognitive-aid body rendered from flow-next spec state via gh. Use whenever asked to make or open a PR in a flow-next repo.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---

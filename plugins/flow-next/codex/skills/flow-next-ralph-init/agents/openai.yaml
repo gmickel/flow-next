@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Ralph Init"
+  short_description: "Scaffold the repo-local Ralph autonomous harness"
+  brand_color: "#3B82F6"
+policy:
+  allow_implicit_invocation: true

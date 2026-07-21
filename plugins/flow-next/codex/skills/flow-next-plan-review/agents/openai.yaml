@@ -3,4 +3,4 @@ interface:
   short_description: "Carmack-level plan review via RepoPrompt"
   brand_color: "#EF4444"
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

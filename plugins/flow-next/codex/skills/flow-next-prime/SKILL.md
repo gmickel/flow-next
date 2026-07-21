@@ -1,6 +1,6 @@
 ---
 name: flow-next-prime
-description: Comprehensive codebase assessment for agent and production readiness. Classifies the project (lifecycle, topology, size, stack, shape), scans 8 pillars, verifies commands actually run, checks GitHub settings. Leads with a verdict + ranked next-actions; fixes agent readiness only. Triggers on /flow-next:prime.
+description: Assess codebase agent and production readiness. Classifies the project, verifies commands run, leads with a verdict and ranked next actions.
 user-invocable: false
 ---
 

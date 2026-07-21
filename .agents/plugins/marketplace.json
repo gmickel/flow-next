@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "flow-next",
-      "version": "3.1.1",
+      "version": "3.1.2",
       "source": {
         "source": "local",
         "path": "./plugins/flow-next"

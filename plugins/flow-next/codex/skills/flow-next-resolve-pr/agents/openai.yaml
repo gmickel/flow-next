@@ -4,4 +4,4 @@ interface:
   brand_color: "#EF4444"
   default_prompt: "Resolve PR "
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

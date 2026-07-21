@@ -1,6 +1,6 @@
 ---
 name: flow-next-map
-description: Wrap `clawpatch map` to produce a semantic feature index of the repo (~20 languages, persisted at `.clawpatch/features/*.json`). Detects install, runs `clawpatch init` when `.clawpatch/` absent, invokes provider-free `clawpatch map --source heuristic` by default; `--source auto|agent` flows through as passthrough. Opt-in enrichment — scouts and prime read the resulting index, but flowctl never depends on clawpatch.
+description: Build a semantic feature index of the repo via clawpatch map (opt-in). Use when asked to map the repo.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit
 ---

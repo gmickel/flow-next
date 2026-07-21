@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow RP Explorer [internal]"
+  short_description: "RepoPrompt exploration helper used by reviews"
+  brand_color: "#9CA3AF"
+policy:
+  allow_implicit_invocation: false

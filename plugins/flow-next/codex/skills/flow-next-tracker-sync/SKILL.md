@@ -1,6 +1,6 @@
 ---
 name: flow-next-tracker-sync
-description: Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, or Jira) and reconcile body/status/comments two-way — projection, not coordination. The spec stays the source of truth; the tracker is a co-editable mirror. Use to configure the bridge (discovery ceremony), link a spec to an issue (flow-first push or tracker-first "grab issue X and spec it"), push/pull/reconcile, or unlink. Triggers on /flow-next:tracker-sync, "sync to linear", "push this spec to the tracker", "grab issue X and spec it", "link this spec to the issue", "reconcile with the tracker". NOT /flow-next:sync (that is plan-sync, a different skill).
+description: Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, Jira) and reconcile two-way. Use when asked to sync to a tracker. NOT plan-sync.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---

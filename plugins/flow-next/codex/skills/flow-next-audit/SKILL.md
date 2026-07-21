@@ -1,6 +1,6 @@
 ---
 name: flow-next-audit
-description: Audit `.flow/memory/` entries against the current codebase and decide Keep / Update / Consolidate / Replace / Delete per entry. Triggers on /flow-next:audit, "audit memory", "review memory", "refresh learnings", "sweep stale memory", "consolidate overlapping memory entries". Optional `mode:autofix` token in arguments runs without questions and marks ambiguous as stale. Optional scope hint after the mode token (concept, category, module, or path) narrows what gets audited.
+description: Audit .flow/memory/ entries against current code and keep, update, consolidate, or delete each. Use when asked to audit or refresh memory.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---

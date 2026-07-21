@@ -124,7 +124,7 @@ Then branch:
 **1. `HITS=0` (neither file exists)** — ask the user via `plain-text numbered prompt`:
 
 - **header**: `Copy canonical spec template to <repo-root>/SPEC.md?`
-- **body**: `The spec template discovery cascade prefers <repo-root>/SPEC.md over .flow/templates/spec.md, so customizations there apply to every new spec without affecting other projects. The canonical template at ${PLUGIN_ROOT}/templates/spec.md ships with the 7 canonical sections, scope-owner annotations, and the ## Decision Context H3 conditional. Skipping is safe — the cascade falls through to .flow/templates/spec.md (just copied above), so all downstream skills still resolve a template.`
+- **body**: `Every new flow-next spec starts from a template. Lookup order: <repo-root>/SPEC.md first, then .flow/templates/spec.md, then the plugin's bundled copy — so a SPEC.md at the repo root is where you customize section wording for THIS project without touching .flow/ internals. Skipping is safe — the later fallbacks always resolve, and you can opt in any time by copying .flow/templates/spec.md to the repo root.`
 - **options**:
  - `Copy template` — write `<repo_root>/SPEC.md` from the bundled template (carries the customization-location top-comment). Print the path so the user knows where to edit.
  - `Skip` — no write. Cascade falls through to `.flow/templates/spec.md`. Documentation cross-links (CLAUDE.md / AGENTS.md snippets) explain how to opt in later: just copy `.flow/templates/spec.md` to `<repo-root>/SPEC.md`.
@@ -334,10 +334,10 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
  "header": "Memory",
- "question": "Enable memory system? (Auto-captures learnings from NEEDS_WORK reviews)",
+ "question": "Enable the memory system? When a review sends a task back for rework, the lesson learned is saved under .flow/memory/ and read by future planning and implementation - so the same mistake is not repeated across specs.",
  "options": [
- {"label": "Yes (Recommended)", "description": "Auto-capture pitfalls and conventions from review feedback"},
- {"label": "No", "description": "Disable with: flowctl config set memory.enabled false"}
+ {"label": "Yes (Recommended)", "description": "Auto-capture pitfalls and conventions from review feedback into .flow/memory/"},
+ {"label": "No", "description": "No learnings captured. Enable later with: flowctl config set memory.enabled true"}
  ],
  "multiSelect": false
 }
@@ -347,10 +347,10 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
  "header": "Plan-Sync",
- "question": "Enable plan-sync? (Updates downstream task specs after implementation drift)",
+ "question": "Enable plan-sync? After each task is implemented, a quick sync pass updates the not-yet-started tasks in the same spec to match what was ACTUALLY built - so later tasks never work from a stale plan.",
  "options": [
- {"label": "Yes (Recommended)", "description": "Sync task specs when implementation differs from original plan"},
- {"label": "No", "description": "Disable with: flowctl config set planSync.enabled false"}
+ {"label": "Yes (Recommended)", "description": "Sync remaining task specs whenever implementation deviates from the original plan"},
+ {"label": "No", "description": "Later tasks keep their original wording. Enable later with: flowctl config set planSync.enabled true"}
  ],
  "multiSelect": false
 }
@@ -388,9 +388,9 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
  "header": "HTML Artifacts",
- "question": "Enable HTML artifact mode? (Renders specs/PRs as self-contained HTML review pages under .flow/artifacts/ — markdown stays the source of truth)",
+ "question": "Enable HTML artifact mode? Capture/plan/make-pr additionally render each spec and PR body as a self-contained HTML page under .flow/artifacts/ - nicer for humans to review in a browser. The markdown stays the source of truth; pages are regenerable any time.",
  "options": [
- {"label": "Yes (Recommended)", "description": "Participating skills (capture, plan, make-pr) also emit regenerable HTML render lenses for human review"},
+ {"label": "Yes (Recommended)", "description": "Also emit shareable HTML review pages alongside the markdown"},
  {"label": "No", "description": "Markdown-only. Zero extra steps, zero token overhead. Enable later: flowctl config set artifacts.html.enabled true"}
  ],
  "multiSelect": false
@@ -401,13 +401,13 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
  "header": "Review",
- "question": "Which review backend for Carmack-level reviews?",
+ "question": "Which review backend? Plans and implementations get reviewed before they land; a review backend is a second AI CLI - ideally a DIFFERENT model family than the one writing the code, for uncorrelated blind spots. Each needs its own install/subscription. Guide: https://flow-next.dev/review/workflow/",
  "options": [
- {"label": "Codex CLI", "description": "Cross-platform, uses GPT 5.2 High for reviews. Simple setup, works everywhere. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
- {"label": "Copilot CLI", "description": "Cross-platform, routes to Claude (Sonnet/Opus/Haiku 4.5) or GPT-5.2 via GitHub Copilot. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
- {"label": "Cursor CLI", "description": "Cross-platform, runs cursor-agent (default gpt-5.5-high 1M-ctx; also gpt-5.3-codex, composer-2.5, opus-4.8-thinking). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
- {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, ~65% fewer tokens than traditional approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
- {"label": "None", "description": "Skip reviews, can configure later with --review flag"}
+ {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
+ {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
+ {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
+ {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
+ {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
  ],
  "multiSelect": false
 }
@@ -421,7 +421,7 @@ Stored value is a bare backend name by default. Power users can also write a ful
 ```json
 {
  "header": "Model Routing",
- "question": "Scaffold a recommended multi-model pipeline into your project instruction file? (a cost/intelligence/taste scores table + how-to-apply rules + the flow-next wiring for the bridge CLIs detected on this machine; shown in FULL before writing — yours to edit after)",
+ "question": "Scaffold a recommended multi-model pipeline into your project instruction file? This writes a starting-point section - a cost/speed/intelligence/taste scores table plus rules for which model plans, implements, and reviews - wired to the bridge CLIs detected on this machine. Shown in FULL before writing; yours to edit after. Background: https://flow-next.dev/orchestration/",
  "options": [
  {"label": "Scaffold", "description": "Write the model-routing example into the same CLAUDE.md/AGENTS.md the Docs step targets. Shown in full before writing; these are starting opinions you edit down, not up."},
  {"label": "Scaffold + enable codex delegation", "description": "Also set work.delegate=codex so /flow-next:work can offload bulk implementation to the codex CLI. First-use consent is still required — this never pre-approves it. INCLUDE THIS OPTION ONLY WHEN HAVE_CODEX=1."},
@@ -437,7 +437,7 @@ For **Codex** (`PLATFORM=codex`):
 ```json
 {
  "header": "Docs",
- "question": "Update project documentation with Flow-Next instructions?",
+ "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
  "options": [
  {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Codex reads this)"},
  {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
@@ -452,7 +452,7 @@ For **Claude Code / Droid**:
 ```json
 {
  "header": "Docs",
- "question": "Update project documentation with Flow-Next instructions?",
+ "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
  "options": [
  {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
  {"label": "AGENTS.md only", "description": "Add flow-next section to AGENTS.md"},
@@ -467,7 +467,7 @@ For **Cursor** (`PLATFORM=cursor`) — Cursor reads AGENTS.md, so recommend it (
 ```json
 {
  "header": "Docs",
- "question": "Update project documentation with Flow-Next instructions?",
+ "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
  "options": [
  {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Cursor reads this)"},
  {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
@@ -483,7 +483,7 @@ For **Cursor** (`PLATFORM=cursor`) — Cursor reads AGENTS.md, so recommend it (
 ```json
 {
  "header": "Ralph",
- "question": "Enable or keep Ralph autonomous mode? (opt-in AFK harness under scripts/ralph/; registers guard hooks in project settings only when you say yes. Default is off — zero hooks, zero Ralph process in normal sessions.)",
+ "question": "Enable or keep Ralph autonomous mode? Ralph is an opt-in overnight loop that works your backlog while you are away, with guard hooks that limit what it may touch (scaffold lives under scripts/ralph/; hooks register in project settings only if you say yes). Default is off - zero hooks, zero Ralph in normal sessions. Learn more: https://flow-next.dev/ralph/overview/",
  "options": [
  {"label": "No (Recommended)", "description": "Leave Ralph off. Remove any flow-next Ralph guard hook entries from project settings. Note that scripts/ralph/ can be deleted (agent asks before deleting — existing runs/receipts may matter)."},
  {"label": "Yes, enable or keep", "description": "Run /flow-next:ralph-init (scaffold + agent-driven hook merge into project settings). Claude Code's project-hooks trust prompt is the consent gate."}

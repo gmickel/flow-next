@@ -2,11 +2,16 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.1.2] - 2026-07-22
 
 ### Fixed
 
-- **Codex installer now copies template subdirectories (`templates/memory/`).** `install-codex.sh` only copied top-level `*.md` from the mirror's `templates/`, so the memory-track templates (`README.md.tpl`, `bug-track-entry.md.tpl`, `knowledge-track-entry.md.tpl`) never reached `~/.codex/templates/memory/` and flowctl silently fell back to its embedded defaults. The installer now syncs each template subdirectory (rm-then-copy, idempotent), so `_memory_template_path` resolves the shipped templates on Codex installs. Cosmetic-degradation fix; no version bump (batched).
+- **Codex skill catalog un-inverted: prose now resolves the user-facing skills.** Codex injects only skills with `allow_implicit_invocation: true` into the model's skill catalog and defaults ABSENT `openai.yaml` to true - so for months the catalog carried six internal helper skills (`drive`, `sync`, `export-context`, `rp-explorer`, `worktree-kit`, `deps` - which shipped no yaml) while every user verb (`plan`, `work`, `pilot`, `land`, `make-pr`, ...) was hidden with an explicit `false`. Prose like "plan this feature" or "pilot fn-12 to completion" could not resolve the skill and depended on the model rediscovering it from disk. All 22 user-facing skills now ship `true`; the 6 skill-dispatched internals ship an explicit `false` (still invocable by name, out of the shared catalog budget). To keep 22 surfaced entries inside Codex's shared skills context budget (min of 8,000 chars and 2% of the context window, shared with all your other skills), sync-codex now rewrites mirror frontmatter descriptions to dieted catalog lines (2,861 chars total vs ~7.6k undieted; ~2.2k spent today on the accidental internals). Two new validation guards: every mirror skill must declare an explicit catalog policy, and surfaced descriptions must stay <=200 chars.
+- **Codex installer now copies template subdirectories (`templates/memory/`).** `install-codex.sh` only copied top-level `*.md` from the mirror's `templates/`, so the memory-track templates (`README.md.tpl`, `bug-track-entry.md.tpl`, `knowledge-track-entry.md.tpl`) never reached `~/.codex/templates/memory/` and flowctl silently fell back to its embedded defaults. The installer now syncs each template subdirectory (rm-then-copy, idempotent), so `_memory_template_path` resolves the shipped templates on Codex installs.
+
+### Changed
+
+- **`/flow-next:setup` questions rewritten for people not deep into flow-next.** Every ceremony question now states its stakes in plain language before asking (what a setup mode decides, what a review backend is and that it wants a different model family than the writer, what plan-sync/memory/HTML-artifacts actually do to your repo, what Ralph is) and links flow-next.dev where a longer answer exists (setup modes -> /skills/setup/, review backends -> /review/workflow/, model routing -> /orchestration/, Ralph -> /ralph/overview/). Review-backend option copy now uses role labels ("top reasoning tier", "multi-family menu") instead of stale pinned model ids, per the docs-prose rule. No behavior change - same options, same defaults, same config keys.
 
 ## [flow-next 3.1.1] - 2026-07-21
 

@@ -3,4 +3,4 @@ interface:
   short_description: "Verify spec implementation matches the spec"
   brand_color: "#EF4444"
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true
