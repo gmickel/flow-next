@@ -81,9 +81,9 @@ Two install modes exist. **Copy mode** (the only mode before fn-121, and the onl
 CURRENT_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
 ```
 
-**If `PLATFORM` is not `claude`:** set `MODE=copy` silently and continue to Step 3 — plugin mode is Claude-Code-only (Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves `$HOME/.codex/scripts/flowctl`; Droid's bin support is unverified). Never offer the question on these hosts.
+**If `PLATFORM` is not `claude-code`:** set `MODE=copy` silently and continue to Step 3 — plugin mode is Claude-Code-only (Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves `$HOME/.codex/scripts/flowctl`; Droid's bin support is unverified). Never offer the question on these hosts.
 
-**If `PLATFORM=claude` and `CURRENT_MODE` is empty (first mode decision):** ask via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror — unreachable in practice, since this branch requires `PLATFORM=claude`):
+**If `PLATFORM=claude-code` and `CURRENT_MODE` is empty (first mode decision):** ask via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror — unreachable in practice, since this branch requires `PLATFORM=claude-code`):
 
 - **header**: `Setup mode`
 - **question**: `Does anyone use this repo without the Claude Code plugin — Codex/Cursor/Droid teammates, CI jobs, or plain terminal sessions running .flow/bin/flowctl?`
@@ -742,8 +742,9 @@ esac
 
 Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Codex**: use [templates/agents-md-snippet.md](templates/agents-md-snippet.md) (uses `$flow-next-plan` syntax)
-- AGENTS.md on **Claude Code / Droid / Cursor**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` syntax — Cursor runs the slash commands, so its AGENTS.md must carry the `/flow-next:` snippet, NOT the Codex `$flow-next-` one)
-- CLAUDE.md (any platform): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
+- AGENTS.md on **Claude Code (copy mode) / Droid / Cursor**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` syntax — Cursor runs the slash commands, so its AGENTS.md must carry the `/flow-next:` snippet, NOT the Codex `$flow-next-` one)
+- CLAUDE.md on **Claude Code in plugin mode** (`MODE=plugin`): use [templates/claude-md-snippet-plugin.md](templates/claude-md-snippet-plugin.md) — the slim rail with the `<!-- flow-next:snippet:v1 -->` sentinel that `flowctl setup-mode set plugin` (Step 7c) verifies; writing the regular snippet here would make the plugin stamp refuse. AGENTS.md as an optional plugin-mode secondary gets the same plugin template.
+- CLAUDE.md (any platform, copy mode): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
 
 **Resolve the target file set:** an explicit Docs-question answer is authoritative - if the user is asked and selects specific files (or declines one), honor exactly that; never touch a file the user just deselected. The one addition is a backfill for the SKIPPED case: when the Docs question is omitted entirely because the block is already current (per the Note above), still run `apply` on each already-marker-bearing file. Rationale (R8): a current-but-hashless block (written by a pre-hash plugin version) would otherwise never reach `apply`, so its pristine hash never gets backfilled and the NEXT template change wrongly prompts "Overwrite customized?". `apply` on a current block is cheap and idempotent - it returns `unchanged` and records the missing hash. So: resolve targets = files chosen by the Docs question when it was asked; OR, when the Docs question was skipped, the files already carrying the `<!-- BEGIN FLOW-NEXT -->` marker. Run the helper once per resolved file.
 

@@ -464,8 +464,11 @@ if [ -f "$setup_wf" ]; then
   ' "$setup_wf" > "${setup_wf}.fn121tmp" && mv "${setup_wf}.fn121tmp" "$setup_wf"
   sed -i.bak \
     -e '/^- \*\*Claude Code in plugin mode\*\*/d' \
+    -e '/^- CLAUDE.md on \*\*Claude Code in plugin mode\*\*/d' \
     -e 's/^Choose the correct template based on platform AND mode:/Choose the correct template based on platform:/' \
     -e 's|^- \*\*Claude Code (copy mode) / Droid / Cursor\*\*|- **Claude Code / Droid / Cursor**|' \
+    -e 's|^- AGENTS.md on \*\*Claude Code (copy mode) / Droid / Cursor\*\*|- AGENTS.md on **Claude Code / Droid / Cursor**|' \
+    -e 's|^- CLAUDE.md (any platform, copy mode):|- CLAUDE.md (any platform):|' \
     "$setup_wf"
   rm -f "${setup_wf}.bak"
 fi
