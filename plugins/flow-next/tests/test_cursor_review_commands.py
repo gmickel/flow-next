@@ -402,9 +402,13 @@ class CursorDeepPassDispatch(unittest.TestCase):
                 pass_name="adversarial", primary_findings=None,
                 receipt=str(receipt), spec=None, json=True,
             )
-            with mock.patch.object(flowctl, "run_cursor_exec", runner):
-                with contextlib.redirect_stdout(io.StringIO()):
-                    flowctl.cmd_cursor_deep_pass(args)
+            # Receipt mutation is autonomous-only (fn-113.4). Session resume
+            # still fires either way; pin FLOW_AUTONOMOUS so the additive
+            # deep_passes write is asserted under the math-on path.
+            with mock.patch.dict(os.environ, {"FLOW_AUTONOMOUS": "1"}):
+                with mock.patch.object(flowctl, "run_cursor_exec", runner):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        flowctl.cmd_cursor_deep_pass(args)
             self.assertEqual(len(runner.calls), 1)
             self.assertEqual(runner.calls[0]["session_id"], PRIOR_SID)
             data = _read_receipt(receipt)

@@ -19054,6 +19054,32 @@ def parse_validator_output(output: str, findings: list[dict]) -> dict:
     }
 
 
+# fn-113.4: deep-pass/validator judgment math is mode-split.
+# Autonomous (FLOW_RALPH / REVIEW_RECEIPT_PATH / FLOW_AUTONOMOUS) keeps the
+# deterministic receipt path; interactive surfaces raw findings for the host.
+HOST_JUDGES_NOTE = (
+    "Interactive mode: raw findings only; host judges merge/promotion "
+    "(no flowctl receipt mutation)."
+)
+
+
+def _is_autonomous_context() -> bool:
+    """True when Ralph / pilot / receipt harness owns the run.
+
+    Reuses the established autonomy-marker family exactly (same three signals
+    make-pr / pilot / setup honor for non-interactive):
+      - FLOW_RALPH == "1"
+      - REVIEW_RECEIPT_PATH is non-empty
+      - FLOW_AUTONOMOUS == "1"
+    Interactive impl-review has none of these set. Do not invent new signals.
+    """
+    return (
+        os.environ.get("FLOW_RALPH") == "1"
+        or bool(os.environ.get("REVIEW_RECEIPT_PATH"))
+        or os.environ.get("FLOW_AUTONOMOUS") == "1"
+    )
+
+
 def _apply_validator_to_receipt(
     receipt_path: str,
     validator_result: dict,
@@ -19229,24 +19255,32 @@ def _run_validator_pass(
         )
 
     findings = load_findings(findings_file)
+    autonomous = _is_autonomous_context()
     if not findings:
-        # No findings to validate — write an empty validator block and exit
-        # cleanly. Verdict unchanged (no dispatch, no drop).
+        # No findings to validate. Autonomous: write empty validator block
+        # (verdict unchanged). Interactive: surface empty raw findings; no
+        # receipt mutation (fn-113.4 split-by-mode).
         empty = {"dispatched": 0, "dropped": 0, "kept": 0, "reasons": []}
-        _apply_validator_to_receipt(receipt_path, empty, prior_verdict)
+        if autonomous:
+            _apply_validator_to_receipt(receipt_path, empty, prior_verdict)
         if use_json:
-            json_output(
-                {
-                    "type": "impl_review_validate",
-                    "mode": backend,
-                    "dispatched": 0,
-                    "dropped": 0,
-                    "kept": 0,
-                    "verdict": prior_verdict,
-                    "reasons": [],
-                }
-            )
+            payload: dict[str, Any] = {
+                "type": "impl_review_validate",
+                "mode": backend,
+                "dispatched": 0,
+                "dropped": 0,
+                "kept": 0,
+                "verdict": prior_verdict,
+                "reasons": [],
+            }
+            if not autonomous:
+                payload["findings"] = []
+                payload["host_judges"] = True
+                payload["note"] = HOST_JUDGES_NOTE
+            json_output(payload)
         else:
+            if not autonomous:
+                print(HOST_JUDGES_NOTE)
             print("Validator: no findings to validate")
             print(f"VERDICT={prior_verdict or 'UNKNOWN'}")
         return
@@ -19269,7 +19303,36 @@ def _run_validator_pass(
     # Parse validator decisions.
     result = parse_validator_output(output, findings)
 
-    # Merge into receipt (may upgrade verdict to SHIP).
+    # fn-113.4 SPLIT BY MODE: interactive surfaces raw findings; host judges.
+    # Autonomous keeps the deterministic receipt mutation path.
+    if not autonomous:
+        if use_json:
+            json_output(
+                {
+                    "type": "impl_review_validate",
+                    "mode": backend,
+                    "dispatched": result["dispatched"],
+                    "dropped": result["dropped"],
+                    "kept": result["kept"],
+                    "reasons": result["reasons"],
+                    "decisions": result["decisions"],
+                    "verdict": prior_verdict,
+                    "host_judges": True,
+                    "note": HOST_JUDGES_NOTE,
+                    "receipt": receipt_path,
+                }
+            )
+        else:
+            print(output)
+            print(f"\n{HOST_JUDGES_NOTE}")
+            print(
+                f"Validator raw: dispatched={result['dispatched']} "
+                f"dropped={result['dropped']} kept={result['kept']}"
+            )
+            print(f"VERDICT={prior_verdict or 'UNKNOWN'} (unchanged; host judges)")
+        return
+
+    # Autonomous path: merge into receipt (may upgrade verdict to SHIP).
     updated_receipt = _apply_validator_to_receipt(
         receipt_path, result, prior_verdict
     )
@@ -19916,7 +19979,34 @@ def _run_deep_pass(
     # Parse deep-pass findings from output.
     deep_findings = parse_deep_findings(output, pass_name)
 
-    # Merge with primary (this pass only for the per-call receipt update).
+    # fn-113.4 SPLIT BY MODE: interactive surfaces raw findings; host judges.
+    # Autonomous keeps merge/promotion + receipt mutation (byte-stable).
+    if not _is_autonomous_context():
+        if use_json:
+            json_output(
+                {
+                    "type": "impl_review_deep_pass",
+                    "mode": backend,
+                    "pass": pass_name,
+                    "findings": deep_findings,
+                    "findings_count": len(deep_findings),
+                    "host_judges": True,
+                    "note": HOST_JUDGES_NOTE,
+                    "receipt": receipt_path,
+                }
+            )
+        else:
+            print(output)
+            print(f"\n{HOST_JUDGES_NOTE}")
+            print(
+                f"Deep-pass ({pass_name}): raw_findings={len(deep_findings)}"
+            )
+            if deep_findings:
+                print(json.dumps(deep_findings, indent=2))
+        return
+
+    # Autonomous path: merge with primary (this pass only for the per-call
+    # receipt update).
     merge_result = merge_deep_findings(primary_findings, {pass_name: deep_findings})
 
     # Append this pass to prior_passes (de-dup while preserving order).

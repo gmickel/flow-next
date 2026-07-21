@@ -1258,6 +1258,8 @@ flowctl codex validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3
 
 `--findings-file` is JSON-Lines (one finding per line, with at least `id`). Empty/missing → no-op. Receipt drives session resume via `session_id`.
 
+**Mode split (fn-113.4).** Autonomy markers (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, or `FLOW_AUTONOMOUS=1`) keep the deterministic path: validator decisions merge into the receipt and may upgrade `NEEDS_WORK` → `SHIP` when every finding is dropped. Interactive (no markers) surfaces raw validator decisions (`host_judges: true`) and does **not** mutate the receipt; the host agent judges keep/drop and any verdict change.
+
 #### codex deep-pass
 
 Specialized deep-review pass (`fn-32.2 --deep`). Runs after primary review in the same chat session.
@@ -1269,6 +1271,8 @@ flowctl codex deep-pass --pass performance --receipt /tmp/impl-fn-1.3.json --pri
 ```
 
 Pass options: `adversarial`, `security`, `performance`. Primary findings JSONL provides cross-pass agreement / dedup context. Receipt is required (provides `session_id` for resume).
+
+**Mode split (fn-113.4).** Same markers as validate. Autonomous: fingerprint merge, confidence promotion, `deep_*` receipt fields, and SHIP → NEEDS_WORK on blocking introduced findings. Interactive: raw deep findings only (`host_judges: true`); no merge/promotion math and no receipt mutation — the host judges.
 
 
 #### codex classify-result
