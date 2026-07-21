@@ -26,7 +26,7 @@ else
   # shellcheck source=/dev/null
   . "$SCRIPT_DIR/../lib/pick-python.sh"
 fi
-pick_python || { echo "ralph-guard: no working Python interpreter found" >&2; exit 1; }
+pick_python || { flow_python_error "ralph-guard"; exit 1; }
 
 # The guard reads the hook JSON payload on stdin (inherited across exec) and
 # gates itself on FLOW_RALPH — a no-op for non-Ralph users.

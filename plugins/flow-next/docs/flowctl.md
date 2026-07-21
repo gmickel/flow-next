@@ -37,7 +37,8 @@ Works out of the box for parallel branches. No setup required.
 ├── bin/                       # Local flowctl install (via /flow-next:setup)
 │   ├── flowctl                # bash launcher (Git Bash / WSL / macOS / Linux)
 │   ├── flowctl.cmd            # batch launcher (cmd.exe / PowerShell)
-│   └── flowctl.py             # Python entrypoint (all CLI logic)
+│   ├── flowctl_bootstrap.py   # source-validating startup accelerator
+│   └── flowctl.py             # source of truth (all CLI logic)
 ├── templates/spec.md          # Setup-managed copy of the canonical scaffold
 ├── specs/fn-N-slug.json       # Spec state - colocated with .md
 ├── specs/fn-N-slug.md         # Spec markdown
@@ -54,7 +55,7 @@ Works out of the box for parallel branches. No setup required.
 └── .cache/                    # (gitignored) CLI model-resolution cache
 ```
 
-Both launchers resolve a working Python by **probing functionality** (`<cand> -c "import sys"`, order `$PYTHON_BIN` → `py -3` → `python3` → `python`) so the Windows Microsoft Store `python3` alias stub is skipped (fn-77). `flowctl init` re-stamps **both** `bin/flowctl` and `bin/flowctl.cmd` from in-module launcher constants, so an existing install self-heals a pre-fix launcher without a full `/flow-next:setup` re-run - see [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
+Both launchers resolve Python by **probing functionality and the 3.11 minimum** (order `$PYTHON_BIN` → `py -3` → `python3` → `python`), so the Windows Microsoft Store `python3` alias stub and working-but-too-old interpreters are skipped before source loading. `flowctl init` re-stamps **both** `bin/flowctl` and `bin/flowctl.cmd` from in-module launcher constants, so an existing install self-heals a pre-fix launcher without a full `/flow-next:setup` re-run - see [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
 
 Pre-1.0 layout had spec JSON sidecars at `.flow/epics/fn-N-slug.json` (the markdown was already at `.flow/specs/fn-N-slug.md`). Port by hand via `.flow/usage.md` "Pre-1.0 layout porting" (and `docs/troubleshooting.md`); the automated migrate-rename path was removed in fn-111.
 
@@ -112,6 +113,8 @@ flowctl usage
 ```
 
 Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin — this is how plugin-mode repos read the guide), then the repo-local `.flow/usage.md` (copy-mode installs, where flowctl runs from `.flow/bin/` with no plugin tree around it). Exits 1 with a pointer to `/flow-next:setup` when neither exists.
+
+The Unix and Windows launchers route this exact command through the small `flowctl_bootstrap.py` fast path, so printing static guidance does not load the full CLI. Other commands use the same bootstrap's source-first cache: it accepts only interpreter-tagged checked-hash bytecode matching the current `flowctl.py`, preserves `flowctl.py` as the logical `__file__`, and falls back to source for missing, stale, corrupt, or unwritable cache state. Generated `__pycache__/` files are ignored and never distributed as source.
 
 ### setup-mode
 

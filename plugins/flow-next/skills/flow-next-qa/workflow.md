@@ -523,15 +523,15 @@ export QA_TYPE="qa_verdict" QA_ID="$SPEC_ID" QA_MODE="$MODE" QA_VERDICT="$VERDIC
        OPEN_P0P1="${OPEN_P0P1:-[]}" RID_COVERAGE="${RID_COVERAGE:-{}}" \
        BLOCKED_REASON="${BLOCKED_REASON:-}" NA_REASON="${NA_REASON:-}"
 
-# Resolve a working Python once (functionality probe — the Windows Store python3
+# Resolve Python 3.11+ once (functionality/version probe — the Windows Store python3
 # alias stub satisfies `command -v` but exits 9009; the probe skips it). Order
 # mirrors the shared scripts/lib/pick-python.sh resolver.
 PY=""
 for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
   [ -n "$_c" ] || continue
-  $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
+  $_c -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1 && { PY="$_c"; break; }
 done
-[ -n "$PY" ] || { echo "qa: no working Python interpreter found (see Windows python3 stub in troubleshooting)" >&2; exit 1; }
+[ -n "$PY" ] || { echo "qa: no working Python 3.11+ interpreter found (see Windows Python troubleshooting)" >&2; exit 1; }
 
 $PY - "$RECEIPT_PATH" <<'PY'
 import datetime, json, os, sys

@@ -72,6 +72,7 @@ cd "$TEST_DIR/repo"
 git init -q
 
 cp "$PLUGIN_ROOT/scripts/flowctl.py" scripts/flowctl.py
+cp "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" scripts/flowctl_bootstrap.py
 cp "$PLUGIN_ROOT/scripts/flowctl" scripts/flowctl
 chmod +x scripts/flowctl
 
@@ -142,6 +143,7 @@ fi
 # `exec python3` launcher + missing .cmd. init self-heals both.
 mkdir -p .flow/bin
 cp scripts/flowctl.py .flow/bin/flowctl.py
+cp scripts/flowctl_bootstrap.py .flow/bin/flowctl_bootstrap.py
 printf '#!/bin/bash\nexec python3 "$(dirname "${BASH_SOURCE[0]}")/flowctl.py" "$@"\n' > .flow/bin/flowctl
 rm -f .flow/bin/flowctl.cmd
 scripts/flowctl init --json >/dev/null

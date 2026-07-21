@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # fn-77-windows-python3-stub-fix-cross-context.5 — POSIX regression harness (R8, R9).
 #
-# Proves the shared functionality probe (scripts/lib/pick-python.sh) and the
+# Proves the shared functionality/version probe (scripts/lib/pick-python.sh) and the
 # self-contained bash launcher (scripts/flowctl) reject the Microsoft Store
 # `python3` App Execution Alias stub — a present-on-PATH interpreter that prints
 # "Python was not found" and exits 9009 — and fall through to a working one,
@@ -155,6 +155,26 @@ case "$out" in
   *) ko "S5 expected NONE got '$out'";;
 esac
 
+# S5b: working-but-too-old candidates are rejected with the distinct minimum
+# version error rather than being conflated with Store stubs/missing commands.
+FAKE_OLD="$TEST_DIR/fakebin-old"; mkdir -p "$FAKE_OLD"
+for name in py python3 python; do
+  cat > "$FAKE_OLD/$name" <<'EOF'
+#!/bin/bash
+exit 3
+EOF
+  chmod +x "$FAKE_OLD/$name"
+done
+out="$(env -i PATH="$FAKE_OLD:/usr/bin:/bin" /bin/bash -c '
+  . "'"$HELPER"'"
+  if pick_python; then echo UNEXPECTED; else flow_python_error flowctl; fi
+' 2>&1)"
+if printf '%s' "$out" | grep -q "Python 3.11 or newer is required"; then
+  ok "S5b working Python below 3.11 gets the actionable minimum-version error"
+else
+  ko "S5b expected Python 3.11 minimum error, got '$out'"
+fi
+
 # ── The resolved FLOW_PY array actually EXECUTES (both forms) ──────────────────
 echo -e "${YELLOW}--- resolved array runs: two-word 'py -3' AND bare python3 ---${NC}"
 exec_marker() {  # resolve on $1's PATH, then exec "${FLOW_PY[@]}" -c print(marker)
@@ -212,6 +232,20 @@ if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "no working Python interprete
   ok "S7 launcher errors cleanly when no interpreter works"
 else
   ko "S7 launcher should have errored non-zero: rc=$rc: $out"
+fi
+
+# S8: a functional probe reporting an old interpreter must stop before loading
+# flowctl.py and use the precise minimum-version diagnostic.
+cat > "$LDIR/flowctl.py" <<'PY'
+print("SOURCE-LOADED-UNEXPECTEDLY")
+PY
+out="$(env -i PATH="$FAKE_OLD:/usr/bin:/bin" /bin/bash "$LDIR/flowctl" hello 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] \
+  && printf '%s' "$out" | grep -q "Python 3.11 or newer is required" \
+  && ! printf '%s' "$out" | grep -q "SOURCE-LOADED-UNEXPECTEDLY"; then
+  ok "S8 launcher rejects Python below 3.11 before loading flowctl.py"
+else
+  ko "S8 expected pre-import Python minimum rejection: rc=$rc: $out"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ Every other detail is in a focused file you should consult when relevant — see
 
 ## Stack and tooling
 
-- Python 3.8+ (flowctl), Node ecosystem optional (TUI uses `bun`).
+- Python 3.11+ (flowctl), Node ecosystem optional (TUI uses `bun`).
 - `jq` and `gh` are required for review-subsystem and PR plumbing.
 - Package manager: pick one and stay with it per project. `pnpm` for the TUI.
 - Pre-commit / lint: `biome` is the source of truth for the TUI; flowctl uses pure-stdlib Python.

@@ -134,6 +134,17 @@ class SetupModeStampTest(unittest.TestCase):
             data["failures"],
         )
 
+    def test_plugin_refuses_when_bootstrap_copy_present(self) -> None:
+        self._write_claude(VALID_CLAUDE)
+        self._touch_artifact(".flow/bin/flowctl_bootstrap.py")
+        proc = self._run_json("plugin")
+        self.assertEqual(proc.returncode, 1, proc.stderr + proc.stdout)
+        data = self._payload(proc)
+        self.assertIn(
+            "copy artifact present: .flow/bin/flowctl_bootstrap.py",
+            data["failures"],
+        )
+
     # --- success paths ---
 
     def test_plugin_succeeds_in_clean_state(self) -> None:

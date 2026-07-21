@@ -2,7 +2,7 @@
 #
 # Source this file, then call pick_python:
 #   . "$SCRIPT_DIR/lib/pick-python.sh"        # resolver path varies by layout
-#   pick_python || { echo "no working python" >&2; exit 1; }
+#   pick_python || { flow_python_error "tool-name"; exit 1; }
 #   exec "${FLOW_PY[@]}" some_script.py "$@"
 #
 # Two distinct names — do NOT conflate them:
@@ -14,8 +14,8 @@
 #                can carry the two-word `py -3`; a single string cannot be both a
 #                multi-word invocation and a space-safe single token.
 #
-# Probe = functionality, not presence. Each candidate must actually run
-# `<cand> -c "import sys"` and exit 0. This rejects the Windows Store `python3`
+# Probe = functionality + minimum version. Each candidate must actually run and
+# report Python 3.11+. This rejects the Windows Store `python3`
 # App Execution Alias stub — a 0-byte reparse point that prints "Python was not
 # found" and exits 9009 (never 0 with -c; bpo-41327) — which a bare `command -v`
 # would wrongly accept, and equally rejects a genuinely-absent interpreter.
@@ -32,17 +32,34 @@
 
 pick_python() {
   FLOW_PY=()
+  FLOW_PY_TOO_OLD=()
   local _cand
+  local _rc
   local -a _argv
   for _cand in "${PYTHON_BIN:-}" "py -3" "python3" "python"; do
     [ -n "$_cand" ] || continue
     # Intentional word-split so the two-word `py -3` becomes two argv elements.
     read -r -a _argv <<< "$_cand"
     [ "${#_argv[@]}" -gt 0 ] || continue
-    if "${_argv[@]}" -c "import sys" >/dev/null 2>&1; then
+    if "${_argv[@]}" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1; then
       FLOW_PY=("${_argv[@]}")
       return 0
+    else
+      _rc=$?
+    fi
+    if [ "$_rc" -eq 3 ]; then
+      FLOW_PY_TOO_OLD+=("$_cand")
     fi
   done
   return 1
+}
+
+flow_python_error() {
+  local _owner="${1:-flow-next}"
+  if [ "${#FLOW_PY_TOO_OLD[@]}" -gt 0 ]; then
+    echo "$_owner: Python 3.11 or newer is required; working but too-old candidate(s): ${FLOW_PY_TOO_OLD[*]}." >&2
+    echo "  Install a supported Python, or set PYTHON_BIN to its command name." >&2
+  else
+    echo "$_owner: no working Python interpreter found (tried \$PYTHON_BIN, py -3, python3, python)." >&2
+  fi
 }

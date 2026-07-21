@@ -40,7 +40,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: macos-latest
+            python-version: "3.11"
+          - os: windows-latest
+            python-version: "3.11"
+          # Latest stable full gate. `3.x` advances with setup-python while the
+          # explicit 3.11 rows preserve the minimum-runtime contract.
+          - os: ubuntu-latest
+            python-version: "3.x"
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -58,7 +68,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       - name: Configure git identity (smoke tests create commits)
         run: |
@@ -210,6 +220,35 @@ jobs:
       #   - ralph_smoke_test.sh / ralph_smoke_rp.sh — need claude / codex / rp-cli
       #   - plan_review_prompt_smoke.sh — needs rp-cli
 
+  python-intermediate-smoke:
+    name: Python ${{ matrix.python-version }} compatibility smoke
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile flowctl source and bootstrap
+        run: |
+          python -m py_compile \
+            plugins/flow-next/scripts/flowctl.py \
+            plugins/flow-next/scripts/flowctl_bootstrap.py
+      - name: Runtime, launcher, usage, and setup-mode contracts
+        run: |
+          cd plugins/flow-next/tests
+          python -m unittest \
+            test_startup_bootstrap \
+            test_init_stamp_launchers \
+            test_bin_launcher_parity \
+            test_cmd_usage \
+            test_setup_mode_stamp \
+            test_precheck_mode_contract \
+            -q
+
   # ─────────────────────────────────────────────────────────────────────────────
   # fn-77.5 (R10): real windows-latest end-to-end. A DETERMINISTIC fake `python3`
   # stub (exit 9009 — the Microsoft Store App Execution Alias failure mode) is
@@ -270,6 +309,25 @@ jobs:
           fi
           printf 'PYSTUB_DIR=%s\n' "$STUB" >> "$GITHUB_ENV"
 
+      - name: Build deterministic working-but-too-old probes for both shells
+        shell: bash
+        run: |
+          set -euo pipefail
+          OLD="$RUNNER_TEMP/pyold"
+          mkdir -p "$OLD"
+          for name in py python3 python; do
+            {
+              printf '#!/bin/bash\n'
+              printf 'exit 3\n'
+            } > "$OLD/$name"
+            chmod +x "$OLD/$name"
+            {
+              printf '@ECHO OFF\r\n'
+              printf 'EXIT /b 3\r\n'
+            } > "$OLD/$name.cmd"
+          done
+          printf 'PYOLD_DIR=%s\n' "$OLD" >> "$GITHUB_ENV"
+
       - name: Git Bash — bash `flowctl` bypasses the 9009 stub
         shell: bash
         run: |
@@ -314,3 +372,27 @@ jobs:
           if ($out -notmatch '"success": true') { Write-Error "flowctl.cmd init did not succeed"; exit 1 }
           if ($out -match "Python was not found") { Write-Error "stub message leaked — flowctl.cmd did not bypass the stub"; exit 1 }
           Write-Host "PASS: flowctl.cmd bypassed the 9009 python3 stub"
+
+      - name: Git Bash — launcher rejects Python below 3.11 before source load
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$PYOLD_DIR:/usr/bin:/bin"
+          FLOWCTL="$GITHUB_WORKSPACE/plugins/flow-next/scripts/flowctl"
+          set +e
+          OUT="$("$FLOWCTL" --help 2>&1)"; RC=$?
+          set -e
+          [ "$RC" -ne 0 ]
+          echo "$OUT" | grep -q "Python 3.11 or newer is required"
+          ! echo "$OUT" | grep -q '^usage:'
+
+      - name: PowerShell — batch launcher rejects Python below 3.11 before source load
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $env:PATH = $env:PYOLD_DIR
+          $flowctl = Join-Path $env:GITHUB_WORKSPACE "plugins/flow-next/scripts/flowctl.cmd"
+          $out = & $flowctl --help 2>&1 | Out-String
+          if ($LASTEXITCODE -eq 0) { Write-Error "old Python probe unexpectedly succeeded"; exit 1 }
+          if ($out -notmatch "Python 3.11 or newer is required") { Write-Error "missing minimum-version error: $out"; exit 1 }
+          if ($out -match '^usage:') { Write-Error "flowctl.py loaded before minimum-version rejection"; exit 1 }

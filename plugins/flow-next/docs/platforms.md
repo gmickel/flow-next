@@ -251,7 +251,7 @@ flow-next's **skills, commands, and subagents all register and run** on Cursor. 
 
 ## Windows: Python discovery
 
-flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows it resolves the Python interpreter by **probing functionality, not presence** (fn-77): each candidate must actually run `<cand> -c "import sys"` and exit 0. Probe order is `$PYTHON_BIN` → `py -3` → `python3` → `python`.
+flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows it resolves the Python interpreter by **probing functionality and the Python 3.11 minimum, not presence**: each candidate must run a version probe successfully. Probe order is `$PYTHON_BIN` → `py -3` → `python3` → `python`. Broken Store aliases are skipped; if only working interpreters below 3.11 exist, the launcher reports that distinct condition before loading flowctl.
 
 - **Dual launcher.** The extensionless bash `flowctl` runs under Git Bash / WSL (and macOS / Linux); a **`flowctl.cmd`** batch shim runs the same probe under **cmd.exe / PowerShell** — i.e. Claude Desktop, native Codex, and native Cursor, where the bash launcher's shebang is never honored. Both live under `.flow/bin/` and are (re-)written by `flowctl init` / `/flow-next:setup`.
 - **`py -3` preferred.** The [py launcher](https://docs.python.org/3/using/windows.html) (`C:\Windows\py.exe`, installed by python.org / [PEP 397](https://peps.python.org/pep-0397/)) is never a Store alias stub, so it's the most reliable Windows candidate.
@@ -275,9 +275,9 @@ Upstream tracking: [github/copilot-cli#3398](https://github.com/github/copilot-c
 
 ## Optional skill requirements
 
-Most flow-next skills run on the base flowctl install (Python 3.8+, `jq`, `gh`). A couple of opt-in skills carry an extra prerequisite:
+Most flow-next skills run on the base flowctl install (Python 3.11+, `jq`, `gh`). A couple of opt-in skills carry an extra prerequisite:
 
-> **Windows Python 3.8+ caveat:** the `py` launcher or a python.org install satisfies this; the Microsoft Store `python3` **alias stub does not** (it's on `PATH` but non-functional). flowctl's launcher probes past it automatically — see [Windows: Python discovery](#windows-python-discovery).
+> **Windows Python 3.11+ caveat:** the `py` launcher or a supported python.org install satisfies this; the Microsoft Store `python3` **alias stub does not** (it's on `PATH` but non-functional). flowctl's launcher probes past it automatically and separately identifies working but too-old interpreters — see [Windows: Python discovery](#windows-python-discovery).
 
 | Skill | Requires | Notes |
 |---|---|---|

@@ -57,7 +57,9 @@ scaffold() {
   mkdir -p scripts/ralph/hooks
   cp -R "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/." scripts/ralph/
   cp "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/flowctl.py
+  cp "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" scripts/ralph/flowctl_bootstrap.py
   cp "$PLUGIN_ROOT/scripts/flowctl" scripts/ralph/flowctl
+  cp "$PLUGIN_ROOT/scripts/flowctl.cmd" scripts/ralph/flowctl.cmd
   # Shared resolver copied FLAT next to ralph.sh (installed layout) — ralph.sh and
   # the hook wrapper source it as "$SCRIPT_DIR/pick-python.sh". Mirrors ralph-init.
   cp "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/pick-python.sh
@@ -107,7 +109,7 @@ scaffold
 
 echo -e "${YELLOW}--- ralph-init scaffold ---${NC}"
 missing=0
-for f in ralph.sh ralph_once.sh prompt_plan.md prompt_work.md config.env runs/.gitkeep flowctl flowctl.py pick-python.sh hooks/ralph-guard hooks/ralph-guard.py .gitignore; do
+for f in ralph.sh ralph_once.sh prompt_plan.md prompt_work.md config.env runs/.gitkeep flowctl flowctl.cmd flowctl.py flowctl_bootstrap.py pick-python.sh hooks/ralph-guard hooks/ralph-guard.py .gitignore; do
   if [[ ! -f "scripts/ralph/$f" ]]; then
     echo -e "${RED}✗${NC} missing scripts/ralph/$f"
     missing=1

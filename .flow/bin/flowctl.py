@@ -8054,54 +8054,63 @@ def _ensure_flow_gitignore(flow_dir: Path) -> bool:
 # endings; LAUNCHER_CMD is stored LF here but written to disk as CRLF (a
 # Windows batch file) by _stamp_flow_bin_launchers.
 LAUNCHER_SH = r'''#!/bin/bash
-# flowctl wrapper — invokes flowctl.py from the same directory via a probed
-# Python interpreter.
+# flowctl wrapper — invokes the source-first bootstrap beside flowctl.py via a
+# probed Python 3.11+ interpreter.
 #
 # SELF-CONTAINED: this launcher does NOT source scripts/lib/pick-python.sh —
 # installed copies (.flow/bin/flowctl, scripts/ralph/flowctl) can't assume that
 # path is reachable. Keep this inline probe in sync with the shared resolver at
 # plugins/flow-next/scripts/lib/pick-python.sh.
 #
-# Probe = functionality, not presence: each candidate must actually run
-# `<cand> -c "import sys"` and exit 0, so the Windows Store `python3` App
-# Execution Alias stub (prints "Python was not found", exits 9009) is skipped
-# even though it is present on PATH. Candidate order:
+# Probe = functionality + minimum version: each candidate must actually run and
+# report Python 3.11+, so the Windows Store `python3` App Execution Alias stub
+# and working-but-too-old interpreters are skipped. Candidate order:
 #   $PYTHON_BIN (scalar override) -> py -3 -> python3 -> python
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FLOWCTL_SOURCE_DIR="$SCRIPT_DIR"
 
 FLOW_PY=()
+FLOW_PY_TOO_OLD=()
 for _cand in "${PYTHON_BIN:-}" "py -3" "python3" "python"; do
   [ -n "$_cand" ] || continue
   # Intentional word-split so the two-word `py -3` becomes two argv elements.
   read -r -a _argv <<< "$_cand"
   [ "${#_argv[@]}" -gt 0 ] || continue
-  if "${_argv[@]}" -c "import sys" >/dev/null 2>&1; then
+  if "${_argv[@]}" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1; then
     FLOW_PY=("${_argv[@]}")
     break
+  elif [ "$?" -eq 3 ]; then
+    FLOW_PY_TOO_OLD+=("$_cand")
   fi
 done
 
 if [ "${#FLOW_PY[@]}" -eq 0 ]; then
-  echo "flowctl: no working Python interpreter found (tried \$PYTHON_BIN, py -3, python3, python)." >&2
-  echo "  On Windows, 'python3' may be the disabled Microsoft Store alias stub;" >&2
-  echo "  install python.org Python (or the py launcher), or set PYTHON_BIN to a working interpreter." >&2
+  if [ "${#FLOW_PY_TOO_OLD[@]}" -gt 0 ]; then
+    echo "flowctl: Python 3.11 or newer is required; working but too-old candidate(s): ${FLOW_PY_TOO_OLD[*]}." >&2
+    echo "  Install a supported Python, or set PYTHON_BIN to its command name." >&2
+  else
+    echo "flowctl: no working Python interpreter found (tried \$PYTHON_BIN, py -3, python3, python)." >&2
+    echo "  On Windows, 'python3' may be the disabled Microsoft Store alias stub;" >&2
+    echo "  install python.org Python (or the py launcher), or set PYTHON_BIN to a working interpreter." >&2
+  fi
   exit 1
 fi
 
-exec "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" "$@"
+FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py"
+[ -f "$FLOWCTL_ENTRY" ] || FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl.py"
+exec "${FLOW_PY[@]}" "$FLOWCTL_ENTRY" "$@"
 '''
 
 LAUNCHER_CMD = '''@ECHO OFF
 REM flowctl.cmd -- Windows batch launcher for cmd.exe / PowerShell (Claude
-REM Desktop, native Codex, native Cursor). Invokes flowctl.py from this
-REM directory via a probed Python interpreter. Companion to the extensionless
+REM Desktop, native Codex, native Cursor). Invokes the source-first bootstrap
+REM beside flowctl.py via a probed Python 3.11+ interpreter. Companion to the extensionless
 REM bash `flowctl` launcher (Git Bash / WSL / macOS / Linux); PATHEXT resolves
 REM `flowctl` to this file in cmd/PowerShell.
 REM
-REM Probe = functionality, not presence: each candidate must actually run
-REM `<cand> -c "import sys"` and exit 0, so the Microsoft Store `python3` App
-REM Execution Alias stub (prints "Python was not found", exits 9009) is skipped
-REM even though it is on PATH. Candidate order mirrors the bash launcher:
+REM Probe = functionality + minimum version: each candidate must actually run
+REM and report Python 3.11+, so the Microsoft Store `python3` App Execution
+REM Alias stub and working-but-too-old interpreters are skipped. Candidate order:
 REM   %PYTHON_BIN% (command name only) -> py -3 -> python3 -> python
 REM Keep this probe in sync with plugins/flow-next/scripts/lib/pick-python.sh.
 GOTO :start
@@ -8115,33 +8124,49 @@ SETLOCAL
 CALL :find_dp0
 
 SET "_prog="
+SET "_old="
 
 REM %PYTHON_BIN% is honored as a COMMAND NAME ONLY (e.g. python3.12, py) -- no
 REM quoted paths-with-spaces / embedded args, which keeps batch quoting trivial.
 IF DEFINED PYTHON_BIN (
-  "%PYTHON_BIN%" -c "import sys" >NUL 2>&1 && SET "_prog=%PYTHON_BIN%"
+  "%PYTHON_BIN%" -c "import sys; raise SystemExit(0 if sys.version_info ^>= (3, 11) else 3)" >NUL 2>&1
+  IF NOT ERRORLEVEL 1 SET "_prog=%PYTHON_BIN%"
+  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=%PYTHON_BIN%"
 )
 IF NOT DEFINED _prog (
-  py -3 -c "import sys" >NUL 2>&1 && SET "_prog=py -3"
+  py -3 -c "import sys; raise SystemExit(0 if sys.version_info ^>= (3, 11) else 3)" >NUL 2>&1
+  IF NOT ERRORLEVEL 1 SET "_prog=py -3"
+  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=py -3"
 )
 IF NOT DEFINED _prog (
-  python3 -c "import sys" >NUL 2>&1 && SET "_prog=python3"
+  python3 -c "import sys; raise SystemExit(0 if sys.version_info ^>= (3, 11) else 3)" >NUL 2>&1
+  IF NOT ERRORLEVEL 1 SET "_prog=python3"
+  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=python3"
 )
 IF NOT DEFINED _prog (
-  python -c "import sys" >NUL 2>&1 && SET "_prog=python"
+  python -c "import sys; raise SystemExit(0 if sys.version_info ^>= (3, 11) else 3)" >NUL 2>&1
+  IF NOT ERRORLEVEL 1 SET "_prog=python"
+  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=python"
 )
 
 IF NOT DEFINED _prog (
-  ECHO flowctl: no working Python interpreter found ^(tried PYTHON_BIN, py -3, python3, python^). 1>&2
-  ECHO   On Windows, 'python3' may be the disabled Microsoft Store alias stub; 1>&2
-  ECHO   install python.org Python ^(or the py launcher^), or set PYTHON_BIN to a working interpreter. 1>&2
+  IF DEFINED _old (
+    ECHO flowctl: Python 3.11 or newer is required; working but too-old candidate: %_old%. 1>&2
+    ECHO   Install a supported Python, or set PYTHON_BIN to its command name. 1>&2
+  ) ELSE (
+    ECHO flowctl: no working Python interpreter found ^(tried PYTHON_BIN, py -3, python3, python^). 1>&2
+    ECHO   On Windows, 'python3' may be the disabled Microsoft Store alias stub; 1>&2
+    ECHO   install python.org Python ^(or the py launcher^), or set PYTHON_BIN to a working interpreter. 1>&2
+  )
   EXIT /b 1
 )
 
 REM %_prog% is intentionally UNQUOTED so a two-word `py -3` expands to two argv
 REM words; this is why %PYTHON_BIN% must be a command name only. Args (%*) and
 REM the dp0 path are quoted so spaced/paren'd install paths survive.
-%_prog% "%dp0%flowctl.py" %*
+SET "_entry=%dp0%flowctl_bootstrap.py"
+IF NOT EXIST "%_entry%" SET "_entry=%dp0%flowctl.py"
+%_prog% "%_entry%" %*
 EXIT /b %errorlevel%
 '''
 
@@ -8293,6 +8318,7 @@ PLUGIN_MODE_COPY_ARTIFACTS = [
     ".flow/bin/flowctl",
     ".flow/bin/flowctl.cmd",
     ".flow/bin/flowctl.py",
+    ".flow/bin/flowctl_bootstrap.py",
     ".flow/templates/spec.md",
     ".flow/usage.md",
 ]

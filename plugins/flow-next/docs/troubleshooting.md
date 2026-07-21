@@ -141,14 +141,14 @@ POSIX (macOS / Linux / WSL) behavior is unchanged.
 
 **Cause:** `python3` resolves to the Microsoft Store **App Execution Alias** — a 0-byte reparse point at `%LOCALAPPDATA%\Microsoft\WindowsApps\python3.exe` that Windows ships **enabled by default**. When your real Python came from [python.org](https://python.org) or the `py` launcher (not the Store), the stub shadows it: it satisfies `command -v python3` (it *is* on `PATH`) but is non-functional. Older flowctl launchers trusted presence over function and picked the stub — so flow-next broke on every Windows machine in this configuration.
 
-**The shipped fix (no action needed on a fresh install):** the `flowctl` launchers now **probe interpreter functionality** — each candidate must actually run `<cand> -c "import sys"` and exit 0 — in order `$PYTHON_BIN` → `py -3` → `python3` → `python`, so the 9009 stub is skipped. A `flowctl.cmd` batch shim ships alongside the extensionless bash `flowctl`, so PowerShell / cmd.exe (Claude Desktop, native Codex, native Cursor) resolve a working interpreter too. See [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
+**The shipped fix (no action needed on a fresh install):** the `flowctl` launchers now probe interpreter functionality **and require Python 3.11+** in order `$PYTHON_BIN` → `py -3` → `python3` → `python`, so the 9009 stub and working-but-too-old interpreters are skipped before `flowctl.py` loads. If no candidate works, the error says so; if candidates work but are below 3.11, a distinct error tells you to install or select a supported Python. A `flowctl.cmd` batch shim ships alongside the extensionless bash `flowctl`, so PowerShell / cmd.exe (Claude Desktop, native Codex, native Cursor) resolve a supported interpreter too. See [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
 
 **Recovering an already-broken install** (a pre-fix `.flow/bin/flowctl` hardcodes `exec python3` and cannot fix itself). Pick either:
 
 1. **Re-stamp the launchers (recommended, durable).** `flowctl init` re-writes `.flow/bin/flowctl` **and** `.flow/bin/flowctl.cmd` from the fixed source. Because the broken bash launcher can't run, drive `init` through a working interpreter directly — `init` lives inside `flowctl.py`, so it never needs the launcher:
 
    ```powershell
-   py -3 .flow/bin/flowctl.py init      # or:  python .flow/bin/flowctl.py init
+   py -3.11 .flow/bin/flowctl.py init   # or use an explicit Python 3.11+ command
    ```
 
    or just re-run `/flow-next:setup` (its upgrade branch re-stamps both). After this, `flowctl` and `flowctl.cmd` work in every shell.
