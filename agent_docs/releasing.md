@@ -70,23 +70,32 @@ The public, human-readable changelog at `~/work/flow-next.dev/src/content/docs/r
 ```mdx
 ### X.Y.Z — <short title (3-6 words)>
 
-**<one-sentence summary of what changed and why it matters — the "what">.**
+**<the reader's problem, then what changes for them - the "why", in plain language>.**
 
 <details>
 <summary>Detail</summary>
 
-<the full prose — lift the substance from the repo CHANGELOG.md entry. Code spans,
-links, file paths all fine. Blank lines around this block so MDX renders the markdown.>
+<goal-oriented prose - see the register rules below. Code spans, links, file paths
+fine WHERE THE READER ACTS ON THEM. Blank lines around this block so MDX renders.>
 
 </details>
 ```
+
+**Register (MANDATORY - the docs-site changelog is customer-facing, NOT the repo CHANGELOG in disguise):**
+
+- **Lead with the reader's problem, not the mechanism.** The bold one-liner answers "what was wrong with my life, and what changes now" - never "what we built". Wrong: "Snapshot-based config get: three read forms backed by one command-scoped snapshot". Right: "The skills you run most now read configuration once instead of seven times - less waiting, fewer places for a half-written task to exist."
+- **Every bullet earns its place by answering why / what it means for you.** Internal machinery (function names, LOC counts, fence/prose-contract mechanics, fn-task numbering, test counts) belongs in the repo CHANGELOG - reference it only when the reader would act on it.
+- **Upgrade actions come FIRST and are imperative.** If the reader must do something ("re-run ralph-init", "switch off the legacy JSON keys"), it opens the details block under a "do these first" framing - never buried mid-list.
+- **Numbers are outcomes, not inventory.** "30 seconds to half a second" and "half the wall-clock" persuade; "-1,251 LOC" and "ran=1935" are inventory. Keep measured evidence (that is the register: proof-backed, never adjective-backed), drop bookkeeping.
+- **Honesty stays.** Bounds, deliberate misses, and what did NOT change are part of the story ("about 35% of runs still force a full suite as the safety floor"). The register is candid practitioner, zero hype - see the messaging architecture (claim hierarchy) in the maintainer's private config.
+- **Plain hyphens, never em dashes**, in all new prose.
 
 **Rules:**
 - **Heading is `### X.Y.Z — title`** (h3). This is what makes the TOC a version index and gives visual breaks. Never use a bare bullet.
 - **Bold one-liner is mandatory** — it's the scannable summary. Keep it to one sentence.
 - **`<details>` only for verbose releases** (multi-paragraph behavior changes). Trivial patches (a one-liner fix) can skip the disclosure and just carry the bold summary + a sentence or two of plain prose.
 - **Newest at the top of `## Latest`.** When `## Latest` grows past ~4-5 entries, migrate the oldest ones down to `## Earlier releases` (same format; collapse their detail or trim to the one-liner).
-- **Don't duplicate the whole repo CHANGELOG.** The docs-site page is the public story, not every commit. The repo `CHANGELOG.md` stays canonical (linked at the top of the page).
+- **Don't duplicate the whole repo CHANGELOG.** The docs-site page is the public story, not every commit. The repo `CHANGELOG.md` stays canonical (linked at the top of the page). Translating repo-changelog substance into the customer register above is the actual work of this step - budget for it; a copy-paste-and-trim is the failure mode.
 - **Bump the docs-site version refs** in the same commit: `src/lib/site.ts` `FLOW_NEXT_VERSION` + `package.json` `version` → `X.Y.Z`.
 - **Gate:** `cd ~/work/flow-next.dev && pnpm build` must pass (MDX `<details>` + mermaid render). Commit separately in the `flow-next.dev` repo.
 
