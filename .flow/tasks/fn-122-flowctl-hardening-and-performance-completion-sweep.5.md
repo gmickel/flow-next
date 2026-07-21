@@ -21,9 +21,8 @@ Quick commands:
 - [ ] 400+ task status/list deterministic subprocess/read budgets prevent hot-path regression.
 - [ ] Focused suites and operation-count tests pass without wall-clock CI assertions.
 ## Done summary
-TBD
-
+Unified all task backlog consumers on a command-scoped native/tracker inventory with stable ordering, strict identity/ownership checks, scoped fast paths, bulk runtime snapshots, and deterministic validation diagnostics. Replaced quadratic reverse-dependency rescans with one tolerant reverse graph and deque traversal. Added 404-task operation budgets plus mixed-schema, corruption, cycle, cross-spec, tracker, runtime, and output-parity regressions.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: eb46b133, a7aa5b38
+- Tests: PATH=/opt/homebrew/bin:$PATH PYTHON_BIN=/opt/homebrew/bin/python3 /opt/homebrew/bin/python3 -m unittest test_hot_path_memoization test_hot_path_sweep test_task_inventory test_tracker_id_resolution test_spec_ready test_task_create_files test_startup_bootstrap test_bin_launcher_parity -q (129 tests), .flow/bin/flowctl validate --all --json (115 specs, 455 tasks, 49 pre-existing validation errors; counts match baseline), .flow/bin/flowctl list --json (115 specs, 455 tasks), flowctl codex impl-review --base a88052fc (round 2 SHIP)
 - PRs:
