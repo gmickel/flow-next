@@ -1199,15 +1199,12 @@ def get_default_config() -> dict:
         # keys (phases.md:94-101) — no clash.
         "work": {
             "delegate": False,
-            # fn-97 — default is gpt-5.6-terra: a controlled pipeline eval
-            # (2026-07-14, n=3 reps) found terra-medium matched gpt-5.6-sol on
-            # correctness at ~2/3 the wall-clock on frontier-authored specs
-            # (one task; motivation, not a guarantee). Escalate via
-            # `config set work.delegateModel gpt-5.6-sol` for gnarly tasks.
-            # Requires codex CLI >= 0.144 (older CLIs 400 "requires a newer
-            # version of Codex"). The delegation path passes -m explicitly and
-            # has no fn-76 resolution ladder, so this default is a hard floor,
-            # not a resolved best-available.
+            # fn-97 / fn-115 - baseline gpt-5.6-terra (eval-motivated default).
+            # Effective model resolution (resolve_delegate_model): on-disk
+            # work.delegateModel > models.roles.delegate.codex > this baseline.
+            # Escalate via `config set work.delegateModel gpt-5.6-sol` or the
+            # role map. Requires codex CLI >= 0.144. No fn-76 ladder on this
+            # path (hard floor once resolved).
             "delegateModel": "gpt-5.6-terra",
             # Effort enum: none|low|medium|high|xhigh. `medium` is the floor
             # default; the per-batch risk escalation (fn-55.3) floors against it.
@@ -1319,6 +1316,16 @@ def get_default_config() -> dict:
         # land.*, this materializes on init (NOT in
         # _INIT_UNMATERIALIZED_BLOCKS — no setup-ceremony `--raw` null probe).
         "pilot": {"autonomy": "ready", "gateClasses": []},
+        # fn-115.1 - model-pin role map. Semantic roles (not call-site pins);
+        # flowctl stores + validates + does mechanical staleness math only.
+        # The setup skill (fn-115.2) probes/judges/refreshes pins. Empty
+        # roles = use registry baselines; absent verifiedAt = no nudge.
+        # Shape: models.roles.<role>.<backend> = "model" | "model:effort".
+        "models": {
+            "roles": {},
+            "verifiedAt": None,
+            "verifiedWith": None,
+        },
     }
 
 
@@ -4340,6 +4347,314 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
 VALID_BACKENDS: list[str] = sorted(BACKEND_REGISTRY.keys())
 
 
+# --- fn-115.1 model-pin role map (mechanical only: store / resolve / date math) ---
+#
+# Roles name *jobs*, not call sites. Pins live at models.roles.<role>.<backend>
+# in .flow/config.json. Resolution extends fn-76:
+#   explicit CLI / per-task pin > env > config role map > registry baseline.
+# Role-map fills are ladder-eligible (model_explicit=False) so a pin-too-new
+# still steps down the registry ranking; the role map heals pin-too-old.
+# NO probing, NO ranking, NO LLM calls here - setup (fn-115.2) owns intelligence.
+
+MODEL_ROLES: tuple[str, ...] = (
+    "fastJudge",
+    "review",
+    "delegate",
+    "scoutFast",
+    "scoutIntelligent",
+)
+# Backends that accept a model pin in the role map (rp/none have no model axis).
+MODEL_ROLE_BACKENDS: tuple[str, ...] = ("codex", "copilot", "cursor")
+MODELS_STALE_DAYS = 90
+
+# Registry-baseline pins for roles that do not ride BACKEND_REGISTRY.default_model.
+# review → BACKEND_REGISTRY[*].default_model; scout pins are mirror-build only
+# (fn-115.3) and have no runtime baseline in flowctl.
+FAST_JUDGE_BASELINE: dict[str, tuple[str, str]] = {
+    # (model, default effort) - fn-113.1 interim defaults re-homed as baseline.
+    "codex": ("gpt-5.6-luna", "high"),
+    "copilot": ("claude-haiku-4.5", "low"),
+}
+DELEGATE_BASELINE_MODEL = "gpt-5.6-terra"
+
+
+def _parse_role_pin(pin: str) -> tuple[str, Optional[str]]:
+    """Split a role-map value into (model, effort|None).
+
+    Accepts ``model`` or ``model:effort``. No validation against the registry
+    ranking (the CLI is the availability authority; role pins are free-form
+    like explicit models).
+    """
+    raw = str(pin).strip()
+    if not raw:
+        return "", None
+    if ":" in raw:
+        model, effort = raw.split(":", 1)
+        model = model.strip()
+        effort = effort.strip() or None
+        return model, effort
+    return raw, None
+
+
+def get_role_map_pin(role: str, backend: str) -> Optional[str]:
+    """Return the on-disk ``models.roles.<role>.<backend>`` pin, or None.
+
+    Reads the RAW config file (not merged defaults) so only an explicitly
+    written pin counts. Mechanical - no probing, no judgment.
+    """
+    raw = _get_config_from_file(f"models.roles.{role}.{backend}")
+    if raw is _CONFIG_RAW_SENTINEL or raw is None:
+        return None
+    if isinstance(raw, (dict, list)):
+        return None
+    text = str(raw).strip()
+    return text or None
+
+
+def resolve_role_model(
+    role: str,
+    backend: str,
+    *,
+    explicit: Optional[str] = None,
+    env_var: Optional[str] = None,
+) -> tuple[Optional[str], Optional[str], str]:
+    """Resolve (model, effort, source) for a role + backend.
+
+    Precedence (fn-115 extends fn-76):
+      1. ``explicit`` (CLI flag / per-task pin / caller override)
+      2. env var named by ``env_var`` (when set)
+      3. config role map ``models.roles.<role>.<backend>``
+      4. role baseline (fastJudge / delegate) or registry default (review)
+         - caller applies registry defaults when source is ``baseline`` and
+         model is None.
+
+    Returns source in {``explicit``, ``env``, ``role-map``, ``baseline``}.
+    Effort is only filled from an explicit ``model:effort`` role pin or left
+    None for the caller to default.
+    """
+    if explicit is not None and str(explicit).strip():
+        model, effort = _parse_role_pin(str(explicit).strip())
+        return model or None, effort, "explicit"
+    if env_var:
+        env_val = os.environ.get(env_var, "").strip()
+        if env_val:
+            model, effort = _parse_role_pin(env_val)
+            return model or None, effort, "env"
+    pin = get_role_map_pin(role, backend)
+    if pin:
+        model, effort = _parse_role_pin(pin)
+        return model or None, effort, "role-map"
+    # Baselines for non-review roles. review leaves model None so
+    # BackendSpec.resolve falls through to BACKEND_REGISTRY defaults.
+    if role == "fastJudge" and backend in FAST_JUDGE_BASELINE:
+        model, effort = FAST_JUDGE_BASELINE[backend]
+        return model, effort, "baseline"
+    if role == "delegate" and backend == "codex":
+        return DELEGATE_BASELINE_MODEL, None, "baseline"
+    return None, None, "baseline"
+
+
+def resolve_delegate_model() -> tuple[str, str]:
+    """Effective work.delegate model: raw work.delegateModel > role map > baseline.
+
+    ``work.delegateModel`` wins only when set on disk (not merely the merged
+    default). Role map pin is ``models.roles.delegate.codex``.
+    """
+    raw = _get_config_from_file("work.delegateModel")
+    if raw is not _CONFIG_RAW_SENTINEL and raw is not None and str(raw).strip():
+        return str(raw).strip(), "config"
+    model, _effort, source = resolve_role_model("delegate", "codex")
+    return model or DELEGATE_BASELINE_MODEL, source
+
+
+def resolve_fast_judge_model(
+    backend: str,
+    *,
+    explicit_model: Optional[str] = None,
+    explicit_effort: Optional[str] = None,
+) -> tuple[str, str, str]:
+    """Resolve triage-judge (model, effort, source) for codex/copilot.
+
+    ``--model`` / ``--effort`` are explicit. Else role map ``fastJudge``, else
+    the fn-113.1 baseline (gpt-5.6-luna@high / claude-haiku-4.5@low).
+    """
+    model, pin_effort, source = resolve_role_model(
+        "fastJudge", backend, explicit=explicit_model
+    )
+    base_model, base_effort = FAST_JUDGE_BASELINE.get(
+        backend, ("gpt-5.6-luna", "high")
+    )
+    effective_model = model or base_model
+    if explicit_effort is not None and str(explicit_effort).strip():
+        effective_effort = str(explicit_effort).strip()
+    elif pin_effort:
+        effective_effort = pin_effort
+    else:
+        effective_effort = base_effort
+    return effective_model, effective_effort, source
+
+
+def parse_models_verified_at(value: Any) -> Optional[date]:
+    """Parse models.verifiedAt (ISO date or datetime) to a date, or None."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    # Date-only first.
+    try:
+        return date.fromisoformat(text[:10]) if len(text) >= 10 and text[4] == "-" else date.fromisoformat(text)
+    except ValueError:
+        pass
+    # Full ISO datetime (allow trailing Z).
+    try:
+        normalized = text.replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized).date()
+    except ValueError:
+        return None
+
+
+def models_pin_nudge_message(
+    verified_at: Any = None,
+    *,
+    now: Optional[datetime] = None,
+) -> Optional[str]:
+    """One-line staleness notice when verifiedAt is older than MODELS_STALE_DAYS.
+
+    Never blocks, never judges. Absent / unparseable verifiedAt = no nudge
+    (fresh repos stay quiet). Pure date math - no I/O when verified_at given.
+    """
+    if verified_at is None:
+        verified_at = _get_config_from_file("models.verifiedAt")
+        if verified_at is _CONFIG_RAW_SENTINEL:
+            return None
+    parsed = parse_models_verified_at(verified_at)
+    if parsed is None:
+        return None
+    today = (now or datetime.now(timezone.utc)).date()
+    age_days = (today - parsed).days
+    if age_days < MODELS_STALE_DAYS:
+        return None
+    return (
+        f"model pins last verified {parsed.isoformat()}; "
+        f"re-run setup to refresh"
+    )
+
+
+def _validate_models_config_key(key: str, value: Any) -> Optional[str]:
+    """Validate a models.* config set. Return error message or None if OK.
+
+    Unknown role/backend rejected with the valid list. verifiedAt must be an
+    ISO date (or datetime). verifiedWith is free-form. Mechanical only.
+    """
+    parts = key.split(".")
+    if not parts or parts[0] != "models":
+        return None
+    if len(parts) == 1:
+        # Setting the whole models block (JSON object).
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            return "models must be a JSON object"
+        if "roles" in value:
+            err = _validate_models_roles_tree(value.get("roles"))
+            if err:
+                return err
+        if "verifiedAt" in value and value["verifiedAt"] is not None:
+            if parse_models_verified_at(value["verifiedAt"]) is None:
+                return (
+                    f"models.verifiedAt must be an ISO date "
+                    f"(YYYY-MM-DD); got {value['verifiedAt']!r}"
+                )
+        return None
+    leaf = parts[1]
+    if leaf == "verifiedAt":
+        if value is None or value == "":
+            return None
+        if parse_models_verified_at(value) is None:
+            return (
+                f"models.verifiedAt must be an ISO date "
+                f"(YYYY-MM-DD); got {value!r}"
+            )
+        return None
+    if leaf == "verifiedWith":
+        return None  # free-form (string or JSON object of CLI versions)
+    if leaf == "roles":
+        if len(parts) == 2:
+            return _validate_models_roles_tree(value)
+        role = parts[2]
+        if role not in MODEL_ROLES:
+            return (
+                f"Unknown model role: {role!r}. "
+                f"Valid: {list(MODEL_ROLES)}"
+            )
+        if len(parts) == 3:
+            # models.roles.<role> = {backend: pin, ...}
+            if value is None:
+                return None
+            if not isinstance(value, dict):
+                return (
+                    f"models.roles.{role} must be a JSON object of "
+                    f"backend → model pin"
+                )
+            for backend in value:
+                if backend not in MODEL_ROLE_BACKENDS:
+                    return (
+                        f"Unknown model-role backend: {backend!r}. "
+                        f"Valid: {list(MODEL_ROLE_BACKENDS)}"
+                    )
+            return None
+        if len(parts) == 4:
+            backend = parts[3]
+            if backend not in MODEL_ROLE_BACKENDS:
+                return (
+                    f"Unknown model-role backend: {backend!r}. "
+                    f"Valid: {list(MODEL_ROLE_BACKENDS)}"
+                )
+            # Pin value: string model or model:effort; null clears.
+            if value is None or value == "":
+                return None
+            if isinstance(value, (dict, list)):
+                return (
+                    f"models.roles.{role}.{backend} must be a model "
+                    f"pin string (model or model:effort)"
+                )
+            return None
+        return f"Invalid models config key: {key!r}"
+    return (
+        f"Unknown models key: {leaf!r}. "
+        f"Valid: roles, verifiedAt, verifiedWith"
+    )
+
+
+def _validate_models_roles_tree(value: Any) -> Optional[str]:
+    """Validate a models.roles object (role → backend → pin)."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        return "models.roles must be a JSON object"
+    for role, backends in value.items():
+        if role not in MODEL_ROLES:
+            return (
+                f"Unknown model role: {role!r}. "
+                f"Valid: {list(MODEL_ROLES)}"
+            )
+        if backends is None:
+            continue
+        if not isinstance(backends, dict):
+            return (
+                f"models.roles.{role} must be a JSON object of "
+                f"backend → model pin"
+            )
+        for backend in backends:
+            if backend not in MODEL_ROLE_BACKENDS:
+                return (
+                    f"Unknown model-role backend: {backend!r}. "
+                    f"Valid: {list(MODEL_ROLE_BACKENDS)}"
+                )
+    return None
+
+
 @dataclass(frozen=True)
 class BackendSpec:
     """Parsed review-backend spec: ``backend[:model[:effort]]``.
@@ -4454,25 +4769,41 @@ class BackendSpec:
         )
 
     def resolve(self) -> "BackendSpec":
-        """Fill missing fields from env vars then registry defaults.
+        """Fill missing fields from env vars, role map, then registry defaults.
 
-        Precedence (per field, most specific wins):
+        Precedence (per field, most specific wins) - fn-76 extended by fn-115:
           1. explicit value on this spec
           2. ``FLOW_<BACKEND>_MODEL`` / ``FLOW_<BACKEND>_EFFORT`` env var
-          3. registry ``default_model`` / ``default_effort``
+          3. config role map ``models.roles.review.<backend>`` (model[:effort])
+          4. registry ``default_model`` / ``default_effort``
+
+        Role-map fills are non-explicit (ladder-/cache-eligible) so a pin that
+        is too new for the installed CLI still steps down the ranking; the role
+        map's job is healing pin-too-old, not hard-locking the dispatch.
 
         Backends with ``models is None`` (rp, none) always resolve ``model`` to
-        ``None`` — env vars are ignored for fields the backend doesn't accept.
-        Same for ``effort``. This prevents a stray ``FLOW_RP_MODEL`` from
-        leaking into an RP spec.
+        ``None`` - env vars and the role map are ignored for fields the backend
+        doesn't accept. Same for ``effort``. This prevents a stray
+        ``FLOW_RP_MODEL`` from leaking into an RP spec.
         """
         reg = BACKEND_REGISTRY[self.backend]
         env_model_key = f"FLOW_{self.backend.upper()}_MODEL"
         env_effort_key = f"FLOW_{self.backend.upper()}_EFFORT"
 
+        # Role-map pin for the review role (fn-115). Read once; apply to model
+        # and (when the pin carries :effort) to effort below.
+        role_model: Optional[str] = None
+        role_effort: Optional[str] = None
+        if reg["models"] is not None:
+            pin = get_role_map_pin("review", self.backend)
+            if pin:
+                role_model, role_effort = _parse_role_pin(pin)
+                if not role_model:
+                    role_model = None
+
         # fn-76: track whether the resolved model was pinned explicitly (spec or
-        # env) vs filled from the registry default. Only the default (unconfigured)
-        # case is ladder-/cache-eligible downstream.
+        # env) vs filled from the role map / registry default. Only the
+        # non-explicit case is ladder-/cache-eligible downstream.
         if reg["models"] is None:
             model = None
             model_explicit = False
@@ -4485,6 +4816,9 @@ class BackendSpec:
         elif os.environ.get(env_model_key):
             model = os.environ.get(env_model_key)
             model_explicit = True
+        elif role_model is not None:
+            model = role_model
+            model_explicit = False
         else:
             model = reg.get("default_model")
             model_explicit = False
@@ -4495,6 +4829,7 @@ class BackendSpec:
             effort = (
                 self.effort
                 or os.environ.get(env_effort_key)
+                or role_effort
                 or reg.get("default_effort")
             )
 
@@ -7679,6 +8014,12 @@ def cmd_status(args: argparse.Namespace) -> None:
             else:
                 print("No active runs")
 
+        # fn-115.1 - mechanical model-pin staleness nudge (never blocks).
+        if flow_exists:
+            nudge = models_pin_nudge_message()
+            if nudge:
+                print(nudge)
+
 
 
 def cmd_config_get(args: argparse.Namespace) -> None:
@@ -7770,6 +8111,27 @@ def cmd_config_set(args: argparse.Namespace) -> None:
         )
 
     canonical_key, _ = resolve_config_key_for_write(args.key)
+
+    # fn-115.1 - validate models.roles / verifiedAt before write. Coerce the
+    # value the same way set_config will so JSON object pins validate as dicts.
+    if canonical_key == "models" or canonical_key.startswith("models."):
+        coerce_value = args.value
+        if isinstance(coerce_value, str):
+            low = coerce_value.lower()
+            if low == "true":
+                coerce_value = True
+            elif low == "false":
+                coerce_value = False
+            elif low == "null":
+                coerce_value = None
+            elif coerce_value.lstrip()[:1] in ("{", "["):
+                try:
+                    coerce_value = json.loads(coerce_value)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+        err = _validate_models_config_key(canonical_key, coerce_value)
+        if err:
+            error_exit(err, use_json=args.json)
 
     set_config(canonical_key, args.value)
     new_value = get_config(canonical_key)
@@ -23130,12 +23492,15 @@ def _triage_run_codex_judge(
     """Invoke codex as the triage judge. Returns (verdict, reason, model_used).
 
     verdict is ``SKIP`` / ``REVIEW`` / ``None`` (on tooling failure or malformed).
+    Model resolution (fn-115): explicit --model > models.roles.fastJudge.codex
+    > baseline gpt-5.6-luna@high (fn-113.1 interim re-homed as baseline).
     """
     codex = shutil.which("codex")
     if not codex:
         return None, "codex CLI not available for triage", None
-    effective_model = model or "gpt-5.6-luna"
-    effective_effort = effort or "high"
+    effective_model, effective_effort, _src = resolve_fast_judge_model(
+        "codex", explicit_model=model, explicit_effort=effort
+    )
     cmd = [
         codex,
         "exec",
@@ -23171,12 +23536,17 @@ def _triage_run_codex_judge(
 def _triage_run_copilot_judge(
     prompt: str, model: Optional[str], effort: Optional[str]
 ) -> tuple[Optional[str], str, Optional[str]]:
-    """Invoke copilot as the triage judge."""
+    """Invoke copilot as the triage judge.
+
+    Model resolution (fn-115): explicit --model > models.roles.fastJudge.copilot
+    > baseline claude-haiku-4.5@low.
+    """
     copilot = shutil.which("copilot")
     if not copilot:
         return None, "copilot CLI not available for triage", None
-    effective_model = model or "claude-haiku-4.5"
-    effective_effort = effort or "low"
+    effective_model, effective_effort, _src = resolve_fast_judge_model(
+        "copilot", explicit_model=model, explicit_effort=effort
+    )
     repo_root = get_repo_root()
     cmd = [
         copilot,
@@ -29073,11 +29443,17 @@ def main() -> None:
     )
     p_triage.add_argument(
         "--model",
-        help="Fast model override (default: gpt-5.6-luna for codex, claude-haiku-4.5 for copilot)",
+        help=(
+            "Fast model override (else models.roles.fastJudge.<backend>, else "
+            "baseline gpt-5.6-luna / claude-haiku-4.5)"
+        ),
     )
     p_triage.add_argument(
         "--effort",
-        help="Reasoning effort for LLM judge (default: high for codex, low for copilot)",
+        help=(
+            "Reasoning effort for LLM judge (else role-map pin effort, else "
+            "baseline high for codex / low for copilot)"
+        ),
     )
     p_triage.add_argument(
         "--receipt",
