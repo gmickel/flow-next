@@ -25,6 +25,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import importlib.util
 import io
 import json
@@ -37,6 +38,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any, Optional
+from unittest import mock
 
 
 HERE = Path(__file__).resolve()
@@ -346,6 +348,84 @@ class TaskCreateFilesTestCase(unittest.TestCase):
         self._assert_no_orphan_writes()
         result = self._create(title="Next")
         self.assertEqual(result["id"], f"{self.spec_id}.1")
+
+    def test_second_publication_failure_rolls_back_first_file(self) -> None:
+        real_create = self.flowctl.atomic_create
+        calls = 0
+
+        def fail_second(path: Path, content: str) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("injected markdown publication failure")
+            real_create(path, content)
+
+        with mock.patch.object(self.flowctl, "atomic_create", side_effect=fail_second):
+            err = self._create_expect_error(title="Rollback")
+        self.assertIn("injected markdown publication failure", err)
+        self._assert_no_orphan_writes()
+        self.assertEqual(self._create(title="Retry")["id"], f"{self.spec_id}.1")
+
+    def test_post_link_temp_cleanup_failure_still_reports_publication(self) -> None:
+        target = self.tmpdir / "published.txt"
+        with mock.patch.object(
+            self.flowctl.os, "unlink", side_effect=PermissionError("injected cleanup")
+        ):
+            self.flowctl.atomic_create(target, "complete\n")
+        self.assertEqual(target.read_text(encoding="utf-8"), "complete\n")
+
+    def test_orphan_collision_is_explicit_and_never_overwritten(self) -> None:
+        tasks = self.tmpdir / ".flow" / "tasks"
+        tasks.mkdir(parents=True, exist_ok=True)
+        orphan = tasks / f"{self.spec_id}.1.md"
+        orphan.write_text("preserve me\n", encoding="utf-8")
+        err = self._create_expect_error(title="Collision")
+        self.assertIn("Refusing to overwrite", err)
+        self.assertEqual(orphan.read_text(encoding="utf-8"), "preserve me\n")
+        self.assertFalse((tasks / f"{self.spec_id}.1.json").exists())
+
+    def test_40_process_creators_publish_unique_matching_pairs(self) -> None:
+        def create_one(index: int) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                [
+                    sys.executable,
+                    str(FLOWCTL_PY),
+                    "task",
+                    "create",
+                    "--spec",
+                    self.spec_id,
+                    "--title",
+                    f"Concurrent {index}",
+                    "--json",
+                ],
+                cwd=self.tmpdir,
+                capture_output=True,
+                text=True,
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=40) as pool:
+            results = list(pool.map(create_one, range(40)))
+
+        failures = [p.stdout + p.stderr for p in results if p.returncode != 0]
+        self.assertEqual(failures, [])
+        created = [json.loads(p.stdout) for p in results]
+        self.assertEqual(len({item["id"] for item in created}), 40)
+
+        tasks = self.tmpdir / ".flow" / "tasks"
+        json_paths = sorted(tasks.glob(f"{self.spec_id}.*.json"))
+        md_paths = sorted(tasks.glob(f"{self.spec_id}.*.md"))
+        self.assertEqual(len(json_paths), 40)
+        self.assertEqual(len(md_paths), 40)
+        expected_ids = {f"{self.spec_id}.{i}" for i in range(1, 41)}
+        self.assertEqual({p.stem for p in json_paths}, expected_ids)
+        self.assertEqual({p.stem for p in md_paths}, expected_ids)
+
+        reported_titles = {item["id"]: item["title"] for item in created}
+        for task_id, title in reported_titles.items():
+            data = json.loads((tasks / f"{task_id}.json").read_text(encoding="utf-8"))
+            markdown = (tasks / f"{task_id}.md").read_text(encoding="utf-8")
+            self.assertEqual(data["title"], title)
+            self.assertTrue(markdown.startswith(f"# {task_id} {title}\n"))
 
     # --- partial flag combinations (each flag independent) -------------------------
 

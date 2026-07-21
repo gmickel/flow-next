@@ -8,6 +8,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 
 import argparse
 import difflib
+import errno
 import hashlib
 import io
 import json
@@ -30,22 +31,121 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, ContextManager, Optional
 
-# Platform-specific file locking (fcntl on Unix, no-op on Windows)
-try:
+
+# Cross-process locks use platform-native kernel locks. The kernel releases
+# them when a process exits, avoiding both abandoned-lock cleanup and the ABA
+# race inherent in deleting/recreating a shared lock path.
+CROSS_PROCESS_LOCK_WAIT_SECS = 30.0
+CROSS_PROCESS_LOCK_POLL_SECS = 0.02
+
+
+class CrossProcessLockError(RuntimeError):
+    """A portable lock could not be acquired safely within its bound."""
+
+
+def _try_kernel_lock(fd: int) -> bool:
+    """Try one non-blocking platform-native exclusive lock acquisition."""
+    if os.name == "nt":
+        import msvcrt
+
+        os.lseek(fd, 0, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError as e:
+            if e.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                return False
+            raise
+
     import fcntl
 
-    def _flock(f, lock_type):
-        fcntl.flock(f, lock_type)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError as e:
+        if e.errno in (errno.EACCES, errno.EAGAIN):
+            return False
+        raise
 
-    LOCK_EX = fcntl.LOCK_EX
-    LOCK_UN = fcntl.LOCK_UN
-except ImportError:
-    # Windows: fcntl not available, use no-op (acceptable for single-machine use)
-    def _flock(f, lock_type):
-        pass
 
-    LOCK_EX = 0
-    LOCK_UN = 0
+def _release_kernel_lock(fd: int) -> None:
+    """Release a platform-native lock; closing the fd remains the backstop."""
+    if os.name == "nt":
+        import msvcrt
+
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        return
+
+    import fcntl
+
+    fcntl.flock(fd, fcntl.LOCK_UN)
+
+
+@contextmanager
+def cross_process_lock(
+    lock_path: Path,
+    *,
+    timeout: Optional[float] = None,
+    poll: Optional[float] = None,
+):
+    """Acquire a bounded POSIX/Windows kernel lock on a persistent lock file."""
+    if timeout is None:
+        timeout = CROSS_PROCESS_LOCK_WAIT_SECS
+    if poll is None:
+        poll = CROSS_PROCESS_LOCK_POLL_SECS
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    if lock_path.parent.is_symlink() or not lock_path.parent.is_dir():
+        raise CrossProcessLockError(
+            f"lock parent is not a real directory: {lock_path.parent}"
+        )
+    try:
+        leaf_info = os.lstat(lock_path)
+    except FileNotFoundError:
+        leaf_info = None
+    except OSError as e:
+        raise CrossProcessLockError(f"cannot inspect lock path {lock_path}: {e}") from e
+    if leaf_info is not None and not stat.S_ISREG(leaf_info.st_mode):
+        raise CrossProcessLockError(f"lock path is not a regular file: {lock_path}")
+
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(lock_path, flags, 0o600)
+    except OSError as e:
+        raise CrossProcessLockError(f"cannot open lock path {lock_path}: {e}") from e
+
+    acquired = False
+    deadline = _monotonic_now() + max(0.0, timeout)
+    try:
+        if os.fstat(fd).st_size == 0:
+            os.write(fd, b"\0")
+        while not acquired:
+            try:
+                acquired = _try_kernel_lock(fd)
+            except OSError as e:
+                raise CrossProcessLockError(
+                    f"cannot acquire lock {lock_path}: {e}"
+                ) from e
+            if acquired:
+                break
+            if _monotonic_now() >= deadline:
+                raise CrossProcessLockError(
+                    f"timed out acquiring live lock {lock_path} after {timeout:g}s"
+                )
+            _sleep_secs(poll)
+
+        yield
+    finally:
+        if acquired:
+            try:
+                _release_kernel_lock(fd)
+            except OSError:
+                # Closing the descriptor releases kernel ownership. Never mask
+                # an exception from the protected body.
+                pass
+        os.close(fd)
 
 
 # --- Constants ---
@@ -171,7 +271,7 @@ def get_repo_root() -> Path:
         root = Path(result.stdout.strip())
         _REPO_ROOT_CACHE[cwd] = root
         return root
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         # Fallback to current directory (uncached: never sticky)
         return cwd
 
@@ -849,7 +949,7 @@ def get_state_dir() -> Path:
         state = Path(common) / "flow-state"
         _STATE_DIR_CACHE[cache_key] = state
         return state
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         pass
 
     # 3. Fallback for non-git repos (uncached: never sticky)
@@ -884,7 +984,7 @@ class StateStore(ABC):
 
 
 class LocalFileStateStore(StateStore):
-    """File-based state store with fcntl locking."""
+    """File-based state store with portable cross-process locking."""
 
     def __init__(self, state_dir: Path):
         self.state_dir = state_dir
@@ -895,6 +995,8 @@ class LocalFileStateStore(StateStore):
         return self.tasks_dir / f"{task_id}.state.json"
 
     def _lock_path(self, task_id: str) -> Path:
+        # Preserve the legacy path so POSIX processes running across an
+        # upgrade still contend on the same kernel lock.
         return self.locks_dir / f"{task_id}.lock"
 
     def load_runtime(self, task_id: str) -> Optional[dict]:
@@ -916,14 +1018,8 @@ class LocalFileStateStore(StateStore):
     @contextmanager
     def lock_task(self, task_id: str):
         """Acquire exclusive lock for task operations."""
-        self.locks_dir.mkdir(parents=True, exist_ok=True)
-        lock_path = self._lock_path(task_id)
-        with open(lock_path, "w") as f:
-            try:
-                _flock(f, LOCK_EX)
-                yield
-            finally:
-                _flock(f, LOCK_UN)
+        with cross_process_lock(self._lock_path(task_id)):
+            yield
 
     def list_runtime_files(self) -> list[str]:
         if not self.tasks_dir.exists():
@@ -2052,6 +2148,32 @@ def atomic_write_json(path: Path, data: dict) -> None:
     atomic_write(path, content)
 
 
+def atomic_create(path: Path, content: str) -> None:
+    """Publish a new file atomically without ever replacing an existing path.
+
+    A complete sibling temp file is hard-linked into place. ``os.link`` is an
+    atomic no-clobber publication on POSIX and Windows when source and target
+    share a directory; a concurrent/pre-existing target raises
+    ``FileExistsError`` instead of being overwritten by ``os.replace``.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.link(tmp_path, path)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            # Temp cleanup is best-effort. If os.link failed, preserve that
+            # original exception; if it succeeded, publication is complete
+            # and the caller must be allowed to track/rollback the target.
+            pass
+
+
 def load_json(path: Path) -> dict:
     """Load JSON file."""
     with open(path, encoding="utf-8") as f:
@@ -2258,30 +2380,13 @@ def _setup_block_lock():
     second writer clobbers the first target's hash. A repo-local exclusive lock
     (re-read meta INSIDE the lock at each call site) makes the map merge safe.
     """
-    lock_dir = get_flow_dir() / "locks"
-    lock_dir.mkdir(parents=True, exist_ok=True)
-    # The parent dir itself must be a real directory: a repository-controlled
-    # `.flow/locks -> /outside` symlink would relocate every child open even
-    # with O_NOFOLLOW on the leaf (security review, PR #209 wave 2).
-    if lock_dir.is_symlink() or not lock_dir.is_dir():
-        error_exit(f"setup-block lock dir is not a real directory: {lock_dir}", use_json=True)
-    lock_path = lock_dir / "setup-block.lock"
-    # O_NOFOLLOW: a repository-controlled symlink at the lock path must not
-    # redirect the open outside .flow/locks (security review, PR #209). No
-    # truncation flag - flock only needs a stable fd, never file content.
-    flags = os.O_CREAT | os.O_WRONLY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
+    # Preserve the legacy leaf so POSIX processes across an upgrade contend.
+    lock_path = get_flow_dir() / "locks" / "setup-block.lock"
     try:
-        fd = os.open(lock_path, flags, 0o644)
-    except OSError as e:
-        error_exit(f"setup-block lock unavailable: {lock_path} ({e})", use_json=True)
-    with os.fdopen(fd, "w") as f:
-        try:
-            _flock(f, LOCK_EX)
+        with cross_process_lock(lock_path):
             yield
-        finally:
-            _flock(f, LOCK_UN)
+    except CrossProcessLockError as e:
+        error_exit(f"setup-block lock unavailable: {e}", use_json=True)
 
 
 def _setup_block_emit(args: argparse.Namespace, target: str, action: str,
@@ -2889,7 +2994,7 @@ def get_changed_files(base_branch: str) -> list[str]:
             cwd=get_repo_root(),
         )
         return [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return []
 
 
@@ -3079,7 +3184,7 @@ def find_references(
             if len(refs) >= max_results:
                 break
         return refs
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return []
 
 
@@ -3155,7 +3260,7 @@ def get_codex_version() -> Optional[str]:
         output = result.stdout.strip()
         match = re.search(r"(\d+\.\d+\.\d+)", output)
         return match.group(1) if match else output
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return None
 
 
@@ -5235,7 +5340,7 @@ def get_copilot_version() -> Optional[str]:
         version = match.group(1) if match else output
         _CLI_VERSION_CACHE[copilot] = version
         return version
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return None
 
 
@@ -5459,7 +5564,7 @@ def get_cursor_version() -> Optional[str]:
         version = match.group(1) if match else output
         _CLI_VERSION_CACHE[cursor] = version
         return version
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return None
 
 
@@ -6853,7 +6958,7 @@ def get_actor() -> str:
         )
         if email := result.stdout.strip():
             return email
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         pass
 
     # 3. git config user.name
@@ -6863,7 +6968,7 @@ def get_actor() -> str:
         )
         if name := result.stdout.strip():
             return name
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         pass
 
     # 4. $USER env var
@@ -13891,22 +13996,6 @@ def cmd_task_create(args: argparse.Namespace) -> None:
 
     load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
 
-    # MU-1: Scan-based allocation for merge safety
-    # Scan existing tasks to determine next ID (don't rely on counter)
-    max_task = scan_max_task_id(flow_dir, spec_id)
-    task_num = max_task + 1
-    task_id = f"{spec_id}.{task_num}"
-
-    # Double-check no collision (shouldn't happen with scan-based allocation)
-    task_json_path = flow_dir / TASKS_DIR / f"{task_id}.json"
-    task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
-    if task_json_path.exists() or task_spec_path.exists():
-        error_exit(
-            f"Refusing to overwrite existing task {task_id}. "
-            f"This shouldn't happen - check for orphaned files.",
-            use_json=args.json,
-        )
-
     # Parse dependencies (shared same-spec canonicalize helper).
     deps = []
     if args.deps:
@@ -13948,30 +14037,72 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         except ValueError as e:
             error_exit(str(e), use_json=args.json)
 
-    # fn-43.2: persisted task JSON uses canonical "spec" key only. Read paths
-    # accept legacy "epic" via normalize_task() for 0.x task files that
-    # haven't been rewritten yet.
-    task_data = {
-        "id": task_id,
-        "spec": spec_id,
-        "title": args.title,
-        "status": "todo",
-        "priority": args.priority,
-        "depends_on": deps,
-        "assignee": None,
-        "claimed_at": None,
-        "claim_note": "",
-        "spec_path": f"{FLOW_DIR}/{TASKS_DIR}/{task_id}.md",
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-    }
-    atomic_write_json(flow_dir / TASKS_DIR / f"{task_id}.json", task_data)
+    # Allocation and the paired JSON/Markdown publication are one per-spec
+    # transaction. A process reports success only after both complete files
+    # exist; any second-write/collision failure removes files created by this
+    # transaction before surfacing the error.
+    lock_hash = hashlib.sha256(spec_id.encode("utf-8")).hexdigest()[:16]
+    lock_path = flow_dir / "locks" / f"task-create-{lock_hash}.lock.d"
+    try:
+        with cross_process_lock(lock_path):
+            # MU-1: scan while holding the allocation lock. The previous
+            # unlocked scan let concurrent creators all choose the same id.
+            task_num = scan_max_task_id(flow_dir, spec_id) + 1
+            task_id = f"{spec_id}.{task_num}"
+            task_json_path = flow_dir / TASKS_DIR / f"{task_id}.json"
+            task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+            if task_json_path.exists() or task_spec_path.exists():
+                error_exit(
+                    f"Refusing to overwrite existing task {task_id}. "
+                    f"This shouldn't happen - check for orphaned files.",
+                    use_json=args.json,
+                )
 
-    # Create task spec
-    spec_content = create_task_spec(
-        task_id, args.title, acceptance, description=description, satisfies=satisfies
-    )
-    atomic_write(flow_dir / TASKS_DIR / f"{task_id}.md", spec_content)
+            # fn-43.2: persisted task JSON uses canonical "spec" key only.
+            created_at = now_iso()
+            task_data = {
+                "id": task_id,
+                "spec": spec_id,
+                "title": args.title,
+                "status": "todo",
+                "priority": args.priority,
+                "depends_on": deps,
+                "assignee": None,
+                "claimed_at": None,
+                "claim_note": "",
+                "spec_path": f"{FLOW_DIR}/{TASKS_DIR}/{task_id}.md",
+                "created_at": created_at,
+                "updated_at": created_at,
+            }
+            json_content = json.dumps(task_data, indent=2, sort_keys=True) + "\n"
+            spec_content = create_task_spec(
+                task_id,
+                args.title,
+                acceptance,
+                description=description,
+                satisfies=satisfies,
+            )
+
+            published: list[Path] = []
+            try:
+                atomic_create(task_json_path, json_content)
+                published.append(task_json_path)
+                atomic_create(task_spec_path, spec_content)
+                published.append(task_spec_path)
+            except (OSError, ValueError) as e:
+                cleanup_errors = []
+                for published_path in reversed(published):
+                    try:
+                        published_path.unlink()
+                    except OSError as cleanup_error:
+                        cleanup_errors.append(str(cleanup_error))
+                detail = f"; cleanup failed: {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+                error_exit(
+                    f"Failed to create task {task_id}: {e}{detail}",
+                    use_json=args.json,
+                )
+    except CrossProcessLockError as e:
+        error_exit(f"Task allocation lock unavailable for {spec_id}: {e}", use_json=args.json)
 
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
@@ -30192,7 +30323,10 @@ def main() -> None:
         )
 
     args = parser.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except CrossProcessLockError as e:
+        error_exit(f"Runtime lock unavailable: {e}", use_json=args.json)
 
 
 if __name__ == "__main__":
