@@ -931,3 +931,24 @@ Optional next step — connect a tracker:
   two-way bridge (spec ⇄ issue, status, comments) and make PRs reviewable as Linear Diffs.
   Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
 ```
+
+### Step 8a: Plugin-mode summary variant (fn-121)
+
+When `MODE_OUTCOME` is `plugin`, the Step 8 copy-mode summary above is WRONG for this repo — its `Installed:` paths were deliberately never written, the `export PATH=".flow/bin:$PATH"` block points at a directory the plugin stamp forbids, and the "Re-run /flow-next:setup after plugin updates" note is exactly the treadmill plugin mode removes. Replace the `Installed:` block, the "To use from command line" block, and that Notes line with:
+
+```
+Setup mode: plugin (Claude Code)
+
+Written:
+- CLAUDE.md flow-next snippet (marker-fenced, sentinel v<N>)
+- <repo-root>/SPEC.md (only if Step 4a "Copy template" was chosen — otherwise omit this line)
+
+Nothing was copied into .flow/ — flowctl rides the plugin's PATH:
+  flowctl --help        # any agent shell, no export needed
+  flowctl usage         # CLI cheatsheet + orchestration recipes, always current
+
+Plugin updates land silently. You never re-run setup for an update.
+(Re-run /flow-next:setup only to change configuration or switch modes.)
+```
+
+Everything else in the Step 8 summary (Configuration block, Documentation updated, Model routing scaffold, Model-pin ceremony, the remaining Notes lines, the tracker proposal) prints unchanged in both modes.

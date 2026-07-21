@@ -460,7 +460,8 @@ if [ -f "$setup_wf" ]; then
       skip3=1; next
     }
     skip3 && /^## Step 8: Print Summary/ {skip3=0}
-    skip || skip2 || skip3 {next}
+    /^### Step 8a: Plugin-mode summary variant/ {skip4=1}
+    skip || skip2 || skip3 || skip4 {next}
     /^\*\*Copy mode only .* skip to Step 4a\.\*\*$/ {next}
     {print}
   ' "$setup_wf" > "${setup_wf}.fn121tmp" && mv "${setup_wf}.fn121tmp" "$setup_wf"

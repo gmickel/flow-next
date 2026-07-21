@@ -879,3 +879,4 @@ Optional next step — connect a tracker:
  two-way bridge (spec ⇄ issue, status, comments) and make PRs reviewable as Linear Diffs.
  Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
 ```
+
