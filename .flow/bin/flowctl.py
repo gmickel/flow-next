@@ -25576,6 +25576,12 @@ _PRIME_SIZE_MEDIUM = 400_000
 _PRIME_SIZE_LARGE = 2_000_000
 _PRIME_HUGE_FILES = 20000
 
+# Root containment is checked for thousands of tracked files. Cache only the
+# root's realpath (targets still resolve independently) and fingerprint the
+# lexical root so a replaced/retargeted symlink invalidates safely.
+_PRIME_ROOT_REAL_CACHE: dict[str, tuple[tuple[int, int, int], str]] = {}
+_PRIME_ROOT_REAL_CACHE_MAX = 32
+
 # Path-based exclusion sets (content-hash dedup handled separately). Matched on
 # any path SEGMENT (POSIX-split) so nested occurrences are caught.
 _PRIME_TOOL_MANAGED_DIRS = frozenset(
@@ -25715,6 +25721,45 @@ def _prime_git(
         return (1, "", str(exc))
 
 
+def _prime_git_many(
+    root: Path,
+    commands: "list[list[str]]",
+    collector: "_PrimeCollector",
+    timeout: int = _PRIME_GIT_TIMEOUT,
+) -> "list[tuple[int, str, str]]":
+    """Run independent Git probes concurrently; preserve result/error order."""
+    if not commands:
+        return []
+    if len(commands) == 1:
+        return [_prime_git(root, commands[0], collector, timeout=timeout)]
+
+    # Lazy import: Prime is specialized; ordinary flowctl startup must not pay
+    # concurrent.futures import cost.
+    from concurrent.futures import ThreadPoolExecutor
+
+    private_collectors = [
+        _PrimeCollector(f"{collector.name}-git-{index}")
+        for index in range(len(commands))
+    ]
+
+    def run(item: "tuple[list[str], _PrimeCollector]") -> "tuple[int, str, str]":
+        args, private = item
+        try:
+            return _prime_git(root, args, private, timeout=timeout)
+        except Exception as exc:
+            private.fail(exc)
+            return (1, "", str(exc))
+
+    with ThreadPoolExecutor(max_workers=min(4, len(commands))) as pool:
+        results = list(pool.map(run, zip(commands, private_collectors)))
+
+    collector.op(len(commands))
+    for private in private_collectors:
+        for error in private.errors:
+            collector.fail(error)
+    return results
+
+
 def _prime_read_text(path: Path, cap: int = _PRIME_MAX_FILE_BYTES) -> Optional[str]:
     """Bounded, defensive text read (never raises; None on any failure)."""
     try:
@@ -25728,6 +25773,31 @@ def _prime_read_text(path: Path, cap: int = _PRIME_MAX_FILE_BYTES) -> Optional[s
         return None
 
 
+def _prime_root_real(root: Path) -> str:
+    """Resolve a classifier root once while detecting path retargeting."""
+    lexical = os.path.abspath(os.fspath(root))
+    try:
+        info = os.stat(lexical, follow_symlinks=False)
+        fingerprint = (info.st_dev, info.st_ino, info.st_mtime_ns)
+    except (OSError, ValueError):
+        return os.path.realpath(lexical)
+
+    cached = _PRIME_ROOT_REAL_CACHE.get(lexical)
+    if cached is not None and cached[0] == fingerprint:
+        return cached[1]
+
+    resolved = os.path.realpath(lexical)
+    if resolved != lexical:
+        # A symlinked root (including a symlinked parent) may retarget below
+        # the leaf fingerprint. Resolve it every time; containment beats cache.
+        _PRIME_ROOT_REAL_CACHE.pop(lexical, None)
+        return resolved
+    if len(_PRIME_ROOT_REAL_CACHE) >= _PRIME_ROOT_REAL_CACHE_MAX:
+        _PRIME_ROOT_REAL_CACHE.clear()
+    _PRIME_ROOT_REAL_CACHE[lexical] = (fingerprint, resolved)
+    return resolved
+
+
 def _prime_contained(root: Path, rel: str) -> Optional[Path]:
     """Join a git-tracked relative path onto `root` and confirm (via realpath)
     it stays inside `root`. Returns None on ANY escape - a `..` traversal, an
@@ -25736,7 +25806,7 @@ def _prime_contained(root: Path, rel: str) -> Optional[Path]:
     None sentinel as a skip. Does NOT open the file.
     """
     try:
-        base = os.path.realpath(str(root))
+        base = _prime_root_real(root)
         target = os.path.realpath(os.path.join(base, rel))
     except (OSError, ValueError):
         return None
@@ -25874,6 +25944,18 @@ def _prime_parse_ls_files_staged(
             pass
         if not entries:
             return ([], False)
+    finally:
+        if proc.stdout is not None:
+            try:
+                proc.stdout.close()
+            except OSError:
+                pass
+        try:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait(timeout=_PRIME_GIT_TIMEOUT)
+        except (OSError, subprocess.SubprocessError):
+            pass
     if truncated:
         collector.note_truncated()
     return (entries, truncated)
@@ -25994,14 +26076,25 @@ def _prime_collect_lifecycle(
     c = _PrimeCollector("lifecycle", budget=16)
     evidence: list[str] = []
 
-    rc, out, _err = _prime_git(root, ["rev-list", "--count", "HEAD"], c)
+    commit_result, tags_result, first_result, authors_result = _prime_git_many(
+        root,
+        [
+            ["rev-list", "--count", "HEAD"],
+            ["tag"],
+            ["log", "--reverse", "--max-parents=0", "--format=%ct"],
+            ["shortlog", "-sne", "HEAD"],
+        ],
+        c,
+    )
+
+    rc, out, _err = commit_result
     commit_count = int(out.strip()) if rc == 0 and out.strip().isdigit() else 0
     if rc != 0:
         evidence.append("no commits (unborn HEAD)")
     else:
         evidence.append(f"{commit_count} commits")
 
-    rc, out, _err = _prime_git(root, ["tag"], c)
+    rc, out, _err = tags_result
     tags = len([ln for ln in out.splitlines() if ln.strip()]) if rc == 0 else 0
 
     # Reuse the CAPPED streamed inventory count instead of re-materializing
@@ -26050,9 +26143,7 @@ def _prime_collect_lifecycle(
     c.op()
 
     first_commit_days = 0
-    rc, out, _err = _prime_git(
-        root, ["log", "--reverse", "--max-parents=0", "--format=%ct"], c
-    )
+    rc, out, _err = first_result
     if rc == 0 and out.strip():
         first_ts = out.strip().splitlines()[0].strip()
         if first_ts.isdigit():
@@ -26061,7 +26152,7 @@ def _prime_collect_lifecycle(
             first_commit_days = max(0, int((time.time() - int(first_ts)) / 86400))
 
     single_contributor = False
-    rc, out, _err = _prime_git(root, ["shortlog", "-sne", "HEAD"], c)
+    rc, out, _err = authors_result
     if rc == 0:
         authors = [ln for ln in out.splitlines() if ln.strip()]
         single_contributor = len(authors) == 1
@@ -26350,7 +26441,7 @@ def _prime_collect_topology(
     prose_cross_repo_refs: list[str] = []
     seen_refs: set[str] = set()
     try:
-        root_real = os.path.realpath(str(root))
+        root_real = _prime_root_real(root)
     except (OSError, ValueError):
         root_real = str(root)
 
@@ -27454,6 +27545,7 @@ def _prime_collect_atomic_pairs(
     if pre_dedup is not None:
         deduped = pre_dedup
     tracked = set(deduped)
+    tracked_lower = {path.lower() for path in tracked}
     pairs: list[dict[str, Any]] = []
 
     def _add(kind: str, a: str, b: str) -> None:
@@ -27464,7 +27556,7 @@ def _prime_collect_atomic_pairs(
         low = rel.lower()
         if low.endswith(".pas"):
             dfm = rel[:-4] + ".dfm"
-            if dfm in tracked or (rel[:-4] + ".dfm").lower() in {t.lower() for t in tracked}:
+            if dfm in tracked or dfm.lower() in tracked_lower:
                 _add("delphi-form", rel, dfm)
         if low.endswith(".designer.cs"):
             base = rel[: -len(".designer.cs")] + ".cs"
@@ -27538,19 +27630,27 @@ def _prime_collect_docs_freshness(
     """FH1: last-commit timestamps for instruction/docs files vs src churn."""
     c = _PrimeCollector("substance-docs-freshness", budget=30)
     instruction_files: list[dict[str, Any]] = []
-    for doc in ("CLAUDE.md", "AGENTS.md", "README.md"):
-        rc, out, _err = _prime_git(root, ["log", "-1", "--format=%ct", "--", doc], c)
-        ts = int(out.strip()) if rc == 0 and out.strip().isdigit() else None
-        if ts is not None:
-            instruction_files.append({"path": doc, "last_commit_ts": ts})
+    docs = ("CLAUDE.md", "AGENTS.md", "README.md")
     # Newest source-file commit timestamp (pathspec-restricted to source exts).
     src_exts = sorted({os.path.splitext(p)[1] for p in _prime_iter_source(deduped)})
     src_pathspecs = [f"*{ext}" for ext in src_exts[:12]]
+    commands = [
+        ["log", "-1", "--format=%ct", "--", doc]
+        for doc in docs
+    ]
+    if src_pathspecs:
+        commands.append(
+            ["log", "-1", "--format=%ct", "--", *src_pathspecs]
+        )
+    results = _prime_git_many(root, commands, c)
+
+    for doc, (rc, out, _err) in zip(docs, results[: len(docs)]):
+        ts = int(out.strip()) if rc == 0 and out.strip().isdigit() else None
+        if ts is not None:
+            instruction_files.append({"path": doc, "last_commit_ts": ts})
     src_last_ts: Optional[int] = None
     if src_pathspecs:
-        rc, out, _err = _prime_git(
-            root, ["log", "-1", "--format=%ct", "--", *src_pathspecs], c
-        )
+        rc, out, _err = results[-1]
         if rc == 0 and out.strip().isdigit():
             src_last_ts = int(out.strip())
     return (
