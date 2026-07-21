@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-21T05:12:01.424422Z",
+  "depends_on": [
+    "fn-113-flowctl-judgment-evictions-memory.1"
+  ],
+  "id": "fn-113-flowctl-judgment-evictions-memory.2",
+  "priority": null,
+  "spec": "fn-113-flowctl-judgment-evictions-memory",
+  "spec_path": ".flow/tasks/fn-113-flowctl-judgment-evictions-memory.2.md",
+  "status": "todo",
+  "title": "Memory-add overlap eviction (caller decides, --update explicit)",
+  "updated_at": "2026-07-21T05:12:02.311028Z"
+}
