@@ -145,12 +145,9 @@ flowctl scope bank business|technical|both [--json]
 
 # Per-section write policy given existing-section-state JSON (path or '-' for stdin)
 flowctl scope write-policy business|technical|both --current-sections-json <file|-> [--json]
-
-# Capture biz-suggestion fire/no-fire (R25): fire iff 1 <= count < 3. Exit 0=fire, 1=no-fire.
-flowctl scope suggest --signal-categories-count N [--json]
 ```
 
-`scope resolve` falls back to `technical` when no scope flag is passed (sets `defaulted: true`); the interview skill asks before silently running that default. `scope suggest` is a thin threshold helper - judgment (counting signal categories) stays in the skill (fn-113 owns further eviction).
+`scope resolve` falls back to `technical` when no scope flag is passed (sets `defaulted: true`); the interview skill asks before silently running that default. The R25 capture biz-suggestion threshold (`1 <= n < 3`) lives in capture skill prose (fn-113 eviction), not a flowctl subcommand.
 
 ### spec create
 

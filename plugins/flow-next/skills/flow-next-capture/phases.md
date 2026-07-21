@@ -98,7 +98,7 @@ Every acceptance criterion line, every decision-context line, every scope-boundi
 
 ### Biz-context signal routing (R24)
 
-The nine-category routing table and its rules live **inline at [workflow.md §2.6](workflow.md)**, directly beside the §2.2 drafting step that consumes them — the single copy (proximity is accuracy-load-bearing; do not re-duplicate the table here). Section names in that table are anchors in the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — never re-embed the section list inline), resolved at runtime via the 4-tier discovery cascade described in workflow.md §2.2. The signal-category count the routing produces is the `BIZ_SIGNAL_CATEGORIES` value Phase 6 passes to `flowctl scope suggest` for the R25 fire/no-fire decision.
+The nine-category routing table and its rules live **inline at [workflow.md §2.6](workflow.md)**, directly beside the §2.2 drafting step that consumes them — the single copy (proximity is accuracy-load-bearing; do not re-duplicate the table here). Section names in that table are anchors in the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — never re-embed the section list inline), resolved at runtime via the 4-tier discovery cascade described in workflow.md §2.2. The signal-category count the routing produces is the `BIZ_SIGNAL_CATEGORIES` value Phase 6 agent-judges against the R25 threshold (`1 <= n < 3`) for the business-pass suggestion.
 
 ### Examples
 

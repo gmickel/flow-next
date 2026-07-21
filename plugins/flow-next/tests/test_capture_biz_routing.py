@@ -1,5 +1,5 @@
 """Unit tests for /flow-next:capture biz-context routing + sparse-layer
-suggestion (fn-44.9, covers R24, R25).
+suggestion (fn-44.9 / fn-113.3, covers R24, R25).
 
 Capture's runtime routing is host-agent-driven (skill-vs-flowctl architectural
 rule from CLAUDE.md) — there is no `capture_route()` helper to drive. The
@@ -12,35 +12,30 @@ tests cover the contract:
     (Biz-suggestion footer); the contract is "documented somewhere in
     workflow.md," scanned whole-file.
 
-  - Runtime threshold: `flowctl scope suggest` returns the expected
-    fire/no-fire decision for N ∈ {0, 1, 2, 3, 5}. Both plain-mode
-    exit-code semantics (0=fire, 1=no-fire — what SKILL.md branches on)
-    and JSON-mode 0-exit-regardless semantics are covered.
+  - R25 threshold (fn-113 eviction): the fire/no-fire rule lives in capture
+    skill prose, not `flowctl scope suggest` (subcommand deleted). A
+    prose-contract pin locks the constant threshold sentence so the rule
+    stays stated.
 """
 
 from __future__ import annotations
 
-import json
 import re
-import subprocess
-import sys
 import unittest
 from pathlib import Path
 
 
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
-FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
 CAPTURE_DIR = PLUGIN_DIR / "skills" / "flow-next-capture"
 
-
-def _run(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+# Byte-exact R25 threshold sentence pinned by fn-113.3. Keep in sync with
+# capture SKILL.md + workflow.md Phase 6 Biz-suggestion footer.
+R25_THRESHOLD_SENTENCE = (
+    "The R25 business-pass suggestion fires when the captured conversation "
+    "names 1-2 distinct R24 signal categories (the same `1 <= n < 3` rule), "
+    "agent-judged."
+)
 
 
 # Nine R24 signal categories with their canonical markdown destinations
@@ -196,6 +191,7 @@ class TestCaptureWorkflowDocumentsRoutingTable(unittest.TestCase):
         # Accept several equivalent ways to state the threshold.
         threshold_patterns = [
             r"1\s*<=?\s*N\s*<\s*3",
+            r"1\s*<=?\s*n\s*<\s*3",
             r"1\s*<=?\s*count\s*<\s*3",
             r"at least one .*\bfewer than three",
             r"BIZ_SIGNAL_CATEGORIES\s*=\s*[12]",
@@ -234,145 +230,44 @@ class TestCaptureWorkflowDocumentsRoutingTable(unittest.TestCase):
         self.assertIn("/flow-next:interview --scope=business", self.body)
 
 
-class TestScopeSuggestThresholdPlainMode(unittest.TestCase):
-    """R25 threshold runtime: `flowctl scope suggest` plain-mode emits 0=fire,
-    1=no-fire — what SKILL.md branches on via `if flowctl scope suggest ...`."""
+class TestR25ThresholdProseContract(unittest.TestCase):
+    """fn-113.3: R25 threshold lives in capture skill prose, not flowctl.
 
-    def _suggest(self, count: int) -> subprocess.CompletedProcess:
-        return _run(
-            "scope", "suggest", "--signal-categories-count", str(count)
-        )
+    Pins the constant threshold sentence so the rule stays stated after the
+    `scope suggest` eviction. Scope resolve/bank/write-policy are untouched.
+    """
 
-    def test_count_0_plain_no_fire(self) -> None:
-        """R22 invariant: zero biz signals → no-fire (exit 1)."""
-        proc = self._suggest(0)
-        self.assertEqual(proc.returncode, 1)
-        self.assertEqual(proc.stdout.strip(), "no-fire")
-
-    def test_count_1_plain_fire(self) -> None:
-        """Sweet spot: at least one signal → fire (exit 0)."""
-        proc = self._suggest(1)
-        self.assertEqual(proc.returncode, 0)
-        self.assertEqual(proc.stdout.strip(), "fire")
-
-    def test_count_2_plain_fire(self) -> None:
-        """Sweet spot: two signals → fire (still underspecified)."""
-        proc = self._suggest(2)
-        self.assertEqual(proc.returncode, 0)
-        self.assertEqual(proc.stdout.strip(), "fire")
-
-    def test_count_3_plain_no_fire(self) -> None:
-        """Biz layer reasonably filled → no-fire."""
-        proc = self._suggest(3)
-        self.assertEqual(proc.returncode, 1)
-        self.assertEqual(proc.stdout.strip(), "no-fire")
-
-    def test_count_5_plain_no_fire(self) -> None:
-        """Well above threshold → no-fire."""
-        proc = self._suggest(5)
-        self.assertEqual(proc.returncode, 1)
-        self.assertEqual(proc.stdout.strip(), "no-fire")
-
-    def test_count_9_plain_no_fire(self) -> None:
-        """All 9 categories filled → no-fire."""
-        proc = self._suggest(9)
-        self.assertEqual(proc.returncode, 1)
-        self.assertEqual(proc.stdout.strip(), "no-fire")
-
-
-class TestScopeSuggestThresholdJsonMode(unittest.TestCase):
-    """R25 threshold JSON mode: `flowctl scope suggest --json` always exits 0
-    on valid input; the decision is in the payload (R25 + fn-44.1 review
-    fix — JSON callers don't want exit 1 for valid no-fire)."""
-
-    def _suggest(self, count: int) -> dict:
-        proc = _run(
-            "scope",
-            "suggest",
-            "--signal-categories-count",
-            str(count),
-            "--json",
-        )
-        return {"_rc": proc.returncode, **json.loads(proc.stdout)}
-
-    def test_count_0_json_no_fire_exits_0(self) -> None:
-        result = self._suggest(0)
-        self.assertEqual(result["_rc"], 0)
-        self.assertFalse(result["fire"])
-        self.assertEqual(result["decision"], "no-fire")
-        self.assertEqual(result["signal_categories_count"], 0)
-        self.assertEqual(result["threshold_min"], 1)
-        self.assertEqual(result["threshold_max_exclusive"], 3)
-
-    def test_count_1_json_fire(self) -> None:
-        result = self._suggest(1)
-        self.assertEqual(result["_rc"], 0)
-        self.assertTrue(result["fire"])
-        self.assertEqual(result["decision"], "fire")
-
-    def test_count_2_json_fire(self) -> None:
-        result = self._suggest(2)
-        self.assertEqual(result["_rc"], 0)
-        self.assertTrue(result["fire"])
-
-    def test_count_3_json_no_fire_exits_0(self) -> None:
-        result = self._suggest(3)
-        self.assertEqual(result["_rc"], 0)
-        self.assertFalse(result["fire"])
-        self.assertEqual(result["decision"], "no-fire")
-
-    def test_negative_count_rejected(self) -> None:
-        proc = _run(
-            "scope",
-            "suggest",
-            "--signal-categories-count",
-            "-1",
-            "--json",
-        )
-        self.assertNotEqual(proc.returncode, 0)
-        payload = json.loads(proc.stdout)
-        self.assertFalse(payload["success"])
-        self.assertIn("must be >= 0", payload["error"])
-
-
-class TestScopeSuggestSkillIntegrationContract(unittest.TestCase):
-    """Skill ↔ flowctl coupling: SKILL.md / workflow.md branches on plain-
-    mode exit code (`if scope suggest ... >/dev/null; then ... fi`). The
-    branching token is the exit code, not the stdout payload."""
-
-    def test_workflow_uses_plain_mode_exit_branch(self) -> None:
-        """capture/workflow.md must branch on plain-mode exit (the contract
-        flowctl scope suggest provides via 0=fire, 1=no-fire)."""
-        workflow = (CAPTURE_DIR / "workflow.md").read_text(encoding="utf-8")
-        # SKILL.md form: `if "$FLOWCTL" scope suggest ... >/dev/null; then ...`
+    def test_threshold_sentence_in_workflow_md(self) -> None:
+        body = (CAPTURE_DIR / "workflow.md").read_text(encoding="utf-8")
         self.assertIn(
-            "scope suggest --signal-categories-count",
-            workflow,
-        )
-        self.assertIn(
-            ">/dev/null",
-            workflow,
-            "workflow.md must use plain-mode (quieted) suggest invocation",
+            R25_THRESHOLD_SENTENCE,
+            body,
+            "workflow.md Phase 6 must carry the pinned R25 threshold sentence",
         )
 
-    def test_capture_workflow_threshold_lives_in_flowctl_not_skill(self) -> None:
-        """CLAUDE.md skill-vs-flowctl rule: threshold math lives in flowctl
-        (`1 <= N < 3`), NOT inline-reimplemented in skill prose. The skill
-        MAY document the rule for reader context but must not branch on
-        an inline-computed threshold."""
+    def test_threshold_sentence_in_skill_md(self) -> None:
+        body = (CAPTURE_DIR / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn(
+            R25_THRESHOLD_SENTENCE,
+            body,
+            "SKILL.md step 6 must carry the pinned R25 threshold sentence",
+        )
+
+    def test_workflow_branches_on_agent_threshold_not_flowctl(self) -> None:
+        """Phase 6 must branch on BIZ_SIGNAL_CATEGORIES inline; must not call
+        the deleted `flowctl scope suggest` subcommand."""
         workflow = (CAPTURE_DIR / "workflow.md").read_text(encoding="utf-8")
-        # Forbidden pattern: actual conditional branching on the count
-        # rather than on scope suggest's exit code.
-        forbidden_branches = [
-            r"if\s*\[\s*\$BIZ_SIGNAL_CATEGORIES\s*-ge\s*1\s*-a\s*\$BIZ_SIGNAL_CATEGORIES\s*-lt\s*3",
-            r"if\s*\[\[\s*\$BIZ_SIGNAL_CATEGORIES\s*-ge\s*1\s*&&\s*\$BIZ_SIGNAL_CATEGORIES\s*-lt\s*3",
-        ]
-        for pattern in forbidden_branches:
-            self.assertIsNone(
-                re.search(pattern, workflow),
-                f"capture must not branch on inline threshold; flowctl owns "
-                f"the rule. Found: {pattern}",
-            )
+        self.assertNotIn(
+            "scope suggest",
+            workflow,
+            "capture must not call deleted `flowctl scope suggest`",
+        )
+        # Agent-owned shell branch for the 1 <= n < 3 rule.
+        self.assertRegex(
+            workflow,
+            r'BIZ_SIGNAL_CATEGORIES"\s+-ge\s+1\s*\]\s*&&\s*\[\s*"\$BIZ_SIGNAL_CATEGORIES"\s+-lt\s+3',
+            "workflow.md must branch on 1 <= BIZ_SIGNAL_CATEGORIES < 3 inline",
+        )
 
 
 if __name__ == "__main__":

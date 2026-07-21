@@ -12721,8 +12721,8 @@ def cmd_strategy_read(args: argparse.Namespace) -> None:
 # `scope resolve`        — token-safe parser; resolves --scope / --biz / --tech
 # `scope bank`           — prints question-bank path for a given scope
 # `scope write-policy`   — emits per-section write policy for a given scope
-# `scope suggest`        — emits the capture biz-suggestion fire/no-fire decision
 # `spec skeleton`        — prints the canonical fresh-spec skeleton (R22 baseline)
+# (fn-113: `scope suggest` deleted; R25 threshold lives in capture skill prose)
 
 # Valid scope values + the question-bank filename each maps to.
 _SCOPE_VALUES = ("business", "technical", "both")
@@ -13132,59 +13132,6 @@ def cmd_scope_write_policy(args: argparse.Namespace) -> None:
 
     policy = _scope_write_policy(scope, current)
     json_output(policy)
-
-
-def cmd_scope_suggest(args: argparse.Namespace) -> None:
-    """Capture biz-suggestion fire/no-fire decision.
-
-    Pure threshold function (R25):
-      - count == 0           → no-fire (R22: no biz signals at all → silence)
-      - 1 <= count < 3       → fire (sweet spot: user said biz things but underspecified)
-      - count >= 3           → no-fire (biz layer reasonably filled)
-
-    Exit semantics differ by output mode:
-      - PLAIN mode (no --json): 0 = fire (take action), 1 = no-fire (no action).
-        Lets shell-only callers branch on `$?` directly. Both states are
-        valid; 1 is informational, not error.
-      - JSON mode (--json): 0 for both fire AND no-fire (standard
-        subprocess success semantics — the JSON payload carries the
-        decision). Reserve non-zero for invalid input (e.g., negative
-        count).
-    """
-    use_json = bool(getattr(args, "json", False))
-    n = args.signal_categories_count
-    if n < 0:
-        if use_json:
-            json_output(
-                {"error": f"--signal-categories-count must be >= 0 (got {n})"},
-                success=False,
-            )
-        else:
-            print(
-                f"Error: --signal-categories-count must be >= 0 (got {n})",
-                file=sys.stderr,
-            )
-        sys.exit(2)
-
-    fire = (1 <= n < 3)
-    decision = "fire" if fire else "no-fire"
-    payload = {
-        "decision": decision,
-        "fire": fire,
-        "signal_categories_count": n,
-        "threshold_min": 1,
-        "threshold_max_exclusive": 3,
-    }
-    if use_json:
-        json_output(payload)
-        # JSON callers get 0 for valid input regardless of decision —
-        # the JSON body carries the verdict; subprocess semantics stay
-        # standard. Non-zero is reserved for invalid input.
-        sys.exit(0)
-    print(decision)
-    # Plain mode: 0 = fire (take action), 1 = no-fire (no action).
-    # Lets shell callers `if flowctl scope suggest --signal-categories-count $n; then ...`
-    sys.exit(0 if fire else 1)
 
 
 def cmd_spec_skeleton(args: argparse.Namespace) -> None:
@@ -28799,7 +28746,7 @@ def main() -> None:
         "scope",
         help=(
             "Scope helpers for --scope=business|technical|both "
-            "(parser + write policy + capture-suggestion threshold)"
+            "(parser + write policy)"
         ),
     )
     scope_sub = p_scope.add_subparsers(dest="scope_cmd", required=True)
@@ -28891,28 +28838,6 @@ def main() -> None:
         ),
     )
     p_scope_wp.set_defaults(func=cmd_scope_write_policy)
-
-    p_scope_suggest = scope_sub.add_parser(
-        "suggest",
-        help=(
-            "Capture biz-suggestion fire/no-fire decision. Threshold: "
-            "fire iff 1 <= count < 3 (R25). Exit 0 on fire, 1 on no-fire."
-        ),
-    )
-    p_scope_suggest.add_argument(
-        "--signal-categories-count",
-        type=int,
-        required=True,
-        help=(
-            "Number of detected business-signal categories (per R24/R25). "
-            "Counts CATEGORIES (target user, problem framing, success "
-            "metric, MVP boundary, etc.) — not markdown destinations."
-        ),
-    )
-    p_scope_suggest.add_argument(
-        "--json", action="store_true", help="JSON output"
-    )
-    p_scope_suggest.set_defaults(func=cmd_scope_suggest)
 
     # task create
     p_task = subparsers.add_parser("task", help="Task commands")
