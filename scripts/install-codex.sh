@@ -209,6 +209,16 @@ if [ -d "$CODEX_SRC/templates" ]; then
     done
     TPL_COUNT=$(find "$CODEX_SRC/templates" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')
     [ "$TPL_COUNT" -gt 0 ] && echo -e "${GREEN}✓${NC} $TPL_COUNT top-level template(s) (spec.md + siblings)"
+    # Template subdirectories (memory/*.tpl + future siblings). flowctl
+    # resolves ~/.codex/templates/memory/<name> via _memory_template_path;
+    # without this copy it silently falls back to embedded defaults.
+    for tpldir in "$CODEX_SRC/templates/"*/; do
+        [ -d "$tpldir" ] || continue
+        sub=$(basename "$tpldir")
+        rm -rf "$CODEX_DIR/templates/$sub"
+        cp -r "$tpldir" "$CODEX_DIR/templates/$sub"
+        echo -e "${GREEN}✓${NC} templates/$sub"
+    done
 fi
 
 # ====================

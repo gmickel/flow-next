@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Codex installer now copies template subdirectories (`templates/memory/`).** `install-codex.sh` only copied top-level `*.md` from the mirror's `templates/`, so the memory-track templates (`README.md.tpl`, `bug-track-entry.md.tpl`, `knowledge-track-entry.md.tpl`) never reached `~/.codex/templates/memory/` and flowctl silently fell back to its embedded defaults. The installer now syncs each template subdirectory (rm-then-copy, idempotent), so `_memory_template_path` resolves the shipped templates on Codex installs. Cosmetic-degradation fix; no version bump (batched).
+
 ## [flow-next 3.1.1] - 2026-07-21
 
 ### Changed
