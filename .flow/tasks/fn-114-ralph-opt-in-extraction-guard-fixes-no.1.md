@@ -26,9 +26,8 @@ Ralph no-default-install: plugin hooks deleted, registration becomes agent-drive
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Plugin-level hooks are GONE: plugins/flow-next/hooks/hooks.json deleted, no manifest hooks key, fresh installs register zero hooks - pinned by test_no_default_hooks (5 assertions: no dir, no manifest key, registration prose present, setup default-No + removal path, uninstall strip). Registration is agent-driven ralph-init prose per platform: Claude/Grok merge fingerprinted guard entries into .claude/settings.json (project trust prompt = consent gate), Droid .factory hooks with settings fallback, Codex subset (shell Pre/Post + Stop; no file matchers/SubagentStop), Cursor scaffold-only (hook-schema mismatch documented). Setup asks Ralph enable/keep on fresh AND re-runs (default No; No strips fingerprinted entries and offers scaffold cleanup ask-before-delete); uninstall carries the same removal step; cursor installers stop shipping hooks. Delegate doubts routed within plan: codex mirror hooks generation -> .2, ralph.md + checklist rows -> .4, Droid file-matcher body -> .3, setup-run-vs-point -> accepted (default-No is the protective part). Full parallel suite 86 files / 1858 tests / 0 failures / 70.3s; sync-codex x2; no flowctl changes (dual-copy untouched).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 6cce75e2bd29303e3400d26ad6f7bada490f29e6
+- Tests: python3 scripts/run_tests_parallel.py (86 files, 1858 tests, 0 failures, 70.3s), test_no_default_hooks.py 5 green, test_ralph*.py 72 green
 - PRs:
