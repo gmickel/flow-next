@@ -130,7 +130,9 @@ CODEX_MAX_THREADS=12 ./scripts/install-codex.sh flow-next   # CODEX_MAX_THREADS 
 
 ### Hooks (experimental, Ralph opt-in only)
 
-Codex supports hooks, but flow-next does **not** install them by default. A pre-built `codex/hooks.json` may exist in the mirror for reference / global install tooling; **project hooks land only when Ralph is enabled** via `$flow-next-ralph-init` (or setup's Ralph yes path), which writes/merges `.codex/hooks.json` with the Codex subset (`PreToolUse`/`PostToolUse` shell + `Stop`; no `SubagentStop`, no `Edit`/`Write` matchers).
+Codex supports hooks, but flow-next installs **none** by default: the Codex mirror ships no `hooks.json`, and `install-codex.sh` does not copy one (fn-114 zero-default). Project hooks land only when Ralph is enabled via `$flow-next-ralph-init` (or setup's Ralph yes path), which writes/merges project `.codex/hooks.json` with the Codex subset (`PreToolUse`/`PostToolUse` shell + `Stop`; no `SubagentStop`, no `Edit`/`Write` matchers).
+
+`install-codex.sh` still sets `[features] hooks = true` in `~/.codex/config.toml` (feature flag only, not a Ralph install). That flag enables Codex's hooks runtime so a later ralph-init project hooks file can load; it does **not** install any guard entries by itself.
 
 **Limitation:** Codex hooks only intercept `Bash` (not `Edit`/`Write`). Ralph's file-modification guard won't catch direct file edits. The `SubagentStop` event is also not supported.
 

@@ -15,14 +15,14 @@ Global installs take precedence over `--plugin-dir`, causing tests to use stale 
 
 ## Preferred: local marketplace install
 
-Hooks fire correctly via `${CLAUDE_PLUGIN_ROOT}`:
+Hooks are PROJECT-level since fn-114 (ralph-init merges them into .claude/settings.json; the plugin ships none). To verify they fire:
 
 ```bash
 # From this repo root
 /plugin marketplace add ./
 /plugin install flow-next@flow-next
 
-# Test in any project — plugin hooks work via ${CLAUDE_PLUGIN_ROOT}
+# Test in a project where ralph-init has registered the guard hooks
 ```
 
 ## Alternative: --plugin-dir (test scripts only)
