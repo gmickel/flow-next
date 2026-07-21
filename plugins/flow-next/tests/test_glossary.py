@@ -139,6 +139,17 @@ class TestChangedGlossaryDiff(unittest.TestCase):
             )
         self.assertEqual(result, {"added": [], "removed": [], "renamed": []})
 
+    def test_non_utf8_base_glossary_preserves_strict_decode_failure(self) -> None:
+        path = self.root / "GLOSSARY.md"
+        path.write_bytes(b"# Project Glossary\n\n## Broken\n\ninvalid: \xff\n")
+        base = self._commit("non-utf8 base")
+        path.unlink()
+        self._commit("delete non-utf8 glossary")
+        status = _git(self.root, "diff", "--name-status", "-M", f"{base}..HEAD")
+
+        with self.assertRaises(UnicodeDecodeError):
+            flowctl._export_glossary_diff(base, self.root, status, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

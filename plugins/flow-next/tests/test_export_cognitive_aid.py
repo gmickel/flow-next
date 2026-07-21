@@ -1,4 +1,13 @@
-"""Performance and semantic budgets for cognitive-aid diff materialization."""
+"""Performance and semantic budgets for cognitive-aid diff materialization.
+
+fn-122.7 benchmark evidence (2026-07-21, Apple M-series macOS, Python 3.14.2):
+the same live fn-122 cognitive-aid export against ``origin/main``, five timed
+runs per implementation. Pre-change commit 7d072cbf median 0.51 s (range
+0.50-0.52); post-change median 0.38 s (range 0.38-0.38), 25.5% faster. The
+deterministic budget below pins one unified-diff spawn/parse (previously two
+spawns/four parses); glossary tests pin zero whole-tree enumerations and one
+batched base-object process for any number of changed glossary candidates.
+"""
 
 import json
 import sys

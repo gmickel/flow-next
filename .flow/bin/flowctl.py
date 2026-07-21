@@ -16815,10 +16815,10 @@ def _export_read_base_blobs(
         if len(body) != size:
             break
         stream.read(1)  # git's record-separating newline
-        try:
-            blobs[path] = body.decode("utf-8")
-        except UnicodeDecodeError:
-            continue
+        # Match the former ``git show(..., text=True, encoding="utf-8")``
+        # contract: an invalid glossary is an export error, never a silently
+        # missing base file that could erase the removed-term delta.
+        blobs[path] = body.decode("utf-8")
     return blobs
 
 
