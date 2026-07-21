@@ -15,7 +15,7 @@ flow-next gets better as you use it. Four surfaces — memory, glossary, decisio
 
 ## Memory
 
-Opt-in categorized store (bug / knowledge tracks) that survives context compaction. The write moment is the review loop: when an implementation review goes NEEDS_WORK → SHIP, the worker captures the problem / root cause / fix / prevention as a bug-track entry — in Ralph mode this happens with nobody watching. Overlap detection merges duplicates at `memory add` time, so capture carries no dedup burden. Reads happen where they pay: `memory-scout` feeds planning, the worker re-anchor pulls module-relevant entries before touching code. `/flow-next:audit` is the garbage collector — it walks entries against the current codebase and keeps, updates, consolidates, replaces, or deletes. Schema + lifecycle: [`memory-schema.md`](memory-schema.md).
+Opt-in categorized store (bug / knowledge tracks) that survives context compaction. The write moment is the review loop: when an implementation review goes NEEDS_WORK → SHIP, the worker captures the problem / root cause / fix / prevention as a bug-track entry — in Ralph mode this happens with nobody watching. `memory add` always creates unless the caller passes explicit `--update <id>`; the response emits scored `matches` so the calling skill decides update-vs-create (fn-113). Reads happen where they pay: `memory-scout` feeds planning, the worker re-anchor pulls module-relevant entries before touching code. `/flow-next:audit` is the garbage collector — it walks entries against the current codebase and keeps, updates, consolidates, replaces, or deletes. Schema + lifecycle: [`memory-schema.md`](memory-schema.md).
 
 ## Glossary
 

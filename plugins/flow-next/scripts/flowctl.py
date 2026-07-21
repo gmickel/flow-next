@@ -9187,9 +9187,12 @@ def check_memory_overlap(
         "matches": [{"id": str, "path": str, "score": int}, ...],  # best-first
       }
 
-    Thresholds (score 0-4, category always contributes 1):
-      score >= 3 -> high (update existing)
-      score == 2 -> moderate (create new with related_to)
+    Thresholds (score 0-4, category always contributes 1) are a *retrieval
+    signal* for the caller — flowctl never auto-updates on high overlap
+    (fn-113). Callers that want to fold into an existing entry pass
+    explicit `--update <id>`:
+      score >= 3 -> high (strong match signal)
+      score == 2 -> moderate (create may set related_to)
       score <= 1 -> low (standalone)
     """
     cat_dir = memory_dir / track / category
@@ -9259,7 +9262,7 @@ def _memory_update_existing_entry(
     incoming_tags: list[str],
     today: str,
 ) -> dict[str, Any]:
-    """Update an existing entry in place for high-overlap adds.
+    """Update an existing entry in place (explicit `--update <id>` only).
 
     - Sets `last_updated` to today
     - Unions tags (preserving existing order)
@@ -9473,7 +9476,7 @@ def require_memory_enabled(args) -> Path:
 
 
 def cmd_memory_add(args: argparse.Namespace) -> None:
-    """Add a categorized memory entry with overlap detection (fn-30 task 2).
+    """Add a categorized memory entry with overlap *signal* (fn-30 / fn-113).
 
     Preferred form:
       flowctl memory add --track <bug|knowledge> --category <cat> \\
@@ -9481,7 +9484,12 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
           [--body-file <path> | --body-file -] \\
           [--problem-type <t>] [--symptoms <s>] [--root-cause <r>] \\
           [--resolution-type <t>] [--applies-when <a>] \\
-          [--no-overlap-check] [--json]
+          [--update <id>] [--no-overlap-check] [--json]
+
+    Contract (fn-113): always *creates* a new entry unless the caller passes
+    explicit `--update <id>`. Overlap scoring still runs and the response
+    always emits `matches` (with scores) so the calling skill decides
+    update-vs-create; flowctl never auto-mutates on high overlap.
 
     Legacy form (backward-compat, deprecated — suppress with
     FLOW_NO_DEPRECATION=1):
@@ -9638,8 +9646,9 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    # --- Overlap detection ---
+    # --- Overlap signal (caller decides; never auto-updates) ---
     no_overlap = bool(getattr(args, "no_overlap_check", False))
+    update_id = (getattr(args, "update", None) or "").strip() or None
     overlap = (
         {"level": "low", "matches": []}
         if no_overlap
@@ -9647,8 +9656,9 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
             memory_dir, track, category, title, tags, module
         )
     )
+    matches = list(overlap.get("matches") or [])
 
-    # --- Build frontmatter ---
+    # --- Build frontmatter (create path only; --update merges into existing) ---
     frontmatter: dict[str, Any] = {
         "title": title,
         "date": today,
@@ -9677,10 +9687,14 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
     action: str
     target_path: Path
 
-    if overlap["level"] == "high":
-        existing = overlap["matches"][0]
-        target_path = Path(existing["path"])
-        entry_id = existing["id"]
+    if update_id:
+        # Explicit update only — validates id exists; same merge semantics
+        # the former high-overlap auto-branch used (fn-113).
+        entry = _memory_resolve_categorized_entry(
+            memory_dir, update_id, use_json=args.json, command="add"
+        )
+        target_path = Path(entry["path"])
+        entry_id = entry["entry_id"]
         updated_fm = _memory_update_existing_entry(
             target_path, body, tags, today
         )
@@ -9688,11 +9702,13 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         related_to = list(updated_fm.get("related_to", []) or [])
         if not args.json:
             print(
-                f"High overlap with {entry_id}. Updating existing entry "
-                f"instead of creating duplicate. (Override with --no-overlap-check.)"
+                f"Updating {entry_id} via --update. "
+                f"Overlap level: {overlap['level']} "
+                f"({len(matches)} match(es))."
             )
     else:
-        # Fresh entry path.
+        # Always create. High overlap is a retrieval signal only; the caller
+        # re-runs with --update <id> when it wants to fold into an existing entry.
         target_path = _memory_entry_path(memory_dir, track, category, slug, today)
         if target_path.exists():
             # Disambiguate same-day duplicates with a numeric suffix.
@@ -9716,6 +9732,12 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
                     f"Moderate overlap with {', '.join(related_to)}. "
                     f"Creating new entry with related_to reference."
                 )
+        elif overlap["level"] == "high" and not args.json:
+            match_ids = ", ".join(m["id"] for m in matches)
+            print(
+                f"High overlap with {match_ids}. Creating new entry "
+                f"(pass --update <id> to fold into an existing match)."
+            )
 
         write_memory_entry(target_path, frontmatter, body)
         action = "created"
@@ -9725,6 +9747,7 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         "entry_id": entry_id,
         "path": str(target_path),
         "overlap_level": overlap["level"],
+        "matches": matches,
         "related_to": related_to,
         "action": action,
         "warnings": warnings,
@@ -28140,12 +28163,21 @@ def main() -> None:
         dest="alternatives_considered",
         help="Decisions category: comma-separated list of rejected alternatives",
     )
-    # Overlap detection.
+    # Overlap signal + explicit update (fn-113: no auto-update).
+    p_memory_add.add_argument(
+        "--update",
+        dest="update",
+        metavar="ID",
+        help=(
+            "Update an existing entry by id (explicit only; "
+            "memory add never auto-mutates on high overlap)"
+        ),
+    )
     p_memory_add.add_argument(
         "--no-overlap-check",
         dest="no_overlap_check",
         action="store_true",
-        help="Skip overlap detection; always create a standalone entry",
+        help="Skip overlap scoring; emit empty matches (still creates unless --update)",
     )
     # Legacy backward-compat.
     p_memory_add.add_argument(

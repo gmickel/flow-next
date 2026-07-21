@@ -109,7 +109,7 @@ The presence of `_migrated/<filename>.bak` is the canonical signal. Cheaper than
 
 ### Mid-migration (Phase 2)
 
-`flowctl memory add` runs overlap detection. If a categorized entry with high overlap already exists (e.g. someone manually migrated one entry already, then re-ran the skill), the helper updates the existing entry in place rather than creating a duplicate. This is desired — the skill doesn't override that behavior.
+`flowctl memory add` always creates unless `--update <id>` is passed (fn-113). Overlap scoring still runs and the JSON response emits `matches` (with scores). If a high-overlap match already exists (e.g. someone manually migrated one entry already, then re-ran the skill), re-run with `--update <match-id>` to fold into the existing entry rather than accepting a sibling create.
 
 ### Post-migration (Phase 4)
 
@@ -131,8 +131,8 @@ Re-running `/flow-next:memory-migrate` after a clean Phase 4:
 Re-running after Phase 4 was declined (originals still in place):
 
 - Phase 0 sees no backups → all files in scope.
-- `flowctl memory add` overlap detection prevents duplicate categorized entries even if the previous run already wrote them.
-- Net result: idempotent at the categorized-tree level (no duplicates). The skill doesn't track per-entry "already migrated" state — it relies on `flowctl memory add`'s overlap detection.
+- `flowctl memory add` emits `matches` on high/moderate overlap; the skill re-runs with `--update <match-id>` when a prior migration already wrote the same entry, otherwise accepts the create (moderate sets `related_to`).
+- Net result: skill-owned idempotency at the categorized-tree level. The skill does not track per-entry "already migrated" state beyond reading `matches` from each add.
 
 ---
 

@@ -347,7 +347,7 @@ A missing live target is an expected, surfaced limitation — never a fabricated
 
 ## Phase 5: file
 
-**Goal:** file each failure as a structured P0/P1/P2 finding (persona, steps-to-reproduce, expected vs actual, evidence pointers), **filed immediately on FAIL** — not batched at the end. Findings feed the bug memory track via `memory add --track bug` (built-in overlap dedup — **never** `--no-overlap-check`) and carry the R-ID(s) they trace back to.
+**Goal:** file each failure as a structured P0/P1/P2 finding (persona, steps-to-reproduce, expected vs actual, evidence pointers), **filed immediately on FAIL** — not batched at the end. Findings feed the bug memory track via `memory add --track bug` (overlap scoring left ON — **never** `--no-overlap-check`; host decides update-vs-create from `matches`) and carry the R-ID(s) they trace back to.
 
 The full filing discipline (taxonomy, evidence rules, reproduce-before-file, the `memory add` invocation, dedup surfacing, promote-to-spec) lives in **[references/bug-filing.md](references/bug-filing.md)** — read it before filing. The flow on the host:
 
@@ -376,9 +376,9 @@ Every finding cites **real captured evidence** (from Phase 4, under `.flow/tmp/q
 
 Evidence lives under `.flow/tmp/` (gitignored) and is **referenced by path**, never inlined into the receipt or memory body wholesale.
 
-### 5.4 — File the finding to bug memory (immediately, with dedup)
+### 5.4 — File the finding to bug memory (immediately; host owns update-vs-create)
 
-On a confirmed FAIL, file at once via `memory add --track bug` **with overlap dedup left ON**. See [references/bug-filing.md](references/bug-filing.md) §"Filing to bug memory" for the full command and the finding body template. Skeleton:
+On a confirmed FAIL, file at once via `memory add --track bug` **with overlap scoring left ON**. See [references/bug-filing.md](references/bug-filing.md) §"Filing to bug memory" for the full command and the finding body template. Skeleton:
 
 ```bash
 # memory disabled → no-op cleanly (still record the finding in the run notes for the verdict).
@@ -386,25 +386,28 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
  mkdir -p .flow/tmp/qa-"$SPEC_ID"
  # Write the finding body (problem / repro / expected-vs-actual / evidence pointers / R-IDs)
  # to .flow/tmp/qa-$SPEC_ID/finding-<sid>.md per the reference template, then:
- _p="$($FLOWCTL memory add \
+ # Prefer --update <prior-id> when this run (or a prior QA pass) already filed the same finding.
+ _out="$($FLOWCTL memory add \
  --track bug --category "<ui|runtime-errors|integration|data|...>" \
  --title "<persona> can't <goal> — <one-line symptom>" \
  --module "<surface / route / component>" \
  --tags "qa,<spec-id>,<surface>" \
  --symptoms "<observed actual>" \
  --root-cause "(observed via live QA — unconfirmed)" \
- --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json | jq -r '.path // empty')"
+ --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
+ _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
  # Capture via command-substitution in the PARENT shell — a `… | { read … }` pipeline tail
  # runs in a subshell, so the assignment would be lost and the memory left uncommitted.
  [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
  # Track the EXACT path filed (from --json) into QA_FILED_MEMORY — §6.3b commits precisely
- # these, never a broad `.flow/memory` glob. NEVER pass --no-overlap-check. High overlap
- # updates the existing entry in place; moderate overlap creates a related_to cross-reference.
- # Surface "matches existing entry X" instead of re-filing on a re-run (idempotency).
+ # these, never a broad `.flow/memory` glob. NEVER pass --no-overlap-check.
+ # memory add always creates unless --update <id> (fn-113). Read .matches (scored):
+ # high score → surface "matches existing entry X"; re-run with --update <id> when
+ # this is the same finding. Moderate → related_to cross-reference on the new entry.
 fi
 ```
 
-The `memory add` overlap check is the dedup mechanism (per `docs/memory-schema.md`): a re-run of QA does **not** re-file the same finding — it folds into the existing entry. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
+`memory add` emits `matches` as the retrieval signal (per `docs/memory-schema.md`); the host decides update-vs-create. A re-run of QA that already knows the prior entry id should pass `--update <id>` so the body folds in rather than creating a sibling. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
 
 Track every finding's id and severity in a running list for Phase 6. **Read source to assert a PASS is forbidden (R1)** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
 
@@ -544,7 +547,7 @@ The default path `.flow/review-receipts/qa-<spec-id>.json` is **committed** (the
 
 When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching pilot stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. **QA committing its own writes is the agentic, precise answer** — it knows exactly which files it produced (the receipt above, plus the bug-memory entries tracked in `QA_FILED_MEMORY` at §5.4), so pilot never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. **User-invoked QA does not auto-commit** — the user owns their commits.
 
-**Precondition (autonomous mode):** the loop operates on **committed state** — the worker commits before QA, so `.flow/memory` is clean at dispatch. QA commits only the entries it filed this run; the one out-of-contract case is a pre-existing **uncommitted** manual/audit edit to a bug entry that QA then high-overlap-*updates* — that edit would ride this commit. The autonomous pilot loop never carries such state (it operates on committed trees); a human running `/flow-next:qa mode:autonomous` over a dirty `.flow/memory` should commit those edits first.
+**Precondition (autonomous mode):** the loop operates on **committed state** — the worker commits before QA, so `.flow/memory` is clean at dispatch. QA commits only the entries it filed this run; the one out-of-contract case is a pre-existing **uncommitted** manual/audit edit to a bug entry that QA then `--update`s — that edit would ride this commit. The autonomous pilot loop never carries such state (it operates on committed trees); a human running `/flow-next:qa mode:autonomous` over a dirty `.flow/memory` should commit those edits first.
 
 ```bash
 if [ "$QA_AUTONOMOUS" = "1" ]; then

@@ -788,12 +788,18 @@ Enable: `flowctl config set memory.enabled true`. Then `flowctl memory init`.
 # Initialize tree + templates
 flowctl memory init [--json]
 
-# Add entry — bug track
+# Add entry — bug track (always creates; JSON emits matches with scores)
 flowctl memory add --track bug --category runtime-errors \
   --title "subprocess UnicodeEncodeError on Windows cp1252" \
   --module flowctl.py --tags "windows,subprocess,unicode" \
   --problem-type runtime-error --root-cause "..." \
   --resolution-type fix --body-file body.md [--json]
+
+# Fold into an existing entry (explicit only — never auto-updates on high overlap)
+flowctl memory add --track bug --category runtime-errors \
+  --title "subprocess UnicodeEncodeError on Windows cp1252" \
+  --update bug/runtime-errors/subprocess-unicodeencodeerror-on-w-2026-07-01 \
+  --tags "windows,subprocess" --body-file body.md [--json]
 
 # Add entry — knowledge track
 flowctl memory add --track knowledge --category conventions \

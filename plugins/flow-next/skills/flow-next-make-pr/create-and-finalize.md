@@ -491,7 +491,7 @@ if [[ "$WRITE_MEMORY" == "1" && -z "$EXISTING_ENTRY" ]]; then
 fi
 ```
 
-**Failure mode handling:** if `flowctl memory add` fails (overlap detection rejected the entry, frontmatter validation failed, disk write error), the failure is **non-fatal** — the PR is already open, and re-running with `--memory` later will retry. Print the error to stderr; do NOT exit non-zero. The user's primary deliverable (the PR) succeeded; the secondary deliverable (memory entry) didn't.
+**Failure mode handling:** if `flowctl memory add` fails (frontmatter validation failed, disk write error, unknown `--update` id), the failure is **non-fatal** — the PR is already open, and re-running with `--memory` later will retry. Print the error to stderr; do NOT exit non-zero. The user's primary deliverable (the PR) succeeded; the secondary deliverable (memory entry) didn't. Overlap scoring never rejects an add (fn-113: creates + emits `matches`; only explicit `--update` mutates).
 
 `--applies-when` is the knowledge-track required field. The phrasing follows the existing `audit-sync-codexsh-during-planning-for-2026-04-30` example: forward-looking, anchored to a module the future searcher would query for.
 

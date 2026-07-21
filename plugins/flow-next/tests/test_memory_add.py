@@ -1,4 +1,4 @@
-"""Unit tests for `flowctl memory add` with overlap detection (fn-30 task 2).
+"""Unit tests for `flowctl memory add` with overlap signal (fn-30 / fn-113).
 
 Run:
     python3 -m unittest discover -s plugins/flow-next/tests -v
@@ -6,13 +6,14 @@ Run:
 Covers:
   - AC1: new --track/--category creates categorized entry with valid frontmatter
   - AC2: legacy --type auto-maps with deprecation warning
-  - AC3: high overlap updates existing entry
+  - AC3: high overlap WITHOUT --update creates a new entry AND surfaces matches
+  - AC3b: explicit --update <id> updates that entry (merge semantics)
   - AC4: moderate overlap creates new with related_to
-  - AC5: --no-overlap-check bypasses detection
+  - AC5: --no-overlap-check bypasses scoring (empty matches)
   - AC6: missing required fields -> exit 2
   - AC7: invalid category -> exit 2 with helpful message
   - AC8: bug track default problem_type derived from category
-  - AC9: JSON output shape
+  - AC9: JSON output shape includes matches
   - AC10: overlap scoring across all dimensions
 """
 
@@ -197,6 +198,7 @@ class TestOverlapScan(unittest.TestCase):
                 result["matches"][0]["id"],
                 "bug/runtime-errors/null-deref-2026-04-01",
             )
+            self.assertGreaterEqual(result["matches"][0]["score"], 3)
 
     def test_moderate_overlap(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -223,6 +225,7 @@ class TestOverlapScan(unittest.TestCase):
             )
             self.assertEqual(result["level"], "moderate")
             self.assertEqual(len(result["matches"]), 1)
+            self.assertEqual(result["matches"][0]["score"], 2)
 
 
 # --- Deprecation mapping ---
@@ -280,6 +283,7 @@ class TestMemoryAddE2E(unittest.TestCase):
             )
             self.assertEqual(data["action"], "created")
             self.assertEqual(data["overlap_level"], "low")
+            self.assertEqual(data["matches"], [])
             self.assertTrue(data["entry_id"].startswith("bug/runtime-errors/"))
             self.assertEqual(data["warnings"], [])
             # File exists with valid frontmatter.
@@ -305,7 +309,8 @@ class TestMemoryAddE2E(unittest.TestCase):
                 data["warnings"],
             )
 
-    def test_high_overlap_updates(self) -> None:
+    def test_high_overlap_creates_and_surfaces_matches(self) -> None:
+        """fn-113: high overlap WITHOUT --update creates; matches emitted."""
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
             _init_repo(tmp)
@@ -319,7 +324,9 @@ class TestMemoryAddE2E(unittest.TestCase):
                 "--tags", "auth,null",
             )
             self.assertEqual(first["action"], "created")
+            self.assertEqual(first["matches"], [])
             # Second add — high overlap (title tokens + tags + module).
+            # Must CREATE (not auto-update) and surface the match signal.
             second = _run_add(
                 tmp,
                 "--track", "bug",
@@ -328,12 +335,79 @@ class TestMemoryAddE2E(unittest.TestCase):
                 "--module", "src/auth.ts",
                 "--tags", "auth",
             )
-            self.assertEqual(second["action"], "updated")
+            self.assertEqual(second["action"], "created")
             self.assertEqual(second["overlap_level"], "high")
-            self.assertEqual(second["path"], first["path"])
-            # Existing entry now has last_updated.
-            fm = flowctl.parse_memory_frontmatter(Path(second["path"]))
+            self.assertNotEqual(second["path"], first["path"])
+            self.assertEqual(len(second["matches"]), 1)
+            self.assertEqual(second["matches"][0]["id"], first["entry_id"])
+            self.assertGreaterEqual(second["matches"][0]["score"], 3)
+            # Existing entry was NOT mutated (no last_updated).
+            fm_first = flowctl.parse_memory_frontmatter(Path(first["path"]))
+            self.assertNotIn("last_updated", fm_first)
+            # Two files on disk.
+            cat = tmp / ".flow" / "memory" / "bug" / "runtime-errors"
+            md_files = [p for p in cat.iterdir() if p.suffix == ".md"]
+            self.assertEqual(len(md_files), 2)
+
+    def test_explicit_update_mutates_named_entry(self) -> None:
+        """fn-113: --update <id> is the only path that mutates an existing entry."""
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            _init_repo(tmp)
+            first = _run_add(
+                tmp,
+                "--track", "bug",
+                "--category", "runtime-errors",
+                "--title", "Null deref in auth middleware",
+                "--module", "src/auth.ts",
+                "--tags", "auth,null",
+            )
+            self.assertEqual(first["action"], "created")
+            updated = _run_add(
+                tmp,
+                "--track", "bug",
+                "--category", "runtime-errors",
+                "--title", "Null deref auth middleware",
+                "--module", "src/auth.ts",
+                "--tags", "auth,middleware",
+                "--update", first["entry_id"],
+                "--body-file", "-",
+                input_bytes=b"Follow-up notes from re-run.\n",
+            )
+            self.assertEqual(updated["action"], "updated")
+            self.assertEqual(updated["path"], first["path"])
+            self.assertEqual(updated["entry_id"], first["entry_id"])
+            # Matches still emitted as retrieval signal on --update.
+            self.assertEqual(updated["overlap_level"], "high")
+            self.assertEqual(len(updated["matches"]), 1)
+            self.assertEqual(updated["matches"][0]["id"], first["entry_id"])
+            fm = flowctl.parse_memory_frontmatter(Path(updated["path"]))
             self.assertIn("last_updated", fm)
+            tags = [str(t).lower() for t in (fm.get("tags") or [])]
+            self.assertIn("middleware", tags)
+            self.assertIn("auth", tags)
+            body = Path(updated["path"]).read_text(encoding="utf-8")
+            self.assertIn("Follow-up notes from re-run.", body)
+            self.assertIn("## Update ", body)
+            # Still only one file (no silent create alongside --update).
+            cat = tmp / ".flow" / "memory" / "bug" / "runtime-errors"
+            md_files = [p for p in cat.iterdir() if p.suffix == ".md"]
+            self.assertEqual(len(md_files), 1)
+
+    def test_update_unknown_id_exits(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            _init_repo(tmp)
+            out = _run_add(
+                tmp,
+                "--track", "bug",
+                "--category", "runtime-errors",
+                "--title", "x",
+                "--update", "bug/runtime-errors/does-not-exist-2026-01-01",
+                expect_rc=1,
+            )
+            combined = (out.get("_stdout") or "") + (out.get("_stderr") or "")
+            self.assertIn("not found", combined.lower())
 
     def test_moderate_overlap_related_to(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
@@ -359,6 +433,9 @@ class TestMemoryAddE2E(unittest.TestCase):
             self.assertEqual(second["action"], "created")
             self.assertEqual(second["overlap_level"], "moderate")
             self.assertIn(first["entry_id"], second["related_to"])
+            self.assertEqual(len(second["matches"]), 1)
+            self.assertEqual(second["matches"][0]["id"], first["entry_id"])
+            self.assertEqual(second["matches"][0]["score"], 2)
 
     def test_no_overlap_check_forces_create(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
@@ -381,6 +458,7 @@ class TestMemoryAddE2E(unittest.TestCase):
             )
             self.assertEqual(data["action"], "created")
             self.assertEqual(data["overlap_level"], "low")
+            self.assertEqual(data["matches"], [])
 
     def test_missing_title_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
