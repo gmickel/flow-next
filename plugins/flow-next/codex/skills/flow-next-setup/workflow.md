@@ -73,6 +73,18 @@ Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if
 
 **If no `setup_version`:** continue (first-time setup)
 
+## Existing-mode guard (before Step 3)
+
+Read the stamped mode before writing anything:
+
+```bash
+CURRENT_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
+```
+
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+When `CURRENT_MODE` is `plugin`, this repo is a Claude-Code-managed install with NO local `.flow/bin`/`.flow/templates`/`.flow/usage.md` snapshots by design. Never convert it silently: ask (plain-text numbered prompt) `Keep as-is (Recommended)` - skip Step 3, Step 4 copies, and the Step 7c stamp (set `MODE=plugin-kept`; config/docs steps still run) - or `Convert to copy` - proceed normally (writes the snapshots; Step 7c stamps copy). Any other `CURRENT_MODE` value: set `MODE=copy` and continue.
+
 ## Step 3: Create .flow/bin/ and .flow/templates/
 
 ```bash
@@ -108,8 +120,6 @@ HITS=$(ls -1 SPEC.md spec.md 2>/dev/null | sort -u | wc -l | tr -d ' ')
 ```
 
 Then branch:
-
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
 **1. `HITS=0` (neither file exists)** — ask the user via `plain-text numbered prompt`:
 
@@ -808,7 +818,7 @@ Run this **after** the Docs block above and **before** Star. It may touch the **
 
 ### Step 7c: Stamp setup mode (fn-121)
 
-Runs after every Step 7 write, before Step 8. Codex projects are always copy mode:
+Runs after every Step 7 write, before Step 8. When the existing-mode guard chose `MODE=plugin-kept`, do NOT run the stamp - the existing `setup_mode` stays untouched (report `Setup mode: plugin (kept - managed from Claude Code)` in Step 8). Otherwise:
 
 ```bash
 "${PLUGIN_ROOT}/scripts/flowctl" setup-mode set copy --json

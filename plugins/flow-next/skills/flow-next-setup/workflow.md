@@ -81,7 +81,7 @@ Two install modes exist. **Copy mode** (the only mode before fn-121, and the onl
 CURRENT_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
 ```
 
-**If `PLATFORM` is not `claude-code`:** set `MODE=copy` silently and continue to Step 3 — plugin mode is Claude-Code-only (Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves `$HOME/.codex/scripts/flowctl`; Droid's bin support is unverified). Never offer the question on these hosts.
+**If `PLATFORM` is not `claude-code`:** plugin mode is Claude-Code-only (Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves `$HOME/.codex/scripts/flowctl`; Droid's bin support is unverified) — never OFFER it on these hosts. But never silently CONVERT either (PR #227 review): when `CURRENT_MODE` is `plugin` (a Claude-Code-managed repo visited from this host), ask via `AskUserQuestion` (sync-codex.sh carries an equivalent guard in the mirror): `Keep plugin mode (Recommended)` — skip Step 3, Step 4's copies, and the Step 7c stamp entirely (set `MODE=plugin-kept`; config/docs/ceremony steps still run) — or `Convert to copy mode` — proceed as copy (writes the snapshots; Step 7c stamps copy). When `CURRENT_MODE` is anything else, set `MODE=copy` silently and continue to Step 3.
 
 **If `PLATFORM=claude-code` and `CURRENT_MODE` is empty (first mode decision):** ask via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror — unreachable in practice, since this branch requires `PLATFORM=claude-code`):
 
@@ -863,6 +863,7 @@ Runs after every Step 7 write, before Step 8. The stamp is the ONLY write path f
 "${PLUGIN_ROOT}/scripts/flowctl" setup-mode set <MODE> --json
 ```
 
+- `MODE=plugin-kept` (non-Claude host honoring an existing plugin stamp): do NOT run the stamp command at all — the existing `setup_mode: "plugin"` stays untouched. `MODE_OUTCOME="plugin (kept - managed from Claude Code)"`.
 - `MODE=copy`: stamps unconditionally. `MODE_OUTCOME="copy"`.
 - `MODE=plugin`: the command verifies the commit-point invariants itself — CLAUDE.md carries the `<!-- BEGIN FLOW-NEXT -->` block with a current `<!-- flow-next:snippet:vN -->` sentinel AND no copy artifacts remain — and refuses with an itemized failure list otherwise. On success `MODE_OUTCOME="plugin"`. On refusal (a Docs abort, a failed write, or leftover artifacts slipped through): print the failures verbatim, run `setup-mode set copy` so the repo is explicitly copy mode, and set `MODE_OUTCOME="copy (plugin refused: <first failure>)"`. Never leave `setup_mode` unset on a completed setup run.
 

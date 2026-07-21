@@ -442,14 +442,26 @@ fi
 setup_wf="$CODEX_DIR/skills/flow-next-setup/workflow.md"
 if [ -f "$setup_wf" ]; then
   awk '
-    /^## Step 2b: Setup mode/ {skip=1}
+    /^## Step 2b: Setup mode/ {
+      print "## Existing-mode guard (before Step 3)";
+      print "";
+      print "Read the stamped mode before writing anything:";
+      print "";
+      print "```bash";
+      print "CURRENT_MODE=$(jq -r '"'"'.setup_mode // empty'"'"' .flow/meta.json 2>/dev/null)";
+      print "```";
+      print "";
+      print "When `CURRENT_MODE` is `plugin`, this repo is a Claude-Code-managed install with NO local `.flow/bin`/`.flow/templates`/`.flow/usage.md` snapshots by design. Never convert it silently: ask (plain-text numbered prompt) `Keep as-is (Recommended)` - skip Step 3, Step 4 copies, and the Step 7c stamp (set `MODE=plugin-kept`; config/docs steps still run) - or `Convert to copy` - proceed normally (writes the snapshots; Step 7c stamps copy). Any other `CURRENT_MODE` value: set `MODE=copy` and continue.";
+      print "";
+      skip=1
+    }
     /^## Step 3: Create \.flow\/bin\// {skip=0}
     /^For \*\*Claude Code in plugin mode\*\*/ {skip2=1}
     skip2 && /fall back to copy mode`/ && /^On / {skip2=0; next}
     /^### Step 7c: Stamp setup mode/ {
       print "### Step 7c: Stamp setup mode (fn-121)";
       print "";
-      print "Runs after every Step 7 write, before Step 8. Codex projects are always copy mode:";
+      print "Runs after every Step 7 write, before Step 8. When the existing-mode guard chose `MODE=plugin-kept`, do NOT run the stamp - the existing `setup_mode` stays untouched (report `Setup mode: plugin (kept - managed from Claude Code)` in Step 8). Otherwise:";
       print "";
       print "```bash";
       print "\"${PLUGIN_ROOT}/scripts/flowctl\" setup-mode set copy --json";
