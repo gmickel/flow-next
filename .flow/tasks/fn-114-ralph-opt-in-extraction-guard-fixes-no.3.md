@@ -28,9 +28,8 @@ Guard defect fixes (the guard still ships, opt-in).
 - [ ] TBD
 
 ## Done summary
-TBD
-
+All six guard fixes shipped: (1) done-detection is structured - exit code, --json status, or the exact completion line; the done/updated/completed word sniff is gone, fail-closed by design when hosts omit all three signals. (2) Dual-platform per the plan decision: guard body accepts Bash|Execute and Edit|Write|Create|ApplyPatch; ralph-init registers host-appropriate matchers. (3) File-tool receipt-path writes blocked pre-review (Bash parity), PostToolUse resets after receipt write. (4) Debug log gated behind RALPH_GUARD_DEBUG=1, tempfile.gettempdir() for Windows parity. (5) RALPH_GUARD_VERSION deleted; ralph_e2e_test.sh wired into local-dev.md; fn-111's pick-window removal verified. (6) key=value progress contract: parse_progress_kv in ralphctl, ralph.sh writes one key per line, flowctl soft-probe parses the same contract (deliberate no-import duplication per .2 design). fn-55 canonical-delegation assertions unchanged. Host review: synced the drifted dual-copy (delegate edited canonical flowctl only). Guard suites 96 green; full parallel suite 88 files / 1883 tests / 0 failures / 71.3s; sync-codex x2.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 5d9d9fe3e64502e30d1bed4e0e2367296424c0a7
+- Tests: python3 scripts/run_tests_parallel.py (88 files, 1883 tests, 0 failures, 71.3s), test_ralph_guard* + test_ralphctl 96 green, fn-55 delegation assertions unchanged
 - PRs:
