@@ -23,9 +23,8 @@ Quick commands:
 - [ ] FileNotFoundError, PermissionError, and equivalent OSError probes fall back without poisoning later successful discovery.
 - [ ] Focused suites pass with existing output/layout semantics preserved.
 ## Done summary
-TBD
-
+Implemented transactional task creation and portable locking. Task IDs now allocate under a per-spec kernel lock; paired JSON/Markdown publication is no-clobber and rolls back partial writes. Runtime and setup state use bounded POSIX/Windows kernel locks with crash recovery and stable CLI errors. Repo/state/CLI discovery now treats spawn OSErrors as retryable fallbacks.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e5610f8f281f5c29c0c974f7785e13d7c338b4f5, f5cdcb61
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_portable_locks test_task_create_files test_setup_block_helper test_hot_path_memoization -q (53 passed), cd plugins/flow-next/tests && python3 -m unittest test_task_create_files test_portable_locks test_setup_block_helper test_hot_path_memoization test_anchor_bundle test_pilot_backlog_substrate -q (106 passed before final review fixes), python3 -m py_compile plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py, Codex implementation review round 3: SHIP
 - PRs:
