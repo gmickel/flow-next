@@ -33,9 +33,18 @@ Quick commands:
 - [ ] Compatibility false positives remain present and pinned.
 - [ ] Focused suites pass; no test is deleted merely to obtain green.
 ## Done summary
-TBD
+Completed the dead-surface, focused-coverage, and RepoPrompt CE compatibility pass.
 
+- Removed confirmed dead imports, strategy renderer/validator-only constants and functions, task-definition writer, key validator, YAML availability shim, and inert tracker tiebreaks. Retained StateStore bulk loading and workflow-imported prospect helpers with active-callsite proofs.
+- Rewrote strategy smoke coverage around the real direct-edit/read contract.
+- Pinned the exact 117 CLI leaf paths and callable handlers, the live plan-workflow command manifest, completion-review persisted state, and 404-task status/list read budgets.
+- Added the CE-first executable ladder: PATH `rpce-cli`, current CE user link, legacy CE application-support link, then Classic `rp-cli`. Absent/broken/non-executable candidates fall through; selected CE failures never downgrade.
+- Added CE schema support for `binding.window_id` and `windows[].tabs[].repo_paths`/`repoPaths`, deterministic root deduplication, `create_if_missing` first-run binding, and strict bind protocol validation.
+- Covered both modern reuse routes and proved they never reach workspace switch/create. Classic missing-tool behavior remains the sole capability fallback; legacy response fixtures stay green.
+- Updated active setup, review, Ralph, and RP smoke probes to the same CE-first ladder; regenerated the Codex mirror twice idempotently.
+
+Live CE 1.1.0 evidence: first empty-repo setup created window 3 and the immediate repeat reused window 3; two setup calls for this worktree both reused window 2. Prompt get/set, selection get/add, prompt export, and chat-send all succeeded; chat returned `CE_SMOKE_OK`. Classic 2.1.33 remained installed but was never selected.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a999399f, 0e9728ff, c029d0eb, 7317a713
+- Tests: 246 focused RP/surface/review/backend/hot-path/inventory/startup tests passed, plugins/flow-next/scripts/ci_test.sh: 67 passed, 0 failed, plugins/flow-next/scripts/strategy_smoke_test.sh: 62 passed, 0 failed, scripts/sync-codex.sh twice: idempotent validation passed, RepoPrompt CE 1.1.0 live: first-run create, repeated same-window reuse, prompt-get, prompt-set, select-get, select-add, prompt-export, chat-send, canonical/dogfood flowctl.py cmp parity and bootstrap hash tests, Codex implementation review round 4: SHIP
 - PRs:
