@@ -12,6 +12,7 @@ import errno
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import secrets
@@ -3443,7 +3444,13 @@ def _model_cache_entry(data: dict, key: str) -> Optional[str]:
         return None
     model = entry.get("model")
     cached_at = entry.get("cached_at")
-    if not isinstance(model, str) or not isinstance(cached_at, (int, float)):
+    if (
+        not isinstance(model, str)
+        or not model.strip()
+        or isinstance(cached_at, bool)
+        or not isinstance(cached_at, (int, float))
+        or not math.isfinite(float(cached_at))
+    ):
         return None
     age = _model_cache_now() - float(cached_at)
     if age < -_MODEL_CACHE_MAX_FUTURE_SKEW_SECS or age >= _MODEL_CACHE_TTL_SECS:
@@ -3495,6 +3502,41 @@ def _model_cache_invalidate(
             data = _read_model_cache(repo_root)
             if key in data:
                 del data[key]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write_json(path, data)
+    except (OSError, CrossProcessLockError):
+        pass
+
+
+def _model_cache_prune(
+    repo_root: Optional[Path],
+    backend: str,
+    cli_version: Optional[str],
+    intent: str,
+) -> None:
+    """Drop obsolete same-backend entries and an invalid current entry.
+
+    A routing/CLI change pays one version probe, then removes the superseded
+    keys so later happy-path dispatches return to the zero-probe fast path.
+    Other backends are unrelated cache owners and are always preserved.
+    """
+    path = _model_cache_path(repo_root)
+    if path is None:
+        return
+    keep_key = _model_cache_key(backend, cli_version, intent)
+    prefix = f"{backend}@"
+    try:
+        with cross_process_lock(_model_cache_lock_path(path)):
+            data = _read_model_cache(repo_root)
+            changed = False
+            for key in list(data):
+                if isinstance(key, str) and key.startswith(prefix) and key != keep_key:
+                    del data[key]
+                    changed = True
+            if keep_key in data and _model_cache_entry(data, keep_key) is None:
+                del data[keep_key]
+                changed = True
+            if changed:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 atomic_write_json(path, data)
     except (OSError, CrossProcessLockError):
@@ -3594,10 +3636,19 @@ def _dispatch_review_with_fallback(
     # Cheap pre-check: only consult the version (a subprocess) when the cache
     # file actually has entries — the pristine happy path never touches it.
     raw_cache = _read_model_cache(repo_root)
-    cache_key = _model_cache_key(backend, _ver(), cache_intent) if raw_cache else None
+    backend_keys = [
+        key
+        for key in raw_cache
+        if isinstance(key, str) and key.startswith(f"{backend}@")
+    ]
+    cache_key = (
+        _model_cache_key(backend, _ver(), cache_intent) if backend_keys else None
+    )
     cached = _model_cache_entry(raw_cache, cache_key) if cache_key else None
-    if cache_key and cache_key in raw_cache and cached is None:
-        _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
+    if cache_key and (
+        cached is None or any(key != cache_key for key in backend_keys)
+    ):
+        _model_cache_prune(repo_root, backend, _ver(), cache_intent)
 
     if cached is not None:
         if cached == _MODEL_CACHE_FLOOR:

@@ -527,8 +527,48 @@ class TestCache(unittest.TestCase):
                     flowctl.run_codex_exec("p", spec=role_spec, repo_root=root)
                 dispatched = [_model_of(c) for c in calls if "exec" in c]
                 self.assertEqual(dispatched, ["gpt-5.6-sol"])
+                self.assertEqual(_cache_models(root), {})
+
+                # The obsolete registry-intent entry was pruned. A subsequent
+                # role happy path must not pay even a CLI-version subprocess.
+                calls = []
+                with _scripted(
+                    flowctl,
+                    dispatch_result=lambda model: (CODEX_OK_STREAM, "", 0),
+                    calls=calls,
+                ):
+                    flowctl.run_codex_exec("p", spec=role_spec, repo_root=root)
+                self.assertNotIn("--version", [token for call in calls for token in call])
             finally:
                 os.chdir(previous_cwd)
+
+    def test_malformed_structured_entries_are_cold(self) -> None:
+        corruptions = (
+            ("empty model", lambda entry: entry.update(model="")),
+            ("NaN timestamp", lambda entry: entry.update(cached_at=float("nan"))),
+            ("boolean timestamp", lambda entry: entry.update(cached_at=True)),
+        )
+        for label, corrupt in corruptions:
+            with self.subTest(label=label), _repo() as root:
+                self._codex_ladder_run(root)
+                cache_path = root / ".flow" / ".cache" / "model-resolution.json"
+                cache = json.loads(cache_path.read_text(encoding="utf-8"))
+                corrupt(next(iter(cache.values())))
+                cache_path.write_text(json.dumps(cache), encoding="utf-8")
+
+                calls: list = []
+                with _scripted(
+                    flowctl,
+                    dispatch_result=lambda model: (CODEX_OK_STREAM, "", 0),
+                    calls=calls,
+                ):
+                    flowctl.run_codex_exec(
+                        "p", spec=BackendSpec("codex"), repo_root=root
+                    )
+                self.assertEqual(
+                    [_model_of(call) for call in calls if "exec" in call],
+                    ["gpt-5.6-sol"],
+                )
 
     def test_expired_downgrade_reprobes_stronger_model(self) -> None:
         with _repo() as root:
