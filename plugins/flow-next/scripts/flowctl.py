@@ -1034,7 +1034,7 @@ class LocalFileStateStore(StateStore):
         try:
             with open(state_path, encoding="utf-8") as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (json.JSONDecodeError, OSError, UnicodeError):
             return None
 
     def save_runtime(self, task_id: str, data: dict) -> None:
@@ -1055,16 +1055,23 @@ class LocalFileStateStore(StateStore):
         if not self.tasks_dir.exists():
             return {}
         runtime_by_id = {}
-        for state_path in self.tasks_dir.glob("*.state.json"):
-            task_id = state_path.name.removesuffix(".state.json")
-            if not is_task_id(task_id):
-                continue
-            if task_ids is not None and task_id not in task_ids:
+        if task_ids is None:
+            candidates = (
+                (state_path.name.removesuffix(".state.json"), state_path)
+                for state_path in self.tasks_dir.glob("*.state.json")
+            )
+        else:
+            candidates = (
+                (task_id, self._state_path(task_id))
+                for task_id in sorted(task_ids, key=id_sort_key)
+            )
+        for task_id, state_path in candidates:
+            if not is_task_id(task_id) or not state_path.exists():
                 continue
             try:
                 with open(state_path, encoding="utf-8") as f:
                     runtime_by_id[task_id] = json.load(f)
-            except (json.JSONDecodeError, IOError):
+            except (json.JSONDecodeError, OSError, UnicodeError):
                 continue
         return runtime_by_id
 
@@ -7517,7 +7524,7 @@ def iter_spec_json_files(flow_dir: Path):
         yield seen[stem]
 
 
-def iter_task_json_files(flow_dir: Path):
+def iter_task_json_files(flow_dir: Path, spec_id: Optional[str] = None):
     """Yield every eligible task definition in stable cross-scheme order.
 
     Task definitions have one canonical directory, but that directory also
@@ -7528,21 +7535,24 @@ def iter_task_json_files(flow_dir: Path):
     tasks_dir = flow_dir / TASKS_DIR
     if not tasks_dir.exists():
         return
+    pattern = f"{spec_id}.*.json" if spec_id else "*.json"
     eligible = (
         task_file
-        for task_file in tasks_dir.glob("*.json")
+        for task_file in tasks_dir.glob(pattern)
         if is_task_id(task_file.stem)
+        and (spec_id is None or spec_id_from_task(task_file.stem) == spec_id)
     )
     yield from sorted(eligible, key=lambda path: id_sort_key(path.stem))
 
 
 @dataclass
 class TaskInventory:
-    """One command-scoped scan of task definitions and runtime state."""
+    """One command-scoped scan of all tasks, or one requested spec's tasks."""
 
     ordered: list[dict]
     by_id: dict[str, dict]
     by_spec: dict[str, list[dict]]
+    issues_by_spec: dict[str, list[str]] = field(default_factory=dict)
 
     @classmethod
     def load(
@@ -7552,8 +7562,11 @@ class TaskInventory:
         use_json: bool = True,
         tolerate_errors: bool = False,
         merge_runtime: bool = True,
+        spec_id: Optional[str] = None,
+        collect_consistency_errors: bool = False,
+        collect_load_errors: bool = False,
     ) -> "TaskInventory":
-        task_files = list(iter_task_json_files(flow_dir))
+        task_files = list(iter_task_json_files(flow_dir, spec_id=spec_id))
         if not task_files:
             return cls(ordered=[], by_id={}, by_spec={})
         runtime_by_id = (
@@ -7566,10 +7579,19 @@ class TaskInventory:
         ordered = []
         by_id = {}
         by_spec: dict[str, list[dict]] = {}
+        issues_by_spec: dict[str, list[str]] = {}
+
+        def reject(file_spec: str, message: str) -> None:
+            if collect_consistency_errors:
+                issues_by_spec.setdefault(file_spec, []).append(message)
+            elif not tolerate_errors:
+                error_exit(message, use_json=use_json)
 
         for task_file in task_files:
+            file_id = task_file.stem
+            file_spec = spec_id_from_task(file_id)
             try:
-                if tolerate_errors:
+                if tolerate_errors or collect_load_errors:
                     definition = load_json(task_file)
                 else:
                     definition = load_json_or_exit(
@@ -7584,25 +7606,61 @@ class TaskInventory:
                     if merge_runtime
                     else normalize_task(definition)
                 )
-            except Exception:
+            except Exception as error:
+                if collect_load_errors:
+                    kind = (
+                        "invalid JSON"
+                        if isinstance(error, json.JSONDecodeError)
+                        else "unreadable"
+                    )
+                    issues_by_spec.setdefault(file_spec, []).append(
+                        f"Task {file_id} {kind}: {task_file} ({error})"
+                    )
+                    continue
                 if tolerate_errors:
                     continue
                 raise
 
-            # GH-21: a task-shaped artifact filename is not a task payload.
+            # GH-21: a task-shaped artifact filename without an id is not a
+            # task payload. A present-but-invalid id is corrupt task data.
+            if "id" not in task:
+                continue
             task_id = task.get("id")
             if not isinstance(task_id, str) or not is_task_id(task_id):
+                reject(
+                    file_spec,
+                    f"Task definition {file_id}: invalid payload id {task_id!r}",
+                )
                 continue
-            spec_id = task.get("spec") or task.get("epic")
+            if task_id != file_id:
+                reject(
+                    file_spec,
+                    f"Task definition {file_id}: payload id is {task_id}",
+                )
+                continue
+            owner = task.get("spec") or task.get("epic")
+            if owner != file_spec:
+                reject(
+                    file_spec,
+                    f"Task definition {file_id}: owning spec is {owner!r}, expected {file_spec}",
+                )
+                continue
+            if task_id in by_id:
+                reject(file_spec, f"Duplicate task definition id: {task_id}")
+                continue
             ordered.append(task)
             by_id[task_id] = task
-            if isinstance(spec_id, str):
-                by_spec.setdefault(spec_id, []).append(task)
+            by_spec.setdefault(file_spec, []).append(task)
 
         ordered.sort(key=lambda task: id_sort_key(task["id"]))
         for tasks in by_spec.values():
             tasks.sort(key=lambda task: id_sort_key(task["id"]))
-        return cls(ordered=ordered, by_id=by_id, by_spec=by_spec)
+        return cls(
+            ordered=ordered,
+            by_id=by_id,
+            by_spec=by_spec,
+            issues_by_spec=issues_by_spec,
+        )
 
 
 def scan_max_task_id(flow_dir: Path, epic_id: str) -> int:
@@ -7982,7 +8040,12 @@ def find_dependents(task_id: str, same_epic: bool = False) -> list[str]:
         tid = task["id"]
         if same_epic and spec_id_from_task(tid) != spec_id:
             continue
-        for dependency in task.get("depends_on", []):
+        dependencies = task.get("depends_on", [])
+        if not isinstance(dependencies, list):
+            continue
+        for dependency in dependencies:
+            if not isinstance(dependency, str) or not is_task_id(dependency):
+                continue
             reverse.setdefault(dependency, []).append(tid)
 
     # Build the reverse graph once, then traverse each edge at most once.
@@ -14491,7 +14554,11 @@ def cmd_show(args: argparse.Namespace) -> None:
 
         # Get tasks for this spec from the command-scoped inventory.
         tasks = []
-        inventory = TaskInventory.load(flow_dir, use_json=args.json)
+        inventory = TaskInventory.load(
+            flow_dir,
+            use_json=args.json,
+            spec_id=args.id,
+        )
         for task_data in inventory.by_spec.get(args.id, []):
             tasks.append(
                 {
@@ -14640,7 +14707,11 @@ def cmd_tasks(args: argparse.Namespace) -> None:
     spec_filter = resolve_spec_arg(args, get_flow_dir())
 
     tasks = []
-    inventory = TaskInventory.load(flow_dir, use_json=args.json)
+    inventory = TaskInventory.load(
+        flow_dir,
+        use_json=args.json,
+        spec_id=spec_filter,
+    )
     candidates = (
         inventory.by_spec.get(spec_filter, [])
         if spec_filter
@@ -14706,8 +14777,8 @@ def cmd_list(args: argparse.Namespace) -> None:
     # Sort specs by number. fn-52.10: tracker-aware total order (mixed fn-* + wor-*).
     specs.sort(key=lambda e: id_sort_key(e["id"]))
 
-    # Load all tasks grouped by spec (with merged runtime state). fn-52.10:
-    # glob ALL task json (not just fn-*) so tracker-key tasks (wor-17.M) list.
+    # Load all tasks grouped by spec (with merged runtime state). The shared
+    # iterator includes both native and tracker-key task definitions.
     inventory = TaskInventory.load(flow_dir, use_json=args.json)
     tasks_by_spec = inventory.by_spec
     all_tasks = []
@@ -18030,7 +18101,11 @@ def cmd_ready(args: argparse.Namespace) -> None:
             f"{TASKS_DIR}/ missing. Run 'flowctl init' or fix repo state.",
             use_json=args.json,
         )
-    inventory = TaskInventory.load(flow_dir, use_json=args.json)
+    inventory = TaskInventory.load(
+        flow_dir,
+        use_json=args.json,
+        spec_id=spec_id,
+    )
     tasks = {
         task["id"]: task
         for task in inventory.by_spec.get(spec_id, [])
@@ -18223,7 +18298,16 @@ def cmd_next(args: argparse.Namespace) -> None:
                 use_json=args.json,
             )
         if inventory is None:
-            inventory = TaskInventory.load(flow_dir, use_json=args.json)
+            inventory = TaskInventory.load(
+                flow_dir,
+                use_json=args.json,
+                collect_consistency_errors=True,
+                collect_load_errors=True,
+            )
+
+        task_issues = inventory.issues_by_spec.get(epic_id, [])
+        if task_issues:
+            error_exit(task_issues[0], use_json=args.json)
 
         tasks = {
             task["id"]: task
@@ -18771,11 +18855,17 @@ def validate_epic(
 
     # Get all tasks from one command-scoped task/runtime snapshot.
     if inventory is None:
-        inventory = TaskInventory.load(flow_dir, use_json=use_json)
+        inventory = TaskInventory.load(
+            flow_dir,
+            use_json=use_json,
+            spec_id=epic_id,
+            collect_consistency_errors=True,
+        )
     tasks = {
         task["id"]: task
         for task in inventory.by_spec.get(epic_id, [])
     }
+    errors.extend(inventory.issues_by_spec.get(epic_id, []))
 
     # Validate each task
     for task_id, task in tasks.items():
@@ -25325,7 +25415,11 @@ def cmd_validate(args: argparse.Namespace) -> None:
                         )
         total_tasks = 0
         epic_results = []
-        inventory = TaskInventory.load(flow_dir, use_json=args.json)
+        inventory = TaskInventory.load(
+            flow_dir,
+            use_json=args.json,
+            collect_consistency_errors=True,
+        )
 
         for epic_id in epic_ids:
             errors, warnings, task_count = validate_epic(

@@ -202,6 +202,88 @@ class TestUnifiedTaskUniverse(TaskInventoryCase):
         store.delete_runtime("fn-1.1")
         self.assertIsNone(store.load_runtime("fn-1.1"))
 
+    def test_bulk_runtime_exact_ids_avoid_directory_walk_and_bad_utf8(self) -> None:
+        self.write_spec("fn-1")
+        self.write_task("fn-1.1")
+        state_tasks = self.state_dir / "tasks"
+        state_tasks.mkdir(parents=True)
+        bad_state = state_tasks / "fn-1.1.state.json"
+        bad_state.write_bytes(b"\xff\xfe")
+
+        store = flowctl.get_state_store()
+        with mock.patch.object(
+            Path, "glob", side_effect=AssertionError("unexpected state scan")
+        ):
+            self.assertEqual(store.load_all_runtime({"fn-1.1"}), {})
+        self.assertIsNone(store.load_runtime("fn-1.1"))
+        inventory = flowctl.TaskInventory.load(self.flow)
+        self.assertEqual(inventory.by_id["fn-1.1"]["status"], "todo")
+
+    def test_scoped_commands_ignore_unrelated_malformed_task(self) -> None:
+        self.write_spec("fn-1")
+        self.write_spec("fn-2")
+        self.write_task("fn-1.1", with_markdown=True)
+        (self.flow / "tasks" / "fn-2.1.json").write_text(
+            "{broken", encoding="utf-8"
+        )
+
+        shown = self.call(flowctl.cmd_show, id="fn-1")
+        tasks = self.call(flowctl.cmd_tasks, spec="fn-1", status=None)
+        with mock.patch.object(flowctl, "get_actor", return_value="tester"):
+            ready = self.call(flowctl.cmd_ready, spec="fn-1", all=False)
+            next_task = self.call(
+                flowctl.cmd_next,
+                specs_file=None,
+                require_plan_review=False,
+                require_completion_review=False,
+            )
+        validated = self.call(
+            flowctl.cmd_validate, spec="fn-1", all=False
+        )
+
+        self.assertEqual([task["id"] for task in shown["tasks"]], ["fn-1.1"])
+        self.assertEqual([task["id"] for task in tasks["tasks"]], ["fn-1.1"])
+        self.assertEqual([task["id"] for task in ready["ready"]], ["fn-1.1"])
+        self.assertEqual(next_task["task"], "fn-1.1")
+        self.assertTrue(validated["valid"])
+
+    def test_payload_identity_and_owner_corruption_is_diagnosable(self) -> None:
+        self.write_spec("fn-1")
+        task_path = self.flow / "tasks" / "fn-1.1.json"
+        corrupt_payloads = (
+            ({"id": "fn-1.2", "spec": "fn-1"}, "payload id is fn-1.2"),
+            ({"id": "fn-1.1"}, "owning spec is None"),
+            ({"id": 1, "spec": "fn-1"}, "invalid payload id 1"),
+        )
+        for payload, expected in corrupt_payloads:
+            with self.subTest(expected=expected):
+                task_path.write_text(
+                    json.dumps(
+                        {
+                            **payload,
+                            "title": "corrupt",
+                            "status": "todo",
+                            "depends_on": [],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                inventory = flowctl.TaskInventory.load(
+                    self.flow,
+                    spec_id="fn-1",
+                    collect_consistency_errors=True,
+                )
+                self.assertEqual(inventory.ordered, [])
+                (issue,) = inventory.issues_by_spec["fn-1"]
+                self.assertIn(expected, issue)
+                errors, _, count = flowctl.validate_epic(
+                    self.flow,
+                    "fn-1",
+                    inventory=inventory,
+                )
+                self.assertEqual(count, 0)
+                self.assertIn(issue, errors)
+
     def test_human_output_order_is_golden(self) -> None:
         self.seed_mixed_universe()
         self.assertEqual(
@@ -238,6 +320,24 @@ class TestReverseDependencyInventory(TaskInventoryCase):
         self.write_task("fn-1.6", depends_on=["fn-1.5"])
         self.write_task("fn-2.1", depends_on=["fn-1.3"])
         self.write_task("wor-7-track.1", depends_on=["fn-2.1"])
+        malformed_dependencies = {
+            "fn-1.20": None,
+            "fn-1.21": {"not": "a list"},
+            "fn-1.22": [{"not": "hashable"}, "bad", "fn-1.1"],
+        }
+        for task_id, dependencies in malformed_dependencies.items():
+            (self.flow / "tasks" / f"{task_id}.json").write_text(
+                json.dumps(
+                    {
+                        "id": task_id,
+                        "spec": "fn-1",
+                        "title": task_id,
+                        "status": "todo",
+                        "depends_on": dependencies,
+                    }
+                ),
+                encoding="utf-8",
+            )
         malformed = self.flow / "tasks" / "fn-1.99.json"
         malformed.write_text("{broken", encoding="utf-8")
         return [path.name for path in flowctl.iter_task_json_files(self.flow)]
@@ -261,7 +361,14 @@ class TestReverseDependencyInventory(TaskInventoryCase):
     def test_chain_diamond_cycle_malformed_same_spec(self) -> None:
         self.assert_single_read_graph(
             same_spec=True,
-            expected=["fn-1.2", "fn-1.3", "fn-1.4", "fn-1.5", "fn-1.6"],
+            expected=[
+                "fn-1.2",
+                "fn-1.22",
+                "fn-1.3",
+                "fn-1.4",
+                "fn-1.5",
+                "fn-1.6",
+            ],
         )
 
     def test_cross_spec_and_tracker_dependents(self) -> None:
@@ -269,6 +376,7 @@ class TestReverseDependencyInventory(TaskInventoryCase):
             same_spec=False,
             expected=[
                 "fn-1.2",
+                "fn-1.22",
                 "fn-1.3",
                 "fn-1.4",
                 "fn-1.5",
