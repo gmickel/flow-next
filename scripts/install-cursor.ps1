@@ -24,7 +24,7 @@
     - Skills:    skills\<name>\SKILL.md
     - Commands:  commands\flow-next\*.md       (via the manifest override)
     - Agents:    agents\*.md
-    - Hooks:     hooks\hooks.json              (loaded, but see the Ralph caveat below)
+    - Hooks:     none shipped at plugin level (Ralph is opt-in via ralph-init project settings)
     - flowctl:   scripts\flowctl[.py]          (resolved at runtime via .flow\bin after setup)
 
   Excludes the Codex mirror (codex\), tests\, and Python/OS cruft.

@@ -43,6 +43,22 @@ if [[ -d scripts/ralph ]]; then
 fi
 ```
 
+## Remove Ralph guard hook entries (AI can do this)
+
+Plugin installs no longer ship hooks. Any Ralph guard entries live in **project** settings, registered by `/flow-next:ralph-init`. Strip them the same way setup does on "No":
+
+**Fingerprint:** nested hook `command` contains `scripts/ralph/hooks/ralph-guard`.
+
+For each path that exists, Read then Edit (never clobber unrelated hooks; if the file becomes empty hooks-only, delete the file or remove the empty `hooks` key):
+
+| Host | Path |
+|---|---|
+| Claude Code / Grok | `.claude/settings.json` (`hooks` key) |
+| Factory Droid | `.factory/hooks.json` (primary); also strip under `.factory/settings.json` `hooks` if present |
+| Codex | `.codex/hooks.json` |
+
+Do **not** introduce a flowctl hook-remove command. Agent-driven Read+Edit only.
+
 ## Clean up docs (AI can do this)
 
 For CLAUDE.md and AGENTS.md: if file exists, remove everything between `<!-- BEGIN FLOW-NEXT -->` and `<!-- END FLOW-NEXT -->` (inclusive). This is safe for the AI to execute.
@@ -60,6 +76,7 @@ Flow-next uninstall prepared.
 Cleaned up:
 - Flow-next sections from docs (if existed)
 - Model-routing scaffold block from docs (if a well-formed marker pair existed; damaged marker states are reported and left untouched)
+- Ralph guard hook entries from project settings (if any fingerprinted entries existed)
 
 Run these commands manually to complete removal:
 <commands from above>

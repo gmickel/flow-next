@@ -22,7 +22,7 @@
 #   - Skills:    skills/<name>/SKILL.md        (Cursor default location)
 #   - Commands:  commands/flow-next/*.md       (via the manifest override)
 #   - Agents:    agents/*.md                   (Cursor default location)
-#   - Hooks:     hooks/hooks.json              (loaded, but see the Ralph caveat below)
+#   - Hooks:     none shipped at plugin level (Ralph is opt-in via ralph-init project settings)
 #   - flowctl:   scripts/flowctl[.py]          (resolved at runtime via .flow/bin after setup)
 #
 # Excludes the Codex mirror (codex/) and tests/ — not needed by Cursor.
@@ -30,9 +30,9 @@
 # Caveats (cosmetic / known):
 #   - Cursor registers the skills/commands/agents but does NOT show flow-next as a
 #     grouped "plugin" card in the marketplace UI — the components still work.
-#   - Ralph autonomous mode is NOT supported on Cursor: flow-next's hooks use Claude
-#     Code's schema (PreToolUse/Stop + Bash|Execute matchers); Cursor's hook events
-#     are afterFileEdit / beforeShellExecution, so the Ralph guard never fires.
+#   - Ralph autonomous mode is NOT supported on Cursor: even after ralph-init, the
+#     guard uses Claude Code's schema (PreToolUse/Stop + Bash|Execute matchers);
+#     Cursor's hook events are afterFileEdit / beforeShellExecution, so it never fires.
 
 set -e
 

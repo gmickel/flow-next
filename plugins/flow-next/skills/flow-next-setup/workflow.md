@@ -35,7 +35,7 @@ fi
 Store `PLATFORM` for use in later steps. This determines:
 - Which manifest to read for version (`plugin.json`)
 - Which docs file to prefer (CLAUDE.md vs AGENTS.md)
-- Whether to copy Codex agents and hooks to project
+- Whether to copy Codex agents to project (hooks are **not** copied here — Ralph is opt-in via the Ralph question + `/flow-next:ralph-init`)
 - Which command-name syntax the docs snippet uses (`/flow-next:plan` for Claude Code / Droid / **Cursor**; `$flow-next-plan` for Codex)
 
 ## Step 1: Initialize .flow/
@@ -187,9 +187,9 @@ Then handle `.flow/usage.md` — preserve any repo-customized variant:
 
 ## Step 4b: Codex-specific project setup (PLATFORM=codex only)
 
-**Skip this step entirely if PLATFORM is not `codex`.** (Claude Code / Droid / Cursor all skip it — Cursor drives the workflow with `/flow-next:*` slash commands and resolves `flowctl` via `.flow/bin/flowctl`, not project-scoped `.codex/` agents + hooks.)
+**Skip this step entirely if PLATFORM is not `codex`.** (Claude Code / Droid / Cursor all skip it — Cursor drives the workflow with `/flow-next:*` slash commands and resolves `flowctl` via `.flow/bin/flowctl`, not project-scoped `.codex/` agents.)
 
-On Codex, agents and hooks live in project-scoped `.codex/` directories (not in the plugin cache). Copy them:
+On Codex, agents live in project-scoped `.codex/` directories (not in the plugin cache). Copy them. **Do not copy or enable Ralph hooks here** — hooks are opt-in via the Ralph question (Step 6d, always asked) and `/flow-next:ralph-init` registration prose.
 
 ### Copy agent .toml files
 
@@ -204,74 +204,6 @@ if [ -d "$AGENTS_SRC" ]; then
   echo "Copied $(ls .codex/agents/*.toml 2>/dev/null | wc -l | tr -d ' ') agent configs to .codex/agents/"
 else
   echo "Warning: No agent .toml files found at ${PLUGIN_ROOT}/codex/agents/ or ~/.codex/agents/"
-fi
-```
-
-### Copy hooks.json
-
-```bash
-HOOKS_SRC="${PLUGIN_ROOT}/codex/hooks.json"
-[ -f "$HOOKS_SRC" ] || HOOKS_SRC="$HOME/.codex/hooks.json"
-
-if [ -f "$HOOKS_SRC" ]; then
-  mkdir -p .codex
-  cp "$HOOKS_SRC" .codex/hooks.json
-  echo "Copied hooks.json to .codex/hooks.json"
-else
-  echo "Warning: No hooks.json found at ${PLUGIN_ROOT}/codex/hooks.json or ~/.codex/hooks.json"
-fi
-```
-
-### Enable Codex hooks feature (if config.toml exists)
-
-```bash
-if [ -f .codex/config.toml ]; then
-  # `[features].hooks` is the current key; `codex_hooks` is the deprecated
-  # pre-2026 spelling (Codex warns on every run). Goal: EXACTLY ONE
-  # `hooks = true` under [features], NO `codex_hooks`. This must stay dedup-safe:
-  # a config carrying BOTH keys (older setup/install left this) would, under a
-  # naive `sed codex_hooks->hooks`, gain a DUPLICATE `hooks` key — invalid TOML
-  # that breaks Codex hook loading. Use python3 to normalize idempotently.
-  python3 - .codex/config.toml <<'PY'
-import re, sys
-path = sys.argv[1]
-HOOKS = "hooks = true  # flow-next"
-sec = re.compile(r"^\s*\[([^\]]+)\]\s*$")
-old = re.compile(r"^\s*codex_hooks\s*=")
-new = re.compile(r"^\s*hooks\s*=")
-try:
-    text = open(path, encoding="utf-8").read()
-except FileNotFoundError:
-    text = ""
-out, in_feat, feat_seen, kept = [], False, False, False
-for line in text.splitlines():
-    m = sec.match(line)
-    if m:
-        if in_feat and not kept:
-            out.append(HOOKS); kept = True
-        in_feat = m.group(1).strip() == "features"
-        if in_feat:
-            feat_seen = True; kept = False
-        out.append(line); continue
-    if in_feat:
-        if old.match(line):
-            continue                      # drop deprecated key
-        if new.match(line):
-            if kept:
-                continue                  # drop duplicate hooks
-            kept = True; out.append(line); continue
-    out.append(line)
-if in_feat and not kept:
-    out.append(HOOKS)
-if not feat_seen:
-    if out and out[-1].strip():
-        out.append("")
-    out += ["[features]", HOOKS]
-result = "\n".join(out).rstrip("\n") + "\n"
-if result != text:
-    open(path, "w", encoding="utf-8").write(result)
-    print("Normalized .codex/config.toml -> single [features] hooks = true")
-PY
 fi
 ```
 
@@ -382,7 +314,7 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 Build the questions array dynamically. **Only include questions for config values that are NOT already set** — existing config is preserved, never overwritten. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
 
-Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `AskUserQuestion` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only the always-include Docs + Star questions (plus the interactive-only Model Routing scaffold question, when `ROUTING_ASK=1`).
+Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `AskUserQuestion` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only the always-include Docs + Ralph + Star questions (plus the interactive-only Model Routing scaffold question, when `ROUTING_ASK=1`).
 
 Available questions (include only if corresponding config is unset):
 
@@ -533,6 +465,22 @@ For **Cursor** (`PLATFORM=cursor`) — Cursor reads AGENTS.md, so recommend it (
   "multiSelect": false
 }
 ```
+
+**Ralph question** (always include — fresh setup AND re-run). Ralph is fully opt-in: default install ships zero hooks. Detect whether the project already has a Ralph surface (`scripts/ralph/` present, or any settings file with a hook command containing `scripts/ralph/hooks/ralph-guard`) and adjust the question wording (enable vs keep). **Default is No.**
+
+```json
+{
+  "header": "Ralph",
+  "question": "Enable or keep Ralph autonomous mode? (opt-in AFK harness under scripts/ralph/; registers guard hooks in project settings only when you say yes. Default is off — zero hooks, zero Ralph process in normal sessions.)",
+  "options": [
+    {"label": "No (Recommended)", "description": "Leave Ralph off. Remove any flow-next Ralph guard hook entries from project settings. Note that scripts/ralph/ can be deleted (agent asks before deleting — existing runs/receipts may matter)."},
+    {"label": "Yes, enable or keep", "description": "Run /flow-next:ralph-init (scaffold + agent-driven hook merge into project settings). Claude Code's project-hooks trust prompt is the consent gate."}
+  ],
+  "multiSelect": false
+}
+```
+
+When `scripts/ralph/` already exists, prefer wording in the spoken intro like "Ralph scaffold is already present — keep it?" but keep the same two option labels so processing stays mechanical.
 
 **Star question** (always include):
 ```json
@@ -721,6 +669,21 @@ Run this **after** the Docs block above and **before** Star. It may touch the **
 
 `Keep current` → no write, done. `Switch to codex` → run `"${PLUGIN_ROOT}/scripts/flowctl" config set review.backend codex --json`, then read the persisted value back (same read-back pattern as step 7); if it did not persist as `codex`, print `Warning: review.backend did not persist as codex — set it manually with flowctl config set review.backend codex`. This step never runs non-interactively (the whole scaffold pipeline is gated on `ROUTING_ASK=1`) and never fires when the user skipped the scaffold — declining the scaffold declines its pipeline too.
 
+**Ralph** (always processed — default No):
+
+- **Yes, enable or keep:**
+  1. Tell the user Ralph is opt-in and that the next step is `/flow-next:ralph-init` (or `$flow-next-ralph-init` on Codex).
+  2. **Prefer running the ralph-init skill workflow now** in this session (same agent, same tools) so scaffold + hook merge land before setup ends. If the user declines mid-ralph-init, leave partial state and report how to finish.
+  3. Do **not** invent a flowctl hook-install command — registration is ralph-init skill prose only (Read+Edit of project settings).
+
+- **No (Recommended)** (also the answer when the user picks nothing / default):
+  1. **Remove flow-next Ralph guard hook entries** from every host settings surface that may hold them (Read each path that exists; Edit to strip; never delete the whole file if other hooks remain):
+     - Claude Code / Grok: `.claude/settings.json` — under `hooks`, drop any matcher-group whose nested `command` contains `scripts/ralph/hooks/ralph-guard`. If `hooks` becomes empty, remove the `hooks` key (keep all other settings keys).
+     - Factory Droid: `.factory/hooks.json` (primary) and, if present, hooks under `.factory/settings.json` — same fingerprint strip. If `.factory/hooks.json` is only Ralph entries, delete the file.
+     - Codex: `.codex/hooks.json` — same fingerprint strip; if the file is only Ralph entries, delete it. Do **not** force `[features] hooks = true` when Ralph is off.
+  2. If `scripts/ralph/` exists: **note** that the scaffold (including `runs/` and receipts) can be deleted with `rm -rf scripts/ralph/`, but **ask before deleting** via AskUserQuestion (existing AFK runs / receipts may matter). Default: keep the directory.
+  3. Print one line: `Ralph: off (no project guard hooks).`
+
 **Star:**
 - If "Yes, star it":
   1. Check if `gh` CLI is available: `which gh`
@@ -747,7 +710,7 @@ Installed:
 ```
 Codex project setup:
 - .codex/agents/*.toml (<N> agent configs)
-- .codex/hooks.json (Ralph workflow guards)
+- Ralph hooks: only if Ralph was enabled (via ralph-init → .codex/hooks.json); otherwise none
 ```
 
 **Then always show:**
@@ -773,12 +736,11 @@ Model routing scaffold: <ROUTING_OUTCOME — e.g. "written to CLAUDE.md" | "kept
 
 Notes:
 - Re-run /flow-next:setup after plugin updates to refresh scripts
-- Interested in autonomous mode? Run /flow-next:ralph-init
+- Ralph: answered in the setup ceremony (default off). To enable later: /flow-next:ralph-init (merges project hooks; plugin ships none)
 - Use Linear / GitHub Issues / GitLab / Jira for project management? Run /flow-next:tracker-sync to configure the (opt-in) two-way tracker bridge — it runs a discovery ceremony (detects Linear MCP / LINEAR_API_KEY / gh auth / glab auth or GITLAB_TOKEN / JIRA_BASE_URL + credential, asks, writes config), then syncs specs ⇄ issues; on Linear it additionally makes your PRs reviewable as Linear Diffs. Skips cleanly if you don't use a tracker; adds nothing to the base install until enabled.
-- Uninstall (run manually): rm -rf .flow/bin .flow/templates .flow/usage.md and remove the <!-- BEGIN/END FLOW-NEXT --> and <!-- flow-next:model-routing:start/end --> blocks from docs — or run /flow-next:uninstall for full cleanup
+- Uninstall (run manually): rm -rf .flow/bin .flow/templates .flow/usage.md and remove the <!-- BEGIN/END FLOW-NEXT --> and <!-- flow-next:model-routing:start/end --> blocks from docs — or run /flow-next:uninstall for full cleanup (also strips Ralph guard hook entries from project settings)
 - This setup is optional - plugin works without it
 ```
-
 **Tracker-sync proposal (always show, after the Notes block).** Surface the tracker bridge as an explicit optional next step — the discovery ceremony is the bridge's own setup, separate from this skill (which never touches tracker config, keeping the zero-dep base clean):
 
 ```
