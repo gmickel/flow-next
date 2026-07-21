@@ -6,6 +6,7 @@ import argparse
 import ast
 import io
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -55,6 +56,134 @@ PLAN_INVOCATION_MANIFEST = (
     ("dep", "add"),
     ("validate",),
     ("sync", "active"),
+)
+
+EXPECTED_LEAF_PATHS = frozenset(
+    """anchor
+block
+cat
+checkpoint restore
+checkpoint save
+codex classify-result
+codex completion-review
+codex deep-pass
+codex impl-review
+codex plan-review
+codex rollback-plan
+codex validate
+config get
+config set
+copilot completion-review
+copilot deep-pass
+copilot impl-review
+copilot plan-review
+copilot validate
+cursor completion-review
+cursor deep-pass
+cursor impl-review
+cursor plan-review
+cursor validate
+dep add
+detect
+done
+gate check
+gate classify
+gate receipt
+glossary add
+glossary list
+glossary read
+glossary remove
+init
+list
+memory add
+memory init
+memory list
+memory list-legacy
+memory mark-fresh
+memory mark-stale
+memory migrate
+memory read
+memory search
+models resolve
+next
+pilot-log append
+prime classify
+prospect archive
+prospect promote
+ready
+repo-map list
+review-backend
+review-deep-auto
+review-rounds increment
+review-rounds reset
+review-walkthrough-defer
+review-walkthrough-record
+rp chat-send
+rp prompt-export
+rp prompt-get
+rp prompt-set
+rp select-add
+rp select-get
+rp setup-review
+scope bank
+scope resolve
+scope write-policy
+setup-block apply
+setup-block resolve
+setup-mode set
+show
+spec add-dep
+spec close
+spec create
+spec export-cognitive-aid
+spec ready
+spec reset-review-rounds
+spec rm-dep
+spec set-backend
+spec set-branch
+spec set-completion-review-status
+spec set-plan
+spec set-plan-review-status
+spec set-title
+spec skeleton
+spec unready
+specs
+start
+status
+strategy read
+strategy status
+sync active
+sync check
+sync check-collisions
+sync clear
+sync defer
+sync get-state
+sync list-dep-relations
+sync list-stale
+sync list-unsynced
+sync receipt
+sync set-dep-relation
+sync set-last-synced
+sync set-merge-base
+sync set-tracker-id
+task create
+task reset
+task set-acceptance
+task set-backend
+task set-description
+task set-spec
+tasks
+triage-skip
+usage
+validate""".splitlines()
+)
+
+GROUPED_COMMANDS = {
+    path.split(" ", 1)[0] for path in EXPECTED_LEAF_PATHS if " " in path
+}
+FLOWCTL_INVOCATION = re.compile(
+    r'(?<![A-Za-z0-9_])"?\$FLOWCTL"?\s+'
+    r"([a-z][a-z0-9-]*)(?:\s+([a-z][a-z0-9-]*))?"
 )
 
 
@@ -143,7 +272,8 @@ class DeadSurfaceContractTest(unittest.TestCase):
 class CliSurfaceContractTest(unittest.TestCase):
     def test_every_registered_leaf_has_a_callable_handler(self) -> None:
         leaves = list(_leaf_parsers(_built_parser()))
-        self.assertGreaterEqual(len(leaves), 115)
+        discovered = {" ".join(path) for path, _parser in leaves}
+        self.assertEqual(discovered, EXPECTED_LEAF_PATHS)
         missing = [
             " ".join(path)
             for path, parser in leaves
@@ -158,9 +288,14 @@ class CliSurfaceContractTest(unittest.TestCase):
             ).read_text(encoding="utf-8")
             for name in ("SKILL.md", "steps.md")
         )
+        invocations = set()
+        for match in FLOWCTL_INVOCATION.finditer(plan_text):
+            top, child = match.groups()
+            invocations.add(
+                (top, child) if top in GROUPED_COMMANDS and child else (top,)
+            )
         for path in PLAN_INVOCATION_MANIFEST:
-            phrase = " ".join(path)
-            self.assertIn(phrase, plan_text, phrase)
+            self.assertIn(path, invocations, " ".join(path))
             result = subprocess.run(
                 [sys.executable, str(FLOWCTL_PY), *path, "--help"],
                 capture_output=True,
