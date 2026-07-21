@@ -3333,14 +3333,17 @@ def resolve_codex_sandbox(sandbox: str) -> str:
 # ONLY when that dispatch fails with the backend's DISTINCTIVE model-unavailable
 # signature; any OTHER failure (auth / network / sandbox / timeout) propagates
 # unchanged, so the ladder can never mask a real failure. A resolved downgrade
-# memoizes per ``(backend, CLI version)`` so the failed round-trip is paid at
-# most once per CLI upgrade. Explicit model pins bypass ladder + cache entirely.
+# memoizes per ``(backend, CLI version, routing intent)`` with bounded expiry so
+# role changes take effect immediately and stronger models are periodically
+# re-probed. Explicit model pins bypass ladder + cache entirely.
 #
 # The ladder lives BELOW the fn-90 review-round cap: the review handler increments
 # the cap once before calling the exec wrapper, and every ladder rung is the SAME
 # logical dispatch — ``enforce_and_increment_review_cap`` is NEVER called here.
 
 _MODEL_CACHE_FLOOR = "__floor__"  # sentinel: resolution reached the never-fail floor
+_MODEL_CACHE_TTL_SECS = 24 * 60 * 60
+_MODEL_CACHE_MAX_FUTURE_SKEW_SECS = 5 * 60
 
 # Distinctive model-unavailable signatures, captured VERBATIM from live probes
 # 2026-07-10 (all three CLIs). Matching ONLY these keeps the ladder from stepping
@@ -3383,8 +3386,42 @@ def _model_cache_path(repo_root: Optional[Path]) -> Optional[Path]:
     return repo_root / ".flow" / ".cache" / "model-resolution.json"
 
 
-def _model_cache_key(backend: str, cli_version: Optional[str]) -> str:
-    return f"{backend}@{cli_version or 'unknown'}"
+def _model_cache_now() -> float:
+    """Persistable wall clock for bounded cache entries (test indirection)."""
+    import time as _time
+
+    return _time.time()
+
+
+def _model_cache_intent(
+    backend: str,
+    spec: "BackendSpec",
+    ranking: list[str],
+    floor_model: Optional[str],
+    max_steps: int,
+) -> str:
+    """Fingerprint the effective non-explicit routing ladder.
+
+    CLI version alone cannot identify a resolution: role-map mutations and
+    registry updates can change the requested start/candidates without changing
+    the installed CLI. Hash the complete deterministic model-selection intent.
+    """
+    payload = {
+        "backend": backend,
+        "start": spec.model,
+        "source": spec.routing_intent or f"implicit:{spec.model or 'none'}",
+        "ranking": ranking,
+        "floor": floor_model,
+        "max_steps": max_steps,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
+
+
+def _model_cache_key(
+    backend: str, cli_version: Optional[str], intent: str
+) -> str:
+    return f"{backend}@{cli_version or 'unknown'}@{intent}"
 
 
 def _read_model_cache(repo_root: Optional[Path]) -> dict:
@@ -3399,37 +3436,68 @@ def _read_model_cache(repo_root: Optional[Path]) -> dict:
         return {}
 
 
+def _model_cache_entry(data: dict, key: str) -> Optional[str]:
+    """Return one fresh cached model; legacy/malformed/expired entries are cold."""
+    entry = data.get(key)
+    if not isinstance(entry, dict):
+        return None
+    model = entry.get("model")
+    cached_at = entry.get("cached_at")
+    if not isinstance(model, str) or not isinstance(cached_at, (int, float)):
+        return None
+    age = _model_cache_now() - float(cached_at)
+    if age < -_MODEL_CACHE_MAX_FUTURE_SKEW_SECS or age >= _MODEL_CACHE_TTL_SECS:
+        return None
+    return model
+
+
+def _model_cache_lock_path(path: Path) -> Path:
+    return path.with_name(f"{path.name}.lock")
+
+
 def _model_cache_put(
-    repo_root: Optional[Path], backend: str, cli_version: Optional[str], model: str
+    repo_root: Optional[Path],
+    backend: str,
+    cli_version: Optional[str],
+    intent: str,
+    model: str,
 ) -> None:
     """Memoize a resolved model. Best-effort — a cache write never fails a review."""
     path = _model_cache_path(repo_root)
     if path is None:
         return
     try:
-        data = _read_model_cache(repo_root)
-        data[_model_cache_key(backend, cli_version)] = model
-        path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(path, data)
-    except OSError:
+        with cross_process_lock(_model_cache_lock_path(path)):
+            data = _read_model_cache(repo_root)
+            data[_model_cache_key(backend, cli_version, intent)] = {
+                "model": model,
+                "cached_at": _model_cache_now(),
+            }
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(path, data)
+    except (OSError, CrossProcessLockError):
         pass
 
 
 def _model_cache_invalidate(
-    repo_root: Optional[Path], backend: str, cli_version: Optional[str]
+    repo_root: Optional[Path],
+    backend: str,
+    cli_version: Optional[str],
+    intent: str,
 ) -> None:
     """Drop a stale cache entry (a cached model that just failed the signature)."""
     path = _model_cache_path(repo_root)
     if path is None:
         return
-    key = _model_cache_key(backend, cli_version)
+    key = _model_cache_key(backend, cli_version, intent)
     try:
-        data = _read_model_cache(repo_root)
-        if key in data:
-            del data[key]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            atomic_write_json(path, data)
-    except OSError:
+        with cross_process_lock(_model_cache_lock_path(path)):
+            data = _read_model_cache(repo_root)
+            if key in data:
+                del data[key]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write_json(path, data)
+    except (OSError, CrossProcessLockError):
         pass
 
 
@@ -3443,13 +3511,15 @@ def _warn_model_resolution(
         )
         print(
             f"warning: {backend} model {tried!r} unavailable; fell back to the "
-            f"never-fail floor ({used_desc}). Cached for this CLI version.",
+            f"never-fail floor ({used_desc}). Cached temporarily for this CLI "
+            "version and routing intent.",
             file=sys.stderr,
         )
     else:
         print(
             f"warning: {backend} model {tried!r} unavailable; downgraded to "
-            f"{used!r}. Cached for this CLI version.",
+            f"{used!r}. Cached temporarily for this CLI version and routing "
+            "intent.",
             file=sys.stderr,
         )
 
@@ -3494,6 +3564,9 @@ def _dispatch_review_with_fallback(
             ranking = ranking[ranking.index(spec.model):]
         else:
             ranking = [spec.model] + ranking
+    cache_intent = _model_cache_intent(
+        backend, spec, ranking, floor_model, max_steps
+    )
 
     def _record(model: Optional[str], floor: bool) -> None:
         if resolution_out is not None:
@@ -3521,7 +3594,10 @@ def _dispatch_review_with_fallback(
     # Cheap pre-check: only consult the version (a subprocess) when the cache
     # file actually has entries — the pristine happy path never touches it.
     raw_cache = _read_model_cache(repo_root)
-    cached = raw_cache.get(_model_cache_key(backend, _ver())) if raw_cache else None
+    cache_key = _model_cache_key(backend, _ver(), cache_intent) if raw_cache else None
+    cached = _model_cache_entry(raw_cache, cache_key) if cache_key else None
+    if cache_key and cache_key in raw_cache and cached is None:
+        _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
 
     if cached is not None:
         if cached == _MODEL_CACHE_FLOOR:
@@ -3532,7 +3608,7 @@ def _dispatch_review_with_fallback(
             return _resolved(out, sid, rc, err, cached, False)
         # A cached model that now fails the signature (org revoked it mid-version)
         # → drop it and re-resolve fresh from the ranking top. Self-healing.
-        _model_cache_invalidate(repo_root, backend, _ver())
+        _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
 
     top = ranking[0]
 
@@ -3547,11 +3623,13 @@ def _dispatch_review_with_fallback(
         if best is not None:
             out, sid, rc, err = dispatch(best, False)
             if rc == 0 or not is_unavailable(out, err):
-                _model_cache_put(repo_root, backend, _ver(), best)
+                _model_cache_put(repo_root, backend, _ver(), cache_intent, best)
                 _warn_model_resolution(backend, top, best, floor=False)
                 return _resolved(out, sid, rc, err, best, False)
         out, sid, rc, err = dispatch(floor_model, True)
-        _model_cache_put(repo_root, backend, _ver(), _MODEL_CACHE_FLOOR)
+        _model_cache_put(
+            repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR
+        )
         _warn_model_resolution(backend, top, floor_model, floor=True)
         return _resolved(out, sid, rc, err, floor_model, True)
 
@@ -3563,11 +3641,11 @@ def _dispatch_review_with_fallback(
         out, sid, rc, err = dispatch(model, False)
         if rc == 0 or not is_unavailable(out, err):
             if idx > 0:
-                _model_cache_put(repo_root, backend, _ver(), model)
+                _model_cache_put(repo_root, backend, _ver(), cache_intent, model)
                 _warn_model_resolution(backend, top, model, floor=False)
             return _resolved(out, sid, rc, err, model, False)
     out, sid, rc, err = dispatch(floor_model, True)
-    _model_cache_put(repo_root, backend, _ver(), _MODEL_CACHE_FLOOR)
+    _model_cache_put(repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR)
     _warn_model_resolution(backend, top, floor_model, floor=True)
     return _resolved(out, sid, rc, err, floor_model, True)
 
@@ -4931,6 +5009,10 @@ class BackendSpec:
     # registry-default fill) — only those code paths may mark a populated
     # model as non-explicit.
     model_explicit: Optional[bool] = field(default=None, compare=False)
+    # Non-explicit routing source used only for cache identity. A configured
+    # role pin and the registry baseline remain distinct intents even when both
+    # currently name the same model.
+    routing_intent: Optional[str] = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if self.model_explicit is None:
@@ -5057,21 +5139,28 @@ class BackendSpec:
         if reg["models"] is None:
             model = None
             model_explicit = False
+            routing_intent = None
         elif self.model is not None:
             model = self.model
             # PROPAGATE the incoming flag — never re-infer from presence: a
             # default-filled spec that gets re-resolved must stay non-explicit;
             # a parse()d or env-pinned model already carries True.
             model_explicit = self.model_explicit
+            routing_intent = self.routing_intent
+            if not model_explicit and routing_intent is None:
+                routing_intent = f"resolved:{model}"
         elif os.environ.get(env_model_key):
             model = os.environ.get(env_model_key)
             model_explicit = True
+            routing_intent = None
         elif role_model is not None:
             model = role_model
             model_explicit = False
+            routing_intent = f"role-map:review:{pin}"
         else:
             model = reg.get("default_model")
             model_explicit = False
+            routing_intent = f"registry:{model or 'none'}"
 
         if reg["efforts"] is None:
             effort = None
@@ -5084,7 +5173,11 @@ class BackendSpec:
             )
 
         return BackendSpec(
-            self.backend, model, effort, model_explicit=model_explicit
+            self.backend,
+            model,
+            effort,
+            model_explicit=model_explicit,
+            routing_intent=routing_intent,
         )
 
     def __str__(self) -> str:
@@ -7858,7 +7951,7 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # proof-of-work; accumulate per pilot tick, same runtime-artifact class as
     # sync-runs/ — deliberately NOT a receipts/ path the ralph-guard validates)
     "pilot-runs/",
-    # fn-76 per-CLI-version model-resolution cache (.flow/.cache/): a memoized
+    # fn-76 model-resolution cache (.flow/.cache/): a memoized
     # ladder result, a runtime artifact keyed on the local CLI version — never
     # durable repo state.
     ".cache/",

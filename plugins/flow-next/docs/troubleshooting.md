@@ -95,7 +95,7 @@ Ralph reads receipts to decide whether to advance, retry, or block. A missing or
 **Symptom:** a review prints one stderr line like
 
 ```
-warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached for this CLI version.
+warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached temporarily for this CLI version and routing intent.
 ```
 
 (or `… fell back to the never-fail floor (the CLI default / 'auto')`), and the review's receipt records `gpt-5.5` / `auto` / `default` rather than the ranking top.
@@ -104,7 +104,7 @@ warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached 
 
 **What to do:**
 - **Want the top model?** Upgrade the backend CLI (e.g. `codex` ≥ 0.144 for `gpt-5.6-sol`). The cache key is `(backend, CLI version)`, so the upgrade re-resolves automatically on the next review.
-- **The downgrade repeats every review?** It shouldn't — the result is memoized in `.flow/.cache/model-resolution.json`. If it does, that file may be unwritable (check permissions) or you're on a fresh CLI version each run.
+- **The downgrade repeats every review?** It normally should not — the result is memoized in `.flow/.cache/model-resolution.json`. A changed routing role, CLI version, or the 24-hour stronger-model re-probe intentionally causes one fresh resolution. Otherwise, the cache file may be unwritable; check permissions.
 - **Force a specific model** (skip the ladder + cache entirely): pin it explicitly — `--spec codex:gpt-5.5`, a per-task/per-spec `review:` value, `FLOW_CODEX_MODEL`, or `review.backend`. An explicit unavailable model errors clearly instead of downgrading.
 - **Reset the cache:** `rm -rf .flow/.cache/` — it is regenerated (and gitignored) on the next review; a corrupt file is already treated as a cold start.
 

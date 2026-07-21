@@ -12,10 +12,13 @@ Run:
 
 from __future__ import annotations
 
+import concurrent.futures
 import importlib.util
 import io
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -130,6 +133,38 @@ def _repo():
         root = Path(td)
         (root / ".flow").mkdir()
         yield root
+
+
+def _cache_models(root: Path) -> dict:
+    data = json.loads(
+        (root / ".flow" / ".cache" / "model-resolution.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    return {key: value["model"] for key, value in data.items()}
+
+
+def _cache_worker(
+    root: Path, operation: str, backend: str, intent: str, model: str = ""
+) -> subprocess.CompletedProcess:
+    flowctl_path = Path(__file__).resolve().parent.parent / "scripts" / "flowctl.py"
+    call = (
+        f"m._model_cache_put(root, {backend!r}, 'v', {intent!r}, {model!r})"
+        if operation == "put"
+        else f"m._model_cache_invalidate(root, {backend!r}, 'v', {intent!r})"
+    )
+    script = (
+        "import importlib.util, pathlib, sys\n"
+        f"p = pathlib.Path({str(flowctl_path)!r})\n"
+        "s = importlib.util.spec_from_file_location('cache_worker_flowctl', p)\n"
+        "m = importlib.util.module_from_spec(s); sys.modules[s.name] = m\n"
+        "s.loader.exec_module(m)\n"
+        f"root = pathlib.Path({str(root)!r})\n"
+        f"{call}\n"
+    )
+    return subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True
+    )
 
 
 # --- Signature detectors ---
@@ -380,8 +415,9 @@ class TestCache(unittest.TestCase):
         with _repo() as root:
             # First run: ladder resolves gpt-5.6-sol → gpt-5.5, caches it.
             self._codex_ladder_run(root)
-            cache = json.loads((root / ".flow" / ".cache" / "model-resolution.json").read_text())
-            self.assertEqual(cache["codex@0.142"], "gpt-5.5")
+            cache = _cache_models(root)
+            self.assertEqual(list(cache.values()), ["gpt-5.5"])
+            self.assertTrue(next(iter(cache)).startswith("codex@0.142@"))
 
             # Second run: cache hit → dispatch gpt-5.5 DIRECTLY (no failed top).
             calls: list = []
@@ -417,8 +453,7 @@ class TestCache(unittest.TestCase):
             with _scripted(flowctl, dispatch_result=result, version="0.142"):
                 with redirect_stderr(io.StringIO()):
                     flowctl.run_codex_exec("p", sandbox="read-only", spec=BackendSpec("codex"), repo_root=root)
-            cache = json.loads((root / ".flow" / ".cache" / "model-resolution.json").read_text())
-            self.assertEqual(cache["codex@0.142"], "gpt-5.4")
+            self.assertEqual(list(_cache_models(root).values()), ["gpt-5.4"])
 
     def test_corrupt_cache_is_cold_start(self) -> None:
         with _repo() as root:
@@ -446,6 +481,163 @@ class TestCache(unittest.TestCase):
                 )
             self.assertNotIn("--version", [tok for c in calls for tok in c])
             self.assertEqual(_model_of([c for c in calls if "exec" in c][0]), "gpt-5.6-sol")
+
+    def test_role_pin_same_as_registry_top_has_distinct_cache_intent(self) -> None:
+        with _repo() as root:
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(root)
+                registry_spec = BackendSpec("codex").resolve()
+                self.assertTrue(registry_spec.routing_intent.startswith("registry:"))
+                with _scripted(
+                    flowctl,
+                    dispatch_result=lambda model: (
+                        (CODEX_UNAVAILABLE_STREAM, "", 1)
+                        if model == "gpt-5.6-sol"
+                        else (CODEX_OK_STREAM, "", 0)
+                    ),
+                ):
+                    with redirect_stderr(io.StringIO()):
+                        flowctl.run_codex_exec(
+                            "p", spec=registry_spec, repo_root=root
+                        )
+
+                (root / ".flow" / "config.json").write_text(
+                    json.dumps(
+                        {
+                            "models": {
+                                "roles": {
+                                    "review": {"codex": "gpt-5.6-sol"}
+                                }
+                            }
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                role_spec = BackendSpec("codex").resolve()
+                self.assertEqual(role_spec.model, registry_spec.model)
+                self.assertNotEqual(role_spec.routing_intent, registry_spec.routing_intent)
+
+                calls: list = []
+                with _scripted(
+                    flowctl,
+                    dispatch_result=lambda model: (CODEX_OK_STREAM, "", 0),
+                    calls=calls,
+                ):
+                    flowctl.run_codex_exec("p", spec=role_spec, repo_root=root)
+                dispatched = [_model_of(c) for c in calls if "exec" in c]
+                self.assertEqual(dispatched, ["gpt-5.6-sol"])
+            finally:
+                os.chdir(previous_cwd)
+
+    def test_expired_downgrade_reprobes_stronger_model(self) -> None:
+        with _repo() as root:
+            self._codex_ladder_run(root)
+            cache_path = root / ".flow" / ".cache" / "model-resolution.json"
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+            for entry in cache.values():
+                entry["cached_at"] = (
+                    flowctl._model_cache_now() - flowctl._MODEL_CACHE_TTL_SECS - 1
+                )
+            cache_path.write_text(json.dumps(cache), encoding="utf-8")
+
+            calls: list = []
+            with _scripted(
+                flowctl,
+                dispatch_result=lambda model: (CODEX_OK_STREAM, "", 0),
+                calls=calls,
+            ):
+                flowctl.run_codex_exec("p", spec=BackendSpec("codex"), repo_root=root)
+            self.assertEqual(
+                [_model_of(c) for c in calls if "exec" in c], ["gpt-5.6-sol"]
+            )
+
+    def test_expired_floor_reprobes_stronger_model(self) -> None:
+        with _repo() as root:
+            with _scripted(
+                flowctl,
+                dispatch_result=lambda model: (
+                    (CODEX_OK_STREAM, "", 0)
+                    if model is None
+                    else (CODEX_UNAVAILABLE_STREAM, "", 1)
+                ),
+            ):
+                with redirect_stderr(io.StringIO()):
+                    flowctl.run_codex_exec(
+                        "p", spec=BackendSpec("codex"), repo_root=root
+                    )
+            cache_path = root / ".flow" / ".cache" / "model-resolution.json"
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                [entry["model"] for entry in cache.values()],
+                [flowctl._MODEL_CACHE_FLOOR],
+            )
+            for entry in cache.values():
+                entry["cached_at"] = (
+                    flowctl._model_cache_now() - flowctl._MODEL_CACHE_TTL_SECS - 1
+                )
+            cache_path.write_text(json.dumps(cache), encoding="utf-8")
+
+            calls: list = []
+            with _scripted(
+                flowctl,
+                dispatch_result=lambda model: (CODEX_OK_STREAM, "", 0),
+                calls=calls,
+            ):
+                flowctl.run_codex_exec("p", spec=BackendSpec("codex"), repo_root=root)
+            self.assertEqual(
+                [_model_of(c) for c in calls if "exec" in c], ["gpt-5.6-sol"]
+            )
+
+    def test_concurrent_puts_preserve_every_intent(self) -> None:
+        with _repo() as root:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
+                results = list(
+                    pool.map(
+                        lambda i: _cache_worker(
+                            root, "put", f"backend-{i}", f"intent-{i}", f"model-{i}"
+                        ),
+                        range(20),
+                    )
+                )
+            self.assertTrue(
+                all(result.returncode == 0 for result in results),
+                [result.stderr for result in results],
+            )
+            self.assertEqual(
+                set(_cache_models(root).values()),
+                {f"model-{i}" for i in range(20)},
+            )
+
+    def test_concurrent_put_and_invalidate_preserve_unrelated_entries(self) -> None:
+        with _repo() as root:
+            flowctl._model_cache_put(root, "keep", "v", "keep-intent", "keep-model")
+            flowctl._model_cache_put(
+                root, "remove", "v", "remove-intent", "remove-model"
+            )
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                put = pool.submit(
+                    _cache_worker,
+                    root,
+                    "put",
+                    "new",
+                    "new-intent",
+                    "new-model",
+                )
+                invalidate = pool.submit(
+                    _cache_worker,
+                    root,
+                    "invalidate",
+                    "remove",
+                    "remove-intent",
+                )
+            self.assertEqual(put.result().returncode, 0, put.result().stderr)
+            self.assertEqual(
+                invalidate.result().returncode, 0, invalidate.result().stderr
+            )
+            self.assertEqual(
+                set(_cache_models(root).values()), {"keep-model", "new-model"}
+            )
 
 
 # --- R5: receipt records the actually-used model ---
