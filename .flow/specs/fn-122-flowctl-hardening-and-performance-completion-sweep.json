@@ -1,0 +1,26 @@
+{
+  "branch_name": "fn-122-flowctl-hardening-and-performance-completion-sweep",
+  "created_at": "2026-07-21T12:49:33.889082Z",
+  "depends_on_epics": [
+    "fn-121-plugin-mode-zero-rerun-setup-on-claude"
+  ],
+  "id": "fn-122-flowctl-hardening-and-performance-completion-sweep",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-122-flowctl-hardening-and-performance-completion-sweep.md",
+  "status": "open",
+  "title": "flowctl hardening and performance completion sweep",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-21T19:26:09.828823Z"
+}

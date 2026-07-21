@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-21T12:52:49.060623Z",
+  "depends_on": [
+    "fn-122-flowctl-hardening-and-performance-completion-sweep.1"
+  ],
+  "id": "fn-122-flowctl-hardening-and-performance-completion-sweep.4",
+  "priority": null,
+  "spec": "fn-122-flowctl-hardening-and-performance-completion-sweep",
+  "spec_path": ".flow/tasks/fn-122-flowctl-hardening-and-performance-completion-sweep.4.md",
+  "status": "todo",
+  "title": "Python 3.11 runtime contract and startup acceleration proof",
+  "updated_at": "2026-07-21T18:15:28.031171Z"
+}
