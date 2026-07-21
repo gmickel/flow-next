@@ -69,6 +69,7 @@ class TestMemoryReadBudgets(unittest.TestCase):
             metadata = flowctl._memory_iter_entries(self.memory)
         self.assertEqual(len(metadata), len(self.paths))
         self.assertTrue(all(entry["body"] == "" for entry in metadata))
+        self.assertTrue(all(entry["raw"] == "" for entry in metadata))
         self.assertEqual({counts[str(path)] for path in self.paths}, {1})
 
         patcher, counts = self._count_reads()
@@ -78,6 +79,7 @@ class TestMemoryReadBudgets(unittest.TestCase):
             )
         self.assertEqual(len(searchable), len(self.paths))
         self.assertTrue(all(entry["body"].startswith("Body") for entry in searchable))
+        self.assertTrue(all(entry["raw"] == "" for entry in searchable))
         self.assertEqual({counts[str(path)] for path in self.paths}, {1})
 
     def test_full_id_reads_only_the_validated_target(self) -> None:
@@ -87,6 +89,8 @@ class TestMemoryReadBudgets(unittest.TestCase):
             resolved = flowctl._memory_resolve_read_target(self.memory, target_id)
         self.assertIsNotNone(resolved)
         self.assertEqual(resolved["entry"]["entry_id"], target_id)
+        self.assertTrue(resolved["entry"]["body"].startswith("Body"))
+        self.assertTrue(resolved["entry"]["raw"].startswith("---\n"))
         self.assertEqual(sum(counts.values()), 1)
         self.assertEqual(counts[str(self.paths[17])], 1)
 

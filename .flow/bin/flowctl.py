@@ -10839,15 +10839,16 @@ def _memory_entry_descriptor(
     entry_date: str,
     *,
     include_body: bool,
+    include_raw: bool = False,
     data: Optional[dict[str, Any]] = None,
 ) -> Optional[dict[str, Any]]:
     """Build one categorized descriptor with exactly one content read."""
-    if include_body:
+    if include_body or include_raw:
         if data is None:
             data = _memory_read_entry(entry_path)
         fm = data["frontmatter"]
-        body = data["body"]
-        raw = data["raw"]
+        body = data["body"] if include_body else ""
+        raw = data["raw"] if include_raw else ""
     else:
         fm = parse_memory_frontmatter(entry_path)
         body = ""
@@ -10884,12 +10885,13 @@ def _memory_iter_entries(
     category: Optional[str] = None,
     *,
     include_body: bool = False,
+    include_raw: bool = False,
 ) -> list[dict[str, Any]]:
     """Walk the categorized tree and return entry descriptors.
 
     Each descriptor: {entry_id, track, category, slug, date, path,
-    frontmatter, title, module, tags, status}. ``body`` is populated only
-    when ``include_body`` is true. Entries with malformed
+    frontmatter, title, module, tags, status}. ``body`` and ``raw`` are
+    populated only when their corresponding flags are true. Entries with malformed
     filenames or missing/invalid frontmatter are skipped. Filters
     `--track` / `--category` narrow the scan. Status filtering is left
     to the caller (defaults live in `cmd_memory_list`).
@@ -10923,6 +10925,7 @@ def _memory_iter_entries(
                     slug,
                     date,
                     include_body=include_body,
+                    include_raw=include_raw,
                 )
                 if descriptor is None:
                     continue
@@ -11043,6 +11046,7 @@ def _memory_resolve_read_target(
             slug,
             entry_date,
             include_body=True,
+            include_raw=True,
         )
         if descriptor is None:
             return None
@@ -11129,6 +11133,7 @@ def cmd_memory_read(args: argparse.Namespace) -> None:
                     entry["slug"],
                     entry["date"],
                     include_body=True,
+                    include_raw=True,
                     data=data,
                 ) or entry
             if args.json:
