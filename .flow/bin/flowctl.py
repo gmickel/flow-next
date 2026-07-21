@@ -15802,6 +15802,119 @@ def _export_run_git(args: list[str], cwd: Optional[Path] = None) -> tuple[int, s
         return (1, "", str(exc))
 
 
+@dataclass(frozen=True, slots=True)
+class _ExportDiffEvent:
+    """One path-bound semantic event from a zero-context unified diff."""
+
+    path: str
+    kind: str  # "hunk", "add", or "remove"
+    text: str  # hunk context, or line body without the +/- marker
+
+
+@dataclass(frozen=True, slots=True)
+class _ExportDiffMaterialization:
+    """All git diff streams needed by one cognitive-aid export."""
+
+    head_sha: str
+    numstat_rc: int
+    numstat: str
+    name_status_rc: int
+    name_status: str
+    unified_rc: int
+    events: tuple[_ExportDiffEvent, ...]
+
+
+def _export_parse_unified_diff(unified_diff: str) -> tuple[_ExportDiffEvent, ...]:
+    """Parse a unified diff once into path-bound events.
+
+    Consumers no longer repeat header/path parsing or materialize their own
+    ``splitlines()`` lists. Deleted files retain the old path; renames use the
+    new path, matching the pre-fn-122 analyzers.
+    """
+    if not unified_diff:
+        return ()
+    events: list[_ExportDiffEvent] = []
+    current_path: Optional[str] = None
+    pending_removed_path: Optional[str] = None
+    for line in unified_diff.splitlines():
+        if line.startswith("diff --git "):
+            current_path = None
+            pending_removed_path = None
+            continue
+        if line.startswith("--- a/"):
+            pending_removed_path = line[len("--- a/") :].strip() or None
+            continue
+        if line.startswith("--- "):
+            pending_removed_path = None
+            continue
+        if line.startswith("+++ b/"):
+            current_path = line[len("+++ b/") :].strip() or None
+            pending_removed_path = None
+            continue
+        if line.startswith("+++ /dev/null"):
+            current_path = pending_removed_path
+            pending_removed_path = None
+            continue
+        if current_path is None:
+            continue
+        if line.startswith("@@"):
+            match = _EXPORT_HUNK_HEADER_RE.match(line)
+            if match:
+                events.append(
+                    _ExportDiffEvent(current_path, "hunk", match.group(1).strip())
+                )
+            continue
+        if line.startswith("+") and not line.startswith("+++"):
+            events.append(_ExportDiffEvent(current_path, "add", line[1:]))
+        elif line.startswith("-") and not line.startswith("---"):
+            events.append(_ExportDiffEvent(current_path, "remove", line[1:]))
+    return tuple(events)
+
+
+def _export_diff_events(
+    value: str | tuple[_ExportDiffEvent, ...],
+) -> tuple[_ExportDiffEvent, ...]:
+    """Accept legacy raw-diff callers while export passes parsed events."""
+    if isinstance(value, str):
+        return _export_parse_unified_diff(value)
+    return value
+
+
+def _export_materialize_diff(
+    merge_base_sha: str,
+    repo_root: Path,
+) -> _ExportDiffMaterialization:
+    """Read each git diff representation exactly once for one export."""
+    head_rc, head_out, _ = _export_run_git(["rev-parse", "HEAD"], cwd=repo_root)
+    numstat_rc, numstat, _ = _export_run_git(
+        [
+            "diff",
+            "--numstat",
+            "-M",
+            "--diff-filter=AMRD",
+            f"{merge_base_sha}..HEAD",
+        ],
+        cwd=repo_root,
+    )
+    name_status_rc, name_status, _ = _export_run_git(
+        ["diff", "--name-status", "-M", f"{merge_base_sha}..HEAD"],
+        cwd=repo_root,
+    )
+    unified_rc, unified, _ = _export_run_git(
+        ["diff", "-M", "--unified=0", f"{merge_base_sha}..HEAD"],
+        cwd=repo_root,
+    )
+    return _ExportDiffMaterialization(
+        head_sha=head_out.strip() if head_rc == 0 else "",
+        numstat_rc=numstat_rc,
+        numstat=numstat,
+        name_status_rc=name_status_rc,
+        name_status=name_status,
+        unified_rc=unified_rc,
+        events=_export_parse_unified_diff(unified) if unified_rc == 0 else (),
+    )
+
+
 def _export_resolve_merge_base(base_ref: str) -> Optional[str]:
     """Return the merge-base sha for `base_ref..HEAD`, or None on failure."""
     rc, out, _err = _export_run_git(["merge-base", base_ref, "HEAD"])
@@ -15989,6 +16102,7 @@ def _export_diff_summary(
     base_ref: str,
     merge_base_sha: str,
     repo_root: Path,
+    materialized: Optional[_ExportDiffMaterialization] = None,
 ) -> dict[str, Any]:
     """Build the diff_summary block from git diff output.
 
@@ -15996,25 +16110,15 @@ def _export_diff_summary(
     per-file additions/deletions, `--name-status -M` for status (A/M/R/D),
     and a unified-diff scan for added export lines.
     """
-    head_sha_rc, head_sha_out, _ = _export_run_git(["rev-parse", "HEAD"], cwd=repo_root)
-    head_sha = head_sha_out.strip() if head_sha_rc == 0 else ""
+    diff = materialized or _export_materialize_diff(merge_base_sha, repo_root)
+    head_sha = diff.head_sha
 
     # numstat: per-file additions/deletions. Renames render as a tab-separated
     # `old\tnew` path on the third column (or `{old => new}` brace form when
     # `-M` matches a rename).
-    rc_n, out_n, _ = _export_run_git(
-        [
-            "diff",
-            "--numstat",
-            "-M",
-            "--diff-filter=AMRD",
-            f"{merge_base_sha}..HEAD",
-        ],
-        cwd=repo_root,
-    )
     files_numstat: dict[str, dict[str, Any]] = {}
-    if rc_n == 0:
-        for line in out_n.splitlines():
+    if diff.numstat_rc == 0:
+        for line in diff.numstat.splitlines():
             parts = line.split("\t")
             if len(parts) < 3:
                 continue
@@ -16046,18 +16150,9 @@ def _export_diff_summary(
             }
 
     # name-status: A/M/D/R. Renames appear as `R<score>\told\tnew`.
-    rc_s, out_s, _ = _export_run_git(
-        [
-            "diff",
-            "--name-status",
-            "-M",
-            f"{merge_base_sha}..HEAD",
-        ],
-        cwd=repo_root,
-    )
     file_status: dict[str, str] = {}
-    if rc_s == 0:
-        for line in out_s.splitlines():
+    if diff.name_status_rc == 0:
+        for line in diff.name_status.splitlines():
             parts = line.split("\t")
             if len(parts) < 2:
                 continue
@@ -16121,30 +16216,21 @@ def _export_diff_summary(
     # import/from/use/require lines, derive `(adding_module, target_module)`
     # pairs, surface only when target_module != adding_module.
     cross_module_changes: list[str] = []
-    rc_u, out_u, _ = _export_run_git(
-        [
-            "diff",
-            "-M",
-            "--unified=0",
-            f"{merge_base_sha}..HEAD",
-        ],
-        cwd=repo_root,
-    )
-    if rc_u == 0:
-        cross_module_changes = _export_detect_cross_module(out_u, files)
+    if diff.unified_rc == 0:
+        cross_module_changes = _export_detect_cross_module(diff.events, files)
 
     # changed_symbols (fn-86 R1): attach per-file hunk-header context from the
     # same unified diff — empty list where git detects no function context.
-    if rc_u == 0:
-        symbols_by_path = _export_changed_symbols(out_u)
+    if diff.unified_rc == 0:
+        symbols_by_path = _export_changed_symbols(diff.events)
         for f in files:
             f["changed_symbols"] = symbols_by_path.get(f["path"], [])
 
     # Public-exports-changed detection: parse +/- lines in index/__init__/lib
     # files to compute added/removed exports.
     public_exports_changed: list[dict[str, Any]] = []
-    if rc_u == 0:
-        public_exports_changed = _export_detect_public_exports(out_u)
+    if diff.unified_rc == 0:
+        public_exports_changed = _export_detect_public_exports(diff.events)
 
     return {
         "base_ref": base_ref,
@@ -16177,7 +16263,10 @@ _EXPORT_SOURCE_EXTENSIONS: frozenset[str] = frozenset(
 )
 
 
-def _export_detect_cross_module(unified_diff: str, files: list[dict[str, Any]]) -> list[str]:
+def _export_detect_cross_module(
+    unified_diff: str | tuple[_ExportDiffEvent, ...],
+    files: list[dict[str, Any]],
+) -> list[str]:
     """Surface new dependency edges across modules from a unified diff.
 
     Heuristic: scan added (`+`) lines in *source files* for actual
@@ -16190,17 +16279,14 @@ def _export_detect_cross_module(unified_diff: str, files: list[dict[str, Any]]) 
     capped at 12. Both endpoints must be modules that actually changed in
     this diff (otherwise a fresh `import os` would surface).
     """
-    if not unified_diff:
+    events = _export_diff_events(unified_diff)
+    if not events:
         return []
 
     diff_modules: set[str] = {f["module"] for f in files}
     if len(diff_modules) < 2:
         return []
 
-    # Track which file we're currently inside (header `+++ b/<path>`).
-    current_path: Optional[str] = None
-    current_module: Optional[str] = None
-    current_is_source = False
     edges: set[tuple[str, str]] = set()
 
     # Strict patterns — keyword required at line start (after whitespace).
@@ -16217,27 +16303,11 @@ def _export_detect_cross_module(unified_diff: str, files: list[dict[str, Any]]) 
     sh_source_re = re.compile(r"^(?:source|\.)\s+([./a-zA-Z0-9_-]+)")
     go_import_re = re.compile(r'^import\s+["\']([^"\']+)["\']')
 
-    for line in unified_diff.splitlines():
-        if line.startswith("+++ b/"):
-            current_path = line[len("+++ b/") :].strip()
-            current_module = (
-                _export_path_module(current_path) if current_path else None
-            )
-            current_is_source = False
-            if current_path:
-                idx = current_path.rfind(".")
-                if idx != -1:
-                    ext = current_path[idx:].lower()
-                    if ext in _EXPORT_SOURCE_EXTENSIONS:
-                        current_is_source = True
+    for event in events:
+        if event.kind != "add" or not _export_path_is_source(event.path):
             continue
-        if line.startswith("--- ") or line.startswith("@@"):
-            continue
-        if not line.startswith("+") or line.startswith("+++"):
-            continue
-        if current_module is None or not current_is_source:
-            continue
-        body = line[1:].lstrip()
+        current_module = _export_path_module(event.path)
+        body = event.text.lstrip()
         candidates: list[str] = []
         for regex in (py_from_re, py_import_re, rust_use_re):
             mm = regex.match(body)
@@ -16269,7 +16339,9 @@ def _export_detect_cross_module(unified_diff: str, files: list[dict[str, Any]]) 
     return sorted(f"{src} imports {dst} (new)" for src, dst in edges)[:12]
 
 
-def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
+def _export_detect_public_exports(
+    unified_diff: str | tuple[_ExportDiffEvent, ...],
+) -> list[dict[str, Any]]:
     """Detect added/removed exports in `index.*`, `__init__.py`, `lib.rs`, etc.
 
     For each matching file in the diff, scan added (`+`) and removed (`-`)
@@ -16277,54 +16349,17 @@ def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
     and emit `{"file": ..., "added": [...], "removed": [...]}`. Skips files
     without any export-shaped changes.
     """
-    if not unified_diff:
+    events = _export_diff_events(unified_diff)
+    if not events:
         return []
 
     per_file: dict[str, dict[str, list[str]]] = {}
-    current_path: Optional[str] = None
-    is_export_file = False
-    pending_removed_path: Optional[str] = None
-
-    for line in unified_diff.splitlines():
-        # New diff stanza — reset any pending `--- a/<path>` candidate so
-        # state from the prior file does not leak into this one.
-        if line.startswith("diff --git "):
-            pending_removed_path = None
+    for event in events:
+        if event.kind not in ("add", "remove"):
             continue
-        # `--- a/<path>` precedes `+++ b/<path>` (or `+++ /dev/null` for
-        # deletions). Stash the old-side path so we can fall back to it
-        # when the new side is /dev/null (deleted-file case).
-        if line.startswith("--- a/"):
-            pending_removed_path = line[len("--- a/") :].strip() or None
+        if not _PUBLIC_EXPORT_FILES_RE.search(event.path):
             continue
-        if line.startswith("--- "):
-            # `--- /dev/null` (added file) or other non-`a/` form — no
-            # deleted-side path to remember.
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ b/"):
-            current_path = line[len("+++ b/") :].strip()
-            is_export_file = bool(
-                current_path and _PUBLIC_EXPORT_FILES_RE.search(current_path)
-            )
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ /dev/null"):
-            # Deleted file — use the path captured from `--- a/<path>`.
-            current_path = pending_removed_path
-            is_export_file = bool(
-                current_path and _PUBLIC_EXPORT_FILES_RE.search(current_path)
-            )
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ ") or line.startswith("@@"):
-            continue
-        if not is_export_file or not current_path:
-            continue
-        sign = line[:1] if line else ""
-        if sign not in ("+", "-"):
-            continue
-        body = line[1:].lstrip()
+        body = event.text.lstrip()
         for regex in _PUBLIC_EXPORT_LINE_RES:
             mm = regex.match(body)
             if not mm:
@@ -16336,9 +16371,9 @@ def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
                 if not sym:
                     continue
                 bucket = per_file.setdefault(
-                    current_path, {"added": [], "removed": []}
+                    event.path, {"added": [], "removed": []}
                 )
-                target = "added" if sign == "+" else "removed"
+                target = "added" if event.kind == "add" else "removed"
                 if sym not in bucket[target]:
                     bucket[target].append(sym)
             break
@@ -16378,7 +16413,9 @@ _EXPORT_HUNK_HEADER_RE = re.compile(
 )
 
 
-def _export_changed_symbols(unified_diff: str) -> dict[str, list[str]]:
+def _export_changed_symbols(
+    unified_diff: str | tuple[_ExportDiffEvent, ...],
+) -> dict[str, list[str]]:
     """Map each changed file to its list of hunk-context symbols.
 
     Parses `git diff` hunk headers (`@@ … @@ <context>`); dedupes per file,
@@ -16386,44 +16423,16 @@ def _export_changed_symbols(unified_diff: str) -> dict[str, list[str]]:
     pure top-level edit) yields no entry — the render falls back to file-level
     anchoring, never fabricates. Deleted files anchor under their old path.
     """
-    if not unified_diff:
+    events = _export_diff_events(unified_diff)
+    if not events:
         return {}
     symbols: dict[str, list[str]] = {}
-    current_path: Optional[str] = None
-    pending_removed_path: Optional[str] = None
-    for line in unified_diff.splitlines():
-        if line.startswith("diff --git "):
-            current_path = None
-            pending_removed_path = None
+    for event in events:
+        if event.kind != "hunk" or not event.text:
             continue
-        if line.startswith("--- a/"):
-            pending_removed_path = line[len("--- a/"):].strip() or None
-            continue
-        if line.startswith("--- "):
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ b/"):
-            current_path = line[len("+++ b/"):].strip() or None
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ /dev/null"):
-            current_path = pending_removed_path
-            pending_removed_path = None
-            continue
-        if line.startswith("+++"):
-            continue
-        if line.startswith("@@"):
-            if current_path is None:
-                continue
-            mm = _EXPORT_HUNK_HEADER_RE.match(line)
-            if not mm:
-                continue
-            ctx = mm.group(1).strip()
-            if not ctx:
-                continue
-            bucket = symbols.setdefault(current_path, [])
-            if ctx not in bucket:
-                bucket.append(ctx)
+        bucket = symbols.setdefault(event.path, [])
+        if event.text not in bucket:
+            bucket.append(event.text)
     return symbols
 
 
@@ -16538,45 +16547,24 @@ _EXPORT_REMOVED_REFS_GREP_CHUNK = 20
 
 
 
-def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
+def _export_extract_removed_symbols(
+    unified_diff: str | tuple[_ExportDiffEvent, ...],
+) -> dict[str, str]:
     """Extract candidate removed symbol definitions from a diff.
 
     Returns `{symbol: defining_file}` for removed (`-`) lines in *source*
     files whose body matches a conservative definition pattern. First-seen
     defining file wins on name collision.
     """
-    if not unified_diff:
+    events = _export_diff_events(unified_diff)
+    if not events:
         return {}
     out: dict[str, str] = {}
     added: set[tuple[str, str]] = set()
-    current_path: Optional[str] = None
-    current_is_source = False
-    pending_removed_path: Optional[str] = None
-    for line in unified_diff.splitlines():
-        if line.startswith("diff --git "):
-            current_path = None
-            current_is_source = False
-            pending_removed_path = None
+    for event in events:
+        if event.kind not in ("add", "remove"):
             continue
-        if line.startswith("--- a/"):
-            pending_removed_path = line[len("--- a/"):].strip() or None
-            continue
-        if line.startswith("--- "):
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ b/"):
-            current_path = line[len("+++ b/"):].strip() or None
-            current_is_source = _export_path_is_source(current_path)
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ /dev/null"):
-            current_path = pending_removed_path
-            current_is_source = _export_path_is_source(current_path)
-            pending_removed_path = None
-            continue
-        if line.startswith("+++") or line.startswith("@@"):
-            continue
-        if not current_is_source or current_path is None:
+        if not _export_path_is_source(event.path):
             continue
         # Track BOTH sides: a definition on a `-` line that reappears on a `+`
         # line anywhere in the diff is a signature edit / move, NOT a removal
@@ -16587,8 +16575,8 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
         # false candidates); an indented `+def` (refactor into a class) does
         # NOT replace the removed top-level export — `from lib import helper`
         # callers still break, so it must not suppress the report.
-        if line.startswith("-"):
-            body = line[1:]
+        if event.kind == "remove":
+            body = event.text
             if body[:1].isspace():
                 continue
             for regex in _EXPORT_REMOVED_DEF_RES:
@@ -16596,19 +16584,19 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
                 if mm:
                     sym = mm.group(1)
                     if sym and sym not in out:
-                        out[sym] = current_path
+                        out[sym] = event.path
                     break
             continue
-        if line.startswith("+"):
-            body = line[1:]
+        if event.kind == "add":
+            body = event.text
             if body[:1].isspace():
                 continue
             for regex in _EXPORT_REMOVED_DEF_RES:
                 mm = regex.match(body)
                 if mm:
                     sym = mm.group(1)
-                    if sym and current_path:
-                        added.add((sym, current_path))
+                    if sym:
+                        added.add((sym, event.path))
                     break
             continue
     # Suppress ONLY same-file re-additions (signature edit / move within the
@@ -16624,7 +16612,8 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
 def _export_removed_export_refs(
     merge_base_sha: str,
     repo_root: Path,
-    files: list[dict[str, Any]],
+    *,
+    unified_diff: Optional[str | tuple[_ExportDiffEvent, ...]] = None,
 ) -> list[dict[str, Any]]:
     """Deleted symbols in the diff that are STILL referenced in the repo.
 
@@ -16636,13 +16625,15 @@ def _export_removed_export_refs(
     render states "no removed symbols still referenced (checked at export
     time)". Never claims completeness — false positives steer a human look.
     """
-    rc_u, out_u, _ = _export_run_git(
-        ["diff", "-M", "--unified=0", f"{merge_base_sha}..HEAD"],
-        cwd=repo_root,
-    )
-    if rc_u != 0:
-        return []
-    removed = _export_extract_removed_symbols(out_u)
+    if unified_diff is None:
+        rc_u, out_u, _ = _export_run_git(
+            ["diff", "-M", "--unified=0", f"{merge_base_sha}..HEAD"],
+            cwd=repo_root,
+        )
+        if rc_u != 0:
+            return []
+        unified_diff = out_u
+    removed = _export_extract_removed_symbols(unified_diff)
     if not removed:
         return []
 
@@ -16748,155 +16739,137 @@ def _export_task_evidence_block(
     }
 
 
-def _export_find_glossaries_downward(repo_root: Path) -> list[Path]:
-    """Find every `GLOSSARY.md` within the repo (downward walk).
-
-    The flow-next glossary model supports glossaries at the repo root **and
-    in any subdirectory** (CLAUDE.md "Project glossary" section). For PR
-    export, we need the full set so subdirectory-glossary deltas (e.g.
-    `apps/web/GLOSSARY.md`) surface in `glossary_changes`. The ancestor-walk
-    helper `find_all_glossaries(repo_root)` only returns the root file —
-    not what we want here.
-
-    Skips the same vendored / generated prefixes the triage classifier
-    skips (`node_modules/`, `vendor/`, `third_party/`, `dist/`, `build/`,
-    `.next/`, plugins/flow-next/codex/), plus `.git/` and `.flow/memory/`
-    (memory has its own export channel). Capped at
-    `GLOSSARY_WALK_MAX_DEPTH` levels deep as a defensive bound.
-    """
-    found: list[Path] = []
-    skip_dirs = {".git", "node_modules", "vendor", "third_party", "dist", "build", ".next"}
-    repo_root_resolved = repo_root.resolve()
-    repo_root_str = str(repo_root_resolved)
-
-    # Use os.walk with in-place dirnames pruning so massive vendored trees
-    # (node_modules, vendor, etc.) are never descended into. rglob() would
-    # walk the entire subtree before the post-filter could reject matches —
-    # O(N) on the full repo even when 99% of N is junk in monorepos.
-    for dirpath, dirnames, filenames in os.walk(repo_root_str, topdown=True):
-        # Compute depth of current dir relative to repo root.
-        try:
-            rel_dir = Path(dirpath).relative_to(repo_root_resolved)
-        except ValueError:
-            dirnames[:] = []
-            continue
-        rel_dir_parts = rel_dir.parts if rel_dir != Path(".") else ()
-        depth = len(rel_dir_parts)
-
-        # Depth cap: don't descend further than GLOSSARY_WALK_MAX_DEPTH dirs deep.
-        if depth >= GLOSSARY_WALK_MAX_DEPTH:
-            dirnames[:] = []
-            continue
-
-        # Prune skip_dirs in place so os.walk never recurses into them.
-        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
-
-        # Prune codex mirror and .flow/memory subtrees by exact prefix match.
-        rel_dir_posix = rel_dir.as_posix() if rel_dir != Path(".") else ""
-        if rel_dir_posix == "plugins/flow-next" and "codex" in dirnames:
-            dirnames.remove("codex")
-        if rel_dir_posix == ".flow" and "memory" in dirnames:
-            dirnames.remove("memory")
-
-        if GLOSSARY_FILE in filenames:
-            candidate = Path(dirpath) / GLOSSARY_FILE
-            try:
-                if candidate.is_file():
-                    found.append(candidate)
-            except OSError:
-                continue
-
-    found.sort()
-    return found
+_EXPORT_GLOSSARY_SKIP_DIRS: frozenset[str] = frozenset(
+    {".git", "node_modules", "vendor", "third_party", "dist", "build", ".next"}
+)
 
 
-def _export_find_glossaries_at_base(merge_base_sha: str, repo_root: Path) -> list[str]:
-    """Enumerate `GLOSSARY.md` paths that existed at the merge base.
-
-    Uses `git ls-tree -r <merge_base_sha> --name-only` to surface every
-    glossary path that existed at base, including ones the feature branch
-    deleted entirely (which the HEAD-only walk in
-    `_export_find_glossaries_downward` cannot see). Combined with the HEAD
-    walk to form the union over which `_export_glossary_diff` iterates.
-
-    Skips the same vendored / generated prefixes the HEAD walk skips so a
-    base-only `node_modules/.../GLOSSARY.md` doesn't sneak in. Returns
-    repo-relative POSIX paths sorted; empty list on git failure.
-    """
-    rc, out, _ = _export_run_git(
-        ["ls-tree", "-r", merge_base_sha, "--name-only"],
-        cwd=repo_root,
+def _export_is_glossary_candidate(path: str) -> bool:
+    """True when a changed path belongs to the export glossary surface."""
+    if not (path == GLOSSARY_FILE or path.endswith("/" + GLOSSARY_FILE)):
+        return False
+    parts = path.split("/")
+    if len(parts) - 1 > GLOSSARY_WALK_MAX_DEPTH:
+        return False
+    if any(part in _EXPORT_GLOSSARY_SKIP_DIRS for part in parts[:-1]):
+        return False
+    return not (
+        path.startswith("plugins/flow-next/codex/")
+        or path.startswith(".flow/memory/")
     )
-    if rc != 0:
-        return []
-    skip_dirs = {".git", "node_modules", "vendor", "third_party", "dist", "build", ".next"}
-    found: list[str] = []
-    for line in out.splitlines():
-        rel = line.strip()
-        if not rel:
-            continue
-        # Filename must be GLOSSARY.md (root or any subdir).
-        if not (rel == GLOSSARY_FILE or rel.endswith("/" + GLOSSARY_FILE)):
-            continue
-        parts = rel.split("/")
-        # Depth cap mirrors the HEAD walk (parts include filename).
-        if len(parts) - 1 > GLOSSARY_WALK_MAX_DEPTH:
-            continue
-        if any(part in skip_dirs for part in parts[:-1]):
-            continue
-        if rel.startswith("plugins/flow-next/codex/"):
-            continue
-        if rel.startswith(".flow/memory/"):
-            continue
-        found.append(rel)
-    found.sort()
-    return found
 
 
-def _export_glossary_diff(base_ref: str, merge_base_sha: str, repo_root: Path) -> dict[str, Any]:
+def _export_changed_glossary_paths(name_status: str) -> list[str]:
+    """Extract the sorted old/new glossary-path union from name-status."""
+    paths: set[str] = set()
+    for line in name_status.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        status = parts[0][:1]
+        candidates = parts[1:3] if status in ("R", "C") else parts[1:2]
+        for path in candidates:
+            if _export_is_glossary_candidate(path):
+                paths.add(path)
+    return sorted(paths)
+
+
+def _export_read_base_blobs(
+    merge_base_sha: str,
+    paths: list[str],
+    repo_root: Path,
+) -> dict[str, str]:
+    """Read base-side blobs in one ``git cat-file --batch`` process."""
+    if not paths:
+        return {}
+    request = "".join(f"{merge_base_sha}:{path}\n" for path in paths).encode()
+    try:
+        proc = subprocess.run(
+            ["git", "cat-file", "--batch"],
+            cwd=str(repo_root),
+            input=request,
+            capture_output=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if proc.returncode != 0:
+        return {}
+
+    stream = io.BytesIO(proc.stdout or b"")
+    blobs: dict[str, str] = {}
+    for path in paths:
+        header = stream.readline()
+        if not header:
+            break
+        if header.rstrip().endswith(b" missing"):
+            continue
+        header_parts = header.rstrip(b"\n").rsplit(b" ", 2)
+        if len(header_parts) != 3:
+            break
+        try:
+            size = int(header_parts[2])
+        except ValueError:
+            break
+        body = stream.read(size)
+        if len(body) != size:
+            break
+        stream.read(1)  # git's record-separating newline
+        try:
+            blobs[path] = body.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+    return blobs
+
+
+def _export_glossary_diff(
+    merge_base_sha: str,
+    repo_root: Path,
+    name_status: Optional[str] = None,
+    name_status_rc: Optional[int] = None,
+) -> dict[str, Any]:
     """Compute glossary added/removed terms vs the merge base.
 
-    Iterates the **union** of (HEAD-walk glossaries via
-    `_export_find_glossaries_downward`) and (base-tree glossaries via
-    `_export_find_glossaries_at_base`). For each repo-relative path:
-    reads HEAD text (empty if path doesn't exist in HEAD — covers
-    whole-file deletion), reads base text via `git show
-    <merge_base>:<rel_path>` (empty if path didn't exist at base — covers
-    new files), then diffs term sets. Empty diff or missing files →
+    Iterates only the old/new glossary path union in the branch diff. For each
+    repo-relative path:
+    reads HEAD text (empty if path doesn't exist in HEAD — covers whole-file
+    deletion), batch-reads base blobs with ``git cat-file`` (missing means the
+    path was added), then diffs term sets. Empty diff or missing files →
     `{"added": [], "removed": [], "renamed": []}`.
     """
     result: dict[str, Any] = {"added": [], "removed": [], "renamed": []}
-
-    # Build union of HEAD-walk and base-tree glossary paths (repo-relative POSIX).
-    head_glossaries = _export_find_glossaries_downward(repo_root)
-    head_rel_paths: dict[str, Path] = {}
-    for p in head_glossaries:
-        try:
-            head_rel_paths[p.relative_to(repo_root).as_posix()] = p
-        except ValueError:
-            continue
-    base_rel_paths = _export_find_glossaries_at_base(merge_base_sha, repo_root)
-    union_rel = sorted(set(head_rel_paths.keys()) | set(base_rel_paths))
-    if not union_rel:
+    if name_status is None:
+        name_status_rc, name_status, _ = _export_run_git(
+            ["diff", "--name-status", "-M", f"{merge_base_sha}..HEAD"],
+            cwd=repo_root,
+        )
+    if name_status_rc not in (None, 0):
         return result
 
-    for rel_posix in union_rel:
+    candidates = _export_changed_glossary_paths(name_status or "")
+    if not candidates:
+        return result
+    base_text_by_path = _export_read_base_blobs(
+        merge_base_sha, candidates, repo_root
+    )
+
+    for rel_posix in candidates:
         # HEAD content: read from disk if present; empty for whole-file deletion.
         head_text = ""
-        head_path = head_rel_paths.get(rel_posix)
-        if head_path is not None:
+        head_path = repo_root / rel_posix
+        try:
+            head_exists = head_path.is_file()
+        except OSError:
+            head_exists = False
+        if head_exists:
             try:
                 head_text = head_path.read_text(encoding="utf-8")
             except OSError:
                 head_text = ""
 
-        # Base content: empty for files added on the feature branch.
-        rc, base_text, _ = _export_run_git(
-            ["show", f"{merge_base_sha}:{rel_posix}"],
-            cwd=repo_root,
-        )
+        base_text = base_text_by_path.get(rel_posix, "")
         head_entries = parse_glossary_file(head_text) if head_text else []
-        base_entries = parse_glossary_file(base_text) if rc == 0 else []
+        base_entries = parse_glossary_file(base_text) if base_text else []
 
         head_terms = {
             re.sub(r"\s+", " ", e["term"].strip().lower()): e
@@ -17462,18 +17435,35 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         base_ref=base_ref,
     )
 
+    # Materialize all diff representations once. The parsed unified event
+    # stream is shared by summary/symbol/export/removed-reference analyses;
+    # name-status also bounds glossary work to changed candidates.
+    materialized_diff = _export_materialize_diff(merge_base_sha, repo_root)
+
     # --- Glossary diff ---
-    glossary_changes = _export_glossary_diff(base_ref, merge_base_sha, repo_root)
+    glossary_changes = _export_glossary_diff(
+        merge_base_sha,
+        repo_root,
+        name_status=materialized_diff.name_status,
+        name_status_rc=materialized_diff.name_status_rc,
+    )
 
     # --- Strategy alignment ---
     strategy_alignment = _export_strategy_alignment(spec_text)
 
     # --- Diff summary ---
-    diff_summary = _export_diff_summary(base_ref, merge_base_sha, repo_root)
+    diff_summary = _export_diff_summary(
+        base_ref,
+        merge_base_sha,
+        repo_root,
+        materialized=materialized_diff,
+    )
 
     # --- Removed-export references (fn-86 R3) ---
     removed_export_refs = _export_removed_export_refs(
-        merge_base_sha, repo_root, diff_summary["files"]
+        merge_base_sha,
+        repo_root,
+        unified_diff=materialized_diff.events,
     )
 
     # --- Deferred findings ---

@@ -252,9 +252,7 @@ class TestRemovedExportRefsGit(unittest.TestCase):
         # Remove the definition; the reference in use.py survives.
         self._write("lib.py", "def other():\n    return 0\n")
         self._commit("remove removed_fn")
-        refs = flowctl._export_removed_export_refs(
-            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
-        )
+        refs = flowctl._export_removed_export_refs(base, self.root)
         self.assertEqual(len(refs), 1)
         self.assertEqual(refs[0]["symbol"], "removed_fn")
         self.assertEqual(refs[0]["defined_in"], "lib.py")
@@ -266,9 +264,7 @@ class TestRemovedExportRefsGit(unittest.TestCase):
         base = self._commit("base")
         self._write("lib.py", "def other():\n    return 0\n")
         self._commit("remove solo_fn")
-        refs = flowctl._export_removed_export_refs(
-            base, self.root, [{"path": "lib.py"}]
-        )
+        refs = flowctl._export_removed_export_refs(base, self.root)
         self.assertEqual(refs, [])
 
     def test_added_only_is_clean(self) -> None:
@@ -276,9 +272,7 @@ class TestRemovedExportRefsGit(unittest.TestCase):
         base = self._commit("base")
         self._write("lib.py", "def existing():\n    return 1\n\n\ndef added():\n    return 2\n")
         self._commit("add function")
-        refs = flowctl._export_removed_export_refs(
-            base, self.root, [{"path": "lib.py"}]
-        )
+        refs = flowctl._export_removed_export_refs(base, self.root)
         self.assertEqual(refs, [])
 
 
@@ -339,8 +333,7 @@ class TestRemovedRefsCrossExtension(RemovedExportRefsBase if 'RemovedExportRefsB
             subprocess.run(["git", "add", "-A"], cwd=d, check=True, capture_output=True)
             subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
                             "commit", "-qm", "remove"], cwd=d, check=True, capture_output=True)
-            files = [{"path": "lib.ts"}]  # diff touched ONLY .ts
-            refs = flowctl._export_removed_export_refs(base, root, files)
+            refs = flowctl._export_removed_export_refs(base, root)
             hits = [r for r in refs if r["symbol"] == "helper"]
             self.assertTrue(hits, "cross-extension .tsx reference must be found")
             self.assertTrue(any(x["path"] == "view.tsx" for x in hits[0]["refs"]))
@@ -504,9 +497,7 @@ class TestBatchedRemovedRefsGrep(_BatchedRefsGitBase):
 
         patcher, calls = self._counting_export_git()
         with patcher:
-            refs = flowctl._export_removed_export_refs(
-                base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
-            )
+            refs = flowctl._export_removed_export_refs(base, self.root)
         grep_calls = [c for c in calls if c and c[0] == "grep"]
         self.assertLessEqual(
             len(grep_calls), 2,
@@ -530,9 +521,7 @@ class TestBatchedRemovedRefsGrep(_BatchedRefsGitBase):
         base = self._commit("base")
         self._write("lib.py", "def keep():\n    return 0\n")
         self._commit("remove both")
-        refs = flowctl._export_removed_export_refs(
-            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
-        )
+        refs = flowctl._export_removed_export_refs(base, self.root)
         by_sym = {r["symbol"]: r["refs"] for r in refs}
         self.assertIn("alpha_fn", by_sym)
         self.assertIn("beta_fn", by_sym)
@@ -559,9 +548,7 @@ class TestBatchedRemovedRefsGrep(_BatchedRefsGitBase):
         base = self._commit("base")
         self._write("lib.py", "def keep():\n    return 0\n")
         self._commit("remove foo + foobar")
-        refs = flowctl._export_removed_export_refs(
-            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
-        )
+        refs = flowctl._export_removed_export_refs(base, self.root)
         by_sym = {r["symbol"]: r["refs"] for r in refs}
         foo_texts = [x["text"] for x in by_sym["foo"] if x["path"] == "use.py"]
         foobar_texts = [
@@ -579,9 +566,7 @@ class TestBatchedRemovedRefsGrep(_BatchedRefsGitBase):
         base = self._commit("base")
         self._write("lib.py", "def keep():\n    return 0\n")
         self._commit("remove capped_fn")
-        refs = flowctl._export_removed_export_refs(
-            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
-        )
+        refs = flowctl._export_removed_export_refs(base, self.root)
         self.assertEqual(len(refs), 1)
         self.assertEqual(len(refs[0]["refs"]), cap)
         # Cap keeps the FIRST `cap` matches in grep output order.
@@ -622,9 +607,7 @@ class TestBatchedRemovedRefsGrep(_BatchedRefsGitBase):
         self._write("lib.py", "def keep():\n    return 0\n")
         self._commit("remove both")
 
-        batched = flowctl._export_removed_export_refs(
-            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
-        )
+        batched = flowctl._export_removed_export_refs(base, self.root)
         by_sym = {r["symbol"]: r["refs"] for r in batched}
         # The matches are NOT dropped under forced color...
         self.assertIn("tinted_fn", by_sym)
@@ -668,9 +651,7 @@ class TestBatchedRemovedRefsGrep(_BatchedRefsGitBase):
         self._write("lib.py", "def keep():\n    return 0\n")
         self._commit("remove all")
 
-        batched = flowctl._export_removed_export_refs(
-            base, self.root, [{"path": "lib.py"}, {"path": "use.py"}]
-        )
+        batched = flowctl._export_removed_export_refs(base, self.root)
         oracle = self._sequential_reference(base, self.root)
         self.assertEqual(
             _json.dumps(batched, sort_keys=True, indent=2),
