@@ -701,13 +701,20 @@ append_progress() {
   if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -f "$REVIEW_RECEIPT_PATH" ]]; then
     receipt_exists="1"
   fi
+  # key=value contract lines (one key per line). MUST match
+  # ralphctl.py parse_progress_kv / find_active_runs and flowctl soft-probe.
   {
-    echo "## $(date -u +%Y-%m-%dT%H:%M:%SZ) - iter $iter"
-    echo "status=$status spec=${spec_id:-} task=${task_id:-} reason=${reason:-}"
+    echo "## $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "iteration=$iter"
+    echo "status=$status"
+    echo "spec=${spec_id:-}"
+    echo "task=${task_id:-}"
+    echo "reason=${reason:-}"
     echo "claude_rc=$claude_rc"
     echo "verdict=${verdict:-}"
     echo "promise=${promise:-}"
-    echo "receipt=${REVIEW_RECEIPT_PATH:-} exists=$receipt_exists"
+    echo "receipt=${REVIEW_RECEIPT_PATH:-}"
+    echo "receipt_exists=$receipt_exists"
     echo "plan_review_status=${plan_review_status:-}"
     echo "completion_review_status=${completion_review_status:-}"
     echo "task_status=${task_status:-}"
@@ -718,13 +725,14 @@ append_progress() {
   } >> "$PROGRESS_FILE"
 }
 
-# Write completion marker to progress.txt (MUST match find_active_runs() detection in flowctl.py)
+# Write completion marker to progress.txt (MUST match find_active_runs() in ralphctl.py
+# and the flowctl status soft-probe of the same key=value markers)
 write_completion_marker() {
   local reason="${1:-DONE}"
   {
     echo ""
     echo "completion_reason=$reason"
-    echo "promise=COMPLETE"  # CANONICAL - must match flowctl.py substring search
+    echo "promise=COMPLETE"  # CANONICAL - must match ralphctl.py / soft-probe key=value contract
   } >> "$PROGRESS_FILE"
 }
 

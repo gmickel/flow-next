@@ -39,7 +39,9 @@ Ralph is Flow-Next's repo-local **hardened** autonomous harness. It exists becau
 
 ## Quick Start
 
-### 1. Initialize
+Ralph is **fully opt-in**. Fresh plugin installs register **zero hooks** and spawn no guard process in any session. Enabling Ralph is `/flow-next:ralph-init` (or setup's Ralph **Yes** path): the host agent scaffolds `scripts/ralph/` and merges fingerprinted guard entries into project settings. Claude Code's project-hooks trust prompt is the consent gate; setup asks with default **No**. Until that ceremony completes, non-Ralph sessions pay nothing. The zero-overhead claim is literal for users who never opt in.
+
+### 1. Initialize (scaffold + register hooks)
 
 ```bash
 # Inside Claude Code
@@ -55,8 +57,14 @@ Creates `scripts/ralph/` with:
 |------|---------|
 | `ralph.sh` | Main loop |
 | `ralph_once.sh` | Single iteration (testing) |
+| `ralphctl.py` | Run control: pause / resume / stop / status (not in flowctl core) |
 | `config.env` | All settings |
+| `hooks/ralph-guard` (+ `.py`) | Project-local guard invoked by registered hooks |
 | `runs/` | Artifacts and logs |
+
+Also merges host-appropriate hook entries into project settings (Claude: `.claude/settings.json`; Droid: `.factory/hooks.json`; Codex: `.codex/hooks.json` shell+Stop subset; Cursor: scaffold only). Fingerprint: command string contains `scripts/ralph/hooks/ralph-guard`. Idempotent re-run; never clobbers unrelated hooks. See [platforms.md](platforms.md) for per-host detail.
+
+**Upgrade:** After a flow-next upgrade that removed plugin-level hooks, existing Ralph users must re-run `/flow-next:ralph-init` so project hooks re-register and `ralphctl.py` lands under `scripts/ralph/`.
 
 ### 2. Configure
 
@@ -592,15 +600,18 @@ Each run creates:
 scripts/ralph/runs/<run-id>/
 ├── iter-001.log           # Raw Claude output
 ├── iter-002.log
-├── progress.txt           # Append-only run log
+├── progress.txt           # Append-only run log (key=value contract)
 ├── attempts.json          # Per-task retry counts
 ├── branches.json          # Branch info
+├── PAUSE / STOP           # Optional sentinels (not state.json)
 ├── receipts/
 │   ├── plan-fn-1.json        # Plan review receipt
 │   ├── impl-fn-1.1.json      # Impl review receipt
 │   └── completion-fn-1.json  # Completion review receipt
 └── block-fn-1.2.md        # Written when task auto-blocked
 ```
+
+**`progress.txt` contract:** `ralph.sh` writes one key per line (`iteration=`, `spec=`, `task=`, `promise=`, and on terminal write `completion_reason=` + `promise=COMPLETE`). `ralphctl.py` and the `flowctl status` soft-probe parse the same key=value lines (prose tails ignored). A run is active while `progress.txt` exists and is not terminal (`promise=COMPLETE` with `completion_reason=`).
 
 ### Tracker-sync conflicts never block
 
@@ -618,16 +629,21 @@ The opt-in `/flow-next:work` Codex delegation mode (`work.delegate` / `delegate:
 
 ## Controlling Ralph
 
+Run control lives in the repo-local CLI installed by ralph-init (extracted out of flowctl core in fn-114). Mechanism is **sentinels + `progress.txt`**, not a `state.json`.
+
 ### CLI Commands
 
 ```bash
-flowctl status                    # Spec/task counts + active runs
-flowctl ralph pause               # Pause run
-flowctl ralph resume              # Resume run
-flowctl ralph stop                # Graceful stop
-flowctl ralph status              # Show run state
-flowctl ralph pause --run <id>    # Specify run when multiple active
+flowctl status                              # Spec/task counts; soft-probes scripts/ralph/runs/ when present
+./scripts/ralph/ralphctl.py pause           # Pause run
+./scripts/ralph/ralphctl.py resume          # Resume run
+./scripts/ralph/ralphctl.py stop            # Graceful stop
+./scripts/ralph/ralphctl.py status          # Show run state
+./scripts/ralph/ralphctl.py pause --run <id>
+./scripts/ralph/ralphctl.py status --json
 ```
+
+`flowctl status` only scans `scripts/ralph/runs/` when that directory exists (absent = zero cost; JSON still carries an empty `runs` array). Control commands are **not** on `flowctl` after fn-114.
 
 ### Sentinel Files
 
@@ -642,7 +658,7 @@ rm scripts/ralph/runs/<run-id>/PAUSE
 touch scripts/ralph/runs/<run-id>/STOP
 ```
 
-Ralph checks sentinels at iteration boundaries.
+Ralph checks sentinels at iteration boundaries. Prefer `ralphctl.py` over hand-touching so multi-run selection and JSON output stay consistent.
 
 ### Task Retry/Rollback
 
@@ -764,9 +780,11 @@ rm -rf ~/.config/dcg/
 
 ### Guard Hooks
 
-Plugin hooks enforce workflow rules deterministically.
+Ralph guard hooks enforce workflow rules deterministically. They are **not** part of the default plugin install.
 
-> **Only active when `FLOW_RALPH=1`** — zero overhead for non-Ralph users.
+> **Registration is opt-in.** Fresh installs ship zero hooks (no `plugins/flow-next/hooks/`). `/flow-next:ralph-init` (agent-driven prose) merges fingerprinted entries into project settings. Until that runs and the host trusts project hooks, no guard process ever starts. That is the zero-overhead guarantee for non-Ralph users.
+>
+> **Runtime gate:** After registration, the guard body still exits immediately unless `FLOW_RALPH=1` (set by the harness). Debug log writes only when `RALPH_GUARD_DEBUG=1` (uses `tempfile.gettempdir()`, never unconditional `/tmp`).
 
 | Rule | Purpose |
 |------|---------|
@@ -777,22 +795,28 @@ Plugin hooks enforce workflow rules deterministically.
 | Direct `codex` / `copilot` blocked (use `flowctl` wrappers) | Receipt + session continuity |
 | Canonical `FLOW_DELEGATE_CODEX=1 codex exec …` allowlist | fn-55 delegation carve-out only |
 | No `--last` (codex) / no `--continue` (copilot) | Session continuity via receipt `session_id` |
+| `flowctl done` structured success only | Exit code / `--json` status=done / exact completion line (no word sniff) |
 | `flowctl done` requires `--summary-file` + `--evidence-json` | Structured completion |
 | Receipt schema + ordering (`type`/`id`/`verdict`; no write before review) | Honest Ralph gate |
-| Impl receipt requires prior `flowctl done` for that task | Done-before-receipt ordering |
-| Edit/Write of protected workflow files blocked | Ralph must not self-modify guard/flowctl/hooks |
+| Impl receipt requires prior successful `flowctl done` for that task | Done-before-receipt ordering |
+| Bash **and** file tools block receipt-path writes pre-review | Close Edit/Write/Create/ApplyPatch bypass |
+| File tools on protected workflow files blocked | Ralph must not self-modify guard/flowctl/hooks |
+| Dual-platform tool names | Shell: `Bash`\|`Execute`; files: `Edit`\|`Write`\|`Create`\|`ApplyPatch` |
 
-**Location:**
+**Where it lives (after ralph-init):**
 
 ```
-plugins/flow-next/
-  hooks/hooks.json              # Config
-  scripts/hooks/ralph-guard.py  # Logic
+scripts/ralph/hooks/ralph-guard(.py)   # Project-local logic (copied by ralph-init)
+.claude/settings.json hooks            # Claude / Grok (trust prompt = consent)
+.factory/hooks.json                    # Droid (or settings fallback)
+.codex/hooks.json                      # Codex subset only (shell + Stop)
 ```
 
-**Disable temporarily:** Unset `FLOW_RALPH`
+Plugin source of the guard binary: `plugins/flow-next/scripts/hooks/ralph-guard.py` (copied into the project; not registered via a plugin-level `hooks.json`).
 
-**Disable permanently:** Delete `hooks/` directory
+**Disable temporarily:** Unset `FLOW_RALPH` (hook may still invoke the wrapper; guard exits without enforcement).
+
+**Disable permanently:** Setup Ralph **No** path or uninstall strips fingerprinted entries; optionally delete `scripts/ralph/` after asking (runs/receipts may matter). Re-run ralph-init to restore.
 
 ---
 

@@ -15,7 +15,8 @@
 # What gets installed (from pre-built codex/ directory):
 #   - Skills:    codex/skills/             → ~/.codex/skills/
 #   - Agents:    codex/agents/*.toml       → ~/.codex/agents/
-#   - Hooks:     codex/hooks.json          → ~/.codex/hooks.json
+#   - Hooks:     none by default (fn-114). Ralph guard is opt-in via
+#                /flow-next:ralph-init → project .codex/hooks.json
 #   - Prompts:   commands/flow-next/*.md   → ~/.codex/prompts/
 #   - CLI tools: flowctl, flowctl.py       → ~/.codex/scripts/
 #   - Scripts:   worktree.sh              → ~/.codex/scripts/  (from codex/skills/)
@@ -101,11 +102,18 @@ done
 echo -e "${GREEN}✓${NC} $AGENT_COUNT agents"
 
 # ====================
-# Hooks
+# Hooks (zero-default; fn-114)
 # ====================
+# Mirror ships no hooks.json (fn-114). Upgrade cleanup: a ~/.codex/hooks.json
+# from an OLDER flow-next install would keep the outdated guard firing globally
+# with [features] hooks=true set - remove it, but ONLY when it is verifiably
+# ours (flow-next/ralph-guard fingerprint); user-customized files are kept.
+if [ -f "$HOME/.codex/hooks.json" ] && grep -qE "ralph-guard|flow-next" "$HOME/.codex/hooks.json" 2>/dev/null; then
+    rm -f "$HOME/.codex/hooks.json"
+    echo -e "${YELLOW}!${NC} removed stale flow-next ~/.codex/hooks.json from a pre-opt-in install (re-run /flow-next:ralph-init in projects that use Ralph)"
+fi
 if [ -f "$CODEX_SRC/hooks.json" ]; then
-    cp "$CODEX_SRC/hooks.json" "$CODEX_DIR/hooks.json"
-    echo -e "${GREEN}✓${NC} hooks.json"
+    echo -e "${YELLOW}!${NC} codex/hooks.json present in source but not installed (Ralph is opt-in via ralph-init)"
 fi
 
 # ====================
@@ -269,7 +277,7 @@ CODEX_MAX_THREADS="${CODEX_MAX_THREADS:-12}"
 } >> "$CONFIG"
 
 echo -e "  ${GREEN}✓${NC} config.toml ($AGENT_COUNT agent entries, max_threads=$CODEX_MAX_THREADS)"
-echo -e "  ${GREEN}✓${NC} [features] hooks = true"
+echo -e "  ${GREEN}✓${NC} [features] hooks = true (feature flag only; no default Ralph hooks file)"
 
 # ====================
 # Summary
@@ -278,7 +286,7 @@ echo
 echo -e "${GREEN}Done!${NC} $PLUGIN installed to ~/.codex"
 echo "  $SKILL_COUNT skills, $AGENT_COUNT agents, $PROMPT_COUNT prompts"
 [ "$HAS_FLOWCTL" = true ] && echo "  flowctl: ~/.codex/scripts/flowctl"
-echo "  hooks: ~/.codex/hooks.json"
+echo "  hooks: none by default (ralph-init writes project .codex/hooks.json when opted in)"
 echo "  config: ~/.codex/config.toml (merged, max_threads=$CODEX_MAX_THREADS)"
 echo
 echo -e "${YELLOW}Requires Codex CLI 0.102.0+${NC}"

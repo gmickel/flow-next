@@ -10,7 +10,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 init, setup-block, detect, status, config, sync, pilot-log, review-backend, review-rounds,
 memory, prospect, anchor, repo-map, prime, glossary, strategy, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
-checkpoint, ralph, rp, codex, copilot, cursor,
+checkpoint, rp, codex, copilot, cursor,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
 
@@ -1345,22 +1345,24 @@ flowctl cursor deep-pass --pass adversarial|security|performance \
 
 Spec form: `cursor[:model]` — **effort is folded into the model name** (Cursor convention), so `cursor:<model>:<effort>` is rejected. Default model resolved via env (`FLOW_CURSOR_MODEL`, no `FLOW_CURSOR_EFFORT`) / config / registry. Receipt fields mirror codex/copilot but **omit `effort`**: `mode: "cursor"`, `spec: "cursor:<model>"`, `session_id` for resume. Sessions are **resume-only** — the first call omits `--resume` and persists Cursor's generated `session_id`; a continuation passes `--resume <stored-id>` only when the receipt's `mode == "cursor"` (cross-backend → fresh). Runs `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (read-only Q&A; never mutates the tree). Keep the model list synced with `cursor-agent --list-models`. **Auth:** stored `cursor-agent` login OR `CURSOR_API_KEY`. **Triage note:** the opt-in LLM triage judge (`FLOW_TRIAGE_LLM=1`, default off) stays `codex|copilot` — a cursor user who enables it also needs codex/copilot present; with the judge off (the default) cursor reviews use the deterministic whitelist, zero extra dependency.
 
-### ralph
+### Ralph run control (repo-local after ralph-init)
 
-Ralph autonomous-loop run control. Mechanism is **sentinel files + `progress.txt`**, not a `state.json`:
+Ralph control is **not** a `flowctl` subcommand (fn-114 extraction). After `/flow-next:ralph-init`, use the project-local CLI:
+
+```bash
+./scripts/ralph/ralphctl.py status [--run <id>] [--json]
+./scripts/ralph/ralphctl.py pause  [--run <id>] [--json]
+./scripts/ralph/ralphctl.py resume [--run <id>] [--json]
+./scripts/ralph/ralphctl.py stop   [--run <id>] [--json]
+```
+
+Mechanism is **sentinel files + `progress.txt`**, not a `state.json`:
 
 - `scripts/ralph/runs/<run>/PAUSE` - present ⇒ paused
 - `scripts/ralph/runs/<run>/STOP` - present ⇒ stop requested (kept for audit)
-- `scripts/ralph/runs/<run>/progress.txt` - append-only run log; a run is active while this file exists and does not contain `promise=COMPLETE`
+- `scripts/ralph/runs/<run>/progress.txt` - append-only key=value contract (`iteration=`, `spec=`, `task=`, `promise=`, terminal `completion_reason=` + `promise=COMPLETE`)
 
-```bash
-flowctl ralph status [--run <id>] [--json]   # Show run state (auto-detect if single)
-flowctl ralph pause  [--run <id>] [--json]   # Create PAUSE sentinel
-flowctl ralph resume [--run <id>] [--json]   # Remove PAUSE sentinel
-flowctl ralph stop   [--run <id>] [--json]   # Create STOP sentinel
-```
-
-Used by humans to pause/stop a long-running Ralph loop without `kill -9`. Worker scripts poll the sentinels at iteration boundaries and act accordingly. See [`ralph.md`](ralph.md).
+`flowctl status` soft-probes `scripts/ralph/runs/` only when that directory exists (absent = zero cost; JSON always carries a `runs` array, empty when none). Control for pause/resume/stop lives only on `ralphctl.py`. See [`ralph.md`](ralph.md).
 
 ### review-deep-auto
 

@@ -1,6 +1,18 @@
 # Other Platforms
 
-Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre-built mirror), and Factory Droid (native cross-platform patterns). A community port exists for OpenCode. xAI **Grok Build** reads the Claude Code plugin with zero config — skills load, the `/flow-next:*` commands **run when typed** (hooks fire), and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Grok's UI just under-lists flow-next's commands/agents (cosmetic — they work when invoked); Ralph autonomous mode is the one piece still to validate (see [Grok Build](#grok-build-claude-code-compatibility) below). **Cursor** runs flow-next too, via its own `.cursor-plugin/` local install (`./scripts/install-cursor.sh` on macOS/Linux, `install-cursor.ps1` on Windows) — skills, commands, and multi-agent flows verified; Ralph unsupported there (hook-schema mismatch). See [Cursor](#cursor-local-plugin) below.
+Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre-built mirror), and Factory Droid (native cross-platform patterns). A community port exists for OpenCode. xAI **Grok Build** reads the Claude Code plugin with zero config — skills load, the `/flow-next:*` commands **run when typed**, and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Grok's UI just under-lists flow-next's commands/agents (cosmetic — they work when invoked); Ralph is fully opt-in (project hooks via ralph-init) and still to validate end-to-end on Grok (see [Grok Build](#grok-build-claude-code-compatibility) below). **Cursor** runs flow-next too, via its own `.cursor-plugin/` local install (`./scripts/install-cursor.sh` on macOS/Linux, `install-cursor.ps1` on Windows) — skills, commands, and multi-agent flows verified; Ralph unsupported there (hook-schema mismatch). See [Cursor](#cursor-local-plugin) below.
+
+### Ralph hooks: per-host registration (no plugin-default)
+
+The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard process. Registration is **agent-driven** by `/flow-next:ralph-init` (and setup's Ralph yes path), which merges entries into project settings. Host differences:
+
+| Host | Where hooks land | Notes |
+|------|------------------|-------|
+| Claude Code | `.claude/settings.json` `hooks` key | Project-hooks trust prompt = consent gate |
+| Factory Droid | `.factory/hooks.json` (primary) | Fallback: `hooks` in `.factory/settings.json` if already used |
+| Codex | `.codex/hooks.json` (project) | Shell + Stop only; no plugin auto-hooks |
+| Cursor | *(none)* | Schema mismatch — scaffold only |
+| Grok Build | same as Claude (`.claude/settings.json`) | Claude-compat path |
 
 ## Install matrix
 
@@ -32,8 +44,9 @@ droid plugin install flow-next
 
 - **Plugin manifest** — Factory documents: "Droid is compatible with plugins built for Claude Code. If you find a Claude Code plugin you'd like to use, you can install it directly - the plugin format is interoperable." flow-next ships only `.claude-plugin/plugin.json`; Droid reads it directly. The repo deliberately does **not** include a `.factory-plugin/plugin.json` — it would be redundant.
 - **Plugin-root env var** — Droid sets `DROID_PLUGIN_ROOT` (canonical) and exposes `CLAUDE_PLUGIN_ROOT` as an alias (per [Factory hooks-reference](https://docs.factory.ai/reference/hooks-reference): *"`${CLAUDE_PLUGIN_ROOT}` — Alias for `${DROID_PLUGIN_ROOT}` (Claude Code compatibility)"*). flow-next skill bash blocks use the fallback chain `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` — conservative ordering, correct on both platforms.
-- **Hook tool name** — Droid's shell-command tool is named **`Execute`** (not `Bash`); per Factory docs, `Bash` is not a recognized matcher in Droid. flow-next's `hooks.json` uses `"matcher": "Bash|Execute"` (regex OR) so a single hook entry fires on both Claude (`Bash`) and Droid (`Execute`).
+- **Hook tool name** — Droid's shell-command tool is named **`Execute`** (not `Bash`); per Factory docs, `Bash` is not a recognized matcher in Droid. When Ralph is opt-in-installed, matchers use `"Bash|Execute"` (regex OR) so a single entry fires on both Claude (`Bash`) and Droid (`Execute`).
 - **Agent permissions** — flow-next uses `disallowedTools` blacklists instead of `tools` whitelists, because tool names diverge (Claude `Bash` vs Droid `Execute`, etc.) but both platforms understand the common deny-list set (`Edit`, `Write`, `Task`).
+- **Ralph hooks are not plugin-default** — the plugin ships no `hooks/hooks.json`. `/flow-next:ralph-init` (agent prose) merges guard entries into the project file **`.factory/hooks.json`** (Factory's project hooks path; fallback: `hooks` key in `.factory/settings.json` if that is already the project's hooks surface).
 
 **Caveats:**
 - Subagents may behave differently (Droid's Task tool implementation).
@@ -86,7 +99,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 - Multi-agent roles: 22 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`).
 - Cross-model reviews (Codex as review backend).
 - flowctl CLI (`~/.codex/scripts/flowctl`).
-- Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/hooks/flowctl to project.
+- Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/flowctl to project; Ralph hooks only if the Ralph ceremony answers yes.
 - `openai.yaml` UI metadata for Codex app display (brand color, descriptions).
 - Tracker-sync background dispatch at **Tier B (isolated-but-awaited)**: comment-shaped tracker touchpoints on linked specs run in a `tracker_runner` agent (context isolation preserved) but are **awaited** — the fire-and-forget overlap is Claude-Code-only (Tier A). Same for Cursor. See `docs/tracker-sync.md` § Background dispatch + `references/tracker-dispatch.md` (host capability ladder).
 
@@ -115,9 +128,11 @@ CODEX_REASONING_EFFORT_WORKER=medium \
 CODEX_MAX_THREADS=12 ./scripts/install-codex.sh flow-next   # CODEX_MAX_THREADS is the installer's own knob
 ```
 
-### Hooks (experimental)
+### Hooks (experimental, Ralph opt-in only)
 
-Codex now supports hooks. The pre-built `codex/hooks.json` includes Ralph guard hooks for `Bash|Execute` tool calls and `Stop` events.
+Codex supports hooks, but flow-next installs **none** by default: the Codex mirror ships no `hooks.json`, and `install-codex.sh` does not copy one (fn-114 zero-default). Project hooks land only when Ralph is enabled via `$flow-next-ralph-init` (or setup's Ralph yes path), which writes/merges project `.codex/hooks.json` with the Codex subset (`PreToolUse`/`PostToolUse` shell + `Stop`; no `SubagentStop`, no `Edit`/`Write` matchers).
+
+`install-codex.sh` still sets `[features] hooks = true` in `~/.codex/config.toml` (feature flag only, not a Ralph install). That flag enables Codex's hooks runtime so a later ralph-init project hooks file can load; it does **not** install any guard entries by itself.
 
 **Limitation:** Codex hooks only intercept `Bash` (not `Edit`/`Write`). Ralph's file-modification guard won't catch direct file edits. The `SubagentStop` event is also not supported.
 
@@ -127,7 +142,7 @@ Run `$flow-next-setup` (or select **Flow Setup** from the `$` dropdown) in your 
 - Initializes `.flow/` directory
 - Copies flowctl to `.flow/bin/`
 - Copies 22 agent `.toml` configs to `.codex/agents/` (project-scoped)
-- Copies `hooks.json` to `.codex/hooks.json` (project-scoped)
+- Asks whether to enable Ralph (default **No**). Yes → ralph-init (scaffold + `.codex/hooks.json`). No → strips any fingerprinted Ralph guard entries if present
 - Adds Flow-Next instructions to AGENTS.md
 - Configures review backend and recommended defaults
 
@@ -159,7 +174,7 @@ chmod +x .flow/bin/flowctl
 
 ### Install (pick one)
 
-- **Already in Claude Code?** Nothing to do — run `grok inspect` and you'll see flow-next's skills + hook loaded.
+- **Already in Claude Code?** Nothing to do — run `grok inspect` and you'll see flow-next's skills loaded (Ralph guard hooks only after project-level ralph-init + trust).
 - **Add as a marketplace source:** flow-next's repo root is a Claude Code **marketplace** (`.claude-plugin/marketplace.json`), so register `gmickel/flow-next` via `[[marketplace.sources]]` in `~/.grok/config.toml` (or the TUI **Marketplace** tab, opened with `/plugins`), then enable the `flow-next` plugin.
 - **Local / dev:** `grok --plugin-dir /path/to/flow-next/plugins/flow-next`.
 
@@ -168,7 +183,7 @@ chmod +x .flow/bin/flowctl
 ### What works (verified, Grok 0.2.27 alpha)
 
 - All 24 flow-next **skills** load (`grok inspect`: `plugin: flow-next`); discovery used the **Claude Code plugin install** directly (`Marketplaces (0)`, no Grok-side config).
-- **The `/flow-next:<name>` commands run when typed.** Typing `/flow-next:plan` fires `user_prompt_submit`, loads the `flow-next-plan` skill, and runs its workflow — **hooks fire** (`user_prompt_submit` + skill hooks). The Ralph-guard **hook** loads (`file → plugin: flow-next`).
+- **The `/flow-next:<name>` commands run when typed.** Typing `/flow-next:plan` fires `user_prompt_submit`, loads the `flow-next-plan` skill, and runs its workflow. Plugin-level Ralph hooks are **not** shipped; project hooks appear only after ralph-init merges them into `.claude/settings.json`.
 - **Multi-agent flows work — verified end-to-end.** A real `/flow-next:plan` run under Grok 0.2.27 **fanned out all seven scout subagents** (`repo-scout`, `practice-scout`, `docs-scout`, `spec-scout`, `docs-gap-scout`, `memory-scout`, `flow-gap-analyst`) in parallel; they spawned, completed, and the skill drove `flowctl` to create the spec + tasks and validate — a full plan, start to finish. So Grok **dispatches flow-next's custom `subagent_type`s** even though `grok inspect` doesn't list them in its agent UI. (UI listing ≠ functionality — see below.)
 - **MCP servers** resolve (e.g. RepoPrompt, linear-server); `flowctl` resolves via the bundled `.flow/bin/flowctl` copy.
 
@@ -177,7 +192,7 @@ chmod +x .flow/bin/flowctl
 - **Grok's UI under-lists flow-next's commands and agents — but both work when invoked.** `grok inspect` shows only Grok's 3 builtin agents (not flow-next's 21), and the slash *autocomplete* lists only the ~7 skills with **no** `user-invocable` key (`flow-next`, `flow-next-deps`, `flow-next-drive`, `flow-next-export-context`, `flow-next-rp-explorer`, `flow-next-worktree-kit`). The 20 `user-invocable: false` skills + the 22 `commands/flow-next/*.md` wrappers don't show in the menu, and the custom agents don't show in `inspect` — yet **the commands run when typed in full** (e.g. `/flow-next:plan`) and **the subagents dispatch** (verified above). flow-next marks skills `user-invocable: false` because the Claude Code entry point is the command wrapper; Grok's menu keys on that flag and its `inspect` summary just doesn't surface plugin agents. **Discoverability gap, not a functional one — type the command.**
 - **Ralph autonomous mode — not yet validated.** The verified run was interactive multi-agent work; Ralph's hook-gated `Stop`/`SubagentStop` loop hasn't been exercised under Grok. Hooks load and fire; the autonomous gating specifically is untested.
 
-> **Status (Grok 0.2.27 alpha):** skills load; `/flow-next:*` commands **run when typed** (hooks fire); MCP + `flowctl` resolve; and **multi-agent subagent dispatch works** — a full `/flow-next:plan` fanned out all seven scouts end-to-end. Caveat: Grok's autocomplete + `grok inspect` under-list flow-next's commands/agents (cosmetic — they work when invoked). Ralph autonomous mode is the one piece still to validate.
+> **Status (Grok 0.2.27 alpha):** skills load; `/flow-next:*` commands **run when typed**; MCP + `flowctl` resolve; and **multi-agent subagent dispatch works** — a full `/flow-next:plan` fanned out all seven scouts end-to-end. Caveat: Grok's autocomplete + `grok inspect` under-list flow-next's commands/agents (cosmetic — they work when invoked). Ralph is opt-in (project hooks) and still to validate under Grok.
 
 ## Cursor (local plugin)
 
@@ -213,7 +228,7 @@ flow-next's **skills, commands, and subagents all register and run** on Cursor. 
 
 - **No "plugin" card.** Cursor registers the individual skills/commands/agents (they appear in the `/` menu + skill/command/subagent lists), but flow-next does **not** show as a grouped plugin in the marketplace UI — cosmetic; the components work.
 - **Slash autocomplete under-lists** (same as Grok): `user-invocable: false` skills + the command wrappers don't populate the menu, but **run when typed in full**.
-- **Ralph autonomous mode is NOT supported.** Cursor's hook schema is `afterFileEdit` / `beforeShellExecution`; flow-next's hooks use Claude Code's `PreToolUse` / `Stop` + `Bash|Execute` matchers, which Cursor doesn't recognize — so the Ralph guard never fires. The interactive plan / work / review workflow is unaffected. (A future Cursor-format hook mirror could add it.)
+- **Ralph autonomous mode is NOT supported.** Cursor's hook schema is `afterFileEdit` / `beforeShellExecution`; flow-next's Ralph guard uses Claude/Droid-style `PreToolUse` / `Stop` + `Bash|Execute` matchers registered into project settings by ralph-init — Cursor doesn't recognize those events, so the guard never fires even if you scaffold `scripts/ralph/`. The interactive plan / work / review workflow is unaffected. (A future Cursor-format hook mirror could add it.)
 - **Tracker-sync background dispatch runs at Tier B (isolated-but-awaited).** Comment-shaped tracker touchpoints on linked specs dispatch to a `tracker-runner` subagent for context isolation, but the host **awaits** it — the fire-and-forget overlap is Claude-Code-only (Tier A). See `docs/tracker-sync.md` § Background dispatch.
 
 > **Status:** skills + commands + agents register and run; **multi-agent verified**; flowctl resolves post-`/flow-next:setup`. Cosmetic: no plugin card + autocomplete under-lists. Ralph unsupported (hook-schema mismatch).

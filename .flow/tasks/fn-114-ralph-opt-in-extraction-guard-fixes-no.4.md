@@ -23,9 +23,8 @@ Ralph docs truth-up + CHANGELOG rider + full gate.
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Docs describe the shipped state on every surface: ralph.md carries the opt-in install story (ralph-init registers project hooks, consent-gated, nothing by default) and the zero-overhead claim is now literally true and stated as such; platforms.md documents per-host hook installation (Claude/Droid supported, Codex subset, Cursor scaffold-only); flowctl.md drops the ralph command group and documents the status soft-probe; sync-codex.md reflects no-hooks-generation; CLAUDE.md cross-platform checklist row 4 updated. Consolidated CHANGELOG rider covers all four tasks with the loud upgrade note (existing ralph users re-run ralph-init or the guard never fires and flowctl ralph is gone). test_ralph_docs_truth (6) pins the claims. Host review: fixed the README ralph-init one-liner and local-dev.md plugin-hooks flavor grok flagged; smoke failure triaged as a live-copilot-CLI flake (clean rerun 136/136; leg untouched by fn-114, CI does not run it). Final gates: full parallel suite 89 files / 1889 tests / 0 failures / 71.6s; smoke_test.sh all-pass on rerun; ci_test.sh 67/67; sync-codex x2. flow-next.dev intentionally NOT walked - the batched release (stopped before, per maintainer) owns the downstream walk.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f8074ae8d1b9483c0d123e50835c993bbf287d7b
+- Tests: python3 scripts/run_tests_parallel.py (89 files, 1889 tests, 0 failures, 71.6s), bash smoke_test.sh (All tests passed 136/136 on rerun; first run hit a live-copilot flake), bash ci_test.sh (67/67), test_ralph_docs_truth 6 green
 - PRs:

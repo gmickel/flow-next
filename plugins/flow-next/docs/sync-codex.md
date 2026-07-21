@@ -1,6 +1,6 @@
 # Codex Mirror Generation (`sync-codex.sh`)
 
-[`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) generates the pre-built Codex files from canonical `skills/` and `agents/` sources. Output: `plugins/flow-next/codex/{skills/,agents/,hooks.json}` plus mirrored `templates/` and `references/` directories. The script is **idempotent** — running twice produces identical output.
+[`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) generates the pre-built Codex files from canonical `skills/` and `agents/` sources. Output: `plugins/flow-next/codex/{skills/,agents/}` plus mirrored `templates/` and `references/` directories. **No `hooks.json`:** Ralph hooks are opt-in via ralph-init project settings (fn-114 zero-default); the script asserts the mirror ships none. The script is **idempotent** - running twice produces identical output.
 
 > Read the script's top-of-file comments and stage banners for the authoritative behavior. This doc gives the high-level shape and points at the validation guards.
 
@@ -8,11 +8,12 @@
 
 Run after modifying any of:
 
-- `plugins/flow-next/skills/**` — skill workflow files (canonical sources)
-- `plugins/flow-next/agents/**` — agent `.md` files (converted to `.toml`)
-- `plugins/flow-next/hooks/hooks.json` — hook definitions
-- `plugins/flow-next/templates/spec.md` — canonical scaffold mirrored into `codex/templates/` for R20 relative-path resolution
-- `plugins/flow-next/references/**` — shared disclosure files (e.g. `html-artifacts.md`) mirrored byte-identical into `codex/references/` (tool-name-agnostic by contract; no rewrite pass touches them)
+- `plugins/flow-next/skills/**` - skill workflow files (canonical sources)
+- `plugins/flow-next/agents/**` - agent `.md` files (converted to `.toml`)
+- `plugins/flow-next/templates/spec.md` - canonical scaffold mirrored into `codex/templates/` for R20 relative-path resolution
+- `plugins/flow-next/references/**` - shared disclosure files (e.g. `html-artifacts.md`) mirrored byte-identical into `codex/references/` (tool-name-agnostic by contract; no rewrite pass touches them)
+
+Plugin-level `hooks/hooks.json` is gone (fn-114). Do not re-add a hooks stage.
 
 ```bash
 ./scripts/sync-codex.sh
@@ -24,11 +25,11 @@ Commit the regenerated `plugins/flow-next/codex/` tree alongside the canonical c
 
 The script runs in numbered stages (see banners in [`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh)):
 
-1. **Copy & patch skills** — canonical `skills/` copied to `codex/skills/`, then per-stage transforms applied (Claude-native tool names rewritten to Codex equivalents; `request_user_input` → plain-text numbered prompt per fn-45).
-2. **Convert agents** — `agents/*.md` → `codex/agents/*.toml` with per-agent reasoning effort, sandbox mode, model mapping, and nickname candidates.
-3. **Generate hooks.json** — derived from canonical `hooks/hooks.json`.
-4. **Mirror templates/ + references/** — canonical `templates/spec.md` copied to `codex/templates/` so the R20 4-tier discovery cascade resolves the same relative path in the mirror; canonical `references/` copied byte-identical to `codex/references/` (shared disclosure files are tool-name-agnostic, so no transform applies).
-5. **Validation** — counts + drift guards (see below).
+1. **Copy & patch skills** - canonical `skills/` copied to `codex/skills/`, then per-stage transforms applied (Claude-native tool names rewritten to Codex equivalents; `request_user_input` → plain-text numbered prompt per fn-45).
+2. **Convert agents** - `agents/*.md` → `codex/agents/*.toml` with per-agent reasoning effort, sandbox mode, model mapping, and nickname candidates.
+3. **Zero-default hooks** - remove any stale `codex/hooks.json`; assert absence (Ralph registration is agent-driven into project `.codex/hooks.json` via ralph-init).
+4. **Mirror templates/ + references/** - canonical `templates/spec.md` copied to `codex/templates/` so the R20 4-tier discovery cascade resolves the same relative path in the mirror; canonical `references/` copied byte-identical to `codex/references/` (shared disclosure files are tool-name-agnostic, so no transform applies).
+5. **Validation** - counts + drift guards (see below).
 
 ## Validation guards
 
@@ -38,7 +39,7 @@ The script's validation block (search for `# ─── Validation ───` in 
 |-------|-----------------|--------------|
 | Skill / agent count | Mirror lost or gained a file vs source | Build fails |
 | TOML required keys | `developer_instructions` missing in any agent | Build fails |
-| `hooks.json` valid JSON | Mirror produced unparseable JSON | Build fails |
+| No `codex/hooks.json` | Stale mirror reintroduced default hooks | Build fails |
 | Bare `CLAUDE_PLUGIN_ROOT` refs | Skill bash without `${...:-${...}}` fallback | Warning |
 | `Task flow-next:` refs | Skill text still references the Claude `Task` form | Build fails |
 | `AskUserQuestion` / `ToolSearch` refs | Stage 1 transforms missed a Claude-native tool name | Build fails |

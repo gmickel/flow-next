@@ -1154,20 +1154,32 @@ STATUS_OUT="$(flowctl status --json)"
 echo "$STATUS_OUT" | "${FLOW_PY[@]}" -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 [[ $? -eq 0 ]] && pass "status --json" || fail "status --json invalid JSON"
 
-# Test ralph pause/resume/stop commands
-mkdir -p scripts/ralph/runs/test-run
-echo "iteration: 1" > scripts/ralph/runs/test-run/progress.txt
+# Test ralphctl pause/resume/stop (fn-114: extracted from flowctl into ralphctl.py)
+RALPHCTL_SRC="$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/ralphctl.py"
+RALPHCTL_TMP="$(mktemp -d)"
+mkdir -p "$RALPHCTL_TMP/scripts/ralph/runs/test-run"
+cp "$RALPHCTL_SRC" "$RALPHCTL_TMP/scripts/ralph/ralphctl.py"
+chmod +x "$RALPHCTL_TMP/scripts/ralph/ralphctl.py"
+echo "iteration: 1" > "$RALPHCTL_TMP/scripts/ralph/runs/test-run/progress.txt"
+(
+  cd "$RALPHCTL_TMP"
+  "${FLOW_PY[@]}" scripts/ralph/ralphctl.py pause --run test-run >/dev/null
+)
+[[ -f "$RALPHCTL_TMP/scripts/ralph/runs/test-run/PAUSE" ]] && pass "ralphctl pause" || fail "ralphctl pause"
 
-flowctl ralph pause --run test-run >/dev/null
-[[ -f scripts/ralph/runs/test-run/PAUSE ]] && pass "ralph pause" || fail "ralph pause"
+(
+  cd "$RALPHCTL_TMP"
+  "${FLOW_PY[@]}" scripts/ralph/ralphctl.py resume --run test-run >/dev/null
+)
+[[ ! -f "$RALPHCTL_TMP/scripts/ralph/runs/test-run/PAUSE" ]] && pass "ralphctl resume" || fail "ralphctl resume"
 
-flowctl ralph resume --run test-run >/dev/null
-[[ ! -f scripts/ralph/runs/test-run/PAUSE ]] && pass "ralph resume" || fail "ralph resume"
+(
+  cd "$RALPHCTL_TMP"
+  "${FLOW_PY[@]}" scripts/ralph/ralphctl.py stop --run test-run >/dev/null
+)
+[[ -f "$RALPHCTL_TMP/scripts/ralph/runs/test-run/STOP" ]] && pass "ralphctl stop" || fail "ralphctl stop"
 
-flowctl ralph stop --run test-run >/dev/null
-[[ -f scripts/ralph/runs/test-run/STOP ]] && pass "ralph stop" || fail "ralph stop"
-
-rm -rf scripts/ralph/runs/test-run
+rm -rf "$RALPHCTL_TMP"
 
 # Test task reset
 RESET_EPIC="$(flowctl spec create --title "Reset test" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
@@ -1199,25 +1211,35 @@ flowctl spec rm-dep "$DEP_CHILD" "$DEP_BASE" --json >/dev/null
 DEPS="$(flowctl show "$DEP_CHILD" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(",".join(json.load(sys.stdin).get("depends_on_epics",[])))')"
 [[ -z "$DEPS" ]] && pass "epic rm-dep" || fail "epic rm-dep: deps=$DEPS"
 
-# Test ralph auto-detection (single active run)
-mkdir -p scripts/ralph/runs/auto-test
-echo "iteration: 1" > scripts/ralph/runs/auto-test/progress.txt
-flowctl ralph pause >/dev/null 2>&1  # Should auto-detect single run
-[[ -f scripts/ralph/runs/auto-test/PAUSE ]] && pass "ralph auto-detect single run" || fail "ralph auto-detect"
-rm -rf scripts/ralph/runs/auto-test
+# Test ralphctl auto-detection (single active run)
+RALPHCTL_TMP="$(mktemp -d)"
+mkdir -p "$RALPHCTL_TMP/scripts/ralph/runs/auto-test"
+cp "$RALPHCTL_SRC" "$RALPHCTL_TMP/scripts/ralph/ralphctl.py"
+echo "iteration: 1" > "$RALPHCTL_TMP/scripts/ralph/runs/auto-test/progress.txt"
+(
+  cd "$RALPHCTL_TMP"
+  "${FLOW_PY[@]}" scripts/ralph/ralphctl.py pause >/dev/null 2>&1
+)
+[[ -f "$RALPHCTL_TMP/scripts/ralph/runs/auto-test/PAUSE" ]] && pass "ralphctl auto-detect single run" || fail "ralphctl auto-detect"
+rm -rf "$RALPHCTL_TMP"
 
 # Test multiple active runs error
-mkdir -p scripts/ralph/runs/run-a scripts/ralph/runs/run-b
-echo "iteration: 1" > scripts/ralph/runs/run-a/progress.txt
-echo "iteration: 1" > scripts/ralph/runs/run-b/progress.txt
+RALPHCTL_TMP="$(mktemp -d)"
+mkdir -p "$RALPHCTL_TMP/scripts/ralph/runs/run-a" "$RALPHCTL_TMP/scripts/ralph/runs/run-b"
+cp "$RALPHCTL_SRC" "$RALPHCTL_TMP/scripts/ralph/ralphctl.py"
+echo "iteration: 1" > "$RALPHCTL_TMP/scripts/ralph/runs/run-a/progress.txt"
+echo "iteration: 1" > "$RALPHCTL_TMP/scripts/ralph/runs/run-b/progress.txt"
 set +e
-flowctl ralph pause 2>/dev/null
+(
+  cd "$RALPHCTL_TMP"
+  "${FLOW_PY[@]}" scripts/ralph/ralphctl.py pause 2>/dev/null
+)
 MULTI_RC=$?
 set -e
-[[ $MULTI_RC -ne 0 ]] && pass "ralph rejects multiple active runs" || fail "ralph should reject multiple runs"
-rm -rf scripts/ralph/runs/run-a scripts/ralph/runs/run-b
+[[ $MULTI_RC -ne 0 ]] && pass "ralphctl rejects multiple active runs" || fail "ralphctl should reject multiple runs"
+rm -rf "$RALPHCTL_TMP"
 
-# Test completion marker detection (run with markers not detected as active)
+# Test flowctl status soft-probe: completed run excluded; uses "runs" key
 mkdir -p scripts/ralph/runs/completed-test
 cat > scripts/ralph/runs/completed-test/progress.txt << 'PROGRESS'
 iteration: 5
@@ -1226,7 +1248,7 @@ promise=RETRY
 completion_reason=DONE
 promise=COMPLETE
 PROGRESS
-ACTIVE_COUNT="$(flowctl status --json | "${FLOW_PY[@]}" -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("active_runs",[])))')"
+ACTIVE_COUNT="$(flowctl status --json | "${FLOW_PY[@]}" -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("runs",[])))')"
 [[ "$ACTIVE_COUNT" == "0" ]] && pass "completed run excluded from active" || fail "completed run still active: count=$ACTIVE_COUNT"
 rm -rf scripts/ralph/runs/completed-test
 
