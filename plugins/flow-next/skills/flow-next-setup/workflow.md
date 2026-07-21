@@ -207,7 +207,7 @@ Then:
 
 Then handle `.flow/usage.md` — preserve any repo-customized variant:
 
-1. Read [templates/usage.md](templates/usage.md) (this is the canonical content).
+1. Read [../../templates/usage.md](../../templates/usage.md) (this is the canonical content, bundled at `${PLUGIN_ROOT}/templates/usage.md` since fn-121).
 2. If `.flow/usage.md` does not exist → write the canonical content.
 3. If `.flow/usage.md` exists → compare byte-for-byte with the canonical content:
    - **Identical**: no-op (skip the write entirely — re-running setup must not bump mtime on unchanged files).

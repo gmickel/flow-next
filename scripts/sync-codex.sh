@@ -430,13 +430,15 @@ if [ -f "$setup_usage" ]; then
 fi
 
 # fn-121: plugin mode is Claude-Code-only (bin PATH injection). The Codex mirror
-# must never describe it: (a) exclude the slim plugin snippet template, (b) strip
-# the plugin-mode sections from the setup workflow, leaving copy mode as the only
-# documented path. The per-skill pre-check plugin BRANCH stays in the mirror: a
-# repo set up in plugin mode by a Claude Code user is still workable from Codex
-# (its FLOWCTL preamble self-resolves), and the branch is inert unless
-# .flow/meta.json says setup_mode=plugin. Validation below guards regression.
-rm -f "$CODEX_DIR/skills/flow-next-setup/templates/claude-md-snippet-plugin.md"
+# must never OFFER it: strip the plugin-mode sections from the setup workflow,
+# leaving copy mode as the only documented setup path. The per-skill pre-check
+# plugin BRANCH stays in the mirror - a repo set up in plugin mode by a Claude
+# Code user is still workable from Codex (its FLOWCTL preamble self-resolves),
+# and the branch is inert unless .flow/meta.json says setup_mode=plugin. For the
+# same reason the slim snippet TEMPLATE ships in the mirror (PR #227 review):
+# the mirrored pre-check's "Refresh now" path reads it, and excluding it would
+# strand a plugin-mode repo's snippet refresh when visited from Codex. Data, not
+# doctrine: the file alone offers nothing. Validation below guards regression.
 setup_wf="$CODEX_DIR/skills/flow-next-setup/workflow.md"
 if [ -f "$setup_wf" ]; then
   awk '
@@ -1761,11 +1763,20 @@ fi
 # negative half: no plugin-mode prose in the setup workflow, no slim template.
 pm_refs=$( { grep -cE 'Step 2b|claude-md-snippet-plugin|setup-mode set plugin|plugin mode' "$CODEX_DIR/skills/flow-next-setup/workflow.md" 2>/dev/null || true; } | tr -d ' ')
 [ -n "$pm_refs" ] || pm_refs=0
-if [ "$pm_refs" != "0" ] || [ -f "$CODEX_DIR/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" ]; then
-  echo -e "  ${RED}✗${NC} plugin-mode prose or slim template leaked into the codex mirror (workflow refs=$pm_refs)"
+if [ "$pm_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} plugin-mode prose leaked into the codex mirror setup workflow (refs=$pm_refs)"
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No plugin-mode prose in codex setup workflow"
+fi
+
+# fn-121 (PR #227 review): the slim template MUST ship in the mirror - the
+# retained per-skill pre-check's "Refresh now" path reads it cross-host.
+if [ -f "$CODEX_DIR/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" ]; then
+  echo -e "  ${GREEN}✓${NC} Slim plugin snippet template present in mirror (pre-check refresh path)"
+else
+  echo -e "  ${RED}✗${NC} Slim plugin snippet template missing from mirror - the mirrored pre-check's Refresh now path would 404"
+  errors=$((errors + 1))
 fi
 
 # fn-121 positive half: copy-mode behavior retained in the mirror.
