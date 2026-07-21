@@ -24,9 +24,8 @@ Memory-add overlap auto-routing eviction: caller decides, flowctl reports.
 - [ ] TBD
 
 ## Done summary
-TBD
-
+memory add never mutates without explicit --update <id>: auto-update branch evicted, overlap scoring retained as the matches retrieval signal (always emitted, best-first, with scores), --update resolves the id and applies the same merge semantics the auto-branch used (tag union, ## Update section, last_updated). Moderate-overlap related_to auto-link kept - additive metadata, not the judged mutation the spec evicts. test_memory_add.py re-pinned to 24 tests; memory suite 8 files / 138 tests green. Caller prose: worker Phase 4.5, qa workflow + bug-filing, make-pr failure wording, memory-migrate phases + workflow (idempotency now matches + --update); capture/interview/audit audited - no auto-merge prose existed. Host review: live-exercised all three paths in a scratch repo (created / created-with-matches / updated with ## Update section); delegate doubts accepted with reasons (orphan-sibling risk inherent to caller-decides, matches is the mitigation; --update without category guard = explicit caller intent). Transport note: implemented via the direct grok-4.5 CLI bridge (cursor quota exhausted at .1; same model family+tier, reasoning-effort high). Full parallel suite green; dual-copy identical; sync-codex x2.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8e7dd55f864ca006b303ee5805317ba1a8dcc71c
+- Tests: python3 scripts/run_tests_parallel.py (full suite green, see log), test_memory*.py 8 files / 138 tests green, host live exercise: create -> overlap-create+matches -> explicit update (scratch repo)
 - PRs:
