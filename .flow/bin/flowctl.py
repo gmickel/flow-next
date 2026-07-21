@@ -19549,9 +19549,11 @@ def parse_deep_findings(output: str, pass_name: str) -> list[dict]:
     header prose form (logged). Returns [] when nothing found.
     """
     block = extract_review_json_block(output)
-    if block is not None:
+    if block is not None and "deep_findings" in block:
         _log_review_parse_path("deep_findings", "json")
         return _deep_findings_from_json(block, pass_name)
+    # A tally block WITHOUT deep_findings (e.g. suppressed counts only) must not
+    # swallow prose findings that follow it (PR #222 post-merge review).
     result = _parse_deep_findings_prose(output, pass_name)
     if result:
         _log_review_parse_path("deep_findings", "prose-fallback")

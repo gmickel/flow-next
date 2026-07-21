@@ -109,8 +109,39 @@ echo -e "${GREEN}✓${NC} $AGENT_COUNT agents"
 # with [features] hooks=true set - remove it, but ONLY when it is verifiably
 # ours (flow-next/ralph-guard fingerprint); user-customized files are kept.
 if [ -f "$HOME/.codex/hooks.json" ] && grep -qE "ralph-guard|flow-next" "$HOME/.codex/hooks.json" 2>/dev/null; then
-    rm -f "$HOME/.codex/hooks.json"
-    echo -e "${YELLOW}!${NC} removed stale flow-next ~/.codex/hooks.json from a pre-opt-in install (re-run /flow-next:ralph-init in projects that use Ralph)"
+    # Strip ONLY the fingerprinted flow-next entries; user-defined hooks in the
+    # same file survive. Delete the file only when nothing else remains.
+    python3 - "$HOME/.codex/hooks.json" <<'PYEOF'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text())
+except Exception:
+    print("!  could not parse ~/.codex/hooks.json; leaving it untouched", file=sys.stderr)
+    sys.exit(0)
+def is_ours(entry):
+    return "ralph-guard" in json.dumps(entry) or "flow-next" in json.dumps(entry)
+changed = False
+if isinstance(data, dict):
+    for event, entries in list(data.items()):
+        if isinstance(entries, list):
+            kept = [e for e in entries if not is_ours(e)]
+            if len(kept) != len(entries):
+                changed = True
+                if kept:
+                    data[event] = kept
+                else:
+                    del data[event]
+    remaining = any(v for v in data.values() if isinstance(v, list) and v)
+    if changed and not remaining:
+        path.unlink()
+        print("removed stale flow-next ~/.codex/hooks.json (no other hooks remained)")
+    elif changed:
+        path.write_text(json.dumps(data, indent=2) + "\n")
+        print("stripped stale flow-next entries from ~/.codex/hooks.json (your other hooks kept)")
+PYEOF
+    echo -e "${YELLOW}!${NC} pre-opt-in flow-next hook entries cleaned (re-run /flow-next:ralph-init in projects that use Ralph)"
 fi
 if [ -f "$CODEX_SRC/hooks.json" ]; then
     echo -e "${YELLOW}!${NC} codex/hooks.json present in source but not installed (Ralph is opt-in via ralph-init)"

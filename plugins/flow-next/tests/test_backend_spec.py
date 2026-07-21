@@ -1960,6 +1960,36 @@ if __name__ == "__main__":
     unittest.main(verbosity=2)
 
 
+class TestDeepFindingsTallyBlockFallback(unittest.TestCase):
+    """PR #222 post-merge: a tally block without deep_findings must not swallow prose findings."""
+
+    def setUp(self) -> None:
+        self.flowctl = _load_flowctl()
+
+    def test_tally_only_block_falls_back_to_prose(self) -> None:
+        out = (
+            "```json\n{\"suppressed_count\": {\"50\": 1}}\n```\n"
+            "**a1** | severity=P1 | confidence=75 | classification=introduced\n"
+            "- Location: src/x.py:3\n"
+            "- Issue: title text\n"
+            "- Fix: fix text\n"
+        )
+        prose = self.flowctl._parse_deep_findings_prose(out, "adversarial")
+        via_public = self.flowctl.parse_deep_findings(out, "adversarial")
+        self.assertEqual(via_public, prose)
+        self.assertTrue(via_public, "prose findings after a tally-only block must be parsed")
+
+    def test_block_with_deep_findings_takes_json_path(self) -> None:
+        out = (
+            "```json\n{\"deep_findings\": [{\"id\": \"d1\", \"severity\": \"P1\", \"confidence\": 75, "
+            "\"classification\": \"introduced\", \"file\": \"src/x.py\", \"line\": 3, \"title\": \"t\", "
+            "\"suggested_fix\": \"f\", \"pass\": \"adversarial\"}]}\n```\n"
+        )
+        res = self.flowctl.parse_deep_findings(out, "adversarial")
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["id"], "d1")
+
+
 class TestReviewJsonBlockHardening(unittest.TestCase):
     """PR #222 findings: decoy fences, unknown-key dicts, last-block-wins."""
 
