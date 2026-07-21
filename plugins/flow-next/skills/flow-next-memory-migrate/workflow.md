@@ -268,7 +268,7 @@ If `flowctl memory add` exits non-zero, capture stderr and surface in the report
 
 ### 2.3 — Overlap signal (`flowctl memory add` matches; skill decides)
 
-`flowctl memory add` always creates unless `--update <id>` is passed (fn-113). Overlap scoring still runs; the JSON response always emits `matches` (with scores). High overlap: re-run with `--update <match-id>` to fold into the existing entry (or accept the create and surface the match in the report). Moderate overlap: creates a new entry with `related_to: [<existing-id>]`. Never pass `--no-overlap-check`. Surface the outcome in the report so the user knows when migration folded vs created.
+`flowctl memory add` always creates unless `--update <id>` is passed (fn-113). Overlap scoring still runs; the JSON response always emits `matches` (with scores). High overlap: re-run with `--update <match-id>` to fold into the existing entry AND delete the file the first call just created (its `.path` - a fresh duplicate of ours; `rm -f` it so migration never leaves a near-copy), or accept the create and surface the match in the report. Moderate overlap: creates a new entry with `related_to: [<existing-id>]`. Never pass `--no-overlap-check`. Surface the outcome (folded + duplicate removed vs created) in the report.
 
 ### 2.4 — Cleanup tempfile
 

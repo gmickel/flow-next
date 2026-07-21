@@ -402,6 +402,8 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
     if [ -n "$_mid" ]; then
       _out="$("$FLOWCTL" memory add --track bug --category "$_cat" \
         --title "<same title>" --update "$_mid" \
+        --module "<same module>" --tags "qa,<spec-id>,<surface>" \
+        --symptoms "<same symptoms>" \
         --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
       # Remove the duplicate WE just created (safe: our own fresh file).
       [ -n "$_dup" ] && rm -f "$_dup"
