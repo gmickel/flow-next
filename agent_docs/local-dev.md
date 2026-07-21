@@ -159,6 +159,8 @@ Run after any change touching `flowctl config get / set`, `cmd_init`'s config up
 ```bash
 mkdir -p /tmp/fn-crossspec-smoke && cd /tmp/fn-crossspec-smoke
 .flow/bin/flowctl init   # or run /flow-next:setup once
+# (Claude Code sessions with the plugin enabled can use bare `flowctl` instead —
+#  plugin bin/ PATH injection, fn-121. The .flow/bin path works everywhere.)
 ```
 
 **Canonical write + read:**

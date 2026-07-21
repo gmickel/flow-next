@@ -89,7 +89,7 @@ When a skill invokes `flowctl` from bash, define the variable **once per canonic
 ```markdown
 ## Preamble
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `<workflow.md>` / `<phases.md>`) use `$FLOWCTL`:
+**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail in copy-mode repos and on every non-Claude host (expected). Caveat since fn-121: on Claude Code with the plugin enabled, bare `flowctl` DOES resolve (plugin `bin/` PATH injection) — but skill preambles must NEVER rely on that; the `$FLOWCTL` resolution below is the cross-host contract and stays mandatory in every skill. Define once; subsequent blocks (here and in `<workflow.md>` / `<phases.md>`) use `$FLOWCTL`:
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"

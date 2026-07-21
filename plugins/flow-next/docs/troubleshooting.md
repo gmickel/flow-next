@@ -11,7 +11,7 @@ The **single most common post-update issue.** `flowctl` (in `.flow/bin/`) and `.
                       # refreshes the model-routing scaffold + spec template, re-stamps setup_version
 ```
 
-It is idempotent and non-destructive (your specs/tasks/memory/config are untouched). Re-run it in **each project** after every flow-next update - not just once globally, because the copies live per-repo under `.flow/`.
+It is idempotent and non-destructive (your specs/tasks/memory/config are untouched). **Copy-mode repos only:** re-run it in **each project** after every flow-next update - not just once globally, because the copies live per-repo under `.flow/`. **Plugin-mode repos** (Claude Code, `setup_mode: "plugin"` in `.flow/meta.json`) have no local copies to refresh - plugin updates land silently and this section does not apply. See [platforms.md → Setup modes](platforms.md#setup-modes-plugin-vs-copy-fn-121).
 
 ## Pre-1.0 `.flow/epics/` layout still present?
 

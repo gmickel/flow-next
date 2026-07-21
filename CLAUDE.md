@@ -75,7 +75,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 
 1. Run `./scripts/sync-codex.sh` TWICE (idempotency) and commit the mirror diff with the canonical change. Its validation guards must stay green; new Claude-only phrases (tool dispatches, model-name examples) may need a new transform + hard-fail guard (pattern: the fn-100 Explore-dispatch and scout-tier rules).
 2. Claude BUILTIN references (`Explore`, `general-purpose`, `AskUserQuestion`, model names) are invisible to the Cursor/Droid consumers - every such reference needs a portable-host fallback clause in the canonical prose (generic read-only dispatch with Edit/Write disallowed; plain-text numbered-prompt fallback for asks) or graceful degradation stated inline.
-3. Plugin-root env vars: Cursor exposes NONE - every bash preamble must keep the `.flow/bin/flowctl` fallback after the `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` probe.
+3. Plugin-root env vars: Cursor exposes NONE - every bash preamble must keep the `.flow/bin/flowctl` fallback after the `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` probe. Plugin-mode repos (fn-121) resolve bare `flowctl` via Claude Code bin-PATH injection in plain Bash ONLY - never in skill prose; dual-mode rules live in `agent_docs/setup-modes.md`.
 4. No plugin-level hooks (`plugins/flow-next/hooks/` is gone): Ralph registration is agent-driven via `/flow-next:ralph-init` (merge fingerprinted entries into project settings per host). Guard matchers stay Claude-schema (`PreToolUse`/`Stop`, `Bash|Execute` shell + file-tool set); works on Claude Code + Droid, NOT Cursor (different hook events) - never assume the guard fires there.
 5. Installers need no enumeration updates (Cursor installers blanket-copy; the codex mirror is a full regen) - but `plugins/flow-next/docs/platforms.md` DOES need a note when host behavior differs.
 6. `agents/*.md` model fields are family aliases resolved by the host; on non-Claude hosts they map to host defaults - never version-pin, and never assume a specific tier is honored off Claude Code.
@@ -127,6 +127,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Codebase feature map (optional) | [`plugins/flow-next/skills/flow-next-map/`](plugins/flow-next/skills/flow-next-map/) — `/flow-next:map` wraps `clawpatch map` |
 | Troubleshooting + uninstall | [`plugins/flow-next/docs/troubleshooting.md`](plugins/flow-next/docs/troubleshooting.md) |
 | Canonical spec-template scaffold (single source of truth — section list, scope-owner annotations, `## Decision Context` flat-vs-H3 conditional; `.flow/templates/spec.md` is a setup-managed copy) | [`plugins/flow-next/templates/spec.md`](plugins/flow-next/templates/spec.md) |
+| Setup modes (plugin vs copy), per-artifact resolution chains, pre-check contract, `setup-mode set` invariants | [`agent_docs/setup-modes.md`](agent_docs/setup-modes.md) |
 | Adding a new `/flow-next:<name>` skill | [`agent_docs/adding-skills.md`](agent_docs/adding-skills.md) |
 | Cutting a release | [`agent_docs/releasing.md`](agent_docs/releasing.md) |
 | Local plugin dev + smoke tests + Ralph e2e | [`agent_docs/local-dev.md`](agent_docs/local-dev.md) |

@@ -103,6 +103,27 @@ pilot-runs/
 
 Idempotent: the auto-block is only written if absent. User patterns added below the footer survive subsequent `flowctl init` runs. Existing user `.flow/.gitignore` files are migrated in-place by prepending the auto-block. **`.flow/.flow_version` is intentionally NOT in the block** - it's the schema sentinel and should be tracked per repo so multiple devs share the same layout (semantics like `Cargo.lock`).
 
+### usage
+
+Print the bundled usage guide (CLI cheatsheet + `## Orchestration & model steering` bridge recipes).
+
+```bash
+flowctl usage
+```
+
+Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin — this is how plugin-mode repos read the guide), then the repo-local `.flow/usage.md` (copy-mode installs, where flowctl runs from `.flow/bin/` with no plugin tree around it). Exits 1 with a pointer to `/flow-next:setup` when neither exists.
+
+### setup-mode
+
+Stamp the setup mode in `.flow/meta.json` — the ONLY write path for the `setup_mode` field (fn-121).
+
+```bash
+flowctl setup-mode set plugin [--json]
+flowctl setup-mode set copy [--json]
+```
+
+`copy` stamps unconditionally. `plugin` enforces the commit-point invariants in plumbing and refuses (exit 1, itemized failures) unless BOTH hold: CLAUDE.md contains the `<!-- BEGIN FLOW-NEXT -->` block with a current `<!-- flow-next:snippet:vN -->` sentinel, AND no copy artifacts remain (`.flow/bin/flowctl*`, `.flow/templates/spec.md`, `.flow/usage.md`). Driven by `/flow-next:setup` Step 7c; not normally run by hand. See [platforms.md → Setup modes](platforms.md#setup-modes-plugin-vs-copy-fn-121).
+
 ### detect
 
 Check if `.flow/` exists and is valid.

@@ -410,8 +410,21 @@ class TestResolve(unittest.TestCase):
                or key.startswith("FLOW_CURSOR_") \
                or key.startswith("FLOW_RP_") or key.startswith("FLOW_NONE_"):
                 os.environ.pop(key, None)
+        # Hermetic vs repo config: resolve() consults models.roles pins from
+        # the enclosing repo's .flow/config.json (fn-115). Any real repo with
+        # pins (this one, since fn-121's setup ceremony) would otherwise leak
+        # into the registry-default assertions - chdir to a bare temp dir.
+        self._tmpdir = tempfile.TemporaryDirectory()
+        flow = os.path.join(self._tmpdir.name, ".flow")
+        os.makedirs(flow)
+        with open(os.path.join(flow, "config.json"), "w", encoding="utf-8") as f:
+            f.write("{}")
+        self._old_cwd = os.getcwd()
+        os.chdir(self._tmpdir.name)
 
     def tearDown(self) -> None:
+        os.chdir(self._old_cwd)
+        self._tmpdir.cleanup()
         os.environ.clear()
         os.environ.update(self._env_snapshot)
 
@@ -887,8 +900,26 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
         for key in list(os.environ.keys()):
             if key.startswith("FLOW_"):
                 os.environ.pop(key, None)
+        # Hermetic vs repo config (fn-115 models.roles pins) - see TestResolve.
+        self._tmpdir = tempfile.TemporaryDirectory()
+        flow = os.path.join(self._tmpdir.name, ".flow")
+        os.makedirs(flow)
+        with open(os.path.join(flow, "config.json"), "w", encoding="utf-8") as f:
+            f.write("{}")
+        # A real (pin-free) git repo: get_repo_root memoizes SUCCESS-only, so
+        # without git init every call re-runs `git rev-parse` and the stub's
+        # captured[0] would be the git argv, not codex.
+        import subprocess as _sp
+        _sp.run(["git", "init", "-q"], cwd=self._tmpdir.name, check=True,
+                capture_output=True)
+        self._old_cwd = os.getcwd()
+        os.chdir(self._tmpdir.name)
+        # Pre-warm the per-cwd repo-root memo OUTSIDE the subprocess stub.
+        flowctl.get_repo_root()
 
     def tearDown(self) -> None:
+        os.chdir(self._old_cwd)
+        self._tmpdir.cleanup()
         os.environ.clear()
         os.environ.update(self._env_snapshot)
 

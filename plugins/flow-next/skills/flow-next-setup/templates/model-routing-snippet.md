@@ -25,7 +25,7 @@ How to apply — defaults, not limits. Unless prompted otherwise, route work acr
 
 Recommended default pipeline (swap any row to taste): the SESSION model authors specs — capture, interview, plan; that is where plan quality is made — then gpt-5.6-terra @ medium implements via the implementation routes below (packaged delegation on Claude Code; the same-family self-bridge on a Codex host until MAv2 role pins are reliable), then reviews go to the strongest reviewer from a DIFFERENT family than the writer (single-subscription fallback: the strongest same-family model that did not write the diff). On Claude Code this resolves to fable-5 → terra → sol; on a Codex host to sol → terra → a Claude-family reviewer when installed, else sol.
 
-flow-next wiring — roles with a MENU, not fixed pairings: pick per task. Claude tiers run natively (spawn subagents with the model parameter); other families ride the headless bridges — recipes in `.flow/usage.md` § Orchestration & model steering. Probe-marked lines are live only if their CLI is installed:
+flow-next wiring — roles with a MENU, not fixed pairings: pick per task. Claude tiers run natively (spawn subagents with the model parameter); other families ride the headless bridges — recipes: run `flowctl usage` § Orchestration & model steering (copy-mode repos also have it on disk at `.flow/usage.md`). Probe-marked lines are live only if their CLI is installed:
 - Implementation, native: a worker/subagent on opus-4.8 (quality) or sonnet-5 (speed) via the model parameter.
 <!-- probe:codex --> Implementation via gpt-5.6-terra @ medium (the packaged delegate default): `/flow-next:work <id> delegate:codex` (consent-gated, host keeps git/review) or a direct `codex exec` bridge. Eval-matched gpt-5.6-sol correctness at ~2/3 wall-clock on strong specs; escalate work.delegateModel to gpt-5.6-sol for gnarly tasks.
 <!-- probe:cursor --> Implementation via composer-2.5: the `cursor-agent` bridge (`--force` to apply); host reviews + commits.
@@ -35,6 +35,6 @@ flow-next wiring — roles with a MENU, not fixed pairings: pick per task. Claud
 - Review, same-family heavy: a fresh-context reviewer subagent on opus-4.8 (or the session model) with the review criteria — no registry rung needed; describe the arrangement.
 <!-- probe:cursor --> Bulk, low-judgment reads (codebase sweeps): scouts may shell out to `cursor-agent`; only the digest returns.
 - Bulk reads, native: haiku-4.5 / sonnet-5 subagents for scans and digests.
-- Autonomous loops: never call a bridge CLI raw - wrap it in a thin fast-tier subagent that runs the bridge in the FOREGROUND and self-heals environment failures only (bridges fail silently outside trusted git dirs), never judgment; recipes in `.flow/usage.md` § Orchestration & model steering.
+- Autonomous loops: never call a bridge CLI raw - wrap it in a thin fast-tier subagent that runs the bridge in the FOREGROUND and self-heals environment failures only (bridges fail silently outside trusted git dirs), never judgment; recipes via `flowctl usage` § Orchestration & model steering.
 <!-- probe:codex --> Reach gpt-5.6-terra inside a subagent (thin-wrapper) for cheap bulk reads/digests only — not implementation: a cheap wrapper writes a self-contained prompt, runs `codex exec` over Bash, returns the digest.
 <!-- flow-next:model-routing:end -->

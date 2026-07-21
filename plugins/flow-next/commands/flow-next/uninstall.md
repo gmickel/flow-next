@@ -22,11 +22,15 @@ If cancel → stop.
 Based on answers, generate the appropriate commands and print them for the user to run manually.
 
 **If keeping tasks:**
+
+Copy-mode repos (`setup_mode` absent or `"copy"` in `.flow/meta.json`):
 ```
 To complete uninstall, run these commands manually:
 
 rm -rf .flow/bin .flow/templates .flow/usage.md
 ```
+
+Plugin-mode repos (`setup_mode: "plugin"`): there are no `.flow/bin`, `.flow/templates`, or `.flow/usage.md` copies to remove. Instead, remove the `<!-- BEGIN FLOW-NEXT -->`...`<!-- END FLOW-NEXT -->` block from CLAUDE.md and strip the stamps from `.flow/meta.json` (`setup_mode`, `setup_version`, `version_ack`, `snippet_ack`).
 
 **If removing everything:**
 ```
