@@ -109,6 +109,12 @@ Remove only post-rebase-proven dead surfaces: unused imports, the unreachable st
 
 Repair active documentation and skills after a fresh post-fn-121 grep, including the known stale references to epic aliases, `migrate-rename`, `config toggle`, Ralph `unblock`/`update`, global `--version`/`setup`, unnamespaced review commands, bare strategy `flowctl`, nonexistent `strategy list`, removed export `--section`/`review_receipts`, and deleted RP `pick-window`/`builder`. Historical specs/tasks/changelog/eval fixtures remain historical evidence and are excluded from active-reference gates.
 
+### 7. RepoPrompt Community Edition compatibility ladder
+
+RepoPrompt Community Edition is the primary supported RP backend; discontinued Classic support is compatibility-only. Use one deterministic executable ladder: `rpce-cli` on PATH → current CE user link `~/RepoPrompt/repoprompt_ce_cli` → legacy CE application-support link `~/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli` → `rp-cli` as the final Classic fallback. Candidate absence, a broken link, or a non-executable file may advance the ladder. Once a CE candidate is selected, its connection, timeout, protocol, or command failure is authoritative and must not silently downgrade to Classic.
+
+Treat CE 1.1.0's live response shapes as canonical: selected windows may be under `binding.window_id`, while repository roots are under `windows[].tabs[].repo_paths`. Preserve legacy `result`/`data` wrappers, top-level root keys, and Classic execution as explicit regression compatibility. Task `.9` owns deterministic discovery/parser/setup-review tests; task `.11` owns a bounded live CE smoke across every supported `flowctl rp` wrapper and proves repeated `setup-review --create` reuses one window.
+
 ## API Contracts
 <!-- scope: technical -->
 
@@ -119,6 +125,8 @@ Repair active documentation and skills after a fresh post-fn-121 grep, including
 - Supported Python is `>=3.11`; older working interpreters are rejected before loading `flowctl.py` with actionable remediation.
 - Cached startup artifacts are optional accelerators, never sources of truth. Missing, stale, unwritable, or corrupt cache state falls back to source execution without changing command output or plugin/template path resolution.
 - Task inventory consumers see the same eligible task universe, including tracker-key tasks; caller-specific filtering is layered above one scanner.
+- RP backend discovery prefers RepoPrompt CE through the pinned ladder (`rpce-cli` → current CE user link → legacy CE link → Classic `rp-cli`). Discovery-only failures advance; operational failures from a selected CE executable never downgrade to Classic.
+- CE/current `binding.window_id` and `windows[].tabs[].repo_paths` payloads are authoritative. Legacy wrappers/root keys remain accepted without changing the external `flowctl rp` command surface.
 - No new external Python dependency. PyYAML remains optional; pure-stdlib behavior stays complete.
 
 ## Edge Cases & Constraints
@@ -129,6 +137,8 @@ Repair active documentation and skills after a fresh post-fn-121 grep, including
 - Preserve fn-52 tracker-key behavior, canonical/legacy layout rules, output sorting, malformed-file tolerance, and runtime-state precedence while centralizing scans.
 - Preserve fn-76/fn-115 explicit model precedence and fail-soft intent unless the post-fn-121 audit proves the landed contract changed.
 - Preserve cognitive-aid rename/deletion semantics, same-file re-add suppression, protected-path handling, R-ID coverage, and stable payload order.
+- RepoPrompt CE and discontinued Classic may coexist. Every capability probe, generated mirror, and smoke must select CE first; Classic remains a last-resort compatibility fallback, never an operational retry target.
+- Live CE verification is macOS-local evidence, not a CI requirement. It uses deliberate bounded state, temporary exports, pre/post window inventories, and records any retained CE tabs/workspaces.
 - Cache/lock files stay gitignored and recoverable. Never use a broad destructive cleanup path.
 - Do not convert flowctl into an agentic judgment engine; all changes remain deterministic plumbing.
 - Canonical skill edits require `scripts/sync-codex.sh` twice and committed mirror parity. User-facing behavior/docs changes propagate to `~/work/flow-next.dev` in the same workstream.
@@ -152,11 +162,12 @@ Repair active documentation and skills after a fresh post-fn-121 grep, including
 - **R13:** Memory list/read/search use one content read per entry plus constant target overhead; fully-qualified IDs resolve directly with containment validation. Pilot steady-state append is O(1) historical-row reads with recovery tests. Shared frontmatter parsing preserves optional-PyYAML and fallback coercion/sentinel behavior.
 - **R14:** Post-rebase reachability scan removes all confirmed dead imports/helpers/test-only production code while preserving explicit compatibility surfaces. Every registered CLI leaf remains handler-bound and active-callsite proof is retained for non-obvious workflow imports.
 - **R15:** Active repo docs, agent docs, skills, smoke labels, generated Codex mirror, and flow-next.dev no longer instruct any deleted/nonexistent command or payload field. A scoped executable-snippet/reference gate excludes historical records and frozen eval fixtures.
-- **R16:** Coverage gaps are closed for completion-review state mutation, the five live RP wrappers, 400+ task `status` budgets, concurrent create/locking/model cache, Python-minimum launch, tracker-key scanner parity, and the live plan-workflow invocation manifest.
+- **R16:** Coverage gaps are closed for completion-review state mutation, every supported RP wrapper, CE/current plus legacy response schemas, 400+ task `status` budgets, concurrent create/locking/model cache, Python-minimum launch, tracker-key scanner parity, and the live plan-workflow invocation manifest.
 - **R17:** Canonical/mirror/generated copies stay synchronized: `scripts/sync-codex.sh` twice is idempotent; plugin-bin/copy/Ralph launcher, dogfood/template parity, and `claude plugin validate` pass; fn-121 plugin-mode invariants remain intact.
 - **R18:** Final evidence reports pre/post medians and deterministic operation counts for help/usage/setup-mode/config/list/status/specs/prime/export/memory/cascade/pilot paths. No optimized path regresses more than 10% versus the 3.1.0 baseline without an explicit correctness justification.
 - **R19:** Focused suites pass per task; final gate passes `python3 scripts/run_tests_parallel.py`, plugin smoke tests, launcher/platform tests, and relevant shell smokes on a clean worktree. No existing tests are removed merely to obtain green.
 - **R20:** Root and docs-site `## Unreleased` entries describe behavior/runtime changes; public docs build passes; no version bump or release occurs in this spec.
+- **R21:** RepoPrompt integration is CE-first through the explicit executable ladder, never downgrades after a selected CE operational failure, parses live CE `binding`/tab-root schemas without losing legacy compatibility, and passes deterministic discovery/setup-review tests. A final live CE 1.1+ smoke selects CE over a co-installed Classic app, exercises every supported `flowctl rp` wrapper, validates prompt/selection/export/chat round trips, and proves two `setup-review --create` calls for one root reuse the same numeric window without cloning the workspace.
 
 ## Boundaries
 <!-- scope: business -->
@@ -221,9 +232,9 @@ python3 scripts/run_tests_parallel.py && \
 6. **`.6` — Prime classifier performance pass** — complexity **62/100**, depends `.1`. Remove quadratic lowercase construction, cache containment roots, reduce Git probes/read repetition, preserve redaction/classification, and prove gains with deterministic counts plus a Pascal-heavy synthetic fixture. Satisfies R11.
 7. **`.7` — Cognitive-aid diff and glossary performance pass** — complexity **64/100**, depends `.1`. Share one unified diff/event stream, derive changed glossary paths, batch base reads, and lock semantic parity/subprocess counts. Satisfies R12.
 8. **`.8` — Memory, pilot-log, and frontmatter performance pass** — complexity **72/100**, depends `.1`. Single-buffer memory parsing/direct IDs, metadata-only scans, O(1) pilot tick state/recovery, optional YAML selection cache, and schema-specific coercion over one envelope parser. Satisfies remaining R13.
-9. **`.9` — Dead-surface removal and focused coverage closure** — complexity **66/100**, depends `.2,.3,.4,.5,.6,.7,.8`. Re-run reachability after refactors, rewrite strategy smoke, remove confirmed dead/test-only surfaces, add completion-review/RP/status/live-manifest coverage, and retain compatibility proofs. Satisfies R14, R16.
+9. **`.9` — Dead-surface removal and focused coverage closure** — complexity **74/100**, depends `.2,.3,.4,.5,.6,.7,.8`. Re-run reachability after refactors, remove confirmed dead/test-only surfaces, close completion-review/status/live-manifest gaps, implement the CE-first executable ladder and issue-#228 schema/window-reuse fix, update active capability probes, and add deterministic coverage for every RP wrapper plus legacy compatibility. Satisfies R14, R16, R21.
 10. **`.10` — Active docs, skill contracts, mirror, and docs-site repair** — complexity **58/100**, depends `.9`. Repair all active deleted-command/payload references while preserving 3.1.0 plugin-mode and `flowctl usage` truth; add scoped drift gate, regenerate mirror twice, update public docs and Unreleased entries, build docs site. Satisfies R15, R17, R20.
-11. **`.11` — Integration benchmark, cross-platform gate, and completion evidence** — complexity **72/100**, depends `.10`. Run the complete matrix/smokes, collect counts/timings including `usage` and `setup-mode`, investigate any >10% regression, verify plugin-bin/copy/Ralph/mirror state, and prepare completion-review evidence. Satisfies R18, R19 and final verification for all requirements.
+11. **`.11` — Integration benchmark, cross-platform gate, and completion evidence** — complexity **76/100**, depends `.10`. Run the complete matrix/smokes, collect counts/timings including `usage` and `setup-mode`, investigate any >10% regression, verify plugin-bin/copy/Ralph/mirror state, then run the bounded live CE smoke across every `flowctl rp` wrapper and prove repeated setup reuses one window. Prepare completion-review evidence. Satisfies R18, R19, R21 and final verification for all requirements.
 
 ### Requirement coverage
 
@@ -249,3 +260,4 @@ python3 scripts/run_tests_parallel.py && \
 | R18 benchmark evidence | .1, .4–.8, .11 |
 | R19 complete gates | .11 |
 | R20 docs/changelog, no bump | .10, .11 |
+| R21 RepoPrompt CE ladder, schemas, and live smoke | .9, .11 |

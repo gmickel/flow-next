@@ -1,5 +1,5 @@
 ---
-satisfies: [R14, R16, R19]
+satisfies: [R14, R16, R19, R21]
 ---
 # fn-122-flowctl-hardening-and-performance-completion-sweep.9 Dead-surface removal and focused coverage closure
 
@@ -10,7 +10,7 @@ Close remaining focused gaps: completion-review persisted state, five live RP wr
 
 Fold in GitHub #228, the confirmed RepoPrompt window-reuse regression, with RepoPrompt Community Edition as the supported primary target. Live CE 1.1.0 (`rpce-cli`) confirms `bind_context` identifies the selected window at `binding.window_id`, while `windows` exposes repository roots under `windows[].tabs[].repo_paths`. The current parsers recognize only `result`/`data` wrappers and legacy top-level root keys, so `rp setup-review --create` can miss an existing worktree and clone it into a new window. Extend both parsers without dropping legacy shapes, and test the complete setup-review decision path so an existing matching window never reaches workspace switch/create.
 
-Do not assume or prefer the discontinued Classic app's `rp-cli` symlink. Resolve the CE executable in deterministic order: `rpce-cli` on PATH, the current CE user link (`~/RepoPrompt/repoprompt_ce_cli`), then its legacy application-support link (`~/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli`). Retain `rp-cli` only as a final Classic compatibility fallback so machines with both apps always route FlowNext reviews to CE. Update active setup/Ralph/review capability probes in the same change; task .10 will align the longer-form platform/troubleshooting prose and Unreleased notes.
+Implement one explicit executable-selection ladder: (1) `rpce-cli` on PATH, (2) current CE user link `~/RepoPrompt/repoprompt_ce_cli`, (3) legacy CE link `~/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli`, then (4) discontinued `rp-cli` only as a final Classic compatibility fallback. Fall through only when a candidate is absent, broken, or non-executable. Once CE is selected, connection, timeout, protocol, or command failure is authoritative and must never silently retry against Classic. Update active setup/Ralph/review capability probes in the same change; task .10 aligns longer-form platform/troubleshooting prose and Unreleased notes.
 
 Complexity: 74/100.
 
@@ -24,6 +24,7 @@ Quick commands:
 - [ ] All 115+ post-fn-121 CLI leaves remain handler-bound; non-obvious workflow imports have active-callsite evidence.
 - [ ] Completion-review state, five RP wrappers, status scale, and live invocation-manifest gaps have deterministic tests.
 - [ ] RepoPrompt Community Edition is the primary supported RP target. Flowctl resolves `rpce-cli`, the current `~/RepoPrompt/repoprompt_ce_cli` user link, and the legacy CE application-support link before any final `rp-cli` Classic compatibility fallback; a machine with both apps demonstrably selects CE.
+- [ ] Ladder fallthrough occurs only for absent, broken, or non-executable candidates. A selected CE candidate's connection/runtime/protocol failure is returned unchanged and never triggers Classic execution.
 - [ ] Missing-CLI diagnostics name RepoPrompt CE and `rpce-cli`; discovery tests mock PATH/home, cover executable/non-executable/broken-link cases, and require no installed app.
 - [ ] GitHub #228 is fixed: `extract_response_window_id` recognizes `binding.window_id` through the supported wrapper recursion while preserving legacy `result`/`data` shapes.
 - [ ] `extract_root_paths` combines and deterministically deduplicates legacy top-level roots with modern `tabs[].repo_paths` and `tabs[].repoPaths`, tolerating malformed/partial tab entries.
