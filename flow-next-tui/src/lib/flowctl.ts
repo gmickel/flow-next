@@ -379,7 +379,9 @@ export async function getReadyTasks(epicId: string): Promise<ReadyResponse> {
   const args = ['ready', '--spec', epicId, '--json'];
   const { result, cmd } = await flowctlWithCmd<ReadyResponse>(args);
   assertSuccess(result, cmd, args);
-  return result;
+  // fn-111: wire is canonical `spec`; TUI internals still use `epic` naming.
+  const spec = (result as { spec?: string }).spec;
+  return { ...result, epic: spec ?? result.epic };
 }
 
 /**

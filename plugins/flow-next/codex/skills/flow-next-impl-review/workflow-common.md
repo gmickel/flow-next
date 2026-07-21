@@ -188,6 +188,12 @@ primary review. When multiple are set, phases run in a fixed order:
 6. Receipt each phase writes its own additive block without disturbing others
 ```
 
+Mode split (fn-113): steps 2-3 mutate the receipt ONLY under autonomy markers
+(FLOW_RALPH=1 / REVIEW_RECEIPT_PATH set / FLOW_AUTONOMOUS=1). In an interactive
+session deep/validate return raw JSON with host_judges: true and leave the
+receipt unchanged - the host judges merge/promotion/survivors from that JSON
+instead of re-reading the receipt. optional-phases.md documents both paths.
+
 **Why this order:**
 - Deep runs before validate: deep expands the finding superset; validator
  filters the (larger) merged set in a single pass — cheaper than running
