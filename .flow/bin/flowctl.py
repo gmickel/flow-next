@@ -23143,8 +23143,8 @@ def _triage_run_codex_judge(
     codex = shutil.which("codex")
     if not codex:
         return None, "codex CLI not available for triage", None
-    effective_model = model or "gpt-5-mini"
-    effective_effort = effort or "low"
+    effective_model = model or "gpt-5.6-luna"
+    effective_effort = effort or "high"
     cmd = [
         codex,
         "exec",
@@ -29095,11 +29095,11 @@ def main() -> None:
     )
     p_triage.add_argument(
         "--model",
-        help="Fast model override (default: gpt-5-mini for codex, claude-haiku-4.5 for copilot)",
+        help="Fast model override (default: gpt-5.6-luna for codex, claude-haiku-4.5 for copilot)",
     )
     p_triage.add_argument(
         "--effort",
-        help="Reasoning effort for LLM judge (default: low)",
+        help="Reasoning effort for LLM judge (default: high for codex, low for copilot)",
     )
     p_triage.add_argument(
         "--receipt",

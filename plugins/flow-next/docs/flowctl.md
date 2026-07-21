@@ -1050,7 +1050,7 @@ Trivial-diff fast path that bypasses the configured review backend on whiteliste
 flowctl triage-skip --base main [--task fn-1.2] [--receipt /tmp/triage.json] [--json]
 
 # With LLM judge for ambiguous diffs (gated behind FLOW_TRIAGE_LLM=1 in Ralph)
-flowctl triage-skip --base main --backend codex --model gpt-5-mini --effort low [--json]
+flowctl triage-skip --base main --backend codex --model gpt-5.6-luna --effort high [--json]
 
 # Whitelist-only mode (ambiguous → REVIEW)
 flowctl triage-skip --base main --no-llm [--json]
