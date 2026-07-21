@@ -25733,10 +25733,6 @@ def _prime_git_many(
     if len(commands) == 1:
         return [_prime_git(root, commands[0], collector, timeout=timeout)]
 
-    # Lazy import: Prime is specialized; ordinary flowctl startup must not pay
-    # concurrent.futures import cost.
-    from concurrent.futures import ThreadPoolExecutor
-
     private_collectors = [
         _PrimeCollector(f"{collector.name}-git-{index}")
         for index in range(len(commands))
@@ -25750,8 +25746,21 @@ def _prime_git_many(
             private.fail(exc)
             return (1, "", str(exc))
 
-    with ThreadPoolExecutor(max_workers=min(4, len(commands))) as pool:
-        results = list(pool.map(run, zip(commands, private_collectors)))
+    try:
+        # Lazy import: Prime is specialized; ordinary flowctl startup must not
+        # pay concurrent.futures import cost.
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=min(4, len(commands))) as pool:
+            results = list(pool.map(run, zip(commands, private_collectors)))
+    except Exception:
+        # Thread/resource exhaustion must not turn the fail-soft classifier
+        # into a crash. Re-run in stable command order; read-only probes may
+        # repeat if executor submission failed partway through.
+        return [
+            _prime_git(root, args, collector, timeout=timeout)
+            for args in commands
+        ]
 
     collector.op(len(commands))
     for private in private_collectors:

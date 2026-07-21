@@ -115,6 +115,28 @@ class PrimeGitBatchTest(unittest.TestCase):
         self.assertEqual(collector.errors, ["bad probe"])
         self.assertEqual(collector.status, "error")
 
+    def test_executor_start_failure_falls_back_in_order(self) -> None:
+        calls = []
+
+        def fake_git(root, args, collector, timeout=30):
+            collector.op()
+            calls.append(args[0])
+            return (0, args[0], "")
+
+        collector = flowctl._PrimeCollector("batch", budget=3)
+        commands = [["one"], ["two"], ["three"]]
+        with mock.patch(
+            "concurrent.futures.ThreadPoolExecutor",
+            side_effect=RuntimeError("can't start new thread"),
+        ):
+            with mock.patch.object(flowctl, "_prime_git", side_effect=fake_git):
+                results = flowctl._prime_git_many(Path("."), commands, collector)
+
+        self.assertEqual(calls, ["one", "two", "three"])
+        self.assertEqual([result[1] for result in results], calls)
+        self.assertEqual(collector.operations, 3)
+        self.assertEqual(collector.status, "ok")
+
 
 class PrimeInventoryProcessTest(unittest.TestCase):
     def test_streamed_git_inventory_closes_stdout(self) -> None:

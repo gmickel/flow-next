@@ -17,7 +17,7 @@ from pathlib import Path
 MIN_PYTHON = (3, 11)
 SOURCE_NAME = "flowctl.py"
 HELP_NAME = "flowctl-help.txt"
-SOURCE_SHA256 = "84d905fae3bcb0067b56bae5b5c7f975a23ffdb8d2735c80e494d4b6456a8a61"
+SOURCE_SHA256 = "29ee79d55869f4a9f6ee163ebbb9b18a6e3c25f926181893a73907c43cc98479"
 HELP_SHA256 = "ad7c987b1f90e8dd12f1e22c6ec4163c72222c3bbf49111ce278337258f01d85"
 USAGE_ERROR = (
     "No usage guide found (searched the plugin's templates/usage.md, then "
