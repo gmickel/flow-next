@@ -2032,7 +2032,14 @@ def bind_context_window(
             f"bind_context JSON parse failed: {exc}", use_json=False, code=2
         )
 
-    return extract_response_window_id(data)
+    window_id = extract_response_window_id(data)
+    if window_id is None:
+        error_exit(
+            "bind_context response missing numeric window id",
+            use_json=False,
+            code=2,
+        )
+    return window_id
 
 
 def parse_builder_tab(output: str) -> str:

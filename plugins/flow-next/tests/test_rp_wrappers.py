@@ -206,6 +206,8 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
             ),
             subprocess.TimeoutExpired(["rpce-cli"], 1),
             _result("not-json"),
+            _result("{}"),
+            _result('{"binding":{}}'),
         )
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
