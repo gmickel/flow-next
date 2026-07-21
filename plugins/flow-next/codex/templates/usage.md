@@ -61,8 +61,11 @@ CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>"              
 # claude -p: the same bridge in REVERSE — drive Claude headlessly from a Codex/Cursor host.
 claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Bash" </dev/null  # prompt BEFORE --allowedTools (variadic — it swallows trailing args); edits need --permission-mode acceptEdits
 
-# grok -p: xAI's headless one-shot (grok CLI, v0.2.x alpha). Prints the response to stdout and exits.
-grok -p "<self-contained prompt>" -m grok-4.5-high </dev/null                              # read-only-ish; add --always-approve (or --permission-mode acceptEdits) to let it act. -m/--model + --reasoning-effort; --json-schema for structured output. Grok 4.5 = fast + cheap first-draft; route to bulk/implementation, not UI or final taste-critical work.
+# grok: xAI's Grok Build CLI (v0.2.x alpha) - a full headless EDITING agent, same class as codex
+# exec / cursor-agent, on its own quota. FLAGS BEFORE -p: `-p/--single` consumes the NEXT token as
+# the prompt, so `grok -p --always-approve "..."` misparses (live-verified failure mode).
+grok -m grok-4.5-high -p "<self-contained prompt>" </dev/null                              # read-only one-shot: prints and exits
+grok --permission-mode acceptEdits -m grok-4.5-high -p "<self-contained prompt>" </dev/null  # WRITE mode (edits files - run inside a trusted git dir; --always-approve = blanket). Extras: --check self-verify loop, --best-of-n N parallel attempts, --json-schema structured output, --reasoning-effort. Grok 4.5 = fast + cheap first-draft; route to bulk/implementation, not UI or final taste-critical work.
 ```
 
 The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<prompt>"` steers a different GPT tier reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.

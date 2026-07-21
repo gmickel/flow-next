@@ -90,20 +90,24 @@ class TestRalphDocsTruth(unittest.TestCase):
 
     def test_changelog_upgrade_note(self) -> None:
         text = _read(CHANGELOG)
-        # Bound to the top of the changelog: Unreleased before the batched
-        # release, the newest released entry after it (batched-release-proof).
-        # Scan the top TWO sections, not one - a fresh Unreleased opened for a
-        # LATER spec sits above the released section that carries this note
-        # (fn-121 exposed the single-section scan).
-        head_marker = "## [Unreleased]" if "## [Unreleased]" in text else "## ["
-        after = text.split(head_marker, 1)[1]
-        parts = after.split("\n## [", 2)
-        unreleased = "\n".join(parts[:2])
-        self.assertIn("fn-114", unreleased)
-        self.assertIn("re-run `/flow-next:ralph-init`", unreleased)
-        self.assertIn("Upgrade note", unreleased)
-        self.assertIn("ralphctl.py", unreleased)
-        self.assertIn("hooks = true", unreleased)
+        # Positionally immune (fn-121 broke a top-1 scan; the 3.1.0 release
+        # broke the top-2 fix hours later): the loud ralph re-init upgrade
+        # note must live TOGETHER inside a single release section, wherever
+        # the changelog's growth has pushed that section.
+        sections = text.split("\n## [")
+        pins = (
+            "fn-114",
+            "re-run `/flow-next:ralph-init`",
+            "Upgrade note",
+            "ralphctl.py",
+            "hooks = true",
+        )
+        carrier = [s for s in sections if all(pin in s for pin in pins)]
+        self.assertTrue(
+            carrier,
+            "no single changelog release section carries the full ralph "
+            "re-init upgrade note (pins: %r)" % (pins,),
+        )
 
 
 if __name__ == "__main__":

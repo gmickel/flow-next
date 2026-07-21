@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [Unreleased]
+
+### Changed
+
+- **grok bridge recipe upgraded to the editing-delegate form (fn-121 follow-up).** Live probing showed the grok CLI is a full headless editing agent, not a print-only one-shot: `grok --permission-mode acceptEdits -m grok-4.5-high -p "<task>"` edits files in place (same bridge class as `codex exec` / `cursor-agent --force`, on xAI's own quota), and `-p/--single` consumes the NEXT token as the prompt - flags must come first (`grok -p --always-approve "..."` misparses; live-verified failure mode now documented). `templates/usage.md` and the model-routing scaffold's grok route carry the corrected invocation + the `--check` / `--best-of-n` / `--json-schema` extras. Docs-only behavior surface; no version bump (batched).
+
 ## [flow-next 3.1.0] - 2026-07-21
 
 ### Added
