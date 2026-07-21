@@ -409,6 +409,28 @@ class TestMemoryAddE2E(unittest.TestCase):
             combined = (out.get("_stdout") or "") + (out.get("_stderr") or "")
             self.assertIn("not found", combined.lower())
 
+    def test_update_rejects_cross_bucket_id(self) -> None:
+        """--update must not mutate an entry outside the requested track/category."""
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            _init_repo(tmp)
+            first = _run_add(
+                tmp,
+                "--track", "bug",
+                "--category", "runtime-errors",
+                "--title", "Cross bucket seed",
+            )
+            out = _run_add(
+                tmp,
+                "--track", "bug",
+                "--category", "build-errors",
+                "--title", "Cross bucket attempt",
+                "--update", first["entry_id"],
+                expect_rc=1,
+            )
+            combined = (out.get("_stdout") or "") + (out.get("_stderr") or "")
+            self.assertIn("not the requested", combined)
+
     def test_moderate_overlap_related_to(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)

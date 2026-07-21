@@ -9695,6 +9695,17 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         )
         target_path = Path(entry["path"])
         entry_id = entry["entry_id"]
+        # Bucket guard: the retired auto-branch could only mutate entries the
+        # same-category overlap scan returned; the explicit path must not
+        # widen mutation scope across track/category (also catches id mixups).
+        _upd_track, _upd_category = entry_id.split("/")[0], entry_id.split("/")[1]
+        if _upd_track != track or _upd_category != category:
+            error_exit(
+                f"--update target {entry_id} is in {_upd_track}/{_upd_category}, "
+                f"not the requested {track}/{category}; pass the matching "
+                f"--track/--category or a same-bucket id",
+                use_json=args.json,
+            )
         updated_fm = _memory_update_existing_entry(
             target_path, body, tags, today
         )
