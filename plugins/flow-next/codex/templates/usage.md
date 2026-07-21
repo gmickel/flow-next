@@ -5,8 +5,8 @@ Task tracking for AI agents. All state lives in `.flow/`.
 ## CLI
 
 ```bash
-.flow/bin/flowctl --help # All commands
-.flow/bin/flowctl <cmd> --help # Command help
+.flow/bin/flowctl --help              # All commands
+.flow/bin/flowctl <cmd> --help        # Command help
 ```
 
 ## IDs
@@ -21,16 +21,16 @@ Task tracking for AI agents. All state lives in `.flow/`.
 The typical flow. Everything else (deps, block/reset, memory, glossary, config, tracker sync, checkpoints, Ralph): `.flow/bin/flowctl --help` and `.flow/bin/flowctl <cmd> --help`.
 
 ```bash
-.flow/bin/flowctl list # all specs + tasks grouped
-.flow/bin/flowctl show fn-1-add-oauth.2 # spec or task detail (cat for raw markdown)
-.flow/bin/flowctl ready --spec fn-1-add-oauth # tasks ready to work on
+.flow/bin/flowctl list                          # all specs + tasks grouped
+.flow/bin/flowctl show fn-1-add-oauth.2         # spec or task detail (cat for raw markdown)
+.flow/bin/flowctl ready --spec fn-1-add-oauth   # tasks ready to work on
 .flow/bin/flowctl spec create --title "..." --branch fn-1-add-oauth --json
 .flow/bin/flowctl spec set-plan fn-1-add-oauth --file plan.md
 .flow/bin/flowctl task create --spec fn-1-add-oauth --title "..." --deps fn-1-add-oauth.1 --description-file d.md --acceptance-file a.md --satisfies R1,R3
-.flow/bin/flowctl start fn-1-add-oauth.2 # claim task
+.flow/bin/flowctl start fn-1-add-oauth.2        # claim task
 .flow/bin/flowctl done fn-1-add-oauth.2 --summary-file s.md --evidence-json e.json
-.flow/bin/flowctl task reset fn-1-add-oauth.2 # back to todo
-.flow/bin/flowctl validate --all # check structure
+.flow/bin/flowctl task reset fn-1-add-oauth.2   # back to todo
+.flow/bin/flowctl validate --all                # check structure
 ```
 
 ## Orchestration & model steering
@@ -44,23 +44,23 @@ flow-next skills are prompts the host agent executes — so you (the host) can r
 # spawned by another agent it hangs indefinitely on inherited non-TTY stdin.
 # ALWAYS pass --skip-git-repo-check: outside a trusted git repo codex refuses in ~1s
 # with the error only in the log — a fire-and-forget caller sees a clean, silent failure.
-codex exec -s read-only --skip-git-repo-check "<self-contained investigation prompt>" </dev/null # read-only investigation
+codex exec -s read-only --skip-git-repo-check "<self-contained investigation prompt>" </dev/null               # read-only investigation
 # WRITE mode: the flag also disables codex's git-repo preflight — your rollback boundary.
 # Assert the intended workspace FIRST (or `git init` a scratch dir), so the flag only
 # suppresses the silent-refusal failure mode, never the safety check:
 [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "<intended-repo-root>" ] && \
-codex exec --sandbox workspace-write --skip-git-repo-check -o out.md "<self-contained impl prompt>" </dev/null # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
+codex exec --sandbox workspace-write --skip-git-repo-check -o out.md "<self-contained impl prompt>" </dev/null  # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
 
 # cursor-agent: -p print mode; --force actually APPLIES edits (else proposed-only).
 # Run it INSIDE a git repo (`git init` scratch dirs first): in a non-repo dir it blocks on an
 # interactive workspace-trust prompt and exits "successfully" with empty output.
-CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>" # model IDs are volatile → cursor-agent --list-models
+CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>"                        # model IDs are volatile → cursor-agent --list-models
 
 # claude -p: the same bridge in REVERSE — drive Claude headlessly from a Codex/Cursor host.
-claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Bash" </dev/null # prompt BEFORE --allowedTools (variadic — it swallows trailing args); edits need --permission-mode acceptEdits
+claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Bash" </dev/null  # prompt BEFORE --allowedTools (variadic — it swallows trailing args); edits need --permission-mode acceptEdits
 
 # grok -p: xAI's headless one-shot (grok CLI, v0.2.x alpha). Prints the response to stdout and exits.
-grok -p "<self-contained prompt>" -m grok-4.5-high </dev/null # read-only-ish; add --always-approve (or --permission-mode acceptEdits) to let it act. -m/--model + --reasoning-effort; --json-schema for structured output. Grok 4.5 = fast + cheap first-draft; route to bulk/implementation, not UI or final taste-critical work.
+grok -p "<self-contained prompt>" -m grok-4.5-high </dev/null                              # read-only-ish; add --always-approve (or --permission-mode acceptEdits) to let it act. -m/--model + --reasoning-effort; --json-schema for structured output. Grok 4.5 = fast + cheap first-draft; route to bulk/implementation, not UI or final taste-critical work.
 ```
 
 The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<prompt>"` steers a different GPT tier reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.
@@ -73,14 +73,14 @@ Harness-relative: every direction works — from Claude Code the bridges are `co
 # The raw codex exec bridge above is the interactive route. delegate:codex is the same
 # bridge with deterministic rails for unattended loops; its task and spec paths are the brief.
 # Delegate implementation to codex (host keeps gating/git/review; codex only writes code)
-.flow/bin/flowctl config set work.delegate codex # value MUST be `codex` to activate (OFF by default, consent-gated)
-# …or per-run, no config: $flow-next-work fn-1-add-oauth delegate:codex
+.flow/bin/flowctl config set work.delegate codex     # value MUST be `codex` to activate (OFF by default, consent-gated)
+# …or per-run, no config:  $flow-next-work fn-1-add-oauth delegate:codex
 # Steer the delegate: work.delegateModel (default gpt-5.6-terra, passed as -m) +
 # work.delegateEffort (default medium, passed as -c model_reasoning_effort=)
 
 # Cross-family review — the model that writes is never the model that reviews
-.flow/bin/flowctl config set review.backend codex # or cursor:composer-2.5
-.flow/bin/flowctl task set-backend fn-1-add-oauth.3 --review cursor:composer-2.5 # per-task review: override
+.flow/bin/flowctl config set review.backend codex                                 # or cursor:composer-2.5
+.flow/bin/flowctl task set-backend fn-1-add-oauth.3 --review cursor:composer-2.5   # per-task review: override
 ```
 
 **Prompted orchestration** — describe the policy; the host judges per item, no parameter required:

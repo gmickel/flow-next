@@ -7993,6 +7993,29 @@ def cmd_init(args: argparse.Namespace) -> None:
         print(message)
 
 
+def cmd_usage(args: argparse.Namespace) -> None:
+    """Print the bundled usage guide (CLI cheatsheet + orchestration recipes).
+
+    Resolution: plugin-bundled canonical first (always current with the
+    installed plugin version), repo-local .flow/usage.md as fallback for
+    copied installs (.flow/bin/flowctl.py has no plugin tree around it).
+    """
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here.parent / "templates" / "usage.md",
+        get_flow_dir() / "usage.md",
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            print(cand.read_text(encoding="utf-8"), end="")
+            return
+    error_exit(
+        "No usage guide found (searched the plugin's templates/usage.md, then .flow/usage.md). "
+        "Reinstall/update the flow-next plugin, or run /flow-next:setup.",
+        use_json=False,
+    )
+
+
 def cmd_detect(args: argparse.Namespace) -> None:
     """Check if .flow/ exists and is valid."""
     flow_dir = get_flow_dir()
@@ -29510,6 +29533,12 @@ def main() -> None:
         help="Spec or task ID (e.g., fn-1-add-auth, fn-1-add-auth.2)",
     )
     p_cat.set_defaults(func=cmd_cat)
+
+    # usage
+    p_usage = subparsers.add_parser(
+        "usage", help="Print the bundled usage guide (CLI + orchestration recipes)"
+    )
+    p_usage.set_defaults(func=cmd_usage)
 
     p_ready = subparsers.add_parser("ready", help="List ready tasks")
     p_ready.add_argument(

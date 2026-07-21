@@ -413,7 +413,7 @@ if [ -f "$work_skill" ]; then
   rm -f "${work_skill}.bak"
 fi
 
-# flow-next-setup: templates/usage.md — Codex command-name syntax
+# canonical templates/usage.md (mirrored to codex/templates/) — Codex command-name syntax
 # This template is copied into projects as `.flow/usage.md` by setup Step 4
 # (which byte-compares `.flow/usage.md` against it on re-runs). On Codex the
 # skill reads THIS mirror copy, and Codex project docs use `$flow-next-<cmd>`
@@ -423,7 +423,7 @@ fi
 # elsewhere keeps `/flow-next:` (agents resolve those contextually; this file
 # is a user-facing project doc where a literal `/flow-next:work` invocation
 # would hit an unavailable command). Validation below guards regression.
-setup_usage="$CODEX_DIR/skills/flow-next-setup/templates/usage.md"
+setup_usage="$CODEX_DIR/templates/usage.md"
 if [ -f "$setup_usage" ]; then
   sed -i.bak -E 's|/flow-next:([a-z-]+)|$flow-next-\1|g' "$setup_usage"
   rm -f "${setup_usage}.bak"
@@ -1704,13 +1704,13 @@ fi
 # it is copied into projects as `.flow/usage.md`, and Codex resolves
 # `$flow-next-<cmd>`, not `/flow-next:<cmd>`. The targeted rewrite above must
 # have converted every token.
-usage_slash_refs=$( { grep -c '/flow-next:' "$CODEX_DIR/skills/flow-next-setup/templates/usage.md" 2>/dev/null || true; } | tr -d ' ')
+usage_slash_refs=$( { grep -c '/flow-next:' "$CODEX_DIR/templates/usage.md" 2>/dev/null || true; } | tr -d ' ')
 [ -n "$usage_slash_refs" ] || usage_slash_refs=0
 if [ "$usage_slash_refs" != "0" ]; then
-  echo -e "  ${RED}✗${NC} $usage_slash_refs '/flow-next:' refs remain in codex setup templates/usage.md — should be \$flow-next-<cmd>"
+  echo -e "  ${RED}✗${NC} $usage_slash_refs '/flow-next:' refs remain in codex templates/usage.md — should be \$flow-next-<cmd>"
   errors=$((errors + 1))
 else
-  echo -e "  ${GREEN}✓${NC} No '/flow-next:' refs in codex setup templates/usage.md"
+  echo -e "  ${GREEN}✓${NC} No '/flow-next:' refs in codex templates/usage.md"
 fi
 
 # Check no "AskUserQuestion" or "ToolSearch select:AskUserQuestion" in codex

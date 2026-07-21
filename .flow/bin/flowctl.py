@@ -8003,7 +8003,6 @@ def cmd_usage(args: argparse.Namespace) -> None:
     here = Path(__file__).resolve().parent
     candidates = [
         here.parent / "templates" / "usage.md",
-        here.parent / "skills" / "flow-next-setup" / "templates" / "usage.md",
         get_flow_dir() / "usage.md",
     ]
     for cand in candidates:
@@ -8011,7 +8010,8 @@ def cmd_usage(args: argparse.Namespace) -> None:
             print(cand.read_text(encoding="utf-8"), end="")
             return
     error_exit(
-        "No usage guide found (plugin templates/usage.md or .flow/usage.md).",
+        "No usage guide found (searched the plugin's templates/usage.md, then .flow/usage.md). "
+        "Reinstall/update the flow-next plugin, or run /flow-next:setup.",
         use_json=False,
     )
 

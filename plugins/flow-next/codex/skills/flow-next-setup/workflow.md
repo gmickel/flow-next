@@ -181,7 +181,7 @@ Then handle `.flow/usage.md` — preserve any repo-customized variant:
  - **Identical**: no-op (skip the write entirely — re-running setup must not bump mtime on unchanged files).
  - **Customized** (any deviation): do NOT overwrite. Ask the user via `plain-text numbered prompt`:
  - **header**: `Overwrite customized .flow/usage.md?`
- - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/skills/flow-next-setup/templates/usage.md\`).`
+ - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/usage.md\`).`
  - **options**:
  - `Keep mine (Recommended)` — leave `.flow/usage.md` unchanged. Print the path to the canonical template so the user can diff manually.
  - `Overwrite with canonical` — replace `.flow/usage.md` with the template content. Repo customization is lost.
