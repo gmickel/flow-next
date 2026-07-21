@@ -21,9 +21,16 @@ Quick commands:
 - [ ] Frontmatter envelope dedupe does not collapse strategy/memory/prospect malformed/absent contracts.
 - [ ] Focused suites and deterministic read-count tests pass.
 ## Done summary
-TBD
+Completed the memory, pilot-log, and frontmatter performance pass.
 
+- Centralized schema-aware frontmatter envelopes and cached optional PyYAML selection while preserving strategy, memory, and prospect sentinel/coercion contracts.
+- Reduced memory metadata/search iteration to one file read per entry, resolved validated full IDs directly in one read, separated body/raw retention, and rejected traversal, external symlinks, and symlink loops without tracebacks.
+- Replaced pilot tick-history rescans with crash-safe per-ID counter state and deterministic recovery for absent, corrupt, stale-valid, crash-ahead, and orphan-reservation states.
+- Preserved canonical/dogfood source identity and refreshed hash-validated bootstrap metadata.
+- Addressed all findings emitted across four bounded implementation-review rounds. The final reviewer finding (symlink-loop RuntimeError) was fixed and regression-tested after the external review-round cap was exhausted; no reset or fabricated SHIP verdict was recorded.
+
+Deterministic evidence: exact full-ID lookup dropped from 48 reads to 1 on the 24-entry fixture; metadata/search scans dropped from 2N to N reads; steady-state pilot tick 41 dropped from 40 historical-row reads to 1 commit-witness read. Live memory-list timing remained at a 0.19s median (no regression).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: ef54951d, a3f5aa37, 5327eed5, 8928e69a
+- Tests: cd plugins/flow-next/tests && PATH=/opt/homebrew/bin:$PATH PYTHON_BIN=/opt/homebrew/bin/python3 /opt/homebrew/bin/python3 -m unittest test_memory_performance test_memory_list_read_search test_memory_during_spec_null_safe test_frontmatter_performance test_pilot_log test_pilot_backlog_substrate test_startup_bootstrap -q (105 passed), canonical/dogfood flowctl.py cmp parity, git diff --check
 - PRs:
