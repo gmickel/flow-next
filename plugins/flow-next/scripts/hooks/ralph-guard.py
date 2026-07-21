@@ -588,6 +588,12 @@ def output_json(data: dict) -> None:
 PROTECTED_FILE_PATTERNS = [
     "ralph-guard.py",
     "ralph-guard",
+    # fn-114: hooks live in PROJECT settings now - a Ralph-driven agent must
+    # not be able to edit its own registration out from under the guard.
+    ".claude/settings.json",
+    ".factory/hooks.json",
+    ".factory/settings.json",
+    ".codex/hooks.json",
     "flowctl.py",
     "flowctl",
     "/hooks/hooks.json",

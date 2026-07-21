@@ -240,3 +240,31 @@ class DeadWeightTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestProtectedRegistrationFiles(unittest.TestCase):
+    """fn-114 review: the guard must block edits to its own hook registration."""
+
+    def _blocks(self, file_path: str) -> bool:
+        import io, contextlib
+        guard = _load_guard()
+        data = {"tool_name": "Edit", "tool_input": {"file_path": file_path}}
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                guard.handle_protected_file_check(data)
+            except SystemExit:
+                pass
+        return "BLOCKED" in (out.getvalue() + err.getvalue())
+
+    def test_blocks_claude_settings(self) -> None:
+        self.assertTrue(self._blocks("/repo/.claude/settings.json"))
+
+    def test_blocks_factory_hooks(self) -> None:
+        self.assertTrue(self._blocks("/repo/.factory/hooks.json"))
+
+    def test_blocks_project_codex_hooks(self) -> None:
+        self.assertTrue(self._blocks("/repo/.codex/hooks.json"))
+
+    def test_allows_ordinary_file(self) -> None:
+        self.assertFalse(self._blocks("/repo/src/app.py"))

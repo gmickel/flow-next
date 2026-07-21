@@ -104,8 +104,14 @@ echo -e "${GREEN}✓${NC} $AGENT_COUNT agents"
 # ====================
 # Hooks (zero-default; fn-114)
 # ====================
-# Mirror ships no hooks.json. If a stale file remains from older plugins, leave
-# it alone (user may have customized); do not install Ralph hooks from the plugin.
+# Mirror ships no hooks.json (fn-114). Upgrade cleanup: a ~/.codex/hooks.json
+# from an OLDER flow-next install would keep the outdated guard firing globally
+# with [features] hooks=true set - remove it, but ONLY when it is verifiably
+# ours (flow-next/ralph-guard fingerprint); user-customized files are kept.
+if [ -f "$HOME/.codex/hooks.json" ] && grep -qE "ralph-guard|flow-next" "$HOME/.codex/hooks.json" 2>/dev/null; then
+    rm -f "$HOME/.codex/hooks.json"
+    echo -e "${YELLOW}!${NC} removed stale flow-next ~/.codex/hooks.json from a pre-opt-in install (re-run /flow-next:ralph-init in projects that use Ralph)"
+fi
 if [ -f "$CODEX_SRC/hooks.json" ]; then
     echo -e "${YELLOW}!${NC} codex/hooks.json present in source but not installed (Ralph is opt-in via ralph-init)"
 fi
