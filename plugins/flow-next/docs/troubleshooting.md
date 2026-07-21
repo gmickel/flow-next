@@ -7,7 +7,7 @@ Common recovery patterns for stuck tasks, broken state, Ralph debugging, and rev
 The **single most common post-update issue.** `flowctl` (in `.flow/bin/`) and `.flow/usage.md` are **snapshot copies inside your repo**, written by setup - a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) refreshes the *plugin* but NOT those in-repo copies. So symptoms like a `flowctl` flag that "should exist" erroring, an outdated `.flow/usage.md`, or the skills printing `Local setup vX differs from plugin vY. Run /flow-next:setup to refresh local scripts` on stderr all mean the same thing:
 
 ```bash
-/flow-next:setup      # re-copies flowctl + flowctl.cmd + flowctl.py, rewrites usage.md,
+/flow-next:setup      # re-copies launchers + flowctl.py + tracked fast-path files, rewrites usage.md,
                       # refreshes the model-routing scaffold + spec template, re-stamps setup_version
 ```
 

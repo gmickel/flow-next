@@ -41,6 +41,9 @@ if [ "${#FLOW_PY[@]}" -eq 0 ]; then
   exit 1
 fi
 
-FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py"
-[ -f "$FLOWCTL_ENTRY" ] || FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl.py"
+FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl.py"
+if [ "$#" -eq 1 ] && { [ "$1" = "usage" ] || [ "$1" = "--help" ]; } \
+  && [ -f "$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py" ]; then
+  FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py"
+fi
 exec "${FLOW_PY[@]}" "$FLOWCTL_ENTRY" "$@"

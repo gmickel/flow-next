@@ -61,7 +61,8 @@ IF NOT DEFINED _prog (
 REM %_prog% is intentionally UNQUOTED so a two-word `py -3` expands to two argv
 REM words; this is why %PYTHON_BIN% must be a command name only. Args (%*) and
 REM the dp0 path are quoted so spaced/paren'd install paths survive.
-SET "_entry=%dp0%flowctl_bootstrap.py"
-IF NOT EXIST "%_entry%" SET "_entry=%dp0%flowctl.py"
+SET "_entry=%dp0%flowctl.py"
+IF EXIST "%dp0%flowctl_bootstrap.py" IF "%~2"=="" IF "%~1"=="usage" SET "_entry=%dp0%flowctl_bootstrap.py"
+IF EXIST "%dp0%flowctl_bootstrap.py" IF "%~2"=="" IF "%~1"=="--help" SET "_entry=%dp0%flowctl_bootstrap.py"
 %_prog% "%_entry%" %*
 EXIT /b %errorlevel%

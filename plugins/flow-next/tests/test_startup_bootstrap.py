@@ -1,4 +1,4 @@
-"""Startup cache, source-fallback, path, and usage-fast-path contracts."""
+"""Source-authoritative startup, launcher, help, and usage contracts."""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP = ROOT / "scripts" / "flowctl_bootstrap.py"
 DOGFOOD_BOOTSTRAP = ROOT.parents[1] / ".flow" / "bin" / "flowctl_bootstrap.py"
+HELP_TEXT = ROOT / "scripts" / "flowctl-help.txt"
+DOGFOOD_HELP_TEXT = ROOT.parents[1] / ".flow" / "bin" / "flowctl-help.txt"
 SCRIPT_LAUNCHER = ROOT / "scripts" / "flowctl"
 BIN_LAUNCHER = ROOT / "bin" / "flowctl"
 BUNDLED_USAGE = ROOT / "templates" / "usage.md"
@@ -34,6 +36,11 @@ class StartupBootstrapTest(unittest.TestCase):
             BOOTSTRAP.read_bytes(),
             DOGFOOD_BOOTSTRAP.read_bytes(),
             "canonical and dogfood bootstrap copies must stay byte-identical",
+        )
+        self.assertEqual(
+            HELP_TEXT.read_bytes(),
+            DOGFOOD_HELP_TEXT.read_bytes(),
+            "canonical and dogfood help fast-path copies must stay byte-identical",
         )
 
     def _install(self, root: Path, source: str, *, nested: bool = False) -> tuple[Path, Path]:
@@ -53,21 +60,18 @@ class StartupBootstrapTest(unittest.TestCase):
             text=True,
         )
 
-    def test_checked_hash_cache_created_and_reused(self) -> None:
+    def test_non_static_commands_never_create_executable_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            boot, source = self._install(root, 'def main():\n    print("CACHE-OK")\n')
+            boot, source = self._install(root, 'def main():\n    print("SOURCE-OK")\n')
             first = self._run(boot, root)
             second = self._run(boot, root)
             self.assertEqual(first.returncode, 0, first.stderr)
-            self.assertEqual(second.stdout, "CACHE-OK\n")
+            self.assertEqual(second.stdout, "SOURCE-OK\n")
             cache = Path(importlib.util.cache_from_source(str(source)))
-            data = cache.read_bytes()
-            self.assertEqual(data[:4], importlib.util.MAGIC_NUMBER)
-            self.assertEqual(int.from_bytes(data[4:8], "little") & 0b11, 0b11)
-            self.assertEqual(data[8:16], importlib.util.source_hash(source.read_bytes()))
+            self.assertFalse(cache.exists())
 
-    def test_same_size_same_mtime_source_change_invalidates_cache(self) -> None:
+    def test_same_size_same_mtime_source_change_is_authoritative(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             one = 'def main():\n    print("VERSION-A")\n'
@@ -82,31 +86,22 @@ class StartupBootstrapTest(unittest.TestCase):
             self.assertEqual(first.stdout, "VERSION-A\n")
             self.assertEqual(second.stdout, "VERSION-B\n")
 
-    def test_corrupt_cache_recovers_from_source_and_refreshes(self) -> None:
+    def test_forged_executable_cache_is_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            boot, source = self._install(root, 'def main():\n    print("RECOVERED")\n')
-            self.assertEqual(self._run(boot, root).returncode, 0)
+            boot, source = self._install(root, 'def main():\n    print("TRACKED-SOURCE")\n')
             cache = Path(importlib.util.cache_from_source(str(source)))
-            cache.write_bytes(b"corrupt")
-            recovered = self._run(boot, root)
-            self.assertEqual(recovered.returncode, 0, recovered.stderr)
-            self.assertEqual(recovered.stdout, "RECOVERED\n")
-            self.assertEqual(cache.read_bytes()[:4], importlib.util.MAGIC_NUMBER)
+            cache.parent.mkdir()
+            attacker = root / "attacker.py"
+            attacker.write_text('def main():\n    print("FORGED-CACHE")\n', encoding="utf-8")
+            import py_compile
 
-    def test_unwritable_cache_path_compiles_source_in_memory(self) -> None:
-        source = Path("/tmp/logical/flowctl.py")
-        source_bytes = b'def main():\n    print("SOURCE")\n'
-        with mock.patch("py_compile.compile", side_effect=PermissionError("read-only")):
-            code = bootstrap._source_code(source, source_bytes)
-        namespace: dict = {}
-        exec(code, namespace)
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            namespace["main"]()
-        self.assertEqual(out.getvalue(), "SOURCE\n")
+            py_compile.compile(str(attacker), cfile=str(cache), doraise=True)
+            result = self._run(boot, root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "TRACKED-SOURCE\n")
 
-    def test_cached_execution_preserves_logical_source_file(self) -> None:
+    def test_source_execution_preserves_logical_source_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             boot, source = self._install(
@@ -175,7 +170,12 @@ class StartupBootstrapTest(unittest.TestCase):
             root = Path(tmp)
             bindir = root / "repo" / ".flow" / "bin"
             bindir.mkdir(parents=True)
-            for source in (SCRIPT_LAUNCHER, BOOTSTRAP, ROOT / "scripts" / "flowctl.py"):
+            for source in (
+                SCRIPT_LAUNCHER,
+                BOOTSTRAP,
+                HELP_TEXT,
+                ROOT / "scripts" / "flowctl.py",
+            ):
                 target = bindir / source.name
                 shutil.copy2(source, target)
             launcher = bindir / "flowctl"
@@ -234,6 +234,15 @@ class StartupBootstrapTest(unittest.TestCase):
                 self.assertEqual(accelerated.returncode, direct.returncode, args)
                 self.assertEqual(accelerated.stdout, direct.stdout, args)
                 self.assertEqual(accelerated.stderr, direct.stderr, args)
+
+    def test_tracked_root_help_matches_argparse_byte_for_byte(self) -> None:
+        direct = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "flowctl.py"), "--help"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertEqual(HELP_TEXT.read_text(encoding="utf-8"), direct.stdout)
 
 
 if __name__ == "__main__":

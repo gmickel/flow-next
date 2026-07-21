@@ -37,7 +37,8 @@ Works out of the box for parallel branches. No setup required.
 ├── bin/                       # Local flowctl install (via /flow-next:setup)
 │   ├── flowctl                # bash launcher (Git Bash / WSL / macOS / Linux)
 │   ├── flowctl.cmd            # batch launcher (cmd.exe / PowerShell)
-│   ├── flowctl_bootstrap.py   # source-validating startup accelerator
+│   ├── flowctl_bootstrap.py   # source-authoritative startup front end
+│   ├── flowctl-help.txt       # tracked root-help fast-path output
 │   └── flowctl.py             # source of truth (all CLI logic)
 ├── templates/spec.md          # Setup-managed copy of the canonical scaffold
 ├── specs/fn-N-slug.json       # Spec state - colocated with .md
@@ -114,7 +115,7 @@ flowctl usage
 
 Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin — this is how plugin-mode repos read the guide), then the repo-local `.flow/usage.md` (copy-mode installs, where flowctl runs from `.flow/bin/` with no plugin tree around it). Exits 1 with a pointer to `/flow-next:setup` when neither exists.
 
-The Unix and Windows launchers route this exact command through the small `flowctl_bootstrap.py` fast path, so printing static guidance does not load the full CLI. Other commands use the same bootstrap's source-first cache: it accepts only interpreter-tagged checked-hash bytecode matching the current `flowctl.py`, preserves `flowctl.py` as the logical `__file__`, and falls back to source for missing, stale, corrupt, or unwritable cache state. Generated `__pycache__/` files are ignored and never distributed as source.
+The Unix and Windows launchers route this exact command through the small `flowctl_bootstrap.py` fast path, so printing static guidance does not load the full CLI. Exact root `--help` similarly reads tracked `flowctl-help.txt`, with parity tests pinning it to argparse output. The bytecode-cache proof was rejected: a runtime-written ignored pyc can validate a source hash without proving its executable payload came from that source. Every non-static command therefore compiles tracked `flowctl.py` in memory, preserves it as the logical `__file__`, and never reads or writes executable cache state.
 
 ### setup-mode
 

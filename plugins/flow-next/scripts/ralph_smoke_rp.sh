@@ -161,6 +161,7 @@ mkdir -p scripts/ralph
 cp -R "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/." scripts/ralph/
 cp "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/flowctl.py
 cp "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" scripts/ralph/flowctl_bootstrap.py
+cp "$PLUGIN_ROOT/scripts/flowctl-help.txt" scripts/ralph/flowctl-help.txt
 cp "$PLUGIN_ROOT/scripts/flowctl" scripts/ralph/flowctl
 chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl
 FLOWCTL="scripts/ralph/flowctl"

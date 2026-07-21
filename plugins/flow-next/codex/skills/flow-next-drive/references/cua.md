@@ -413,7 +413,7 @@ lume ls # confirm the image is present
 **The Sandbox SDK** (drives the provisioned machine, both backends):
 
 ```bash
-# Cua's quickstart requires Python 3.12+ (lists 3.12/3.13). flow-next itself is 3.8+,
+# Cua's quickstart requires Python 3.12+ (lists 3.12/3.13). flow-next itself is 3.11+,
 # so install into a dedicated venv: python3.12 -m venv .cua && .cua/bin/pip install cua
 pip install cua # MIT base; the omni/vision extras are NOT needed here — see Licensing
 

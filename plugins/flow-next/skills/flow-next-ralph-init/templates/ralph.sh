@@ -81,8 +81,11 @@ else
   . "\$DIR/../../../scripts/lib/pick-python.sh"
 fi
 pick_python || { flow_python_error "flowctl"; exit 1; }
-ENTRY="\$DIR/flowctl_bootstrap.py"
-[ -f "\$ENTRY" ] || ENTRY="\$DIR/flowctl.py"
+ENTRY="\$DIR/flowctl.py"
+if [ "\$#" -eq 1 ] && { [ "\$1" = "usage" ] || [ "\$1" = "--help" ]; } \
+  && [ -f "\$DIR/flowctl_bootstrap.py" ]; then
+  ENTRY="\$DIR/flowctl_bootstrap.py"
+fi
 exec "\${FLOW_PY[@]}" "\$ENTRY" "\$@"
 SH
     chmod +x "$wrapper" 2>/dev/null || true

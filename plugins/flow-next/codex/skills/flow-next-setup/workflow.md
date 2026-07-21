@@ -102,11 +102,12 @@ cp "${PLUGIN_ROOT}/scripts/flowctl" .flow/bin/flowctl
 cp "${PLUGIN_ROOT}/scripts/flowctl.cmd" .flow/bin/flowctl.cmd
 cp "${PLUGIN_ROOT}/scripts/flowctl.py" .flow/bin/flowctl.py
 cp "${PLUGIN_ROOT}/scripts/flowctl_bootstrap.py" .flow/bin/flowctl_bootstrap.py
+cp "${PLUGIN_ROOT}/scripts/flowctl-help.txt" .flow/bin/flowctl-help.txt
 cp "${PLUGIN_ROOT}/templates/spec.md" .flow/templates/spec.md
 chmod +x .flow/bin/flowctl
 ```
 
-`flowctl.cmd` is the Windows batch launcher (cmd.exe / PowerShell — Claude Desktop, native Codex, native Cursor); no `chmod +x` needed (PATHEXT resolves it, not the exec bit). The bash `flowctl` and the `.cmd` share the small `flowctl_bootstrap.py` accelerator and source-of-truth `flowctl.py`; the bootstrap always validates source before accepting ignored bytecode and safely falls back to source.
+`flowctl.cmd` is the Windows batch launcher (cmd.exe / PowerShell — Claude Desktop, native Codex, native Cursor); no `chmod +x` needed (PATHEXT resolves it, not the exec bit). The bash `flowctl` and the `.cmd` share the small `flowctl_bootstrap.py` front end, tracked `flowctl-help.txt`, and source-of-truth `flowctl.py`. Only exact static help/usage requests use fast paths; every other command compiles tracked source in memory and never reads executable cache state.
 
 `.flow/templates/spec.md` is the canonical 7-section spec scaffold that the AGENTS.md / CLAUDE.md snippet points downstream agents at. Copying it project-local means the path the snippet references resolves without depending on the plugin install location.
 

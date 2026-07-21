@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Source-first startup accelerator for the bundled flowctl CLI.
+"""Small, source-authoritative startup front end for the bundled flowctl CLI.
 
-The launcher always reads and hashes ``flowctl.py`` before accepting cached
-bytecode.  Cache files are interpreter-tagged, checked-hash ``.pyc`` files in
-the standard ignored ``__pycache__`` directory.  Missing, stale, corrupt, or
-unwritable cache state falls back to compiling the source in memory.
+Only exact static commands use tracked fast-path data. Every other command
+compiles ``flowctl.py`` from source in memory; ignored executable caches are
+never read or written.
 """
 
 import importlib.util
-import marshal
 import sys
 import types
 from pathlib import Path
@@ -16,6 +14,7 @@ from pathlib import Path
 
 MIN_PYTHON = (3, 11)
 SOURCE_NAME = "flowctl.py"
+HELP_NAME = "flowctl-help.txt"
 USAGE_ERROR = (
     "No usage guide found (searched the plugin's templates/usage.md, then "
     ".flow/usage.md). Reinstall/update the flow-next plugin, or run "
@@ -75,50 +74,14 @@ def _usage_fast_path(source: Path) -> int:
     return 1
 
 
-def _checked_cache_code(source: Path, source_bytes: bytes) -> types.CodeType:
-    """Load code only from a valid checked-hash cache for this exact source."""
-    cache = Path(importlib.util.cache_from_source(str(source)))
-    data = cache.read_bytes()
-    if len(data) < 17 or data[:4] != importlib.util.MAGIC_NUMBER:
-        raise ValueError("invalid bytecode header")
-    flags = int.from_bytes(data[4:8], "little")
-    if flags & 0b11 != 0b11:
-        raise ValueError("cache is not checked-hash bytecode")
-    if data[8:16] != importlib.util.source_hash(source_bytes):
-        raise ValueError("source hash changed")
-    code = marshal.loads(data[16:])
-    if not isinstance(code, types.CodeType):
-        raise ValueError("cache payload is not code")
-    return code
-
-
-def _source_code(source: Path, source_bytes: bytes) -> types.CodeType:
-    """Refresh checked-hash bytecode best-effort, then fall back to source."""
-    import py_compile
-
-    try:
-        py_compile.compile(
-            str(source),
-            cfile=importlib.util.cache_from_source(str(source)),
-            doraise=True,
-            invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH,
-        )
-        return _checked_cache_code(source, source_bytes)
-    except (ImportError, OSError, EOFError, ValueError, py_compile.PyCompileError):
-        return compile(source_bytes, str(source), "exec")
-
-
 def _load_flowctl(source: Path):
     source_bytes = source.read_bytes()
-    try:
-        code = _checked_cache_code(source, source_bytes)
-    except (ImportError, OSError, EOFError, ValueError):
-        code = _source_code(source, source_bytes)
+    code = compile(source_bytes, str(source), "exec")
 
     spec = importlib.util.spec_from_file_location("flowctl", source)
     module = types.ModuleType("flowctl")
     module.__file__ = str(source)
-    module.__cached__ = importlib.util.cache_from_source(str(source))
+    module.__cached__ = None
     module.__loader__ = spec.loader if spec is not None else None
     module.__package__ = ""
     module.__spec__ = spec
@@ -134,6 +97,14 @@ def main() -> int:
     source = Path(__file__).resolve().with_name(SOURCE_NAME)
     if sys.argv[1:] == ["usage"]:
         return _usage_fast_path(source)
+    if sys.argv[1:] == ["--help"]:
+        help_path = source.with_name(HELP_NAME)
+        try:
+            if help_path.is_file():
+                sys.stdout.write(help_path.read_text(encoding="utf-8"))
+                return 0
+        except OSError:
+            pass
 
     sys.argv[0] = str(source)
     module = _load_flowctl(source)

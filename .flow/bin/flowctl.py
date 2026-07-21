@@ -8096,8 +8096,11 @@ if [ "${#FLOW_PY[@]}" -eq 0 ]; then
   exit 1
 fi
 
-FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py"
-[ -f "$FLOWCTL_ENTRY" ] || FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl.py"
+FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl.py"
+if [ "$#" -eq 1 ] && { [ "$1" = "usage" ] || [ "$1" = "--help" ]; } \
+  && [ -f "$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py" ]; then
+  FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py"
+fi
 exec "${FLOW_PY[@]}" "$FLOWCTL_ENTRY" "$@"
 '''
 
@@ -8164,8 +8167,9 @@ IF NOT DEFINED _prog (
 REM %_prog% is intentionally UNQUOTED so a two-word `py -3` expands to two argv
 REM words; this is why %PYTHON_BIN% must be a command name only. Args (%*) and
 REM the dp0 path are quoted so spaced/paren'd install paths survive.
-SET "_entry=%dp0%flowctl_bootstrap.py"
-IF NOT EXIST "%_entry%" SET "_entry=%dp0%flowctl.py"
+SET "_entry=%dp0%flowctl.py"
+IF EXIST "%dp0%flowctl_bootstrap.py" IF "%~2"=="" IF "%~1"=="usage" SET "_entry=%dp0%flowctl_bootstrap.py"
+IF EXIST "%dp0%flowctl_bootstrap.py" IF "%~2"=="" IF "%~1"=="--help" SET "_entry=%dp0%flowctl_bootstrap.py"
 %_prog% "%_entry%" %*
 EXIT /b %errorlevel%
 '''
@@ -8319,6 +8323,7 @@ PLUGIN_MODE_COPY_ARTIFACTS = [
     ".flow/bin/flowctl.cmd",
     ".flow/bin/flowctl.py",
     ".flow/bin/flowctl_bootstrap.py",
+    ".flow/bin/flowctl-help.txt",
     ".flow/templates/spec.md",
     ".flow/usage.md",
 ]

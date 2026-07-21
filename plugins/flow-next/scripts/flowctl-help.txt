@@ -1,0 +1,79 @@
+usage: flowctl.py [-h]
+                  {init,setup-block,detect,status,config,sync,pilot-log,review-backend,models,review-rounds,memory,prospect,anchor,repo-map,prime,glossary,strategy,spec,scope,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
+
+flowctl - CLI for .flow/ task tracking
+
+positional arguments:
+  {init,setup-block,detect,status,config,sync,pilot-log,review-backend,models,review-rounds,memory,prospect,anchor,repo-map,prime,glossary,strategy,spec,scope,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
+    init                Initialize .flow/ directory
+    setup-block         Apply or resolve the tracked Flow-Next docs block
+    detect              Check if .flow/ exists
+    status              Show .flow state and active runs
+    config              Config commands
+    sync                Tracker sync plumbing (config / state / enumerate /
+                        receipt)
+    pilot-log           Pilot backlog-mode decision log (append / summary)
+    review-backend      Get review backend (ASK if not configured)
+    models              Model role-map helpers (read-only resolve; no
+                        judgment)
+    review-rounds       Deterministic review-round cap counter (rp workflows:
+                        increment before dispatch, reset on SHIP)
+    memory              Memory commands
+    prospect            Prospect artifact commands
+    anchor              Single-call worker anchor bundle — verbatim Phase-1
+                        re-anchor reads (task+spec show/cat, git state, memory
+                        flag, glossary, memory index, dependencies) in one
+                        deterministic payload
+    repo-map            Read clawpatch's `.clawpatch/features/*.json` feature
+                        index. Bypasses .flow/ guard — gates on .clawpatch/
+                        presence.
+    prime               Prime deterministic helpers (classify). Bounded, pure-
+                        stdlib, no LLM — the skill layers judgment on the
+                        emitted signals.
+    glossary            Project glossary commands (GLOSSARY.md at repo root or
+                        nearest ancestor). Lives outside .flow/ so it survives
+                        flow-next removal.
+    strategy            Project strategy commands (STRATEGY.md at repo root,
+                        single-root). Lives outside .flow/ so it survives
+                        flow-next removal. Read-only plumbing — the skill
+                        writes the file.
+    spec                Spec commands (canonical)
+    scope               Scope helpers for --scope=business|technical|both
+                        (parser + write policy)
+    task                Task commands
+    dep                 Dependency commands
+    show                Show spec or task
+    specs               List all specs
+    tasks               List tasks
+    list                List all specs and tasks
+    cat                 Print spec markdown
+    usage               Print the bundled usage guide (CLI + orchestration
+                        recipes)
+    setup-mode          Stamp setup_mode in .flow/meta.json
+    ready               List ready tasks
+    next                Select next plan/work unit
+    start               Start task
+    done                Complete task
+    block               Block task with reason
+    validate            Validate spec or all
+    triage-skip         Trivial-diff triage pre-check (exit 0=SKIP, 1=REVIEW,
+                        2+=error)
+    gate                Gate-diet commands: green receipts + docs-only tiering
+                        (fn-102)
+    checkpoint          Checkpoint commands
+    rp                  RepoPrompt helpers
+    codex               Codex CLI helpers
+    copilot             GitHub Copilot CLI helpers
+    cursor              Cursor (cursor-agent CLI) helpers
+    review-deep-auto    Print deep passes that auto-enable for a changed-file
+                        list (fn-32.2)
+    review-walkthrough-defer
+                        Append deferred findings to .flow/review-
+                        deferred/<branch>.md (fn-32.3). Append-only; creates
+                        the directory if absent.
+    review-walkthrough-record
+                        Stamp the receipt with walkthrough bucket counts
+                        (fn-32.3). Additive — never changes verdict.
+
+options:
+  -h, --help            show this help message and exit
