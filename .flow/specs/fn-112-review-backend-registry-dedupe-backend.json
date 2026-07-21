@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-112-review-backend-registry-dedupe-backend.md",
-  "status": "open",
+  "status": "done",
   "title": "review backend registry: dedupe backend clones, prompts to templates",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T13:00:51.617573Z"
+  "updated_at": "2026-07-21T05:11:00.777234Z"
 }
