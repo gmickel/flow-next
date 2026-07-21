@@ -1,8 +1,9 @@
-"""fn-114.1 — plugin ships zero hooks by default (Ralph opt-in).
+"""fn-114.1 / fn-114.2 - plugin ships zero hooks by default (Ralph opt-in).
 
 Pins:
   * plugins/flow-next/hooks/ is absent (no hooks.json, no empty dir required)
   * .claude-plugin/plugin.json carries no ``hooks`` key
+  * codex mirror ships no hooks.json (sync-codex zero-default)
   * ralph-init skill prose owns registration (mentions project settings merge)
   * setup workflow asks Ralph with default No and documents removal
 """
@@ -18,6 +19,7 @@ PLUGIN_DIR = HERE.parent.parent
 PLUGIN_JSON = PLUGIN_DIR / ".claude-plugin" / "plugin.json"
 HOOKS_DIR = PLUGIN_DIR / "hooks"
 HOOKS_JSON = HOOKS_DIR / "hooks.json"
+CODEX_HOOKS_JSON = PLUGIN_DIR / "codex" / "hooks.json"
 RALPH_INIT = PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "SKILL.md"
 SETUP_WORKFLOW = PLUGIN_DIR / "skills" / "flow-next-setup" / "workflow.md"
 UNINSTALL = PLUGIN_DIR / "commands" / "flow-next" / "uninstall.md"
@@ -47,6 +49,13 @@ class TestNoDefaultHooks(unittest.TestCase):
             "hooks",
             data,
             "plugin.json must not declare a hooks field — zero default registration",
+        )
+
+    def test_codex_mirror_ships_no_hooks_json(self) -> None:
+        self.assertFalse(
+            CODEX_HOOKS_JSON.is_file(),
+            "plugins/flow-next/codex/hooks.json must not ship - "
+            "Ralph hooks are opt-in via ralph-init project settings",
         )
 
     def test_ralph_init_owns_registration_prose(self) -> None:

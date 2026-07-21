@@ -1,9 +1,10 @@
 #!/bin/bash
 # Generate pre-built Codex files from canonical skills/ and agents/ sources.
-# Output: plugins/flow-next/codex/{skills/,agents/,hooks.json}
+# Output: plugins/flow-next/codex/{skills/,agents/}
+# (No hooks.json: Ralph hooks are opt-in via ralph-init project settings, not the mirror.)
 #
 # Idempotent — running twice produces identical output.
-# Run after modifying skills/, agents/, or hooks/ and commit the result.
+# Run after modifying skills/ or agents/ and commit the result.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,7 +13,6 @@ PLUGIN_DIR="$REPO_ROOT/plugins/flow-next"
 CODEX_DIR="$PLUGIN_DIR/codex"
 SRC_SKILLS="$PLUGIN_DIR/skills"
 SRC_AGENTS="$PLUGIN_DIR/agents"
-SRC_HOOKS="$PLUGIN_DIR/hooks/hooks.json"
 
 # Model defaults (same as install-codex.sh)
 CODEX_MODEL_INTELLIGENT="${CODEX_MODEL_INTELLIGENT:-gpt-5.5}"
@@ -1565,65 +1565,17 @@ done
 
 echo -e "  ${GREEN}✓${NC} $agent_count agents generated"
 
-# ─── 3. Generate hooks.json ──────────────────────────────────────────────────
-
-echo -e "${BLUE}Generating hooks.json...${NC}"
-
-# Build Codex hooks from canonical source:
-# - Keep: PreToolUse (Bash only), PostToolUse (Bash only), Stop
-# - Drop: SubagentStop, Edit/Write matchers
-# - Drop: top-level "description" — Codex's hooks parser rejects unknown fields
-#   (`unknown field \`description\`, expected \`hooks\``), which silently disables
-#   all hooks (issue #198)
-# - Invoke via the bash wrapper (`bash scripts/ralph/hooks/ralph-guard`), same as
-#   canonical: the wrapper sources pick-python.sh and runs the guard through a
-#   probed interpreter, so a Windows Store `python3` stub (exits 9009) is skipped
-#   rather than executed. Prefer the wrapper when present; fall back to the legacy
-#   `scripts/ralph/hooks/ralph-guard.py` (direct shebang exec) for installs that
-#   ran ralph-init before the wrapper existed; no-op when neither is present.
-cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|Execute",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash|Execute",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi",
-            "timeout": 5
-          }
-        ]
-      }
-    ]
-  }
-}
-HOOKS_EOF
-
-echo -e "  ${GREEN}✓${NC} hooks.json generated"
+# ─── 3. Hooks (none by default; fn-114) ───────────────────────────────────────
+# Codex mirror ships ZERO hooks. Plugin hooks/ is gone; Ralph guard registration
+# is agent-driven via /flow-next:ralph-init into project .codex/hooks.json.
+# Remove any stale mirror hooks.json left from older sync runs.
+echo -e "${BLUE}Hooks: zero-default (no codex/hooks.json)...${NC}"
+if [ -f "$CODEX_DIR/hooks.json" ]; then
+  rm -f "$CODEX_DIR/hooks.json"
+  echo -e "  ${GREEN}✓${NC} removed stale codex/hooks.json"
+else
+  echo -e "  ${GREEN}✓${NC} no codex/hooks.json (correct)"
+fi
 
 # ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -1662,12 +1614,12 @@ else
   errors=$((errors + toml_errors))
 fi
 
-# Validate hooks.json
-if python3 -c "import json; json.load(open('$CODEX_DIR/hooks.json'))" 2>/dev/null; then
-  echo -e "  ${GREEN}✓${NC} hooks.json valid JSON"
-else
-  echo -e "  ${RED}✗${NC} hooks.json invalid JSON"
+# Assert no default hooks.json in the Codex mirror (fn-114 zero-default)
+if [ -f "$CODEX_DIR/hooks.json" ]; then
+  echo -e "  ${RED}✗${NC} codex/hooks.json must not ship (Ralph is opt-in via ralph-init)"
   errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} no codex/hooks.json (zero-default)"
 fi
 
 # Check no bare CLAUDE_PLUGIN_ROOT without fallback in skills
@@ -1946,5 +1898,5 @@ if [ "$errors" -gt 0 ]; then
   exit 1
 fi
 
-echo -e "${GREEN}Sync complete:${NC} $skill_count skills, $agent_count agents, hooks.json"
+echo -e "${GREEN}Sync complete:${NC} $skill_count skills, $agent_count agents (no default hooks)"
 echo -e "  ${BLUE}Output:${NC} plugins/flow-next/codex/"

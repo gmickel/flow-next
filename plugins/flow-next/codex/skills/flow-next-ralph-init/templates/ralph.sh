@@ -718,13 +718,14 @@ append_progress() {
   } >> "$PROGRESS_FILE"
 }
 
-# Write completion marker to progress.txt (MUST match find_active_runs() detection in flowctl.py)
+# Write completion marker to progress.txt (MUST match find_active_runs() in ralphctl.py
+# and the flowctl status soft-probe of the same markers)
 write_completion_marker() {
   local reason="${1:-DONE}"
   {
     echo ""
     echo "completion_reason=$reason"
-    echo "promise=COMPLETE"  # CANONICAL - must match flowctl.py substring search
+    echo "promise=COMPLETE"  # CANONICAL - must match ralphctl.py / soft-probe substring search
   } >> "$PROGRESS_FILE"
 }
 

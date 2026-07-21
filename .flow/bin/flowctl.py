@@ -7162,18 +7162,22 @@ def find_dependents(task_id: str, same_epic: bool = False) -> list[str]:
     return sorted(dependents)
 
 
-# --- Ralph Run Detection ---
+# --- Ralph status soft-probe (fn-114 PLAN DECISION 2026-07-21) ---
+# Control (pause/resume/stop/status) lives in scripts/ralph/ralphctl.py after
+# ralph-init. flowctl status only soft-probes scripts/ralph/runs/ when present:
+# tolerant dir/progress read, no import of ralphctl, zero cost when absent.
 
 
-def find_active_runs() -> list[dict]:
-    """
-    Find active Ralph runs by scanning scripts/ralph/runs/*/progress.txt.
-    A run is active if progress.txt exists AND does NOT contain 'promise=COMPLETE'.
-    Returns list of dicts with run info.
+def soft_probe_active_runs() -> list[dict]:
+    """Tolerant scan of scripts/ralph/runs/ for ``flowctl status`` display.
+
+    Returns [] immediately when the directory is absent (Ralph not installed;
+    zero cost). When present, parses progress.txt with the same completion
+    markers as ralphctl. Does not import ralphctl.
     """
     repo_root = get_repo_root()
     runs_dir = repo_root / "scripts" / "ralph" / "runs"
-    active_runs = []
+    active_runs: list[dict] = []
 
     if not runs_dir.exists():
         return active_runs
@@ -7185,15 +7189,16 @@ def find_active_runs() -> list[dict]:
         if not progress_file.exists():
             continue
 
-        content = progress_file.read_text(encoding="utf-8", errors="replace")
+        try:
+            content = progress_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
 
-        # Run is complete if it contains the completion marker block
         # Require both completion_reason= AND promise=COMPLETE to avoid
         # false positives from per-iteration promise= logging
         if "completion_reason=" in content and "promise=COMPLETE" in content:
             continue
 
-        # Parse progress info from content
         run_info = {
             "id": run_dir.name,
             "path": str(run_dir),
@@ -7204,12 +7209,10 @@ def find_active_runs() -> list[dict]:
             "stopped": (run_dir / "STOP").exists(),
         }
 
-        # Extract iteration number (format: "iteration: N" or "Iteration N")
         iter_match = re.search(r"iteration[:\s]+(\d+)", content, re.IGNORECASE)
         if iter_match:
             run_info["iteration"] = int(iter_match.group(1))
 
-        # Extract current epic/task (format varies, try common patterns)
         epic_match = re.search(r"epic[:\s]+(fn-[\w-]+)", content, re.IGNORECASE)
         if epic_match:
             run_info["current_epic"] = epic_match.group(1)
@@ -7223,25 +7226,9 @@ def find_active_runs() -> list[dict]:
     return active_runs
 
 
-def find_active_run(
-    run_id: Optional[str] = None, use_json: bool = False
-) -> tuple[str, Path]:
-    """
-    Find a single active run. Auto-detect if run_id is None.
-    Returns (run_id, run_dir) tuple.
-    """
-    runs = find_active_runs()
-    if run_id:
-        matches = [r for r in runs if r["id"] == run_id]
-        if not matches:
-            error_exit(f"Run {run_id} not found or not active", use_json=use_json)
-        return matches[0]["id"], Path(matches[0]["path"])
-    if len(runs) == 0:
-        error_exit("No active runs", use_json=use_json)
-    if len(runs) > 1:
-        ids = ", ".join(r["id"] for r in runs)
-        error_exit(f"Multiple active runs, specify --run: {ids}", use_json=use_json)
-    return runs[0]["id"], Path(runs[0]["path"])
+def _ralph_runs_dir_present() -> bool:
+    """True when scripts/ralph/runs/ exists (Ralph scaffold installed)."""
+    return (get_repo_root() / "scripts" / "ralph" / "runs").is_dir()
 
 
 # --- Commands ---
@@ -7585,7 +7572,7 @@ def cmd_detect(args: argparse.Namespace) -> None:
 
 
 def cmd_status(args: argparse.Namespace) -> None:
-    """Show .flow state and active Ralph runs."""
+    """Show .flow state; soft-probe active Ralph runs when scaffold present."""
     flow_dir = get_flow_dir()
     flow_exists = flow_dir.exists()
 
@@ -7620,8 +7607,9 @@ def cmd_status(args: argparse.Namespace) -> None:
                 except Exception:
                     pass
 
-    # Get active runs
-    active_runs = find_active_runs()
+    # Soft-probe: only scan when scripts/ralph/runs/ exists (fn-114).
+    runs_present = _ralph_runs_dir_present()
+    active_runs = soft_probe_active_runs() if runs_present else []
 
     if args.json:
         json_output(
@@ -7647,118 +7635,36 @@ def cmd_status(args: argparse.Namespace) -> None:
         if not flow_exists:
             print(".flow/ not initialized")
         else:
-            total_epics = sum(epic_counts.values())
-            total_tasks = sum(task_counts.values())
             print(f"Specs: {epic_counts['open']} open, {epic_counts['done']} done")
             print(
                 f"Tasks: {task_counts['todo']} todo, {task_counts['in_progress']} in_progress, "
                 f"{task_counts['done']} done, {task_counts['blocked']} blocked"
             )
 
-        print()
-        if active_runs:
-            print("Active runs:")
-            for r in active_runs:
-                state = []
-                if r["paused"]:
-                    state.append("PAUSED")
-                if r["stopped"]:
-                    state.append("STOPPED")
-                state_str = f" [{', '.join(state)}]" if state else ""
-                task_info = ""
-                if r["current_task"]:
-                    task_info = f", working on {r['current_task']}"
-                elif r["current_epic"]:
-                    task_info = f", epic {r['current_epic']}"
-                iter_info = f"iteration {r['iteration']}" if r["iteration"] else "starting"
-                print(f"  {r['id']} ({iter_info}{task_info}){state_str}")
-        else:
-            print("No active runs")
+        # Active-runs section only when Ralph scaffold is present.
+        if runs_present:
+            print()
+            if active_runs:
+                print("Active runs:")
+                for r in active_runs:
+                    state = []
+                    if r["paused"]:
+                        state.append("PAUSED")
+                    if r["stopped"]:
+                        state.append("STOPPED")
+                    state_str = f" [{', '.join(state)}]" if state else ""
+                    task_info = ""
+                    if r["current_task"]:
+                        task_info = f", working on {r['current_task']}"
+                    elif r["current_epic"]:
+                        task_info = f", epic {r['current_epic']}"
+                    iter_info = (
+                        f"iteration {r['iteration']}" if r["iteration"] else "starting"
+                    )
+                    print(f"  {r['id']} ({iter_info}{task_info}){state_str}")
+            else:
+                print("No active runs")
 
-
-def cmd_ralph_pause(args: argparse.Namespace) -> None:
-    """Pause a Ralph run."""
-    run_id, run_dir = find_active_run(args.run, use_json=args.json)
-    pause_file = run_dir / "PAUSE"
-    pause_file.touch()
-    if args.json:
-        json_output({"success": True, "run": run_id, "action": "paused"})
-    else:
-        print(f"Paused {run_id}")
-
-
-def cmd_ralph_resume(args: argparse.Namespace) -> None:
-    """Resume a paused Ralph run."""
-    run_id, run_dir = find_active_run(args.run, use_json=args.json)
-    pause_file = run_dir / "PAUSE"
-    pause_file.unlink(missing_ok=True)
-    if args.json:
-        json_output({"success": True, "run": run_id, "action": "resumed"})
-    else:
-        print(f"Resumed {run_id}")
-
-
-def cmd_ralph_stop(args: argparse.Namespace) -> None:
-    """Request a Ralph run to stop."""
-    run_id, run_dir = find_active_run(args.run, use_json=args.json)
-    stop_file = run_dir / "STOP"
-    stop_file.touch()
-    if args.json:
-        json_output({"success": True, "run": run_id, "action": "stop_requested"})
-    else:
-        print(f"Stop requested for {run_id}")
-
-
-def cmd_ralph_status(args: argparse.Namespace) -> None:
-    """Show Ralph run status."""
-    run_id, run_dir = find_active_run(args.run, use_json=args.json)
-    paused = (run_dir / "PAUSE").exists()
-    stopped = (run_dir / "STOP").exists()
-
-    # Read progress.txt for more info
-    progress_file = run_dir / "progress.txt"
-    iteration = None
-    current_epic = None
-    current_task = None
-
-    if progress_file.exists():
-        content = progress_file.read_text(encoding="utf-8", errors="replace")
-        iter_match = re.search(r"iteration[:\s]+(\d+)", content, re.IGNORECASE)
-        if iter_match:
-            iteration = int(iter_match.group(1))
-        epic_match = re.search(r"epic[:\s]+(fn-[\w-]+)", content, re.IGNORECASE)
-        if epic_match:
-            current_epic = epic_match.group(1)
-        task_match = re.search(r"task[:\s]+(fn-[\w.-]+\.\d+)", content, re.IGNORECASE)
-        if task_match:
-            current_task = task_match.group(1)
-
-    if args.json:
-        json_output(
-            {
-                "success": True,
-                "run": run_id,
-                "iteration": iteration,
-                "current_spec": current_epic,
-                "current_task": current_task,
-                "paused": paused,
-                "stopped": stopped,
-            }
-        )
-    else:
-        state = []
-        if paused:
-            state.append("PAUSED")
-        if stopped:
-            state.append("STOPPED")
-        state_str = f" [{', '.join(state)}]" if state else " [running]"
-        task_info = ""
-        if current_task:
-            task_info = f", working on {current_task}"
-        elif current_epic:
-            task_info = f", epic {current_epic}"
-        iter_info = f"iteration {iteration}" if iteration else "starting"
-        print(f"{run_id} ({iter_info}{task_info}){state_str}")
 
 
 def cmd_config_get(args: argparse.Namespace) -> None:
@@ -29241,30 +29147,6 @@ def main() -> None:
     )
     p_checkpoint_restore.add_argument("--json", action="store_true", help="JSON output")
     p_checkpoint_restore.set_defaults(func=cmd_checkpoint_restore)
-
-    # ralph (Ralph run control)
-    p_ralph = subparsers.add_parser("ralph", help="Ralph run control commands")
-    ralph_sub = p_ralph.add_subparsers(dest="ralph_cmd", required=True)
-
-    p_ralph_pause = ralph_sub.add_parser("pause", help="Pause a Ralph run")
-    p_ralph_pause.add_argument("--run", help="Run ID (auto-detect if single)")
-    p_ralph_pause.add_argument("--json", action="store_true", help="JSON output")
-    p_ralph_pause.set_defaults(func=cmd_ralph_pause)
-
-    p_ralph_resume = ralph_sub.add_parser("resume", help="Resume a paused Ralph run")
-    p_ralph_resume.add_argument("--run", help="Run ID (auto-detect if single)")
-    p_ralph_resume.add_argument("--json", action="store_true", help="JSON output")
-    p_ralph_resume.set_defaults(func=cmd_ralph_resume)
-
-    p_ralph_stop = ralph_sub.add_parser("stop", help="Request a Ralph run to stop")
-    p_ralph_stop.add_argument("--run", help="Run ID (auto-detect if single)")
-    p_ralph_stop.add_argument("--json", action="store_true", help="JSON output")
-    p_ralph_stop.set_defaults(func=cmd_ralph_stop)
-
-    p_ralph_status = ralph_sub.add_parser("status", help="Show Ralph run status")
-    p_ralph_status.add_argument("--run", help="Run ID (auto-detect if single)")
-    p_ralph_status.add_argument("--json", action="store_true", help="JSON output")
-    p_ralph_status.set_defaults(func=cmd_ralph_status)
 
     # rp (RepoPrompt wrappers)
     p_rp = subparsers.add_parser("rp", help="RepoPrompt helpers")

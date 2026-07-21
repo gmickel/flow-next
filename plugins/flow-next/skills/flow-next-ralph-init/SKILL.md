@@ -52,9 +52,9 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
 
 - Only create/update `scripts/ralph/` in the current repo.
 - If `scripts/ralph/` already exists, offer to update (preserves config.env).
-- Copy templates from `templates/` into `scripts/ralph/`.
+- Copy templates from `templates/` into `scripts/ralph/` (includes `ralphctl.py` for pause/resume/stop/status).
 - Copy `flowctl`, `flowctl.cmd`, `flowctl.py` (from `$PLUGIN_ROOT/scripts/`) and `pick-python.sh` (from `$PLUGIN_ROOT/scripts/lib/`) into `scripts/ralph/` — flat, so the resolver lands at `scripts/ralph/pick-python.sh` (NOT `scripts/ralph/lib/`) where `ralph.sh` and the hook wrapper source it.
-- Set executable bit on `scripts/ralph/ralph.sh`, `scripts/ralph/ralph_once.sh`, and `scripts/ralph/flowctl`.
+- Set executable bit on `scripts/ralph/ralph.sh`, `scripts/ralph/ralph_once.sh`, `scripts/ralph/flowctl`, and `scripts/ralph/ralphctl.py`.
 - **Hook registration is agent-driven skill prose only.** The plugin ships ZERO hooks by default. You (the host agent) merge the guard entries into the project's host settings via Read+Edit. Never clobber unrelated hooks. Idempotent on re-run. **HARD BOUNDARY: no flowctl subcommand for hook install/remove/status — zero hook machinery in Python.**
 
 ## Workflow
@@ -108,10 +108,11 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/prompt_work.md" scripts/ralph/
    cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/prompt_completion.md" scripts/ralph/
    cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/watch-filter.py" scripts/ralph/
+   cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/ralphctl.py" scripts/ralph/
    cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
    mkdir -p scripts/ralph/hooks
    cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
-   chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
+   chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/ralphctl.py scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
 
    # Restore config.env
    cp /tmp/ralph-config-backup.env scripts/ralph/config.env
@@ -123,7 +124,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    cp -R "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/." scripts/ralph/
    cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
    cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
-   chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
+   chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/ralphctl.py scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
    ```
    Note: `cp -R templates/.` copies all files including dotfiles (.gitignore).
 
@@ -209,6 +210,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    Run from terminal:
    - ./scripts/ralph/ralph_once.sh (one iteration, observe)
    - ./scripts/ralph/ralph.sh (full loop, AFK)
+   - ./scripts/ralph/ralphctl.py status|pause|resume|stop  (run control; not flowctl)
    ```
 
    **If UPDATE_MODE=0:**
@@ -220,6 +222,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    - Edit scripts/ralph/config.env to customize settings
    - ./scripts/ralph/ralph_once.sh (one iteration, observe)
    - ./scripts/ralph/ralph.sh (full loop, AFK)
+   - ./scripts/ralph/ralphctl.py status|pause|resume|stop  (run control; not flowctl)
 
    Maintenance:
    - Re-run /flow-next:ralph-init after plugin updates to refresh scripts + re-merge hooks
