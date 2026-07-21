@@ -1355,3 +1355,58 @@ class TestModelsResolveCli(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReviewPinLadderStart(unittest.TestCase):
+    """PR #225 review: a role-map review pin must be the ladder START, not ignored."""
+
+    def test_ladder_reorders_to_start_at_pin(self) -> None:
+        flowctl = _load_flowctl()
+        ranking = list(flowctl.BACKEND_REGISTRY["codex"].get("models") or [])
+        self.assertGreater(len(ranking), 1)
+        pin = ranking[1]
+        calls = []
+
+        def dispatch(model, is_floor):
+            calls.append(model)
+            return ("<verdict>SHIP</verdict>", "sid", 0, "")
+
+        spec = flowctl.BackendSpec("codex", model=pin, model_explicit=False)
+        flowctl._dispatch_review_with_fallback(
+            backend="codex", spec=spec, explicit_model=False, repo_root=None,
+            dispatch=dispatch, is_unavailable=lambda o, e: False,
+            floor_model=None, version_fn=lambda: "v",
+        )
+        self.assertEqual(calls[0], pin, "ladder must start at the role-map pin")
+
+
+class TestDelegateSeededDefaultVsRoleMap(unittest.TestCase):
+    """PR #225 review: an init-materialized seeded default must not shadow the role map."""
+
+    def _resolve_with(self, config: dict):
+        with _repo() as root:
+            (root / ".flow" / "config.json").write_text(
+                json.dumps(config), encoding="utf-8"
+            )
+            prev = Path.cwd()
+            try:
+                os.chdir(root)
+                return flowctl.resolve_delegate_model()
+            finally:
+                os.chdir(prev)
+
+    def test_seeded_default_yields_to_role_map(self) -> None:
+        model, source = self._resolve_with({
+            "work": {"delegateModel": "gpt-5.6-terra"},
+            "models": {"roles": {"delegate": {"codex": "gpt-5.6-sol"}}},
+        })
+        self.assertEqual(model, "gpt-5.6-sol")
+        self.assertEqual(source, "role-map")
+
+    def test_real_user_pin_beats_role_map(self) -> None:
+        model, source = self._resolve_with({
+            "work": {"delegateModel": "gpt-5.6-sol"},
+            "models": {"roles": {"delegate": {"codex": "gpt-5.6-terra"}}},
+        })
+        self.assertEqual(model, "gpt-5.6-sol")
+        self.assertEqual(source, "config")

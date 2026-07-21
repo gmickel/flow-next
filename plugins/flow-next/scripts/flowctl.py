@@ -3360,7 +3360,16 @@ def _dispatch_review_with_fallback(
     on the receipt.
     """
     reg = BACKEND_REGISTRY[backend]
-    ranking = reg.get("models") or []
+    ranking = list(reg.get("models") or [])
+    # fn-115 (PR #225 review): a role-map pin resolves NON-explicit (ladder-
+    # eligible by design), so the ladder must START at the pin and step down
+    # from there - not restart at the registry top, which ignored the pin.
+    # With no role map, spec.model == ranking[0] and this is a no-op.
+    if spec.model and ranking and spec.model != ranking[0]:
+        if spec.model in ranking:
+            ranking = ranking[ranking.index(spec.model):]
+        else:
+            ranking = [spec.model] + ranking
 
     def _record(model: Optional[str], floor: bool) -> None:
         if resolution_out is not None:
@@ -4462,7 +4471,17 @@ def resolve_delegate_model() -> tuple[str, str]:
     """
     raw = _get_config_from_file("work.delegateModel")
     if raw is not _CONFIG_RAW_SENTINEL and raw is not None and str(raw).strip():
-        return str(raw).strip(), "config"
+        raw_val = str(raw).strip()
+        # fn-115 (PR #225 review): `flowctl init` MATERIALIZES the seeded
+        # default into config.json, so an on-disk value identical to the seed
+        # is not evidence of a user pin - let the role map win there. A real
+        # user pin (any non-seed value) still beats the map.
+        seeded = str(
+            get_default_config().get("work", {}).get("delegateModel", "")
+        ).strip()
+        role_pin = get_role_map_pin("delegate", "codex")
+        if raw_val != seeded or role_pin is None:
+            return raw_val, "config"
     model, _effort, source = resolve_role_model("delegate", "codex")
     return model or DELEGATE_BASELINE_MODEL, source
 
