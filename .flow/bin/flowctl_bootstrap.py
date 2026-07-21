@@ -6,7 +6,9 @@ compiles ``flowctl.py`` from source in memory; ignored executable caches are
 never read or written.
 """
 
+import hashlib
 import importlib.util
+import os
 import sys
 import types
 from pathlib import Path
@@ -15,6 +17,8 @@ from pathlib import Path
 MIN_PYTHON = (3, 11)
 SOURCE_NAME = "flowctl.py"
 HELP_NAME = "flowctl-help.txt"
+SOURCE_SHA256 = "b8e9f96da3807579911c14b6c372e16fe84f02dd47421efbbe921052f3bd9150"
+HELP_SHA256 = "ad7c987b1f90e8dd12f1e22c6ec4163c72222c3bbf49111ce278337258f01d85"
 USAGE_ERROR = (
     "No usage guide found (searched the plugin's templates/usage.md, then "
     ".flow/usage.md). Reinstall/update the flow-next plugin, or run "
@@ -34,6 +38,18 @@ def _runtime_error() -> int:
         file=sys.stderr,
     )
     return 1
+
+
+def _reconfigure_stdio_utf8() -> None:
+    """Match flowctl's legacy-codepage-safe output contract."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
 
 
 def _repo_root() -> Path:
@@ -90,21 +106,40 @@ def _load_flowctl(source: Path):
     return module
 
 
+def _root_help_fast_path(source: Path) -> bool:
+    """Write authenticated static help, or decline safely to live argparse."""
+    # argparse deliberately honors terminal width through COLUMNS. Static text
+    # is valid only for the default layout captured in flowctl-help.txt.
+    if "COLUMNS" in os.environ:
+        return False
+
+    help_path = source.with_name(HELP_NAME)
+    try:
+        source_bytes = source.read_bytes()
+        help_bytes = help_path.read_bytes()
+        if hashlib.sha256(source_bytes).hexdigest() != SOURCE_SHA256:
+            return False
+        if hashlib.sha256(help_bytes).hexdigest() != HELP_SHA256:
+            return False
+        help_text = help_bytes.decode("utf-8")
+    except (OSError, UnicodeError):
+        return False
+
+    sys.stdout.write(help_text)
+    return True
+
+
 def main() -> int:
     if sys.version_info < MIN_PYTHON:
         return _runtime_error()
 
+    _reconfigure_stdio_utf8()
+
     source = Path(__file__).resolve().with_name(SOURCE_NAME)
     if sys.argv[1:] == ["usage"]:
         return _usage_fast_path(source)
-    if sys.argv[1:] == ["--help"]:
-        help_path = source.with_name(HELP_NAME)
-        try:
-            if help_path.is_file():
-                sys.stdout.write(help_path.read_text(encoding="utf-8"))
-                return 0
-        except OSError:
-            pass
+    if sys.argv[1:] == ["--help"] and _root_help_fast_path(source):
+        return 0
 
     sys.argv[0] = str(source)
     module = _load_flowctl(source)

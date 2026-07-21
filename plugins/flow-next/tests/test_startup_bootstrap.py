@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import os
@@ -52,12 +53,19 @@ class StartupBootstrapTest(unittest.TestCase):
         flowctl.write_text(source, encoding="utf-8")
         return boot, flowctl
 
-    def _run(self, boot: Path, cwd: Path, *args: str) -> subprocess.CompletedProcess:
+    def _run(
+        self,
+        boot: Path,
+        cwd: Path,
+        *args: str,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, str(boot), *args],
             cwd=cwd,
             capture_output=True,
             text=True,
+            env=env,
         )
 
     def test_non_static_commands_never_create_executable_cache(self) -> None:
@@ -235,7 +243,50 @@ class StartupBootstrapTest(unittest.TestCase):
                 self.assertEqual(accelerated.stdout, direct.stdout, args)
                 self.assertEqual(accelerated.stderr, direct.stderr, args)
 
+    def test_static_output_reconfigures_legacy_ascii_streams_to_utf8(self) -> None:
+        env = {**os.environ, "PYTHONIOENCODING": "ascii"}
+        env.pop("COLUMNS", None)
+        with tempfile.TemporaryDirectory() as tmp:
+            for args in (("usage",), ("--help",)):
+                result = self._run(BOOTSTRAP, Path(tmp), *args, env=env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("flowctl", result.stdout)
+
+    def test_stale_or_corrupt_help_falls_back_to_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            boot, source = self._install(root, 'def main():\n    print("LIVE-HELP")\n')
+            help_path = source.with_name("flowctl-help.txt")
+            for payload in (b"STALE-HELP\n", b"\xff\xfe"):
+                help_path.write_bytes(payload)
+                result = self._run(boot, root, "--help")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "LIVE-HELP\n")
+
+    def test_columns_override_falls_back_to_width_aware_argparse(self) -> None:
+        env = {**os.environ, "COLUMNS": "120"}
+        with tempfile.TemporaryDirectory() as tmp:
+            direct = subprocess.run(
+                [sys.executable, str(ROOT / "scripts" / "flowctl.py"), "--help"],
+                cwd=tmp,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            accelerated = self._run(BOOTSTRAP, Path(tmp), "--help", env=env)
+        self.assertEqual(accelerated.returncode, direct.returncode)
+        self.assertEqual(accelerated.stdout, direct.stdout)
+        self.assertEqual(accelerated.stderr, direct.stderr)
+
     def test_tracked_root_help_matches_argparse_byte_for_byte(self) -> None:
+        self.assertEqual(
+            bootstrap.SOURCE_SHA256,
+            hashlib.sha256((ROOT / "scripts" / "flowctl.py").read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            bootstrap.HELP_SHA256,
+            hashlib.sha256(HELP_TEXT.read_bytes()).hexdigest(),
+        )
         direct = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "flowctl.py"), "--help"],
             capture_output=True,

@@ -9,12 +9,12 @@ Method: 12 fresh processes per command, discard the first two, report the median
 
 | Path | 3.1.0 baseline | Safe post-change median | Change | Post-change range |
 |---|---:|---:|---:|---:|
-| copied launcher `--help` | 0.2008s | 0.0636s | -68.3% | 0.0619–0.0668s |
-| plugin-bin launcher `--help` | 0.1971s | 0.0632s | -67.9% | 0.0627–0.0648s |
-| plugin-bin `usage` | 0.2242s | 0.0633s | -71.8% | 0.0617–0.0645s |
-| `config get "" --json` | 0.2197s | 0.2235s | +1.7% | 0.2213–0.2271s |
-| `status --json` | 0.2772s | 0.2767s | -0.2% | 0.2739–0.2828s |
-| `list --json` | 0.2764s | 0.2782s | +0.7% | 0.2748–0.2829s |
+| copied launcher `--help` | 0.2008s | 0.0636s | -68.3% | 0.0621–0.0670s |
+| plugin-bin launcher `--help` | 0.1971s | 0.0641s | -67.5% | 0.0621–0.0655s |
+| plugin-bin `usage` | 0.2242s | 0.0635s | -71.7% | 0.0618–0.0655s |
+| `config get "" --json` | 0.2197s | 0.2213s | +0.7% | 0.2158–0.2279s |
+| `status --json` | 0.2772s | 0.2777s | +0.2% | 0.2720–0.2888s |
+| `list --json` | 0.2764s | 0.2812s | +1.7% | 0.2747–0.2848s |
 
 Exact static `usage` and root-help requests route through the tracked bootstrap. Every other launcher invocation continues directly to tracked `flowctl.py`, preserving the 3.1.0 performance envelope; no measured ordinary path regressed by 10%.
 
@@ -27,9 +27,10 @@ Python's checked-hash pyc header proves which source hash a cache claims, but it
 The shipped bootstrap instead uses only tracked, non-executable fast-path data:
 
 - `flowctl usage` resolves the canonical bundled guide first, then copy-mode `.flow/usage.md` with the same error contract.
-- exact root `--help` reads tracked `flowctl-help.txt`; a parity test compares it byte-for-byte with live argparse output.
+- exact root `--help` reads tracked `flowctl-help.txt` only after authenticating both it and the adjacent source against hashes embedded in the bootstrap; mixed/interrupted copy-mode updates, corrupt UTF-8, and explicit `COLUMNS` layouts fall back to live argparse.
 - all other commands execute tracked `flowctl.py` directly through the launcher.
 - a regression test plants executable pyc content for the expected module path and proves the tracked source still runs.
+- static paths reconfigure stdout/stderr to UTF-8 with replacement, matching flowctl's legacy Windows codepage contract.
 
 Interpreter-choice caching was evaluated and rejected: safely invalidating command aliases, PATH changes, `PYTHON_BIN`, Windows `py -3`, and interpreter replacement would add a second mutable cache and more validation than the retained probe costs. Demand-driven argparse construction was also deferred because the safe static paths already remove the two high-frequency presentation costs, while lazy parser surgery would broaden compatibility risk across 140 command nodes.
 
