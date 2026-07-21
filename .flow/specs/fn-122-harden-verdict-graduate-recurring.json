@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-122-harden-verdict-graduate-recurring",
+  "created_at": "2026-07-21T22:45:24.941917Z",
+  "depends_on_epics": [],
+  "id": "fn-122-harden-verdict-graduate-recurring",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-122-harden-verdict-graduate-recurring.md",
+  "status": "open",
+  "title": "Harden verdict: graduate recurring memory entries into enforced gates",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-21T22:46:57.643033Z"
+}
