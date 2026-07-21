@@ -26,9 +26,8 @@ Role-map config plumbing: models.roles namespace, resolution order, verifiedAt s
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Role-map plumbing complete: models.roles.<role>.<backend> config namespace for exactly the five live roles, schema-validated on set (unknown role/backend/leaf errors with the valid list; pins are model or model:effort; verifiedAt ISO-validated). Resolution extends the fn-76 precedence in place per consumer: review (dispatch + deep-pass + validator ride BackendSpec.resolve model-fill), fastJudge (triage judges; fn-113's gpt-5.6-luna@high re-homed as the registry baseline under the map), delegate (raw on-disk work.delegateModel beats map; merged default alone does not), scout roles stored+validated for .3 consumption. Staleness nudge is pure date math (MODELS_STALE_DAYS=90, quiet when absent/unparseable, one line in status when stale, never blocks). No probing, no judgment, no LLM calls in Python - doctrine boundary held. 58 resolution/schema/nudge tests. Delegate-skill read path (doubt 1) assigned to .3 wire-in: a thin read-only models resolve surface so the work skill consumes the map instead of the merged default. Full parallel suite 89 files / 1921 tests / 0 failures / 71.4s; dual-copy identical.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f871b3f1883f1e78f76ff4d2f33d7c437dffd5b0
+- Tests: python3 scripts/run_tests_parallel.py (89 files, 1921 tests, 0 failures, 71.4s), test_model_resolution.py 58 green (matrices, schema, nudge), test_backend_spec 144 / test_gate_classify 18 green
 - PRs:
