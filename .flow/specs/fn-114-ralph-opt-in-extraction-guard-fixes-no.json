@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-114-ralph-opt-in-extraction-guard-fixes-no.md",
-  "status": "open",
+  "status": "done",
   "title": "ralph opt-in extraction: guard fixes + no-default-install",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T13:02:03.461992Z"
+  "updated_at": "2026-07-21T08:34:34.542925Z"
 }
