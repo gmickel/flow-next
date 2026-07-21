@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-21T08:35:37.657755Z",
+  "depends_on": [
+    "fn-115-model-pin-registry-role-map-in-config.1"
+  ],
+  "id": "fn-115-model-pin-registry-role-map-in-config.2",
+  "priority": null,
+  "spec": "fn-115-model-pin-registry-role-map-in-config",
+  "spec_path": ".flow/tasks/fn-115-model-pin-registry-role-map-in-config.2.md",
+  "status": "todo",
+  "title": "Setup refresh ceremony (probe, judge, propose, stamp)",
+  "updated_at": "2026-07-21T08:35:38.298588Z"
+}
