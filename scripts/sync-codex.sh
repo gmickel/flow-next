@@ -413,7 +413,7 @@ if [ -f "$work_skill" ]; then
   rm -f "${work_skill}.bak"
 fi
 
-# flow-next-setup: templates/usage.md — Codex command-name syntax
+# canonical templates/usage.md (mirrored to codex/templates/) — Codex command-name syntax
 # This template is copied into projects as `.flow/usage.md` by setup Step 4
 # (which byte-compares `.flow/usage.md` against it on re-runs). On Codex the
 # skill reads THIS mirror copy, and Codex project docs use `$flow-next-<cmd>`
@@ -423,10 +423,70 @@ fi
 # elsewhere keeps `/flow-next:` (agents resolve those contextually; this file
 # is a user-facing project doc where a literal `/flow-next:work` invocation
 # would hit an unavailable command). Validation below guards regression.
-setup_usage="$CODEX_DIR/skills/flow-next-setup/templates/usage.md"
+setup_usage="$CODEX_DIR/templates/usage.md"
 if [ -f "$setup_usage" ]; then
   sed -i.bak -E 's|/flow-next:([a-z-]+)|$flow-next-\1|g' "$setup_usage"
   rm -f "${setup_usage}.bak"
+fi
+
+# fn-121: plugin mode is Claude-Code-only (bin PATH injection). The Codex mirror
+# must never OFFER it: strip the plugin-mode sections from the setup workflow,
+# leaving copy mode as the only documented setup path. The per-skill pre-check
+# plugin BRANCH stays in the mirror - a repo set up in plugin mode by a Claude
+# Code user is still workable from Codex (its FLOWCTL preamble self-resolves),
+# and the branch is inert unless .flow/meta.json says setup_mode=plugin. For the
+# same reason the slim snippet TEMPLATE ships in the mirror (PR #227 review):
+# the mirrored pre-check's "Refresh now" path reads it, and excluding it would
+# strand a plugin-mode repo's snippet refresh when visited from Codex. Data, not
+# doctrine: the file alone offers nothing. Validation below guards regression.
+setup_wf="$CODEX_DIR/skills/flow-next-setup/workflow.md"
+if [ -f "$setup_wf" ]; then
+  awk '
+    /^## Step 2b: Setup mode/ {
+      print "## Existing-mode guard (before Step 3)";
+      print "";
+      print "Read the stamped mode before writing anything:";
+      print "";
+      print "```bash";
+      print "CURRENT_MODE=$(jq -r '"'"'.setup_mode // empty'"'"' .flow/meta.json 2>/dev/null)";
+      print "```";
+      print "";
+      print "When `CURRENT_MODE` is `plugin`, this repo is a Claude-Code-managed install with NO local `.flow/bin`/`.flow/templates`/`.flow/usage.md` snapshots by design. Never convert it silently: ask (plain-text numbered prompt) `Keep as-is (Recommended)` - skip Step 3, Step 4 copies, and the Step 7c stamp (set `MODE=plugin-kept`; config steps still run, and the Docs step may target AGENTS.md only - the CLAUDE.md marker block is the Claude-Code-managed rail, never touched from this host) - or `Convert to copy` - proceed normally (writes the snapshots; Step 7c stamps copy). Any other `CURRENT_MODE` value: set `MODE=copy` and continue.";
+      print "";
+      skip=1
+    }
+    /^## Step 3: Create \.flow\/bin\// {skip=0}
+    /^For \*\*Claude Code in plugin mode\*\*/ {skip2=1}
+    skip2 && /fall back to copy mode`/ && /^On / {skip2=0; next}
+    /^### Step 7c: Stamp setup mode/ {
+      print "### Step 7c: Stamp setup mode (fn-121)";
+      print "";
+      print "Runs after every Step 7 write, before Step 8. When the existing-mode guard chose `MODE=plugin-kept`, do NOT run the stamp - the existing `setup_mode` stays untouched (report `Setup mode: plugin (kept - managed from Claude Code)` in Step 8). Otherwise:";
+      print "";
+      print "```bash";
+      print "\"${PLUGIN_ROOT}/scripts/flowctl\" setup-mode set copy --json";
+      print "```";
+      print "";
+      print "Include `Setup mode: copy` in the Step 8 summary.";
+      print "";
+      skip3=1; next
+    }
+    skip3 && /^## Step 8: Print Summary/ {skip3=0}
+    /^### Step 8a: Plugin-mode summary variant/ {skip4=1}
+    skip || skip2 || skip3 || skip4 {next}
+    /^\*\*Copy mode only .* skip to Step 4a\.\*\*$/ {next}
+    {print}
+  ' "$setup_wf" > "${setup_wf}.fn121tmp" && mv "${setup_wf}.fn121tmp" "$setup_wf"
+  sed -i.bak \
+    -e 's/continue from Step 2b — the mode gate runs on EVERY pass (PR #227 review: a same-version re-run in a plugin-mode repo must not fall straight into Step 3.s copies); copy-mode repos then flow into Step 3.s re-copy/continue from the existing-mode guard (before Step 3) — it runs on EVERY pass, then copy-mode repos flow into Step 3'"'"'s re-copy/' \
+    -e '/^- \*\*Claude Code in plugin mode\*\*/d' \
+    -e '/^- CLAUDE.md on \*\*Claude Code in plugin mode\*\*/d' \
+    -e 's/^Choose the correct template based on platform AND mode:/Choose the correct template based on platform:/' \
+    -e 's|^- \*\*Claude Code (copy mode) / Droid / Cursor\*\*|- **Claude Code / Droid / Cursor**|' \
+    -e 's|^- AGENTS.md on \*\*Claude Code (copy mode) / Droid / Cursor\*\*|- AGENTS.md on **Claude Code / Droid / Cursor**|' \
+    -e 's|^- CLAUDE.md (any platform, copy mode):|- CLAUDE.md (any platform):|' \
+    "$setup_wf"
+  rm -f "${setup_wf}.bak"
 fi
 
 # flow-next-plan: steps.md
@@ -1704,13 +1764,42 @@ fi
 # it is copied into projects as `.flow/usage.md`, and Codex resolves
 # `$flow-next-<cmd>`, not `/flow-next:<cmd>`. The targeted rewrite above must
 # have converted every token.
-usage_slash_refs=$( { grep -c '/flow-next:' "$CODEX_DIR/skills/flow-next-setup/templates/usage.md" 2>/dev/null || true; } | tr -d ' ')
+usage_slash_refs=$( { grep -c '/flow-next:' "$CODEX_DIR/templates/usage.md" 2>/dev/null || true; } | tr -d ' ')
 [ -n "$usage_slash_refs" ] || usage_slash_refs=0
 if [ "$usage_slash_refs" != "0" ]; then
-  echo -e "  ${RED}✗${NC} $usage_slash_refs '/flow-next:' refs remain in codex setup templates/usage.md — should be \$flow-next-<cmd>"
+  echo -e "  ${RED}✗${NC} $usage_slash_refs '/flow-next:' refs remain in codex templates/usage.md — should be \$flow-next-<cmd>"
   errors=$((errors + 1))
 else
-  echo -e "  ${GREEN}✓${NC} No '/flow-next:' refs in codex setup templates/usage.md"
+  echo -e "  ${GREEN}✓${NC} No '/flow-next:' refs in codex templates/usage.md"
+fi
+
+# fn-121: the Codex mirror must not describe plugin mode (Claude-Code-only) —
+# negative half: no plugin-mode prose in the setup workflow, no slim template.
+pm_refs=$( { grep -cE 'Step 2b|claude-md-snippet-plugin|setup-mode set plugin|plugin mode' "$CODEX_DIR/skills/flow-next-setup/workflow.md" 2>/dev/null || true; } | tr -d ' ')
+[ -n "$pm_refs" ] || pm_refs=0
+if [ "$pm_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} plugin-mode prose leaked into the codex mirror setup workflow (refs=$pm_refs)"
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No plugin-mode prose in codex setup workflow"
+fi
+
+# fn-121 (PR #227 review): the slim template MUST ship in the mirror - the
+# retained per-skill pre-check's "Refresh now" path reads it cross-host.
+if [ -f "$CODEX_DIR/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" ]; then
+  echo -e "  ${GREEN}✓${NC} Slim plugin snippet template present in mirror (pre-check refresh path)"
+else
+  echo -e "  ${RED}✗${NC} Slim plugin snippet template missing from mirror - the mirrored pre-check's Refresh now path would 404"
+  errors=$((errors + 1))
+fi
+
+# fn-121 positive half: copy-mode behavior retained in the mirror.
+if grep -q '^## Step 3: Create .flow/bin/' "$CODEX_DIR/skills/flow-next-setup/workflow.md" 2>/dev/null \
+   && grep -q 'setup-mode set copy' "$CODEX_DIR/skills/flow-next-setup/workflow.md" 2>/dev/null; then
+  echo -e "  ${GREEN}✓${NC} Copy-mode setup path retained in codex mirror (Step 3 + copy stamp)"
+else
+  echo -e "  ${RED}✗${NC} Copy-mode setup path missing from codex mirror (Step 3 heading or copy stamp gone)"
+  errors=$((errors + 1))
 fi
 
 # Check no "AskUserQuestion" or "ToolSearch select:AskUserQuestion" in codex

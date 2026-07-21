@@ -27,6 +27,20 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 
 > The canonical install path on Claude Code is the marketplace. Direct `--plugin-dir` (`claude --plugin-dir ./plugins/flow-next`) is the development path.
 
+## Setup modes: plugin vs copy (fn-121)
+
+`/flow-next:setup` on **Claude Code** asks one mode question per repo; every other host is always copy mode.
+
+| | **Plugin mode** (Claude Code only) | **Copy mode** (all hosts) |
+|---|---|---|
+| What lands in the repo | A slim versioned CLAUDE.md snippet — nothing else | `.flow/bin/flowctl*`, `.flow/templates/spec.md`, `.flow/usage.md` snapshots + full snippet |
+| How agents reach flowctl | Bare `flowctl` — Claude Code injects the plugin's `bin/` onto the Bash PATH | `.flow/bin/flowctl` (works with no plugin installed at all) |
+| The agent guide | Pulled live via `flowctl usage` (always current) | `.flow/usage.md` on disk |
+| Plugin updates | Land silently — **no setup re-run, ever** | Re-run `/flow-next:setup` per repo to refresh the snapshots |
+| Who should pick it | Claude-Code-only repos | Repos with Codex/Cursor/Droid teammates, CI, or plain-terminal flowctl use |
+
+Why other hosts can't have plugin mode: Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves flowctl from `$HOME/.codex/scripts/`; Droid's bin injection is unverified. A plugin-mode repo remains **workable from Codex and Droid** (Codex skills self-resolve flowctl from `$HOME/.codex/scripts/`; Droid reads the plugin-root envs) — but **NOT from Cursor**, whose skill preambles need `.flow/bin`; a Cursor visitor is offered a consented convert-to-copy. If teammates on other hosts are the norm, choose copy mode. Switching modes later is a consented `/flow-next:setup` re-run; the mode stamp (`setup_mode` in `.flow/meta.json`) is written only by `flowctl setup-mode set`, which refuses a plugin stamp unless the CLAUDE.md rail is present and no copy snapshots remain. Contributor-facing internals: [`agent_docs/setup-modes.md`](../../../agent_docs/setup-modes.md).
+
 **Team / org-wide deployment (Claude Code).** To install flow-next across a whole team without each developer running the commands, deploy it through Claude Code settings rather than per-user: a `managed-settings.json` for org-wide rollout (admin/IT, via MDM/GPO — `extraKnownMarketplaces` registers the marketplace, `enabledPlugins` force-enables `flow-next@flow-next`, not user-overridable), or a committed `.claude/settings.json` for a prompt-on-trust install scoped to one repo. A one-time trust prompt still appears by design, and each repo still needs `/flow-next:setup` to wire the local `.flow/` state. Full JSON + OS paths: [flow-next.dev/install → Team / org-wide deployment](https://flow-next.dev/install/#team--org-wide-deployment-claude-code-managed-settings).
 
 ## Factory Droid (native support)

@@ -1,0 +1,154 @@
+# fn-121-plugin-mode-zero-rerun-setup-on-claude Plugin mode: zero-rerun setup on Claude Code (bin/flowctl, flowctl usage, slim snippet)
+
+## Overview
+
+Claude Code users should run `/flow-next:setup` at most once - ideally never. Today every plugin release re-arms a version nag (fn-95 mechanism) across the pre-check-carrying skills, and answering it costs a full interactive setup run just to re-copy files whose refresh needs zero judgment. Silent refresh of tracked files (fn-96) is rejected: git churn mid-branch. Instead, on Claude Code we stop copying entirely - every locally-copied artifact either already has a plugin-resolved fallback or gains one, so nothing local exists to go stale. Mixed-host repos keep copy mode unchanged.
+
+Empirically probe-validated (Claude Code 2.1.215, headless `claude -p`; findings: session scratchpad binlab/FINDINGS.md, n=1 per cell): plugin `bin/` PATH injection works incl. wrapper relative-resolution and `--plugin-dir` shadowing; zero-setup e2e green in a virgin repo; slim-snippet pull rail made sonnet AND haiku run `flowctl usage` before composing a codex delegation and apply all bridge gotchas; negative control made zero flowctl calls; broken `@`-import degrades gracefully; `claude plugin validate` passes. `CLAUDE_PLUGIN_ROOT` is NOT an env var in plain Bash (substitution-only in skill text) - bin/ is the only plugin-resolved route outside skills.
+
+Supersedes fn-96 (closed at capture). Prototypes for the launcher + `usage` subcommand already sit on this branch.
+
+## Conversation Evidence
+
+1. [user] "would putting flowctl into the bin dir allow usage without users having to use setup to copy the script to .flow? how would this affect our other harnesses (codex and cursor which we also support)"
+2. [user] "this question stems from me trying to make the install easier, having to run setup every time is really annoying"
+3. [user] "and forget prong 1, the git stuff kills it imo" (prong 1 = silent refresh of tracked .flow/ copies)
+4. [user] "what about usage.md and spec.md etc. Could we make it so claude code users only ever have to run setup once?"
+5. [user] "not true, has the orchestration instructions too" (usage.md content)
+6. [user] "no, the idea of usage.md is to not copy it but overwrite it via CLAUDE.md etc"
+7. [user] "also consider that the CLAUDE.md snippet may change, that would need rerunning of setup or nag"
+8. [user] "yea but, the CLAUDE.md snippet also includes the optional orchestration setup, given the release cadence of models..."
+9. [user] "the issue with the flowctl usage piece is that CLAUDE.md is read every turn and that is guaranteed, how can we achieve the same with a thin rail that points to flowctl usage"
+10. [user] "i like the direction and would love it if claude code never needs a setup rerun, just want to fully discuss"
+11. [user] "so i agree with number 1, ie. we add a short rail telling it WHEN to read usage.md, then we can also include read usage.md or do flowctl usage bla bla for flowctl commands or something"
+12. [user] "perhaps you spin up a fresh repo and start testing all of this, autoresearch it until we are confident our model will work"
+13. [user] "then for all other harnesses, we could move to an installer, npx flow-next install codex/cursor or something or we just keep it as is right now"
+14. [user] "capture it and plan it, this should be just 1 or 2 tasks, but consider also the downstream documentation updates as the get started/quick stark/installation/update pages on flow-next.dev and github docs etc will need updating for claude code etc"
+15. [user] AskUserQuestion: fn-96 duplicate -> "Supersede - close fn-96"
+
+## Architecture & Data Models
+<!-- scope: technical -->
+
+- **`plugins/flow-next/bin/flowctl`** - launcher on the plugin-bin PATH (Claude Code injects `<plugin>/bin/` into the Bash tool PATH while enabled). Execs `../scripts/flowctl.py` via the fn-77 functionality-probe interpreter selection; mirror the comment/probe structure of the in-module `LAUNCHER_SH` constant (flowctl.py ~7788, 3.0.0), do not diverge. Prototype on this branch.
+- **`flowctl usage` subcommand** - prints the bundled usage guide (CLI cheatsheet + Orchestration & model steering recipes). Resolution after the move: plugin-bundled `../templates/usage.md` first, `.flow/usage.md` fallback for copied installs; the transitional middle candidate (old skills path) is dropped once the move lands. Error hint must read correctly in both modes. Prototype (cmd_usage, flowctl.py ~7996, 3.0.0) on this branch.
+- **Canonical usage.md MOVES** from `skills/flow-next-setup/templates/usage.md` to `plugins/flow-next/templates/usage.md` (next to spec.md). sync-codex already mirrors ALL of `templates/` via `cp -R` (sync-codex.sh:169-175) - the path-literal fixes land in the transform (~L426, 3.0.0) and guard (~L1707-1716).
+- **Codex mirror needs a GENERATION TRANSFORM, not just a guard** (codex round 1, Major): sync-codex copies skill directories recursively, so without a transform the slim template and the plugin-mode setup prose would enter the mirror and the new negative guard would fail every sync. sync-codex.sh therefore (a) EXCLUDES `claude-md-snippet-plugin.md` from the mirror, and (b) strips/replaces the plugin-mode setup-workflow branch with copy-mode-only prose (deterministic sed/awk transform, fn-100 pattern). Guards assert BOTH absence (no plugin-mode/bin-PATH phrases, no slim template file) AND retained copy-mode behavior (copy branch text still present).
+- **usage.md is never copied in plugin mode.** User overrides live in their own CLAUDE.md prose, which outranks generic guidance. No `.flow/usage.md` override tier in plugin mode.
+- **Slim version-stable CLAUDE.md snippet** - NEW template file `claude-md-snippet-plugin.md` (existing copy-mode snippet files untouched; Droid/Cursor can never receive the slim variant). Content: identity, no-TodoWrite rule, lifecycle commands (bare `flowctl`), evidence-JSON shape, spec-create lines, not-found fallback line, and the two trigger-shaped pull directives: "before any flowctl operation beyond the lifecycle commands, run `flowctl usage`" and "before delegating to another model/CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) or picking a delegate/review model, run `flowctl usage` and follow the Orchestration & model steering section". Markers stay EXACTLY `<!-- BEGIN FLOW-NEXT -->` / `<!-- END FLOW-NEXT -->` (the setup-block engine, flowctl.py:2296/2363, matches those exact standalone strings - a parameterized BEGIN marker would be appended as an unrecognized second block and `resolve` could never update it; codex review round 1, Critical). The schema version is an internal sentinel line INSIDE the block: `<!-- flow-next:snippet:v1 -->` as the first line after BEGIN. Reuse the engine as-is - no hand-rolled marker logic, no engine changes.
+- **Routing scaffold split**: stable policy layer + the user-owned re-ranked table stay in CLAUDE.md (fn-115 owns further redesign); the volatile layer lives plugin-side: model pins in `models.roles` config (fn-115, SHIPPED in 3.0.0 - the 6e refresh ceremony + `flowctl models resolve` now exist) plus bridge recipes behind `flowctl usage`. `model-routing-snippet.md` pointer phrasing switches from `.flow/usage.md` section references to `flowctl usage` (mode-appropriate) - NOTE (3.0.0): setup Step 7 composes that block via a deterministic line transform over probe sentinels (workflow.md ~740); edits must preserve the sentinel line grammar the transform consumes.
+- **Setup mode question** (inserted after workflow.md Step 2 at :56-74; plugin branch skips Step 3 and Step 4's copies - Step 4a's SPEC.md offer still runs, it seeds a user file, not a .flow copy): "does anyone use this repo without the Claude Code plugin (Codex/Cursor teammates, CI)?" No + platform==claude = **plugin mode**: `flowctl init` + slim snippet only, zero copies, stamp via `flowctl setup-mode set plugin` (plumbing-enforced commit point - see API Contracts). Yes, or any non-claude platform = **copy mode**: today's behavior byte-equivalent. Droid is copy-mode-only until bin/ injection is probe-verified there.
+- **CLAUDE.md slim block is a plugin-mode COMMIT PREREQUISITE** (codex round 1, Major): the rail's whole justification is guaranteed every-turn context, and Claude Code does not consume AGENTS.md - so the plugin-mode docs step targets CLAUDE.md specifically (AGENTS.md optional secondary), and `setup_mode: "plugin"` is NEVER stamped when the user picks Skip, the snippet write fails, or a customization conflict is unresolved. Write ORDER: snippet into CLAUDE.md first (verified current), stamp last - the stamp is the commit point. The pre-check reads the sentinel from CLAUDE.md specifically.
+- **Mode switching is consented, never silent - with a defined transition table** (codex round 1, Major): re-run shows current mode and offers switch. Copy-to-plugin transition: enumerate copy artifacts (`.flow/bin/` contents, `.flow/templates/spec.md`, `.flow/usage.md`); ask before removal (`git rm` for tracked, explicit `rm` listing for untracked; modified tracked files are surfaced, not force-removed); stamp `setup_mode: "plugin"` ONLY after every listed artifact is confirmed absent. Decline, failed/partial cleanup, or refusal on modified files = remain/stamp copy mode and print the exact remaining paths. Downgrade to copy mode = the normal copy-mode path writes the copies and sets `setup_mode` to `"copy"`.
+- **Pre-check rewrite** in ALL pre-check-carrying skills (inventory by grep "Pre-check: Local setup version" - 15 files carry the blocking FLOW_SETUP_ASK in 3 variants (12 byte-identical, 3 with mode:autofix marker, 1 tracker-sync with DISPATCH=forked) plus notice-only variants (capture/audit/prospect shape)): when `setup_mode == "plugin"`, skip the version compare entirely; check the snippet marker's `snippet:vN` against the plugin's expected constant; on drift offer ONE consented marker-bounded in-place refresh (AskUserQuestion; body/options mirror the existing usage.md Keep/Overwrite shape), suppressed to a stderr note under autonomy markers (FLOW_RALPH / FLOW_AUTONOMOUS / REVIEW_RECEIPT_PATH / mode tokens - same guards each variant already carries). Copy-mode path unchanged. **ralph-init is exempt from plugin-mode silence** - its `scripts/ralph/` flowctl copies genuinely drift; its pre-check keeps the version ask in both modes.
+
+## API Contracts
+<!-- scope: technical -->
+
+- New subcommand: `flowctl usage` (no flags; prints guide to stdout; exit 1 with a mode-appropriate hint when no guide found).
+- New subcommand: `flowctl setup-mode set plugin|copy --json` - the ONLY way the setup skill stamps `setup_mode`. For `plugin` it enforces the commit-point invariants in plumbing (codex round 2): refuses (exit 1, listing exact failures) unless CLAUDE.md contains the BEGIN/END FLOW-NEXT block with an internal `flow-next:snippet:vN` sentinel AND every copy artifact (`.flow/bin/` launcher trio, `.flow/templates/spec.md`, `.flow/usage.md`) is absent; on success writes the stamp atomically. For `copy` it stamps unconditionally. The skill's ask-flows (Skip / decline / partial cleanup) simply never reach a successful `set plugin` - the invariant is enforced below the prose.
+- `plugins/flow-next/bin/flowctl` exposes the identical CLI surface as `scripts/flowctl` (same flowctl.py).
+- `.flow/meta.json` gains optional `setup_mode: "plugin" | "copy"`; absent = legacy/copy semantics. Written only via `flowctl setup-mode set`.
+- Snippet markers are the exact existing `<!-- BEGIN FLOW-NEXT -->` / `<!-- END FLOW-NEXT -->`; the schema version is the internal sentinel line `<!-- flow-next:snippet:vN -->` (expected N ships with the plugin as a flowctl constant that `setup-mode set plugin` and the pre-check both reference).
+- No other schema changes; no new hooks.
+
+## Edge Cases & Constraints
+<!-- scope: technical -->
+
+- bin/ injection verified on Claude Code 2.1.215; intro version unknown, so the snippet keeps a one-line fallback ("`flowctl` not found: run `/flow-next:setup`"). Older Claude Code = graceful degradation, not breakage.
+- Plugin mode is Claude-Code-only: Cursor has no env vars and no bin/ injection; Codex resolves `$HOME/.codex/scripts/flowctl`; Droid unverified (copy mode until probed). Canonical skill FLOWCTL preambles stay untouched (cross-host contract).
+- usage.md move reference list is a FLOOR, not a ceiling - grep-driven acceptance. Known refs: setup workflow.md:174-186 + prompt body, sync-codex.sh transform + guard, test_dogfood_template_parity.py, test_token_budgets.py:22, ralph_e2e_rp_test.sh:197, ralph_e2e_short_rp_test.sh:96, plus refs found by gap analysis: docs/architecture.md, docs/troubleshooting.md, docs/orchestration.md, flow-next-capture/workflow.md, flow-next-make-pr/workflow.md, agents-md-snippet.md/claude-md-snippet.md "More:" line, agent_docs/local-dev.md, agent_docs/guidance-eval/.
+- Dual-copy invariant: this repo dogfoods copy mode - `.flow/bin/flowctl.py` and `scripts/ralph/flowctl.py` must be refreshed alongside `scripts/flowctl.py` changes (test_dogfood_template_parity + CI enforce parts of this).
+- Existing copy-mode repos in the wild: untouched; `flowctl usage` falls back to `.flow/usage.md` there.
+- Zero-setup users (never ran setup: no setup_version, no setup_mode): pre-check already silently skips (SETUP_VER empty) - unchanged, correct.
+- Uninstall: docs gain a plugin-mode branch (nothing under `.flow/bin`, `.flow/templates`, `.flow/usage.md` to remove; remove the snippet block + `setup_mode`/`version_ack` stamps instead).
+- A user with an unrelated global `flowctl` on PATH: plugin-bin position decides; accepted edge (snippet directives are flow-specific).
+- Interruption between snippet write and setup_mode stamp: stamp-last ordering means worst case is "snippet present, mode unstamped" = copy-mode semantics until setup completes; skills never see plugin mode without a snippet.
+
+## Acceptance Criteria
+<!-- scope: both -->
+
+- **R1:** `plugins/flow-next/bin/flowctl` exists, executable, launches the same flowctl.py; parity test (pattern: test_init_stamp_launchers.py) asserts byte-identity with `scripts/flowctl` modulo the one intentional exec-path diff; `claude plugin validate` passes.
+- **R2:** `flowctl usage` prints the bundled guide; resolution `../templates/usage.md` then `.flow/usage.md` (transitional old-path candidate removed); mode-appropriate error hint when neither exists; unit-tested (bundled hit, fallback hit, neither).
+- **R3:** canonical usage.md lives at `plugins/flow-next/templates/usage.md`; grep gate scoped to ACTIVE sources: no file outside `.flow/` (historical specs/tasks/memory stay untouched) and outside `plugins/flow-next/codex/` (regenerated) references the old location (list in Edge Cases is a floor).
+- **R4:** setup asks the mode question (platform==claude only); plugin mode writes NO `.flow/bin/`, `.flow/templates/`, or `.flow/usage.md` files and writes the slim snippet via the unmodified setup-block engine into CLAUDE.md (prerequisite - AGENTS.md optional secondary); `setup_mode: "plugin"` is stamped LAST and never after Skip, a failed write, or unresolved customization; copy mode byte-equivalent to today.
+- **R5:** slim snippet is a NEW template `claude-md-snippet-plugin.md`: exact existing `<!-- BEGIN FLOW-NEXT -->`/`<!-- END FLOW-NEXT -->` markers with internal sentinel `<!-- flow-next:snippet:v1 -->` as first line inside; bare `flowctl`; both pull directives; no-TodoWrite rule; evidence-JSON shape; not-found fallback line; no `.flow/bin/` path; within the 300-token block budget (test_token_budgets covers it).
+- **R6:** every pre-check-carrying skill (grep-inventoried; 3 blocking variants + notice-only variants): plugin mode = silent when the CLAUDE.md sentinel version is current; on drift, one consented marker-bounded refresh ask; copy-mode path unchanged; ralph-init exempt (keeps version ask both modes).
+- **R7:** `sync-codex.sh` runs twice idempotent, guards green, including the NEW transform (plugin-mode setup prose stripped to copy-mode-only) and paired negative+positive guards (no plugin-mode prose in the mirror's setup workflow; copy-mode branch retained; the slim template SHIPS in the mirror - amended in PR #227 review: the retained per-skill pre-check's Refresh-now path reads it cross-host, so excluding it stranded plugin-mode repos visited from Codex).
+- **R8:** `plugins/flow-next/docs/platforms.md` documents plugin mode as Claude-Code-only with the copy-mode matrix for other hosts.
+- **R9:** repo docs updated - README (install + "After every update" section + setup command row), docs/flowctl.md (`usage` entry), docs/orchestration.md (`.flow/usage.md` claims mode-qualified), docs/troubleshooting.md, docs/architecture.md, docs/spec-template.md, agent_docs/adding-skills.md ("BUNDLED - NOT installed globally" caveat), agent_docs/local-dev.md note, CHANGELOG `## Unreleased` entry (bold-title + fn-121, "No version bump (batched)").
+- **R10:** flow-next.dev updated in the same workstream (separate repo commit): get-started / installation / update pages reflect the Claude Code zero-setup + run-once story; docs-site changelog entry staged per releasing.md; `pnpm build` green.
+- **R11:** fn-96 closed as superseded with a pointer to this spec. (Done at capture - verify only.)
+- **R12:** full gate green: focused suites per task + full parallel suite at final gate + `bash smoke_test.sh`.
+- **R13:** mode switching follows the transition table: consented artifact cleanup (git rm tracked / listed rm untracked; modified files surfaced, never force-removed); plugin stamp ONLY after all copy artifacts confirmed absent; decline/failure = copy mode + exact remaining paths printed; downgrade writes copies and sets `setup_mode: "copy"`.
+- **R14:** the snippet-drift ask is suppressed to a stderr note under autonomy markers (FLOW_RALPH / FLOW_AUTONOMOUS / REVIEW_RECEIPT_PATH / per-variant mode tokens) - pilot/Ralph never hang.
+- **R15:** uninstall docs gain the plugin-mode branch (snippet block + stamps removal; no .flow copy removal).
+- **R16:** deterministic contract tests, both in fn-121.2's focused command: (a) `test_precheck_mode_contract.py` asserts, for every grep-inventoried pre-check carrier: the plugin-mode branch is present (setup_mode read + CLAUDE.md sentinel compare), all of that variant's autonomy-suppression markers are preserved, the copy-mode block is byte-identical to its pre-fn-121 shape per variant, and ralph-init carries NO plugin-mode silence; plus template-shape assertions for `claude-md-snippet-plugin.md` (exact engine markers, internal sentinel, forbidden `.flow/bin/` strings). (b) `test_setup_mode_stamp.py` unit-tests the `flowctl setup-mode set` state machine: plugin refuses on missing CLAUDE.md block, missing/stale sentinel, or any present copy artifact (each failure listed in output); plugin succeeds only in the clean state and writes the stamp atomically; copy stamps unconditionally; the artifact enumeration matches the spec's list. Skip/decline/partial-cleanup ask-flows remain prose, but their commit point is this tested plumbing - a wrong prose path cannot produce an invalid stamp.
+- **R17:** contributor-facing architecture doc for future agents working ON flow-next: new `agent_docs/setup-modes.md` covering the mode taxonomy (plugin vs copy vs legacy-absent), per-host flowctl/usage/template resolution chains, the invariants (no silent writes to tracked files; setup-block markers are EXACT strings, version sentinel inside; every mirror guard needs a paired generation transform; plugin mode is Claude-Code-only until other hosts are probe-verified), the pre-check contract (variants, autonomy suppression, ralph-init exemption, `setup_mode` read), the `flowctl setup-mode set` commit-point state machine, and what canonical skill prose may/may not assume (FLOWCTL preambles never change; bare `flowctl` only in the plugin-mode snippet, never in skills). Referenced from repo CLAUDE.md: one "Where to look" row + one Cross-platform-checklist line (CLAUDE.md stays lean; the doc carries the detail).
+- **R18:** the two orchestration layers are documented human-readably on BOTH public surfaces: `docs/orchestration.md` gains a leading "Two layers of steering" section, and the flow-next.dev orchestration page mirrors it. Content: (1) **session steering** - prompts and per-task pins; top of the precedence chain; ephemeral; the CLAUDE.md pipeline prose steers the AGENT, which then feeds explicit values to the plumbing; (2) **machinery steering** - config (`review.backend`, `work.delegate*`, `models.roles`) resolved by deterministic plumbing that never reads prose; what autonomous loops (pilot/Ralph) and unattended gates use. Spell the full precedence chain once: prompt > per-task/per-spec pin > env > role map > registry baseline; state plainly that a prompt like "implement via grok-4.5 and review with sol" just works and persists nothing, and that standing changes for autonomous runs belong in config.
+
+## Boundaries
+<!-- scope: business -->
+
+- NO silent writes to tracked repo files, ever - the fn-96 mechanism stays dead.
+- NO `npx flow-next install codex/cursor` installer in this spec - parked as follow-up.
+- NO runtime behavior change for Codex / Cursor / Droid / copy-mode repos.
+- NO push mechanisms (`@`-import, SessionStart context hook) - directive rail chosen; escalation documented in Decision context, deferred until the rail demonstrably underperforms.
+- NO routing-scaffold content redesign beyond the stable/volatile split - fn-115 (model-pin registry) owns that surface and should land AFTER this spec (reverse dep recorded).
+- NO ralph-init copy-refresh mechanism changes - `scripts/ralph/` staleness is pre-existing and out of scope (fn-114 territory); only the exemption rule (R6) touches it.
+- NO version bump - `## Unreleased` staging per batched-release policy.
+
+## Strategy Alignment
+
+Active tracks served by this plan:
+- **Cross-platform parity** - makes the per-host install contract explicit (plugin mode Claude-Code-only, copy mode everywhere else) instead of one-size-fits-all copies; other hosts' behavior is explicitly frozen and guarded (sync-codex negative guard).
+
+## Quick commands
+
+```bash
+# Task 1 focused suites
+cd plugins/flow-next/tests && python3 -m unittest test_init_stamp_launchers test_cmd_usage test_dogfood_template_parity test_token_budgets -q
+# Launcher smoke
+plugins/flow-next/bin/flowctl usage | head -3
+# Mirror idempotency (run TWICE)
+./scripts/sync-codex.sh && ./scripts/sync-codex.sh
+# Final gate (once, at completion review)
+python3 scripts/run_tests_parallel.py && (cd plugins/flow-next/scripts && bash smoke_test.sh)
+```
+
+## Decision context
+
+- Silent-copy self-heal (fn-96) rejected by owner: tracked-file churn mid-branch unacceptable; superseded by not copying at all on Claude Code.
+- Pull rail over push (@-import via `${CLAUDE_PLUGIN_DATA}` sync, SessionStart additionalContext): probes showed trigger-shaped directives deliver recipe compliance at composition time; push options remain the documented escalation path; broken `@`-import verified graceful.
+- Prior eval precedent (usage-md-guidance-eval 2026-07-15): minimal inline block + schema strictly dominated the fat always-inline block - this design extends that conclusion. Probe caveat: n=1 per cell; rerun as a small rep set during implementation if confidence demands.
+- NEW template file over conditional split in claude-md-snippet.md: copy-mode hosts (Droid/Cursor share that file) can never accidentally receive the slim variant.
+- setup_mode stamping moved INTO flowctl plumbing (`setup-mode set`, codex round 2): the commit-point invariants (CLAUDE.md rail present, copy artifacts absent) are enforceable and unit-testable there; skill prose owns only the asks. Reading setup_mode in pre-checks stays plain jq.
+- ralph-init exemption: plugin-mode silence would let `scripts/ralph/flowctl` drift forever unnoticed; keeping its version ask costs one rare question in an explicitly opt-in harness.
+- Prototypes for R1/R2 already on branch `claude/plugin-flowctl-optimization-3d11bd`; implementation formalizes, tests, documents.
+- Coordination (verified 2026-07-21): fn-113 LANDED (PR #223) - rebase over it, refresh dual copies. fn-114 is implementation-complete on its branch and lands FIRST - fn-121 depends on fn-114 (recorded); its docs truth-up touched platforms.md / flowctl.md / CLAUDE.md checklist / CHANGELOG / README / local-dev.md AND added `test_ralph_docs_truth` prose-pin tests - fn-121.2 rebases over those and UPDATES the prose pins where its edits move pinned text (never delete a pin to make it pass). fn-115 depends on fn-121 (recorded). fn-94, fn-85: unplanned; whoever lands second rebases.
+
+## Early proof point
+
+Task fn-121-plugin-mode-zero-rerun-setup-on-claude.1 validates the core mechanism (launcher + usage subcommand + canonical move, all reference sites green). The behavioral rail was already probe-validated pre-spec; if .1 surfaces a blocker (e.g. sync-codex guard conflicts), re-evaluate the move location before .2 rewrites 15+ skills against it.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1  | bin/flowctl launcher + parity test | fn-121.1 | - |
+| R2  | flowctl usage + unit tests | fn-121.1 | - |
+| R3  | usage.md canonical move, grep-clean | fn-121.1 | - |
+| R4  | setup mode question + plugin-mode branch | fn-121.2 | - |
+| R5  | slim snippet template (new file, budgeted) | fn-121.2 | - |
+| R6  | pre-check rewrite (all variants) | fn-121.2 | - |
+| R7  | sync-codex idempotent + new negative guard | fn-121.2 | - |
+| R8  | platforms.md plugin-mode matrix | fn-121.2 | - |
+| R9  | repo docs + CHANGELOG | fn-121.2 | - |
+| R10 | flow-next.dev pages + changelog staged | fn-121.3 | - |
+| R11 | fn-96 superseded | - | Done at capture; verify in .2 |
+| R12 | full gate | fn-121.1-3 | final gate at completion review |
+| R13 | consented mode switching (transition table) | fn-121.2 | - |
+| R14 | autonomy suppression of drift ask | fn-121.2 | - |
+| R15 | uninstall plugin-mode branch | fn-121.2 | - |
+| R16 | pre-check + snippet contract tests | fn-121.2 | - |
+| R17 | contributor doc agent_docs/setup-modes.md + CLAUDE.md pointers | fn-121.2 | - |
+| R18 | two-layers-of-steering explainer (orchestration.md + docs-site orchestration page) | fn-121.2, fn-121.3 | - |

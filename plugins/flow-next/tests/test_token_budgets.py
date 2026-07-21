@@ -22,6 +22,8 @@ HERE = Path(__file__).resolve()
 TESTS_DIR = HERE.parent
 PLUGIN_DIR = TESTS_DIR.parent
 TEMPLATES = PLUGIN_DIR / "skills" / "flow-next-setup" / "templates"
+# fn-121: canonical usage.md moved next to spec.md; setup snippets stay in the skill dir.
+PLUGIN_TEMPLATES = PLUGIN_DIR / "templates"
 
 BLOCK_BUDGET_TOKENS = 300
 USAGE_BUDGET_TOKENS = 2800
@@ -36,7 +38,11 @@ def _token_equiv(path: Path) -> float:
 
 class TokenBudgetTest(unittest.TestCase):
     def test_setup_snippets_stay_within_block_budget(self) -> None:
-        for name in ("claude-md-snippet.md", "agents-md-snippet.md"):
+        for name in (
+            "claude-md-snippet.md",
+            "agents-md-snippet.md",
+            "claude-md-snippet-plugin.md",
+        ):
             with self.subTest(template=name):
                 self.assertLessEqual(
                     _token_equiv(TEMPLATES / name),
@@ -45,7 +51,7 @@ class TokenBudgetTest(unittest.TestCase):
                 )
 
     def test_usage_template_stays_within_usage_budget(self) -> None:
-        path = TEMPLATES / "usage.md"
+        path = PLUGIN_TEMPLATES / "usage.md"
         self.assertLessEqual(
             _token_equiv(path),
             USAGE_BUDGET_TOKENS,

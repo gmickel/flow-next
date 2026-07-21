@@ -82,7 +82,7 @@ Verdict gate considers only `introduced` findings. Pre-existing issues surface i
 Review prompts carry a hardcoded never-flag list — findings recommending deletion or gitignore of these paths are discarded during synthesis:
 
 - `.flow/*` (specs, tasks, memory, state)
-- `.flow/bin/*` (bundled flowctl)
+- `.flow/bin/*` (bundled flowctl — copy-mode repos; plugin-mode repos have no `.flow/bin/`)
 - `.flow/memory/*` (learnings store)
 - `docs/plans/*`, `docs/solutions/*` (when the project uses them)
 - `scripts/ralph/*` (Ralph harness)

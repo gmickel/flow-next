@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [Unreleased]
+
+### Added
+
+- **Plugin mode: zero-rerun setup on Claude Code (fn-121).** `/flow-next:setup` now asks one mode question per repo (Claude Code only). Plugin mode copies NOTHING into the repo - bare `flowctl` rides the plugin's `bin/` PATH injection (new `plugins/flow-next/bin/flowctl` launcher, byte-identical to `scripts/flowctl` modulo the exec target), the agent guide is pulled live via the new `flowctl usage` subcommand, the spec template resolves through the bundled cascade, and the only repo artifact is a slim versioned CLAUDE.md snippet (internal `<!-- flow-next:snippet:v1 -->` sentinel inside the standard markers). Plugin updates land silently - no setup re-runs, ever. Copy mode (all other hosts + mixed-host repos) is byte-unchanged. New `flowctl setup-mode set plugin|copy` is the sole `setup_mode` writer and refuses a plugin stamp unless the CLAUDE.md rail is present and no copy snapshots remain (itemized failures). The fn-95 pre-check went mode-aware across 17 carriers: plugin mode skips the version nag entirely and checks only the snippet contract (consented marker-bounded refresh on drift; autonomy-suppressed; ralph-init exempt). Canonical usage.md moved to `plugins/flow-next/templates/usage.md`; sync-codex strips plugin-mode prose from the mirror (paired transform + guards). Docs: platforms.md setup-modes matrix, orchestration.md "Two layers of steering" (session vs machinery precedence chain), contributor internals in `agent_docs/setup-modes.md`. Supersedes fn-96. No version bump (batched).
+
 ## [flow-next 3.0.0] - 2026-07-21
 
 ### BREAKING

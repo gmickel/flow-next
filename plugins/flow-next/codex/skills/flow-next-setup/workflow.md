@@ -67,11 +67,23 @@ Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if
 
 **If `setup_version` exists (already set up):**
 - If **same version**: tell user "Already set up with v<VERSION>. Re-run to refresh files + docs? (y/n)"
- - If yes: continue from Step 3 — re-copy bin + templates + docs (idempotent; same-version refresh should NOT skip the file copy, otherwise a project running an unchanged version number but a moved template lands docs that point at a missing path)
+ - If yes: continue from the existing-mode guard (before Step 3) — it runs on EVERY pass, then copy-mode repos flow into Step 3's re-copy (idempotent; same-version refresh should NOT skip the file copy, otherwise a project running an unchanged version number but a moved template lands docs that point at a missing path)
  - If no: done
 - If **older version**: tell user "Updating from v<OLD> to v<NEW>" and continue
 
 **If no `setup_version`:** continue (first-time setup)
+
+## Existing-mode guard (before Step 3)
+
+Read the stamped mode before writing anything:
+
+```bash
+CURRENT_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
+```
+
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+When `CURRENT_MODE` is `plugin`, this repo is a Claude-Code-managed install with NO local `.flow/bin`/`.flow/templates`/`.flow/usage.md` snapshots by design. Never convert it silently: ask (plain-text numbered prompt) `Keep as-is (Recommended)` - skip Step 3, Step 4 copies, and the Step 7c stamp (set `MODE=plugin-kept`; config steps still run, and the Docs step may target AGENTS.md only - the CLAUDE.md marker block is the Claude-Code-managed rail, never touched from this host) - or `Convert to copy` - proceed normally (writes the snapshots; Step 7c stamps copy). Any other `CURRENT_MODE` value: set `MODE=copy` and continue.
 
 ## Step 3: Create .flow/bin/ and .flow/templates/
 
@@ -108,8 +120,6 @@ HITS=$(ls -1 SPEC.md spec.md 2>/dev/null | sort -u | wc -l | tr -d ' ')
 ```
 
 Then branch:
-
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
 **1. `HITS=0` (neither file exists)** — ask the user via `plain-text numbered prompt`:
 
@@ -175,13 +185,13 @@ Then:
 
 Then handle `.flow/usage.md` — preserve any repo-customized variant:
 
-1. Read [templates/usage.md](templates/usage.md) (this is the canonical content).
+1. Read [../../templates/usage.md](../../templates/usage.md) (this is the canonical content, bundled at `${PLUGIN_ROOT}/templates/usage.md` since fn-121).
 2. If `.flow/usage.md` does not exist → write the canonical content.
 3. If `.flow/usage.md` exists → compare byte-for-byte with the canonical content:
  - **Identical**: no-op (skip the write entirely — re-running setup must not bump mtime on unchanged files).
  - **Customized** (any deviation): do NOT overwrite. Ask the user via `plain-text numbered prompt`:
  - **header**: `Overwrite customized .flow/usage.md?`
- - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/skills/flow-next-setup/templates/usage.md\`).`
+ - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/usage.md\`).`
  - **options**:
  - `Keep mine (Recommended)` — leave `.flow/usage.md` unchanged. Print the path to the canonical template so the user can diff manually.
  - `Overwrite with canonical` — replace `.flow/usage.md` with the template content. Repo customization is lost.
@@ -806,6 +816,16 @@ Run this **after** the Docs block above and **before** Star. It may touch the **
  2. If available, run: `gh api -X PUT /user/starred/gmickel/flow-next`
  3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/flow-next`
 
+### Step 7c: Stamp setup mode (fn-121)
+
+Runs after every Step 7 write, before Step 8. When the existing-mode guard chose `MODE=plugin-kept`, do NOT run the stamp - the existing `setup_mode` stays untouched (report `Setup mode: plugin (kept - managed from Claude Code)` in Step 8). Otherwise:
+
+```bash
+"${PLUGIN_ROOT}/scripts/flowctl" setup-mode set copy --json
+```
+
+Include `Setup mode: copy` in the Step 8 summary.
+
 ## Step 8: Print Summary
 
 ```
@@ -869,3 +889,4 @@ Optional next step — connect a tracker:
  two-way bridge (spec ⇄ issue, status, comments) and make PRs reviewable as Linear Diffs.
  Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
 ```
+

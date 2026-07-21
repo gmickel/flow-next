@@ -2,6 +2,8 @@
 
 Task tracking for AI agents. All state lives in `.flow/`.
 
+**Plugin-mode repos (Claude Code, `setup_mode: "plugin"`):** `flowctl` is already on the agent's PATH - read every `.flow/bin/flowctl` below as bare `flowctl` (plugin mode has no `.flow/bin/`).
+
 ## CLI
 
 ```bash

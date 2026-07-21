@@ -2,6 +2,8 @@
 
 Task tracking for AI agents. All state lives in `.flow/`.
 
+**Plugin-mode repos (Claude Code, `setup_mode: "plugin"`):** `flowctl` is already on the agent's PATH - read every `.flow/bin/flowctl` below as bare `flowctl` (plugin mode has no `.flow/bin/`).
+
 ## CLI
 
 ```bash
@@ -74,7 +76,7 @@ Harness-relative: every direction works — from Claude Code the bridges are `co
 # bridge with deterministic rails for unattended loops; its task and spec paths are the brief.
 # Delegate implementation to codex (host keeps gating/git/review; codex only writes code)
 .flow/bin/flowctl config set work.delegate codex     # value MUST be `codex` to activate (OFF by default, consent-gated)
-# …or per-run, no config:  /flow-next:work fn-1-add-oauth delegate:codex
+# …or per-run, no config:  $flow-next-work fn-1-add-oauth delegate:codex
 # Steer the delegate: work.delegateModel (default gpt-5.6-terra, passed as -m) +
 # work.delegateEffort (default medium, passed as -c model_reasoning_effort=)
 
@@ -89,7 +91,7 @@ Harness-relative: every direction works — from Claude Code the bridges are `co
 Work the ready specs — decide per spec by complexity: auth/migration tasks you
 implement yourself; plain CRUD is delegated (delegate:codex). Reviews from codex either way.
 
-Run /flow-next:work fn-12 with delegate:codex. If a task's review comes back
+Run $flow-next-work fn-12 with delegate:codex. If a task's review comes back
 NEEDS_WORK twice, stop delegating it and implement it yourself on the session model.
 ```
 

@@ -194,7 +194,7 @@ mkdir -p .flow/bin
 cp "$PLUGIN_ROOT/scripts/flowctl" .flow/bin/flowctl
 cp "$PLUGIN_ROOT/scripts/flowctl.py" .flow/bin/flowctl.py
 chmod +x .flow/bin/flowctl
-cp "$PLUGIN_ROOT/skills/flow-next-setup/templates/usage.md" .flow/usage.md
+cp "$PLUGIN_ROOT/templates/usage.md" .flow/usage.md
 cat "$PLUGIN_ROOT/skills/flow-next-setup/templates/claude-md-snippet.md" > CLAUDE.md
 echo -e "${GREEN}✓${NC} Setup mirrored (.flow/bin/, usage.md, CLAUDE.md)"
 

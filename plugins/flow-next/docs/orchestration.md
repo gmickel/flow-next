@@ -19,6 +19,15 @@ The pattern this page serves: use your smartest model to orchestrate and judge, 
 
 The two compose: parameters set the floor, prompting steers above it. And either can be made durable by writing it into `CLAUDE.md` / `AGENTS.md` — the host reads your instruction files every session, and flow-next skills inherit them automatically because the host is the one executing them.
 
+### Two layers of steering — session vs machinery
+
+The table above is really two layers with a clean seam, and knowing which layer you are talking to answers most "will this override that?" questions:
+
+- **Session steering** — your prompts and per-task pins. Top of the precedence chain, ephemeral, done the moment the task is done. Saying *"implement via grok-4.5 and review with sol"* just works: the agent runs the grok bridge for the draft and pins sol for the review, and **nothing persists afterward** — pins and defaults resume untouched. Your `CLAUDE.md` routing prose lives in this layer too: deterministic plumbing never reads prose, but the *agent* reads it every turn and feeds explicit values downward, so a `CLAUDE.md` pipeline dominates everything the agent orchestrates by occupying the higher-precedence rung — not by editing config.
+- **Machinery steering** — config resolved by deterministic plumbing that never reads prose: `review.backend`, `work.delegate*`, the `models.roles` role map. This is what autonomous loops (pilot, Ralph, land ticks) and unattended gates use when nobody is prompting. Standing changes for autonomous runs belong here, not in prose.
+
+The full precedence chain, highest first: **prompt > per-task/per-spec pin (`review:` field, `spec set-backend`) > env (`FLOW_REVIEW_BACKEND`) > `models.roles` role map > registry baseline.** One consequence worth spelling out: a prompt can steer only the session it is typed in — if you want pilot ticks at 3am to use a different reviewer, that is a config change (`flowctl config set review.backend ...`), because at 3am there is no prompt.
+
 ## Deterministic routing — the parameter surfaces
 
 ### The host model — the conductor
@@ -181,7 +190,7 @@ Two rules are load-bearing:
 - **The wrapper MUST run the bridge in the foreground** - one blocking Bash call. A backgrounded bridge loses the completion signal and the wrapper idles forever on a finished (or silently dead) process.
 - **The self-heal license covers environment and flags only, never judgment.** In scope: git trust (`--skip-git-repo-check`, `git init` in a scratch dir), sandbox flags, stale model ids, empty-output retry. Out of scope: rewriting the task prompt, interpreting review verdicts, or switching models on quality grounds - judgment stays with the host.
 
-This is a documented pattern, not a shipped agent type - the bridge recipes live in `.flow/usage.md` § Orchestration & model steering. Interactive sessions don't need it.
+This is a documented pattern, not a shipped agent type - the bridge recipes live in the usage guide's `## Orchestration & model steering` section (`flowctl usage`; in copy-mode repos also on disk at `.flow/usage.md`). Interactive sessions don't need it.
 
 ### Raw-bridge review prompts - demand severity tiers
 
@@ -240,7 +249,7 @@ Loop internals: [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot
 
 This page lives in the plugin's doc tree — *outside* the repo you're working in. At use time the host agent reads two files that ship into your project, so the steering recipes are put where agents already look:
 
-- **`.flow/usage.md`** carries an `## Orchestration & model steering` section (installed in every project; read on demand - the always-loaded CLAUDE.md/AGENTS.md block points agents at it): the headless `codex exec` / `cursor-agent` / `claude -p` bridge commands and the flow-next shortcuts (`delegate:codex`, `review.backend`, per-task `review:`, prompted-orchestration examples). The bridges run in **every direction** — `claude -p` lets a Codex or Cursor host conduct Claude the same way; any harness that can run Bash can be the conductor.
+- **The usage guide** carries an `## Orchestration & model steering` section, read on demand - the always-loaded CLAUDE.md/AGENTS.md block points agents at it. In plugin mode (fn-121, Claude Code) agents pull it live via `flowctl usage` (always current with the installed plugin); in copy-mode repos it is also installed on disk as `.flow/usage.md`. It contains: the headless `codex exec` / `cursor-agent` / `claude -p` bridge commands and the flow-next shortcuts (`delegate:codex`, `review.backend`, per-task `review:`, prompted-orchestration examples). The bridges run in **every direction** — `claude -p` lets a Codex or Cursor host conduct Claude the same way; any harness that can run Bash can be the conductor.
 - **`CLAUDE.md` / `AGENTS.md`** can hold the durable model-routing table above: `/flow-next:setup` offers, as an optional ceremony step, to scaffold it live — annotated for the CLIs you actually have installed, shown in full before writing, yours to edit after. Marker-fenced so `/flow-next:uninstall` can remove it cleanly.
 
 ## What stays fixed

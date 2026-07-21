@@ -130,7 +130,7 @@ This creates a complete audit trail: what was planned, what was done, how it was
 
 The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The repo now ships flow-next only. The historical comparison table lives in CHANGELOG; the live shape is:
 
-- Task tracking lives in `.flow/` (bundled flowctl, no external tracker).
+- Task tracking lives in `.flow/` (no external tracker). flowctl reaches it either as a repo-local copy (`.flow/bin/`, copy mode) or straight off the plugin's PATH-injected `bin/` (plugin mode, Claude Code — see [platforms.md → Setup modes](platforms.md#setup-modes-plugin-vs-copy-fn-121)).
 - Install: plugin only - no external services, no config-file edits.
 - Artifacts: `.flow/specs/` (markdown + JSON sidecar) and `.flow/tasks/` (markdown + JSON sidecar).
 - Multi-user safe: scan-based IDs + soft claims.

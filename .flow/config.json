@@ -16,6 +16,31 @@
   "memory": {
     "enabled": true
   },
+  "models": {
+    "roles": {
+      "delegate": {
+        "codex": "gpt-5.6-terra:medium"
+      },
+      "fastJudge": {
+        "codex": "gpt-5.6-luna",
+        "copilot": "claude-haiku-4.5",
+        "cursor": "composer-2.5"
+      },
+      "review": {
+        "codex": "gpt-5.6-sol:medium",
+        "copilot": "claude-opus-4.8",
+        "cursor": "gpt-5.6-sol-high"
+      },
+      "scoutFast": {
+        "codex": "gpt-5.6-luna"
+      },
+      "scoutIntelligent": {
+        "codex": "gpt-5.6-terra"
+      }
+    },
+    "verifiedAt": "2026-07-21",
+    "verifiedWith": "setup 3.0.0 re-run 2026-07-21: cursor-agent --list-models roster-verified (sol-high, composer-2.5, opus-4.8, fable-5); codex pins receipt-validated (plan-review SHIP on gpt-5.6-sol today); bare codex CLI mise-broken pending node@26.3.1; copilot roster probe inconclusive (pins knowledge-based)"
+  },
   "pilot": {
     "autonomy": "ready",
     "gateClasses": []

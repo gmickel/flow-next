@@ -3,7 +3,7 @@ to the canonical templates that `/flow-next:setup` ships to consumers (1.5.1).
 
 `/flow-next:setup` copies two canonical templates into a consumer's `.flow/`:
 
-    plugins/flow-next/skills/flow-next-setup/templates/usage.md  ->  .flow/usage.md
+    plugins/flow-next/templates/usage.md  ->  .flow/usage.md
     plugins/flow-next/templates/spec.md                          ->  .flow/templates/spec.md
 
 This repo dogfoods flow-next, so it carries its OWN `.flow/usage.md` and
@@ -36,7 +36,7 @@ REPO_ROOT = PLUGIN_DIR.parent.parent      # repo root
 PARITY_PAIRS = [
     (
         REPO_ROOT / ".flow" / "usage.md",
-        PLUGIN_DIR / "skills" / "flow-next-setup" / "templates" / "usage.md",
+        PLUGIN_DIR / "templates" / "usage.md",
     ),
     (
         REPO_ROOT / ".flow" / "templates" / "spec.md",

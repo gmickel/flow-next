@@ -18,11 +18,26 @@ Comprehensive codebase assessment inspired by [Factory.ai's Agent Readiness fram
 Compare `.flow/meta.json` `setup_version` to the plugin version; on mismatch, escalate once per plugin version. Fail-open throughout: a missing `jq`, `.flow/meta.json`, or plugin manifest silently continues.
 
 ```bash
+SETUP_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
 SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
 PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
 PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
 VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
-if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+if [[ "$SETUP_MODE" == "plugin" ]]; then
+  # fn-121 plugin mode: no local copies exist to go stale - the version compare is
+  # moot. Check only the CLAUDE.md snippet contract (sentinel vs the plugin's
+  # expected v1; keep the literal in sync with SNIPPET_SCHEMA_VERSION in flowctl.py).
+  SNIP_ACK=$(jq -r '.snippet_ack // empty' .flow/meta.json 2>/dev/null)
+  SNIP_VER=$(grep -m1 -o 'flow-next:snippet:v[0-9]*' CLAUDE.md 2>/dev/null | grep -o '[0-9]*$')
+  if [[ "${SNIP_VER:-missing}" != "1" ]]; then
+    if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
+          || "$SNIP_ACK" == "1" ]]; then
+      echo "CLAUDE.md flow-next snippet contract v${SNIP_VER:-missing} != plugin v1. Refresh via /flow-next:setup or the interactive ask." >&2
+    else
+      echo "FLOW_SNIPPET_ASK ${SNIP_VER:-missing} 1"
+    fi
+  fi
+elif [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
   if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
         || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
         || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
@@ -32,6 +47,14 @@ if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_
   fi
 fi
 ```
+
+If the block printed a `FLOW_SNIPPET_ASK` line (plugin mode only; suppressed to the stderr note under the autonomy markers above), before proceeding ask the user with AskUserQuestion (the CLAUDE.md flow-next snippet block is on an older contract than this plugin version; refresh the marker block?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
+- **Refresh now**: run `"${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl" setup-block apply --file CLAUDE.md --template "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" --json`; if it returns `action: ask`, re-run as `setup-block resolve` with the same `--file`/`--template` plus `--choice overwrite --json` - this question WAS the consent. Marker-bounded: content outside the block is never touched.
+- **Remind me next version**: record the acknowledgement so this contract version is not re-asked (fail-open: on any error, continue anyway):
+  ```bash
+  rm -f .flow/meta.json.tmp && jq '.snippet_ack = "1"' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
+  ```
+- **Skip this run**: continue without writing anything; the next invocation asks again.
 
 If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user with AskUserQuestion (local setup differs from the plugin; refresh now?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
 - **Refresh now**: pause and have the user run `/flow-next:setup` in this session (do not run setup yourself), then continue once it finishes.

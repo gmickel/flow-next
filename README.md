@@ -124,11 +124,13 @@ droid plugin marketplace add \
 
 That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `/flow-next:interview` for structured discovery), branch out (`/flow-next:pilot` + `/flow-next:land` for the autonomous assembly line, `/flow-next:ralph-init` for hardened overnight runs, `/flow-next:audit` for memory garbage collection).
 
-### After every update: re-run `/flow-next:setup`
+### After every update
 
-> **Update the plugin, then re-run `/flow-next:setup` in each project.** One command, safe to re-run.
+**Plugin mode (Claude Code, the setup default for Claude-Code-only repos): nothing to do.** Nothing is copied into your repo — `flowctl` rides the plugin's `bin/` PATH injection, the agent guide is pulled live via `flowctl usage`, and the spec template resolves from the bundled copy. Plugin updates land silently; you never re-run setup for an update.
 
-Your plugin manager updates the *plugin* (`/plugin` update on Claude Code, `droid plugin update`, or `git pull` + re-run the install script on Codex/Cursor). But two things live as **snapshot copies inside your repo's `.flow/`**, not live links to the plugin: the bundled **`flowctl` CLI** (`.flow/bin/`) and **`.flow/usage.md`** (the in-repo agent guide). A plugin update does **not** touch them - so after updating, re-run `/flow-next:setup` in each project to refresh the CLI, `usage.md`, the model-routing scaffold, and the spec template. It is idempotent; nothing is lost. When the bundled copy lags the plugin, the skills print a one-line `Run /flow-next:setup to refresh local scripts` nudge on stderr (see [Troubleshooting](plugins/flow-next/docs/troubleshooting.md)).
+**Copy mode (mixed-host repos — Codex/Cursor/Droid teammates, CI, plain terminals): update the plugin, then re-run `/flow-next:setup` in each project.** In copy mode two things live as **snapshot copies inside your repo's `.flow/`**, not live links to the plugin: the bundled **`flowctl` CLI** (`.flow/bin/`) and **`.flow/usage.md`** (the in-repo agent guide). A plugin update does **not** touch them - re-running setup refreshes the CLI, `usage.md`, the model-routing scaffold, and the spec template. It is idempotent; nothing is lost. When the bundled copy lags the plugin, the skills print a one-line `Run /flow-next:setup to refresh local scripts` nudge on stderr (see [Troubleshooting](plugins/flow-next/docs/troubleshooting.md)).
+
+Setup asks the mode question once per repo (Claude Code only; other hosts are always copy mode) and stamps the choice; switching later is a consented setup re-run. Details: [platforms.md](plugins/flow-next/docs/platforms.md).
 
 ---
 
@@ -369,7 +371,7 @@ Scope honesty, because the architecture depends on it:
 | `/flow-next:pilot` | **Single-tick build-loop conductor** — advances one ready spec by one pipeline stage (plan → plan-review → work → make-pr, plus an optional `qa` stage when `pipeline.qa==on`) per tick, ends with a `PILOT_VERDICT` line; drive it with `/loop` or `/goal` |
 | `/flow-next:land` | **Cadence-tick ship loop** — babysits the build loop's draft PRs: CI tri-state fix loop, reviewer patience window, resolve-pr convergence, gated explicit merge, spec close, release-follow; ends with a `LAND_VERDICT` line; drive it with `/loop 30m /flow-next:land` |
 | `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) + register project hooks (consent-gated; nothing installed by default) |
-| `/flow-next:setup` | Per-project setup — `.flow/` init, local flowctl install, CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony, optional model-routing scaffold |
+| `/flow-next:setup` | Per-project setup — `.flow/` init, mode question (plugin mode: zero copies, run-once on Claude Code; copy mode: local flowctl install for mixed-host repos), CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony, optional model-routing scaffold |
 | `/flow-next:sync` | **Plan-sync** — update downstream *task* specs after implementation drift inside flow-next |
 | `/flow-next:tracker-sync` | **Tracker bridge** (distinct from `/flow-next:sync`) — project a spec to a Linear/GitHub/GitLab/Jira issue and reconcile body/status/comments two-way; projection, not coordination ([docs](plugins/flow-next/docs/tracker-sync.md)) |
 | `/flow-next:map` | Optional — wrap [openclaw/clawpatch](https://github.com/openclaw/clawpatch)'s `clawpatch map` for a semantic feature index (`.clawpatch/features/*.json`); scouts read it when present, fall back to grep/glob when absent. Requires Node 22+ + `pnpm add -g clawpatch` |
