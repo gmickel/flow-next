@@ -1,8 +1,8 @@
 # fn-122 startup proof
 
-Date: 2026-07-21  
-Machine: maintainer macOS workstation  
-Runtime: CPython 3.14.5  
+Date: 2026-07-21
+Machine: maintainer macOS workstation
+Runtime: CPython 3.14.5
 Method: 12 fresh processes per command, discard the first two, report the median and observed range of the remaining 10. Stdout discarded; stderr captured; 30 ms spacing between runs. Baseline and post-change runs use the same worktree and machine.
 
 ## Shipped result
