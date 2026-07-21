@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-21T08:01:25.316380Z",
+  "depends_on": [
+    "fn-121-plugin-mode-zero-rerun-setup-on-claude.1"
+  ],
+  "id": "fn-121-plugin-mode-zero-rerun-setup-on-claude.2",
+  "priority": null,
+  "satisfies": null,
+  "spec": "fn-121-plugin-mode-zero-rerun-setup-on-claude",
+  "spec_path": ".flow/tasks/fn-121-plugin-mode-zero-rerun-setup-on-claude.2.md",
+  "status": "todo",
+  "title": "setup plugin mode: slim snippet, pre-check rewrite, codex guard, repo docs",
+  "updated_at": "2026-07-21T08:27:48.717920Z"
+}

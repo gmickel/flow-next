@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-96-setup-self-heal-silent-flowctl-usagemd.md",
-  "status": "open",
+  "status": "done",
   "title": "Setup self-heal: silent flowctl + usage.md re-copy on version drift",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-14T14:59:32.167713Z"
+  "updated_at": "2026-07-21T07:48:42.304556Z"
 }

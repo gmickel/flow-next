@@ -3,6 +3,8 @@
 ## Goal & Context
 <!-- scope: business -->
 
+> **SUPERSEDED by fn-121-plugin-mode-zero-rerun-setup-on-claude (2026-07-21).** Owner rejected the silent tracked-file copy mechanism (git churn mid-branch). Plugin mode removes the copies instead; copy-mode repos keep fn-95 surfacing.
+
 Flow-Next copies its runtime into each repo as **snapshot files, not live links**: `.flow/bin/flowctl` (+ `flowctl.cmd`, `flowctl.py`), `.flow/usage.md`, and `.flow/templates/spec.md`. A plugin upgrade refreshes the plugin but leaves those copies frozen at whatever version last ran `/flow-next:setup`. The worst symptom is a hard break: a skill calls a `flowctl` subcommand/flag the stale local binary doesn't have yet. This repo itself sat at `setup_version` 2.6.0 against a 2.12.x plugin for weeks unnoticed.
 
 fn-95 (shipped 2.12.4) fixed **surfacing** — an interactive once-per-version blocking ack, an autonomous `SETUP_STALE` verdict line. It did not fix the **mechanism**: the user still has to manually re-run setup to stop things breaking.
