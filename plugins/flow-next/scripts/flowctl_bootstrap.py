@@ -110,7 +110,7 @@ def _root_help_fast_path(source: Path) -> bool:
     """Write authenticated static help, or decline safely to live argparse."""
     # argparse deliberately honors terminal width through COLUMNS. Static text
     # is valid only for the default layout captured in flowctl-help.txt.
-    if "COLUMNS" in os.environ:
+    if "COLUMNS" in os.environ or getattr(sys.stdout, "isatty", lambda: False)():
         return False
 
     help_path = source.with_name(HELP_NAME)

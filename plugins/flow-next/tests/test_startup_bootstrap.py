@@ -278,6 +278,12 @@ class StartupBootstrapTest(unittest.TestCase):
         self.assertEqual(accelerated.stdout, direct.stdout)
         self.assertEqual(accelerated.stderr, direct.stderr)
 
+    def test_interactive_tty_falls_back_to_width_aware_argparse(self) -> None:
+        with mock.patch.object(bootstrap.sys.stdout, "isatty", return_value=True):
+            self.assertFalse(
+                bootstrap._root_help_fast_path(ROOT / "scripts" / "flowctl.py")
+            )
+
     def test_tracked_root_help_matches_argparse_byte_for_byte(self) -> None:
         self.assertEqual(
             bootstrap.SOURCE_SHA256,
