@@ -779,33 +779,32 @@ def parse_strategy_file(text: str) -> dict[str, Any]:
 
     # --- Frontmatter ---
     body_text = text
-    if text.startswith("---"):
-        parts = text.split("---", 2)
-        if len(parts) >= 3:
-            fm_text = parts[1]
+    envelope = _frontmatter_envelope(text)
+    if envelope.complete:
+        parser = _optional_yaml_parser()
+        if parser is None:
+            parsed_fm = _parse_inline_yaml(envelope.frontmatter)
+        else:
+            safe_load, yaml_error = parser
             try:
-                import yaml  # type: ignore[import-not-found]
-                try:
-                    parsed_fm = yaml.safe_load(fm_text)
-                except yaml.YAMLError:
-                    parsed_fm = None
-                if not isinstance(parsed_fm, dict):
-                    parsed_fm = {}
-            except ImportError:
-                parsed_fm = _parse_inline_yaml(fm_text)
-            for key in ("name", "last_updated", "generator"):
-                if key in parsed_fm:
-                    val = parsed_fm[key]
-                    # PyYAML may parse last_updated as datetime.date — coerce
-                    # to ISO string so JSON output round-trips cleanly.
-                    if isinstance(val, date) and not isinstance(val, datetime):
-                        result[key] = val.isoformat()
-                    else:
-                        result[key] = str(val) if val is not None else None
-            body_text = parts[2]
-            # Skip leading newline after the closing `---`.
-            if body_text.startswith("\n"):
-                body_text = body_text[1:]
+                parsed_fm = safe_load(envelope.frontmatter)
+            except yaml_error:
+                parsed_fm = None
+            if not isinstance(parsed_fm, dict):
+                parsed_fm = {}
+        for key in ("name", "last_updated", "generator"):
+            if key in parsed_fm:
+                val = parsed_fm[key]
+                # PyYAML may parse last_updated as datetime.date — coerce
+                # to ISO string so JSON output round-trips cleanly.
+                if isinstance(val, date) and not isinstance(val, datetime):
+                    result[key] = val.isoformat()
+                else:
+                    result[key] = str(val) if val is not None else None
+        body_text = envelope.body
+        # Skip leading newline after the closing `---`.
+        if body_text.startswith("\n"):
+            body_text = body_text[1:]
 
     # --- Section scan (after frontmatter) ---
     masked = _glossary_strip_fenced_code(body_text)
@@ -9089,13 +9088,46 @@ MEMORY_LEGACY_FILES: tuple[str, ...] = ("pitfalls.md", "conventions.md", "decisi
 # --- Frontmatter parsing / writing ---
 
 
+@dataclass(frozen=True, slots=True)
+class _FrontmatterEnvelope:
+    """Mechanical ``---`` envelope split; schema semantics stay with callers."""
+
+    present: bool
+    complete: bool
+    frontmatter: str
+    body: str
+
+
+def _frontmatter_envelope(text: str) -> _FrontmatterEnvelope:
+    """Split one leading frontmatter envelope without interpreting YAML."""
+    if not text.startswith("---"):
+        return _FrontmatterEnvelope(False, False, "", text)
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return _FrontmatterEnvelope(True, False, "", text)
+    return _FrontmatterEnvelope(True, True, parts[1], parts[2])
+
+
+_YAML_PARSER_UNSET: Any = object()
+_YAML_PARSER: Any = _YAML_PARSER_UNSET
+
+
+def _optional_yaml_parser() -> Optional[tuple[Any, type[BaseException]]]:
+    """Resolve PyYAML's loader/error pair once per process, or cache absence."""
+    global _YAML_PARSER
+    if _YAML_PARSER is _YAML_PARSER_UNSET:
+        try:
+            import yaml  # type: ignore[import-not-found]
+        except ImportError:
+            _YAML_PARSER = None
+        else:
+            _YAML_PARSER = (yaml.safe_load, yaml.YAMLError)
+    return _YAML_PARSER
+
+
 def _memory_yaml_available() -> bool:
     """Detect PyYAML for optional round-trip parse. Zero-dep by default."""
-    try:
-        import yaml  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    return _optional_yaml_parser() is not None
 
 
 def _parse_inline_yaml(text: str) -> dict[str, Any]:
@@ -9230,7 +9262,27 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
     return result
 
 
-def parse_memory_frontmatter(path: Path) -> dict[str, Any]:
+def _parse_memory_frontmatter_text(text: str) -> dict[str, Any]:
+    """Parse memory frontmatter from an already-read entry buffer."""
+    envelope = _frontmatter_envelope(text)
+    if not envelope.complete:
+        return {}
+    parser = _optional_yaml_parser()
+    if parser is None:
+        return _parse_inline_yaml(envelope.frontmatter)
+    safe_load, yaml_error = parser
+    try:
+        parsed = safe_load(envelope.frontmatter)
+    except yaml_error:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def parse_memory_frontmatter(
+    path: Path,
+    *,
+    text: Optional[str] = None,
+) -> dict[str, Any]:
     """Parse YAML frontmatter from a memory entry file.
 
     Returns an empty dict if:
@@ -9241,32 +9293,12 @@ def parse_memory_frontmatter(path: Path) -> dict[str, Any]:
     PyYAML is used when available (round-trip-safe); otherwise the inline
     parser runs. Both produce the same shape for entries we write.
     """
-    if not path.exists():
-        return {}
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return {}
-    if not text.startswith("---"):
-        return {}
-    # Split into (delim, frontmatter, delim, body).
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return {}
-    fm_text = parts[1]
-    # Prefer PyYAML when available.
-    try:
-        import yaml  # type: ignore[import-not-found]
-
+    if text is None:
         try:
-            parsed = yaml.safe_load(fm_text)
-        except yaml.YAMLError:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
             return {}
-        if not isinstance(parsed, dict):
-            return {}
-        return parsed
-    except ImportError:
-        return _parse_inline_yaml(fm_text)
+    return _parse_memory_frontmatter_text(text)
 
 
 # Fields that PyYAML would auto-coerce to typed scalars (datetime.date,
@@ -9749,32 +9781,30 @@ def _prospect_parse_frontmatter(text: str) -> Optional[dict[str, Any]]:
     (and Phase 0) defer to. Phase 0 may import / shell out to this
     helper in a follow-on touch-up.
     """
-    if not text or not text.startswith("---"):
+    envelope = _frontmatter_envelope(text)
+    if not envelope.complete:
         return None
-    # Need a full ---\n<frontmatter>\n---\n block at the top.
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return None
-    fm_text = parts[1]
     # Closing delimiter must be its own line — `_parse_inline_yaml` is
     # tolerant, but a bare `---` mid-line wouldn't open the block above.
     # Prefer PyYAML when available so the parse matches `parse_memory_frontmatter`.
-    try:
-        import yaml  # type: ignore[import-not-found]
-
+    parser = _optional_yaml_parser()
+    if parser is not None:
+        safe_load, yaml_error = parser
         try:
-            parsed = yaml.safe_load(fm_text)
-        except yaml.YAMLError:
+            parsed = safe_load(envelope.frontmatter)
+        except yaml_error:
             return None
         if not isinstance(parsed, dict):
             return None
         return parsed
-    except ImportError:
-        result = _parse_inline_yaml(fm_text)
+    else:
+        result = _parse_inline_yaml(envelope.frontmatter)
         # `_parse_inline_yaml` returns {} for malformed input — distinguish
         # "no frontmatter" (None) from "empty frontmatter dict" by checking
         # whether the block contained any non-blank lines.
-        if not result and any(line.strip() for line in fm_text.splitlines()):
+        if not result and any(
+            line.strip() for line in envelope.frontmatter.splitlines()
+        ):
             return None
         # `_parse_inline_yaml` keeps booleans as strings ("memory entries don't
         # need typed scalars" per its docstring), but prospect frontmatter ships
@@ -10123,27 +10153,26 @@ def _memory_title_tokens(title: str) -> set[str]:
     return set(_WORD_RE.findall(title.lower()))
 
 
-def _memory_read_entry(path: Path) -> dict[str, Any]:
-    """Read a memory entry file into {frontmatter, body}.
+def _memory_read_entry(
+    path: Path,
+    *,
+    raise_errors: bool = False,
+) -> dict[str, Any]:
+    """Read a memory entry file once into {frontmatter, body, raw}.
 
     Returns {"frontmatter": {}, "body": ""} on any failure so callers can
     continue the overlap scan past a malformed entry.
     """
-    if not path.exists():
-        return {"frontmatter": {}, "body": ""}
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
-        return {"frontmatter": {}, "body": ""}
-    fm = parse_memory_frontmatter(path)
-    body = ""
-    if text.startswith("---"):
-        parts = text.split("---", 2)
-        if len(parts) >= 3:
-            body = parts[2].lstrip("\n")
-    else:
-        body = text
-    return {"frontmatter": fm, "body": body}
+        if raise_errors:
+            raise
+        return {"frontmatter": {}, "body": "", "raw": ""}
+    envelope = _frontmatter_envelope(text)
+    fm = _parse_memory_frontmatter_text(text)
+    body = envelope.body.lstrip("\n") if envelope.complete else text
+    return {"frontmatter": fm, "body": body, "raw": text}
 
 
 def _memory_score_overlap(
@@ -10802,15 +10831,65 @@ _LEGACY_TYPE_FOR_FILE: dict[str, str] = {
 }
 
 
+def _memory_entry_descriptor(
+    entry_path: Path,
+    track: str,
+    category: str,
+    slug: str,
+    entry_date: str,
+    *,
+    include_body: bool,
+    data: Optional[dict[str, Any]] = None,
+) -> Optional[dict[str, Any]]:
+    """Build one categorized descriptor with exactly one content read."""
+    if include_body:
+        if data is None:
+            data = _memory_read_entry(entry_path)
+        fm = data["frontmatter"]
+        body = data["body"]
+        raw = data["raw"]
+    else:
+        fm = parse_memory_frontmatter(entry_path)
+        body = ""
+        raw = ""
+    if not fm:
+        return None
+    tags_raw = fm.get("tags", []) or []
+    if isinstance(tags_raw, str):
+        tags_list = [tags_raw]
+    elif isinstance(tags_raw, list):
+        tags_list = [str(tag) for tag in tags_raw]
+    else:
+        tags_list = []
+    return {
+        "entry_id": _memory_entry_id(track, category, slug, entry_date),
+        "track": track,
+        "category": category,
+        "slug": slug,
+        "date": entry_date,
+        "path": str(entry_path),
+        "frontmatter": fm,
+        "body": body,
+        "raw": raw,
+        "title": str(fm.get("title", "")),
+        "module": str(fm.get("module", "") or ""),
+        "tags": tags_list,
+        "status": str(fm.get("status", "active") or "active"),
+    }
+
+
 def _memory_iter_entries(
     memory_dir: Path,
     track: Optional[str] = None,
     category: Optional[str] = None,
+    *,
+    include_body: bool = False,
 ) -> list[dict[str, Any]]:
     """Walk the categorized tree and return entry descriptors.
 
     Each descriptor: {entry_id, track, category, slug, date, path,
-    frontmatter, title, module, tags, status}. Entries with malformed
+    frontmatter, title, module, tags, status}. ``body`` is populated only
+    when ``include_body`` is true. Entries with malformed
     filenames or missing/invalid frontmatter are skipped. Filters
     `--track` / `--category` narrow the scan. Status filtering is left
     to the caller (defaults live in `cmd_memory_list`).
@@ -10837,33 +10916,17 @@ def _memory_iter_entries(
                 slug, date = _memory_parse_entry_filename(entry_path)
                 if not slug or not date:
                     continue
-                data = _memory_read_entry(entry_path)
-                fm = data["frontmatter"]
-                if not fm:
-                    continue
-                tags_raw = fm.get("tags", []) or []
-                if isinstance(tags_raw, str):
-                    tags_list = [tags_raw]
-                elif isinstance(tags_raw, list):
-                    tags_list = [str(tt) for tt in tags_raw]
-                else:
-                    tags_list = []
-                entries.append(
-                    {
-                        "entry_id": _memory_entry_id(t, cat, slug, date),
-                        "track": t,
-                        "category": cat,
-                        "slug": slug,
-                        "date": date,
-                        "path": str(entry_path),
-                        "frontmatter": fm,
-                        "body": data["body"],
-                        "title": str(fm.get("title", "")),
-                        "module": str(fm.get("module", "") or ""),
-                        "tags": tags_list,
-                        "status": str(fm.get("status", "active") or "active"),
-                    }
+                descriptor = _memory_entry_descriptor(
+                    entry_path,
+                    t,
+                    cat,
+                    slug,
+                    date,
+                    include_body=include_body,
                 )
+                if descriptor is None:
+                    continue
+                entries.append(descriptor)
     return entries
 
 
@@ -10950,13 +11013,42 @@ def _memory_resolve_read_target(
             "text": segments[index - 1],
         }
 
-    all_entries = _memory_iter_entries(memory_dir)
     # Full id form.
     if entry_id.count("/") == 2:
-        for entry in all_entries:
-            if entry["entry_id"] == entry_id:
-                return {"kind": "categorized", "entry": entry}
-        return None
+        match = re.fullmatch(
+            r"(bug|knowledge)/([a-z0-9][a-z0-9-]*)/"
+            r"([a-z0-9][a-z0-9-]*)-(\d{4}-\d{2}-\d{2})",
+            entry_id,
+        )
+        if not match:
+            return None
+        track, category, slug, entry_date = match.groups()
+        if category not in MEMORY_CATEGORIES.get(track, []):
+            return None
+        entry_path = _memory_entry_path(
+            memory_dir, track, category, slug, entry_date
+        )
+        try:
+            resolved_root = memory_dir.resolve()
+            resolved_path = entry_path.resolve()
+            resolved_path.relative_to(resolved_root)
+            if not entry_path.is_file():
+                return None
+        except (OSError, ValueError):
+            return None
+        descriptor = _memory_entry_descriptor(
+            entry_path,
+            track,
+            category,
+            slug,
+            entry_date,
+            include_body=True,
+        )
+        if descriptor is None:
+            return None
+        return {"kind": "categorized", "entry": descriptor}
+
+    all_entries = _memory_iter_entries(memory_dir)
 
     # slug[-date] form.
     m = re.match(r"^(.+)-(\d{4}-\d{2}-\d{2})$", entry_id)
@@ -11015,13 +11107,30 @@ def cmd_memory_read(args: argparse.Namespace) -> None:
         if resolved["kind"] == "categorized":
             entry = resolved["entry"]
             path_obj = Path(entry["path"])
-            try:
-                raw = path_obj.read_text(encoding="utf-8")
-            except OSError as exc:
-                error_exit(
-                    f"failed to read {entry['path']}: {exc}",
-                    use_json=args.json,
-                )
+            raw = entry.get("raw", "")
+            if not raw:
+                try:
+                    data = _memory_read_entry(path_obj, raise_errors=True)
+                except OSError as exc:
+                    error_exit(
+                        f"failed to read {entry['path']}: {exc}",
+                        use_json=args.json,
+                    )
+                raw = data["raw"]
+                if not raw:
+                    error_exit(
+                        f"failed to read {entry['path']}",
+                        use_json=args.json,
+                    )
+                entry = _memory_entry_descriptor(
+                    path_obj,
+                    entry["track"],
+                    entry["category"],
+                    entry["slug"],
+                    entry["date"],
+                    include_body=True,
+                    data=data,
+                ) or entry
             if args.json:
                 json_output(
                     {
@@ -11350,7 +11459,9 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
     query_lower = query.lower()
 
     # Categorized walk.
-    entries = _memory_iter_entries(memory_dir, track=track, category=category)
+    entries = _memory_iter_entries(
+        memory_dir, track=track, category=category, include_body=True
+    )
     if module_filter:
         entries = [e for e in entries if e["module"] == module_filter]
     if tag_filter_set:
@@ -21260,6 +21371,7 @@ PILOT_RUNS_DIR_REL = ".flow/pilot-runs"
 # pilot skill records exactly one of these per tick; flowctl validates the
 # token but applies NO judgment about which is correct.
 PILOT_LOG_ACTIONS = ("triaged", "advanced", "asked", "blocked", "needs-human")
+PILOT_LOG_COUNTER_VERSION = 1
 
 
 def _pilot_log_id_slug(raw_id: str) -> str:
@@ -21358,6 +21470,63 @@ def _pilot_log_now() -> float:
     import time as _time
 
     return _time.time()
+
+
+def _pilot_log_recover_next_tick(
+    run_dir: Path,
+    id_slug: str,
+    raw_id: str,
+) -> int:
+    """Reconstruct the next tick from rows after absent/corrupt state."""
+    max_tick = 0
+    for candidate in run_dir.glob(f"pilot-{id_slug}-*.json"):
+        try:
+            row = json.loads(candidate.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(row, dict) or row.get("id") != raw_id:
+            continue
+        tick = row.get("tick")
+        if isinstance(tick, int) and not isinstance(tick, bool) and tick > max_tick:
+            max_tick = tick
+    return max_tick + 1
+
+
+def _pilot_log_read_next_tick(
+    counter_path: Path,
+    run_dir: Path,
+    raw_id: str,
+) -> Optional[int]:
+    """Read and validate counter state plus its one-row commit witness."""
+    try:
+        state = json.loads(counter_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(state, dict):
+        return None
+    next_tick = state.get("nextTick")
+    last_row_name = state.get("lastRow")
+    if (
+        state.get("version") != PILOT_LOG_COUNTER_VERSION
+        or state.get("id") != raw_id
+        or not isinstance(next_tick, int)
+        or isinstance(next_tick, bool)
+        or next_tick < 2
+        or not isinstance(last_row_name, str)
+        or Path(last_row_name).name != last_row_name
+    ):
+        return None
+    try:
+        last_row = json.loads(
+            (run_dir / last_row_name).read_text(encoding="utf-8")
+        )
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(last_row, dict):
+        return None
+    if last_row.get("id") != raw_id or last_row.get("tick") != next_tick - 1:
+        return None
+    return next_tick
 
 
 def _branch_slug(branch: Optional[str] = None) -> str:
@@ -22266,8 +22435,8 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     # share a lock OR clobber each other's path (review finding #1).
     id_hash = hashlib.sha1(raw_id.encode("utf-8")).hexdigest()[:8]
 
-    # The count+write is serialized under a per-id exclusive CROSS-PLATFORM lock
-    # so two concurrent same-id appends can't both read N rows and both write
+    # Tick reservation + write is serialized under a per-id CROSS-PLATFORM lock
+    # so two concurrent same-id appends can't both reserve N+1 and both write
     # tick=N+1 (review finding #1 follow-up — duplicate-tick race). The lock is a
     # `.pilot-<id-hash>.lock` DIRECTORY: `os.mkdir` is atomic on POSIX AND Windows
     # (raw `fcntl.flock` is Unix-only and a no-op on Windows, so it failed to
@@ -22277,20 +22446,18 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     # the summary glob ever sees it (and it still matches the `.pilot-*.lock`
     # glob a caller may use to spot the lock).
     lock_path = run_dir / f".pilot-{id_hash}.lock"
+    counter_path = run_dir / f".pilot-{id_hash}.counter.json"
     with _pilot_log_lock(lock_path):
-        # Per-id monotonic tick = (#existing rows whose STORED id == this raw
-        # id) + 1. The slug glob is a cheap pre-filter; we then read each
-        # candidate's `id` and count EXACT raw-id matches so two distinct ids
-        # that normalize to the same slug never share a counter. A row whose
-        # JSON can't be read is skipped — it can't belong to this id.
-        tick = 1
-        for cand in run_dir.glob(f"pilot-{id_slug}-*.json"):
-            try:
-                cand_data = json.loads(cand.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                continue
-            if isinstance(cand_data, dict) and cand_data.get("id") == raw_id:
-                tick += 1
+        # Steady state reads one counter + its one-row commit witness. Missing,
+        # malformed, mismatched, or crash-ahead state reconstructs once from
+        # historical rows, then self-heals the counter below.
+        tick = _pilot_log_read_next_tick(counter_path, run_dir, raw_id)
+        if tick is None:
+            tick = _pilot_log_recover_next_tick(run_dir, id_slug, raw_id)
+
+        timestamp = now_iso()
+        ts_slug = timestamp.replace(":", "").replace("-", "").replace(".", "")
+        row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}-{id_hash}.json"
 
         row = {
             "tick": tick,
@@ -22298,13 +22465,21 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
             "action": action,
             "stage": stage,
             "costTokens": getattr(args, "cost_tokens", None),
-            "timestamp": now_iso(),
+            "timestamp": timestamp,
         }
 
-        # Filename: slug + tick + timestamp + id-hash, unique per write even
-        # for slug-colliding ids or two appends in the same timestamp tick.
-        ts_slug = now_iso().replace(":", "").replace("-", "").replace(".", "")
-        row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}-{id_hash}.json"
+        # Reserve before publishing the row. If publication crashes, the next
+        # append rejects the missing witness and reconstructs from rows; it can
+        # never trust an ahead-of-disk counter or duplicate a committed tick.
+        atomic_write_json(
+            counter_path,
+            {
+                "version": PILOT_LOG_COUNTER_VERSION,
+                "id": raw_id,
+                "nextTick": tick + 1,
+                "lastRow": row_path.name,
+            },
+        )
         atomic_write_json(row_path, row)
 
     if args.json:
