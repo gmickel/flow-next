@@ -400,7 +400,7 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
   if [ "$_lvl" = "high" ]; then
     _mid="$(printf '%s' "$_out" | jq -r '.matches[0].id // empty')"
     if [ -n "$_mid" ]; then
-      _out="$("$FLOWCTL" memory add --track bug --category "$_cat" \
+      _out="$("$FLOWCTL" memory add --track bug --category "<same category as the create above>" \
         --title "<same title>" --update "$_mid" \
         --module "<same module>" --tags "qa,<spec-id>,<surface>" \
         --symptoms "<same symptoms>" \

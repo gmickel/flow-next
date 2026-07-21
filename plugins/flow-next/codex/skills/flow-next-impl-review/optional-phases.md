@@ -209,7 +209,7 @@ Mode split (fn-113): under autonomy markers the `codex validate` and
 and upgrade verdict to SHIP if all findings dropped - the read-back below
 applies there. In an INTERACTIVE session the call returns raw validator
 decisions with `host_judges: true` and does NOT mutate the receipt: read the
-JSON output (`.decisions[]`, `.dropped`, `.kept`), judge which findings
+JSON output (`.decisions` - an object keyed by finding id, each value `{validated, reason}` - plus `.dropped`/`.kept`), judge which findings
 survive yourself, and record your verdict. Autonomous read-back:
 
 ```bash
