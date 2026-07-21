@@ -73,13 +73,47 @@ Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if
 
 **If no `setup_version`:** continue (first-time setup)
 
+## Step 2b: Setup mode (fn-121 — Claude Code only)
+
+Two install modes exist. **Copy mode** (the only mode before fn-121, and the only mode on non-Claude hosts): flowctl + templates + usage.md are copied into `.flow/` as repo-committed snapshots; plugin updates require a setup re-run to refresh them. **Plugin mode** (Claude Code only): nothing is copied — bare `flowctl` rides the plugin's `bin/` PATH injection, the guide is pulled via `flowctl usage`, the spec template resolves through the bundled cascade, and the only repo artifact is a slim versioned CLAUDE.md snippet. Plugin-mode repos never need a setup re-run for plugin updates.
+
+```bash
+CURRENT_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
+```
+
+**If `PLATFORM` is not `claude`:** set `MODE=copy` silently and continue to Step 3 — plugin mode is Claude-Code-only (Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves `$HOME/.codex/scripts/flowctl`; Droid's bin support is unverified). Never offer the question on these hosts.
+
+**If `PLATFORM=claude` and `CURRENT_MODE` is empty (first mode decision):** ask via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror — unreachable in practice, since this branch requires `PLATFORM=claude`):
+
+- **header**: `Setup mode`
+- **question**: `Does anyone use this repo without the Claude Code plugin — Codex/Cursor/Droid teammates, CI jobs, or plain terminal sessions running .flow/bin/flowctl?`
+- **options**:
+  - `No — plugin mode (Recommended for Claude-Code-only repos)` — zero copies; slim CLAUDE.md snippet; plugin updates land silently, no setup re-runs.
+  - `Yes — copy mode` — repo-committed flowctl copies so plugin-less consumers work; setup re-runs refresh them (today's behavior).
+  - `abort` — exit cleanly; nothing written beyond the idempotent Steps 1-2.
+
+**If `CURRENT_MODE` is set (re-run):** print `Setup mode: <CURRENT_MODE>` and ask keep-or-switch (same tool): `Keep <CURRENT_MODE> (Recommended)` / `Switch to <other>` / `abort`. Keep = refresh within the current mode.
+
+**Transition table (copy → plugin), consent-gated — NEVER silent deletion:**
+
+1. Enumerate leftover copy artifacts actually present: `.flow/bin/flowctl`, `.flow/bin/flowctl.cmd`, `.flow/bin/flowctl.py`, `.flow/templates/spec.md`, `.flow/usage.md`.
+2. None present → proceed as plugin mode.
+3. Any present → list them and ask: `Remove copy-mode artifacts? (required for plugin mode)` with options `Remove listed files` / `Keep them — stay in copy mode`. On Remove: `git rm -q` tracked paths, plain `rm` for untracked ones — but FIRST surface any listed tracked file with uncommitted modifications and exclude it from removal (never force-remove modified files; the user resolves those manually).
+4. After removal attempt, re-enumerate. Anything still present (decline, modified-file exclusions, partial failure) → print the exact remaining paths, set `MODE=copy`, and continue as copy mode. `flowctl setup-mode set plugin` (Step 7c) would refuse anyway — the plumbing enforces this table even on prose error.
+
+**Plugin mode path through the rest of this workflow:** skip Step 3 and Step 4's copy block and Step 4's `.flow/usage.md` handling entirely (nothing is copied); Step 4a (repo-root SPEC.md offer) still runs — it seeds a user-owned file, not a `.flow/` copy. Steps 5-7 run normally with the plugin-mode adjustments marked inline (Docs template + Step 7c stamp). Copy mode = every step exactly as written.
+
 ## Step 3: Create .flow/bin/ and .flow/templates/
+
+**Copy mode only — in plugin mode skip to Step 4a.**
 
 ```bash
 mkdir -p .flow/bin .flow/templates
 ```
 
 ## Step 4: Copy files
+
+**Copy mode only — in plugin mode skip to Step 4a.**
 
 **IMPORTANT: Do NOT read flowctl.py - it's too large. Just copy it.**
 
@@ -280,9 +314,10 @@ Store detection results for use in questions. When showing options, indicate cur
 
 ### 6b: Check docs status
 
-Choose the correct template based on platform:
+Choose the correct template based on platform AND mode:
 - **Codex** (`PLATFORM=codex`): read [templates/agents-md-snippet.md](templates/agents-md-snippet.md) — uses `$flow-next-plan` syntax
-- **Claude Code / Droid / Cursor**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — uses `/flow-next:plan` syntax (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md, which Cursor reads)
+- **Claude Code in plugin mode** (`MODE=plugin`): read [templates/claude-md-snippet-plugin.md](templates/claude-md-snippet-plugin.md) — bare `flowctl` (plugin-bin PATH), `flowctl usage` pull directives, internal `<!-- flow-next:snippet:vN -->` sentinel. CLAUDE.md is the REQUIRED target (the rail's guarantee is CLAUDE.md's every-turn presence); AGENTS.md is an optional secondary.
+- **Claude Code (copy mode) / Droid / Cursor**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — uses `/flow-next:plan` syntax (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md, which Cursor reads)
 
 For each of CLAUDE.md and AGENTS.md:
 1. Check if file exists
@@ -420,6 +455,21 @@ Stored value is a bare backend name by default. Power users can also write a ful
 ```
 
 **Docs question** (always include — adjust default based on platform):
+
+For **Claude Code in plugin mode** (`MODE=plugin`) — CLAUDE.md is the commit prerequisite, so the option set differs (no CLAUDE.md-less variant):
+```json
+{
+  "header": "Docs",
+  "question": "Write the Flow-Next snippet? Plugin mode requires it in CLAUDE.md (the always-loaded rail that replaces the copied files).",
+  "options": [
+    {"label": "CLAUDE.md (Recommended)", "description": "Required for plugin mode; marker-bounded block, content outside untouched"},
+    {"label": "CLAUDE.md + AGENTS.md", "description": "Same block in both (AGENTS.md optional secondary)"},
+    {"label": "Skip — fall back to copy mode", "description": "No rail means no plugin mode; setup continues as copy mode (Step 3-4 copies run before Step 7)"}
+  ],
+  "multiSelect": false
+}
+```
+On `Skip — fall back to copy mode`: set `MODE=copy` and run the skipped Steps 3-4 copies NOW (before Step 7), then continue — `setup_mode` will stamp `copy` in Step 7c. Never stamp plugin without the CLAUDE.md rail.
 
 For **Codex** (`PLATFORM=codex`):
 ```json
@@ -803,6 +853,19 @@ Run this **after** the Docs block above and **before** Star. It may touch the **
   1. Check if `gh` CLI is available: `which gh`
   2. If available, run: `gh api -X PUT /user/starred/gmickel/flow-next`
   3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/flow-next`
+
+### Step 7c: Stamp setup mode (fn-121 — stamp-last commit point)
+
+Runs after every Step 7 write, before Step 8. The stamp is the ONLY write path for `setup_mode` and lives in plumbing so a wrong prose path cannot produce an invalid stamp:
+
+```bash
+"${PLUGIN_ROOT}/scripts/flowctl" setup-mode set <MODE> --json
+```
+
+- `MODE=copy`: stamps unconditionally. `MODE_OUTCOME="copy"`.
+- `MODE=plugin`: the command verifies the commit-point invariants itself — CLAUDE.md carries the `<!-- BEGIN FLOW-NEXT -->` block with a current `<!-- flow-next:snippet:vN -->` sentinel AND no copy artifacts remain — and refuses with an itemized failure list otherwise. On success `MODE_OUTCOME="plugin"`. On refusal (a Docs abort, a failed write, or leftover artifacts slipped through): print the failures verbatim, run `setup-mode set copy` so the repo is explicitly copy mode, and set `MODE_OUTCOME="copy (plugin refused: <first failure>)"`. Never leave `setup_mode` unset on a completed setup run.
+
+Include `Setup mode: <MODE_OUTCOME>` in the Step 8 summary.
 
 ## Step 8: Print Summary
 

@@ -806,6 +806,16 @@ Run this **after** the Docs block above and **before** Star. It may touch the **
  2. If available, run: `gh api -X PUT /user/starred/gmickel/flow-next`
  3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/flow-next`
 
+### Step 7c: Stamp setup mode (fn-121)
+
+Runs after every Step 7 write, before Step 8. Codex projects are always copy mode:
+
+```bash
+"${PLUGIN_ROOT}/scripts/flowctl" setup-mode set copy --json
+```
+
+Include `Setup mode: copy` in the Step 8 summary.
+
 ## Step 8: Print Summary
 
 ```

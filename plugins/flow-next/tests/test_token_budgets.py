@@ -38,7 +38,11 @@ def _token_equiv(path: Path) -> float:
 
 class TokenBudgetTest(unittest.TestCase):
     def test_setup_snippets_stay_within_block_budget(self) -> None:
-        for name in ("claude-md-snippet.md", "agents-md-snippet.md"):
+        for name in (
+            "claude-md-snippet.md",
+            "agents-md-snippet.md",
+            "claude-md-snippet-plugin.md",
+        ):
             with self.subTest(template=name):
                 self.assertLessEqual(
                     _token_equiv(TEMPLATES / name),

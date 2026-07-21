@@ -109,10 +109,11 @@ Same pattern as `/flow-next:prospect` / `/flow-next:capture` — non-blocking no
 
 ```bash
 if [[ -f .flow/meta.json ]]; then
- SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
+ SETUP_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
+SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
  PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
  PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
- if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+ if [[ "$SETUP_MODE" != "plugin" && -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
  echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
  fi
 fi

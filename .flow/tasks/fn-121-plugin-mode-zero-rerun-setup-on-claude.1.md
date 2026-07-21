@@ -26,9 +26,8 @@ Formalize the two mechanism prototypes already on this branch and land the canon
 - `./scripts/sync-codex.sh` run twice: second run produces no diff; all existing guards green.
 - Focused suites green: `cd plugins/flow-next/tests && python3 -m unittest test_init_stamp_launchers test_bin_launcher_parity test_cmd_usage test_dogfood_template_parity test_token_budgets -q`.
 ## Done summary
-TBD
-
+Task .1 complete. bin/flowctl finalized to strict 1-line parity with scripts/flowctl; flowctl usage finalized (transitional candidate dropped, actionable hint); canonical usage.md moved to plugins/flow-next/templates/; all active-source references updated; new parity + cmd_usage tests; dual copy refreshed; codex mirror regenerated twice (idempotent, guards green, incl. fn-115 pin flow-through in scout tomls). Grok-via-cursor route died on quota; native grok CLI authored both test files (reviewed + accepted with one hint improvement); mechanical edits host-authored.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2d0d8d52
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_init_stamp_launchers test_bin_launcher_parity test_cmd_usage test_dogfood_template_parity test_token_budgets -q, ./scripts/sync-codex.sh (x2, idempotent), claude plugin validate plugins/flow-next, grep gate: 0 hits outside codex/.flow/CHANGELOG
 - PRs:

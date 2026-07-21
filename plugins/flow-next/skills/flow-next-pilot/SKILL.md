@@ -28,10 +28,11 @@ Non-blocking, never asks (autonomous). On mismatch, stash a `SETUP_STALE` line s
 
 ```bash
 [[ -d .flow/tmp && ! -L .flow/tmp ]] && rm -f .flow/tmp/setup_stale 2>/dev/null
+SETUP_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
 SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
 PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
 PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+if [[ "$SETUP_MODE" != "plugin" && -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
   if [[ ! -L .flow/tmp ]]; then
     mkdir -p .flow/tmp 2>/dev/null
     rm -f .flow/tmp/setup_stale 2>/dev/null                # drop a planted setup_stale symlink before tee follows it

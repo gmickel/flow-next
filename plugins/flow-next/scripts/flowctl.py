@@ -8016,6 +8016,133 @@ def cmd_usage(args: argparse.Namespace) -> None:
     )
 
 
+# fn-121: plugin-mode commit-point plumbing. The snippet schema version and
+# sentinel grammar are shared with the skills' pre-check blocks; bump the
+# version ONLY on a genuine snippet-contract change.
+SNIPPET_SCHEMA_VERSION = 1
+SNIPPET_SENTINEL_RE = re.compile(r"<!-- flow-next:snippet:v(\d+) -->")
+PLUGIN_MODE_COPY_ARTIFACTS = [
+    ".flow/bin/flowctl",
+    ".flow/bin/flowctl.cmd",
+    ".flow/bin/flowctl.py",
+    ".flow/templates/spec.md",
+    ".flow/usage.md",
+]
+
+
+def cmd_setup_mode_set(args: argparse.Namespace) -> None:
+    """Stamp setup_mode in .flow/meta.json (fn-121 R4/R13/R16).
+
+    The only write path for the setup_mode field. plugin mode enforces the
+    commit-point invariants (CLAUDE.md rail + no copy artifacts); copy mode
+    stamps unconditionally.
+    """
+    mode = args.mode
+    repo_root = get_repo_root()
+    flow_dir = get_flow_dir()
+    meta_path = flow_dir / META_FILE
+    if not flow_dir.is_dir() or not meta_path.is_file():
+        error_exit(
+            ".flow/ not initialized. Run flowctl init first.",
+            use_json=args.json,
+        )
+
+    if mode == "copy":
+        meta = load_json(meta_path)
+        meta["setup_mode"] = "copy"
+        atomic_write_json(meta_path, meta)
+        message = "setup_mode set to copy"
+        if args.json:
+            json_output({"success": True, "mode": "copy", "message": message})
+        else:
+            print("setup-mode: %s" % message)
+        return
+
+    # mode == "plugin" — collect all failures, then refuse or stamp.
+    failures = []  # type: list
+
+    claude_path = repo_root / "CLAUDE.md"
+    if not claude_path.is_file():
+        failures.append("CLAUDE.md missing")
+    else:
+        try:
+            with open(claude_path, encoding="utf-8") as f:
+                claude_text = f.read()
+        except Exception:
+            claude_text = ""
+        lines = claude_text.splitlines()
+        begin_idx = next(
+            (
+                i
+                for i, line in enumerate(lines)
+                if line.strip() == "<!-- BEGIN FLOW-NEXT -->"
+            ),
+            None,
+        )
+        end_idx = None
+        if begin_idx is not None:
+            end_idx = next(
+                (
+                    i
+                    for i in range(begin_idx + 1, len(lines))
+                    if lines[i].strip() == "<!-- END FLOW-NEXT -->"
+                ),
+                None,
+            )
+        if begin_idx is None or end_idx is None:
+            failures.append("CLAUDE.md has no FLOW-NEXT block")
+        else:
+            found_ver = None  # type: Optional[int]
+            for line in lines[begin_idx + 1 : end_idx]:
+                m = SNIPPET_SENTINEL_RE.search(line.strip())
+                if m:
+                    found_ver = int(m.group(1))
+                    break
+            if found_ver is None:
+                failures.append("FLOW-NEXT block has no snippet sentinel")
+            elif found_ver != SNIPPET_SCHEMA_VERSION:
+                failures.append(
+                    "snippet sentinel v%d != expected v%d"
+                    % (found_ver, SNIPPET_SCHEMA_VERSION)
+                )
+
+    for relpath in PLUGIN_MODE_COPY_ARTIFACTS:
+        if (repo_root / relpath).exists():
+            failures.append("copy artifact present: %s" % relpath)
+
+    if failures:
+        if args.json:
+            json_output(
+                {"success": False, "mode": "plugin", "failures": failures}
+            )
+        else:
+            for fail in failures:
+                print("setup-mode: %s" % fail, file=sys.stderr)
+            print(
+                "setup-mode: fix the failures above, then re-run: "
+                "flowctl setup-mode set plugin",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+
+    meta = load_json(meta_path)
+    meta["setup_mode"] = "plugin"
+    atomic_write_json(meta_path, meta)
+    sentinel = "v%d" % SNIPPET_SCHEMA_VERSION
+    message = "setup_mode set to plugin"
+    if args.json:
+        json_output(
+            {
+                "success": True,
+                "mode": "plugin",
+                "sentinel": sentinel,
+                "message": message,
+            }
+        )
+    else:
+        print("setup-mode: %s (%s)" % (message, sentinel))
+
+
 def cmd_detect(args: argparse.Namespace) -> None:
     """Check if .flow/ exists and is valid."""
     flow_dir = get_flow_dir()
@@ -29539,6 +29666,26 @@ def main() -> None:
         "usage", help="Print the bundled usage guide (CLI + orchestration recipes)"
     )
     p_usage.set_defaults(func=cmd_usage)
+
+    # setup-mode (fn-121): sole write path for meta.json setup_mode stamp.
+    p_setup_mode = subparsers.add_parser(
+        "setup-mode", help="Stamp setup_mode in .flow/meta.json"
+    )
+    setup_mode_sub = p_setup_mode.add_subparsers(
+        dest="setup_mode_cmd", required=True
+    )
+    p_setup_mode_set = setup_mode_sub.add_parser(
+        "set", help="Set setup_mode to plugin or copy"
+    )
+    p_setup_mode_set.add_argument(
+        "mode",
+        choices=["plugin", "copy"],
+        help="Setup mode to stamp",
+    )
+    p_setup_mode_set.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_setup_mode_set.set_defaults(func=cmd_setup_mode_set)
 
     p_ready = subparsers.add_parser("ready", help="List ready tasks")
     p_ready.add_argument(
