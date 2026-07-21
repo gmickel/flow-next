@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-113-flowctl-judgment-evictions-memory.md",
-  "status": "open",
+  "status": "done",
   "title": "flowctl judgment evictions: memory overlap, scope suggest, carve-out doc",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-19T13:00:52.071765Z"
+  "updated_at": "2026-07-21T07:27:38.035300Z"
 }
