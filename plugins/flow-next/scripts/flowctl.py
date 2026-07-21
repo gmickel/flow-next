@@ -4541,6 +4541,113 @@ def models_pin_nudge_message(
     )
 
 
+def resolve_models_role(
+    role: str,
+    backend: str,
+) -> tuple[Optional[str], Optional[str], str]:
+    """Pure map + precedence lookup for ``models resolve`` (no judgment).
+
+    Returns ``(model, effort, source)``. Source is one of
+    ``explicit`` / ``env`` / ``role-map`` / ``config`` / ``baseline``.
+    Role-specific resolvers own the precedence:
+
+    * ``delegate`` + codex → ``resolve_delegate_model`` (raw
+      ``work.delegateModel`` > role map > baseline)
+    * ``fastJudge`` → ``resolve_fast_judge_model``
+    * ``review`` → ``resolve_role_model`` + registry default fill
+      (env ``FLOW_<BACKEND>_MODEL``)
+    * ``scoutFast`` / ``scoutIntelligent`` → ``resolve_role_model``
+      (env ``CODEX_MODEL_FAST`` / ``CODEX_MODEL_INTELLIGENT`` on codex)
+
+    Scout roles have no flowctl baseline model (mirror-build constants live
+    in ``sync-codex.sh``); when unset, model is None and source is baseline.
+    """
+    if role == "delegate" and backend == "codex":
+        model, source = resolve_delegate_model()
+        effort: Optional[str] = None
+        if source == "role-map":
+            pin = get_role_map_pin("delegate", "codex")
+            if pin:
+                _m, effort = _parse_role_pin(pin)
+        return model, effort, source
+
+    if role == "fastJudge":
+        return resolve_fast_judge_model(backend)
+
+    if role == "review":
+        env_var = f"FLOW_{backend.upper()}_MODEL"
+        model, effort, source = resolve_role_model(
+            "review", backend, env_var=env_var
+        )
+        reg = BACKEND_REGISTRY.get(backend) or {}
+        if reg.get("models") is None:
+            return None, None, "baseline"
+        if model is None:
+            model = reg.get("default_model")
+            source = "baseline"
+        if effort is None and reg.get("efforts") is not None:
+            effort = (
+                os.environ.get(f"FLOW_{backend.upper()}_EFFORT", "").strip()
+                or reg.get("default_effort")
+            )
+        return model, effort, source
+
+    # scoutFast / scoutIntelligent (and any future role that is map-only)
+    scout_env = {
+        "scoutFast": "CODEX_MODEL_FAST",
+        "scoutIntelligent": "CODEX_MODEL_INTELLIGENT",
+    }
+    env_var = scout_env.get(role) if backend == "codex" else None
+    return resolve_role_model(role, backend, env_var=env_var)
+
+
+def cmd_models_resolve(args: argparse.Namespace) -> None:
+    """Read-only role-map resolve: map + precedence only, no judgment.
+
+    The ONE new flowctl surface fn-115 adds. Skills that previously read
+    ``config get work.delegateModel`` (merged default, bypasses the role map)
+    must call this instead for the ``delegate`` role.
+    """
+    use_json = bool(getattr(args, "json", False))
+    role = (getattr(args, "role", None) or "").strip()
+    if role not in MODEL_ROLES:
+        error_exit(
+            f"Unknown model role: {role!r}. Valid: {list(MODEL_ROLES)}",
+            use_json=use_json,
+        )
+
+    backend = (getattr(args, "backend", None) or "").strip() or "codex"
+    if backend not in MODEL_ROLE_BACKENDS:
+        error_exit(
+            f"Unknown model-role backend: {backend!r}. "
+            f"Valid: {list(MODEL_ROLE_BACKENDS)}",
+            use_json=use_json,
+        )
+
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=use_json,
+        )
+
+    model, effort, source = resolve_models_role(role, backend)
+
+    if use_json:
+        json_output(
+            {
+                "role": role,
+                "backend": backend,
+                "model": model,
+                "effort": effort,
+                "source": source,
+            }
+        )
+    else:
+        # Bare model for shell capture (``MODEL=$(flowctl models resolve X)``).
+        # Empty when no pin and no baseline (scouts without a role-map entry).
+        print(model if model is not None else "")
+
+
 def _validate_models_config_key(key: str, value: Any) -> Optional[str]:
     """Validate a models.* config set. Return error message or None if OK.
 
@@ -28384,6 +28491,36 @@ def main() -> None:
     )
     p_review_backend.add_argument("--json", action="store_true", help="JSON output")
     p_review_backend.set_defaults(func=cmd_review_backend)
+
+    # models resolve (fn-115.3) — pure map + precedence lookup for skills
+    p_models = subparsers.add_parser(
+        "models",
+        help="Model role-map helpers (read-only resolve; no judgment)",
+    )
+    models_sub = p_models.add_subparsers(dest="models_cmd", required=True)
+    p_models_resolve = models_sub.add_parser(
+        "resolve",
+        help=(
+            "Resolve a role pin via precedence "
+            "(explicit/env/role-map/baseline; pure lookup, no probing)"
+        ),
+    )
+    p_models_resolve.add_argument(
+        "role",
+        help=(
+            "Role name: fastJudge | review | delegate | scoutFast | scoutIntelligent"
+        ),
+    )
+    p_models_resolve.add_argument(
+        "--backend",
+        default="codex",
+        choices=list(MODEL_ROLE_BACKENDS),
+        help="Backend axis (default: codex)",
+    )
+    p_models_resolve.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_models_resolve.set_defaults(func=cmd_models_resolve)
 
     # review-rounds (fn-90 R5, rp surface) — prose-driven rp workflows hit the
     # same deterministic cap counter the codex/copilot/cursor handlers wire

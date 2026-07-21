@@ -270,8 +270,12 @@ entirely (or pass `DELEGATE: local`) when delegation is off or a gate failed —
 the worker then runs standard in-session implementation, unchanged. The flags are PROVISIONAL - the worker owns the final per-task call: its thin-task valve (worker.md Phase 2) may still run the task standard in-session, emitting no `DELEGATION_*` lines (counter untouched).
 
 ```
+# Resolve model via role map (fn-115): do NOT use `config get work.delegateModel`
+# (merged default bypasses models.roles.delegate). Precedence: raw on-disk
+# work.delegateModel > models.roles.delegate.codex > baseline gpt-5.6-terra.
+DELEGATE_MODEL="$($FLOWCTL models resolve delegate --json | jq -r '.model')"
 DELEGATE: codex
-DELEGATE_MODEL: <work.delegateModel>          # default gpt-5.6-terra
+DELEGATE_MODEL: <resolved above>
 DELEGATE_SANDBOX: <yolo|full-auto>            # from consent (work.delegateSandbox)
 DELEGATE_EFFORT_FLOOR: <work.delegateEffort>  # default medium (per-run escalation floors here)
 DELEGATE_DECISION: <auto|ask>
