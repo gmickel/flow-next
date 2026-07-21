@@ -203,6 +203,53 @@ class PortableLockSubprocessTest(unittest.TestCase):
         self.assertIn("Runtime lock unavailable", payload["error"])
         self.assertNotIn("Traceback", output.getvalue())
 
+    def _assert_start_lock_setup_error(
+        self, task: str, patcher, expected: str
+    ) -> None:
+        previous_cwd = Path.cwd()
+        output = io.StringIO()
+        try:
+            os.chdir(self.repo)
+            with patcher, mock.patch.object(
+                sys, "argv", ["flowctl", "start", task, "--json"]
+            ), contextlib.redirect_stdout(output):
+                with self.assertRaises(SystemExit) as raised:
+                    flowctl.main()
+            self.assertEqual(raised.exception.code, 1)
+        finally:
+            os.chdir(previous_cwd)
+        payload = json.loads(output.getvalue())
+        self.assertFalse(payload["success"])
+        self.assertIn("Runtime lock unavailable", payload["error"])
+        self.assertIn(expected, payload["error"])
+        self.assertNotIn("Traceback", output.getvalue())
+
+    def test_runtime_lock_mkdir_failure_uses_json_error_contract(self) -> None:
+        spec = json.loads(
+            self._run("spec", "create", "--title", "Mkdir failure").stdout
+        )["id"]
+        task = json.loads(
+            self._run("task", "create", "--spec", spec, "--title", "Start me").stdout
+        )["id"]
+        self._assert_start_lock_setup_error(
+            task,
+            mock.patch.object(Path, "mkdir", side_effect=PermissionError("denied")),
+            "cannot prepare lock parent",
+        )
+
+    def test_runtime_lock_initial_write_failure_uses_json_error_contract(self) -> None:
+        spec = json.loads(
+            self._run("spec", "create", "--title", "Write failure").stdout
+        )["id"]
+        task = json.loads(
+            self._run("task", "create", "--spec", spec, "--title", "Start me").stdout
+        )["id"]
+        self._assert_start_lock_setup_error(
+            task,
+            mock.patch.object(flowctl.os, "write", side_effect=OSError("disk failed")),
+            "cannot initialize lock",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

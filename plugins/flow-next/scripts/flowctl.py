@@ -94,8 +94,14 @@ def cross_process_lock(
         timeout = CROSS_PROCESS_LOCK_WAIT_SECS
     if poll is None:
         poll = CROSS_PROCESS_LOCK_POLL_SECS
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    if lock_path.parent.is_symlink() or not lock_path.parent.is_dir():
+    try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        invalid_parent = lock_path.parent.is_symlink() or not lock_path.parent.is_dir()
+    except OSError as e:
+        raise CrossProcessLockError(
+            f"cannot prepare lock parent {lock_path.parent}: {e}"
+        ) from e
+    if invalid_parent:
         raise CrossProcessLockError(
             f"lock parent is not a real directory: {lock_path.parent}"
         )
@@ -116,11 +122,21 @@ def cross_process_lock(
     except OSError as e:
         raise CrossProcessLockError(f"cannot open lock path {lock_path}: {e}") from e
 
-    acquired = False
-    deadline = _monotonic_now() + max(0.0, timeout)
     try:
         if os.fstat(fd).st_size == 0:
             os.write(fd, b"\0")
+    except OSError as e:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        raise CrossProcessLockError(
+            f"cannot initialize lock {lock_path}: {e}"
+        ) from e
+
+    acquired = False
+    deadline = _monotonic_now() + max(0.0, timeout)
+    try:
         while not acquired:
             try:
                 acquired = _try_kernel_lock(fd)
@@ -145,7 +161,10 @@ def cross_process_lock(
                 # Closing the descriptor releases kernel ownership. Never mask
                 # an exception from the protected body.
                 pass
-        os.close(fd)
+        try:
+            os.close(fd)
+        except OSError:
+            pass
 
 
 # --- Constants ---
