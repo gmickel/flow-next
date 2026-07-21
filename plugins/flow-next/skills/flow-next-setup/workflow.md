@@ -262,7 +262,10 @@ Before asking questions, detect available tools and read current config:
 
 ```bash
 # Detect available review backends
-HAVE_RP=$(which rp-cli >/dev/null 2>&1 && echo 1 || echo 0)
+if command -v rpce-cli >/dev/null 2>&1 \
+  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+  || command -v rp-cli >/dev/null 2>&1; then HAVE_RP=1; else HAVE_RP=0; fi
 HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)

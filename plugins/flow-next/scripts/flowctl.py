@@ -7,7 +7,6 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 """
 
 import argparse
-import difflib
 import errno
 import hashlib
 import io
@@ -30,7 +29,7 @@ from collections import deque
 from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, ContextManager, Optional
 
 
@@ -236,12 +235,6 @@ STRATEGY_DRAFT_PLACEHOLDER = "_Not yet captured._"
 STRATEGY_EMPTY_SENTINELS: frozenset[str] = frozenset(
     {STRATEGY_HUSK_SENTINEL, STRATEGY_DRAFT_PLACEHOLDER}
 )
-# Frontmatter contract: exactly these three keys. Refuse unknown keys to keep
-# the audit story simple (single-source-of-truth invariant).
-STRATEGY_FRONTMATTER_FIELDS: frozenset[str] = frozenset(
-    {"name", "last_updated", "generator"}
-)
-
 SPEC_STATUS = ["open", "done"]
 EPIC_STATUS = SPEC_STATUS  # Backward-compat alias (removed in 2.0).
 TASK_STATUS = ["todo", "in_progress", "blocked", "done"]
@@ -646,8 +639,6 @@ del _name, _key
 _STRATEGY_SECTION_NAMES_LOWER: frozenset[str] = frozenset(_STRATEGY_SECTION_KEYS.keys())
 
 _STRATEGY_HEADING_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
-# YYYY-MM-DD ISO date for last_updated validation.
-_STRATEGY_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # HTML comment matcher used by _strategy_section_filled.
 _STRATEGY_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 
@@ -830,105 +821,6 @@ def parse_strategy_file(text: str) -> dict[str, Any]:
 
     result["_section_filled"] = section_filled
     return result
-
-
-def render_strategy_file(parsed: dict[str, Any]) -> str:
-    """Render a parsed strategy dict back to markdown.
-
-    Round-trip contract: `parse → render → parse` produces semantically
-    equivalent output; section bodies preserved (whitespace stripping
-    only at section boundaries). Frontmatter always written; H1 always
-    written (`# <name> Strategy`); required sections always written
-    (empty bodies allowed for husk semantics); optional sections only
-    written when their body is non-empty (per R2: "Optional sections
-    deleted entirely if unused; never left as empty headers").
-
-    Frontmatter key order: name, last_updated, generator (deterministic
-    diffs).
-
-    Husk render (R23 invariant): when all sections are empty, output is
-    H1 + frontmatter only; file is never deleted.
-    """
-    name = parsed.get("name") or "Untitled"
-    last_updated = parsed.get("last_updated") or date.today().isoformat()
-    generator = parsed.get("generator") or STRATEGY_GENERATOR
-
-    lines: list[str] = ["---"]
-    # Locked field order — never sort alphabetically.
-    lines.append(f"name: {_format_yaml_value(name, 'name')}")
-    # last_updated quoted as string so PyYAML doesn't coerce back to date.
-    lines.append(f"last_updated: {_quote_yaml_scalar(last_updated)}")
-    lines.append(f"generator: {_format_yaml_value(generator, 'generator')}")
-    lines.append("---")
-    lines.append("")
-    lines.append(f"# {name} Strategy")
-    lines.append("")
-
-    # Required sections — always emitted, even when empty (husk semantics).
-    for section_name, key in STRATEGY_REQUIRED_SECTIONS:
-        body = (parsed.get(key) or "").strip("\n").rstrip()
-        lines.append(f"## {section_name}")
-        lines.append("")
-        if body:
-            lines.append(body)
-            lines.append("")
-
-    # Optional sections — only emitted when body has content.
-    for section_name, key in STRATEGY_OPTIONAL_SECTIONS:
-        body = (parsed.get(key) or "").strip("\n").rstrip()
-        if body:
-            lines.append(f"## {section_name}")
-            lines.append("")
-            lines.append(body)
-            lines.append("")
-
-    out = "\n".join(lines).rstrip("\n") + "\n"
-    return out
-
-
-def validate_strategy_frontmatter(fm: dict[str, Any]) -> list[str]:
-    """Return validation errors for STRATEGY.md frontmatter (empty = valid).
-
-    Required: `name` (non-empty str), `last_updated` (ISO YYYY-MM-DD),
-              `generator` (must equal `flow-next-strategy`).
-    Refuses: unknown keys (single-source-of-truth invariant).
-    """
-    errors: list[str] = []
-    if not isinstance(fm, dict):
-        return ["frontmatter must be a dict"]
-
-    missing = STRATEGY_FRONTMATTER_FIELDS - set(fm.keys())
-    if missing:
-        errors.append(f"missing required fields: {', '.join(sorted(missing))}")
-
-    name = fm.get("name")
-    if name is not None and (not isinstance(name, str) or not name.strip()):
-        errors.append("name must be a non-empty string")
-
-    last_updated = fm.get("last_updated")
-    if last_updated is not None:
-        if isinstance(last_updated, date) and not isinstance(last_updated, datetime):
-            # PyYAML coerced to a date — that's fine for validation purposes;
-            # the renderer will quote it back to ISO string.
-            pass
-        elif not isinstance(last_updated, str):
-            errors.append("last_updated must be a string (YYYY-MM-DD)")
-        elif not _STRATEGY_ISO_DATE_RE.match(last_updated):
-            errors.append(
-                f"last_updated '{last_updated}' is not ISO YYYY-MM-DD"
-            )
-
-    generator = fm.get("generator")
-    if generator is not None and generator != STRATEGY_GENERATOR:
-        errors.append(
-            f"generator must be '{STRATEGY_GENERATOR}' (got '{generator}')"
-        )
-
-    unknown = set(fm.keys()) - STRATEGY_FRONTMATTER_FIELDS
-    if unknown:
-        errors.append(f"unknown fields: {', '.join(sorted(unknown))}")
-
-    return errors
 
 
 # fn-109: hot-path memoization for get_state_dir. Keyed by
@@ -1146,17 +1038,6 @@ def delete_task_runtime(task_id: str) -> None:
         store.delete_runtime(task_id)
 
 
-def save_task_definition(task_id: str, definition: dict) -> None:
-    """Write definition to tracked file (filters out runtime fields)."""
-    flow_dir = get_flow_dir()
-    def_path = flow_dir / TASKS_DIR / f"{task_id}.json"
-    # Filter out runtime fields
-    clean_def = {k: v for k, v in definition.items() if k not in RUNTIME_FIELDS}
-    # fn-43.2: ensure persisted JSON uses canonical "spec" key only.
-    canonicalize_task_for_write(clean_def)
-    atomic_write_json(def_path, clean_def)
-
-
 # --- Tracker sync (fn-52) ---
 #
 # Activation is EXPLICIT and VALUE-CHECKED, not merely "the block exists":
@@ -1170,7 +1051,6 @@ def save_task_definition(task_id: str, definition: dict) -> None:
 # bridge-active predicate alone, not a perEvent leaf — see SKILL.md / steps.md).
 TRACKER_TYPES = {"linear", "github", "gitlab", "jira"}
 TRACKER_PER_EVENT_LEAVES = {"off", "pull", "push", "reconcile", "comment"}
-TRACKER_TIEBREAKS = {"flow-wins", "tracker-wins", "always-ask"}
 # Default staleness threshold (hours) consumed by `sync list-stale`.
 TRACKER_DEFAULT_STALE_HOURS = 24
 # Sync receipt status enum spanning all three sync layers (body / status /
@@ -1768,20 +1648,43 @@ def now_iso() -> str:
 
 
 def require_rp_cli() -> str:
-    """Ensure rp-cli is available."""
-    rp = shutil.which("rp-cli")
-    if not rp:
-        error_exit("rp-cli not found in PATH", use_json=False, code=2)
-    return rp
+    """Resolve the supported RepoPrompt CLI ladder, preferring CE."""
+    candidates = [
+        shutil.which("rpce-cli"),
+        str(Path.home() / "RepoPrompt" / "repoprompt_ce_cli"),
+        str(
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "RepoPrompt CE"
+            / "repoprompt_ce_cli"
+        ),
+        shutil.which("rp-cli"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        try:
+            if path.is_file() and os.access(path, os.X_OK):
+                return str(path)
+        except OSError:
+            continue
+    error_exit(
+        "RepoPrompt CE CLI not found. Install RepoPrompt CE with rpce-cli "
+        "(legacy rp-cli is accepted only as a Classic compatibility fallback).",
+        use_json=False,
+        code=2,
+    )
 
 
 def run_rp_cli(
     args: list[str], timeout: Optional[int] = None
 ) -> subprocess.CompletedProcess:
-    """Run rp-cli with safe error handling and timeout.
+    """Run the selected RepoPrompt CLI with safe error handling and timeout.
 
     Args:
-        args: Command arguments to pass to rp-cli
+        args: Command arguments to pass to the selected RepoPrompt CLI
         timeout: Max seconds to wait. Default from FLOW_RP_TIMEOUT env or 1200s (20min).
     """
     if timeout is None:
@@ -1793,16 +1696,16 @@ def run_rp_cli(
             cmd, capture_output=True, text=True, encoding="utf-8", check=True, timeout=timeout
         )
     except subprocess.TimeoutExpired:
-        error_exit(f"rp-cli timed out after {timeout}s", use_json=False, code=3)
+        error_exit(f"RepoPrompt CLI timed out after {timeout}s", use_json=False, code=3)
     except subprocess.CalledProcessError as e:
         msg = (e.stderr or e.stdout or str(e)).strip()
-        error_exit(f"rp-cli failed: {msg}", use_json=False, code=2)
+        error_exit(f"RepoPrompt CLI failed: {msg}", use_json=False, code=2)
 
 
 def run_rp_cli_unchecked(
     args: list[str], timeout: Optional[int] = None
 ) -> subprocess.CompletedProcess:
-    """Run rp-cli without collapsing command failures.
+    """Run the selected RepoPrompt CLI without collapsing command failures.
 
     Used when a caller needs to inspect stderr/stdout before deciding whether a
     failure is a capability mismatch or a real RepoPrompt error.
@@ -1814,13 +1717,13 @@ def run_rp_cli_unchecked(
     try:
         return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
     except subprocess.TimeoutExpired:
-        error_exit(f"rp-cli timed out after {timeout}s", use_json=False, code=3)
+        error_exit(f"RepoPrompt CLI timed out after {timeout}s", use_json=False, code=3)
 
 
 def try_run_rp_cli(
     args: list[str], timeout: Optional[int] = None
 ) -> Optional[subprocess.CompletedProcess]:
-    """Run rp-cli and return None on failure.
+    """Run the selected RepoPrompt CLI and return None on failure.
 
     Used for optional capability probing where newer RepoPrompt features may not
     exist yet and flowctl should fall back gracefully.
@@ -1889,14 +1792,30 @@ def extract_window_id(win: dict[str, Any]) -> Optional[int]:
 
 
 def extract_root_paths(win: dict[str, Any]) -> list[str]:
+    """Collect legacy and CE tab repository roots in deterministic order."""
+    paths: list[str] = []
+
+    def add(value: Any, *, coerce: bool = False) -> None:
+        values = value if isinstance(value, list) else [value]
+        for item in values:
+            path = item if isinstance(item, str) else str(item) if coerce else None
+            if path is not None and path not in paths:
+                paths.append(path)
+
     for key in ("rootFolderPaths", "rootFolders", "rootFolderPath"):
         if key in win:
-            val = win[key]
-            if isinstance(val, list):
-                return [str(v) for v in val]
-            if isinstance(val, str):
-                return [val]
-    return []
+            add(win[key], coerce=True)
+
+    tabs = win.get("tabs")
+    if isinstance(tabs, list):
+        for tab in tabs:
+            if not isinstance(tab, dict):
+                continue
+            for key in ("repo_paths", "repoPaths"):
+                if key in tab:
+                    add(tab[key])
+
+    return paths
 
 
 def parse_manage_workspaces(raw: str) -> list[dict[str, Any]]:
@@ -2047,7 +1966,7 @@ def extract_response_window_id(data: Any) -> Optional[int]:
         win_id = extract_window_id(data)
         if win_id is not None:
             return win_id
-        for key in ("result", "data"):
+        for key in ("result", "data", "binding"):
             if key in data:
                 win_id = extract_response_window_id(data[key])
                 if win_id is not None:
@@ -2085,9 +2004,13 @@ def extract_builder_tab_from_payload(data: Any) -> Optional[str]:
     return None
 
 
-def bind_context_window(repo_root: str) -> Optional[int]:
+def bind_context_window(
+    repo_root: str, *, create_if_missing: bool = False
+) -> Optional[int]:
     """Prefer RepoPrompt's bind_context repo-path matching when available."""
     payload = {"op": "bind", "working_dirs": normalize_repo_root(repo_root)}
+    if create_if_missing:
+        payload["create_if_missing"] = True
     result = try_run_rp_cli(
         ["--raw-json", "-e", f"call bind_context {json.dumps(payload)}"]
     )
@@ -7677,15 +7600,6 @@ def scan_max_task_id(flow_dir: Path, epic_id: str) -> int:
     return max_m
 
 
-def require_keys(obj: dict, keys: list[str], what: str, use_json: bool = True) -> None:
-    """Validate dict has required keys. Exits on missing keys."""
-    missing = [k for k in keys if k not in obj]
-    if missing:
-        error_exit(
-            f"{what} missing required keys: {', '.join(missing)}", use_json=use_json
-        )
-
-
 # --- Spec File Operations ---
 
 
@@ -9123,11 +9037,6 @@ def _optional_yaml_parser() -> Optional[tuple[Any, type[BaseException]]]:
         else:
             _YAML_PARSER = (yaml.safe_load, yaml.YAMLError)
     return _YAML_PARSER
-
-
-def _memory_yaml_available() -> bool:
-    """Detect PyYAML for optional round-trip parse. Zero-dep by default."""
-    return _optional_yaml_parser() is not None
 
 
 def _parse_inline_yaml(text: str) -> dict[str, Any]:
@@ -19122,7 +19031,9 @@ def cmd_rp_chat_send(args: argparse.Namespace) -> None:
     if res.returncode != 0:
         oracle_error = (res.stderr or res.stdout or "").strip()
         if not is_rp_tool_missing_error(oracle_error, "oracle_send"):
-            error_exit(f"rp-cli failed: {oracle_error}", use_json=False, code=2)
+            error_exit(
+                f"RepoPrompt CLI failed: {oracle_error}", use_json=False, code=2
+            )
         res = run_rp_cli(legacy_cmd)
     output = (res.stdout or "") + ("\n" + res.stderr if res.stderr else "")
     chat_id = parse_chat_id(output)
@@ -19160,7 +19071,9 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
 
     # Step 1: pick-window
     roots = normalize_repo_root(repo_root)
-    win_id = bind_context_window(repo_root)
+    win_id = bind_context_window(
+        repo_root, create_if_missing=bool(getattr(args, "create", False))
+    )
     windows: list[dict[str, Any]] = []
     if win_id is None:
         result = run_rp_cli(["--raw-json", "-e", "windows"])

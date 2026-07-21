@@ -69,7 +69,10 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
 
 3. Detect available review backends (skip if UPDATE_MODE=1):
    ```bash
-   HAVE_RP=$(which rp-cli >/dev/null 2>&1 && echo 1 || echo 0)
+   if command -v rpce-cli >/dev/null 2>&1 \
+     || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+     || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+     || command -v rp-cli >/dev/null 2>&1; then HAVE_RP=1; else HAVE_RP=0; fi
    HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
    HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
    HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)

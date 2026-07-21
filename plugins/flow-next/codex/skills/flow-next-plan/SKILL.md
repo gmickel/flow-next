@@ -155,9 +155,11 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 **RepoPrompt eligibility** (compute once, before any question below):
 
 ```bash
-# RepoPrompt is macOS-only (rp-cli bridges the GUI). Only offer the rp path
-# when it can actually run: on macOS, or when rp-cli is already on PATH.
-if [ "$(uname 2>/dev/null)" = "Darwin" ] || command -v rp-cli >/dev/null 2>&1; then
+# Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
+if command -v rpce-cli >/dev/null 2>&1 \
+ || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+ || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+ || command -v rp-cli >/dev/null 2>&1; then
  RP_ELIGIBLE=1
 else
  RP_ELIGIBLE=0

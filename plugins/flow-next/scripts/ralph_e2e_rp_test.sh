@@ -126,7 +126,11 @@ cleanup() {
 trap cleanup EXIT
 
 command -v "$CLAUDE_BIN" >/dev/null 2>&1 || fail "claude not found (set CLAUDE_BIN if needed)"
-command -v rp-cli >/dev/null 2>&1 || fail "rp-cli not found (required for rp review)"
+command -v rpce-cli >/dev/null 2>&1 \
+  || [[ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ]] \
+  || [[ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ]] \
+  || command -v rp-cli >/dev/null 2>&1 \
+  || fail "RepoPrompt CE CLI not found (rpce-cli; legacy rp-cli also accepted)"
 
 echo -e "${YELLOW}=== ralph e2e (rp reviews) ===${NC}"
 echo "Test dir: $TEST_DIR"

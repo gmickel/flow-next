@@ -334,21 +334,17 @@ echo -e "${YELLOW}--- T2: targeted section re-write preserves rest byte-identica
 T2_BEFORE="$TEST_DIR/t2-before.json"
 ( cd "$REPO" && "$FLOWCTL" strategy read --json > "$T2_BEFORE" )
 
-# Mutate the file: change `## Target problem` body via Python (skill writes
-# direct via Write tool in real flow; we simulate by string-replace + re-render
-# via parse_strategy_file/render_strategy_file roundtrip to mirror skill behavior).
+# Mutate the file exactly as the strategy skill does: direct targeted text edit,
+# then read it back through the public `strategy read` contract.
 "${FLOW_PY[@]}" - <<EOF
-import sys
-sys.path.insert(0, "$SCRIPT_DIR")
-import flowctl
 from pathlib import Path
 
 p = Path("$REPO/STRATEGY.md")
-text = p.read_text()
-parsed = flowctl.parse_strategy_file(text)
-parsed["target_problem"] = "Mutated diagnosis -- only this section changed."
-new_text = flowctl.render_strategy_file(parsed)
-flowctl.atomic_write(p, new_text)
+text = p.read_text(encoding="utf-8")
+body_start = text.index("## Target problem\n") + len("## Target problem\n")
+body_end = text.index("\n## Our approach", body_start)
+new_body = "\nMutated diagnosis -- only this section changed.\n"
+p.write_text(text[:body_start] + new_body + text[body_end:], encoding="utf-8")
 EOF
 
 T2_AFTER="$TEST_DIR/t2-after.json"

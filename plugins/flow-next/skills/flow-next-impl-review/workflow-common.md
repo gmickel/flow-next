@@ -18,9 +18,11 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# RepoPrompt is macOS-only (rp-cli bridges the GUI). Only offer the rp path
-# when it can actually run: on macOS, or when rp-cli is already on PATH.
-if [ "$(uname 2>/dev/null)" = "Darwin" ] || command -v rp-cli >/dev/null 2>&1; then
+# Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
+if command -v rpce-cli >/dev/null 2>&1 \
+  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+  || command -v rp-cli >/dev/null 2>&1; then
   RP_ELIGIBLE=1
 else
   RP_ELIGIBLE=0

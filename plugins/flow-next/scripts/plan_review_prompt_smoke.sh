@@ -26,7 +26,11 @@ SPEC_ID="${EPIC_ID:-${SPEC_ID:-}}"
 fail() { echo "plan_review_prompt_smoke: $*" >&2; exit 1; }
 
 command -v "$CLAUDE_BIN" >/dev/null 2>&1 || fail "claude not found (set CLAUDE_BIN if needed)"
-command -v rp-cli >/dev/null 2>&1 || fail "rp-cli not found (required for rp review)"
+command -v rpce-cli >/dev/null 2>&1 \
+  || [[ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ]] \
+  || [[ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ]] \
+  || command -v rp-cli >/dev/null 2>&1 \
+  || fail "RepoPrompt CE CLI not found (rpce-cli; legacy rp-cli also accepted)"
 
 echo "Test dir: $TEST_DIR"
 
