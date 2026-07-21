@@ -54,11 +54,40 @@ def error_exit(message: str, code: int = 1, use_json: bool = True) -> None:
     sys.exit(code)
 
 
+def parse_progress_kv(content: str) -> dict[str, str]:
+    """Parse progress.txt key=value contract lines (last assignment wins).
+
+    Contract (written by ralph.sh append_progress / write_completion_marker):
+      iteration=<n>
+      spec=<spec-id>
+      task=<task-id>
+      promise=<value>          # per-iteration; COMPLETE only at end
+      completion_reason=<why>  # only on terminal write
+    Lines that are not pure key=value (headers, prose tails) are ignored.
+    """
+    result: dict[str, str] = {}
+    for raw in content.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        # Reject multi-token left-hand sides (prose / multi-kv residue)
+        if not key or any(c.isspace() for c in key):
+            continue
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+            continue
+        result[key] = val.strip()
+    return result
+
+
 def find_active_runs() -> list[dict]:
     """
     Find active Ralph runs by scanning scripts/ralph/runs/*/progress.txt.
-    A run is active if progress.txt exists AND does NOT contain both
-    completion_reason= and promise=COMPLETE.
+    A run is active if progress.txt exists AND does NOT have both
+    completion_reason= and promise=COMPLETE key=value contract lines.
     Returns list of dicts with run info.
     """
     repo_root = get_repo_root()
@@ -76,10 +105,10 @@ def find_active_runs() -> list[dict]:
             continue
 
         content = progress_file.read_text(encoding="utf-8", errors="replace")
+        kv = parse_progress_kv(content)
 
-        # Require both completion_reason= AND promise=COMPLETE to avoid
-        # false positives from per-iteration promise= logging
-        if "completion_reason=" in content and "promise=COMPLETE" in content:
+        # Terminal marker: both completion_reason= and promise=COMPLETE present
+        if "completion_reason" in kv and kv.get("promise") == "COMPLETE":
             continue
 
         run_info = {
@@ -92,17 +121,17 @@ def find_active_runs() -> list[dict]:
             "stopped": (run_dir / "STOP").exists(),
         }
 
-        iter_match = re.search(r"iteration[:\s]+(\d+)", content, re.IGNORECASE)
-        if iter_match:
-            run_info["iteration"] = int(iter_match.group(1))
+        raw_iter = kv.get("iteration", "")
+        if raw_iter.isdigit():
+            run_info["iteration"] = int(raw_iter)
 
-        epic_match = re.search(r"epic[:\s]+(fn-[\w-]+)", content, re.IGNORECASE)
-        if epic_match:
-            run_info["current_epic"] = epic_match.group(1)
+        epic = kv.get("spec") or kv.get("epic") or ""
+        if epic:
+            run_info["current_epic"] = epic
 
-        task_match = re.search(r"task[:\s]+(fn-[\w.-]+\.\d+)", content, re.IGNORECASE)
-        if task_match:
-            run_info["current_task"] = task_match.group(1)
+        task = kv.get("task") or ""
+        if task:
+            run_info["current_task"] = task
 
         active_runs.append(run_info)
 
@@ -173,15 +202,12 @@ def cmd_status(args: argparse.Namespace) -> None:
 
     if progress_file.exists():
         content = progress_file.read_text(encoding="utf-8", errors="replace")
-        iter_match = re.search(r"iteration[:\s]+(\d+)", content, re.IGNORECASE)
-        if iter_match:
-            iteration = int(iter_match.group(1))
-        epic_match = re.search(r"epic[:\s]+(fn-[\w-]+)", content, re.IGNORECASE)
-        if epic_match:
-            current_epic = epic_match.group(1)
-        task_match = re.search(r"task[:\s]+(fn-[\w.-]+\.\d+)", content, re.IGNORECASE)
-        if task_match:
-            current_task = task_match.group(1)
+        kv = parse_progress_kv(content)
+        raw_iter = kv.get("iteration", "")
+        if raw_iter.isdigit():
+            iteration = int(raw_iter)
+        current_epic = kv.get("spec") or kv.get("epic") or None
+        current_task = kv.get("task") or None
 
     if args.json:
         json_output(

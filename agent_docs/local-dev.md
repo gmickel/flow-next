@@ -40,6 +40,8 @@ plugins/flow-next/scripts/smoke_test.sh
 plugins/flow-next/scripts/ralph_smoke_test.sh
 ```
 
+Non-RP Ralph e2e (real `claude`, no RepoPrompt): `plugins/flow-next/scripts/ralph_e2e_test.sh` (run from a non-plugin repo dir; sets its own `TEST_DIR`).
+
 **RP smoke** (RP 1.5.68+ auto-opens window with `--create`):
 ```bash
 RP_SMOKE=1 TEST_DIR=/tmp/flow-next-ralph-smoke-rpN KEEP_TEST_DIR=1 \

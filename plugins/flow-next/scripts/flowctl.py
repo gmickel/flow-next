@@ -7172,8 +7172,9 @@ def soft_probe_active_runs() -> list[dict]:
     """Tolerant scan of scripts/ralph/runs/ for ``flowctl status`` display.
 
     Returns [] immediately when the directory is absent (Ralph not installed;
-    zero cost). When present, parses progress.txt with the same completion
-    markers as ralphctl. Does not import ralphctl.
+    zero cost). When present, parses progress.txt key=value contract lines the
+    same way as ralphctl (completion_reason= + promise=COMPLETE). Does not
+    import ralphctl.
     """
     repo_root = get_repo_root()
     runs_dir = repo_root / "scripts" / "ralph" / "runs"
@@ -7194,9 +7195,22 @@ def soft_probe_active_runs() -> list[dict]:
         except OSError:
             continue
 
-        # Require both completion_reason= AND promise=COMPLETE to avoid
-        # false positives from per-iteration promise= logging
-        if "completion_reason=" in content and "promise=COMPLETE" in content:
+        # key=value contract (last assignment wins); ignore non-kv lines
+        kv: dict = {}
+        for raw in content.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            if not key or any(c.isspace() for c in key):
+                continue
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+                continue
+            kv[key] = val.strip()
+
+        # Terminal marker pair (matches ralphctl.parse_progress_kv)
+        if "completion_reason" in kv and kv.get("promise") == "COMPLETE":
             continue
 
         run_info = {
@@ -7209,17 +7223,17 @@ def soft_probe_active_runs() -> list[dict]:
             "stopped": (run_dir / "STOP").exists(),
         }
 
-        iter_match = re.search(r"iteration[:\s]+(\d+)", content, re.IGNORECASE)
-        if iter_match:
-            run_info["iteration"] = int(iter_match.group(1))
+        raw_iter = kv.get("iteration", "")
+        if isinstance(raw_iter, str) and raw_iter.isdigit():
+            run_info["iteration"] = int(raw_iter)
 
-        epic_match = re.search(r"epic[:\s]+(fn-[\w-]+)", content, re.IGNORECASE)
-        if epic_match:
-            run_info["current_epic"] = epic_match.group(1)
+        epic = kv.get("spec") or kv.get("epic") or ""
+        if epic:
+            run_info["current_epic"] = epic
 
-        task_match = re.search(r"task[:\s]+(fn-[\w.-]+\.\d+)", content, re.IGNORECASE)
-        if task_match:
-            run_info["current_task"] = task_match.group(1)
+        task = kv.get("task") or ""
+        if task:
+            run_info["current_task"] = task
 
         active_runs.append(run_info)
 

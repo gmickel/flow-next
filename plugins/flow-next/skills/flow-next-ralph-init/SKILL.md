@@ -155,9 +155,10 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
 
    | Event | Matcher | Notes |
    |---|---|---|
-   | `PreToolUse` | `Bash\|Execute` | shell |
-   | `PreToolUse` | `Edit\|Write` | file tools (Claude names; Droid file tools extended in guard body later) |
+   | `PreToolUse` | `Bash\|Execute` | shell (Claude `Bash`, Droid `Execute`) |
+   | `PreToolUse` | `Edit\|Write` | file tools (Claude host names) |
    | `PostToolUse` | `Bash\|Execute` | shell |
+   | `PostToolUse` | `Edit\|Write` | file tools (receipt-path gate parity) |
    | `Stop` | *(no matcher)* | stop gate |
    | `SubagentStop` | *(no matcher)* | subagent stop gate |
 
@@ -169,7 +170,16 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
 
    Target (verified against Factory hooks-reference): project file **`.factory/hooks.json`**. Prefer that path. Fallback only if the project already stores hooks under the `hooks` key of `.factory/settings.json` and has no `.factory/hooks.json` — merge there instead; never invent a third path.
 
-   Same four event groups and matchers as Claude (`Bash|Execute`, `Edit|Write`, `Stop`, `SubagentStop`). Factory's canonical shell tool is `Execute` (the `Bash|Execute` regex still matches). File-tool names on Droid also include `Create` / `ApplyPatch` — matchers may stay `Edit|Write` for this install shape; the guard body accepts the broader set when that lands (section C of the parent spec).
+   Host-appropriate matchers for Droid (Factory's shell tool is `Execute`; file tools include `Create` / `ApplyPatch`). The guard body accepts the full dual-platform sets (`Bash`/`Execute`, `Edit`/`Write`/`Create`/`ApplyPatch`).
+
+   | Event | Matcher | Notes |
+   |---|---|---|
+   | `PreToolUse` | `Bash\|Execute` | shell |
+   | `PreToolUse` | `Edit\|Write\|Create\|ApplyPatch` | Droid file tools |
+   | `PostToolUse` | `Bash\|Execute` | shell |
+   | `PostToolUse` | `Edit\|Write\|Create\|ApplyPatch` | file tools (receipt-path gate) |
+   | `Stop` | *(no matcher)* | stop gate |
+   | `SubagentStop` | *(no matcher)* | subagent stop gate |
 
    Prefer project-relative command as above (Ralph harness is repo-local). If the host requires absolute paths, rewrite with `"$FACTORY_PROJECT_DIR"/scripts/ralph/hooks/...` but keep the same fingerprint substring `scripts/ralph/hooks/ralph-guard`.
 

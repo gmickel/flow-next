@@ -600,17 +600,16 @@ class HookEndToEndTestCase(unittest.TestCase):
         )
 
 
-# ── Version bump ──────────────────────────────────────────────────────────────
+# ── Dead-weight version constant removed (fn-114.3) ───────────────────────────
 
 
 class RalphGuardVersionTestCase(unittest.TestCase):
-    def test_version_bumped_past_0_14(self) -> None:
+    def test_version_constant_removed(self) -> None:
+        # RALPH_GUARD_VERSION was a no-op constant (fn-114.3 dead weight).
         guard = _load_guard()
-        ver = guard.RALPH_GUARD_VERSION
-        major, minor, *_ = (int(p) for p in ver.split("."))
-        # fn-55.5 bumps the guard; must be strictly newer than the 0.14.0 baseline.
-        self.assertGreaterEqual(
-            (major, minor), (0, 15), f"RALPH_GUARD_VERSION not bumped: {ver}"
+        self.assertFalse(
+            hasattr(guard, "RALPH_GUARD_VERSION"),
+            "RALPH_GUARD_VERSION must be deleted (no-op dead weight)",
         )
 
 

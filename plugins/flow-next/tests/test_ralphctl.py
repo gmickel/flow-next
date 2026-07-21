@@ -1,8 +1,9 @@
-"""fn-114.2 - ralphctl.py template owns Ralph run control (pause/resume/stop/status).
+"""fn-114.2/.3 - ralphctl.py template owns Ralph run control (pause/resume/stop/status).
 
 Pins:
   * template ships under flow-next-ralph-init/templates/ralphctl.py
-  * find_active_runs excludes promise=COMPLETE + completion_reason= pairs
+  * find_active_runs uses key=value progress contract; excludes
+    promise=COMPLETE + completion_reason= pairs
   * pause/resume/stop write/remove PAUSE and STOP sentinels
   * multi-run without --run errors
   * flowctl.py has no cmd_ralph_* / find_active_runs; soft-probe remains
@@ -87,18 +88,31 @@ class TestRalphctlCommands(unittest.TestCase):
         return run_dir
 
     def test_find_active_runs_and_completion_markers(self) -> None:
-        self._write_progress("active", "iteration: 2\n")
+        self._write_progress(
+            "active",
+            "iteration=2\nspec=fn-1-x\ntask=fn-1-x.1\npromise=RETRY\n",
+        )
         self._write_progress(
             "done",
-            "iteration: 9\npromise=RETRY\n\ncompletion_reason=DONE\npromise=COMPLETE\n",
+            "iteration=9\npromise=RETRY\n\ncompletion_reason=DONE\npromise=COMPLETE\n",
         )
         runs = self.mod.find_active_runs()
         ids = sorted(r["id"] for r in runs)
         self.assertEqual(ids, ["active"])
         self.assertEqual(runs[0]["iteration"], 2)
+        self.assertEqual(runs[0]["current_epic"], "fn-1-x")
+        self.assertEqual(runs[0]["current_task"], "fn-1-x.1")
+
+    def test_parse_progress_kv_ignores_prose(self) -> None:
+        kv = self.mod.parse_progress_kv(
+            "## header\niteration=3\nlast_output:\nsome free text\npromise=RETRY\n"
+        )
+        self.assertEqual(kv.get("iteration"), "3")
+        self.assertEqual(kv.get("promise"), "RETRY")
+        self.assertNotIn("last_output", kv)
 
     def test_pause_resume_stop(self) -> None:
-        run_dir = self._write_progress("r1", "iteration: 1\n")
+        run_dir = self._write_progress("r1", "iteration=1\n")
         buf = io.StringIO()
         with redirect_stdout(buf):
             self.mod.main(["pause", "--run", "r1"])
@@ -111,7 +125,7 @@ class TestRalphctlCommands(unittest.TestCase):
         self.assertTrue((run_dir / "STOP").is_file())
 
     def test_status_json(self) -> None:
-        self._write_progress("r1", "iteration: 3\n")
+        self._write_progress("r1", "iteration=3\ntask=fn-2.1\n")
         buf = io.StringIO()
         with redirect_stdout(buf):
             self.mod.main(["status", "--run", "r1", "--json"])
@@ -119,11 +133,12 @@ class TestRalphctlCommands(unittest.TestCase):
         self.assertTrue(data["success"])
         self.assertEqual(data["run"], "r1")
         self.assertEqual(data["iteration"], 3)
+        self.assertEqual(data["current_task"], "fn-2.1")
         self.assertFalse(data["paused"])
 
     def test_multi_run_requires_run_flag(self) -> None:
-        self._write_progress("a", "iteration: 1\n")
-        self._write_progress("b", "iteration: 1\n")
+        self._write_progress("a", "iteration=1\n")
+        self._write_progress("b", "iteration=1\n")
         with self.assertRaises(SystemExit) as ctx:
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 self.mod.main(["pause"])
@@ -155,13 +170,17 @@ class TestSoftProbeStatus(unittest.TestCase):
             )
             run = root / "scripts" / "ralph" / "runs" / "live"
             run.mkdir(parents=True)
-            (run / "progress.txt").write_text("iteration: 4\n", encoding="utf-8")
+            (run / "progress.txt").write_text(
+                "iteration=4\nspec=fn-9\ntask=fn-9.2\n", encoding="utf-8"
+            )
             with mock.patch.object(self.flowctl, "get_repo_root", return_value=root):
                 self.assertTrue(self.flowctl._ralph_runs_dir_present())
                 runs = self.flowctl.soft_probe_active_runs()
                 self.assertEqual(len(runs), 1)
                 self.assertEqual(runs[0]["id"], "live")
                 self.assertEqual(runs[0]["iteration"], 4)
+                self.assertEqual(runs[0]["current_epic"], "fn-9")
+                self.assertEqual(runs[0]["current_task"], "fn-9.2")
 
     def test_soft_probe_excludes_complete(self) -> None:
         with tempfile.TemporaryDirectory() as td:

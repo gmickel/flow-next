@@ -15,10 +15,10 @@ Supports three review backends:
 - rp (RepoPrompt): tracks chat-send calls and receipt writes
 - codex: tracks flowctl codex impl-review/plan-review and verdict output
 - copilot: tracks flowctl copilot impl-review/plan-review and verdict output
-"""
 
-# Version for drift detection (bump when making changes)
-RALPH_GUARD_VERSION = "0.15.0"
+Dual-platform tool names (fn-114): shell = Bash|Execute; file =
+Edit|Write|Create|ApplyPatch.
+"""
 
 import json
 import os
@@ -26,12 +26,31 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+from typing import Iterator, Optional
+
+# Host tool names the guard accepts (Claude Code + Factory Droid).
+SHELL_TOOLS = frozenset({"Bash", "Execute"})
+FILE_TOOLS = frozenset({"Edit", "Write", "Create", "ApplyPatch"})
+
+
+def _debug_enabled() -> bool:
+    return os.environ.get("RALPH_GUARD_DEBUG") == "1"
+
+
+def debug_log(message: str) -> None:
+    """Append to debug log only when RALPH_GUARD_DEBUG=1 (Windows-safe tempdir)."""
+    if not _debug_enabled():
+        return
+    path = Path(tempfile.gettempdir()) / "ralph-guard-debug.log"
+    with path.open("a", encoding="utf-8") as f:
+        f.write(message if message.endswith("\n") else message + "\n")
 
 
 def get_state_file(session_id: str) -> Path:
-    """Get state file path for this session."""
-    return Path(f"/tmp/ralph-guard-{session_id}.json")
+    """Get state file path for this session (tempdir, not hardcoded /tmp)."""
+    return Path(tempfile.gettempdir()) / f"ralph-guard-{session_id}.json"
 
 
 def load_state(session_id: str) -> dict:
@@ -114,9 +133,167 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
     return any(re.search(pattern, command, re.I) for pattern in patterns)
 
 
+def _normalize_path_for_match(path: str) -> str:
+    """Normalize a path string for receipt equality checks (no filesystem resolve)."""
+    if not path:
+        return ""
+    p = path.strip().strip("'\"")
+    p = p.replace("\\", "/")
+    while "//" in p:
+        p = p.replace("//", "/")
+    if p.startswith("./"):
+        p = p[2:]
+    return p.rstrip("/")
+
+
+def is_receipt_file_path(file_path: str, receipt_path: str) -> bool:
+    """True when a file-tool path targets the active review receipt."""
+    if not receipt_path or not file_path:
+        return False
+    fp = _normalize_path_for_match(file_path)
+    rp = _normalize_path_for_match(receipt_path)
+    if not fp or not rp:
+        return False
+    if fp == rp or fp.endswith("/" + rp) or rp.endswith("/" + fp):
+        return True
+    # Basename match under a receipts/ directory (same convention as Bash patterns)
+    if "/receipts/" in fp and os.path.basename(fp) == os.path.basename(rp):
+        return True
+    return False
+
+
+def file_tool_path(tool_input: dict) -> str:
+    """Best-effort file path from Edit/Write/Create/ApplyPatch tool_input."""
+    if not isinstance(tool_input, dict):
+        return ""
+    for key in ("file_path", "path", "filePath", "target_file"):
+        val = tool_input.get(key)
+        if isinstance(val, str) and val.strip():
+            return val
+    return ""
+
+
+def file_tool_content(tool_input: dict) -> str:
+    """Best-effort body text from a file-write tool_input."""
+    if not isinstance(tool_input, dict):
+        return ""
+    for key in ("content", "new_string", "new_str", "contents"):
+        val = tool_input.get(key)
+        if isinstance(val, str) and val.strip():
+            return val
+    return ""
+
+
 def command_has_json_field(command: str, field: str) -> bool:
     """Best-effort check that a shell command writes a JSON field literally."""
     return bool(re.search(rf"['\"]{re.escape(field)}['\"]\s*:", command))
+
+
+def content_has_json_field(content: str, field: str) -> bool:
+    """Best-effort check that a file body includes a JSON field literally."""
+    if not content:
+        return False
+    return bool(re.search(rf"['\"]{re.escape(field)}['\"]\s*:", content))
+
+
+def _tool_response_text(tool_response) -> str:
+    """Extract stdout/text from a PostToolUse tool_response payload."""
+    if isinstance(tool_response, dict):
+        stdout = tool_response.get("stdout", "")
+        if isinstance(stdout, str) and stdout:
+            return stdout
+        return str(tool_response) if tool_response else ""
+    if isinstance(tool_response, str):
+        return tool_response
+    return ""
+
+
+def _tool_response_exit_code(tool_response) -> Optional[int]:
+    """Return integer exit code from tool_response when present, else None."""
+    if not isinstance(tool_response, dict):
+        return None
+    if tool_response.get("interrupted") is True:
+        return 1
+    for key in ("exit_code", "exitCode", "returncode", "statusCode"):
+        if key not in tool_response:
+            continue
+        try:
+            return int(tool_response[key])
+        except (TypeError, ValueError):
+            return 1
+    return None
+
+
+def _parse_json_objects(text: str) -> Iterator[dict]:
+    """Yield JSON objects from full text or individual lines."""
+    if not text:
+        return
+    stripped = text.strip()
+    try:
+        data = json.loads(stripped)
+        if isinstance(data, dict):
+            yield data
+            return
+    except (json.JSONDecodeError, TypeError):
+        pass
+    for line in stripped.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            data = json.loads(line)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(data, dict):
+            yield data
+
+
+def is_flowctl_done_success(task_id: str, command: str, tool_response, response_text: str) -> bool:
+    """Structured success signal for flowctl done (no prose word sniff).
+
+    Accepts:
+      * tool_response exit code == 0 (when present), and
+      * --json stdout with status=="done" (preferred), or
+      * exact flowctl plain-text contract line: ``Task <id> completed``
+    Rejects non-zero exit, interrupted, JSON errors, and free-form "done" text.
+    """
+    exit_code = _tool_response_exit_code(tool_response)
+    if exit_code is not None and exit_code != 0:
+        return False
+
+    wants_json = bool(re.search(r"--json\b", command))
+    for obj in _parse_json_objects(response_text):
+        if obj.get("success") is False:
+            continue
+        if obj.get("status") != "done":
+            continue
+        obj_id = obj.get("id")
+        if obj_id and obj_id != task_id:
+            continue
+        return True
+
+    if wants_json:
+        # --json required a parseable status=done object; none found.
+        return False
+
+    # Exit code alone is a structured success signal when the host provides it.
+    if exit_code == 0:
+        return True
+
+    # Exact non-JSON flowctl contract (not a substring word sniff).
+    if re.search(rf"(?m)^Task\s+{re.escape(task_id)}\s+completed\s*$", response_text):
+        return True
+
+    return False
+
+
+def review_succeeded(state: dict) -> bool:
+    """True when any review backend has completed for this session."""
+    return bool(
+        state.get("chat_send_succeeded")
+        or state.get("codex_review_succeeded")
+        or state.get("copilot_review_succeeded")
+    )
 
 
 # Sandbox flags allowed in a canonical Codex delegation invocation (R9). Exactly
@@ -418,9 +595,9 @@ PROTECTED_FILE_PATTERNS = [
 
 
 def handle_protected_file_check(data: dict) -> None:
-    """Block Edit/Write to protected workflow files (prevent self-modification)."""
+    """Block file tools targeting protected workflow files (prevent self-modification)."""
     tool_input = data.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
+    file_path = file_tool_path(tool_input)
     if not file_path:
         return
     for pattern in PROTECTED_FILE_PATTERNS:
@@ -429,6 +606,61 @@ def handle_protected_file_check(data: dict) -> None:
                 f"BLOCKED: Cannot modify protected file '{os.path.basename(file_path)}'. "
                 "Ralph must not edit its own workflow tooling (ralph-guard, flowctl, hooks). "
                 "If the guard is blocking incorrectly, report the bug instead of bypassing it."
+            )
+
+
+def handle_file_tool_receipt_check(data: dict) -> None:
+    """Block Edit|Write|Create|ApplyPatch of the receipt path before review (Bash parity)."""
+    receipt_path = os.environ.get("REVIEW_RECEIPT_PATH", "")
+    if not receipt_path:
+        return
+    tool_input = data.get("tool_input", {})
+    file_path = file_tool_path(tool_input)
+    if not is_receipt_file_path(file_path, receipt_path):
+        return
+
+    session_id = data.get("session_id", "unknown")
+    state = load_state(session_id)
+    if not review_succeeded(state):
+        output_block(
+            "BLOCKED: Cannot write receipt before review completes. "
+            "You must run 'flowctl rp chat-send', 'flowctl codex impl-review/plan-review', "
+            "or 'flowctl copilot impl-review/plan-review' and receive a review "
+            "response before writing the receipt."
+        )
+
+    content = file_tool_content(tool_input)
+    if content:
+        if not content_has_json_field(content, "type"):
+            output_block(
+                "BLOCKED: Receipt JSON is missing required 'type' field. "
+                'Receipt must include: {"type":"...","id":"...","verdict":"...",...} '
+                "Copy the exact command from the prompt template."
+            )
+        if not content_has_json_field(content, "id"):
+            output_block(
+                "BLOCKED: Receipt JSON is missing required 'id' field. "
+                'Receipt must include: {"type":"...","id":"<TASK_OR_EPIC_ID>",...} '
+                "Copy the exact command from the prompt template."
+            )
+        if not content_has_json_field(content, "verdict"):
+            output_block(
+                "BLOCKED: Receipt JSON is missing required 'verdict' field. "
+                'Review receipts must include: {"verdict":"SHIP",...} '
+                "Copy the exact command from the prompt template."
+            )
+
+    receipt_type, item_id = parse_receipt_path(receipt_path)
+    if receipt_type == "impl_review":
+        task_id = item_id
+        done_set = state.get("flowctl_done_called", set())
+        if isinstance(done_set, list):
+            done_set = set(done_set)
+        if task_id not in done_set:
+            output_block(
+                f"BLOCKED: Cannot write impl receipt for {task_id} - flowctl done was not called. "
+                f"You MUST run 'flowctl done {task_id} --evidence ...' BEFORE writing the receipt. "
+                "The task is NOT complete until flowctl done succeeds."
             )
 
 
@@ -563,11 +795,7 @@ def handle_pre_tool_use(data: dict) -> None:
         is_receipt_write = is_receipt_write_command(command, receipt_path)
         if is_receipt_write:
             state = load_state(session_id)
-            if (
-                not state.get("chat_send_succeeded")
-                and not state.get("codex_review_succeeded")
-                and not state.get("copilot_review_succeeded")
-            ):
+            if not review_succeeded(state):
                 output_block(
                     "BLOCKED: Cannot write receipt before review completes. "
                     "You must run 'flowctl rp chat-send', 'flowctl codex impl-review/plan-review', "
@@ -657,13 +885,7 @@ def handle_post_tool_use(data: dict) -> None:
     command = tool_input.get("command", "")
     session_id = data.get("session_id", "unknown")
 
-    # Get response text
-    response_text = ""
-    if isinstance(tool_response, dict):
-        response_text = tool_response.get("stdout", "") or str(tool_response)
-    elif isinstance(tool_response, str):
-        response_text = tool_response
-
+    response_text = _tool_response_text(tool_response)
     state = load_state(session_id)
 
     # Track chat-send calls - must have actual review text, not null
@@ -715,39 +937,30 @@ def handle_post_tool_use(data: dict) -> None:
     # - scripts/ralph/flowctl done <task>
     # - $FLOWCTL done <task>
     # - "$FLOWCTL" done <task>
+    # Success is structured only (exit code / --json status=done / exact contract line).
     if " done " in command and ("flowctl" in command or "FLOWCTL" in command):
-        # Debug logging
-        with Path("/tmp/ralph-guard-debug.log").open("a") as f:
-            f.write(f"  -> flowctl done detected in: {command[:100]}...\n")
+        debug_log(f"  -> flowctl done detected in: {command[:100]}...\n")
 
-        # Extract task ID from command - look for "done" followed by task ID
-        # Simplified: just find "done <task_id>" pattern since we already validated flowctl context
         done_match = re.search(r"\bdone\s+([a-zA-Z0-9][a-zA-Z0-9._-]*)", command)
         if done_match:
             task_id = done_match.group(1)
-            with Path("/tmp/ralph-guard-debug.log").open("a") as f:
-                f.write(
-                    f"  -> Extracted task_id: {task_id}, response has 'status': {'status' in response_text.lower()}\n"
-                )
+            exit_code = _tool_response_exit_code(tool_response)
+            has_json = bool(re.search(r"--json\b", command))
+            debug_log(
+                f"  -> Extracted task_id: {task_id}, exit_code={exit_code}, "
+                f"json={has_json}\n"
+            )
 
-            # Check response indicates success (has "status", "done", "updated", or "completed")
-            response_lower = response_text.lower()
-            if (
-                "status" in response_lower
-                or "done" in response_lower
-                or "updated" in response_lower
-                or "completed" in response_lower
-            ):
+            if is_flowctl_done_success(task_id, command, tool_response, response_text):
                 done_set = state.get("flowctl_done_called", set())
                 if isinstance(done_set, list):
                     done_set = set(done_set)
                 done_set.add(task_id)
                 state["flowctl_done_called"] = done_set
                 save_state(session_id, state)
-                with Path("/tmp/ralph-guard-debug.log").open("a") as f:
-                    f.write(
-                        f"  -> Added {task_id} to flowctl_done_called: {done_set}\n"
-                    )
+                debug_log(f"  -> Added {task_id} to flowctl_done_called: {done_set}\n")
+            else:
+                debug_log(f"  -> flowctl done for {task_id} did not pass structured success\n")
 
     # Track receipt writes - reset review state after write
     # Must match actual shell redirects (cat > file, echo > file), not commands
@@ -917,41 +1130,56 @@ def handle_subagent_stop(data: dict) -> None:
     handle_stop(data)
 
 
+def handle_post_file_tool_use(data: dict) -> None:
+    """PostToolUse for file tools: reset review state after a receipt write."""
+    receipt_path = os.environ.get("REVIEW_RECEIPT_PATH", "")
+    if not receipt_path:
+        return
+    tool_input = data.get("tool_input", {})
+    file_path = file_tool_path(tool_input)
+    if not is_receipt_file_path(file_path, receipt_path):
+        return
+    session_id = data.get("session_id", "unknown")
+    state = load_state(session_id)
+    state["chat_send_succeeded"] = False
+    state["codex_review_succeeded"] = False
+    state["copilot_review_succeeded"] = False
+    save_state(session_id, state)
+
+
 def main():
-    # Debug logging - always write to see if hook is being called
-    debug_file = Path("/tmp/ralph-guard-debug.log")
-    with debug_file.open("a") as f:
-        f.write(f"[{os.environ.get('FLOW_RALPH', 'unset')}] Hook called\n")
+    debug_log(f"[{os.environ.get('FLOW_RALPH', 'unset')}] Hook called\n")
 
     # Early exit if not in Ralph mode - no output, no context pollution
     if os.environ.get("FLOW_RALPH") != "1":
-        with debug_file.open("a") as f:
-            f.write("  -> Exiting: FLOW_RALPH not set to 1\n")
+        debug_log("  -> Exiting: FLOW_RALPH not set to 1\n")
         sys.exit(0)
 
     # Read input
     try:
         data = json.load(sys.stdin)
     except json.JSONDecodeError:
-        with debug_file.open("a") as f:
-            f.write("  -> Exiting: JSON decode error\n")
+        debug_log("  -> Exiting: JSON decode error\n")
         sys.exit(0)
 
     event = data.get("hook_event_name", "")
     tool_name = data.get("tool_name", "")
 
-    with debug_file.open("a") as f:
-        f.write(f"  -> Event: {event}, Tool: {tool_name}\n")
+    debug_log(f"  -> Event: {event}, Tool: {tool_name}\n")
 
-    # Block Edit/Write to protected files (prevent self-modification)
-    if event == "PreToolUse" and tool_name in ("Edit", "Write"):
+    # File tools: protected-path + receipt-path gates (Claude + Droid names)
+    if event == "PreToolUse" and tool_name in FILE_TOOLS:
         handle_protected_file_check(data)
+        handle_file_tool_receipt_check(data)
         sys.exit(0)
 
-    # Only process Bash tool calls for Pre/Post
-    if event in ("PreToolUse", "PostToolUse") and tool_name != "Bash":
-        with debug_file.open("a") as f:
-            f.write("  -> Skipping: not Bash\n")
+    if event == "PostToolUse" and tool_name in FILE_TOOLS:
+        handle_post_file_tool_use(data)
+        sys.exit(0)
+
+    # Shell tools only for command Pre/Post (Bash on Claude, Execute on Droid)
+    if event in ("PreToolUse", "PostToolUse") and tool_name not in SHELL_TOOLS:
+        debug_log(f"  -> Skipping: not a shell tool ({tool_name})\n")
         sys.exit(0)
 
     # Route to handler
