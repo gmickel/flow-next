@@ -39,9 +39,8 @@ Add plugin mode to setup, ship the slim versioned snippet, rewrite the pre-check
 - Focused suite green: `cd plugins/flow-next/tests && python3 -m unittest test_token_budgets test_precheck_mode_contract test_setup_mode_stamp -q`; smoke: `cd plugins/flow-next/scripts && bash smoke_test.sh`.
 - Dual copy refreshed after the flowctl.py change (`.flow/bin/flowctl.py`; no `scripts/ralph/` in this repo post-fn-114).
 ## Done summary
-TBD
-
+Task .2 complete across two commits (b8218571 mechanism, + docs/hermeticity). setup-mode set plumbing w/ 10-case state machine test; slim snippet template (260 tok, engine markers + v1 sentinel); setup workflow Step 2b mode question + transition table + Step 7c stamp-last; pre-check rewrite 17 carriers (ralph-init exempt) + contract test; sync-codex plugin-strip transform + paired guards (idempotent); full docs sweep incl. setup-modes.md contributor doc + orchestration two-layers section; CHANGELOG Unreleased. Grok-via-cursor quota-dead; native grok authored setup-mode cmd + stamp test (accepted after review); host authored prose/docs/transforms. Fixed two test-isolation gaps exposed by the branch (ralph-docs-truth changelog scan, backend-spec pin leak). Full suite 1957/0/0 + smoke green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b8218571, HEAD
+- Tests: python3 scripts/run_tests_parallel.py (1957 ran, 0 failures, 0 errors), cd plugins/flow-next/scripts && bash smoke_test.sh, ./scripts/sync-codex.sh x2 idempotent, all guards green incl. new fn-121 pair, claude plugin validate plugins/flow-next
 - PRs:

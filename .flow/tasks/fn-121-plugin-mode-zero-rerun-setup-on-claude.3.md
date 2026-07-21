@@ -23,9 +23,8 @@ Downstream docs-site walk for the plugin-mode story. Separate repo: `~/work/flow
 - `cd ~/work/flow-next.dev && pnpm build` exits 0.
 - Changes committed in the flow-next.dev repo (separate commit, references fn-121); nothing pushed.
 ## Done summary
-TBD
-
+Docs-site walk complete in ~/work/flow-next.dev (commit 2cb0933, not pushed). install/first-30/setup/troubleshooting mode-split (plugin mode = install-and-done; copy mode unchanged); orchestration page gained the Two-layers-of-steering section (precedence chain + persists-nothing example) and flowctl-usage-first guide refs; changelog staged an Unreleased customer-register entry (no version bump). pnpm build green (74 pages). Register: problem-first per the messaging architecture.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2cb0933 (flow-next.dev repo)
+- Tests: cd ~/work/flow-next.dev && pnpm build (74 pages, complete)
 - PRs:
