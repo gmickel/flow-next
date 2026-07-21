@@ -1723,10 +1723,11 @@ def run_rp_cli_unchecked(
 def try_run_rp_cli(
     args: list[str], timeout: Optional[int] = None
 ) -> Optional[subprocess.CompletedProcess]:
-    """Run the selected RepoPrompt CLI and return None on failure.
+    """Run optional Classic capability probes without masking real failures.
 
-    Used for optional capability probing where newer RepoPrompt features may not
-    exist yet and flowctl should fall back gracefully.
+    Only Classic's explicit missing-``bind_context`` response is optional. CE
+    operational/protocol failures and all other Classic failures are
+    authoritative and must not fall through to workspace creation.
     """
     if timeout is None:
         timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
@@ -1736,8 +1737,15 @@ def try_run_rp_cli(
         return subprocess.run(
             cmd, capture_output=True, text=True, encoding="utf-8", check=True, timeout=timeout
         )
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-        return None
+    except subprocess.TimeoutExpired:
+        error_exit(f"RepoPrompt CLI timed out after {timeout}s", use_json=False, code=3)
+    except subprocess.CalledProcessError as exc:
+        output = (exc.stderr or exc.stdout or str(exc)).strip()
+        if Path(rp).name == "rp-cli" and is_rp_tool_missing_error(
+            output, "bind_context"
+        ):
+            return None
+        error_exit(f"RepoPrompt CLI failed: {output}", use_json=False, code=2)
 
 
 def is_rp_tool_missing_error(output: str, tool_name: str) -> bool:
@@ -2019,8 +2027,10 @@ def bind_context_window(
 
     try:
         data = json.loads(result.stdout or "{}")
-    except json.JSONDecodeError:
-        return None
+    except json.JSONDecodeError as exc:
+        error_exit(
+            f"bind_context JSON parse failed: {exc}", use_json=False, code=2
+        )
 
     return extract_response_window_id(data)
 

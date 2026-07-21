@@ -199,6 +199,80 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
         self.assertNotIn("manage_workspaces", flattened)
         self.assertNotIn("workspace create", flattened)
 
+    def test_ce_bind_failures_never_reach_discovery_or_creation(self) -> None:
+        failures = (
+            subprocess.CalledProcessError(
+                9, ["rpce-cli"], stderr="CE connection unavailable"
+            ),
+            subprocess.TimeoutExpired(["rpce-cli"], 1),
+            _result("not-json"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            args = argparse.Namespace(
+                repo_root=str(repo),
+                summary="Must stop",
+                response_type=None,
+                create=True,
+                json=False,
+            )
+            for failure in failures:
+                with self.subTest(failure=type(failure).__name__):
+                    with mock.patch.object(
+                        flowctl, "require_rp_cli", return_value="/bin/rpce-cli"
+                    ):
+                        patch = (
+                            mock.patch.object(
+                                flowctl.subprocess, "run", return_value=failure
+                            )
+                            if not isinstance(failure, BaseException)
+                            else mock.patch.object(
+                                flowctl.subprocess, "run", side_effect=failure
+                            )
+                        )
+                        with patch:
+                            with mock.patch.object(flowctl, "run_rp_cli") as downstream:
+                                with redirect_stderr(io.StringIO()):
+                                    with self.assertRaises(SystemExit):
+                                        flowctl.cmd_rp_setup_review(args)
+                        downstream.assert_not_called()
+
+    def test_classic_explicit_missing_bind_context_can_use_legacy_windows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp).resolve()
+            missing = subprocess.CalledProcessError(
+                2,
+                ["rp-cli"],
+                stderr="Tool not found: bind_context",
+            )
+
+            def legacy_run(args, timeout=None):
+                if args == ["--raw-json", "-e", "windows"]:
+                    return _result(
+                        json.dumps(
+                            [{"windowID": 8, "rootFolderPaths": [str(repo)]}]
+                        )
+                    )
+                self.assertEqual(args[:2], ["-w", "8"])
+                return _result(json.dumps({"context_id": "classic-tab"}))
+
+            args = argparse.Namespace(
+                repo_root=str(repo),
+                summary="Classic compatibility",
+                response_type=None,
+                create=True,
+                json=False,
+            )
+            output = io.StringIO()
+            with mock.patch.object(
+                flowctl, "require_rp_cli", return_value="/bin/rp-cli"
+            ):
+                with mock.patch.object(flowctl.subprocess, "run", side_effect=missing):
+                    with mock.patch.object(flowctl, "run_rp_cli", side_effect=legacy_run):
+                        with redirect_stdout(output):
+                            flowctl.cmd_rp_setup_review(args)
+            self.assertEqual(output.getvalue().strip(), "W=8 T=classic-tab")
+
 
 class RepoPromptWrapperCommandTest(unittest.TestCase):
     def setUp(self) -> None:
