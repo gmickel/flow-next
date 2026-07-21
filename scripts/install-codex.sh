@@ -123,17 +123,34 @@ except Exception:
 def is_ours(entry):
     return "ralph-guard" in json.dumps(entry) or "flow-next" in json.dumps(entry)
 changed = False
-if isinstance(data, dict):
-    for event, entries in list(data.items()):
+def _strip_events(container):
+    global changed
+    for event, entries in list(container.items()):
         if isinstance(entries, list):
             kept = [e for e in entries if not is_ours(e)]
             if len(kept) != len(entries):
                 changed = True
                 if kept:
-                    data[event] = kept
+                    container[event] = kept
                 else:
-                    del data[event]
-    remaining = any(v for v in data.values() if isinstance(v, list) and v)
+                    del container[event]
+if isinstance(data, dict):
+    # Both shapes: flat {"PreToolUse": [...]} and the real pre-fn-114
+    # nested {"hooks": {"PreToolUse": [...]}} (PR #226 review).
+    _strip_events(data)
+    if isinstance(data.get("hooks"), dict):
+        _strip_events(data["hooks"])
+        if not data["hooks"]:
+            del data["hooks"]
+            changed = True
+    def _has_entries(d):
+        for v in d.values():
+            if isinstance(v, list) and v:
+                return True
+            if isinstance(v, dict) and _has_entries(v):
+                return True
+        return False
+    remaining = _has_entries(data)
     if changed and not remaining:
         path.unlink()
         print("removed stale flow-next ~/.codex/hooks.json (no other hooks remained)")
