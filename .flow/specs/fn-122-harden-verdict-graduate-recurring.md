@@ -5,7 +5,7 @@
 
 An agent that re-fixes the same class of issue every run wastes tokens and misses cases. The durable move (Boris Cherny, Jul 2026) is graduating that knowledge into a lint rule, CI step, or CLAUDE.md rule so the whole class is automated forever. flow-next memory entries are the soft form of this knowledge: today they are re-injected as context each run (memory-scout at plan time, worker re-anchor at work time) and never hardened. The lesson keeps riding the context window instead of becoming a gate.
 
-This spec adds a sixth audit outcome, **Harden**, to `/flow-next:audit` (current outcomes: Keep / Update / Consolidate / Replace / Delete). When an entry shows recurrence -- the same correction re-learned or re-reinforced across specs/runs -- the audit proposes graduating it into one of four gate types: (a) a lint rule, (b) a CI step/check, (c) a CLAUDE.md/AGENTS.md rule, (d) a review-checklist item. On user acceptance, the graduation artifact is generated/staged and the memory entry is demoted to a pointer referencing the enforced gate, so provenance survives.
+This spec adds a sixth audit outcome, **Harden**, to `/flow-next:audit` (current outcomes: Keep / Update / Consolidate / Replace / Delete). When an entry shows recurrence -- the same correction re-learned or re-reinforced across specs/runs -- the audit proposes graduating it into one of three gate types: (a) a lint rule, (b) a CI step/check, (c) a CLAUDE.md/AGENTS.md rule (a fourth, review-checklist item, is deferred -- see Architecture). On user acceptance, the graduation artifact is generated/staged and the memory entry is demoted to a pointer referencing the enforced gate, so provenance survives.
 
 This lands squarely on the product's "bias towards verification" claim: don't have the agent re-fix -- encode the gate. Same gates whether interactive or autonomous.
 
@@ -33,7 +33,7 @@ Standard flow-next split (CLAUDE.md "SKILL + thin flowctl plumbing"): the skill 
 - (a) Lint rule: append/extend the repo's existing linter config (biome, ruff, eslint, etc. -- discovered from repo files, not assumed). If no linter exists, this target is unavailable; fall through.
 - (b) CI step: a check in the repo's existing CI workflow (e.g. `.github/workflows/`). If no CI exists, unavailable; fall through.
 - (c) CLAUDE.md / AGENTS.md rule: a one-to-two-line rule appended to the substantive project instruction file (the one not just `@`-including the other -- same discovery as audit Phase 6 discoverability check).
-- (d) Review-checklist item: **no canonical review-checklist artifact exists in flow-next today** (verified -- impl-review builds prompts from spec state, there is no per-repo checklist file it consumes). This target needs a defined home before it is real; candidate answers in Decision Context. Until decided, (d) may degrade to (c).
+- (d) Review-checklist item: **DECIDED (2026-07-22): out of v1.** No canonical review-checklist artifact exists in flow-next (verified -- impl-review builds prompts from spec state; there is no per-repo checklist file it consumes), and inventing a consumed-by-nothing file is banned. In v1, review-shaped lessons degrade to (c) an instruction-file rule. A first-class checklist home wired to impl-review is a possible follow-up spec, not this one. Everywhere else in this spec, gate types are (a)/(b)/(c).
 
 **Data model (flowctl):**
 
@@ -51,6 +51,26 @@ git log --oneline -- <entry-file> | wc -l   # write history
 ```
 
 Plus LLM judgment: entries in the same `related_to` cluster count toward one candidate (the cluster, not each member, is the Harden unit -- consolidate first if needed).
+
+**Proposal thresholds (DECIDED 2026-07-22, documented in phases.md, overridable by judgment in either direction with evidence stated):** an entry (or cluster) becomes a Harden CANDIDATE when ANY of: (i) >= 2 `## Update` headings; (ii) `related_to` cluster of >= 3 entries; (iii) >= 4 commits touching the entry file. Thresholds gate PROPOSING only; the human gates APPLYING. Mechanizability is a separate AND condition and is always LLM-judged.
+
+### Worked example (normative for shape, illustrative values)
+
+Assume a Python repo with ruff configured. Entry `.flow/memory/conventions/timestamps-utc.md`, lesson "always stamp timestamps UTC ISO-8601; naive `datetime.now()` broke receipt comparisons", carrying two `## Update` sections (re-learned in fn-97 and fn-104) and 4 commits.
+
+1. Phase 1 evidence: `grep -c '^## Update '` -> 2; `git log --oneline -- <file> | wc -l` -> 4; `related_to: []`. Candidate (threshold (i) met). Mechanizable: yes -- naive-datetime use is grep/lint-detectable.
+2. Duplication guard: grep ruff config for `DTZ` -> absent. Proceed.
+3. Ask step shows: gate type (a) lint rule; draft artifact = add `DTZ` to the ruff `select` list in `pyproject.toml`; evidence bullets from step 1; options accept / different gate type / decline.
+4. On accept: edit `pyproject.toml`; then `flowctl memory mark-hardened conventions/timestamps-utc --gate-ref "pyproject.toml [tool.ruff] DTZ rules -- bans naive datetimes" --audited-by "/flow-next:audit"`.
+5. Entry frontmatter after (body untouched):
+
+```yaml
+status: hardened            # was: active
+hardened_into: "pyproject.toml [tool.ruff] DTZ rules -- bans naive datetimes"
+last_audited: 2026-07-22T09:00:00Z
+```
+
+6. Report: `Hardened: 1` with detail line `conventions/timestamps-utc -> lint (pyproject.toml ruff DTZ)`. `memory list` no longer shows the entry; `memory list --status hardened` does; memory-scout stops injecting it.
 
 ## API Contracts
 <!-- scope: technical -->
@@ -86,7 +106,7 @@ flowctl memory mark-hardened <id> --gate-ref "..." --audited-by "/flow-next:audi
 
 - **R1:** `phases.md` documents Harden as a sixth outcome with explicit decision criteria: recurrence signal (named artifacts: `## Update` heading count, `related_to` cluster size, git-log write count) AND mechanizability; the quick-reference decision tree includes the Harden branch.
 - **R2:** Audit Phase 1 gathers the recurrence artifacts per entry; the spec of thresholds states plainly that no read-side usage telemetry exists and detection is write-side + LLM judgment.
-- **R3:** Interactive mode presents each Harden candidate individually with: proposed gate type ((a)-(d)), draft artifact content, evidence bullets, and accept / pick-different-gate-type / decline options via the blocking-question tool.
+- **R3:** Interactive mode presents each Harden candidate individually with: proposed gate type ((a)/(b)/(c)), draft artifact content, evidence bullets, and accept / pick-different-gate-type / decline options via the blocking-question tool.
 - **R4:** On acceptance, the graduation artifact is written to the chosen surface and the entry is demoted via `flowctl memory mark-hardened <id> --gate-ref "..."`; the entry file remains on disk with body intact and `hardened_into` pointing at the gate.
 - **R5:** In `mode:autofix`, Harden candidates appear ONLY under Recommended in the report; no gate artifact is written and no entry is demoted.
 - **R6:** `flowctl memory mark-hardened` exists with the contract in API Contracts (status flip, `hardened_into`, `last_audited`, idempotent, `--json`); `mark-fresh` reverts a hardened entry to active and drops `hardened_into`; unit tests cover round-trip, idempotency, unknown id, legacy rejection.
@@ -120,11 +140,11 @@ Boris Cherny's Jul 2026 framing: re-fixing the same issue class every run is the
 ### Implementation Tradeoffs
 <!-- scope: technical -->
 
-**Open decisions carried into planning (each needs an explicit call before or during `/flow-next:plan`):**
+**Decisions (made 2026-07-22, maintainer; planning executes, does not reopen without new evidence):**
 
-1. **Recurrence signal source.** Options: (i) add a write-time reinforcement counter (e.g. `reinforced_count` incremented by `memory add --update`) -- precise going forward, blind to history, extra schema; (ii) derive at audit time from existing artifacts (`## Update` headings + `related_to` clusters + git log) -- retroactive, zero schema change, noisier; (iii) pure LLM judgment. Leaning: (ii) as the baseline (R1/R2 assume it), with (i) as an optional cheap add-on if planning finds `--update` call sites want it. (iii) alone is rejected: unfalsifiable evidence bullets.
-2. **Home for gate type (d), review-checklist item.** No canonical checklist artifact exists. Candidates: a `.flow/checklists/review.md` consumed by impl-review; a CLAUDE.md "review criteria" subsection; or drop (d) for v1 and let it degrade to (c). Needs a call; do not invent a new consumed-by-nothing file without wiring the consumer.
-3. **Threshold values** for "recurring" (e.g. >=2 Update sections OR >=3-entry related_to cluster OR >=3 write commits). Calibrate against this repo's real store during planning; document in phases.md, keep overridable by judgment either direction (thresholds gate PROPOSING, the human gates APPLYING).
+1. **Recurrence signal source: (ii) derive at audit time from existing artifacts** (`## Update` headings + `related_to` clusters + git log). Retroactive over the whole store, zero schema change. (i) a write-time `reinforced_count` was considered (precise going forward, blind to history, extra schema) -- NOT in v1; revisit only if the derived signals prove too noisy in practice. (iii) pure LLM judgment alone is rejected: unfalsifiable evidence bullets.
+2. **Gate type (d) review-checklist: dropped from v1, degrades to (c).** No canonical checklist artifact exists and a consumed-by-nothing file is banned; a checklist home wired to impl-review is follow-up-spec material.
+3. **Threshold values: fixed defaults** -- >=2 `## Update` headings OR >=3-entry `related_to` cluster OR >=4 write commits (see Architecture). Sanity-check against this repo's real store during planning; if the store shows the defaults are badly calibrated, adjust the numbers in phases.md and note it in the plan, keeping the same structure (any-of, propose-only, judgment-overridable).
 4. **Status vs separate field.** Chose extending `MEMORY_STATUS` with `hardened` over a boolean `hardened: true` on stale entries: hardened is not stale (the lesson is MORE alive, just relocated), and the existing status-filter plumbing gives list/search/scout exclusion for free.
 
 **Rejected alternatives:** a standalone `/flow-next:harden` skill (audit already walks every entry with evidence in hand; a second sweep duplicates Phase 0-2); deleting graduated entries (loses provenance -- the pointer answers "why does this lint rule exist" forever); auto-applying under pilot with a strike system (gate surfaces are shared repo infrastructure; wrong lint rules block every future run -- the failure mode is much worse than a wrong stale-mark).
