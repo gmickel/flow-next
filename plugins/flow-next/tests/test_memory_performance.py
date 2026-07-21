@@ -121,6 +121,13 @@ class TestMemoryReadBudgets(unittest.TestCase):
                 self.memory, "knowledge/conventions/linked-2026-07-21"
             )
         )
+        loop = self.memory / "knowledge" / "conventions" / "loop-2026-07-21.md"
+        loop.symlink_to(loop.name)
+        self.assertIsNone(
+            flowctl._memory_resolve_read_target(
+                self.memory, "knowledge/conventions/loop-2026-07-21"
+            )
+        )
 
 
 if __name__ == "__main__":

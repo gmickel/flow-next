@@ -11037,7 +11037,7 @@ def _memory_resolve_read_target(
             resolved_path.relative_to(resolved_root)
             if not entry_path.is_file():
                 return None
-        except (OSError, ValueError):
+        except (OSError, RuntimeError, ValueError):
             return None
         descriptor = _memory_entry_descriptor(
             entry_path,
