@@ -90,8 +90,12 @@ class TestRalphDocsTruth(unittest.TestCase):
 
     def test_changelog_upgrade_note(self) -> None:
         text = _read(CHANGELOG)
-        # Bound to Unreleased head
-        unreleased = text.split("## [Unreleased]", 1)[1].split("## [", 1)[0]
+        # Bound to the top section: Unreleased before the batched release,
+        # the newest released entry after it (batched-release-proof).
+        head_marker = "## [Unreleased]" if "## [Unreleased]" in text else "## ["
+        after = text.split(head_marker, 1)[1]
+        # Section body = up to the NEXT release heading.
+        unreleased = after.split("\n## [", 1)[0]
         self.assertIn("fn-114", unreleased)
         self.assertIn("re-run `/flow-next:ralph-init`", unreleased)
         self.assertIn("Upgrade note", unreleased)

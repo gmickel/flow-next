@@ -2,7 +2,15 @@
 
 All notable changes to the flow-next.
 
-## [Unreleased]
+## [flow-next 3.0.0] - 2026-07-21
+
+### BREAKING
+
+Three breaking changes, all with documented paths forward:
+
+- **Pre-1.0 migration machinery removed** (fn-111). `migrate-rename` / `migrate-rollback` / `migrate-state` and the auto-detect banner are gone. Port a pre-1.0 `.flow/epics/` repo by hand via the three-sentence prose in `.flow/usage.md` "Pre-1.0 layout porting" (same section in the setup-managed template) and `docs/troubleshooting.md`.
+- **Epic/epics alias surface removed** (fn-111). `epic`/`epics` commands, every `--epic*` flag, and the dual-emit JSON keys (`epics`, `epic`, `epic_id`, `epic_count`, ...) are gone; canonical `spec` forms only. The on-disk `depends_on_epics` field is UNCHANGED (canonical schema, not an alias). External consumers reading legacy keys or forwarding `--epic` flags must migrate before upgrading.
+- **Ralph users must re-run `/flow-next:ralph-init` after upgrading** (fn-114). Plugin-level hooks no longer exist and `flowctl ralph *` moved to `scripts/ralph/ralphctl.py`; without re-init the guard never fires.
 
 ### Changed
 
