@@ -268,7 +268,18 @@ After the worker agent returns, verify the task completed:
 $FLOWCTL show <task-id> --json
 ```
 
-If status is not `done`, the worker agent failed. Diagnose from ground truth (below) then retry — but **BOUNDED**: keep a per-task standard-failure strike counter (the mirror of the delegation circuit breaker in 3d.2, which only covers `delegation_active`). After **2** consecutive non-`done` returns for the *same task* (a worker that keeps aborting early or a persistently red Quick command), STOP retrying and escalate — do NOT respawn unboundedly. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would rerun worker agents forever); interactively, surface the failure and stop.
+#### 3d.0 host-deferred gate (runs FIRST when this task's REVIEW_MODE was `host-deferred`)
+
+A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification:
+
+1. Confirm the worker's handover: commits present since `BASE_COMMIT`, summary + evidence files at the handover paths it reported. (Missing handover WITH `in_progress` status = genuine worker failure — fall through to the failure path below.)
+2. Run the mandatory gate: `/flow-next:impl-review <task-id> --base $BASE_COMMIT --review=host`.
+3. On `SHIP`: run `$FLOWCTL done <task-id> --summary-file <worker summary> --evidence-json <worker evidence>` (append the review receipt path + reviewer model to the evidence JSON first), then re-run `$FLOWCTL show` — status is now `done`; continue to 3d.1/plan-sync as normal.
+4. On `NEEDS_WORK`: drive the impl-review fix loop (standard bounded cap); `done` only after a SHIP verdict. On cap exhaustion: escalate exactly like the failure path below (NEEDS_HUMAN under autonomy; surface and stop interactively).
+
+Only after this gate does the standard rule below apply to host-deferred tasks.
+
+If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker agent failed. Diagnose from ground truth (below) then retry — but **BOUNDED**: keep a per-task standard-failure strike counter (the mirror of the delegation circuit breaker in 3d.2, which only covers `delegation_active`). After **2** consecutive non-`done` returns for the *same task* (a worker that keeps aborting early or a persistently red Quick command), STOP retrying and escalate — do NOT respawn unboundedly. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would rerun worker agents forever); interactively, surface the failure and stop.
 
 **Lost / errored worker result (`[Tool result missing due to internal error]`).** On long runs the host (Agent-tool) can drop the worker's completion report — you get an error placeholder instead of the report, even though the worker's *work* may be complete. Don't block waiting for a result that will never arrive. Treat a missing/errored result the same as "status not `done`" and **diagnose from ground truth** before retrying:
 
