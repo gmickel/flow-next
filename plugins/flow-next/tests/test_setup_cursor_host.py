@@ -109,7 +109,7 @@ class TestHostLeadsReviewMenu(unittest.TestCase):
         # the non-cursor review branch), all backends appear.
         host_idx = self.text.index('"label": "Host (Recommended)"')
         non_cursor_idx = self.text.index(
-            "**When `PLATFORM` is NOT `cursor`**", host_idx
+            "**When `PLATFORM` is neither `cursor` nor `grok`**", host_idx
         )
         cursor_menu = self.text[host_idx:non_cursor_idx]
         for label in (
@@ -243,8 +243,8 @@ class TestCursorCopyModeUnchanged(unittest.TestCase):
 
     def test_non_cursor_review_menu_retained(self) -> None:
         # Claude/Droid/Codex menu still ships without Host-first requirement.
-        self.assertIn("**When `PLATFORM` is NOT `cursor`**", self.text)
-        non = self.text.split("**When `PLATFORM` is NOT `cursor`**", 1)[1]
+        self.assertIn("**When `PLATFORM` is neither `cursor` nor `grok`**", self.text)
+        non = self.text.split("**When `PLATFORM` is neither `cursor` nor `grok`**", 1)[1]
         # First review-options block after that header should still lead with Codex CLI
         # (not Host) for the non-cursor path.
         self.assertIn('"label": "Codex CLI"', non[:2000])

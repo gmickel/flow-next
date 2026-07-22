@@ -488,7 +488,7 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**When `PLATFORM` is NOT `cursor`** (Claude Code / Droid / Codex — unchanged; Grok uses the dedicated menu above):
+**When `PLATFORM` is neither `cursor` nor `grok`** (Claude Code / Droid / Codex — unchanged; Cursor and Grok each use their dedicated menu above):
 ```json
 {
   "header": "Review",

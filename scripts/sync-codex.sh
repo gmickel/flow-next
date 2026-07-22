@@ -1917,14 +1917,13 @@ if [ -f "$setup_mirror_wf" ]; then
     grab {print}
   ' "$setup_mirror_wf")
   det_bad=0
-  for sig in GROK_AGENT CURSOR_AGENT DROID_PLUGIN_ROOT CLAUDE_PLUGIN_ROOT; do
-    if printf '%s\n' "$det_block" | grep -q "$sig"; then
-      echo -e "  ${RED}✗${NC} codex mirror setup Step-0 detection bash still branches on $sig (fn-126 R4 — must be unconditional PLATFORM=codex)"
-      det_bad=1
-    fi
-  done
-  if ! printf '%s\n' "$det_block" | grep -q 'PLATFORM="codex"'; then
-    echo -e "  ${RED}✗${NC} codex mirror setup Step-0 detection bash missing unconditional PLATFORM=\"codex\" (fn-126 R4)"
+  # Fail-CLOSED (codex impl-review): the executable content must be EXACTLY the
+  # single `PLATFORM="codex"` assignment. Strip comment/blank lines, then require
+  # the remainder to equal that one line — so ANY future branch (new signal,
+  # if/case, extra assignment) fails, not just the four named signals.
+  det_exec=$(printf '%s\n' "$det_block" | sed 's/#.*$//' | grep -vE '^[[:space:]]*$' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  if [ "$det_exec" != 'PLATFORM="codex"' ]; then
+    echo -e "  ${RED}✗${NC} codex mirror setup Step-0 executable content is not exactly 'PLATFORM=\"codex\"' (fn-126 R4 — must be unconditional; got: $(printf '%s' "$det_exec" | tr '\n' '|'))"
     det_bad=1
   fi
   if [ "$det_bad" = "0" ]; then
