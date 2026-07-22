@@ -21,6 +21,7 @@ Run:
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -51,10 +52,13 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             user_prompt = codex / "prompts" / "my-own-prompt.md"
             user_prompt.write_text("mine too\n")
 
+            # Preserve the runner environment (Git Bash on Windows needs
+            # SystemRoot etc.); only HOME is redirected to the temp dir.
+            env = dict(os.environ, HOME=str(home))
             result = subprocess.run(
                 ["bash", str(INSTALLER)],
                 cwd=str(REPO_ROOT),
-                env={"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+                env=env,
                 capture_output=True,
                 text=True,
                 timeout=300,
