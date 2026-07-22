@@ -15,9 +15,8 @@ Make setup Cursor-host aware. (a) Detection: rewrite the Cursor branch in flow-n
 
 
 ## Done summary
-TBD
-
+Positive Cursor detection: PLUGIN_ROOT resolved under ~/.cursor/ (pwd -P) replaces the codex/-absence rung; 4-case matrix documented (marketplace import w/ codex/ present, local install, Codex-in-Cursor-shell inherited env, Claude/Droid precedence). Host-aware setup on cursor: Host (Recommended) leads menu, cursor CLI relabeled circular/secondary, fn-97 codex-recommendation suppressed on cursor; AGENTS.md model-routing scaffold w/ host-enumerated slugs + cursor-agent --list-models fallback, cheap scout pin + cross-family REVIEW_PIN (TODO if unavailable), inherit default, date stamp + refresh note; no Ralph on Cursor (never offer/register). 42 tests green; mirror twice-idempotent. Reviewed by session model: approved.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4bed7e23
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_setup_cursor_host test_model_routing_scaffold test_setup_snippet_lockstep -q
 - PRs:

@@ -818,6 +818,11 @@ Text output prints the bare backend name (e.g. `codex`) for skill grep back-comp
 
 Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`, `cursor:gpt-5.5-high` (cursor folds effort into the model name — no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
 
+| Backend form | Meaning |
+|--------------|---------|
+| `host` | **Model-less selection sentinel** (bare `host` only). Review runs as a host-native fresh-context subagent pinned to a cross-family model via the AGENTS.md model-routing section — never the session model reviewing its own diff; no subprocess. Preferred from inside Cursor. |
+| `host:<model>` | **REJECTED.** Errors with a hint to set a caller-side pin in the AGENTS.md model-routing section instead (pins never ride the backend string). |
+
 #### Model resolution (strongest-available, never-fail — fn-76)
 
 When a review runs **without an explicit model** (unconfigured `codex` / `copilot` / `cursor`), flow-next resolves the *strongest model the account can actually run* instead of a fixed hardcoded default. The mechanism is **optimistic-first**, so the happy path costs nothing:
