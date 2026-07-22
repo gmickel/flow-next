@@ -208,8 +208,8 @@ class TestComponentFrontmatter(unittest.TestCase):
                 )
 
     def test_commands_have_description(self) -> None:
-        # fn-124 flattened the shims out of the plugin-name-colliding
-        # ``commands/flow-next/`` subdir to ``commands/*.md`` and dropped the
+        # fn-124 flattened the shims out of the plugin-name-colliding nested
+        # command directory to ``commands/*.md`` and dropped the
         # ``name:`` frontmatter (the basename governs the command name now), so
         # this checks the flat path and requires ``description`` only — no
         # ``name`` (see test_command_shim_flatten.py for the flatten guard).

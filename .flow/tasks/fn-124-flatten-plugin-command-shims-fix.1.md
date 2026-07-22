@@ -62,10 +62,45 @@ Work through the spec's "Live path-consumer inventory" table - it is the complet
 ## Done summary
 Flattened the 23 command shims to plugins/flow-next/commands/*.md (deleted the dead epic-review alias on all platforms incl. the Codex mirror redirect skill), removed the namespaced `name:` frontmatter so the basename governs, and updated every live path consumer in lockstep (Cursor manifest + installers + CI verifier, Codex prompts loop + exact-target stale-alias upgrade cleanup, ci_test.sh, 2 unit tests, 5 smoke tests, sync-codex). Live-menu evidence captured: fresh session renders `/flow-next:qa` cleanly and a typed invocation dispatches the flow-next-qa skill; `claude plugin validate` passes.
 
-Live-menu raw capture (headless `claude --plugin-dir plugins/flow-next -p`): 23 clean entries `/flow-next:audit ... /flow-next:work`, zero `flow-next:flow-next:` command entries (only the inherent plugin-prefix+skill-name pairings like `/flow-next:flow-next-qa`), `epic-review` absent. Typed `/flow-next:qa` probe emitted `TOOL_USE: Skill {"skill": "flow-next-qa"}`.
+Live-menu raw capture (fresh headless `claude --plugin-dir plugins/flow-next -p`, 2026-07-22; relevant command-shim lines from the unfiltered live inventory):
+
+```text
+/flow-next:audit
+/flow-next:capture
+/flow-next:impl-review
+/flow-next:interview
+/flow-next:land
+/flow-next:make-pr
+/flow-next:map
+/flow-next:memory-migrate
+/flow-next:pilot
+/flow-next:plan
+/flow-next:plan-review
+/flow-next:prime
+/flow-next:prospect
+/flow-next:qa
+/flow-next:ralph-init
+/flow-next:resolve-pr
+/flow-next:setup
+/flow-next:spec-completion-review
+/flow-next:strategy
+/flow-next:sync
+/flow-next:tracker-sync
+/flow-next:uninstall
+/flow-next:work
+```
+
+The same live inventory contained zero tripled command names and no `epic-review` entry. Inherent plugin-prefixed skill entries such as `/flow-next:flow-next-qa` remain separate from these command shims.
+
+Typed invocation probe:
+
+```text
+$ claude --plugin-dir plugins/flow-next -p "/flow-next:qa fn-124-flatten-plugin-command-shims-fix -- probe dispatch only; stop after loading the skill" --model haiku --output-format stream-json --verbose --tools Skill
+{"type":"tool_use","name":"Skill","input":{"skill":"flow-next:qa","args":"fn-124-flatten-plugin-command-shims-fix -- probe dispatch only; stop after loading the skill"}}
+```
 
 Remaining old-path references, deliberately left for task .2 (docs rows): plugins/flow-next/docs/platforms.md:208,237; plugins/flow-next/docs/strategy.md:58; agent_docs/adding-skills.md:7. Codex impl-review: SHIP (first pass; one non-blocking Minor: raw capture now embedded here).
 ## Evidence
 - Commits: d057f6891b59095f3fe963cd3659fb94ca95ad4c
-- Tests: baseline: green (focused suite pre-edit, 67 tests OK), cd plugins/flow-next/tests && python3 -m unittest test_install_cursor_parity test_cursor_review_commands test_cursor_clean_tree test_model_routing_scaffold test_no_default_hooks test_cursor_plugin_surface test_install_codex_legacy_cleanup -q (73 tests OK), HOME=<tmp> ./scripts/install-cursor.sh && python3 scripts/ci/verify_cursor_install.py --dest <tmp>/.cursor/plugins/local/flow-next (OK: skills=28 commands=23 agents=22), claude plugin validate plugins/flow-next (Validation passed), ./scripts/sync-codex.sh x2 (second run byte-identical), live-menu proof: claude --plugin-dir ... -p rendered all 23 as /flow-next:<cmd> (no tripled prefixes, no epic-review); typed /flow-next:qa dispatched Skill flow-next-qa
+- Tests: baseline: green (focused suite pre-edit, 67 tests OK), cd plugins/flow-next/tests && python3 -m unittest test_install_cursor_parity test_cursor_review_commands test_cursor_clean_tree test_model_routing_scaffold test_no_default_hooks test_cursor_plugin_surface test_install_codex_legacy_cleanup -q (73 tests OK), HOME=<tmp> ./scripts/install-cursor.sh && python3 scripts/ci/verify_cursor_install.py --dest <tmp>/.cursor/plugins/local/flow-next (OK: skills=28 commands=23 agents=22), claude plugin validate plugins/flow-next (Validation passed), ./scripts/sync-codex.sh x2 (second run byte-identical), live-menu proof: claude --plugin-dir ... -p rendered all 23 as /flow-next:<cmd> (no tripled prefixes, no epic-review); typed /flow-next:qa dispatched Skill flow-next:qa, python3 scripts/run_tests_parallel.py (SUMMARY files=108 ran=2069 failures=0 errors=0 skipped=3; OK), exact live-tree grep from the spec (zero hits)
 - PRs:

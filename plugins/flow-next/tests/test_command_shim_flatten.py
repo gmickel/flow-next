@@ -2,7 +2,7 @@
 
 Claude Code's slash menu rendered flow-next command shims as
 `/flow-next:flow-next:flow-next:qa` because the shims lived in a
-plugin-name-colliding subdirectory (`commands/flow-next/`) AND carried
+plugin-name-colliding nested command directory AND carried
 pre-plugin-era frontmatter `name: flow-next:<cmd>` (colon inside `name` is
 literal under v2.1.216+ last-segment semantics). The fix flattened the shims
 to `commands/*.md`, dropped the `name:` field so the basename governs, pointed
@@ -10,7 +10,7 @@ the Cursor manifest at `./commands`, and deleted the dead epic-review alias.
 
 This test pins all of that so a regression can't sneak back in:
 
-  (a) no `commands/flow-next/` subdirectory exists
+  (a) no plugin-name-colliding nested command directory exists
   (b) >= 23 flat `commands/*.md` shims exist
   (c) `.cursor-plugin/plugin.json` `commands` field == `./commands`
   (d) no shim frontmatter `name:` contains a colon (none should exist at all)
@@ -51,7 +51,7 @@ class TestCursorPluginSurface(unittest.TestCase):
     def test_no_nested_flow_next_dir(self) -> None:
         self.assertFalse(
             (COMMANDS / "flow-next").exists(),
-            "commands/flow-next/ subdirectory is back -- it triples the "
+            "the nested flow-next command directory is back -- it triples the "
             "slash-menu prefix on Claude Code (fn-124). Shims live FLAT "
             "at commands/*.md.",
         )
