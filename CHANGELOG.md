@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+## [flow-next 3.2.0] - 2026-07-22
+
 ### Changed
 
 - **Python 3.11+ runtime and faster flowctl startup (fn-122).** Every Unix, Windows, plugin-bin, copied, Ralph, generated, and dogfood launcher now rejects older-but-working interpreters before loading `flowctl.py`. Authenticated static fast paths accelerate `flowctl usage` and root help without executable cache state; help snapshots are scoped to their generating Python minor so other supported runtimes fall back to live argparse without output drift. All other commands compile the tracked source in memory.

@@ -1,6 +1,6 @@
 {
   "name": "flow-next",
-  "version": "3.1.2",
+  "version": "3.2.0",
   "description": "Zero-dependency planning + execution with .flow/ task tracking and Ralph autonomous mode (multi-model review gates). Worker subagent per task for context isolation. Prime delivers an opinionated, structure-aware agent-readiness assessment: it classifies the project, judges substance over existence, and leads with an operability verdict + ranked next-actions. Includes 21 subagents, 24 commands, 28 skills.",
   "author": {
     "name": "Gordon Mickel",

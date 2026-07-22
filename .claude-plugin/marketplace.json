@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Plan-first workflows for Claude Code and Factory Droid. Ships flow-next: zero-dep, spec-driven, Ralph autonomous mode.",
-    "version": "3.1.2"
+    "version": "3.2.0"
   },
   "plugins": [
     {
       "name": "flow-next",
       "description": "Zero-dependency planning + execution with .flow/ task tracking and Ralph autonomous mode (multi-model review gates). Worker subagent per task for context isolation. Includes 21 subagents, 24 commands, 28 skills.",
-      "version": "3.1.2",
+      "version": "3.2.0",
       "author": {
         "name": "Gordon Mickel",
         "email": "gordon@mickel.tech",
