@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-123-cursor-first-class-experience-team.md",
-  "status": "open",
+  "status": "done",
   "title": "Cursor first-class experience: team-marketplace install + host-aware orchestration",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-22T11:25:59.084972Z"
+  "updated_at": "2026-07-22T17:16:50.295879Z"
 }
