@@ -30,6 +30,7 @@ Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
 |------|------------|
 | Claude Code | Native subagent `model` param (existing reviewer-subagent arrangement); `disallowedTools: Edit, Write, Task` (or host read-only equivalent) |
 | Cursor | In-prompt slug pin on the subagent + TOOL-enforced read-only (dispatch via a `readonly: true` agent definition or Cursor's read-only subagent mode — never a mutation-capable subagent; the reviewer reads untrusted diff content, so read-only cannot be prompt-requested only) |
+| Grok | In-prompt / host model pin from AGENTS.md model-routing + TOOL-enforced read-only (never mutation-capable). Single-native-family (`grok-4.5`) — host review fails closed unless the writer is non-Grok; cross-family via bridge backends. Receipt: `mode: "host"`, actual reviewer model, `session_id: null` (same shape as Claude/Cursor) |
 | Codex | Fresh read-only reviewer subagent via the platform subagent primitive (`spawn_agent` on Codex) with the cross-family pin stated in the prompt; read-only via the platform sandbox |
 | Other | Generic fresh-context reviewer; note in the receipt that pin enforcement is host-dependent |
 
