@@ -7502,10 +7502,17 @@ class TaskInventory:
         tolerate_errors: bool = False,
         merge_runtime: bool = True,
         spec_id: Optional[str] = None,
+        spec_ids: Optional[set[str]] = None,
         collect_consistency_errors: bool = False,
         collect_load_errors: bool = False,
     ) -> "TaskInventory":
         task_files = list(iter_task_json_files(flow_dir, spec_id=spec_id))
+        if spec_ids is not None:
+            task_files = [
+                task_file
+                for task_file in task_files
+                if spec_id_from_task(task_file.stem) in spec_ids
+            ]
         if not task_files:
             return cls(ordered=[], by_id={}, by_spec={})
         runtime_by_id = (
@@ -14686,7 +14693,11 @@ def cmd_specs(args: argparse.Namespace) -> None:
         )
 
     inventory = (
-        TaskInventory.load(flow_dir, use_json=args.json)
+        TaskInventory.load(
+            flow_dir,
+            use_json=args.json,
+            spec_ids={spec_data["id"] for spec_data in spec_data_list},
+        )
         if spec_data_list
         else TaskInventory(ordered=[], by_id={}, by_spec={})
     )

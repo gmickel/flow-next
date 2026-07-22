@@ -247,6 +247,23 @@ class TestUnifiedTaskUniverse(TaskInventoryCase):
         self.assertEqual(next_task["task"], "fn-1.1")
         self.assertTrue(validated["valid"])
 
+    def test_specs_ignore_malformed_tasks_for_unknown_specs(self) -> None:
+        self.write_spec("fn-1")
+        self.write_task("fn-1.1")
+        (self.flow / "tasks" / "fn-99.1.json").write_text(
+            "{broken", encoding="utf-8"
+        )
+
+        specs = self.call(flowctl.cmd_specs)
+
+        self.assertEqual(
+            [
+                (spec["id"], spec["tasks"], spec["done"])
+                for spec in specs["specs"]
+            ],
+            [("fn-1", 1, 0)],
+        )
+
     def test_payload_identity_and_owner_corruption_is_diagnosable(self) -> None:
         self.write_spec("fn-1")
         task_path = self.flow / "tasks" / "fn-1.1.json"
