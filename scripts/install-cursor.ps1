@@ -20,10 +20,11 @@
     powershell -ExecutionPolicy Bypass -File .\scripts\install-cursor.ps1
 
   What gets installed (mirrors install-cursor.sh exactly):
-    - Manifest:  .cursor-plugin\plugin.json   (commands path-override -> commands\flow-next)
-    - Skills:    skills\<name>\SKILL.md
-    - Commands:  commands\flow-next\*.md       (via the manifest override)
-    - Agents:    agents\*.md
+    - Manifest:  .cursor-plugin\plugin.json   (explicit skills/agents/commands/rules paths)
+    - Skills:    skills\<name>\SKILL.md       (via the manifest override)
+    - Commands:  commands\flow-next\*.md      (via the manifest override)
+    - Agents:    agents\*.md                  (via the manifest override)
+    - Rules:     rules\*.mdc                  (flow-next.mdc guidance rail)
     - Hooks:     none shipped at plugin level (Ralph is opt-in via ralph-init project settings)
     - flowctl:   scripts\flowctl[.py]          (resolved at runtime via .flow\bin after setup)
 
@@ -102,12 +103,14 @@ function Get-FileCount($path, $filter) {
 $skills   = Get-DirCount  (Join-Path $Dest "skills")
 $commands = Get-FileCount (Join-Path $Dest "commands\flow-next") "*.md"
 $agents   = Get-FileCount (Join-Path $Dest "agents") "*.md"
+$rules    = Get-FileCount (Join-Path $Dest "rules") "*.mdc"
 
 Write-Host ""
 Write-Host "Installed. Cursor registers the components on next launch:"
 Write-Host "  skills:   $skills"
 Write-Host "  commands: $commands"
 Write-Host "  agents:   $agents"
+Write-Host "  rules:    $rules"
 Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1. Fully restart Cursor (Quit, reopen) - a new local plugin needs a full restart."

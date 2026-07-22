@@ -1,0 +1,14 @@
+---
+description: Apply when the workspace contains a .flow/ directory or the conversation involves flow-next, flowctl, or fn-N task ids. Flow-Next task lifecycle and flowctl usage pull directives (Cursor guidance rail).
+alwaysApply: false
+---
+
+# Flow-Next
+
+This project uses Flow-Next for ALL task tracking. Resolve flowctl via `.flow/bin/flowctl` (Cursor has no plugin-root env vars or bin PATH injection; `/flow-next:setup` writes the shim). Do NOT create markdown TODOs or use TodoWrite. Re-anchor (re-read spec + task status) before every task.
+
+- Lifecycle: `.flow/bin/flowctl list` / `show fn-N.M` / `start fn-N.M` / `done fn-N.M --summary-file s.md --evidence-json e.json` (e.json: `{"commits": ["<sha>"], "tests": ["<cmd>"], "prs": []}`)
+- BEFORE any other flowctl operation, or when unsure of a flag: run `.flow/bin/flowctl usage` (CLI cheatsheet + orchestration recipes).
+- BEFORE delegating to another model/CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) or picking a delegate/review model: run `.flow/bin/flowctl usage` and follow "Orchestration & model steering" exactly.
+- Creating a spec: `.flow/bin/flowctl spec create --title "Short title" --json`, then `.flow/bin/flowctl spec set-plan <id> --file plan.md`, then `/flow-next:plan <id>` (Cursor autocomplete may show the hyphenated form `/flow-next-plan`).
+- If `.flow/bin/flowctl` is not found: run `/flow-next:setup`.

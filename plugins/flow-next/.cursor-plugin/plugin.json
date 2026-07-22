@@ -16,5 +16,8 @@
     "automation",
     "ai"
   ],
-  "commands": "./commands/flow-next"
+  "skills": "./skills/",
+  "agents": "./agents/",
+  "commands": "./commands/flow-next",
+  "rules": "./rules/"
 }

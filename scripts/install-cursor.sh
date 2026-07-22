@@ -18,10 +18,11 @@
 # This script copies a snapshot — re-run it after `git pull` to update.
 #
 # What gets installed:
-#   - Manifest:  .cursor-plugin/plugin.json   (commands path-override → commands/flow-next)
-#   - Skills:    skills/<name>/SKILL.md        (Cursor default location)
+#   - Manifest:  .cursor-plugin/plugin.json   (explicit skills/agents/commands/rules paths)
+#   - Skills:    skills/<name>/SKILL.md        (via the manifest override)
 #   - Commands:  commands/flow-next/*.md       (via the manifest override)
-#   - Agents:    agents/*.md                   (Cursor default location)
+#   - Agents:    agents/*.md                   (via the manifest override)
+#   - Rules:     rules/*.mdc                   (flow-next.mdc guidance rail)
 #   - Hooks:     none shipped at plugin level (Ralph is opt-in via ralph-init project settings)
 #   - flowctl:   scripts/flowctl[.py]          (resolved at runtime via .flow/bin after setup)
 #
@@ -86,6 +87,7 @@ echo "Installed. Cursor registers the components on next launch:"
 echo "  skills:   $(ls -d "$DEST"/skills/*/ 2>/dev/null | wc -l | tr -d ' ')"
 echo "  commands: $(ls "$DEST"/commands/flow-next/*.md 2>/dev/null | wc -l | tr -d ' ')"
 echo "  agents:   $(ls "$DEST"/agents/*.md 2>/dev/null | wc -l | tr -d ' ')"
+echo "  rules:    $(ls "$DEST"/rules/*.mdc 2>/dev/null | wc -l | tr -d ' ')"
 echo ""
 echo "Next steps:"
 echo "  1. Fully restart Cursor (Cmd-Q, reopen) — a new local plugin needs a full restart."
