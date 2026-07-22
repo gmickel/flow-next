@@ -55,11 +55,12 @@ BACKEND_REGISTRY = flowctl.BACKEND_REGISTRY
 class TestRegistryShape(unittest.TestCase):
     """Registry contents are the contract downstream code depends on."""
 
-    def test_exactly_five_backends(self) -> None:
+    def test_exactly_six_backends(self) -> None:
         # cursor added in fn-74 (model-yes / effort-no shape).
+        # host added in fn-123 (non-executable selection sentinel; no model/effort).
         self.assertEqual(
             sorted(BACKEND_REGISTRY.keys()),
-            ["codex", "copilot", "cursor", "none", "rp"],
+            ["codex", "copilot", "cursor", "host", "none", "rp"],
         )
 
     def test_cursor_effort_is_none(self) -> None:
@@ -108,6 +109,12 @@ class TestRegistryShape(unittest.TestCase):
     def test_none_rejects_model_and_effort(self) -> None:
         self.assertIsNone(BACKEND_REGISTRY["none"]["models"])
         self.assertIsNone(BACKEND_REGISTRY["none"]["efforts"])
+
+    def test_host_rejects_model_and_effort(self) -> None:
+        # fn-123 R5: host is a non-executable selection sentinel — pins live
+        # in AGENTS.md model-routing, never on the backend string.
+        self.assertIsNone(BACKEND_REGISTRY["host"]["models"])
+        self.assertIsNone(BACKEND_REGISTRY["host"]["efforts"])
 
     def test_codex_effort_set(self) -> None:
         self.assertEqual(
@@ -195,6 +202,11 @@ class TestParseValid(unittest.TestCase):
     def test_bare_none(self) -> None:
         s = BackendSpec.parse("none")
         self.assertEqual(s, BackendSpec("none", None, None))
+
+    def test_bare_host(self) -> None:
+        # fn-123 R5: bare host parses OK; model/effort pins live in AGENTS.md.
+        s = BackendSpec.parse("host")
+        self.assertEqual(s, BackendSpec("host", None, None))
 
     def test_bare_copilot(self) -> None:
         s = BackendSpec.parse("copilot")
@@ -372,6 +384,16 @@ class TestParseInvalid(unittest.TestCase):
     def test_none_rejects_effort(self) -> None:
         with self.assertRaisesRegex(ValueError, "does not accept an effort"):
             BackendSpec.parse("none::high")
+
+    def test_host_rejects_model_with_agents_md_hint(self) -> None:
+        # fn-123 R5: host:<model> must point at AGENTS.md model-routing.
+        with self.assertRaisesRegex(ValueError, r"AGENTS\.md.*model-routing"):
+            BackendSpec.parse("host:opus")
+
+    def test_host_rejects_model_and_effort_with_agents_md_hint(self) -> None:
+        # host:opus:high — model check fires first with the same pointed hint.
+        with self.assertRaisesRegex(ValueError, r"AGENTS\.md.*model-routing"):
+            BackendSpec.parse("host:opus:high")
 
     def test_case_sensitive_backend_name(self) -> None:
         # Backend names are lowercase per the registry. Uppercase must fail

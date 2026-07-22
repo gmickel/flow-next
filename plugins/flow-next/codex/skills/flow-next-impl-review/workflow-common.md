@@ -48,17 +48,17 @@ BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
 if [[ "$BACKEND" == "ASK" ]]; then
  echo "Error: No review backend configured."
  if [ "$RP_ELIGIBLE" = 1 ]; then
- echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
+ echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|host|none"
  else
- echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|none"
+ echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|host|none"
  fi
  exit 1
 fi
 
 if [ "$RP_ELIGIBLE" = 1 ]; then
- echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)"
+ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|host|none)"
 else
- echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|none)"
+ echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|host|none)"
 fi
 ```
 
@@ -91,6 +91,7 @@ Per-task `review` (set via `flowctl task set-backend`) overrides env.
 | `codex` | [workflow-codex.md](workflow-codex.md) |
 | `copilot` | [workflow-copilot.md](workflow-copilot.md) |
 | `cursor` | [workflow-cursor.md](workflow-cursor.md) |
+| `host` | [workflow-host.md](workflow-host.md) |
 | `rp` | [workflow-rp.md](workflow-rp.md) |
 
 Only the file for the active backend should enter context. Do not read the other backend files.

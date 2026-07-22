@@ -101,12 +101,14 @@ When all three hold:
    - **Module** (optional): the file or subsystem the decision shapes.
    - **Tags** (optional): comma-separated, e.g. `glossary,resolution,walk`.
 
-2. **Show the draft via `AskUserQuestion` before writing** — same pattern as `/flow-next:capture` Phase 4 read-back:
-   - **header**: `Write decision?`
-   - **body**: `Drafted decision entry: <title>. Body: <one-line summary>. Recommended: approve — <one-sentence rationale why all three gate criteria hold>. Confidence: [<tier>].`
-   - **options**: frozen — `approve` (write), `edit` (user revises title / body / module / tags via follow-up), `skip` (do not write; the choice stays in spec prose only).
+2. **Print-then-ask before writing** — same print-then-ask contract as `/flow-next:capture` Phase 4 (R13):
+   - **Print first:** emit the FULL decision-entry draft (title, body markdown, optional module/tags, optional Considered Options / Consequences blocks) as an ordinary assistant markdown message. Never embed the multi-paragraph body in the ask.
+   - **Then short ask** via `AskUserQuestion`:
+     - **header**: `Write decision?`
+     - **body** (SHORT — pointer + tally/warnings + recommendation only): `Decision draft printed above (<title>). Recommended: approve — <one-sentence rationale why all three gate criteria hold>. Confidence: [<tier>].`
+     - **options**: frozen — `approve` (write), `edit` (user revises title / body / module / tags via follow-up), `skip` (do not write; the choice stays in spec prose only).
 
-   Show the full body inline in the question or in the message preceding it; the user must be able to read what they're approving. Never write silently — even when the gate cleanly passes, the user owns the final write.
+   Never write silently — even when the gate cleanly passes, the user owns the final write. Never put the full decision body "inline in the question"; ask bodies render as collapsed plain text.
 
 3. **On `approve`**, call:
 
@@ -124,7 +126,7 @@ When all three hold:
 
    The `decisions` category is registered in flowctl's memory schema (Task 1 of the original decisions epic). Optional fields `--decision-status` (default `accepted`), `--superseded-by`, and `--alternatives-considered` are available; pass them when the conversation supplies them and skip otherwise.
 
-4. **On `edit`**, ask one follow-up `AskUserQuestion` for which field changes (title / body / module / tags), capture the revision, re-show the draft, loop. Hard cap at 2 edit cycles before defaulting to `approve` / `skip`.
+4. **On `edit`**, ask one follow-up `AskUserQuestion` for which field changes (title / body / module / tags), capture the revision, **reprint the full revised draft as ordinary markdown**, then re-issue the short approval ask; loop. Hard cap at 2 edit cycles before defaulting to `approve` / `skip`.
 
 5. **On `skip`**, do nothing — the choice still appears in spec prose; only the memory entry is suppressed.
 

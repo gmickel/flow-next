@@ -341,6 +341,12 @@ done
 # flow-next-work: phases.md
 phases="$CODEX_DIR/skills/flow-next-work/phases.md"
 if [ -f "$phases" ]; then
+  # fn-123 R5: the 3d.0 host-deferred gate is an ACTIONABLE invocation — rewrite
+  # the canonical slash-command to the Codex skill name (passive /flow-next:
+  # mentions elsewhere stay; this one the agent must execute).
+  sed -i.bak 's|`/flow-next:impl-review <task-id> --base \$BASE_COMMIT --review=host`|`$flow-next-impl-review <task-id> --base $BASE_COMMIT --review=host`|g' "$phases"
+  rm -f "${phases}.bak"
+
   # Replace section 3c with agent invocation
   start_line=$(grep -n "^### 3c\. Spawn Worker" "$phases" | cut -d: -f1)
   end_line=$(grep -n "^### 3d\." "$phases" | cut -d: -f1)
@@ -355,7 +361,7 @@ Use the **worker** agent role to implement the task. The worker gets fresh conte
 - Implementation
 - Committing
 - Review cycles (if enabled)
-- Completing the task (flowctl done)
+- Completing the task (flowctl done) — EXCEPT under `REVIEW_MODE: host-deferred`, where the worker defers `flowctl done` and the conductor's 3d.0 gate owns completion
 
 **`REVIEW_MODE` is per-task, not a fixed run-wide value.** Resolve it for THIS task: if the user
 passed an explicit `--review=<backend>` to `/flow-next:work`, use that (a deliberate run-wide override
@@ -370,12 +376,14 @@ its backend rather than the project default. `none` still skips review.
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
-REVIEW_MODE: none|rp|codex|copilot|cursor
+REVIEW_MODE: none|rp|codex|copilot|cursor|host-deferred
 RALPH_MODE: true|false
 
 Follow your phases exactly."
 
-**Worker returns**: Summary of implementation, files changed, test results, review verdict.
+**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE done.** When the resolved review mode is \`host\`, pass \`REVIEW_MODE: host-deferred\`: the worker skips review dispatch AND defers \`flowctl done\` (returns with the task still in_progress + summary/evidence files written). The conductor then runs \`$flow-next-impl-review <task-id> --review=host\` as the mandatory gate and only on SHIP runs \`flowctl done\` with the worker-prepared summary/evidence plus the review receipt; NEEDS_WORK drives the bounded fix loop before done.
+
+**Worker returns**: Summary of implementation, files changed, test results, review verdict (or, under host-deferred: implementation summary + handover paths, review pending at conductor level).
 
 SECTION3C
     tail -n +$end_line "$phases" >> "${phases}.tmp"
@@ -1634,6 +1642,11 @@ for md_file in "$SRC_AGENTS"/*.md; do
   codex_name=$(rename_agent "$basename_raw")
 
   # Parse YAML frontmatter
+  # Known keys: name/description/model map into TOML. Cursor-native `readonly:`
+  # (fn-123 R4) and Claude-only keys (disallowedTools, color, user-invocable)
+  # are recognized so they never leak into developer_instructions and never
+  # trip a future strict-key guard. Codex enforces read-only via sandbox_mode
+  # (sandbox_for), not a `readonly` TOML field — so we swallow, not emit.
   name="" description="" model=""
   in_frontmatter=0 frontmatter_done=0
   body=""
@@ -1649,9 +1662,14 @@ for md_file in "$SRC_AGENTS"/*.md; do
     fi
     if [ "$in_frontmatter" = "1" ]; then
       case "$line" in
-        name:*)        name="${line#name: }"; name="${name#name:}"; name="$(echo "$name" | xargs)" ;;
-        description:*) description="${line#description: }"; description="${description#description:}"; description="$(echo "$description" | xargs)" ;;
-        model:*)       model="${line#model: }"; model="${model#model:}"; model="$(echo "$model" | xargs)" ;;
+        name:*)             name="${line#name: }"; name="${name#name:}"; name="$(echo "$name" | xargs)" ;;
+        description:*)      description="${line#description: }"; description="${description#description:}"; description="$(echo "$description" | xargs)" ;;
+        model:*)            model="${line#model: }"; model="${model#model:}"; model="$(echo "$model" | xargs)" ;;
+        readonly:*)         ;; # Cursor-native; Codex uses sandbox_mode (tolerated, not emitted)
+        disallowedTools:*)  ;; # Claude/Droid-only capability blacklist
+        color:*)            ;; # Claude UI chrome
+        user-invocable:*)   ;; # Claude plugin catalog flag
+        ""|\#*)             ;; # blank / comment lines in frontmatter
       esac
     fi
   done < "$md_file"

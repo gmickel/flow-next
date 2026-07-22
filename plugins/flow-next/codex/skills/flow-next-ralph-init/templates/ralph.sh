@@ -460,6 +460,16 @@ COMPLETION_REVIEW="${COMPLETION_REVIEW:-none}"
 PLAN_REVIEW_BACKEND="${PLAN_REVIEW%%:*}"
 WORK_REVIEW_BACKEND="${WORK_REVIEW%%:*}"
 COMPLETION_REVIEW_BACKEND="${COMPLETION_REVIEW%%:*}"
+# fn-123 R5: `host` review is a live-conductor arrangement (fresh host-native
+# subagent) — the Ralph prompts and receipt gates do not implement it, so a
+# host-configured loop would silently skip review verification. Refuse early.
+for _rb in "$PLAN_REVIEW_BACKEND" "$WORK_REVIEW_BACKEND" "$COMPLETION_REVIEW_BACKEND"; do
+  if [[ "$_rb" == "host" ]]; then
+    echo "ERROR: review backend 'host' is not supported under Ralph (no receipt gate for host reviews)." >&2
+    echo "Pick rp/codex/copilot/cursor in scripts/ralph/config.env, or run reviews interactively." >&2
+    exit 2
+  fi
+done
 CODEX_SANDBOX="${CODEX_SANDBOX:-auto}"  # Codex sandbox mode; flowctl reads this env var
 REQUIRE_PLAN_REVIEW="${REQUIRE_PLAN_REVIEW:-0}"
 YOLO="${YOLO:-0}"

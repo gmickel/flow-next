@@ -709,7 +709,7 @@ flowctl config get [--json]
 
 # Set a config value
 flowctl config set memory.enabled true [--json]
-flowctl config set review.backend codex [--json]  # rp, codex, copilot, cursor, or none
+flowctl config set review.backend codex [--json]  # rp, codex, copilot, cursor, host, or none
 
 # Disable a boolean config explicitly
 flowctl config set memory.enabled false [--json]
@@ -731,7 +731,7 @@ flowctl config set memory.enabled false [--json]
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion |
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync — scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
-| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` — cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` — cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`sync`](#sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
 | `tracker.provenance` | string | `null` | Free-form provenance written by the discovery ceremony on confirmation (who/when/signals). |
@@ -817,6 +817,11 @@ Text output prints the bare backend name (e.g. `codex`) for skill grep back-comp
 ```
 
 Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`, `cursor:gpt-5.5-high` (cursor folds effort into the model name — no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
+
+| Backend form | Meaning |
+|--------------|---------|
+| `host` | **Model-less selection sentinel** (bare `host` only). Review runs as a host-native fresh-context subagent pinned to a cross-family model via the AGENTS.md model-routing section — never the session model reviewing its own diff; no subprocess. Preferred from inside Cursor. |
+| `host:<model>` | **REJECTED.** Errors with a hint to set a caller-side pin in the AGENTS.md model-routing section instead (pins never ride the backend string). |
 
 #### Model resolution (strongest-available, never-fail — fn-76)
 

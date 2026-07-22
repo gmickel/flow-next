@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Changed
+
+- **Cursor first-class experience (fn-123).** Team-marketplace repo import is the recommended Cursor install (admin imports the GitHub repo via the Cursor GitHub App; Default Off / On / Required modes; auto-refresh on push ~10 min batching); local `install-cursor.sh` / `.ps1` stay as the individual/fallback path. Root `.cursor-plugin/marketplace.json` + plugin-level explicit component paths so marketplace installs never discover `codex/` or `tests/`; ships `rules/flow-next.mdc` guidance rail. Read-only agents carry Cursor-native `readonly: true` (closes the silent write hole where `disallowedTools` is ignored). New `review.backend host` selection sentinel — fresh-context subagent review pinned via host model slugs / AGENTS.md routing (existing backends unchanged). Setup is host-aware on Cursor (positive path detection, not `codex/` absence; review menu leads with `host`; scaffolds AGENTS.md model-routing with live Cursor slugs + dispatch-pin rules). Docs state agents-alias → inherit degrade + caller-side pin escape hatch. Print-then-ask read-back contract for capture/interview (draft as markdown first, short ask second). Platforms/README/installer truth pass: slash autocomplete lists hyphenated commands, natural-language triggering works, AskUserQuestion native incl. multi-question batches; Cursor has a full agent-hook set but flow-next intentionally does not build/register Ralph there. Admin onboarding runbook in `platforms.md`. No version bump (batched).
+
 ## [flow-next 3.2.1] - 2026-07-22
 
 ### Fixed

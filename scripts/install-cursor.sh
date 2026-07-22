@@ -18,21 +18,25 @@
 # This script copies a snapshot — re-run it after `git pull` to update.
 #
 # What gets installed:
-#   - Manifest:  .cursor-plugin/plugin.json   (commands path-override → commands/flow-next)
-#   - Skills:    skills/<name>/SKILL.md        (Cursor default location)
+#   - Manifest:  .cursor-plugin/plugin.json   (explicit skills/agents/commands/rules paths)
+#   - Skills:    skills/<name>/SKILL.md        (via the manifest override)
 #   - Commands:  commands/flow-next/*.md       (via the manifest override)
-#   - Agents:    agents/*.md                   (Cursor default location)
+#   - Agents:    agents/*.md                   (via the manifest override)
+#   - Rules:     rules/*.mdc                   (flow-next.mdc guidance rail)
 #   - Hooks:     none shipped at plugin level (Ralph is opt-in via ralph-init project settings)
 #   - flowctl:   scripts/flowctl[.py]          (resolved at runtime via .flow/bin after setup)
 #
 # Excludes the Codex mirror (codex/) and tests/ — not needed by Cursor.
 #
+# Team path: team-marketplace repo import is the RECOMMENDED install for orgs
+# (admin imports the GitHub repo via the Cursor GitHub App; Default Off/On/Required;
+# auto-refresh on push). This script is the individual / fallback path.
+#
 # Caveats (cosmetic / known):
-#   - Cursor registers the skills/commands/agents but does NOT show flow-next as a
-#     grouped "plugin" card in the marketplace UI — the components still work.
-#   - Ralph autonomous mode is NOT supported on Cursor: even after ralph-init, the
-#     guard uses Claude Code's schema (PreToolUse/Stop + Bash|Execute matchers);
-#     Cursor's hook events are afterFileEdit / beforeShellExecution, so it never fires.
+#   - Local installs register skills/commands/agents; a grouped "plugin" card in
+#     the marketplace UI is a team-marketplace concern — the components still work.
+#   - Ralph autonomous mode is intentionally not built for Cursor (Cursor has a
+#     full agent-hook set; flow-next does not register Ralph guards there).
 
 set -e
 
@@ -60,10 +64,10 @@ mkdir -p "$HOME/.cursor/plugins/local"
 # Real-dir copy (symlink is rejected by Cursor's plugin loader). --delete keeps
 # the snapshot in lockstep with the source on re-run; --delete-excluded ALSO
 # removes excluded paths (e.g. a stale codex/ from an earlier full copy) from the
-# dest — plain --delete only removes files absent from source, NOT excluded ones,
-# so without it a pre-existing codex/ would survive and break setup's
-# Cursor-vs-Codex detection (which keys on codex/ being absent). Exclude the Codex
-# mirror, tests, and Python/OS cruft.
+# dest — plain --delete only removes files absent from source, NOT excluded ones.
+# Setup's Cursor-vs-Codex detection is a POSITIVE path check (PLUGIN_ROOT under
+# ~/.cursor/) — not codex/ absence — so a leftover codex/ no longer misclassifies
+# the install; still exclude the mirror (and tests) as unused weight.
 if command -v rsync >/dev/null 2>&1; then
     rsync -a --delete --delete-excluded \
         --exclude 'codex/' \
@@ -86,13 +90,18 @@ echo "Installed. Cursor registers the components on next launch:"
 echo "  skills:   $(ls -d "$DEST"/skills/*/ 2>/dev/null | wc -l | tr -d ' ')"
 echo "  commands: $(ls "$DEST"/commands/flow-next/*.md 2>/dev/null | wc -l | tr -d ' ')"
 echo "  agents:   $(ls "$DEST"/agents/*.md 2>/dev/null | wc -l | tr -d ' ')"
+echo "  rules:    $(ls "$DEST"/rules/*.mdc 2>/dev/null | wc -l | tr -d ' ')"
 echo ""
 echo "Next steps:"
 echo "  1. Fully restart Cursor (Cmd-Q, reopen) — a new local plugin needs a full restart."
 echo "  2. In your project, run /flow-next:setup (writes .flow/bin/flowctl + AGENTS.md;"
 echo "     skills resolve flowctl via .flow/bin since Cursor exposes no plugin-root env var)."
-echo "  3. Drive the workflow by TYPING the commands — /flow-next:plan, /flow-next:work, ..."
-echo "     (they run when typed even though the slash autocomplete under-lists them)."
+echo "  3. Drive the workflow: type or pick from slash autocomplete — hyphenated form"
+echo "     shown (/flow-next-plan); colon form also works when typed (/flow-next:plan)."
+echo ""
+echo "Note: for teams, team-marketplace repo import is the recommended path"
+echo "      (admin imports the GitHub repo via the Cursor GitHub App); this script"
+echo "      is the individual / fallback install."
 echo ""
 echo "Re-run this script after 'git pull' to update the snapshot."
 echo "Uninstall: rm -rf \"$DEST\""

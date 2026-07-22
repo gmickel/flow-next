@@ -8,7 +8,16 @@
 
 After interview complete, write everything back — **scope depends on input type**.
 
-**Single-emission write pattern (all branches below):** compose the body and Write it ONCE via the **Write tool** to a **literal unique path** — the Write render is the user-visible read-back. Path-persistence rule: bash vars do NOT survive across prompt turns, and that applies to the draft path itself — compose the path in agent context (`${TMPDIR:-/tmp}/flow-interview-<kind>-<id>-<agent-chosen 4-char suffix>.md`) and type it verbatim in the Write call AND the flowctl `--file <path>` call; never a shell variable across prompt turns (`mktemp` only for paths created and consumed within one bash block). **Edit-cycle Read rule:** if the user requests revisions after seeing the render, apply them via the Edit tool (deltas only), then **Read the FULL draft file** before re-asking approval — the Read render is that cycle's full read-back and satisfies Edit's read-before-edit for the next cycle.
+**Single-emission write pattern (all branches below):** compose the body and Write it ONCE via the **Write tool** to a **literal unique path** (the file is what flowctl `--file` consumes; Write is plumbing). Path-persistence rule: bash vars do NOT survive across prompt turns, and that applies to the draft path itself — compose the path in agent context (`${TMPDIR:-/tmp}/flow-interview-<kind>-<id>-<agent-chosen 4-char suffix>.md`) and type it verbatim in the Write call AND the flowctl `--file <path>` call; never a shell variable across prompt turns (`mktemp` only for paths created and consumed within one bash block).
+
+**Print-then-ask approval (R13 — same contract as capture Phase 4):** before handing the draft to flowctl, obtain write-back approval:
+
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+1. **Print first:** emit the FULL draft markdown as an ordinary assistant message (the user-visible read-back — real markdown, real newlines). Never embed multi-paragraph drafts/diffs/criteria lists in the `plain-text numbered prompt` body (they render as collapsed plain text).
+2. **Then short ask** via `plain-text numbered prompt`: one-line pointer (`Full write-back draft printed above.`) + any compact warnings (e.g. open-questions count) + options only — e.g. `approve` / `edit` / `abort`. No multi-paragraph content in the ask.
+
+**Edit-cycle rule:** if the user picks `edit`, apply revisions via the Edit tool (deltas only), then **Read the FULL draft file**, **reprint the full revised draft as ordinary markdown**, and re-issue the short approval ask. The full-file Read also satisfies Edit's read-before-edit for the next cycle. Loop until `approve` or `abort`.
 
 The canonical spec section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (the single source of truth — never re-embed the section list inline per R17). The templates below show the additional **interview audit sections** that layer onto the canonical structure; the underlying spec sections (`## Goal & Context`, `## Architecture & Data Models`, ...) come from the template.
 

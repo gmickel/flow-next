@@ -7,9 +7,11 @@ flow-next ships two Cursor local-installers:
 
 They must stay behaviorally in lockstep: same destination
 (~/.cursor/plugins/local/flow-next), same exclude set (the Codex mirror, tests,
-and Python/OS cruft must never leak into a Cursor install), and the same
+and Python/OS cruft must never leak into a Cursor install), the same
 real-directory contract (Cursor's plugin loader rejects a symlink whose realpath
-escapes ~/.cursor, so NEITHER installer may symlink).
+escapes ~/.cursor, so NEITHER installer may symlink), and both must surface the
+rules/ rail (flow-next.mdc) in their install summary so a rules-only drop is
+visible on re-install.
 
 Without this guard, adding an exclude (or fixing the dest) in one script and
 forgetting the other ships a divergent install on the other OS -- exactly the
@@ -97,6 +99,28 @@ class TestInstallCursorParity(unittest.TestCase):
             r"(?is)Remove-Item.*codex",
             "install-cursor.ps1 must explicitly Remove-Item the excluded dirs "
             "(robocopy /MIR + /XD does not purge them).",
+        )
+
+    def test_both_surface_rules_in_install_summary(self) -> None:
+        # fn-123 R9: rules/flow-next.mdc is part of the Cursor surface. The
+        # installers already copy the whole plugin tree (rules/ included via
+        # non-exclude); both must report the rules count so operators see the
+        # guidance rail landed.
+        self.assertRegex(
+            self.sh,
+            r"rules/.*\.mdc|rules:\s+",
+            "install-cursor.sh must mention rules (*.mdc) in comments or summary",
+        )
+        self.assertRegex(
+            self.ps1,
+            r"rules\\.*\.mdc|rules:\s+",
+            "install-cursor.ps1 must mention rules (*.mdc) in comments or summary",
+        )
+        # Source rule must exist so a clean install has something to copy.
+        rule = PLUGIN_DIR / "rules" / "flow-next.mdc"
+        self.assertTrue(
+            rule.is_file(),
+            f"missing {rule.relative_to(REPO_ROOT)} — installers copy rules/",
         )
 
 

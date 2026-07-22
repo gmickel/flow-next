@@ -12,7 +12,7 @@ This file is the lookup-and-calibration companion to [workflow.md](workflow.md).
 | **1 — Extract conversation evidence** | Build verbatim `## Conversation Evidence` block FIRST | ≤30-line block of `> user (turn N): "..."` lines drafted; optional file-reference subagent results merged; candidate title proposed |
 | **2 — Source-tagged synthesis** | Draft spec sections with per-line tags using CLAUDE.md richer template | Every section drafted; R-IDs allocated sequentially from R1; `[inferred]` count computed; 8+ acceptance flag set if applicable; untestable criteria flagged for Phase 3; `GLOSSARY_PROPOSALS` collected (≤5; empty when glossary absent/husk — §2.7) |
 | **3 — Must-ask cases** | Resolve ambiguous-title / untestable-acceptance / scope-conflict | Interactive: user resolved each fired case; autofix: exit 2 with which case fired |
-| **4 — Read-back loop** | Show full draft + `[inferred]` tally; obtain approval | Interactive: `approve` / `consider-split` / `abort`; on approve with glossary proposals, `Glossary?` consent recorded; on approve with the readiness predicate met (≥1 ready spec AND no `tracker.readyState` — §4.2), `Mark ready?` consent recorded (default keep-draft); autofix `--yes`: payload printed; autofix without `--yes`: payload printed + exit 0 (proposals print as suggestions, never written; readiness never written) |
+| **4 — Read-back loop** | Print full draft as ordinary markdown, then short ask (`[inferred]` tally + options); obtain approval | Interactive print-then-ask: full draft (and rewrite diff) printed first, then short ask → `approve` / `consider-split` / `abort`; edit cycles reprint revised draft before each short re-ask; on approve with glossary proposals, `Glossary?` consent recorded; on approve with the readiness predicate met (≥1 ready spec AND no `tracker.readyState` — §4.2), `Mark ready?` consent recorded (default keep-draft); autofix `--yes`: payload printed; autofix without `--yes`: payload printed + exit 0 (proposals print as suggestions, never written; readiness never written) |
 | **5 — Write via flowctl** | Atomic write of new (or rewritten) spec | `.flow/specs/<id>.md` exists; `SPEC_ID` known; approved term-adds written via `flowctl glossary add` (§5.8, interactive only); consented mark-ready written via `flowctl spec ready` (§5.9, interactive only); rewrite branch ran idempotent `spec unready` with `READY_RESET` recorded (§5.3); HTML render lens regenerated + link line replaced in place iff `artifacts.html.enabled` (§5.10 — off/unset is a silent no-op beyond one config read) |
 | **6 — Suggested next step** | Print footer with `/flow-next:plan` and `/flow-next:interview` hints | Footer printed; skill exits 0 |
 
@@ -210,10 +210,13 @@ Must-ask cases: ambiguous title / untestable acceptance / scope-conflict?
   any fired → ask one at a time (interactive); exit 2 (autofix)
   none      → continue
 
-Read-back: show full draft + [inferred] tally + 8+ note + diff (if rewrite).
+Read-back (print-then-ask): print FULL draft markdown (+ rewrite diff if any)
+  as ordinary assistant message, then SHORT ask (pointer + [inferred] tally +
+  8+ note + options only — never multi-paragraph content in the ask body).
   interactive: approve / edit / consider-split / abort
-  autofix --yes: print and proceed
-  autofix without --yes: print and exit 0
+  edit cycles: reprint revised draft before each short re-ask
+  autofix --yes: print summary and proceed
+  autofix without --yes: print summary and exit 0
 
 Approved? Write via flowctl spec create + spec set-plan.
 

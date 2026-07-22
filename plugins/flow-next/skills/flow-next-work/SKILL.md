@@ -129,7 +129,7 @@ Check configured backend:
 ```bash
 REVIEW_BACKEND=$($FLOWCTL review-backend)
 ```
-Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`none` (configured).
+Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`host`/`none` (configured).
 
 ### Option Parsing (skip questions if found in arguments)
 
@@ -144,12 +144,13 @@ Parse the arguments for these patterns. If found, use them and skip correspondin
 - `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI (GPT 5.5 High)
 - `--review=copilot` or "review with copilot" or "copilot review" → GitHub Copilot CLI
 - `--review=cursor` or "review with cursor" or "cursor review" → Cursor CLI (`cursor-agent`)
+- `--review=host` or "host review" or "host-native review" → host-native fresh-context reviewer subagent (cross-family pin from the AGENTS.md model-routing section)
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
 - `--review=export` or "export review" or "external llm" → export for external LLM
 - `--review=none` or `--no-review` or "no review" or "skip review" → no review
 
 (All non-`none` review modes route through `/flow-next:impl-review`, which resolves the
-configured/overridden backend — codex, copilot, cursor, or rp — itself.)
+configured/overridden backend — codex, copilot, cursor, rp, or host — itself.)
 
 **Autonomous mode**:
 - `mode:autonomous` token (stripped from arguments) or `FLOW_AUTONOMOUS=1` env → suppress ALL setup questions; defaults per the Autonomous Mode section above (branch `new`, review = configured backend).
@@ -158,14 +159,14 @@ configured/overridden backend — codex, copilot, cursor, or rp — itself.)
 
 **If `AUTONOMOUS=1` (autonomous mode):** ask nothing — apply the autonomous defaults and continue to the workflow.
 
-**If REVIEW_BACKEND is rp, codex, copilot, cursor, or none** (already configured): Only ask branch question. Show override hint:
+**If REVIEW_BACKEND is rp, codex, copilot, cursor, host, or none** (already configured): Only ask branch question. Show override hint:
 
 ```
 Quick setup: Where to work?
 a) Current branch  b) New branch  c) Isolated worktree
 
 (Reply: "a", "current", or just tell me)
-(Tip: --review=rp|codex|copilot|cursor|export|none overrides configured backend)
+(Tip: --review=rp|codex|copilot|cursor|host|export|none overrides configured backend)
 ```
 
 **If REVIEW_BACKEND is ASK** (not configured): Ask both branch AND review questions:

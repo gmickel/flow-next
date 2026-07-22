@@ -3,6 +3,7 @@ name: tooling-scout
 description: Used by /flow-next:prime to scan for linting, formatting, type checking, and pre-commit configuration. Do not invoke directly.
 model: haiku
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#8B5CF6"
 ---
 

@@ -7,10 +7,10 @@ run as part of a developer's local `unittest discover`).
 
 The CI workflow runs the platform's installer, then runs this. It asserts the
 install is COMPLETE and CLEAN by comparing against the source tree instead of
-hardcoding counts (so adding a skill/command/agent doesn't break the smoke):
+hardcoding counts (so adding a skill/command/agent/rule doesn't break the smoke):
 
-  - the .cursor-plugin/plugin.json manifest is present;
-  - dest skill dirs / command files / agent files match the source 1:1;
+  - the .cursor-plugin/plugin.json manifest is present and declares component paths;
+  - dest skill dirs / command files / agent files / rule files match the source 1:1;
   - the excluded payload (codex/, tests/, *.pyc) did NOT leak into the install.
 
 Exit 0 on success; exit 1 with a diagnostic on any mismatch.
@@ -22,12 +22,19 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
 REPO_ROOT = HERE.parents[2]                       # repo root (scripts/ci/ -> ../../)
 SRC = REPO_ROOT / "plugins" / "flow-next"
+
+# Component path keys the Cursor manifest must declare (fn-123 R2 / R11).
+# Explicit paths keep marketplace-imported installs from auto-discovering
+# codex/ mirror skills or tests/ — path overrides do NOT remove those dirs
+# from a whole-repo import, they only stop component discovery.
+REQUIRED_COMPONENT_KEYS = ("skills", "agents", "commands", "rules")
 
 
 def _skill_dirs(root: Path) -> set[str]:
@@ -51,6 +58,31 @@ def _agent_files(root: Path) -> set[str]:
     return {p.name for p in base.glob("*.md")}
 
 
+def _rule_files(root: Path) -> set[str]:
+    base = root / "rules"
+    if not base.is_dir():
+        return set()
+    return {p.name for p in base.glob("*.mdc")}
+
+
+def _check_manifest(dest: Path, errors: list[str]) -> None:
+    manifest_path = dest / ".cursor-plugin" / "plugin.json"
+    if not manifest_path.is_file():
+        errors.append("missing .cursor-plugin/plugin.json manifest")
+        return
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        errors.append(f"plugin.json is not valid JSON: {exc}")
+        return
+    if not isinstance(data, dict):
+        errors.append("plugin.json root must be an object")
+        return
+    for key in REQUIRED_COMPONENT_KEYS:
+        if key not in data or not data[key]:
+            errors.append(f"plugin.json missing non-empty '{key}' component path")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -69,15 +101,15 @@ def main() -> int:
     if dest.is_symlink():
         errors.append(f"dest is a symlink (Cursor rejects these): {dest}")
 
-    # Manifest present.
-    if not (dest / ".cursor-plugin" / "plugin.json").is_file():
-        errors.append("missing .cursor-plugin/plugin.json manifest")
+    # Manifest present + explicit component paths.
+    _check_manifest(dest, errors)
 
     # Completeness: dest must match source 1:1 for the copied component trees.
     for label, fn in (
         ("skills", _skill_dirs),
         ("commands", _command_files),
         ("agents", _agent_files),
+        ("rules", _rule_files),
     ):
         src_set, dst_set = fn(SRC), fn(dest)
         if not src_set:
@@ -89,6 +121,30 @@ def main() -> int:
             errors.append(f"{label}: {len(missing)} missing in install: {sorted(missing)[:5]}")
         if extra:
             errors.append(f"{label}: {len(extra)} unexpected in install: {sorted(extra)[:5]}")
+
+    # Content integrity: same names is not enough — stale/empty/corrupted
+    # copies with matching names must fail (fn-123 review hardening). Compare
+    # content hashes for every file under the copied component trees.
+    import hashlib
+
+    def _tree_hashes(root: Path, sub: str) -> dict[str, str]:
+        base = root / sub
+        if not base.is_dir():
+            return {}
+        return {
+            str(p.relative_to(base)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(base.rglob("*"))
+            if p.is_file()
+        }
+
+    for sub in ("skills", "commands", "agents", "rules"):
+        src_h, dst_h = _tree_hashes(SRC, sub), _tree_hashes(dest, sub)
+        stale = [rel for rel, h in src_h.items() if rel in dst_h and dst_h[rel] != h]
+        if stale:
+            errors.append(
+                f"{sub}: {len(stale)} file(s) differ from source (stale install?"
+                f" re-run installer): {stale[:5]}"
+            )
 
     # Cleanliness: excluded payload must NOT have leaked in.
     if (dest / "codex").exists():
@@ -109,7 +165,8 @@ def main() -> int:
         f"OK: Cursor install verified at {dest}\n"
         f"    skills={len(_skill_dirs(dest))} "
         f"commands={len(_command_files(dest))} "
-        f"agents={len(_agent_files(dest))}; "
+        f"agents={len(_agent_files(dest))} "
+        f"rules={len(_rule_files(dest))}; "
         f"excludes honored (no codex/ tests/ *.pyc)."
     )
     return 0

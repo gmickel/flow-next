@@ -3,6 +3,7 @@ name: context-scout
 description: Token-efficient codebase exploration using RepoPrompt codemaps and slices. Use when you need deep codebase understanding without bloating context.
 model: sonnet
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#06B6D4"
 ---
 

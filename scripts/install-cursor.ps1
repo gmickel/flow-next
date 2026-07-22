@@ -20,21 +20,25 @@
     powershell -ExecutionPolicy Bypass -File .\scripts\install-cursor.ps1
 
   What gets installed (mirrors install-cursor.sh exactly):
-    - Manifest:  .cursor-plugin\plugin.json   (commands path-override -> commands\flow-next)
-    - Skills:    skills\<name>\SKILL.md
-    - Commands:  commands\flow-next\*.md       (via the manifest override)
-    - Agents:    agents\*.md
+    - Manifest:  .cursor-plugin\plugin.json   (explicit skills/agents/commands/rules paths)
+    - Skills:    skills\<name>\SKILL.md       (via the manifest override)
+    - Commands:  commands\flow-next\*.md      (via the manifest override)
+    - Agents:    agents\*.md                  (via the manifest override)
+    - Rules:     rules\*.mdc                  (flow-next.mdc guidance rail)
     - Hooks:     none shipped at plugin level (Ralph is opt-in via ralph-init project settings)
     - flowctl:   scripts\flowctl[.py]          (resolved at runtime via .flow\bin after setup)
 
   Excludes the Codex mirror (codex\), tests\, and Python/OS cruft.
 
+  Team path: team-marketplace repo import is the RECOMMENDED install for orgs
+  (admin imports the GitHub repo via the Cursor GitHub App; Default Off/On/Required;
+  auto-refresh on push). This script is the individual / fallback path.
+
   Caveats (cosmetic / known) -- same as the bash installer:
-    - Cursor registers the skills/commands/agents but does NOT show flow-next as a
-      grouped "plugin" card in the marketplace UI -- the components still work.
-    - Ralph autonomous mode is NOT supported on Cursor: flow-next's hooks use Claude
-      Code's schema (PreToolUse/Stop + Bash|Execute matchers); Cursor's hook events
-      are afterFileEdit / beforeShellExecution, so the Ralph guard never fires.
+    - Local installs register skills/commands/agents; a grouped "plugin" card in
+      the marketplace UI is a team-marketplace concern -- the components still work.
+    - Ralph autonomous mode is intentionally not built for Cursor (Cursor has a
+      full agent-hook set; flow-next does not register Ralph guards there).
 
 .PARAMETER Plugin
   Plugin to install. Only 'flow-next' is supported (the default).
@@ -81,10 +85,10 @@ if ($rc -ge 8) {
 
 # robocopy /MIR purges dest files absent from source, but /XD excludes a directory
 # from processing ENTIRELY — so it neither copies nor PURGES an excluded dir. A
-# stale codex/ (or tests/) left in the dest from an earlier full copy would survive,
-# breaking setup's Cursor-vs-Codex detection (which keys on codex/ being absent).
-# Explicitly remove the excluded dirs from the dest so the snapshot is a true mirror
-# (the rsync side gets this via --delete-excluded).
+# stale codex/ (or tests/) left in the dest from an earlier full copy would survive
+# as unused weight. Setup's Cursor-vs-Codex detection is a POSITIVE path check
+# (PLUGIN_ROOT under ~/.cursor/) — not codex/ absence — but still strip excluded
+# dirs so the snapshot stays a true mirror (rsync side: --delete-excluded).
 foreach ($x in @("codex", "tests", "__pycache__")) {
     $stale = Join-Path $Dest $x
     if (Test-Path $stale) { Remove-Item -Recurse -Force $stale }
@@ -102,19 +106,25 @@ function Get-FileCount($path, $filter) {
 $skills   = Get-DirCount  (Join-Path $Dest "skills")
 $commands = Get-FileCount (Join-Path $Dest "commands\flow-next") "*.md"
 $agents   = Get-FileCount (Join-Path $Dest "agents") "*.md"
+$rules    = Get-FileCount (Join-Path $Dest "rules") "*.mdc"
 
 Write-Host ""
 Write-Host "Installed. Cursor registers the components on next launch:"
 Write-Host "  skills:   $skills"
 Write-Host "  commands: $commands"
 Write-Host "  agents:   $agents"
+Write-Host "  rules:    $rules"
 Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1. Fully restart Cursor (Quit, reopen) - a new local plugin needs a full restart."
 Write-Host "  2. In your project, run /flow-next:setup (writes .flow\bin\flowctl + AGENTS.md;"
 Write-Host "     skills resolve flowctl via .flow\bin since Cursor exposes no plugin-root env var)."
-Write-Host "  3. Drive the workflow by TYPING the commands - /flow-next:plan, /flow-next:work, ..."
-Write-Host "     (they run when typed even though the slash autocomplete under-lists them)."
+Write-Host "  3. Drive the workflow: type or pick from slash autocomplete - hyphenated form"
+Write-Host "     shown (/flow-next-plan); colon form also works when typed (/flow-next:plan)."
+Write-Host ""
+Write-Host "Note: for teams, team-marketplace repo import is the recommended path"
+Write-Host "      (admin imports the GitHub repo via the Cursor GitHub App); this script"
+Write-Host "      is the individual / fallback install."
 Write-Host ""
 Write-Host "Re-run this script after 'git pull' to update the snapshot."
 Write-Host "Uninstall: Remove-Item -Recurse -Force `"$Dest`""

@@ -47,6 +47,8 @@ The bundled agents are pre-tiered by task shape (each A/B-verified before downgr
 
 The Codex mirror maps these to `gpt-5.5` / `gpt-5.4-mini` at sync time (`scripts/sync-codex.sh` `map_model`). Precedence at regen: env (`CODEX_MODEL_INTELLIGENT` / `CODEX_MODEL_FAST`) > role-map pins (`models.roles.scoutIntelligent.codex` / `scoutFast.codex` when present in the repo `.flow/config.json`) > those baselines. The worker keeps `inherit` on both platforms (your session model rules); an OPT-IN sync-time pin (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`, recommended `gpt-5.6-terra` @ `medium`) lets Codex-host work threads ride the efficient tier. Details: [`platforms.md`](platforms.md).
 
+**Cursor host:** canonical `agents/*.md` family aliases (`haiku` / `sonnet` / `opus`) resolve to **inherit** (the session model) when running on a Cursor host. Caller-side model pins (Cursor slugs like `claude-opus-4-8-thinking-high`) are the escape hatch for picking a specific model. There is no alias-to-slug rewrite mechanism and none is planned.
+
 ### Role map: the one place pins rot (fn-115)
 
 Hardcoded model pins used to scatter across the registry, triage defaults, `work.delegateModel`, and sync-codex scout constants. They all rot as providers ship tiers. The **role map** is the single config surface that is allowed to hold those pins:
@@ -74,7 +76,7 @@ Do not use `config get work.delegateModel` for the effective delegate model: the
 
 ### Review backends — cross-model review
 
-The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | none`. The three CLI review backends (`codex` / `copilot` / `cursor`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline (fn-112); genuine variance is hooks, not cloned commands.
+The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | host | none` (`host` is bare-only — no model/effort rungs). The three CLI review backends (`codex` / `copilot` / `cursor`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline (fn-112); genuine variance is hooks, not cloned commands.
 
 ```bash
 flowctl config set review.backend codex                    # project default

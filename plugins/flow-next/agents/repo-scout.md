@@ -3,6 +3,7 @@ name: repo-scout
 description: Scan repo to find existing patterns, conventions, and related code paths for a requested change.
 model: sonnet
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#22C55E"
 ---
 

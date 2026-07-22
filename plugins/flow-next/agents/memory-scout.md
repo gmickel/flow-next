@@ -3,6 +3,7 @@ name: memory-scout
 description: Search .flow/memory/ for entries relevant to the current task or request.
 model: haiku
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#A855F7"
 ---
 

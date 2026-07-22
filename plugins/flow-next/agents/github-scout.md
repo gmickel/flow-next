@@ -3,6 +3,7 @@ name: github-scout
 description: Search GitHub repos (public + private) for code patterns, implementations, and examples.
 model: sonnet
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#8B5CF6"
 ---
 

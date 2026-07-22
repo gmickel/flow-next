@@ -75,6 +75,18 @@ for pass in $SELECTED_PASSES; do
       # See deep-passes.md for template markers.
       :
       ;;
+    host)
+      # fn-123 R5: no flowctl subprocess for host. Dispatch each selected
+      # pass as ANOTHER fresh read-only host-native reviewer subagent with
+      # the SAME cross-family pin as the primary review (workflow-host.md
+      # Step 1). Give it the pass-specific prompt from deep-passes.md plus
+      # the primary findings block; parse its findings and merge them into
+      # the receipt yourself (deep_findings_count / cross_pass_promotions,
+      # same additive fields as D.5). If a fresh subagent cannot be
+      # dispatched, do NOT silently skip: interactive -> ask whether to
+      # continue without deep passes; autonomous -> NEEDS_HUMAN.
+      :
+      ;;
   esac
 done
 ```
@@ -198,6 +210,16 @@ case "$BACKEND" in
     VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/validator.md)"
     # Parse lines matching /^[>*_` ]*<id>[\s*_`]*:[\s*_`]*validated[\s*_`]*:[\s*_`]*(true|false)/
     # and update receipt's validator block accordingly.
+    ;;
+  host)
+    # fn-123 R5: no flowctl subprocess for host. Dispatch the validator as a
+    # fresh read-only host-native subagent with the SAME cross-family pin as
+    # the primary review (workflow-host.md Step 1), prompted from
+    # validate-pass.md with the findings block injected. Parse its
+    # `<id>: validated: <true|false> -- <reason>` lines yourself, recompute
+    # dropped/kept counts, and merge the validator block into the receipt.
+    # If a fresh subagent cannot be dispatched, do NOT silently skip:
+    # interactive -> ask; autonomous -> NEEDS_HUMAN.
     ;;
 esac
 ```

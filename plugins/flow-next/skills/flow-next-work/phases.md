@@ -249,13 +249,22 @@ wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL r
 its backend rather than the project default. `none` still skips review. (This is why the worker passes
 `--review=$REVIEW_MODE` below — the value already carries the correct explicit-or-per-task precedence.)
 
+**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE `done`.** The worker agent carries `disallowedTools: Task` and cannot dispatch the fresh reviewer subagent the `host` backend requires. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker, and the completion contract changes:
+
+1. The worker skips its in-worker review dispatch in Phase 4 (never self-certifies SHIP) **and defers Phase 5's `flowctl done`**: it implements, commits, writes its summary + evidence files to the handover paths, and returns WITHOUT calling `flowctl done` (the task stays `in_progress`).
+2. The conductor then runs `/flow-next:impl-review <task-id> --review=host` itself — this is the mandatory gate; `rg host-deferred` in this file must always find it.
+3. On `SHIP`: the conductor runs `flowctl done <task-id> --summary-file <worker summary> --evidence-json <worker evidence>` (append the review receipt path/model to the evidence). On `NEEDS_WORK`: drive the impl-review fix loop (bounded by the standard cap) and only `done` after a SHIP verdict — so review fixes land INSIDE the task's evidence, never after it.
+4. Mirror this exact contract on the Codex mirror path (`$flow-next-work` / `spawn_agent` worker): host-deferred defers `done` there too.
+
+All other backends keep the worker-owned review dispatch + worker-owned `flowctl done` unchanged.
+
 ```
 Implement flow-next task.
 
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
-REVIEW_MODE: none|rp|codex|copilot|cursor
+REVIEW_MODE: none|rp|codex|copilot|cursor|host-deferred
 RALPH_MODE: true|false
 
 Follow your phases in worker.md exactly.
@@ -291,7 +300,19 @@ After worker returns, verify the task completed:
 $FLOWCTL show <task-id> --json
 ```
 
-If status is not `done`, the worker failed. Diagnose from ground truth (below) then retry — but **BOUNDED**: keep a per-task standard-failure strike counter (the mirror of the delegation circuit breaker in 3d.2, which only covers `delegation_active`). After **2** consecutive non-`done` returns for the *same task* (a worker that keeps aborting early or a persistently red Quick command), STOP retrying and escalate — do NOT respawn unboundedly. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would respawn workers forever); interactively, surface the failure and stop.
+#### 3d.0 host-deferred gate (runs FIRST when this task's REVIEW_MODE was `host-deferred`)
+
+A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification:
+
+1. Re-read the task's base FIRST — shell vars never survive across contexts: `BASE_COMMIT=$(cat .flow/tmp/base_commit)` (the worker persisted it in Phase 1). If the file is missing/empty, derive it from the worker's reported base or `$FLOWCTL show` metadata — never run the gate with an unset base (an empty `--base` silently widens the review beyond the task diff).
+2. Confirm the worker's handover: commits present since `$BASE_COMMIT`, summary + evidence files at the handover paths it reported. (Missing handover WITH `in_progress` status = genuine worker failure — fall through to the failure path below.)
+3. Run the mandatory gate: `/flow-next:impl-review <task-id> --base $BASE_COMMIT --review=host`.
+4. On `SHIP`: UPDATE the evidence JSON before completing — append the review receipt path + reviewer model, AND when the fix loop committed changes (step 5), add those commits and any test commands run during fixes (the worker's pre-review evidence alone omits exactly the changes that earned the SHIP). Then run `$FLOWCTL done <task-id> --summary-file <worker summary> --evidence-json <updated evidence>` and re-run `$FLOWCTL show` — status is now `done`; continue to 3d.1/plan-sync as normal.
+5. On `NEEDS_WORK`: drive the impl-review fix loop (standard bounded cap); `done` only after a SHIP verdict (whose evidence update in step 4 captures the fix commits). On cap exhaustion: escalate exactly like the failure path below (NEEDS_HUMAN under autonomy; surface and stop interactively).
+
+Only after this gate does the standard rule below apply to host-deferred tasks.
+
+If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker failed. Diagnose from ground truth (below) then retry — but **BOUNDED**: keep a per-task standard-failure strike counter (the mirror of the delegation circuit breaker in 3d.2, which only covers `delegation_active`). After **2** consecutive non-`done` returns for the *same task* (a worker that keeps aborting early or a persistently red Quick command), STOP retrying and escalate — do NOT respawn unboundedly. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would respawn workers forever); interactively, surface the failure and stop.
 
 **Lost / errored worker result (`[Tool result missing due to internal error]`).** On long runs the host (Agent-tool) can drop the worker's completion report — you get an error placeholder instead of the report, even though the worker's *work* may be complete. Don't block waiting for a result that will never arrive. Treat a missing/errored result the same as "status not `done`" and **diagnose from ground truth** before retrying:
 
@@ -432,7 +453,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 
 1. Invoke `/flow-next:spec-completion-review <spec-id>` skill
    - Pass `--review=<backend>` matching the work review backend
-   - Skill handles rp/codex/copilot/cursor backend dispatch
+   - Skill handles rp/codex/copilot/cursor/host backend dispatch
    - Skill runs fix loop internally until SHIP verdict
 
 2. After skill returns with SHIP:

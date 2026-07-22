@@ -3,6 +3,7 @@ name: practice-scout
 description: Gather modern best practices and pitfalls for the requested change.
 model: sonnet
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#EAB308"
 ---
 

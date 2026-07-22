@@ -15,9 +15,8 @@ Document Cursor-host orchestration + model-tier degradation. Update `plugins/flo
 
 
 ## Done summary
-TBD
-
+usage.md (template + byte-identical .flow copy): Cursor-host section (slug pin grammar, enumeration/volatility, review.backend host bare-only, host-vs-cursor-CLI distinction, cross-family rule, recipes incl. bridges FROM Cursor); grok CLI grammar corrected repo-wide (-m grok-4.5 --reasoning-effort high; also fixed model-routing-snippet.md). orchestration.md: alias-degrade paragraph. flowctl.md: host grammar rows (reviewer fixed wrong "session model" wording -> cross-family pinned subagent). test_cursor_host_docs added; parity + snippet-lockstep suites green; mirror twice-idempotent. grok wrapper note: needed --permission-mode bypassPermissions for shell-run steps (acceptEdits blocked run_terminal_command). Reviewed by session model: approved.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4e53bfee
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_cmd_usage test_dogfood_template_parity test_cursor_host_docs -q
 - PRs:

@@ -1,6 +1,6 @@
 # Other Platforms
 
-Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre-built mirror), and Factory Droid (native cross-platform patterns). A community port exists for OpenCode. xAI **Grok Build** reads the Claude Code plugin with zero config — skills load, the `/flow-next:*` commands **run when typed**, and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Grok's UI just under-lists flow-next's commands/agents (cosmetic — they work when invoked); Ralph is fully opt-in (project hooks via ralph-init) and still to validate end-to-end on Grok (see [Grok Build](#grok-build-claude-code-compatibility) below). **Cursor** runs flow-next too, via its own `.cursor-plugin/` local install (`./scripts/install-cursor.sh` on macOS/Linux, `install-cursor.ps1` on Windows) — skills, commands, and multi-agent flows verified; Ralph unsupported there (hook-schema mismatch). See [Cursor](#cursor-local-plugin) below.
+Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre-built mirror), and Factory Droid (native cross-platform patterns). A community port exists for OpenCode. xAI **Grok Build** reads the Claude Code plugin with zero config — skills load, the `/flow-next:*` commands **run when typed**, and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Grok's UI just under-lists flow-next's commands/agents (cosmetic — they work when invoked); Ralph is fully opt-in (project hooks via ralph-init) and still to validate end-to-end on Grok (see [Grok Build](#grok-build-claude-code-compatibility) below). **Cursor** is first-class too: **recommended install is team-marketplace repo import** (admin imports the GitHub repo via the Cursor GitHub App; Default Off / On / Required modes; auto-refresh on push); local `install-cursor.sh` / `.ps1` remain the individual/fallback path. Skills, commands, multi-agent flows, native asks, and slash autocomplete verified; Ralph intentionally not built for Cursor. See [Cursor](#cursor) below.
 
 ### Ralph hooks: per-host registration (no plugin-default)
 
@@ -11,7 +11,7 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 | Claude Code | `.claude/settings.json` `hooks` key | Project-hooks trust prompt = consent gate |
 | Factory Droid | `.factory/hooks.json` (primary) | Fallback: `hooks` in `.factory/settings.json` if already used |
 | Codex | `.codex/hooks.json` (project) | Shell + Stop only; no plugin auto-hooks |
-| Cursor | *(none)* | Schema mismatch — scaffold only |
+| Cursor | *(none)* | Cursor has a full agent-hook set; flow-next intentionally does not build/register Ralph on Cursor |
 | Grok Build | same as Claude (`.claude/settings.json`) | Claude-compat path |
 
 ## Install matrix
@@ -22,7 +22,7 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 | Factory Droid | `droid plugin marketplace add https://github.com/gmickel/flow-next && droid plugin install flow-next` (in Droid CLI) | `.claude-plugin/plugin.json` (Droid auto-translates Claude Code plugin format) | Native cross-platform patterns |
 | OpenAI Codex | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-codex.sh` | `.codex-plugin/plugin.json` | Pre-built mirror under `plugins/flow-next/codex/` |
 | Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (read via Claude Code compat) | **Works incl. multi-agent** (full `/flow-next:plan` scout fan-out verified). UI under-lists commands/agents (cosmetic); Ralph TBD — see below |
-| Cursor | `./scripts/install-cursor.sh` (macOS/Linux) or `install-cursor.ps1` (Windows) → copies to `~/.cursor/plugins/local/` | `.cursor-plugin/plugin.json` (Cursor's own namespace — does NOT read `.claude-plugin/`) | **Works incl. multi-agent** (verified). No plugin card + autocomplete under-list (cosmetic); **Ralph unsupported** (hook-schema mismatch) — see below |
+| Cursor | **Recommended:** team-marketplace repo import (admin imports `gmickel/flow-next` via Cursor GitHub App). **Fallback:** `./scripts/install-cursor.sh` / `install-cursor.ps1` → `~/.cursor/plugins/local/` | `.cursor-plugin/plugin.json` (Cursor's own namespace — does NOT read `.claude-plugin/`) | **First-class** (multi-agent, native asks, autocomplete verified). Ralph intentionally not built for Cursor — see [Cursor](#cursor) |
 | OpenCode | See [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | n/a | Community port |
 
 > The canonical install path on Claude Code is the marketplace. Direct `--plugin-dir` (`claude --plugin-dir ./plugins/flow-next`) is the development path.
@@ -210,11 +210,34 @@ chmod +x .flow/bin/flowctl
 
 > **Status (Grok 0.2.27 alpha):** skills load; `/flow-next:*` commands **run when typed**; MCP + `flowctl` resolve; and **multi-agent subagent dispatch works** — a full `/flow-next:plan` fanned out all seven scouts end-to-end. Caveat: Grok's autocomplete + `grok inspect` under-list flow-next's commands/agents (cosmetic — they work when invoked). Ralph is opt-in (project hooks) and still to validate under Grok.
 
-## Cursor (local plugin)
+## Cursor
 
-[Cursor](https://cursor.com) has its own plugin system in the `.cursor-plugin/` namespace and does **not** auto-read Claude Code's `.claude-plugin/` (unlike Grok). flow-next ships a `.cursor-plugin/plugin.json` + a local installer.
+[Cursor](https://cursor.com) has its own plugin system in the `.cursor-plugin/` namespace and does **not** auto-read Claude Code's `.claude-plugin/` (unlike Grok). flow-next ships a root `.cursor-plugin/marketplace.json`, a per-plugin `.cursor-plugin/plugin.json` (explicit skills/agents/commands/rules paths so marketplace installs never discover `codex/` or `tests/`), and a Cursor-native `rules/flow-next.mdc` guidance rail.
 
-### Install
+### Recommended: team-marketplace repo import
+
+For teams (and anyone on Cursor Teams / Enterprise), **import the GitHub repo as a team marketplace** — this is the **recommended** Cursor install. An admin connects the Cursor GitHub App, imports [`gmickel/flow-next`](https://github.com/gmickel/flow-next), and chooses an install mode:
+
+| Mode | Meaning |
+|------|---------|
+| **Default Off** | Plugin available; each engineer opts in |
+| **Default On** | Installed for the team; engineers can disable |
+| **Required** | Forced on for every team member |
+
+Cursor **auto-refreshes** the marketplace on push (GitHub App webhooks, ~10-minute batching). Engineers then run `/flow-next:setup` once per repo (writes `.flow/bin/flowctl`, `AGENTS.md` model-routing scaffold, etc.). No per-developer `git clone` + re-run-after-pull cycle.
+
+Public Cursor Marketplace submission is **not** the path here (publisher-terms decision); team-marketplace repo import delivers the same one-click / auto-update / org-enforceable value without those terms.
+
+#### Admin runbook
+
+1. **Import the repo.** In Cursor team settings → Marketplaces / Plugins, import `https://github.com/gmickel/flow-next` via the Cursor GitHub App (requires admin on the Cursor team + GitHub App install on the org/repo).
+2. **Choose install mode.** Prefer **Default On** for voluntary adoption, **Required** when every engineer must run flow-next on day one.
+3. **Verify auto-refresh.** After a push that changes plugin files, wait for Cursor's refresh window (~10 min batching) and confirm team clients pick up the new surface (skills/commands/rules count or a known skill description change).
+4. **Per-repo setup.** Each engineer (or the first clone of each project) runs `/flow-next:setup` — copy mode only on Cursor (no plugin-root env vars / bin PATH injection). Setup leads the review-backend menu with `host` (recommended), scaffolds AGENTS.md model-routing with live Cursor slugs, and stamps `.flow/bin/flowctl`.
+
+### Fallback: local install scripts (individuals)
+
+For solo use, air-gapped machines, or before team-marketplace is configured, the local installers copy a snapshot into `~/.cursor/plugins/local/flow-next`:
 
 **macOS / Linux:**
 
@@ -232,22 +255,28 @@ cd flow-next
 powershell -ExecutionPolicy Bypass -File .\scripts\install-cursor.ps1
 ```
 
-The Windows installer (`install-cursor.ps1`) is a robocopy-based sibling of the bash script — same destination, same excludes, same real-directory contract. (Running the bash script under Git Bash / WSL works too, since `~/.cursor` resolves the same.)
-
-Both copy the plugin into `~/.cursor/plugins/local/flow-next` (`%USERPROFILE%\.cursor\plugins\local\flow-next` on Windows) as a **real directory** (NOT a symlink — Cursor's plugin loader rejects a symlink whose realpath escapes `~/.cursor/`), with the `.cursor-plugin/plugin.json` manifest (a `commands` path-override points Cursor at the nested `commands/flow-next/`). They exclude the Codex mirror + tests. It's a **snapshot — re-run after `git pull`** to update. Then **fully restart Cursor** (Cmd-Q / Quit, reopen — a new local plugin needs a full restart) and run `/flow-next:setup` in your project.
+Both write a **real directory** (NOT a symlink — Cursor's plugin loader rejects a symlink whose realpath escapes `~/.cursor/`), with the `.cursor-plugin/plugin.json` manifest pointing at nested `commands/flow-next/` and shipping `rules/*.mdc`. They exclude the Codex mirror + tests. It's a **snapshot — re-run after `git pull`** to update. Fully restart Cursor (Cmd-Q / Quit, reopen), then run `/flow-next:setup` in the project. The Windows installer is a robocopy sibling of the bash script (Git Bash / WSL work too).
 
 ### What works (verified)
 
-flow-next's **skills, commands, and subagents all register and run** on Cursor. The interview skill's optional async fact-scout dispatch names Claude Code's `Explore` builtin; Cursor has no such builtin (it registers only the plugin's own agents), so the skill's portable-host clause applies — a generic read-only subagent dispatch (Edit/Write disallowed), falling back to inline investigation if none is available. A full `/flow-next:plan` run fanned out the scout subagents in parallel (Opus 4.8) and drove `flowctl` to create the spec + tasks end-to-end — the same multi-agent engine as Claude Code. `flowctl` resolves via `.flow/bin/flowctl` after `/flow-next:setup`: Cursor exposes **no plugin-root env var**, so the `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl` path is empty, but the project-local `.flow/bin/flowctl` + the `AGENTS.md` / `.flow/usage.md` instructions are what the agent uses (verified end-to-end).
+- **Skills, commands, and subagents** register and run. Slash autocomplete **lists** flow-next commands (hyphenated form, e.g. `/flow-next-plan`); the colon form (`/flow-next:plan`) also works when typed. Natural-language skill triggering works.
+- **AskUserQuestion** renders natively, including multi-question batches (auto "Other...", Skip honored).
+- **Multi-agent:** a full `/flow-next:plan` fans out scout subagents in parallel and drives `flowctl` end-to-end. Explicit subagent model pins (Cursor slugs, e.g. `claude-opus-4-8-thinking-high`) are honored; the host self-corrects near-miss ids.
+- **`readonly: true`** on read-only agents (scouts, reviewers) enforces write restriction on Cursor (`disallowedTools` is not consumed there).
+- **`review.backend host`:** fresh-context subagent review pinned via AGENTS.md routing / caller-side slug pins to a family that did not write the diff (preferred from inside Cursor; existing `codex` / `copilot` / `cursor` CLI / `rp` backends remain selectable).
+- **`rules/flow-next.mdc`:** Cursor-native guidance rail (flowctl lifecycle + `flowctl usage` pull directives).
+- **AGENTS.md model-routing scaffold** from setup: date-stamped Cursor slugs + dispatch-pin rules (cheap slug for scouts, cross-family for review, inherit otherwise); re-run setup to refresh.
+- **`flowctl`** resolves via `.flow/bin/flowctl` after setup (Cursor exposes no plugin-root env var).
 
-### Caveats
+The interview skill's optional async fact-scout dispatch names Claude Code's `Explore` builtin; Cursor has no such builtin, so the skill's portable-host clause applies — generic read-only dispatch, falling back to inline investigation if none is available.
 
-- **No "plugin" card.** Cursor registers the individual skills/commands/agents (they appear in the `/` menu + skill/command/subagent lists), but flow-next does **not** show as a grouped plugin in the marketplace UI — cosmetic; the components work.
-- **Slash autocomplete under-lists** (same as Grok): `user-invocable: false` skills + the command wrappers don't populate the menu, but **run when typed in full**.
-- **Ralph autonomous mode is NOT supported.** Cursor's hook schema is `afterFileEdit` / `beforeShellExecution`; flow-next's Ralph guard uses Claude/Droid-style `PreToolUse` / `Stop` + `Bash|Execute` matchers registered into project settings by ralph-init — Cursor doesn't recognize those events, so the guard never fires even if you scaffold `scripts/ralph/`. The interactive plan / work / review workflow is unaffected. (A future Cursor-format hook mirror could add it.)
-- **Tracker-sync background dispatch runs at Tier B (isolated-but-awaited).** Comment-shaped tracker touchpoints on linked specs dispatch to a `tracker-runner` subagent for context isolation, but the host **awaits** it — the fire-and-forget overlap is Claude-Code-only (Tier A). See `docs/tracker-sync.md` § Background dispatch.
+### Caveats / intentional limits
 
-> **Status:** skills + commands + agents register and run; **multi-agent verified**; flowctl resolves post-`/flow-next:setup`. Cosmetic: no plugin card + autocomplete under-lists. Ralph unsupported (hook-schema mismatch).
+- **Agents frontmatter aliases → inherit.** On Cursor, `agents/*.md` family aliases (`opus`, `sonnet`, …) are ignored; subagents inherit the session model. Caller-side in-prompt slug pins are the escape hatch — no alias-to-slug rewrite pass (marketplace import consumes canonical files as-is).
+- **Ralph autonomous mode is intentionally not built for Cursor.** Cursor has a full agent-hook set (and Claude Code hook compatibility exists upstream), but flow-next does **not** register Ralph guards on Cursor — interactive plan / work / review is the supported surface. Scaffolding `scripts/ralph/` does not enable the autonomous loop here.
+- **Tracker-sync background dispatch runs at Tier B (isolated-but-awaited).** Comment-shaped tracker touchpoints dispatch to a `tracker-runner` subagent for context isolation, but the host **awaits** it — fire-and-forget overlap is Claude-Code-only (Tier A). See `docs/tracker-sync.md` § Background dispatch.
+
+> **Status:** first-class on Cursor. Recommended path = team-marketplace repo import; local scripts = individual/fallback. Multi-agent, native asks, slash autocomplete, `review.backend host`, rules rail, and setup model-routing verified. Ralph intentionally not built for Cursor.
 
 ## Windows: Python discovery
 
@@ -260,7 +289,7 @@ flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows i
 
 ## RepoPrompt review backend (macOS-only)
 
-The `rp` review backend drives [RepoPrompt Community Edition](https://repoprompt.com) on macOS. Flow-Next prefers `rpce-cli` on PATH, then the current and legacy CE user links, with discontinued Classic `rp-cli` retained only as the final compatibility fallback. Once CE is selected, a connection or command failure is authoritative and never retries against Classic. `/flow-next:plan` and the review skills only *propose* RepoPrompt when that CE-first capability ladder finds a runnable CLI; other hosts steer to the cross-platform backends (`codex`, `copilot`, `cursor`, `none`). Explicit `--review=rp` / `review.backend=rp` remains accepted anywhere and fails at runtime with a clear supported-RepoPrompt-CLI diagnostic when no candidate exists.
+The `rp` review backend drives [RepoPrompt Community Edition](https://repoprompt.com) on macOS. Flow-Next prefers `rpce-cli` on PATH, then the current and legacy CE user links, with discontinued Classic `rp-cli` retained only as the final compatibility fallback. Once CE is selected, a connection or command failure is authoritative and never retries against Classic. `/flow-next:plan` and the review skills only *propose* RepoPrompt when that CE-first capability ladder finds a runnable CLI; other hosts steer to the cross-platform backends (`codex`, `copilot`, `cursor`, `host`, `none`). Explicit `--review=rp` / `review.backend=rp` remains accepted anywhere and fails at runtime with a clear supported-RepoPrompt-CLI diagnostic when no candidate exists.
 
 ## Windows + Copilot review backend
 
