@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+## [flow-next 3.4.0] - 2026-07-23
+
 ### Added
 
 - **Grok Build host detection + profile (fn-126).** `/flow-next:setup` detects Grok via positive `GROK_AGENT=1` (probe-verified; `~/.grok` and PATH are not signals), ordered after Droid/Claude/Cursor and before the `else → codex` fallback. Profile: copy mode, `.flow/bin/flowctl`, `/flow-next:` slash syntax (not Codex `$flow-next-`), lifecycle docs default to CLAUDE.md, model-routing scaffold to AGENTS.md (Grok loads both), review menu includes `host` with single-native-family fail-closed (`grok-4.5` only - cross-family via bridges), no Ralph (intentional, same posture as Cursor), no `.codex/agents` copy. Nested Droid→Grok is unsupported if `DROID_PLUGIN_ROOT` propagates. Docs: `platforms.md` Grok section. No version bump (batched).
