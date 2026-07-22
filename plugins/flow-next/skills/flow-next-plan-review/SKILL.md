@@ -199,8 +199,8 @@ When `BACKEND="host"`, do **not** call any `flowctl <backend> plan-review` — t
    ```
 
    `session_id` is literal `null` — every re-review is a new subagent; `null` marks by-design non-resumability (vs an incomplete receipt).
-6. **Status write:** `$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship|needs_work --json` as appropriate (host has no handler-owned write).
-7. Return the verdict to the Fix Loop below. On re-review, spawn a **new** subagent every time (no context reuse).
+6. **Status write — after EVERY host verdict, not just the first pass:** `$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship|needs_work --json` (host has no handler-owned write). Repeat this write after each re-review verdict inside the Fix Loop — the status must always reflect the LATEST verdict, otherwise a spec whose fixes earned SHIP keeps `plan_review_status=needs_work` and pilot's `plan_review_status == ship` gate blocks or re-selects it.
+7. Return the verdict to the Fix Loop below. On re-review, spawn a **new** subagent every time (no context reuse), and re-run step 6's status write on its verdict.
 
 ### RepoPrompt Backend
 
