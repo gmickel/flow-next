@@ -24,6 +24,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -33,6 +34,10 @@ REPO_ROOT = HERE.parents[3]
 INSTALLER = REPO_ROOT / "scripts" / "install-codex.sh"
 
 
+@unittest.skipIf(
+    sys.platform == "win32",
+    "POSIX shell installer test; plain `bash` on Windows resolves to the WSL stub",
+)
 @unittest.skipIf(shutil.which("bash") is None, "bash not available")
 class TestInstallCodexLegacyCleanup(unittest.TestCase):
     def test_stale_aliases_removed_unrelated_survive(self) -> None:
