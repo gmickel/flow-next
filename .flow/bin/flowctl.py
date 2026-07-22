@@ -18354,6 +18354,7 @@ def cmd_next(args: argparse.Namespace) -> None:
             inventory = TaskInventory.load(
                 flow_dir,
                 use_json=args.json,
+                spec_ids=set(epic_ids),
                 collect_consistency_errors=True,
                 collect_load_errors=True,
             )
@@ -25599,6 +25600,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
         inventory = TaskInventory.load(
             flow_dir,
             use_json=args.json,
+            spec_ids=set(epic_ids),
             collect_consistency_errors=True,
         )
 

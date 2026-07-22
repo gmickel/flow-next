@@ -247,14 +247,34 @@ class TestUnifiedTaskUniverse(TaskInventoryCase):
         self.assertEqual(next_task["task"], "fn-1.1")
         self.assertTrue(validated["valid"])
 
-    def test_specs_ignore_malformed_tasks_for_unknown_specs(self) -> None:
+    def test_known_spec_commands_ignore_malformed_tasks_for_unknown_specs(self) -> None:
         self.write_spec("fn-1")
-        self.write_task("fn-1.1")
+        self.write_task("fn-1.1", with_markdown=True)
         (self.flow / "tasks" / "fn-99.1.json").write_text(
             "{broken", encoding="utf-8"
         )
 
         specs = self.call(flowctl.cmd_specs)
+        validated = self.call(
+            flowctl.cmd_validate, spec=None, all=True
+        )
+
+        task_reads: list[str] = []
+        real_load = flowctl.load_json
+
+        def record_load(path: Path):
+            if path.parent.name == "tasks":
+                task_reads.append(path.name)
+            return real_load(path)
+
+        with mock.patch.object(flowctl, "load_json", side_effect=record_load):
+            with mock.patch.object(flowctl, "get_actor", return_value="tester"):
+                next_task = self.call(
+                    flowctl.cmd_next,
+                    specs_file=None,
+                    require_plan_review=False,
+                    require_completion_review=False,
+                )
 
         self.assertEqual(
             [
@@ -263,6 +283,10 @@ class TestUnifiedTaskUniverse(TaskInventoryCase):
             ],
             [("fn-1", 1, 0)],
         )
+        self.assertTrue(validated["valid"])
+        self.assertEqual(validated["total_tasks"], 1)
+        self.assertEqual(next_task["task"], "fn-1.1")
+        self.assertEqual(task_reads, ["fn-1.1.json"])
 
     def test_payload_identity_and_owner_corruption_is_diagnosable(self) -> None:
         self.write_spec("fn-1")
