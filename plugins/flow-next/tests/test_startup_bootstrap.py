@@ -284,6 +284,17 @@ class StartupBootstrapTest(unittest.TestCase):
                 bootstrap._root_help_fast_path(ROOT / "scripts" / "flowctl.py")
             )
 
+    def test_help_snapshot_falls_back_across_python_minor_versions(self) -> None:
+        other_minor = bootstrap.HELP_PYTHON[1] - 1
+        with mock.patch.object(
+            bootstrap.sys,
+            "version_info",
+            (*bootstrap.HELP_PYTHON[:1], other_minor, 0),
+        ):
+            self.assertFalse(
+                bootstrap._root_help_fast_path(ROOT / "scripts" / "flowctl.py")
+            )
+
     def test_tracked_root_help_matches_argparse_byte_for_byte(self) -> None:
         self.assertEqual(
             bootstrap.SOURCE_SHA256,
@@ -299,7 +310,12 @@ class StartupBootstrapTest(unittest.TestCase):
             text=True,
             check=True,
         )
-        self.assertEqual(HELP_TEXT.read_text(encoding="utf-8"), direct.stdout)
+        if sys.version_info[:2] == bootstrap.HELP_PYTHON:
+            self.assertEqual(HELP_TEXT.read_text(encoding="utf-8"), direct.stdout)
+        else:
+            self.assertFalse(
+                bootstrap._root_help_fast_path(ROOT / "scripts" / "flowctl.py")
+            )
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ SOURCE_NAME = "flowctl.py"
 HELP_NAME = "flowctl-help.txt"
 SOURCE_SHA256 = "b1c6ed5c02ac8fcdd15e5b4d715e2f123a6a084a0d306c7c11b6b190220ad4b2"
 HELP_SHA256 = "ad7c987b1f90e8dd12f1e22c6ec4163c72222c3bbf49111ce278337258f01d85"
+HELP_PYTHON = (3, 14)
 USAGE_ERROR = (
     "No usage guide found (searched the plugin's templates/usage.md, then "
     ".flow/usage.md). Reinstall/update the flow-next plugin, or run "
@@ -108,6 +109,11 @@ def _load_flowctl(source: Path):
 
 def _root_help_fast_path(source: Path) -> bool:
     """Write authenticated static help, or decline safely to live argparse."""
+    # argparse's default help layout can change between Python minor releases.
+    # The tracked snapshot is authenticated against both source and the runtime
+    # that generated it; other supported runtimes fall back to live argparse.
+    if sys.version_info[:2] != HELP_PYTHON:
+        return False
     # argparse deliberately honors terminal width through COLUMNS. Static text
     # is valid only for the default layout captured in flowctl-help.txt.
     if "COLUMNS" in os.environ or getattr(sys.stdout, "isatty", lambda: False)():
