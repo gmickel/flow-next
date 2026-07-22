@@ -11,6 +11,7 @@ user-invocable: false
 - `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
 - `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
 - `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
+- `BACKEND=host` → [workflow-host.md](workflow-host.md)
 - `BACKEND=rp` → [workflow-rp.md](workflow-rp.md)
 
 Do not load the others — only the active backend's file is needed.
@@ -19,8 +20,8 @@ Conduct a John Carmack-level review of implementation changes on the current bra
 
 **Role**: Code Review Coordinator (NOT the reviewer)
 **Backends** (branch on the Phase 0 `RP_ELIGIBLE` probe):
-- When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor)
-- When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
+- When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), or host-native (`host`)
+- When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), or host-native (`host`) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
 
 ## Preamble — execute Phase 0 exactly once
 
@@ -28,13 +29,13 @@ Conduct a John Carmack-level review of implementation changes on the current bra
 
 Exception: a `--review=<backend>` argument (see Backend Selection below) wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` / `RP_ELIGIBLE` setup lines).
 
-When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor` (plus `none`). `export` is an explicit one-off review MODE (`--review=export`), not a configured backend — never present it as one. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
+When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor`, `host` (plus `none`). `export` is an explicit one-off review MODE (`--review=export`), not a configured backend — never present it as one. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
 
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|copilot|cursor|export|none` argument
-2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `cursor`, `none`) OR spec form (`codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5`, `cursor:gpt-5.5-high`)
+1. `--review=rp|codex|copilot|cursor|host|export|none` argument
+2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`) OR spec form (`codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5`, `cursor:gpt-5.5-high`); `host` is bare-only (`host:<model>` is rejected)
 3. `.flow/config.json` → `review.backend` (same bare / spec forms)
 4. **Error** - no auto-detection
 
@@ -45,6 +46,7 @@ Check $ARGUMENTS for:
 - `--review=codex` or `--review codex` → use codex
 - `--review=copilot` or `--review copilot` → use copilot
 - `--review=cursor` or `--review cursor` → use cursor
+- `--review=host` or `--review host` → use host
 - `--review=export` or `--review export` → use export
 - `--review=none` or `--review none` → skip review
 
@@ -62,8 +64,9 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 - **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.5`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
 - **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, or `--spec copilot:claude-opus-4.5:xhigh`.
 - **cursor** — Cursor CLI (`cursor-agent`, cross-platform); reaches `gpt-5.5-high` (1M-ctx default), the `gpt-5.3-codex` family, `composer-2.5`, and `claude-opus-4-8-thinking-high` via a Cursor subscription. `FLOW_CURSOR_MODEL` env var, or `--spec cursor:gpt-5.5-high`. Cursor folds reasoning effort into the model name — **no effort field**.
+- **host** — Host-native fresh-context reviewer subagent (fn-123 R5). Non-executable selection sentinel: no subprocess, no `flowctl host` command. Model pins live in the AGENTS.md model-routing section, never on the backend string — bare `host` only; `host:<model>` is rejected.
 
-**Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`, `cursor:gpt-5.5-high` (cursor takes model only — no `:effort`). Per-task `review` (set via `flowctl task set-backend`) overrides env.
+**Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`, `cursor:gpt-5.5-high` (cursor takes model only — no `:effort`), `host` (bare only). Per-task `review` (set via `flowctl task set-backend`) overrides env.
 
 ## Critical Rules
 
@@ -91,6 +94,13 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
 4. Parse verdict from command output
 
+**For host backend (fn-123 R5):**
+1. **DO NOT REVIEW CODE YOURSELF** — you coordinate; a fresh-context host-native subagent reviews (see [workflow-host.md](workflow-host.md))
+2. Dispatch a **read-only** reviewer subagent pinned to a **cross-family** model slug from AGENTS.md model-routing (Claude Code: native `model` param; Cursor: in-prompt slug pin; elsewhere: generic fresh-context reviewer with host-dependent note)
+3. Record actual reviewer model + `"mode": "host"` in the receipt
+4. **Every re-review is a fresh subagent** — no context reuse, no fabricated resume ids
+5. **Fail closed on missing cross-family pin:** interactive → ask user explicitly; autonomous → `NEEDS_HUMAN` (never silent same-family self-review)
+
 **For all backends:**
 - If `REVIEW_RECEIPT_PATH` set: write receipt after review (any verdict)
 - Any failure → output `<promise>RETRY</promise>` and stop
@@ -99,6 +109,7 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 - Self-declaring SHIP without actual backend verdict
 - Mixing backends mid-review (stick to one)
 - Skipping review when backend is "none" without user consent
+- Silent same-family self-review under `host` when no cross-family pin is available
 
 ## Input
 
@@ -266,6 +277,7 @@ Ralph runs.
 | `codex`    | [workflow-codex.md](workflow-codex.md) |
 | `copilot`  | [workflow-copilot.md](workflow-copilot.md) |
 | `cursor`   | [workflow-cursor.md](workflow-cursor.md) |
+| `host`     | [workflow-host.md](workflow-host.md) |
 | `rp`       | [workflow-rp.md](workflow-rp.md) |
 
 **Do not read the other backend files.** Each is self-contained for its backend; loading the others wastes context.
@@ -280,7 +292,7 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 **MAJOR_RETHINK is NOT a fix-loop input.** Every backend can emit `MAJOR_RETHINK` (a valid verdict tag), but it means the *design/approach* is wrong — not something to patch finding-by-finding. Do NOT enter the fix loop on it. Escalate immediately: surface the reviewer's rationale to the caller and stop with a typed **`BLOCKED: DESIGN_CONFLICT`** (Ralph mode: output `<promise>RETRY</promise>`). A re-approach is a human/worker decision, never an ad-hoc patch. Only `NEEDS_WORK` drives the loop below.
 
-**MAX ITERATIONS (backend-agnostic — applies to ALL backends: rp, codex, copilot, cursor):** keep an iteration counter in agent context, starting at 0. Each fix+re-review cycle increments it. When the counter reaches **${MAX_REVIEW_ITERATIONS:-4}** (default 4; env-overridable, configurable in Ralph's config.env) and the verdict is still NEEDS_WORK, BREAK the loop and escalate: surface the surviving findings to the caller and stop (in Ralph mode output `<promise>RETRY</promise>` so the next iteration starts fresh). Never loop unbounded. The per-backend workflow files defer to this cap. **This loop is INTERNAL — the caller (e.g. the `worker`) invokes impl-review ONCE and acts on the terminal verdict; a caller-side "re-invoke until SHIP" outer loop would reset this *in-agent* counter every round and make the cap unbounded in aggregate.** **flowctl now ALSO enforces the cap deterministically (fn-90 R5): on codex/copilot/cursor each `flowctl <backend> impl-review <task-id>` dispatch increments a cumulative PER-TASK counter (`impl_review_rounds[<task-id>]`) internally; on rp — which dispatches via `rp chat-send` — the workflow calls `flowctl review-rounds increment <spec-id> --kind impl --task <task-id>` before every dispatch (same counter, task-scoped reviews only). Either surface REFUSES at the cap with an `ESCALATE:` marker + exit 4 — a distinct exit code from transport/backend failures (2/3), so a host or Ralph loop cannot misread the cap refusal as a retryable error. The flowctl counter survives fresh invocations and resets ONLY on a SHIP verdict or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>`), never on a fresh invocation or a code edit. Under Ralph/autonomous, surface the refusal as NEEDS_HUMAN — never retry it.**
+**MAX ITERATIONS (backend-agnostic — applies to ALL backends: rp, codex, copilot, cursor, host):** keep an iteration counter in agent context, starting at 0. Each fix+re-review cycle increments it. When the counter reaches **${MAX_REVIEW_ITERATIONS:-4}** (default 4; env-overridable, configurable in Ralph's config.env) and the verdict is still NEEDS_WORK, BREAK the loop and escalate: surface the surviving findings to the caller and stop (in Ralph mode output `<promise>RETRY</promise>` so the next iteration starts fresh). Never loop unbounded. The per-backend workflow files defer to this cap. **This loop is INTERNAL — the caller (e.g. the `worker`) invokes impl-review ONCE and acts on the terminal verdict; a caller-side "re-invoke until SHIP" outer loop would reset this *in-agent* counter every round and make the cap unbounded in aggregate.** **flowctl now ALSO enforces the cap deterministically (fn-90 R5): on codex/copilot/cursor each `flowctl <backend> impl-review <task-id>` dispatch increments a cumulative PER-TASK counter (`impl_review_rounds[<task-id>]`) internally; on rp — which dispatches via `rp chat-send` — the workflow calls `flowctl review-rounds increment <spec-id> --kind impl --task <task-id>` before every dispatch (same counter, task-scoped reviews only). Either surface REFUSES at the cap with an `ESCALATE:` marker + exit 4 — a distinct exit code from transport/backend failures (2/3), so a host or Ralph loop cannot misread the cap refusal as a retryable error. The flowctl counter survives fresh invocations and resets ONLY on a SHIP verdict or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>`), never on a fresh invocation or a code edit. Under Ralph/autonomous, surface the refusal as NEEDS_HUMAN — never retry it.**
 
 If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
@@ -310,6 +322,7 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
    - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **Cursor**: Re-run `flowctl cursor impl-review` (receipt enables context; must be `mode == "cursor"` to resume)
+   - **Host**: Spawn a **fresh** read-only reviewer subagent (same cross-family pin rules; never reuse prior subagent context; update receipt `mode: "host"` + actual model)
    - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
 7. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap above breaks the loop (escalate with surviving findings)
 

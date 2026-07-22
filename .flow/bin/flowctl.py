@@ -4573,6 +4573,15 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "models": None,
         "efforts": None,
     },
+    "host": {
+        # fn-123 R5: NON-EXECUTABLE selection sentinel. Review runs as a
+        # host-native fresh-context subagent (skill-owned judgment). No model
+        # or effort on the backend string — pins live in the AGENTS.md
+        # model-routing section (caller routing instructions). No ``run_exec``
+        # hook, no ``flowctl host`` subcommand, never a subprocess path.
+        "models": None,
+        "efforts": None,
+    },
 }
 
 
@@ -4597,7 +4606,7 @@ MODEL_ROLES: tuple[str, ...] = (
     "scoutFast",
     "scoutIntelligent",
 )
-# Backends that accept a model pin in the role map (rp/none have no model axis).
+# Backends that accept a model pin in the role map (rp/none/host have no model axis).
 MODEL_ROLE_BACKENDS: tuple[str, ...] = ("codex", "copilot", "cursor")
 MODELS_STALE_DAYS = 90
 
@@ -5049,7 +5058,7 @@ class BackendSpec:
           - empty / whitespace-only → ``Empty backend spec``
           - more than 3 colon-separated parts → explicit ValueError
           - unknown backend → lists valid backends
-          - model on backend that doesn't accept one (rp/none) → ValueError
+          - model on backend that doesn't accept one (rp/none/host) → ValueError
           - unknown model → lists valid models for that backend
           - effort on backend that doesn't accept one → ValueError
           - unknown effort → lists valid efforts for that backend
@@ -5088,6 +5097,15 @@ class BackendSpec:
 
         if model is not None:
             if reg["models"] is None:
+                # fn-123 R5: host pins live in AGENTS.md model-routing, never in
+                # the backend string — reject host:<model> with a pointed hint.
+                if backend == "host":
+                    raise ValueError(
+                        f"Backend 'host' does not accept a model "
+                        f"(got {model!r}). Pins live in the AGENTS.md "
+                        f"model-routing section (caller routing instructions), "
+                        f"not the backend string. Use bare `host`."
+                    )
                 raise ValueError(
                     f"Backend {backend!r} does not accept a model "
                     f"(got {model!r})"
@@ -5107,6 +5125,13 @@ class BackendSpec:
                 )
         if effort is not None:
             if reg["efforts"] is None:
+                if backend == "host":
+                    raise ValueError(
+                        f"Backend 'host' does not accept an effort "
+                        f"(got {effort!r}). Pins live in the AGENTS.md "
+                        f"model-routing section (caller routing instructions), "
+                        f"not the backend string. Use bare `host`."
+                    )
                 raise ValueError(
                     f"Backend {backend!r} does not accept an effort "
                     f"(got {effort!r})"
@@ -5136,10 +5161,10 @@ class BackendSpec:
         is too new for the installed CLI still steps down the ranking; the role
         map's job is healing pin-too-old, not hard-locking the dispatch.
 
-        Backends with ``models is None`` (rp, none) always resolve ``model`` to
-        ``None`` - env vars and the role map are ignored for fields the backend
-        doesn't accept. Same for ``effort``. This prevents a stray
-        ``FLOW_RP_MODEL`` from leaking into an RP spec.
+        Backends with ``models is None`` (rp, none, host) always resolve
+        ``model`` to ``None`` - env vars and the role map are ignored for
+        fields the backend doesn't accept. Same for ``effort``. This prevents
+        a stray ``FLOW_RP_MODEL`` from leaking into an RP spec.
         """
         reg = BACKEND_REGISTRY[self.backend]
         env_model_key = f"FLOW_{self.backend.upper()}_MODEL"

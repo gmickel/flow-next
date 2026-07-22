@@ -123,7 +123,7 @@ Check configured backend:
 ```bash
 REVIEW_BACKEND=$($FLOWCTL review-backend)
 ```
-Returns: `ASK` (not configured), or `rp`/`codex`/`none` (configured).
+Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`host`/`none` (configured).
 
 ### Autonomous mode (mode:autonomous / FLOW_AUTONOMOUS)
 
@@ -145,6 +145,7 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 **Review mode**:
 - `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI (GPT 5.5 High)
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
+- `--review=host` or "review with host" or "host review" or "use host" → host-native fresh-context reviewer subagent (fn-123 R5; pins in AGENTS.md model-routing)
 - `--review=export` or "export review" or "external llm" → export for external LLM
 - `--review=none` or `--no-review` or "no review" or "skip review" → no review
 
@@ -174,7 +175,7 @@ Suppression governs *proposals only* — an explicit `--research=rp` / `--review
 
 **If `AUTONOMOUS=1`:** skip every question below — apply the autonomous defaults above and continue.
 
-**If REVIEW_BACKEND is rp, codex, or none** (already configured): Only ask research question. Show override hint.
+**If REVIEW_BACKEND is rp, codex, copilot, cursor, host, or none** (already configured): Only ask research question. Show override hint.
 
 When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI): do NOT ask about RepoPrompt — context-scout cannot run here. Research = `repo-scout`; ask nothing in this branch and continue.
 
@@ -186,7 +187,7 @@ a) Yes, context-scout (slower, thorough)
 b) No, repo-scout (faster)
 
 (Reply: "a", "b", or just tell me)
-(Tip: --depth=short|standard|deep, --review=rp|codex|none)
+(Tip: --depth=short|standard|deep, --review=rp|codex|host|none)
 ```
 
 **If REVIEW_BACKEND is ASK** (not configured): Ask all questions (do NOT use AskUserQuestion tool).
