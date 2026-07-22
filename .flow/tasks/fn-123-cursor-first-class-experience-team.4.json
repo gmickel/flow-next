@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-22T11:51:33.900743Z",
+  "depends_on": [
+    "fn-123-cursor-first-class-experience-team.3"
+  ],
+  "id": "fn-123-cursor-first-class-experience-team.4",
+  "priority": null,
+  "spec": "fn-123-cursor-first-class-experience-team",
+  "spec_path": ".flow/tasks/fn-123-cursor-first-class-experience-team.4.md",
+  "status": "todo",
+  "title": "Cursor-host-aware setup: positive detection + model-routing scaffold",
+  "updated_at": "2026-07-22T11:51:33.900743Z"
+}

@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-22T11:51:34.235666Z",
+  "depends_on": [],
+  "id": "fn-123-cursor-first-class-experience-team.5",
+  "priority": null,
+  "spec": "fn-123-cursor-first-class-experience-team",
+  "spec_path": ".flow/tasks/fn-123-cursor-first-class-experience-team.5.md",
+  "status": "todo",
+  "title": "print-then-ask read-back contract (capture + interview)",
+  "updated_at": "2026-07-22T11:51:34.235666Z"
+}
