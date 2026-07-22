@@ -209,6 +209,64 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
                 "exact-id file was not preserved byte-for-byte on retirement",
             )
 
+    def test_retirement_never_clobbers_a_prior_backup(self) -> None:
+        # No-clobber: if a backup already exists (a user recreated the live alias
+        # with DIFFERENT content between upgrades), retiring the new one must NOT
+        # overwrite the earlier backup — both survive under distinct names.
+        body_a = PROMPT_BODY.replace("skill now.\n", "skill now. VARIANT-A\n")
+        body_b = PROMPT_BODY.replace("skill now.\n", "skill now. VARIANT-B\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            codex = home / ".codex"
+            retired_prompts = codex / ".flow-next-retired" / "prompts"
+            retired_prompts.mkdir(parents=True)
+            # An earlier retirement already parked body A here.
+            (retired_prompts / "epic-review.md").write_text(body_a)
+            # A freshly-recreated live exact-id alias carrying body B.
+            (codex / "prompts").mkdir(parents=True)
+            (codex / "prompts" / "epic-review.md").write_text(body_b)
+
+            result = _run_installer(home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            # Live alias de-surfaced.
+            self.assertFalse((codex / "prompts" / "epic-review.md").exists())
+            # BOTH backups intact — A untouched, B parked under a fresh name.
+            self.assertEqual(
+                (retired_prompts / "epic-review.md").read_text(),
+                body_a,
+                "prior backup A was clobbered",
+            )
+            parked = sorted(p for p in retired_prompts.glob("epic-review.md*")
+                            if p.name != "epic-review.md")
+            self.assertTrue(parked, "recreated alias B was not parked under a new name")
+            self.assertIn(body_b, [p.read_text() for p in parked], "body B not preserved")
+
+    def test_second_run_is_idempotent_no_op(self) -> None:
+        # A plain second run (no live alias recreated) must not touch backups.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            codex = home / ".codex"
+            stale_prompt = codex / "prompts"
+            stale_prompt.mkdir(parents=True)
+            (stale_prompt / "epic-review.md").write_text(PROMPT_BODY)
+
+            self.assertEqual(_run_installer(home).returncode, 0)
+            first = (codex / ".flow-next-retired" / "prompts" / "epic-review.md").read_text()
+            self.assertEqual(first, PROMPT_BODY)
+            self.assertFalse((codex / "prompts" / "epic-review.md").exists())
+
+            # Second run: nothing to retire, backups unchanged, no duplicates.
+            self.assertEqual(_run_installer(home).returncode, 0)
+            retired = codex / ".flow-next-retired" / "prompts"
+            backups = sorted(retired.glob("epic-review.md*"))
+            self.assertEqual(
+                [p.name for p in backups],
+                ["epic-review.md"],
+                f"second run created spurious backups: {[p.name for p in backups]}",
+            )
+            self.assertEqual((retired / "epic-review.md").read_text(), PROMPT_BODY)
+
 
 if __name__ == "__main__":
     unittest.main()

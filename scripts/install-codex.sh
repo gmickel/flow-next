@@ -118,9 +118,20 @@ frontmatter_name() {  # $1 = file → prints the leading-frontmatter `name:` val
     ' "$1" 2>/dev/null
 }
 retire_artifact() {  # $1 = path to move, $2 = subdir under RETIRED_DIR, $3 = human label
-    mkdir -p "$RETIRED_DIR/$2"
-    mv -f "$1" "$RETIRED_DIR/$2/$(basename "$1")"
-    echo -e "${GREEN}✓${NC} retired stale legacy $3 → ${RETIRED_DIR}/$2/ (recoverable)"
+    local src="$1" destdir="$RETIRED_DIR/$2" label="$3"
+    mkdir -p "$destdir"
+    local dest="$destdir/$(basename "$src")"
+    # No-clobber: NEVER overwrite a previously retired backup (a user could
+    # recreate the live alias with different content between upgrades — the
+    # earlier backup must survive too). Also avoids `mv`'s move-INTO-an-existing
+    # -dir semantics for the skill directory. Pick the first free numbered name.
+    if [ -e "$dest" ]; then
+        local n=1
+        while [ -e "$dest.$n" ]; do n=$((n + 1)); done
+        dest="$dest.$n"
+    fi
+    mv "$src" "$dest"   # dest is guaranteed free → plain mv, no -f clobber
+    echo -e "${GREEN}✓${NC} retired stale legacy $label → $dest (recoverable)"
 }
 LEGACY_SKILL="$CODEX_DIR/skills/flow-next-epic-review"
 if [ -d "$LEGACY_SKILL" ]; then
