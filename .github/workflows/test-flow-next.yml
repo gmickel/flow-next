@@ -366,9 +366,11 @@ jobs:
           New-Item -ItemType Directory -Force -Path $repo | Out-Null
           Set-Location $repo
           git init -q
-          $out = & $flowctl init --json 2>&1 | Out-String
+          $outputLines = & $flowctl init --json 2>&1
+          $exitCode = $LASTEXITCODE
+          $out = $outputLines | Out-String
           Write-Host $out
-          if ($LASTEXITCODE -ne 0) { Write-Error "flowctl.cmd exited $LASTEXITCODE"; exit 1 }
+          if ($exitCode -ne 0) { Write-Error "flowctl.cmd exited $exitCode"; exit 1 }
           if ($out -notmatch '"success": true') { Write-Error "flowctl.cmd init did not succeed"; exit 1 }
           if ($out -match "Python was not found") { Write-Error "stub message leaked — flowctl.cmd did not bypass the stub"; exit 1 }
           Write-Host "PASS: flowctl.cmd bypassed the 9009 python3 stub"
@@ -392,7 +394,9 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $false
           $env:PATH = $env:PYOLD_DIR
           $flowctl = Join-Path $env:GITHUB_WORKSPACE "plugins/flow-next/scripts/flowctl.cmd"
-          $out = & $flowctl --help 2>&1 | Out-String
-          if ($LASTEXITCODE -eq 0) { Write-Error "old Python probe unexpectedly succeeded"; exit 1 }
+          $outputLines = & $flowctl --help 2>&1
+          $exitCode = $LASTEXITCODE
+          $out = $outputLines | Out-String
+          if ($exitCode -eq 0) { Write-Error "old Python probe unexpectedly succeeded"; exit 1 }
           if ($out -notmatch "Python 3.11 or newer is required") { Write-Error "missing minimum-version error: $out"; exit 1 }
           if ($out -match '^usage:') { Write-Error "flowctl.py loaded before minimum-version rejection"; exit 1 }
