@@ -4,6 +4,12 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+## [flow-next 3.3.2] - 2026-07-22
+
+### Fixed
+
+- **Capture no longer rejects a fully visible feature merely because the conversation was compacted earlier (fn-127).** Compaction markers, system-summary blocks, and unrelated truncated tool results are now advisory signals. `/flow-next:capture` proceeds when the evidence needed for the requested spec remains fully visible, while still failing closed without `--from-compacted-ok` when relevant requirements are missing, truncated, summary-only, or depend on unresolved gaps.
+
 ## [flow-next 3.3.1] - 2026-07-22
 
 ### Fixed

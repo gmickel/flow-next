@@ -14,9 +14,8 @@ Replace capture's any-signal hard refusal with a relevance-based evidence check,
 - [ ] Version 3.3.2 is committed, pushed, tagged, and verified on GitHub.
 
 ## Done summary
-TBD
-
+Scoped capture's compaction guard to evidence relevant to the requested spec. Historical compaction markers and system-summary blocks are advisory when the relevant user turns remain fully visible; missing, truncated, summary-only, or gap-dependent requirements still fail closed without `--from-compacted-ok`. Added canonical/Codex prose-contract coverage and prepared patch release 3.3.2.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 6a34dfe4
+- Tests: python3 -m unittest plugins.flow-next.tests.test_capture_compaction_contract -v, python3 -m unittest plugins.flow-next.tests.test_readback_ask_contract plugins.flow-next.tests.test_capture_biz_routing -q, ./scripts/sync-codex.sh (twice, idempotent), python3 scripts/run_tests_parallel.py (116 files, 2152 tests, 0 failures, 0 errors, 3 skipped)
 - PRs:
