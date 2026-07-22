@@ -333,7 +333,7 @@ If Phase 2 produces **8 or more acceptance criteria**, Phase 4 read-back include
 - Edit (drop / reword criteria).
 - Approve and run `/flow-next:plan <id>` afterward — plan can break it into multiple stages.
 
-Capture's heuristic: ≥8 R-IDs is the trigger. The 8+ count itself goes into the read-back body.
+Capture's heuristic: ≥8 R-IDs is the trigger. The 8+ count itself goes into the short read-back ask (one-line warning) and the `consider-split` option.
 
 ### 2.6 — Biz-context signal routing (R24) + signal-category count for R25
 
@@ -465,11 +465,11 @@ Even when multiple must-ask cases fire, ask **one at a time**. Subsequent questi
 
 **Goal:** show the user the full draft before write. Even in autofix mode (`--yes` is the read-back substitute).
 
-### 4.1 — Materialize the draft (single emission)
+### 4.1 — Materialize the draft + print-then-ask emission
 
 **Path-persistence rule:** bash vars do NOT survive across prompt turns — and that applies to the draft path itself. Compose a **literal unique path in agent context** — `${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<agent-chosen 4-char suffix>.md` — and use that literal path verbatim in the Write call here AND in Phase 5's `spec set-plan <id> --file <path>` call. Never carry the path in a shell variable across prompt turns; `mktemp` is reserved for paths created and consumed within a single bash block. (No spec id exists yet on the new-spec branch — the working-title slug keeps the path readable; uniqueness comes from the suffix.)
 
-Write the full draft to that path via the **Write tool** — exactly once. The Write render IS the user-visible read-back: the full draft appears in the tool render immediately above the §4.2 question. Long renders collapse in the terminal — the question body must say the full draft is in the Write render above (expand if collapsed). Do NOT print the draft again to stdout and do NOT re-author it into a Phase-5 heredoc — the file written here is exactly what Phase 5 hands to `spec set-plan --file`.
+Write the full draft to that path via the **Write tool** — exactly once (the file is what Phase 5 hands to `spec set-plan --file`; do NOT re-author it into a Phase-5 heredoc). The Write is plumbing, not the user-facing read-back.
 
 The **draft file** contains the spec body (what `spec set-plan` consumes — no duplicate `# <title>` heading, per §5.1):
 
@@ -477,50 +477,42 @@ The **draft file** contains the spec body (what `spec set-plan` consumes — no 
 2. Every section drafted in Phase 2, with source tags visible.
 3. The `## Acceptance Criteria` R-ID list — bulleted, source tags shown.
 
-The **summary payload** rides in the §4.2 question body (autofix: printed to stdout) — it is metadata about the draft, never a re-emission of it:
+**Print-then-ask contract (interactive — R13):** question bodies render as collapsed plain text (no markdown, no newlines) on every host, so multi-paragraph drafts/diffs/criteria lists inside `plain-text numbered prompt` are unreadable. Skills that show a draft/diff for approval MUST:
+
+1. **Print the FULL draft markdown as an ordinary assistant message FIRST** (the user-visible read-back — real markdown, real newlines). When `REWRITE_TARGET` is set, also print the existing → proposed **diff** (unified style; changed sections in full) as ordinary markdown in the same message or a second message immediately after the draft — never only inside the ask.
+2. **Then** issue a **short** `plain-text numbered prompt` whose body is only: one-line pointer to the printed draft above + compact `[inferred]` tally / warnings + recommendation + options. **Never embed multi-paragraph drafts, diffs, or criteria lists in the ask body.**
+
+The **summary payload** (metadata about the draft — never a re-emission of it) is what rides in the short ask (interactive) or prints to stdout (autofix):
 
 1. `title` + candidate `branch_name`.
-2. **Source-tag tally** — total count across the spec, with per-tag breakdown. Format:
+2. **Source-tag tally** — compact one-liner. Format:
  ```
  Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L
  ```
- Followed by the per-section `[inferred]` breakdown (the most-scrutinized class):
+ Optional one-line per-section `[inferred]` breakdown when L > 0 (keep short — tallies, not the criteria prose):
  ```
- [inferred] count: 7 total
- - Architecture & Data Models: 3
- - API Contracts: 2
- - Boundaries: 2
+ [inferred] count: 7 total (Architecture 3 · API 2 · Boundaries 2)
  ```
  The `[strategy]` count aggregates all `[strategy:<track>]` lines regardless of track. When Phase 0 strategy snapshot scanned `none` (`STRATEGY_PRESENT=false`), `[strategy] K` reads `[strategy] 0` (or the field is omitted entirely — equivalent in practice).
-3. **8+ acceptance-criterion suggestion** (if Phase 2.5 fired):
+3. **8+ acceptance-criterion warning** (if Phase 2.5 fired) — one short clause, e.g. `11 acceptance criteria — consider-split is available.`
+4. **Related context** footnote (if Phase 0.3 found memory hits) — one short clause, e.g. `Related memory: bug/runtime-errors/oauth-callback-2025-08-12.`
+5. **Rewrite-mode pointer** (if `REWRITE_TARGET` is set) — one short clause, e.g. `Rewrite diff printed above.` (the full diff is already in the ordinary message; never paste it into the ask).
+6. **Glossary term-add proposals** (only when Phase 2.7 collected any) — compact one-liner of term names; full definitions live in the printed draft message (or a short glossary block printed above the ask), never multi-paragraph in the ask body:
  ```
- This spec has 11 acceptance criteria — consider splitting into multiple
- specs? You can: approve as-is, edit (drop some), or accept and split via
- /flow-next:plan after capture lands.
- ```
-4. **Related context** footnote (if Phase 0.3 found memory hits):
- ```
- Related memory entries (not blocking): bug/runtime-errors/oauth-callback-2025-08-12
- ```
-5. **Diff** — if `REWRITE_TARGET` is set, show existing spec → proposed spec diff (unified diff style; only show changed sections in full to keep the read-back navigable).
-6. **Glossary term-add proposals** (only when Phase 2.7 collected any):
- ```
- New project vocabulary (N terms, not yet in GLOSSARY.md):
- - <term> — <one-line definition>
- - <term> — <one-line definition>
+ New glossary terms proposed: <term>, <term> (definitions in draft above).
  ```
 
 ### 4.2 — Interactive read-back
 
-Use `plain-text numbered prompt`:
+**Step A — print first.** Emit the full draft markdown (and rewrite diff when applicable) as an ordinary assistant message. Full criteria, source tags, and section bodies live here — never only inside the ask.
+
+**Step B — short ask.** Use `plain-text numbered prompt`:
 
 - **header**: `Read-back`
-- **body**, in this order (plain-language ratification contract — eval-validated 2026-07-10, legibility 7→9 / ratification-safety 4→9):
- 1. **One sentence of stakes**: what approving means, in the user's words (e.g. "Approving turns this into the plan the team builds from.").
- 2. `Full draft in the Write render above (expand if collapsed).`
- 3. **Every acceptance criterion's substance, one short plain line each** — the user must see what they are approving inside the question, not only in the file. Translate the machinery, never present bare shorthand: "labeled R1-R5 so each can be tracked"; "[inferred] = something I added that you didn't say outright".
- 4. The rest of the §4.1 summary payload (source-tag tally, 8+ split note, related-memory footnote, rewrite diff, glossary proposals) — tallies rendered in plain words.
- 5. **The recommendation — no self-blessing rule (overrides lead-with-recommendation):** when the draft carries ≥1 `[inferred]` item, do NOT recommend approve — the agent never pre-blesses its own guesses. Lead neutrally instead: `Recommended: check the <N> guessed item(s) marked above before choosing — approve only if they match your intent. Confidence: [<tier>].` Only a zero-`[inferred]` draft may carry `Recommended: approve — <one-sentence rationale>. Confidence: [<tier>].`
+- **body** (SHORT — pointer + tally/warnings + recommendation only; no multi-paragraph content):
+ 1. One-line pointer: `Full draft printed above.` (rewrite: `Full draft + rewrite diff printed above.`)
+ 2. Compact summary payload from §4.1 (source-tag tally, 8+ note, related-memory footnote, rewrite pointer, glossary term names) — tallies and one-liners only.
+ 3. **The recommendation — no self-blessing rule (overrides lead-with-recommendation):** when the draft carries ≥1 `[inferred]` item, do NOT recommend approve — the agent never pre-blesses its own guesses. Lead neutrally instead: `Recommended: check the <N> guessed item(s) marked [inferred] in the draft above before choosing — approve only if they match your intent. Confidence: [<tier>].` Only a zero-`[inferred]` draft may carry `Recommended: approve — <one-sentence rationale>. Confidence: [<tier>].`
 - **options** (frozen — each description states its consequence in plain words, "Choose this if…"):
  - `approve` — proceed to Phase 5 write ("this becomes the spec and work can start from it")
  - `edit` — revise specific sections (loops back to Phase 2 for those sections)
@@ -533,12 +525,12 @@ Confidence tier (attaches to whichever recommendation the rule above produced):
 - `[judgment-call]` — `[inferred]` count is moderate (3-6) or some `[inferred]` items are load-bearing (e.g. core acceptance criteria).
 - `[your-call]` — `[inferred]` count is high (7+) or rewrite-mode with substantive divergence from existing spec.
 
-Sizing is priorities, not a cap: always keep the stakes, the full criteria list, the inferred-items callout, and option consequences; trim repetition and background first.
+**Never** put full criteria lists, section bodies, unified diffs, or multi-paragraph glossary definitions in the ask body — they render as collapsed plain text. The printed message is the ratification surface.
 
-**Glossary term-add consent (only when `GLOSSARY_PROPOSALS` is non-empty AND the user picked `approve`).** One follow-up question via `plain-text numbered prompt` — the read-back options above stay frozen; this is a separate ask:
+**Glossary term-add consent (only when `GLOSSARY_PROPOSALS` is non-empty AND the user picked `approve`).** One follow-up question via `plain-text numbered prompt` — the read-back options above stay frozen; this is a separate ask (short — definitions already printed above if present):
 
 - **header**: `Glossary?`
-- **body**: `Add <N> new term(s) to GLOSSARY.md? <comma-separated terms>. Definitions shown in the read-back above. Recommended: add — they surfaced repeatedly in this conversation. Confidence: [judgment-call].`
+- **body**: `Add <N> new term(s) to GLOSSARY.md? <comma-separated terms>. Definitions in the draft printed above. Recommended: add — they surfaced repeatedly in this conversation. Confidence: [judgment-call].`
 - **options**: `add-all`, `pick` (follow-up multi-select / serial yes-no per term), `skip`
 
 Record the approved subset for Phase 5.8. `skip` → no glossary writes; the spec write proceeds regardless of this answer.
@@ -572,19 +564,19 @@ If user picks `edit`:
 - For each section, re-run Phase 2's drafting logic for that section only, with the user's correction context as additional input.
 - Apply the revisions to the §4.1 draft file via the **Edit tool** (deltas only — never rewrite the whole file via Write).
 - Re-tally `[inferred]` count.
-- **Read the FULL draft file** before re-asking approval — an Edit render shows only the delta, which is NOT a full read-back. The Read render is that cycle's mandatory full read-back (one full emission per edit cycle) AND satisfies the Edit tool's read-before-edit requirement for the next cycle.
-- Re-ask the §4.2 question. Loop until user picks `approve` or `abort`.
+- **Print-then-ask again:** **Read the FULL draft file**, then **print the full revised draft as an ordinary assistant message** (one full emission per edit cycle — the Edit render shows only the delta and is NOT a full read-back). The full-file Read also satisfies the Edit tool's read-before-edit requirement for the next cycle.
+- Re-issue the short §4.2 ask (pointer + tally + options only). Loop until user picks `approve` or `abort`.
 
-Hard cap at **3 edit cycles**. If the user is still editing on the 4th cycle, surface: `You've gone through 3 edit cycles. Capture's read-back loop isn't deep refinement — consider /flow-next:interview <id> after capture lands for iterative Q&A.` Offer `approve as-is` / `abort` only.
+Hard cap at **3 edit cycles**. If the user is still editing on the 4th cycle, surface: `You've gone through 3 edit cycles. Capture's read-back loop isn't deep refinement — consider /flow-next:interview <id> after capture lands for iterative Q&A.` Offer `approve as-is` / `abort` only (still print the current draft first if it changed).
 
 ### 4.4 — Autofix read-back
 
-The §4.1 Write render IS the single full emission — it replaces the old stdout print-substitute (no separate draft print, no second read-back; `--yes` consents on the render). Print only the **summary payload** (§4.1 items — tally, 8+ note, related memory, rewrite diff, glossary suggestions) to stdout. Then:
+Autofix paths are unchanged by the interactive print-then-ask contract (no user to ask). The §4.1 Write materializes the draft file; print the **summary payload** (§4.1 items — tally, 8+ note, related memory, rewrite diff, glossary suggestions) to stdout. Then:
 
-- If `COMMIT_YES=0`, exit 0 with: `Draft written (full content in the Write render above). Re-run with --yes to commit (in autofix mode, --yes substitutes for the interactive read-back approval).`
+- If `COMMIT_YES=0`, exit 0 with: `Draft written to <literal draft path> (content in the Write render above). Re-run with --yes to commit (in autofix mode, --yes substitutes for the interactive read-back approval).`
 - If `COMMIT_YES=1`, proceed to Phase 5.
 
-Autofix never offers `edit` — there's no user to ask. The render-then-rerun-with-yes pattern mirrors `flowctl memory migrate --yes` and is the documented autofix-substitute for read-back approval.
+Autofix never offers `edit` — there's no user to ask. The Write + `--yes` pattern mirrors `flowctl memory migrate --yes` and is the documented autofix-substitute for read-back approval.
 
 **Autofix + glossary proposals:** the summary payload's glossary block prints as suggestions (`Suggested glossary adds — review and add via flowctl glossary add "<term>" --definition-file -`), but autofix **never writes terms** — not even with `--yes` (`--yes` consents to the spec write, not to vocabulary changes). Phase 5.8 is interactive-only.
 
@@ -592,17 +584,18 @@ Autofix never offers `edit` — there's no user to ask. The render-then-rerun-wi
 
 ### 4.5 — Forbidden in Phase 4
 
-- **Never silently skip the read-back.** Even if `[inferred]` count is 0, the draft goes through the §4.1 Write (render visible) before any write. The user might still want to reject for reasons unrelated to inference.
+- **Never silently skip the read-back.** Even if `[inferred]` count is 0, interactive mode prints the full draft then asks; autofix still materializes the draft file before any `.flow/` write. The user might still want to reject for reasons unrelated to inference.
+- **Never embed multi-paragraph drafts, diffs, or criteria lists in the `plain-text numbered prompt` body.** Print-then-ask only (R13).
 - **Never auto-split.** The `consider-split` option exits 0 and lets the user decide; it does not call `flowctl spec create` twice.
-- **Never edit `--rewrite` target without showing the diff.** The diff is non-optional in rewrite mode.
+- **Never edit `--rewrite` target without printing the diff** as ordinary markdown before the short ask. The diff is non-optional in rewrite mode.
 - **Never write glossary terms here.** Phase 4 collects consent only; the writes happen in Phase 5.8, after the spec write.
 - **Never write readiness here.** Phase 4 collects the mark-ready consent only; the write happens in Phase 5.9, after the spec write. And never offer the question outside the visibility predicate (readiness adopted + no `tracker.readyState`).
 
 ### Done when
 
-- Interactive: user picked `approve` (proceed to Phase 5), `consider-split` / `abort` (exit 0, no write), or hit the edit-cycle cap. On approve, the glossary and mark-ready consents (when their gates fired) are recorded for Phase 5.8/5.9.
-- Autofix with `--yes`: draft Written (render = emission), summary payload printed, proceeding to Phase 5.
-- Autofix without `--yes`: draft Written (render = emission), summary payload printed, exit 0.
+- Interactive: full draft (and rewrite diff when applicable) printed as ordinary markdown, then user picked `approve` (proceed to Phase 5), `consider-split` / `abort` (exit 0, no write), or hit the edit-cycle cap. Edit cycles re-print the revised draft before each short ask. On approve, the glossary and mark-ready consents (when their gates fired) are recorded for Phase 5.8/5.9.
+- Autofix with `--yes`: draft Written, summary payload printed, proceeding to Phase 5.
+- Autofix without `--yes`: draft Written, summary payload printed, exit 0.
 
 ---
 
@@ -971,11 +964,11 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 - Phase 1 emits a `## Conversation Evidence` block with verbatim user quotes (≤30 lines).
 - Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`. Biz-context signals (R24) route to their destinations using only `[user]` / `[paraphrase]` tags; categories without conversation signal leave their destinations absent. `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6.
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
-- Phase 4 materializes the draft ONCE via the Write tool to a literal unique path (§4.1 — render = read-back) and surfaces the summary payload (`[inferred]` count, 8+ split note if applicable, related-memory footer if applicable, glossary term-add proposals — only when `glossary list --json` reports `total_terms > 0` AND the conversation surfaced new vocabulary — Phase 2.7) in the question body. Interactive: user picks approve / edit / abort; edit cycles revise via the Edit tool + a full-file Read before re-approval; on approve with proposals, one follow-up `Glossary?` consent question; on approve with the readiness predicate met (≥1 ready spec, no `tracker.readyState`), one follow-up `Mark ready?` consent question (default keep-draft). Autofix: the Write render is the single full emission (summary payload printed) + require `--yes`; proposals print as suggestions, never written; readiness never written.
+- Phase 4 materializes the draft ONCE via the Write tool to a literal unique path (§4.1), then **print-then-ask** (interactive): prints the FULL draft markdown (and rewrite diff when applicable) as an ordinary assistant message, then a SHORT `plain-text numbered prompt` (one-line pointer + `[inferred]` tally/warnings + options only — never multi-paragraph drafts/diffs/criteria lists in the ask body). Interactive: user picks approve / edit / abort; edit cycles revise via the Edit tool + full-file Read + **reprint the revised draft** before each short re-ask; on approve with proposals, one follow-up `Glossary?` consent question; on approve with the readiness predicate met (≥1 ready spec, no `tracker.readyState`), one follow-up `Mark ready?` consent question (default keep-draft). Autofix: Write + summary payload printed + require `--yes` (unchanged; no interactive ask); proposals print as suggestions, never written; readiness never written.
 - Phase 5 calls `flowctl spec create` + `spec set-plan --file <literal draft path>` (consumes the §4.1 draft file — no heredoc re-authoring). Approved term-adds written via `flowctl glossary add` (5.8, interactive only). Consented mark-ready written via `flowctl spec ready` (5.9, interactive only). Rewrite branch (5.3) runs idempotent `spec unready` unconditionally; `READY_RESET` gates the Phase 6 announcement. With no glossary (or a husk), 2.7/4.x/5.8 are silent no-ops; with readiness un-adopted, 4.2's mark-ready question / 5.9 / all readiness footer lines are silent no-ops — zero behavior change. With `artifacts.html.enabled` true, 5.10 regenerates `.flow/artifacts/<id>/spec.html` per the disclosure reference and leaves exactly one `<!-- flow-next:artifact-link -->` line in the spec md; off/unset, 5.10 is a single config read and nothing else.
 - Phase 6 prints the next-step footer. Agent-judges the R25 threshold (`1 <= BIZ_SIGNAL_CATEGORIES < 3`); on fire, appends the `/flow-next:interview --scope=business` suggestion line. R22 invariant: `BIZ_SIGNAL_CATEGORIES=0` → no-fire → no suggestion.
 
-In autofix without `--yes`, the draft is Written (render visible) and the skill exits 0 — no `.flow/` write, no spec allocated.
-In autofix with `--yes`, the §4.1 Write render substitutes for the read-back before Phase 5 writes.
+In autofix without `--yes`, the draft is Written and the skill exits 0 — no `.flow/` write, no spec allocated.
+In autofix with `--yes`, the §4.1 Write + `--yes` substitutes for the interactive print-then-ask approval before Phase 5 writes.
 
 The Ralph-block (SKILL.md) ensures this skill never runs under `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` — capture requires a user at the terminal.
