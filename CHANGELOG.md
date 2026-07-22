@@ -2,6 +2,19 @@
 
 All notable changes to the flow-next.
 
+## [Unreleased]
+
+### Changed
+
+- **Python 3.11+ runtime and faster flowctl startup (fn-122).** Every Unix, Windows, plugin-bin, copied, Ralph, generated, and dogfood launcher now rejects older-but-working interpreters before loading `flowctl.py`. Authenticated static fast paths accelerate `flowctl usage` and root help without executable cache state; help snapshots are scoped to their generating Python minor so other supported runtimes fall back to live argparse without output drift. All other commands compile the tracked source in memory.
+- **One task inventory and linear specialized paths (fn-122).** Backlog consumers share canonical task discovery/state projection, reverse dependencies use one adjacency graph, Prime avoids repeated case-folding and Git work, cognitive-aid export materializes one diff, memory reads one buffer per entry, and pilot ticks persist an O(1) counter with recovery. Confirmed dead imports/helpers and test-only production surfaces were removed.
+- **Active command contracts repaired (fn-122).** README, plugin docs, agent docs, skills, smoke labels, generated Codex mirror, and flow-next.dev now describe the live post-3.1 command/payload surface. RepoPrompt Community Edition is the primary documented integration; direct exploration uses `rpce-cli`, while Flow-Next wrappers retain discontinued Classic only as the last compatibility fallback. No version bump; release numbering remains batched.
+
+### Fixed
+
+- **Concurrent state and model-cache correctness (fn-122).** Portable cross-process locks now protect task allocation/publication, setup/runtime state, and model-cache mutation on POSIX and Windows. Concurrent task creators cannot acknowledge lost or mismatched JSON/Markdown writes; model cache keys include effective routing intent, preserve unrelated concurrent entries, and never silently downgrade explicit pins. Git/CLI discovery catches non-sticky `OSError` failures.
+- **RepoPrompt CE window reuse regression (#228, fn-122).** CE-first discovery follows `rpce-cli` → current CE user link → legacy CE link → Classic `rp-cli`; only discovery failures advance, while selected-CE operational failures remain authoritative. Current `binding.window_id` and `windows[].tabs[].repo_paths` responses now reuse the existing repository window instead of cloning the workspace, with legacy response compatibility retained. CE's Markdown-formatted chat response also retains its session ID through the JSON wrapper. Thanks [@aidancurry](https://github.com/aidancurry) for reporting the regression.
+
 ## [flow-next 3.1.2] - 2026-07-22
 
 ### Fixed

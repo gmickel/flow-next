@@ -352,6 +352,13 @@ class TestMemoryDuringEpicNullSafe(unittest.TestCase):
         _write_memory_entry(
             self.mem, "bug", "build-errors", "bug-new", "2026-05-26"
         )
+        _write_memory_entry(
+            self.mem,
+            "knowledge",
+            "architecture-patterns",
+            "pattern-new",
+            "2026-05-26",
+        )
 
     def tearDown(self) -> None:
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -362,6 +369,21 @@ class TestMemoryDuringEpicNullSafe(unittest.TestCase):
         # Date >= 2026-05-25 → decision-mid + decision-new.
         self.assertEqual(len(decision_ids), 2)
         self.assertTrue(all("decision-old" not in i for i in decision_ids))
+        self.assertEqual(
+            [d["first_sentence"] for d in r["decisions"]],
+            [
+                "Synthetic body for decision-mid.",
+                "Synthetic body for decision-new.",
+            ],
+        )
+        self.assertEqual(
+            r["bugs"][0]["winning_hypothesis_first_sentence"],
+            "Synthetic body for bug-new.",
+        )
+        self.assertEqual(
+            r["architecture_patterns"][0]["first_sentence"],
+            "Synthetic body for pattern-new.",
+        )
 
     def test_null_spec_falls_back_to_earliest_task(self) -> None:
         """R3 — spec.created null + tasks have created_at → earliest task wins."""

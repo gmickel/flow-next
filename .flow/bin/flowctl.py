@@ -7,10 +7,11 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 """
 
 import argparse
-import difflib
+import errno
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import secrets
@@ -24,28 +25,147 @@ import tempfile
 import unicodedata
 import uuid
 from abc import ABC, abstractmethod
+from collections import deque
 from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, ContextManager, Optional
 
-# Platform-specific file locking (fcntl on Unix, no-op on Windows)
-try:
+
+# Cross-process locks use platform-native kernel locks. The kernel releases
+# them when a process exits, avoiding both abandoned-lock cleanup and the ABA
+# race inherent in deleting/recreating a shared lock path.
+CROSS_PROCESS_LOCK_WAIT_SECS = 30.0
+CROSS_PROCESS_LOCK_POLL_SECS = 0.02
+
+
+class CrossProcessLockError(RuntimeError):
+    """A portable lock could not be acquired safely within its bound."""
+
+
+def _try_kernel_lock(fd: int) -> bool:
+    """Try one non-blocking platform-native exclusive lock acquisition."""
+    if os.name == "nt":
+        import msvcrt
+
+        os.lseek(fd, 0, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError as e:
+            if e.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                return False
+            raise
+
     import fcntl
 
-    def _flock(f, lock_type):
-        fcntl.flock(f, lock_type)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError as e:
+        if e.errno in (errno.EACCES, errno.EAGAIN):
+            return False
+        raise
 
-    LOCK_EX = fcntl.LOCK_EX
-    LOCK_UN = fcntl.LOCK_UN
-except ImportError:
-    # Windows: fcntl not available, use no-op (acceptable for single-machine use)
-    def _flock(f, lock_type):
-        pass
 
-    LOCK_EX = 0
-    LOCK_UN = 0
+def _release_kernel_lock(fd: int) -> None:
+    """Release a platform-native lock; closing the fd remains the backstop."""
+    if os.name == "nt":
+        import msvcrt
+
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        return
+
+    import fcntl
+
+    fcntl.flock(fd, fcntl.LOCK_UN)
+
+
+@contextmanager
+def cross_process_lock(
+    lock_path: Path,
+    *,
+    timeout: Optional[float] = None,
+    poll: Optional[float] = None,
+):
+    """Acquire a bounded POSIX/Windows kernel lock on a persistent lock file."""
+    if timeout is None:
+        timeout = CROSS_PROCESS_LOCK_WAIT_SECS
+    if poll is None:
+        poll = CROSS_PROCESS_LOCK_POLL_SECS
+    try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        invalid_parent = lock_path.parent.is_symlink() or not lock_path.parent.is_dir()
+    except OSError as e:
+        raise CrossProcessLockError(
+            f"cannot prepare lock parent {lock_path.parent}: {e}"
+        ) from e
+    if invalid_parent:
+        raise CrossProcessLockError(
+            f"lock parent is not a real directory: {lock_path.parent}"
+        )
+    try:
+        leaf_info = os.lstat(lock_path)
+    except FileNotFoundError:
+        leaf_info = None
+    except OSError as e:
+        raise CrossProcessLockError(f"cannot inspect lock path {lock_path}: {e}") from e
+    if leaf_info is not None and not stat.S_ISREG(leaf_info.st_mode):
+        raise CrossProcessLockError(f"lock path is not a regular file: {lock_path}")
+
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(lock_path, flags, 0o600)
+    except OSError as e:
+        raise CrossProcessLockError(f"cannot open lock path {lock_path}: {e}") from e
+
+    try:
+        if os.fstat(fd).st_size == 0:
+            os.write(fd, b"\0")
+    except OSError as e:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        raise CrossProcessLockError(
+            f"cannot initialize lock {lock_path}: {e}"
+        ) from e
+
+    acquired = False
+    deadline = _monotonic_now() + max(0.0, timeout)
+    try:
+        while not acquired:
+            try:
+                acquired = _try_kernel_lock(fd)
+            except OSError as e:
+                raise CrossProcessLockError(
+                    f"cannot acquire lock {lock_path}: {e}"
+                ) from e
+            if acquired:
+                break
+            if _monotonic_now() >= deadline:
+                raise CrossProcessLockError(
+                    f"timed out acquiring live lock {lock_path} after {timeout:g}s"
+                )
+            _sleep_secs(poll)
+
+        yield
+    finally:
+        if acquired:
+            try:
+                _release_kernel_lock(fd)
+            except OSError:
+                # Closing the descriptor releases kernel ownership. Never mask
+                # an exception from the protected body.
+                pass
+        try:
+            os.close(fd)
+        except OSError:
+            pass
 
 
 # --- Constants ---
@@ -115,12 +235,6 @@ STRATEGY_DRAFT_PLACEHOLDER = "_Not yet captured._"
 STRATEGY_EMPTY_SENTINELS: frozenset[str] = frozenset(
     {STRATEGY_HUSK_SENTINEL, STRATEGY_DRAFT_PLACEHOLDER}
 )
-# Frontmatter contract: exactly these three keys. Refuse unknown keys to keep
-# the audit story simple (single-source-of-truth invariant).
-STRATEGY_FRONTMATTER_FIELDS: frozenset[str] = frozenset(
-    {"name", "last_updated", "generator"}
-)
-
 SPEC_STATUS = ["open", "done"]
 EPIC_STATUS = SPEC_STATUS  # Backward-compat alias (removed in 2.0).
 TASK_STATUS = ["todo", "in_progress", "blocked", "done"]
@@ -171,7 +285,7 @@ def get_repo_root() -> Path:
         root = Path(result.stdout.strip())
         _REPO_ROOT_CACHE[cwd] = root
         return root
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         # Fallback to current directory (uncached: never sticky)
         return cwd
 
@@ -525,8 +639,6 @@ del _name, _key
 _STRATEGY_SECTION_NAMES_LOWER: frozenset[str] = frozenset(_STRATEGY_SECTION_KEYS.keys())
 
 _STRATEGY_HEADING_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
-# YYYY-MM-DD ISO date for last_updated validation.
-_STRATEGY_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # HTML comment matcher used by _strategy_section_filled.
 _STRATEGY_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 
@@ -658,33 +770,32 @@ def parse_strategy_file(text: str) -> dict[str, Any]:
 
     # --- Frontmatter ---
     body_text = text
-    if text.startswith("---"):
-        parts = text.split("---", 2)
-        if len(parts) >= 3:
-            fm_text = parts[1]
+    envelope = _frontmatter_envelope(text)
+    if envelope.complete:
+        parser = _optional_yaml_parser()
+        if parser is None:
+            parsed_fm = _parse_inline_yaml(envelope.frontmatter)
+        else:
+            safe_load, yaml_error = parser
             try:
-                import yaml  # type: ignore[import-not-found]
-                try:
-                    parsed_fm = yaml.safe_load(fm_text)
-                except yaml.YAMLError:
-                    parsed_fm = None
-                if not isinstance(parsed_fm, dict):
-                    parsed_fm = {}
-            except ImportError:
-                parsed_fm = _parse_inline_yaml(fm_text)
-            for key in ("name", "last_updated", "generator"):
-                if key in parsed_fm:
-                    val = parsed_fm[key]
-                    # PyYAML may parse last_updated as datetime.date — coerce
-                    # to ISO string so JSON output round-trips cleanly.
-                    if isinstance(val, date) and not isinstance(val, datetime):
-                        result[key] = val.isoformat()
-                    else:
-                        result[key] = str(val) if val is not None else None
-            body_text = parts[2]
-            # Skip leading newline after the closing `---`.
-            if body_text.startswith("\n"):
-                body_text = body_text[1:]
+                parsed_fm = safe_load(envelope.frontmatter)
+            except yaml_error:
+                parsed_fm = None
+            if not isinstance(parsed_fm, dict):
+                parsed_fm = {}
+        for key in ("name", "last_updated", "generator"):
+            if key in parsed_fm:
+                val = parsed_fm[key]
+                # PyYAML may parse last_updated as datetime.date — coerce
+                # to ISO string so JSON output round-trips cleanly.
+                if isinstance(val, date) and not isinstance(val, datetime):
+                    result[key] = val.isoformat()
+                else:
+                    result[key] = str(val) if val is not None else None
+        body_text = envelope.body
+        # Skip leading newline after the closing `---`.
+        if body_text.startswith("\n"):
+            body_text = body_text[1:]
 
     # --- Section scan (after frontmatter) ---
     masked = _glossary_strip_fenced_code(body_text)
@@ -710,105 +821,6 @@ def parse_strategy_file(text: str) -> dict[str, Any]:
 
     result["_section_filled"] = section_filled
     return result
-
-
-def render_strategy_file(parsed: dict[str, Any]) -> str:
-    """Render a parsed strategy dict back to markdown.
-
-    Round-trip contract: `parse → render → parse` produces semantically
-    equivalent output; section bodies preserved (whitespace stripping
-    only at section boundaries). Frontmatter always written; H1 always
-    written (`# <name> Strategy`); required sections always written
-    (empty bodies allowed for husk semantics); optional sections only
-    written when their body is non-empty (per R2: "Optional sections
-    deleted entirely if unused; never left as empty headers").
-
-    Frontmatter key order: name, last_updated, generator (deterministic
-    diffs).
-
-    Husk render (R23 invariant): when all sections are empty, output is
-    H1 + frontmatter only; file is never deleted.
-    """
-    name = parsed.get("name") or "Untitled"
-    last_updated = parsed.get("last_updated") or date.today().isoformat()
-    generator = parsed.get("generator") or STRATEGY_GENERATOR
-
-    lines: list[str] = ["---"]
-    # Locked field order — never sort alphabetically.
-    lines.append(f"name: {_format_yaml_value(name, 'name')}")
-    # last_updated quoted as string so PyYAML doesn't coerce back to date.
-    lines.append(f"last_updated: {_quote_yaml_scalar(last_updated)}")
-    lines.append(f"generator: {_format_yaml_value(generator, 'generator')}")
-    lines.append("---")
-    lines.append("")
-    lines.append(f"# {name} Strategy")
-    lines.append("")
-
-    # Required sections — always emitted, even when empty (husk semantics).
-    for section_name, key in STRATEGY_REQUIRED_SECTIONS:
-        body = (parsed.get(key) or "").strip("\n").rstrip()
-        lines.append(f"## {section_name}")
-        lines.append("")
-        if body:
-            lines.append(body)
-            lines.append("")
-
-    # Optional sections — only emitted when body has content.
-    for section_name, key in STRATEGY_OPTIONAL_SECTIONS:
-        body = (parsed.get(key) or "").strip("\n").rstrip()
-        if body:
-            lines.append(f"## {section_name}")
-            lines.append("")
-            lines.append(body)
-            lines.append("")
-
-    out = "\n".join(lines).rstrip("\n") + "\n"
-    return out
-
-
-def validate_strategy_frontmatter(fm: dict[str, Any]) -> list[str]:
-    """Return validation errors for STRATEGY.md frontmatter (empty = valid).
-
-    Required: `name` (non-empty str), `last_updated` (ISO YYYY-MM-DD),
-              `generator` (must equal `flow-next-strategy`).
-    Refuses: unknown keys (single-source-of-truth invariant).
-    """
-    errors: list[str] = []
-    if not isinstance(fm, dict):
-        return ["frontmatter must be a dict"]
-
-    missing = STRATEGY_FRONTMATTER_FIELDS - set(fm.keys())
-    if missing:
-        errors.append(f"missing required fields: {', '.join(sorted(missing))}")
-
-    name = fm.get("name")
-    if name is not None and (not isinstance(name, str) or not name.strip()):
-        errors.append("name must be a non-empty string")
-
-    last_updated = fm.get("last_updated")
-    if last_updated is not None:
-        if isinstance(last_updated, date) and not isinstance(last_updated, datetime):
-            # PyYAML coerced to a date — that's fine for validation purposes;
-            # the renderer will quote it back to ISO string.
-            pass
-        elif not isinstance(last_updated, str):
-            errors.append("last_updated must be a string (YYYY-MM-DD)")
-        elif not _STRATEGY_ISO_DATE_RE.match(last_updated):
-            errors.append(
-                f"last_updated '{last_updated}' is not ISO YYYY-MM-DD"
-            )
-
-    generator = fm.get("generator")
-    if generator is not None and generator != STRATEGY_GENERATOR:
-        errors.append(
-            f"generator must be '{STRATEGY_GENERATOR}' (got '{generator}')"
-        )
-
-    unknown = set(fm.keys()) - STRATEGY_FRONTMATTER_FIELDS
-    if unknown:
-        errors.append(f"unknown fields: {', '.join(sorted(unknown))}")
-
-    return errors
 
 
 # fn-109: hot-path memoization for get_state_dir. Keyed by
@@ -849,7 +861,7 @@ def get_state_dir() -> Path:
         state = Path(common) / "flow-state"
         _STATE_DIR_CACHE[cache_key] = state
         return state
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         pass
 
     # 3. Fallback for non-git repos (uncached: never sticky)
@@ -878,13 +890,20 @@ class StateStore(ABC):
         ...
 
     @abstractmethod
-    def list_runtime_files(self) -> list[str]:
-        """List all task IDs that have runtime state files."""
+    def load_all_runtime(
+        self, task_ids: Optional[set[str]] = None
+    ) -> dict[str, dict]:
+        """Load readable runtime state, optionally restricted to task IDs."""
+        ...
+
+    @abstractmethod
+    def delete_runtime(self, task_id: str) -> None:
+        """Delete a task's runtime state when present."""
         ...
 
 
 class LocalFileStateStore(StateStore):
-    """File-based state store with fcntl locking."""
+    """File-based state store with portable cross-process locking."""
 
     def __init__(self, state_dir: Path):
         self.state_dir = state_dir
@@ -895,6 +914,8 @@ class LocalFileStateStore(StateStore):
         return self.tasks_dir / f"{task_id}.state.json"
 
     def _lock_path(self, task_id: str) -> Path:
+        # Preserve the legacy path so POSIX processes running across an
+        # upgrade still contend on the same kernel lock.
         return self.locks_dir / f"{task_id}.lock"
 
     def load_runtime(self, task_id: str) -> Optional[dict]:
@@ -904,7 +925,7 @@ class LocalFileStateStore(StateStore):
         try:
             with open(state_path, encoding="utf-8") as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (json.JSONDecodeError, OSError, UnicodeError):
             return None
 
     def save_runtime(self, task_id: str, data: dict) -> None:
@@ -916,22 +937,39 @@ class LocalFileStateStore(StateStore):
     @contextmanager
     def lock_task(self, task_id: str):
         """Acquire exclusive lock for task operations."""
-        self.locks_dir.mkdir(parents=True, exist_ok=True)
-        lock_path = self._lock_path(task_id)
-        with open(lock_path, "w") as f:
-            try:
-                _flock(f, LOCK_EX)
-                yield
-            finally:
-                _flock(f, LOCK_UN)
+        with cross_process_lock(self._lock_path(task_id)):
+            yield
 
-    def list_runtime_files(self) -> list[str]:
+    def load_all_runtime(
+        self, task_ids: Optional[set[str]] = None
+    ) -> dict[str, dict]:
         if not self.tasks_dir.exists():
-            return []
-        return [
-            f.stem.replace(".state", "")
-            for f in self.tasks_dir.glob("*.state.json")
-        ]
+            return {}
+        runtime_by_id = {}
+        if task_ids is None:
+            candidates = (
+                (state_path.name.removesuffix(".state.json"), state_path)
+                for state_path in self.tasks_dir.glob("*.state.json")
+            )
+        else:
+            candidates = (
+                (task_id, self._state_path(task_id))
+                for task_id in sorted(task_ids, key=id_sort_key)
+            )
+        for task_id, state_path in candidates:
+            if not is_task_id(task_id) or not state_path.exists():
+                continue
+            try:
+                with open(state_path, encoding="utf-8") as f:
+                    runtime_by_id[task_id] = json.load(f)
+            except (json.JSONDecodeError, OSError, UnicodeError):
+                continue
+        return runtime_by_id
+
+    def delete_runtime(self, task_id: str) -> None:
+        state_path = self._state_path(task_id)
+        if state_path.exists():
+            state_path.unlink()
 
 
 def get_state_store() -> LocalFileStateStore:
@@ -961,15 +999,19 @@ def load_task_with_state(task_id: str, use_json: bool = True) -> dict:
     store = get_state_store()
     runtime = store.load_runtime(task_id)
 
+    return merge_task_runtime(definition, runtime)
+
+
+def merge_task_runtime(definition: dict, runtime: Optional[dict]) -> dict:
+    """Merge one tracked task definition with its authoritative runtime state."""
     if runtime is None:
-        # Backward compat: extract runtime fields from definition
+        # Backward compat: extract runtime fields from definition.
         runtime = {k: definition[k] for k in RUNTIME_FIELDS if k in definition}
         if not runtime:
             runtime = {"status": "todo"}
 
-    # Merge: runtime overwrites definition for runtime fields
-    merged = {**definition, **runtime}
-    return normalize_task(merged)
+    # Merge: runtime overwrites definition for runtime fields.
+    return normalize_task({**definition, **runtime})
 
 
 def save_task_runtime(task_id: str, updates: dict) -> None:
@@ -993,20 +1035,7 @@ def delete_task_runtime(task_id: str) -> None:
     """Delete runtime state file entirely. Used by checkpoint restore when no runtime."""
     store = get_state_store()
     with store.lock_task(task_id):
-        state_path = store._state_path(task_id)
-        if state_path.exists():
-            state_path.unlink()
-
-
-def save_task_definition(task_id: str, definition: dict) -> None:
-    """Write definition to tracked file (filters out runtime fields)."""
-    flow_dir = get_flow_dir()
-    def_path = flow_dir / TASKS_DIR / f"{task_id}.json"
-    # Filter out runtime fields
-    clean_def = {k: v for k, v in definition.items() if k not in RUNTIME_FIELDS}
-    # fn-43.2: ensure persisted JSON uses canonical "spec" key only.
-    canonicalize_task_for_write(clean_def)
-    atomic_write_json(def_path, clean_def)
+        store.delete_runtime(task_id)
 
 
 # --- Tracker sync (fn-52) ---
@@ -1022,7 +1051,6 @@ def save_task_definition(task_id: str, definition: dict) -> None:
 # bridge-active predicate alone, not a perEvent leaf — see SKILL.md / steps.md).
 TRACKER_TYPES = {"linear", "github", "gitlab", "jira"}
 TRACKER_PER_EVENT_LEAVES = {"off", "pull", "push", "reconcile", "comment"}
-TRACKER_TIEBREAKS = {"flow-wins", "tracker-wins", "always-ask"}
 # Default staleness threshold (hours) consumed by `sync list-stale`.
 TRACKER_DEFAULT_STALE_HOURS = 24
 # Sync receipt status enum spanning all three sync layers (body / status /
@@ -1620,20 +1648,43 @@ def now_iso() -> str:
 
 
 def require_rp_cli() -> str:
-    """Ensure rp-cli is available."""
-    rp = shutil.which("rp-cli")
-    if not rp:
-        error_exit("rp-cli not found in PATH", use_json=False, code=2)
-    return rp
+    """Resolve the supported RepoPrompt CLI ladder, preferring CE."""
+    candidates = [
+        shutil.which("rpce-cli"),
+        str(Path.home() / "RepoPrompt" / "repoprompt_ce_cli"),
+        str(
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "RepoPrompt CE"
+            / "repoprompt_ce_cli"
+        ),
+        shutil.which("rp-cli"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        try:
+            if path.is_file() and os.access(path, os.X_OK):
+                return str(path)
+        except OSError:
+            continue
+    error_exit(
+        "RepoPrompt CE CLI not found. Install RepoPrompt CE with rpce-cli "
+        "(legacy rp-cli is accepted only as a Classic compatibility fallback).",
+        use_json=False,
+        code=2,
+    )
 
 
 def run_rp_cli(
     args: list[str], timeout: Optional[int] = None
 ) -> subprocess.CompletedProcess:
-    """Run rp-cli with safe error handling and timeout.
+    """Run the selected RepoPrompt CLI with safe error handling and timeout.
 
     Args:
-        args: Command arguments to pass to rp-cli
+        args: Command arguments to pass to the selected RepoPrompt CLI
         timeout: Max seconds to wait. Default from FLOW_RP_TIMEOUT env or 1200s (20min).
     """
     if timeout is None:
@@ -1645,16 +1696,16 @@ def run_rp_cli(
             cmd, capture_output=True, text=True, encoding="utf-8", check=True, timeout=timeout
         )
     except subprocess.TimeoutExpired:
-        error_exit(f"rp-cli timed out after {timeout}s", use_json=False, code=3)
+        error_exit(f"RepoPrompt CLI timed out after {timeout}s", use_json=False, code=3)
     except subprocess.CalledProcessError as e:
         msg = (e.stderr or e.stdout or str(e)).strip()
-        error_exit(f"rp-cli failed: {msg}", use_json=False, code=2)
+        error_exit(f"RepoPrompt CLI failed: {msg}", use_json=False, code=2)
 
 
 def run_rp_cli_unchecked(
     args: list[str], timeout: Optional[int] = None
 ) -> subprocess.CompletedProcess:
-    """Run rp-cli without collapsing command failures.
+    """Run the selected RepoPrompt CLI without collapsing command failures.
 
     Used when a caller needs to inspect stderr/stdout before deciding whether a
     failure is a capability mismatch or a real RepoPrompt error.
@@ -1666,16 +1717,17 @@ def run_rp_cli_unchecked(
     try:
         return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
     except subprocess.TimeoutExpired:
-        error_exit(f"rp-cli timed out after {timeout}s", use_json=False, code=3)
+        error_exit(f"RepoPrompt CLI timed out after {timeout}s", use_json=False, code=3)
 
 
 def try_run_rp_cli(
     args: list[str], timeout: Optional[int] = None
 ) -> Optional[subprocess.CompletedProcess]:
-    """Run rp-cli and return None on failure.
+    """Run optional Classic capability probes without masking real failures.
 
-    Used for optional capability probing where newer RepoPrompt features may not
-    exist yet and flowctl should fall back gracefully.
+    Only Classic's explicit missing-``bind_context`` response is optional. CE
+    operational/protocol failures and all other Classic failures are
+    authoritative and must not fall through to workspace creation.
     """
     if timeout is None:
         timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
@@ -1685,8 +1737,15 @@ def try_run_rp_cli(
         return subprocess.run(
             cmd, capture_output=True, text=True, encoding="utf-8", check=True, timeout=timeout
         )
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-        return None
+    except subprocess.TimeoutExpired:
+        error_exit(f"RepoPrompt CLI timed out after {timeout}s", use_json=False, code=3)
+    except subprocess.CalledProcessError as exc:
+        output = (exc.stderr or exc.stdout or str(exc)).strip()
+        if Path(rp).name == "rp-cli" and is_rp_tool_missing_error(
+            output, "bind_context"
+        ):
+            return None
+        error_exit(f"RepoPrompt CLI failed: {output}", use_json=False, code=2)
 
 
 def is_rp_tool_missing_error(output: str, tool_name: str) -> bool:
@@ -1741,14 +1800,30 @@ def extract_window_id(win: dict[str, Any]) -> Optional[int]:
 
 
 def extract_root_paths(win: dict[str, Any]) -> list[str]:
+    """Collect legacy and CE tab repository roots in deterministic order."""
+    paths: list[str] = []
+
+    def add(value: Any, *, coerce: bool = False) -> None:
+        values = value if isinstance(value, list) else [value]
+        for item in values:
+            path = item if isinstance(item, str) else str(item) if coerce else None
+            if path is not None and path not in paths:
+                paths.append(path)
+
     for key in ("rootFolderPaths", "rootFolders", "rootFolderPath"):
         if key in win:
-            val = win[key]
-            if isinstance(val, list):
-                return [str(v) for v in val]
-            if isinstance(val, str):
-                return [val]
-    return []
+            add(win[key], coerce=True)
+
+    tabs = win.get("tabs")
+    if isinstance(tabs, list):
+        for tab in tabs:
+            if not isinstance(tab, dict):
+                continue
+            for key in ("repo_paths", "repoPaths"):
+                if key in tab:
+                    add(tab[key])
+
+    return paths
 
 
 def parse_manage_workspaces(raw: str) -> list[dict[str, Any]]:
@@ -1899,7 +1974,7 @@ def extract_response_window_id(data: Any) -> Optional[int]:
         win_id = extract_window_id(data)
         if win_id is not None:
             return win_id
-        for key in ("result", "data"):
+        for key in ("result", "data", "binding"):
             if key in data:
                 win_id = extract_response_window_id(data[key])
                 if win_id is not None:
@@ -1937,9 +2012,13 @@ def extract_builder_tab_from_payload(data: Any) -> Optional[str]:
     return None
 
 
-def bind_context_window(repo_root: str) -> Optional[int]:
+def bind_context_window(
+    repo_root: str, *, create_if_missing: bool = False
+) -> Optional[int]:
     """Prefer RepoPrompt's bind_context repo-path matching when available."""
     payload = {"op": "bind", "working_dirs": normalize_repo_root(repo_root)}
+    if create_if_missing:
+        payload["create_if_missing"] = True
     result = try_run_rp_cli(
         ["--raw-json", "-e", f"call bind_context {json.dumps(payload)}"]
     )
@@ -1948,10 +2027,19 @@ def bind_context_window(repo_root: str) -> Optional[int]:
 
     try:
         data = json.loads(result.stdout or "{}")
-    except json.JSONDecodeError:
-        return None
+    except json.JSONDecodeError as exc:
+        error_exit(
+            f"bind_context JSON parse failed: {exc}", use_json=False, code=2
+        )
 
-    return extract_response_window_id(data)
+    window_id = extract_response_window_id(data)
+    if window_id is None:
+        error_exit(
+            "bind_context response missing numeric window id",
+            use_json=False,
+            code=2,
+        )
+    return window_id
 
 
 def parse_builder_tab(output: str) -> str:
@@ -1982,7 +2070,7 @@ def parse_builder_tab(output: str) -> str:
 
 
 def parse_chat_id(output: str) -> Optional[str]:
-    match = re.search(r"Chat\s*:\s*`([^`]+)`", output)
+    match = re.search(r"(?:\*\*)?Chat(?:\*\*)?\s*:\s*`([^`]+)`", output)
     if match:
         return match.group(1)
     match = re.search(r"\"chat_id\"\s*:\s*\"([^\"]+)\"", output)
@@ -2050,6 +2138,32 @@ def atomic_write_json(path: Path, data: dict) -> None:
     """Write JSON file atomically with sorted keys."""
     content = json.dumps(data, indent=2, sort_keys=True) + "\n"
     atomic_write(path, content)
+
+
+def atomic_create(path: Path, content: str) -> None:
+    """Publish a new file atomically without ever replacing an existing path.
+
+    A complete sibling temp file is hard-linked into place. ``os.link`` is an
+    atomic no-clobber publication on POSIX and Windows when source and target
+    share a directory; a concurrent/pre-existing target raises
+    ``FileExistsError`` instead of being overwritten by ``os.replace``.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.link(tmp_path, path)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            # Temp cleanup is best-effort. If os.link failed, preserve that
+            # original exception; if it succeeded, publication is complete
+            # and the caller must be allowed to track/rollback the target.
+            pass
 
 
 def load_json(path: Path) -> dict:
@@ -2258,30 +2372,13 @@ def _setup_block_lock():
     second writer clobbers the first target's hash. A repo-local exclusive lock
     (re-read meta INSIDE the lock at each call site) makes the map merge safe.
     """
-    lock_dir = get_flow_dir() / "locks"
-    lock_dir.mkdir(parents=True, exist_ok=True)
-    # The parent dir itself must be a real directory: a repository-controlled
-    # `.flow/locks -> /outside` symlink would relocate every child open even
-    # with O_NOFOLLOW on the leaf (security review, PR #209 wave 2).
-    if lock_dir.is_symlink() or not lock_dir.is_dir():
-        error_exit(f"setup-block lock dir is not a real directory: {lock_dir}", use_json=True)
-    lock_path = lock_dir / "setup-block.lock"
-    # O_NOFOLLOW: a repository-controlled symlink at the lock path must not
-    # redirect the open outside .flow/locks (security review, PR #209). No
-    # truncation flag - flock only needs a stable fd, never file content.
-    flags = os.O_CREAT | os.O_WRONLY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
+    # Preserve the legacy leaf so POSIX processes across an upgrade contend.
+    lock_path = get_flow_dir() / "locks" / "setup-block.lock"
     try:
-        fd = os.open(lock_path, flags, 0o644)
-    except OSError as e:
-        error_exit(f"setup-block lock unavailable: {lock_path} ({e})", use_json=True)
-    with os.fdopen(fd, "w") as f:
-        try:
-            _flock(f, LOCK_EX)
+        with cross_process_lock(lock_path):
             yield
-        finally:
-            _flock(f, LOCK_UN)
+    except CrossProcessLockError as e:
+        error_exit(f"setup-block lock unavailable: {e}", use_json=True)
 
 
 def _setup_block_emit(args: argparse.Namespace, target: str, action: str,
@@ -2889,7 +2986,7 @@ def get_changed_files(base_branch: str) -> list[str]:
             cwd=get_repo_root(),
         )
         return [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return []
 
 
@@ -3079,7 +3176,7 @@ def find_references(
             if len(refs) >= max_results:
                 break
         return refs
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return []
 
 
@@ -3155,7 +3252,7 @@ def get_codex_version() -> Optional[str]:
         output = result.stdout.strip()
         match = re.search(r"(\d+\.\d+\.\d+)", output)
         return match.group(1) if match else output
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return None
 
 
@@ -3209,14 +3306,17 @@ def resolve_codex_sandbox(sandbox: str) -> str:
 # ONLY when that dispatch fails with the backend's DISTINCTIVE model-unavailable
 # signature; any OTHER failure (auth / network / sandbox / timeout) propagates
 # unchanged, so the ladder can never mask a real failure. A resolved downgrade
-# memoizes per ``(backend, CLI version)`` so the failed round-trip is paid at
-# most once per CLI upgrade. Explicit model pins bypass ladder + cache entirely.
+# memoizes per ``(backend, CLI version, routing intent)`` with bounded expiry so
+# role changes take effect immediately and stronger models are periodically
+# re-probed. Explicit model pins bypass ladder + cache entirely.
 #
 # The ladder lives BELOW the fn-90 review-round cap: the review handler increments
 # the cap once before calling the exec wrapper, and every ladder rung is the SAME
 # logical dispatch — ``enforce_and_increment_review_cap`` is NEVER called here.
 
 _MODEL_CACHE_FLOOR = "__floor__"  # sentinel: resolution reached the never-fail floor
+_MODEL_CACHE_TTL_SECS = 24 * 60 * 60
+_MODEL_CACHE_MAX_FUTURE_SKEW_SECS = 5 * 60
 
 # Distinctive model-unavailable signatures, captured VERBATIM from live probes
 # 2026-07-10 (all three CLIs). Matching ONLY these keeps the ladder from stepping
@@ -3259,8 +3359,42 @@ def _model_cache_path(repo_root: Optional[Path]) -> Optional[Path]:
     return repo_root / ".flow" / ".cache" / "model-resolution.json"
 
 
-def _model_cache_key(backend: str, cli_version: Optional[str]) -> str:
-    return f"{backend}@{cli_version or 'unknown'}"
+def _model_cache_now() -> float:
+    """Persistable wall clock for bounded cache entries (test indirection)."""
+    import time as _time
+
+    return _time.time()
+
+
+def _model_cache_intent(
+    backend: str,
+    spec: "BackendSpec",
+    ranking: list[str],
+    floor_model: Optional[str],
+    max_steps: int,
+) -> str:
+    """Fingerprint the effective non-explicit routing ladder.
+
+    CLI version alone cannot identify a resolution: role-map mutations and
+    registry updates can change the requested start/candidates without changing
+    the installed CLI. Hash the complete deterministic model-selection intent.
+    """
+    payload = {
+        "backend": backend,
+        "start": spec.model,
+        "source": spec.routing_intent or f"implicit:{spec.model or 'none'}",
+        "ranking": ranking,
+        "floor": floor_model,
+        "max_steps": max_steps,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
+
+
+def _model_cache_key(
+    backend: str, cli_version: Optional[str], intent: str
+) -> str:
+    return f"{backend}@{cli_version or 'unknown'}@{intent}"
 
 
 def _read_model_cache(repo_root: Optional[Path]) -> dict:
@@ -3275,37 +3409,109 @@ def _read_model_cache(repo_root: Optional[Path]) -> dict:
         return {}
 
 
+def _model_cache_entry(data: dict, key: str) -> Optional[str]:
+    """Return one fresh cached model; legacy/malformed/expired entries are cold."""
+    entry = data.get(key)
+    if not isinstance(entry, dict):
+        return None
+    model = entry.get("model")
+    cached_at = entry.get("cached_at")
+    if (
+        not isinstance(model, str)
+        or not model.strip()
+        or isinstance(cached_at, bool)
+        or not isinstance(cached_at, (int, float))
+        or not math.isfinite(float(cached_at))
+    ):
+        return None
+    age = _model_cache_now() - float(cached_at)
+    if age < -_MODEL_CACHE_MAX_FUTURE_SKEW_SECS or age >= _MODEL_CACHE_TTL_SECS:
+        return None
+    return model
+
+
+def _model_cache_lock_path(path: Path) -> Path:
+    return path.with_name(f"{path.name}.lock")
+
+
 def _model_cache_put(
-    repo_root: Optional[Path], backend: str, cli_version: Optional[str], model: str
+    repo_root: Optional[Path],
+    backend: str,
+    cli_version: Optional[str],
+    intent: str,
+    model: str,
 ) -> None:
     """Memoize a resolved model. Best-effort — a cache write never fails a review."""
     path = _model_cache_path(repo_root)
     if path is None:
         return
     try:
-        data = _read_model_cache(repo_root)
-        data[_model_cache_key(backend, cli_version)] = model
-        path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(path, data)
-    except OSError:
+        with cross_process_lock(_model_cache_lock_path(path)):
+            data = _read_model_cache(repo_root)
+            data[_model_cache_key(backend, cli_version, intent)] = {
+                "model": model,
+                "cached_at": _model_cache_now(),
+            }
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(path, data)
+    except (OSError, CrossProcessLockError):
         pass
 
 
 def _model_cache_invalidate(
-    repo_root: Optional[Path], backend: str, cli_version: Optional[str]
+    repo_root: Optional[Path],
+    backend: str,
+    cli_version: Optional[str],
+    intent: str,
 ) -> None:
     """Drop a stale cache entry (a cached model that just failed the signature)."""
     path = _model_cache_path(repo_root)
     if path is None:
         return
-    key = _model_cache_key(backend, cli_version)
+    key = _model_cache_key(backend, cli_version, intent)
     try:
-        data = _read_model_cache(repo_root)
-        if key in data:
-            del data[key]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            atomic_write_json(path, data)
-    except OSError:
+        with cross_process_lock(_model_cache_lock_path(path)):
+            data = _read_model_cache(repo_root)
+            if key in data:
+                del data[key]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write_json(path, data)
+    except (OSError, CrossProcessLockError):
+        pass
+
+
+def _model_cache_prune(
+    repo_root: Optional[Path],
+    backend: str,
+    cli_version: Optional[str],
+    intent: str,
+) -> None:
+    """Drop obsolete same-backend entries and an invalid current entry.
+
+    A routing/CLI change pays one version probe, then removes the superseded
+    keys so later happy-path dispatches return to the zero-probe fast path.
+    Other backends are unrelated cache owners and are always preserved.
+    """
+    path = _model_cache_path(repo_root)
+    if path is None:
+        return
+    keep_key = _model_cache_key(backend, cli_version, intent)
+    prefix = f"{backend}@"
+    try:
+        with cross_process_lock(_model_cache_lock_path(path)):
+            data = _read_model_cache(repo_root)
+            changed = False
+            for key in list(data):
+                if isinstance(key, str) and key.startswith(prefix) and key != keep_key:
+                    del data[key]
+                    changed = True
+            if keep_key in data and _model_cache_entry(data, keep_key) is None:
+                del data[keep_key]
+                changed = True
+            if changed:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write_json(path, data)
+    except (OSError, CrossProcessLockError):
         pass
 
 
@@ -3319,13 +3525,15 @@ def _warn_model_resolution(
         )
         print(
             f"warning: {backend} model {tried!r} unavailable; fell back to the "
-            f"never-fail floor ({used_desc}). Cached for this CLI version.",
+            f"never-fail floor ({used_desc}). Cached temporarily for this CLI "
+            "version and routing intent.",
             file=sys.stderr,
         )
     else:
         print(
             f"warning: {backend} model {tried!r} unavailable; downgraded to "
-            f"{used!r}. Cached for this CLI version.",
+            f"{used!r}. Cached temporarily for this CLI version and routing "
+            "intent.",
             file=sys.stderr,
         )
 
@@ -3370,6 +3578,9 @@ def _dispatch_review_with_fallback(
             ranking = ranking[ranking.index(spec.model):]
         else:
             ranking = [spec.model] + ranking
+    cache_intent = _model_cache_intent(
+        backend, spec, ranking, floor_model, max_steps
+    )
 
     def _record(model: Optional[str], floor: bool) -> None:
         if resolution_out is not None:
@@ -3397,7 +3608,19 @@ def _dispatch_review_with_fallback(
     # Cheap pre-check: only consult the version (a subprocess) when the cache
     # file actually has entries — the pristine happy path never touches it.
     raw_cache = _read_model_cache(repo_root)
-    cached = raw_cache.get(_model_cache_key(backend, _ver())) if raw_cache else None
+    backend_keys = [
+        key
+        for key in raw_cache
+        if isinstance(key, str) and key.startswith(f"{backend}@")
+    ]
+    cache_key = (
+        _model_cache_key(backend, _ver(), cache_intent) if backend_keys else None
+    )
+    cached = _model_cache_entry(raw_cache, cache_key) if cache_key else None
+    if cache_key and (
+        cached is None or any(key != cache_key for key in backend_keys)
+    ):
+        _model_cache_prune(repo_root, backend, _ver(), cache_intent)
 
     if cached is not None:
         if cached == _MODEL_CACHE_FLOOR:
@@ -3408,7 +3631,7 @@ def _dispatch_review_with_fallback(
             return _resolved(out, sid, rc, err, cached, False)
         # A cached model that now fails the signature (org revoked it mid-version)
         # → drop it and re-resolve fresh from the ranking top. Self-healing.
-        _model_cache_invalidate(repo_root, backend, _ver())
+        _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
 
     top = ranking[0]
 
@@ -3423,11 +3646,13 @@ def _dispatch_review_with_fallback(
         if best is not None:
             out, sid, rc, err = dispatch(best, False)
             if rc == 0 or not is_unavailable(out, err):
-                _model_cache_put(repo_root, backend, _ver(), best)
+                _model_cache_put(repo_root, backend, _ver(), cache_intent, best)
                 _warn_model_resolution(backend, top, best, floor=False)
                 return _resolved(out, sid, rc, err, best, False)
         out, sid, rc, err = dispatch(floor_model, True)
-        _model_cache_put(repo_root, backend, _ver(), _MODEL_CACHE_FLOOR)
+        _model_cache_put(
+            repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR
+        )
         _warn_model_resolution(backend, top, floor_model, floor=True)
         return _resolved(out, sid, rc, err, floor_model, True)
 
@@ -3439,11 +3664,11 @@ def _dispatch_review_with_fallback(
         out, sid, rc, err = dispatch(model, False)
         if rc == 0 or not is_unavailable(out, err):
             if idx > 0:
-                _model_cache_put(repo_root, backend, _ver(), model)
+                _model_cache_put(repo_root, backend, _ver(), cache_intent, model)
                 _warn_model_resolution(backend, top, model, floor=False)
             return _resolved(out, sid, rc, err, model, False)
     out, sid, rc, err = dispatch(floor_model, True)
-    _model_cache_put(repo_root, backend, _ver(), _MODEL_CACHE_FLOOR)
+    _model_cache_put(repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR)
     _warn_model_resolution(backend, top, floor_model, floor=True)
     return _resolved(out, sid, rc, err, floor_model, True)
 
@@ -4807,6 +5032,10 @@ class BackendSpec:
     # registry-default fill) — only those code paths may mark a populated
     # model as non-explicit.
     model_explicit: Optional[bool] = field(default=None, compare=False)
+    # Non-explicit routing source used only for cache identity. A configured
+    # role pin and the registry baseline remain distinct intents even when both
+    # currently name the same model.
+    routing_intent: Optional[str] = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if self.model_explicit is None:
@@ -4933,21 +5162,28 @@ class BackendSpec:
         if reg["models"] is None:
             model = None
             model_explicit = False
+            routing_intent = None
         elif self.model is not None:
             model = self.model
             # PROPAGATE the incoming flag — never re-infer from presence: a
             # default-filled spec that gets re-resolved must stay non-explicit;
             # a parse()d or env-pinned model already carries True.
             model_explicit = self.model_explicit
+            routing_intent = self.routing_intent
+            if not model_explicit and routing_intent is None:
+                routing_intent = f"resolved:{model}"
         elif os.environ.get(env_model_key):
             model = os.environ.get(env_model_key)
             model_explicit = True
+            routing_intent = None
         elif role_model is not None:
             model = role_model
             model_explicit = False
+            routing_intent = f"role-map:review:{pin}"
         else:
             model = reg.get("default_model")
             model_explicit = False
+            routing_intent = f"registry:{model or 'none'}"
 
         if reg["efforts"] is None:
             effort = None
@@ -4960,7 +5196,11 @@ class BackendSpec:
             )
 
         return BackendSpec(
-            self.backend, model, effort, model_explicit=model_explicit
+            self.backend,
+            model,
+            effort,
+            model_explicit=model_explicit,
+            routing_intent=routing_intent,
         )
 
     def __str__(self) -> str:
@@ -5235,7 +5475,7 @@ def get_copilot_version() -> Optional[str]:
         version = match.group(1) if match else output
         _CLI_VERSION_CACHE[copilot] = version
         return version
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return None
 
 
@@ -5459,7 +5699,7 @@ def get_cursor_version() -> Optional[str]:
         version = match.group(1) if match else output
         _CLI_VERSION_CACHE[cursor] = version
         return version
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return None
 
 
@@ -6853,7 +7093,7 @@ def get_actor() -> str:
         )
         if email := result.stdout.strip():
             return email
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         pass
 
     # 3. git config user.name
@@ -6863,7 +7103,7 @@ def get_actor() -> str:
         )
         if name := result.stdout.strip():
             return name
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         pass
 
     # 4. $USER env var
@@ -7223,6 +7463,152 @@ def iter_spec_json_files(flow_dir: Path):
         yield seen[stem]
 
 
+def iter_task_json_files(flow_dir: Path, spec_id: Optional[str] = None):
+    """Yield every eligible task definition in stable cross-scheme order.
+
+    Task definitions have one canonical directory, but that directory also
+    contains JSON receipts and review artifacts. Filename grammar is the
+    cheap authoritative first gate; ``TaskInventory`` applies the second
+    gate (a real task payload with an ``id``) after the single file read.
+    """
+    tasks_dir = flow_dir / TASKS_DIR
+    if not tasks_dir.exists():
+        return
+    pattern = f"{spec_id}.*.json" if spec_id else "*.json"
+    eligible = (
+        task_file
+        for task_file in tasks_dir.glob(pattern)
+        if is_task_id(task_file.stem)
+        and (spec_id is None or spec_id_from_task(task_file.stem) == spec_id)
+    )
+    yield from sorted(eligible, key=lambda path: id_sort_key(path.stem))
+
+
+@dataclass
+class TaskInventory:
+    """One command-scoped scan of all tasks, or one requested spec's tasks."""
+
+    ordered: list[dict]
+    by_id: dict[str, dict]
+    by_spec: dict[str, list[dict]]
+    issues_by_spec: dict[str, list[str]] = field(default_factory=dict)
+
+    @classmethod
+    def load(
+        cls,
+        flow_dir: Path,
+        *,
+        use_json: bool = True,
+        tolerate_errors: bool = False,
+        merge_runtime: bool = True,
+        spec_id: Optional[str] = None,
+        spec_ids: Optional[set[str]] = None,
+        collect_consistency_errors: bool = False,
+        collect_load_errors: bool = False,
+    ) -> "TaskInventory":
+        task_files = list(iter_task_json_files(flow_dir, spec_id=spec_id))
+        if spec_ids is not None:
+            task_files = [
+                task_file
+                for task_file in task_files
+                if spec_id_from_task(task_file.stem) in spec_ids
+            ]
+        if not task_files:
+            return cls(ordered=[], by_id={}, by_spec={})
+        runtime_by_id = (
+            get_state_store().load_all_runtime(
+                {task_file.stem for task_file in task_files}
+            )
+            if merge_runtime
+            else {}
+        )
+        ordered = []
+        by_id = {}
+        by_spec: dict[str, list[dict]] = {}
+        issues_by_spec: dict[str, list[str]] = {}
+
+        def reject(file_spec: str, message: str) -> None:
+            if collect_consistency_errors:
+                issues_by_spec.setdefault(file_spec, []).append(message)
+            elif not tolerate_errors:
+                error_exit(message, use_json=use_json)
+
+        for task_file in task_files:
+            file_id = task_file.stem
+            file_spec = spec_id_from_task(file_id)
+            try:
+                if tolerate_errors or collect_load_errors:
+                    definition = load_json(task_file)
+                else:
+                    definition = load_json_or_exit(
+                        task_file,
+                        f"Task {task_file.stem}",
+                        use_json=use_json,
+                    )
+                task = (
+                    merge_task_runtime(
+                        definition, runtime_by_id.get(task_file.stem)
+                    )
+                    if merge_runtime
+                    else normalize_task(definition)
+                )
+            except Exception as error:
+                if collect_load_errors:
+                    kind = (
+                        "invalid JSON"
+                        if isinstance(error, json.JSONDecodeError)
+                        else "unreadable"
+                    )
+                    issues_by_spec.setdefault(file_spec, []).append(
+                        f"Task {file_id} {kind}: {task_file} ({error})"
+                    )
+                    continue
+                if tolerate_errors:
+                    continue
+                raise
+
+            # GH-21: a task-shaped artifact filename without an id is not a
+            # task payload. A present-but-invalid id is corrupt task data.
+            if "id" not in task:
+                continue
+            task_id = task.get("id")
+            if not isinstance(task_id, str) or not is_task_id(task_id):
+                reject(
+                    file_spec,
+                    f"Task definition {file_id}: invalid payload id {task_id!r}",
+                )
+                continue
+            if task_id != file_id:
+                reject(
+                    file_spec,
+                    f"Task definition {file_id}: payload id is {task_id}",
+                )
+                continue
+            owner = task.get("spec") or task.get("epic")
+            if owner != file_spec:
+                reject(
+                    file_spec,
+                    f"Task definition {file_id}: owning spec is {owner!r}, expected {file_spec}",
+                )
+                continue
+            if task_id in by_id:
+                reject(file_spec, f"Duplicate task definition id: {task_id}")
+                continue
+            ordered.append(task)
+            by_id[task_id] = task
+            by_spec.setdefault(file_spec, []).append(task)
+
+        ordered.sort(key=lambda task: id_sort_key(task["id"]))
+        for tasks in by_spec.values():
+            tasks.sort(key=lambda task: id_sort_key(task["id"]))
+        return cls(
+            ordered=ordered,
+            by_id=by_id,
+            by_spec=by_spec,
+            issues_by_spec=issues_by_spec,
+        )
+
+
 def scan_max_task_id(flow_dir: Path, epic_id: str) -> int:
     """Scan .flow/tasks/ to find max task number for an epic. Returns 0 if none exist."""
     tasks_dir = flow_dir / TASKS_DIR
@@ -7236,15 +7622,6 @@ def scan_max_task_id(flow_dir: Path, epic_id: str) -> int:
             m = int(match.group(1))
             max_m = max(max_m, m)
     return max_m
-
-
-def require_keys(obj: dict, keys: list[str], what: str, use_json: bool = True) -> None:
-    """Validate dict has required keys. Exits on missing keys."""
-    missing = [k for k in keys if k not in obj]
-    if missing:
-        error_exit(
-            f"{what} missing required keys: {', '.join(missing)}", use_json=use_json
-        )
 
 
 # --- Spec File Operations ---
@@ -7586,41 +7963,42 @@ def clear_task_evidence(task_id: str) -> None:
 def find_dependents(task_id: str, same_epic: bool = False) -> list[str]:
     """Find tasks that depend on task_id (recursive). Returns list of dependent task IDs."""
     flow_dir = get_flow_dir()
-    tasks_dir = flow_dir / TASKS_DIR
-    if not tasks_dir.exists():
+    if not (flow_dir / TASKS_DIR).exists():
         return []
 
     spec_id = spec_id_from_task(task_id) if same_epic else None
-    dependents: set[str] = set()  # Use set to avoid duplicates
-    to_check = [task_id]
-    checked = set()
-
-    while to_check:
-        checking = to_check.pop(0)
-        if checking in checked:
+    inventory = TaskInventory.load(
+        flow_dir,
+        tolerate_errors=True,
+        merge_runtime=False,
+    )
+    reverse: dict[str, list[str]] = {}
+    for task in inventory.ordered:
+        tid = task["id"]
+        if same_epic and spec_id_from_task(tid) != spec_id:
             continue
-        checked.add(checking)
+        dependencies = task.get("depends_on", [])
+        if not isinstance(dependencies, list):
+            continue
+        for dependency in dependencies:
+            if not isinstance(dependency, str) or not is_task_id(dependency):
+                continue
+            reverse.setdefault(dependency, []).append(tid)
 
-        for task_file in tasks_dir.glob("fn-*.json"):
-            if not is_task_id(task_file.stem):
-                continue  # Skip non-task files (e.g., fn-1.2-review.json)
-            try:
-                task_data = load_json(task_file)
-                tid = task_data.get("id", task_file.stem)
-                if tid in checked or tid in dependents:
-                    continue
-                # Skip if same_epic filter and different spec
-                if same_epic and spec_id_from_task(tid) != spec_id:
-                    continue
-                # Support both legacy "deps" and current "depends_on"
-                deps = task_data.get("depends_on", task_data.get("deps", []))
-                if checking in deps:
-                    dependents.add(tid)
-                    to_check.append(tid)
-            except Exception:
-                pass
+    # Build the reverse graph once, then traverse each edge at most once.
+    found: set[str] = set()
+    seen = {task_id}
+    to_check = deque(reverse.get(task_id, []))
+    while to_check:
+        dependent = to_check.popleft()
+        if dependent in seen:
+            continue
+        seen.add(dependent)
+        found.add(dependent)
+        to_check.extend(reverse.get(dependent, []))
 
-    return sorted(dependents)
+    # Preserve the historic public ordering contract (plain ID sort).
+    return sorted(found)
 
 
 # --- Ralph status soft-probe (fn-114 PLAN DECISION 2026-07-21) ---
@@ -7734,7 +8112,7 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # proof-of-work; accumulate per pilot tick, same runtime-artifact class as
     # sync-runs/ — deliberately NOT a receipts/ path the ralph-guard validates)
     "pilot-runs/",
-    # fn-76 per-CLI-version model-resolution cache (.flow/.cache/): a memoized
+    # fn-76 model-resolution cache (.flow/.cache/): a memoized
     # ladder result, a runtime artifact keyed on the local CLI version — never
     # durable repo state.
     ".cache/",
@@ -7786,54 +8164,66 @@ def _ensure_flow_gitignore(flow_dir: Path) -> bool:
 # endings; LAUNCHER_CMD is stored LF here but written to disk as CRLF (a
 # Windows batch file) by _stamp_flow_bin_launchers.
 LAUNCHER_SH = r'''#!/bin/bash
-# flowctl wrapper — invokes flowctl.py from the same directory via a probed
-# Python interpreter.
+# flowctl wrapper — invokes the source-first bootstrap beside flowctl.py via a
+# probed Python 3.11+ interpreter.
 #
 # SELF-CONTAINED: this launcher does NOT source scripts/lib/pick-python.sh —
 # installed copies (.flow/bin/flowctl, scripts/ralph/flowctl) can't assume that
 # path is reachable. Keep this inline probe in sync with the shared resolver at
 # plugins/flow-next/scripts/lib/pick-python.sh.
 #
-# Probe = functionality, not presence: each candidate must actually run
-# `<cand> -c "import sys"` and exit 0, so the Windows Store `python3` App
-# Execution Alias stub (prints "Python was not found", exits 9009) is skipped
-# even though it is present on PATH. Candidate order:
+# Probe = functionality + minimum version: each candidate must actually run and
+# report Python 3.11+, so the Windows Store `python3` App Execution Alias stub
+# and working-but-too-old interpreters are skipped. Candidate order:
 #   $PYTHON_BIN (scalar override) -> py -3 -> python3 -> python
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FLOWCTL_SOURCE_DIR="$SCRIPT_DIR"
 
 FLOW_PY=()
+FLOW_PY_TOO_OLD=()
 for _cand in "${PYTHON_BIN:-}" "py -3" "python3" "python"; do
   [ -n "$_cand" ] || continue
   # Intentional word-split so the two-word `py -3` becomes two argv elements.
   read -r -a _argv <<< "$_cand"
   [ "${#_argv[@]}" -gt 0 ] || continue
-  if "${_argv[@]}" -c "import sys" >/dev/null 2>&1; then
+  if "${_argv[@]}" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1; then
     FLOW_PY=("${_argv[@]}")
     break
+  elif [ "$?" -eq 3 ]; then
+    FLOW_PY_TOO_OLD+=("$_cand")
   fi
 done
 
 if [ "${#FLOW_PY[@]}" -eq 0 ]; then
-  echo "flowctl: no working Python interpreter found (tried \$PYTHON_BIN, py -3, python3, python)." >&2
-  echo "  On Windows, 'python3' may be the disabled Microsoft Store alias stub;" >&2
-  echo "  install python.org Python (or the py launcher), or set PYTHON_BIN to a working interpreter." >&2
+  if [ "${#FLOW_PY_TOO_OLD[@]}" -gt 0 ]; then
+    echo "flowctl: Python 3.11 or newer is required; working but too-old candidate(s): ${FLOW_PY_TOO_OLD[*]}." >&2
+    echo "  Install a supported Python, or set PYTHON_BIN to its command name." >&2
+  else
+    echo "flowctl: no working Python interpreter found (tried \$PYTHON_BIN, py -3, python3, python)." >&2
+    echo "  On Windows, 'python3' may be the disabled Microsoft Store alias stub;" >&2
+    echo "  install python.org Python (or the py launcher), or set PYTHON_BIN to a working interpreter." >&2
+  fi
   exit 1
 fi
 
-exec "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" "$@"
+FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl.py"
+if [ "$#" -eq 1 ] && { [ "$1" = "usage" ] || [ "$1" = "--help" ]; } \
+  && [ -f "$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py" ]; then
+  FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py"
+fi
+exec "${FLOW_PY[@]}" "$FLOWCTL_ENTRY" "$@"
 '''
 
 LAUNCHER_CMD = '''@ECHO OFF
 REM flowctl.cmd -- Windows batch launcher for cmd.exe / PowerShell (Claude
-REM Desktop, native Codex, native Cursor). Invokes flowctl.py from this
-REM directory via a probed Python interpreter. Companion to the extensionless
+REM Desktop, native Codex, native Cursor). Invokes the source-first bootstrap
+REM beside flowctl.py via a probed Python 3.11+ interpreter. Companion to the extensionless
 REM bash `flowctl` launcher (Git Bash / WSL / macOS / Linux); PATHEXT resolves
 REM `flowctl` to this file in cmd/PowerShell.
 REM
-REM Probe = functionality, not presence: each candidate must actually run
-REM `<cand> -c "import sys"` and exit 0, so the Microsoft Store `python3` App
-REM Execution Alias stub (prints "Python was not found", exits 9009) is skipped
-REM even though it is on PATH. Candidate order mirrors the bash launcher:
+REM Probe = functionality + minimum version: each candidate must actually run
+REM and report Python 3.11+, so the Microsoft Store `python3` App Execution
+REM Alias stub and working-but-too-old interpreters are skipped. Candidate order:
 REM   %PYTHON_BIN% (command name only) -> py -3 -> python3 -> python
 REM Keep this probe in sync with plugins/flow-next/scripts/lib/pick-python.sh.
 GOTO :start
@@ -7847,33 +8237,52 @@ SETLOCAL
 CALL :find_dp0
 
 SET "_prog="
+SET "_old="
 
 REM %PYTHON_BIN% is honored as a COMMAND NAME ONLY (e.g. python3.12, py) -- no
 REM quoted paths-with-spaces / embedded args, which keeps batch quoting trivial.
+REM CALL is required because a candidate may itself be a .cmd shim; without it,
+REM control transfers out of this launcher instead of resuming the probe ladder.
 IF DEFINED PYTHON_BIN (
-  "%PYTHON_BIN%" -c "import sys" >NUL 2>&1 && SET "_prog=%PYTHON_BIN%"
+  CALL "%PYTHON_BIN%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
+  IF NOT ERRORLEVEL 1 SET "_prog=%PYTHON_BIN%"
+  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=%PYTHON_BIN%"
 )
 IF NOT DEFINED _prog (
-  py -3 -c "import sys" >NUL 2>&1 && SET "_prog=py -3"
+  CALL py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
+  IF NOT ERRORLEVEL 1 SET "_prog=py -3"
+  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=py -3"
 )
 IF NOT DEFINED _prog (
-  python3 -c "import sys" >NUL 2>&1 && SET "_prog=python3"
+  CALL python3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
+  IF NOT ERRORLEVEL 1 SET "_prog=python3"
+  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=python3"
 )
 IF NOT DEFINED _prog (
-  python -c "import sys" >NUL 2>&1 && SET "_prog=python"
+  CALL python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
+  IF NOT ERRORLEVEL 1 SET "_prog=python"
+  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=python"
 )
 
 IF NOT DEFINED _prog (
-  ECHO flowctl: no working Python interpreter found ^(tried PYTHON_BIN, py -3, python3, python^). 1>&2
-  ECHO   On Windows, 'python3' may be the disabled Microsoft Store alias stub; 1>&2
-  ECHO   install python.org Python ^(or the py launcher^), or set PYTHON_BIN to a working interpreter. 1>&2
+  IF DEFINED _old (
+    ECHO flowctl: Python 3.11 or newer is required; working but too-old candidate: %_old%. 1>&2
+    ECHO   Install a supported Python, or set PYTHON_BIN to its command name. 1>&2
+  ) ELSE (
+    ECHO flowctl: no working Python interpreter found ^(tried PYTHON_BIN, py -3, python3, python^). 1>&2
+    ECHO   On Windows, 'python3' may be the disabled Microsoft Store alias stub; 1>&2
+    ECHO   install python.org Python ^(or the py launcher^), or set PYTHON_BIN to a working interpreter. 1>&2
+  )
   EXIT /b 1
 )
 
 REM %_prog% is intentionally UNQUOTED so a two-word `py -3` expands to two argv
 REM words; this is why %PYTHON_BIN% must be a command name only. Args (%*) and
 REM the dp0 path are quoted so spaced/paren'd install paths survive.
-%_prog% "%dp0%flowctl.py" %*
+SET "_entry=%dp0%flowctl.py"
+IF EXIST "%dp0%flowctl_bootstrap.py" IF "%~2"=="" IF "%~1"=="usage" SET "_entry=%dp0%flowctl_bootstrap.py"
+IF EXIST "%dp0%flowctl_bootstrap.py" IF "%~2"=="" IF "%~1"=="--help" SET "_entry=%dp0%flowctl_bootstrap.py"
+%_prog% "%_entry%" %*
 EXIT /b %errorlevel%
 '''
 
@@ -8025,6 +8434,8 @@ PLUGIN_MODE_COPY_ARTIFACTS = [
     ".flow/bin/flowctl",
     ".flow/bin/flowctl.cmd",
     ".flow/bin/flowctl.py",
+    ".flow/bin/flowctl_bootstrap.py",
+    ".flow/bin/flowctl-help.txt",
     ".flow/templates/spec.md",
     ".flow/usage.md",
 ]
@@ -8206,8 +8617,6 @@ def cmd_status(args: argparse.Namespace) -> None:
     task_counts = {"todo": 0, "in_progress": 0, "blocked": 0, "done": 0}
 
     if flow_exists:
-        tasks_dir = flow_dir / TASKS_DIR
-
         # Walk both legacy + canonical spec metadata locations.
         for spec_file in iter_spec_json_files(flow_dir):
             try:
@@ -8218,19 +8627,15 @@ def cmd_status(args: argparse.Namespace) -> None:
             except Exception:
                 pass
 
-        if tasks_dir.exists():
-            for task_file in tasks_dir.glob("fn-*.json"):
-                task_id = task_file.stem
-                if not is_task_id(task_id):
-                    continue  # Skip non-task files (e.g., fn-1.2-review.json)
-                try:
-                    # Use merged state for accurate status counts
-                    task_data = load_task_with_state(task_id, use_json=True)
-                    status = task_data.get("status", "todo")
-                    if status in task_counts:
-                        task_counts[status] += 1
-                except Exception:
-                    pass
+        inventory = TaskInventory.load(
+            flow_dir,
+            use_json=True,
+            tolerate_errors=True,
+        )
+        for task_data in inventory.ordered:
+            status = task_data.get("status", "todo")
+            if status in task_counts:
+                task_counts[status] += 1
 
     # Soft-probe: only scan when scripts/ralph/runs/ exists (fn-114).
     runs_present = _ralph_runs_dir_present()
@@ -8623,13 +9028,41 @@ MEMORY_LEGACY_FILES: tuple[str, ...] = ("pitfalls.md", "conventions.md", "decisi
 # --- Frontmatter parsing / writing ---
 
 
-def _memory_yaml_available() -> bool:
-    """Detect PyYAML for optional round-trip parse. Zero-dep by default."""
-    try:
-        import yaml  # noqa: F401
-    except ImportError:
-        return False
-    return True
+@dataclass(frozen=True, slots=True)
+class _FrontmatterEnvelope:
+    """Mechanical ``---`` envelope split; schema semantics stay with callers."""
+
+    present: bool
+    complete: bool
+    frontmatter: str
+    body: str
+
+
+def _frontmatter_envelope(text: str) -> _FrontmatterEnvelope:
+    """Split one leading frontmatter envelope without interpreting YAML."""
+    if not text.startswith("---"):
+        return _FrontmatterEnvelope(False, False, "", text)
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return _FrontmatterEnvelope(True, False, "", text)
+    return _FrontmatterEnvelope(True, True, parts[1], parts[2])
+
+
+_YAML_PARSER_UNSET: Any = object()
+_YAML_PARSER: Any = _YAML_PARSER_UNSET
+
+
+def _optional_yaml_parser() -> Optional[tuple[Any, type[BaseException]]]:
+    """Resolve PyYAML's loader/error pair once per process, or cache absence."""
+    global _YAML_PARSER
+    if _YAML_PARSER is _YAML_PARSER_UNSET:
+        try:
+            import yaml  # type: ignore[import-not-found]
+        except ImportError:
+            _YAML_PARSER = None
+        else:
+            _YAML_PARSER = (yaml.safe_load, yaml.YAMLError)
+    return _YAML_PARSER
 
 
 def _parse_inline_yaml(text: str) -> dict[str, Any]:
@@ -8764,7 +9197,27 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
     return result
 
 
-def parse_memory_frontmatter(path: Path) -> dict[str, Any]:
+def _parse_memory_frontmatter_text(text: str) -> dict[str, Any]:
+    """Parse memory frontmatter from an already-read entry buffer."""
+    envelope = _frontmatter_envelope(text)
+    if not envelope.complete:
+        return {}
+    parser = _optional_yaml_parser()
+    if parser is None:
+        return _parse_inline_yaml(envelope.frontmatter)
+    safe_load, yaml_error = parser
+    try:
+        parsed = safe_load(envelope.frontmatter)
+    except yaml_error:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def parse_memory_frontmatter(
+    path: Path,
+    *,
+    text: Optional[str] = None,
+) -> dict[str, Any]:
     """Parse YAML frontmatter from a memory entry file.
 
     Returns an empty dict if:
@@ -8775,32 +9228,12 @@ def parse_memory_frontmatter(path: Path) -> dict[str, Any]:
     PyYAML is used when available (round-trip-safe); otherwise the inline
     parser runs. Both produce the same shape for entries we write.
     """
-    if not path.exists():
-        return {}
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return {}
-    if not text.startswith("---"):
-        return {}
-    # Split into (delim, frontmatter, delim, body).
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return {}
-    fm_text = parts[1]
-    # Prefer PyYAML when available.
-    try:
-        import yaml  # type: ignore[import-not-found]
-
+    if text is None:
         try:
-            parsed = yaml.safe_load(fm_text)
-        except yaml.YAMLError:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
             return {}
-        if not isinstance(parsed, dict):
-            return {}
-        return parsed
-    except ImportError:
-        return _parse_inline_yaml(fm_text)
+    return _parse_memory_frontmatter_text(text)
 
 
 # Fields that PyYAML would auto-coerce to typed scalars (datetime.date,
@@ -9283,32 +9716,30 @@ def _prospect_parse_frontmatter(text: str) -> Optional[dict[str, Any]]:
     (and Phase 0) defer to. Phase 0 may import / shell out to this
     helper in a follow-on touch-up.
     """
-    if not text or not text.startswith("---"):
+    envelope = _frontmatter_envelope(text)
+    if not envelope.complete:
         return None
-    # Need a full ---\n<frontmatter>\n---\n block at the top.
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return None
-    fm_text = parts[1]
     # Closing delimiter must be its own line — `_parse_inline_yaml` is
     # tolerant, but a bare `---` mid-line wouldn't open the block above.
     # Prefer PyYAML when available so the parse matches `parse_memory_frontmatter`.
-    try:
-        import yaml  # type: ignore[import-not-found]
-
+    parser = _optional_yaml_parser()
+    if parser is not None:
+        safe_load, yaml_error = parser
         try:
-            parsed = yaml.safe_load(fm_text)
-        except yaml.YAMLError:
+            parsed = safe_load(envelope.frontmatter)
+        except yaml_error:
             return None
         if not isinstance(parsed, dict):
             return None
         return parsed
-    except ImportError:
-        result = _parse_inline_yaml(fm_text)
+    else:
+        result = _parse_inline_yaml(envelope.frontmatter)
         # `_parse_inline_yaml` returns {} for malformed input — distinguish
         # "no frontmatter" (None) from "empty frontmatter dict" by checking
         # whether the block contained any non-blank lines.
-        if not result and any(line.strip() for line in fm_text.splitlines()):
+        if not result and any(
+            line.strip() for line in envelope.frontmatter.splitlines()
+        ):
             return None
         # `_parse_inline_yaml` keeps booleans as strings ("memory entries don't
         # need typed scalars" per its docstring), but prospect frontmatter ships
@@ -9657,27 +10088,26 @@ def _memory_title_tokens(title: str) -> set[str]:
     return set(_WORD_RE.findall(title.lower()))
 
 
-def _memory_read_entry(path: Path) -> dict[str, Any]:
-    """Read a memory entry file into {frontmatter, body}.
+def _memory_read_entry(
+    path: Path,
+    *,
+    raise_errors: bool = False,
+) -> dict[str, Any]:
+    """Read a memory entry file once into {frontmatter, body, raw}.
 
     Returns {"frontmatter": {}, "body": ""} on any failure so callers can
     continue the overlap scan past a malformed entry.
     """
-    if not path.exists():
-        return {"frontmatter": {}, "body": ""}
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
-        return {"frontmatter": {}, "body": ""}
-    fm = parse_memory_frontmatter(path)
-    body = ""
-    if text.startswith("---"):
-        parts = text.split("---", 2)
-        if len(parts) >= 3:
-            body = parts[2].lstrip("\n")
-    else:
-        body = text
-    return {"frontmatter": fm, "body": body}
+        if raise_errors:
+            raise
+        return {"frontmatter": {}, "body": "", "raw": ""}
+    envelope = _frontmatter_envelope(text)
+    fm = _parse_memory_frontmatter_text(text)
+    body = envelope.body.lstrip("\n") if envelope.complete else text
+    return {"frontmatter": fm, "body": body, "raw": text}
 
 
 def _memory_score_overlap(
@@ -10336,15 +10766,67 @@ _LEGACY_TYPE_FOR_FILE: dict[str, str] = {
 }
 
 
+def _memory_entry_descriptor(
+    entry_path: Path,
+    track: str,
+    category: str,
+    slug: str,
+    entry_date: str,
+    *,
+    include_body: bool,
+    include_raw: bool = False,
+    data: Optional[dict[str, Any]] = None,
+) -> Optional[dict[str, Any]]:
+    """Build one categorized descriptor with exactly one content read."""
+    if include_body or include_raw:
+        if data is None:
+            data = _memory_read_entry(entry_path)
+        fm = data["frontmatter"]
+        body = data["body"] if include_body else ""
+        raw = data["raw"] if include_raw else ""
+    else:
+        fm = parse_memory_frontmatter(entry_path)
+        body = ""
+        raw = ""
+    if not fm:
+        return None
+    tags_raw = fm.get("tags", []) or []
+    if isinstance(tags_raw, str):
+        tags_list = [tags_raw]
+    elif isinstance(tags_raw, list):
+        tags_list = [str(tag) for tag in tags_raw]
+    else:
+        tags_list = []
+    return {
+        "entry_id": _memory_entry_id(track, category, slug, entry_date),
+        "track": track,
+        "category": category,
+        "slug": slug,
+        "date": entry_date,
+        "path": str(entry_path),
+        "frontmatter": fm,
+        "body": body,
+        "raw": raw,
+        "title": str(fm.get("title", "")),
+        "module": str(fm.get("module", "") or ""),
+        "tags": tags_list,
+        "status": str(fm.get("status", "active") or "active"),
+    }
+
+
 def _memory_iter_entries(
     memory_dir: Path,
     track: Optional[str] = None,
     category: Optional[str] = None,
+    *,
+    include_body: bool = False,
+    include_raw: bool = False,
 ) -> list[dict[str, Any]]:
     """Walk the categorized tree and return entry descriptors.
 
     Each descriptor: {entry_id, track, category, slug, date, path,
-    frontmatter, title, module, tags, status}. Entries with malformed
+    frontmatter, title, module, tags, status}. ``body`` and ``raw`` are
+    populated only when their corresponding flags are true. Entries with malformed
     filenames or missing/invalid frontmatter are skipped. Filters
     `--track` / `--category` narrow the scan. Status filtering is left
     to the caller (defaults live in `cmd_memory_list`).
@@ -10371,33 +10853,18 @@ def _memory_iter_entries(
                 slug, date = _memory_parse_entry_filename(entry_path)
                 if not slug or not date:
                     continue
-                data = _memory_read_entry(entry_path)
-                fm = data["frontmatter"]
-                if not fm:
-                    continue
-                tags_raw = fm.get("tags", []) or []
-                if isinstance(tags_raw, str):
-                    tags_list = [tags_raw]
-                elif isinstance(tags_raw, list):
-                    tags_list = [str(tt) for tt in tags_raw]
-                else:
-                    tags_list = []
-                entries.append(
-                    {
-                        "entry_id": _memory_entry_id(t, cat, slug, date),
-                        "track": t,
-                        "category": cat,
-                        "slug": slug,
-                        "date": date,
-                        "path": str(entry_path),
-                        "frontmatter": fm,
-                        "body": data["body"],
-                        "title": str(fm.get("title", "")),
-                        "module": str(fm.get("module", "") or ""),
-                        "tags": tags_list,
-                        "status": str(fm.get("status", "active") or "active"),
-                    }
+                descriptor = _memory_entry_descriptor(
+                    entry_path,
+                    t,
+                    cat,
+                    slug,
+                    date,
+                    include_body=include_body,
+                    include_raw=include_raw,
                 )
+                if descriptor is None:
+                    continue
+                entries.append(descriptor)
     return entries
 
 
@@ -10484,13 +10951,43 @@ def _memory_resolve_read_target(
             "text": segments[index - 1],
         }
 
-    all_entries = _memory_iter_entries(memory_dir)
     # Full id form.
     if entry_id.count("/") == 2:
-        for entry in all_entries:
-            if entry["entry_id"] == entry_id:
-                return {"kind": "categorized", "entry": entry}
-        return None
+        match = re.fullmatch(
+            r"(bug|knowledge)/([a-z0-9][a-z0-9-]*)/"
+            r"([a-z0-9][a-z0-9-]*)-(\d{4}-\d{2}-\d{2})",
+            entry_id,
+        )
+        if not match:
+            return None
+        track, category, slug, entry_date = match.groups()
+        if category not in MEMORY_CATEGORIES.get(track, []):
+            return None
+        entry_path = _memory_entry_path(
+            memory_dir, track, category, slug, entry_date
+        )
+        try:
+            resolved_root = memory_dir.resolve()
+            resolved_path = entry_path.resolve()
+            resolved_path.relative_to(resolved_root)
+            if not entry_path.is_file():
+                return None
+        except (OSError, RuntimeError, ValueError):
+            return None
+        descriptor = _memory_entry_descriptor(
+            entry_path,
+            track,
+            category,
+            slug,
+            entry_date,
+            include_body=True,
+            include_raw=True,
+        )
+        if descriptor is None:
+            return None
+        return {"kind": "categorized", "entry": descriptor}
+
+    all_entries = _memory_iter_entries(memory_dir)
 
     # slug[-date] form.
     m = re.match(r"^(.+)-(\d{4}-\d{2}-\d{2})$", entry_id)
@@ -10549,13 +11046,31 @@ def cmd_memory_read(args: argparse.Namespace) -> None:
         if resolved["kind"] == "categorized":
             entry = resolved["entry"]
             path_obj = Path(entry["path"])
-            try:
-                raw = path_obj.read_text(encoding="utf-8")
-            except OSError as exc:
-                error_exit(
-                    f"failed to read {entry['path']}: {exc}",
-                    use_json=args.json,
-                )
+            raw = entry.get("raw", "")
+            if not raw:
+                try:
+                    data = _memory_read_entry(path_obj, raise_errors=True)
+                except OSError as exc:
+                    error_exit(
+                        f"failed to read {entry['path']}: {exc}",
+                        use_json=args.json,
+                    )
+                raw = data["raw"]
+                if not raw:
+                    error_exit(
+                        f"failed to read {entry['path']}",
+                        use_json=args.json,
+                    )
+                entry = _memory_entry_descriptor(
+                    path_obj,
+                    entry["track"],
+                    entry["category"],
+                    entry["slug"],
+                    entry["date"],
+                    include_body=True,
+                    include_raw=True,
+                    data=data,
+                ) or entry
             if args.json:
                 json_output(
                     {
@@ -10884,7 +11399,9 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
     query_lower = query.lower()
 
     # Categorized walk.
-    entries = _memory_iter_entries(memory_dir, track=track, category=category)
+    entries = _memory_iter_entries(
+        memory_dir, track=track, category=category, include_body=True
+    )
     if module_filter:
         entries = [e for e in entries if e["module"] == module_filter]
     if tag_filter_set:
@@ -13891,22 +14408,6 @@ def cmd_task_create(args: argparse.Namespace) -> None:
 
     load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
 
-    # MU-1: Scan-based allocation for merge safety
-    # Scan existing tasks to determine next ID (don't rely on counter)
-    max_task = scan_max_task_id(flow_dir, spec_id)
-    task_num = max_task + 1
-    task_id = f"{spec_id}.{task_num}"
-
-    # Double-check no collision (shouldn't happen with scan-based allocation)
-    task_json_path = flow_dir / TASKS_DIR / f"{task_id}.json"
-    task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
-    if task_json_path.exists() or task_spec_path.exists():
-        error_exit(
-            f"Refusing to overwrite existing task {task_id}. "
-            f"This shouldn't happen - check for orphaned files.",
-            use_json=args.json,
-        )
-
     # Parse dependencies (shared same-spec canonicalize helper).
     deps = []
     if args.deps:
@@ -13948,30 +14449,72 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         except ValueError as e:
             error_exit(str(e), use_json=args.json)
 
-    # fn-43.2: persisted task JSON uses canonical "spec" key only. Read paths
-    # accept legacy "epic" via normalize_task() for 0.x task files that
-    # haven't been rewritten yet.
-    task_data = {
-        "id": task_id,
-        "spec": spec_id,
-        "title": args.title,
-        "status": "todo",
-        "priority": args.priority,
-        "depends_on": deps,
-        "assignee": None,
-        "claimed_at": None,
-        "claim_note": "",
-        "spec_path": f"{FLOW_DIR}/{TASKS_DIR}/{task_id}.md",
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-    }
-    atomic_write_json(flow_dir / TASKS_DIR / f"{task_id}.json", task_data)
+    # Allocation and the paired JSON/Markdown publication are one per-spec
+    # transaction. A process reports success only after both complete files
+    # exist; any second-write/collision failure removes files created by this
+    # transaction before surfacing the error.
+    lock_hash = hashlib.sha256(spec_id.encode("utf-8")).hexdigest()[:16]
+    lock_path = flow_dir / "locks" / f"task-create-{lock_hash}.lock.d"
+    try:
+        with cross_process_lock(lock_path):
+            # MU-1: scan while holding the allocation lock. The previous
+            # unlocked scan let concurrent creators all choose the same id.
+            task_num = scan_max_task_id(flow_dir, spec_id) + 1
+            task_id = f"{spec_id}.{task_num}"
+            task_json_path = flow_dir / TASKS_DIR / f"{task_id}.json"
+            task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+            if task_json_path.exists() or task_spec_path.exists():
+                error_exit(
+                    f"Refusing to overwrite existing task {task_id}. "
+                    f"This shouldn't happen - check for orphaned files.",
+                    use_json=args.json,
+                )
 
-    # Create task spec
-    spec_content = create_task_spec(
-        task_id, args.title, acceptance, description=description, satisfies=satisfies
-    )
-    atomic_write(flow_dir / TASKS_DIR / f"{task_id}.md", spec_content)
+            # fn-43.2: persisted task JSON uses canonical "spec" key only.
+            created_at = now_iso()
+            task_data = {
+                "id": task_id,
+                "spec": spec_id,
+                "title": args.title,
+                "status": "todo",
+                "priority": args.priority,
+                "depends_on": deps,
+                "assignee": None,
+                "claimed_at": None,
+                "claim_note": "",
+                "spec_path": f"{FLOW_DIR}/{TASKS_DIR}/{task_id}.md",
+                "created_at": created_at,
+                "updated_at": created_at,
+            }
+            json_content = json.dumps(task_data, indent=2, sort_keys=True) + "\n"
+            spec_content = create_task_spec(
+                task_id,
+                args.title,
+                acceptance,
+                description=description,
+                satisfies=satisfies,
+            )
+
+            published: list[Path] = []
+            try:
+                atomic_create(task_json_path, json_content)
+                published.append(task_json_path)
+                atomic_create(task_spec_path, spec_content)
+                published.append(task_spec_path)
+            except (OSError, ValueError) as e:
+                cleanup_errors = []
+                for published_path in reversed(published):
+                    try:
+                        published_path.unlink()
+                    except OSError as cleanup_error:
+                        cleanup_errors.append(str(cleanup_error))
+                detail = f"; cleanup failed: {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+                error_exit(
+                    f"Failed to create task {task_id}: {e}{detail}",
+                    use_json=args.json,
+                )
+    except CrossProcessLockError as e:
+        error_exit(f"Task allocation lock unavailable for {spec_id}: {e}", use_json=args.json)
 
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
@@ -14060,26 +14603,25 @@ def cmd_show(args: argparse.Namespace) -> None:
             load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
         )
 
-        # Get tasks for this epic (with merged runtime state)
+        # Get tasks for this spec from the command-scoped inventory.
         tasks = []
-        tasks_dir = flow_dir / TASKS_DIR
-        if tasks_dir.exists():
-            for task_file in sorted(tasks_dir.glob(f"{args.id}.*.json")):
-                task_id = task_file.stem
-                if not is_task_id(task_id):
-                    continue  # Skip non-task files (e.g., fn-1.2-review.json)
-                task_data = load_task_with_state(task_id, use_json=args.json)
-                if "id" not in task_data:
-                    continue  # Skip artifact files (GH-21)
-                tasks.append(
-                    {
-                        "id": task_data["id"],
-                        "title": task_data["title"],
-                        "status": task_data["status"],
-                        "priority": task_data.get("priority"),
-                        "depends_on": task_data.get("depends_on", task_data.get("deps", [])),
-                    }
-                )
+        inventory = TaskInventory.load(
+            flow_dir,
+            use_json=args.json,
+            spec_id=args.id,
+        )
+        for task_data in inventory.by_spec.get(args.id, []):
+            tasks.append(
+                {
+                    "id": task_data["id"],
+                    "title": task_data["title"],
+                    "status": task_data["status"],
+                    "priority": task_data.get("priority"),
+                    "depends_on": task_data.get(
+                        "depends_on", task_data.get("deps", [])
+                    ),
+                }
+            )
 
         # Sort tasks by numeric suffix. fn-52.10: tracker-aware so a wor-* spec's
         # tasks order by suffix (parse_id is fn-only → None for wor-* tasks).
@@ -14140,27 +14682,31 @@ def cmd_specs(args: argparse.Namespace) -> None:
         )
 
     flow_dir = get_flow_dir()
-
-    specs = []
+    spec_data_list = []
     for spec_file in iter_spec_json_files(flow_dir):
-        spec_data = normalize_epic(
-            load_json_or_exit(
-                spec_file, f"Spec {spec_file.stem}", use_json=args.json
+        spec_data_list.append(
+            normalize_epic(
+                load_json_or_exit(
+                    spec_file, f"Spec {spec_file.stem}", use_json=args.json
+                )
             )
         )
-        # Count tasks (with merged runtime state)
-        tasks_dir = flow_dir / TASKS_DIR
-        task_count = 0
-        done_count = 0
-        if tasks_dir.exists():
-            for task_file in tasks_dir.glob(f"{spec_data['id']}.*.json"):
-                task_id = task_file.stem
-                if not is_task_id(task_id):
-                    continue  # Skip non-task files (e.g., fn-1.2-review.json)
-                task_data = load_task_with_state(task_id, use_json=args.json)
-                task_count += 1
-                if task_data.get("status") == "done":
-                    done_count += 1
+
+    inventory = (
+        TaskInventory.load(
+            flow_dir,
+            use_json=args.json,
+            spec_ids={spec_data["id"] for spec_data in spec_data_list},
+        )
+        if spec_data_list
+        else TaskInventory(ordered=[], by_id={}, by_spec={})
+    )
+    specs = []
+    for spec_data in spec_data_list:
+        # Count tasks from the one command-scoped task scan.
+        spec_tasks = inventory.by_spec.get(spec_data["id"], [])
+        task_count = len(spec_tasks)
+        done_count = sum(1 for task in spec_tasks if task.get("status") == "done")
 
         specs.append(
             {
@@ -14213,38 +14759,36 @@ def cmd_tasks(args: argparse.Namespace) -> None:
         )
 
     flow_dir = get_flow_dir()
-    tasks_dir = flow_dir / TASKS_DIR
-
     spec_filter = resolve_spec_arg(args, get_flow_dir())
 
     tasks = []
-    if tasks_dir.exists():
-        # fn-52.10: unfiltered glob is *.json (not fn-*) so tracker-key tasks
-        # (wor-17.M) list. spec_filter is already canonicalized by
-        # resolve_spec_arg (handle → wor-17-slug), so the scoped glob is correct.
-        pattern = f"{spec_filter}.*.json" if spec_filter else "*.json"
-        for task_file in sorted(tasks_dir.glob(pattern), key=lambda p: id_sort_key(p.stem)):
-            task_id = task_file.stem
-            if not is_task_id(task_id):
-                continue  # Skip non-task files (e.g., fn-1.2-review.json)
-            # Load task with merged runtime state
-            task_data = load_task_with_state(task_id, use_json=args.json)
-            if "id" not in task_data:
-                continue  # Skip artifact files (GH-21)
-            # Filter by status if requested
-            if args.status and task_data["status"] != args.status:
-                continue
-            spec_value = task_data.get("spec") or task_data.get("epic")
-            tasks.append(
-                {
-                    "id": task_data["id"],
-                    "spec": spec_value,
-                    "title": task_data["title"],
-                    "status": task_data["status"],
-                    "priority": task_data.get("priority"),
-                    "depends_on": task_data.get("depends_on", task_data.get("deps", [])),
-                }
-            )
+    inventory = TaskInventory.load(
+        flow_dir,
+        use_json=args.json,
+        spec_id=spec_filter,
+    )
+    candidates = (
+        inventory.by_spec.get(spec_filter, [])
+        if spec_filter
+        else inventory.ordered
+    )
+    for task_data in candidates:
+        # Filter by status if requested.
+        if args.status and task_data["status"] != args.status:
+            continue
+        spec_value = task_data.get("spec") or task_data.get("epic")
+        tasks.append(
+            {
+                "id": task_data["id"],
+                "spec": spec_value,
+                "title": task_data["title"],
+                "status": task_data["status"],
+                "priority": task_data.get("priority"),
+                "depends_on": task_data.get(
+                    "depends_on", task_data.get("deps", [])
+                ),
+            }
+        )
 
     # Sort tasks by spec then task number. fn-52.10: tracker-aware total order
     # across the mixed fn-* + wor-* set.
@@ -14275,8 +14819,6 @@ def cmd_list(args: argparse.Namespace) -> None:
         )
 
     flow_dir = get_flow_dir()
-    tasks_dir = flow_dir / TASKS_DIR
-
     # Load all specs (both legacy and canonical layouts).
     specs = []
     for spec_file in iter_spec_json_files(flow_dir):
@@ -14290,40 +14832,27 @@ def cmd_list(args: argparse.Namespace) -> None:
     # Sort specs by number. fn-52.10: tracker-aware total order (mixed fn-* + wor-*).
     specs.sort(key=lambda e: id_sort_key(e["id"]))
 
-    # Load all tasks grouped by spec (with merged runtime state). fn-52.10:
-    # glob ALL task json (not just fn-*) so tracker-key tasks (wor-17.M) list.
-    tasks_by_spec = {}
+    # Load all tasks grouped by spec (with merged runtime state). The shared
+    # iterator includes both native and tracker-key task definitions.
+    inventory = TaskInventory.load(flow_dir, use_json=args.json)
+    tasks_by_spec = inventory.by_spec
     all_tasks = []
-    if tasks_dir.exists():
-        for task_file in sorted(tasks_dir.glob("*.json"), key=lambda p: id_sort_key(p.stem)):
-            task_id = task_file.stem
-            if not is_task_id(task_id):
-                continue  # Skip non-task files (e.g., fn-1.2-review.json)
-            task_data = load_task_with_state(task_id, use_json=args.json)
-            if "id" not in task_data:
-                continue  # Skip artifact files (GH-21)
-            spec_value = task_data.get("spec") or task_data.get("epic")
-            if not spec_value:
-                continue
-            if spec_value not in tasks_by_spec:
-                tasks_by_spec[spec_value] = []
-            tasks_by_spec[spec_value].append(task_data)
-            all_tasks.append(
-                {
-                    "id": task_data["id"],
-                    "spec": spec_value,
-                    "title": task_data["title"],
-                    "status": task_data["status"],
-                    "priority": task_data.get("priority"),
-                    "depends_on": task_data.get("depends_on", task_data.get("deps", [])),
-                }
-            )
-
-    # Sort tasks within each spec
-    for spec_id in tasks_by_spec:
-        # fn-52.10: tracker-aware suffix sort (parse_id is fn-only → None for
-        # wor-* tasks; id_sort_key's task_num element orders both schemes).
-        tasks_by_spec[spec_id].sort(key=lambda t: id_sort_key(t["id"]))
+    for task_data in inventory.ordered:
+        spec_value = task_data.get("spec") or task_data.get("epic")
+        if not spec_value:
+            continue
+        all_tasks.append(
+            {
+                "id": task_data["id"],
+                "spec": spec_value,
+                "title": task_data["title"],
+                "status": task_data["status"],
+                "priority": task_data.get("priority"),
+                "depends_on": task_data.get(
+                    "depends_on", task_data.get("deps", [])
+                ),
+            }
+        )
 
     if args.json:
         specs_out = []
@@ -15328,6 +15857,119 @@ def _export_run_git(args: list[str], cwd: Optional[Path] = None) -> tuple[int, s
         return (1, "", str(exc))
 
 
+@dataclass(frozen=True, slots=True)
+class _ExportDiffEvent:
+    """One path-bound semantic event from a zero-context unified diff."""
+
+    path: str
+    kind: str  # "hunk", "add", or "remove"
+    text: str  # hunk context, or line body without the +/- marker
+
+
+@dataclass(frozen=True, slots=True)
+class _ExportDiffMaterialization:
+    """All git diff streams needed by one cognitive-aid export."""
+
+    head_sha: str
+    numstat_rc: int
+    numstat: str
+    name_status_rc: int
+    name_status: str
+    unified_rc: int
+    events: tuple[_ExportDiffEvent, ...]
+
+
+def _export_parse_unified_diff(unified_diff: str) -> tuple[_ExportDiffEvent, ...]:
+    """Parse a unified diff once into path-bound events.
+
+    Consumers no longer repeat header/path parsing or materialize their own
+    ``splitlines()`` lists. Deleted files retain the old path; renames use the
+    new path, matching the pre-fn-122 analyzers.
+    """
+    if not unified_diff:
+        return ()
+    events: list[_ExportDiffEvent] = []
+    current_path: Optional[str] = None
+    pending_removed_path: Optional[str] = None
+    for line in unified_diff.splitlines():
+        if line.startswith("diff --git "):
+            current_path = None
+            pending_removed_path = None
+            continue
+        if line.startswith("--- a/"):
+            pending_removed_path = line[len("--- a/") :].strip() or None
+            continue
+        if line.startswith("--- "):
+            pending_removed_path = None
+            continue
+        if line.startswith("+++ b/"):
+            current_path = line[len("+++ b/") :].strip() or None
+            pending_removed_path = None
+            continue
+        if line.startswith("+++ /dev/null"):
+            current_path = pending_removed_path
+            pending_removed_path = None
+            continue
+        if current_path is None:
+            continue
+        if line.startswith("@@"):
+            match = _EXPORT_HUNK_HEADER_RE.match(line)
+            if match:
+                events.append(
+                    _ExportDiffEvent(current_path, "hunk", match.group(1).strip())
+                )
+            continue
+        if line.startswith("+") and not line.startswith("+++"):
+            events.append(_ExportDiffEvent(current_path, "add", line[1:]))
+        elif line.startswith("-") and not line.startswith("---"):
+            events.append(_ExportDiffEvent(current_path, "remove", line[1:]))
+    return tuple(events)
+
+
+def _export_diff_events(
+    value: str | tuple[_ExportDiffEvent, ...],
+) -> tuple[_ExportDiffEvent, ...]:
+    """Accept legacy raw-diff callers while export passes parsed events."""
+    if isinstance(value, str):
+        return _export_parse_unified_diff(value)
+    return value
+
+
+def _export_materialize_diff(
+    merge_base_sha: str,
+    repo_root: Path,
+) -> _ExportDiffMaterialization:
+    """Read each git diff representation exactly once for one export."""
+    head_rc, head_out, _ = _export_run_git(["rev-parse", "HEAD"], cwd=repo_root)
+    numstat_rc, numstat, _ = _export_run_git(
+        [
+            "diff",
+            "--numstat",
+            "-M",
+            "--diff-filter=AMRD",
+            f"{merge_base_sha}..HEAD",
+        ],
+        cwd=repo_root,
+    )
+    name_status_rc, name_status, _ = _export_run_git(
+        ["diff", "--name-status", "-M", f"{merge_base_sha}..HEAD"],
+        cwd=repo_root,
+    )
+    unified_rc, unified, _ = _export_run_git(
+        ["diff", "-M", "--unified=0", f"{merge_base_sha}..HEAD"],
+        cwd=repo_root,
+    )
+    return _ExportDiffMaterialization(
+        head_sha=head_out.strip() if head_rc == 0 else "",
+        numstat_rc=numstat_rc,
+        numstat=numstat,
+        name_status_rc=name_status_rc,
+        name_status=name_status,
+        unified_rc=unified_rc,
+        events=_export_parse_unified_diff(unified) if unified_rc == 0 else (),
+    )
+
+
 def _export_resolve_merge_base(base_ref: str) -> Optional[str]:
     """Return the merge-base sha for `base_ref..HEAD`, or None on failure."""
     rc, out, _err = _export_run_git(["merge-base", base_ref, "HEAD"])
@@ -15515,6 +16157,7 @@ def _export_diff_summary(
     base_ref: str,
     merge_base_sha: str,
     repo_root: Path,
+    materialized: Optional[_ExportDiffMaterialization] = None,
 ) -> dict[str, Any]:
     """Build the diff_summary block from git diff output.
 
@@ -15522,25 +16165,15 @@ def _export_diff_summary(
     per-file additions/deletions, `--name-status -M` for status (A/M/R/D),
     and a unified-diff scan for added export lines.
     """
-    head_sha_rc, head_sha_out, _ = _export_run_git(["rev-parse", "HEAD"], cwd=repo_root)
-    head_sha = head_sha_out.strip() if head_sha_rc == 0 else ""
+    diff = materialized or _export_materialize_diff(merge_base_sha, repo_root)
+    head_sha = diff.head_sha
 
     # numstat: per-file additions/deletions. Renames render as a tab-separated
     # `old\tnew` path on the third column (or `{old => new}` brace form when
     # `-M` matches a rename).
-    rc_n, out_n, _ = _export_run_git(
-        [
-            "diff",
-            "--numstat",
-            "-M",
-            "--diff-filter=AMRD",
-            f"{merge_base_sha}..HEAD",
-        ],
-        cwd=repo_root,
-    )
     files_numstat: dict[str, dict[str, Any]] = {}
-    if rc_n == 0:
-        for line in out_n.splitlines():
+    if diff.numstat_rc == 0:
+        for line in diff.numstat.splitlines():
             parts = line.split("\t")
             if len(parts) < 3:
                 continue
@@ -15572,18 +16205,9 @@ def _export_diff_summary(
             }
 
     # name-status: A/M/D/R. Renames appear as `R<score>\told\tnew`.
-    rc_s, out_s, _ = _export_run_git(
-        [
-            "diff",
-            "--name-status",
-            "-M",
-            f"{merge_base_sha}..HEAD",
-        ],
-        cwd=repo_root,
-    )
     file_status: dict[str, str] = {}
-    if rc_s == 0:
-        for line in out_s.splitlines():
+    if diff.name_status_rc == 0:
+        for line in diff.name_status.splitlines():
             parts = line.split("\t")
             if len(parts) < 2:
                 continue
@@ -15647,30 +16271,21 @@ def _export_diff_summary(
     # import/from/use/require lines, derive `(adding_module, target_module)`
     # pairs, surface only when target_module != adding_module.
     cross_module_changes: list[str] = []
-    rc_u, out_u, _ = _export_run_git(
-        [
-            "diff",
-            "-M",
-            "--unified=0",
-            f"{merge_base_sha}..HEAD",
-        ],
-        cwd=repo_root,
-    )
-    if rc_u == 0:
-        cross_module_changes = _export_detect_cross_module(out_u, files)
+    if diff.unified_rc == 0:
+        cross_module_changes = _export_detect_cross_module(diff.events, files)
 
     # changed_symbols (fn-86 R1): attach per-file hunk-header context from the
     # same unified diff — empty list where git detects no function context.
-    if rc_u == 0:
-        symbols_by_path = _export_changed_symbols(out_u)
+    if diff.unified_rc == 0:
+        symbols_by_path = _export_changed_symbols(diff.events)
         for f in files:
             f["changed_symbols"] = symbols_by_path.get(f["path"], [])
 
     # Public-exports-changed detection: parse +/- lines in index/__init__/lib
     # files to compute added/removed exports.
     public_exports_changed: list[dict[str, Any]] = []
-    if rc_u == 0:
-        public_exports_changed = _export_detect_public_exports(out_u)
+    if diff.unified_rc == 0:
+        public_exports_changed = _export_detect_public_exports(diff.events)
 
     return {
         "base_ref": base_ref,
@@ -15703,7 +16318,10 @@ _EXPORT_SOURCE_EXTENSIONS: frozenset[str] = frozenset(
 )
 
 
-def _export_detect_cross_module(unified_diff: str, files: list[dict[str, Any]]) -> list[str]:
+def _export_detect_cross_module(
+    unified_diff: str | tuple[_ExportDiffEvent, ...],
+    files: list[dict[str, Any]],
+) -> list[str]:
     """Surface new dependency edges across modules from a unified diff.
 
     Heuristic: scan added (`+`) lines in *source files* for actual
@@ -15716,17 +16334,14 @@ def _export_detect_cross_module(unified_diff: str, files: list[dict[str, Any]]) 
     capped at 12. Both endpoints must be modules that actually changed in
     this diff (otherwise a fresh `import os` would surface).
     """
-    if not unified_diff:
+    events = _export_diff_events(unified_diff)
+    if not events:
         return []
 
     diff_modules: set[str] = {f["module"] for f in files}
     if len(diff_modules) < 2:
         return []
 
-    # Track which file we're currently inside (header `+++ b/<path>`).
-    current_path: Optional[str] = None
-    current_module: Optional[str] = None
-    current_is_source = False
     edges: set[tuple[str, str]] = set()
 
     # Strict patterns — keyword required at line start (after whitespace).
@@ -15743,27 +16358,11 @@ def _export_detect_cross_module(unified_diff: str, files: list[dict[str, Any]]) 
     sh_source_re = re.compile(r"^(?:source|\.)\s+([./a-zA-Z0-9_-]+)")
     go_import_re = re.compile(r'^import\s+["\']([^"\']+)["\']')
 
-    for line in unified_diff.splitlines():
-        if line.startswith("+++ b/"):
-            current_path = line[len("+++ b/") :].strip()
-            current_module = (
-                _export_path_module(current_path) if current_path else None
-            )
-            current_is_source = False
-            if current_path:
-                idx = current_path.rfind(".")
-                if idx != -1:
-                    ext = current_path[idx:].lower()
-                    if ext in _EXPORT_SOURCE_EXTENSIONS:
-                        current_is_source = True
+    for event in events:
+        if event.kind != "add" or not _export_path_is_source(event.path):
             continue
-        if line.startswith("--- ") or line.startswith("@@"):
-            continue
-        if not line.startswith("+") or line.startswith("+++"):
-            continue
-        if current_module is None or not current_is_source:
-            continue
-        body = line[1:].lstrip()
+        current_module = _export_path_module(event.path)
+        body = event.text.lstrip()
         candidates: list[str] = []
         for regex in (py_from_re, py_import_re, rust_use_re):
             mm = regex.match(body)
@@ -15795,7 +16394,9 @@ def _export_detect_cross_module(unified_diff: str, files: list[dict[str, Any]]) 
     return sorted(f"{src} imports {dst} (new)" for src, dst in edges)[:12]
 
 
-def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
+def _export_detect_public_exports(
+    unified_diff: str | tuple[_ExportDiffEvent, ...],
+) -> list[dict[str, Any]]:
     """Detect added/removed exports in `index.*`, `__init__.py`, `lib.rs`, etc.
 
     For each matching file in the diff, scan added (`+`) and removed (`-`)
@@ -15803,54 +16404,17 @@ def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
     and emit `{"file": ..., "added": [...], "removed": [...]}`. Skips files
     without any export-shaped changes.
     """
-    if not unified_diff:
+    events = _export_diff_events(unified_diff)
+    if not events:
         return []
 
     per_file: dict[str, dict[str, list[str]]] = {}
-    current_path: Optional[str] = None
-    is_export_file = False
-    pending_removed_path: Optional[str] = None
-
-    for line in unified_diff.splitlines():
-        # New diff stanza — reset any pending `--- a/<path>` candidate so
-        # state from the prior file does not leak into this one.
-        if line.startswith("diff --git "):
-            pending_removed_path = None
+    for event in events:
+        if event.kind not in ("add", "remove"):
             continue
-        # `--- a/<path>` precedes `+++ b/<path>` (or `+++ /dev/null` for
-        # deletions). Stash the old-side path so we can fall back to it
-        # when the new side is /dev/null (deleted-file case).
-        if line.startswith("--- a/"):
-            pending_removed_path = line[len("--- a/") :].strip() or None
+        if not _PUBLIC_EXPORT_FILES_RE.search(event.path):
             continue
-        if line.startswith("--- "):
-            # `--- /dev/null` (added file) or other non-`a/` form — no
-            # deleted-side path to remember.
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ b/"):
-            current_path = line[len("+++ b/") :].strip()
-            is_export_file = bool(
-                current_path and _PUBLIC_EXPORT_FILES_RE.search(current_path)
-            )
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ /dev/null"):
-            # Deleted file — use the path captured from `--- a/<path>`.
-            current_path = pending_removed_path
-            is_export_file = bool(
-                current_path and _PUBLIC_EXPORT_FILES_RE.search(current_path)
-            )
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ ") or line.startswith("@@"):
-            continue
-        if not is_export_file or not current_path:
-            continue
-        sign = line[:1] if line else ""
-        if sign not in ("+", "-"):
-            continue
-        body = line[1:].lstrip()
+        body = event.text.lstrip()
         for regex in _PUBLIC_EXPORT_LINE_RES:
             mm = regex.match(body)
             if not mm:
@@ -15862,9 +16426,9 @@ def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
                 if not sym:
                     continue
                 bucket = per_file.setdefault(
-                    current_path, {"added": [], "removed": []}
+                    event.path, {"added": [], "removed": []}
                 )
-                target = "added" if sign == "+" else "removed"
+                target = "added" if event.kind == "add" else "removed"
                 if sym not in bucket[target]:
                     bucket[target].append(sym)
             break
@@ -15904,7 +16468,9 @@ _EXPORT_HUNK_HEADER_RE = re.compile(
 )
 
 
-def _export_changed_symbols(unified_diff: str) -> dict[str, list[str]]:
+def _export_changed_symbols(
+    unified_diff: str | tuple[_ExportDiffEvent, ...],
+) -> dict[str, list[str]]:
     """Map each changed file to its list of hunk-context symbols.
 
     Parses `git diff` hunk headers (`@@ … @@ <context>`); dedupes per file,
@@ -15912,44 +16478,16 @@ def _export_changed_symbols(unified_diff: str) -> dict[str, list[str]]:
     pure top-level edit) yields no entry — the render falls back to file-level
     anchoring, never fabricates. Deleted files anchor under their old path.
     """
-    if not unified_diff:
+    events = _export_diff_events(unified_diff)
+    if not events:
         return {}
     symbols: dict[str, list[str]] = {}
-    current_path: Optional[str] = None
-    pending_removed_path: Optional[str] = None
-    for line in unified_diff.splitlines():
-        if line.startswith("diff --git "):
-            current_path = None
-            pending_removed_path = None
+    for event in events:
+        if event.kind != "hunk" or not event.text:
             continue
-        if line.startswith("--- a/"):
-            pending_removed_path = line[len("--- a/"):].strip() or None
-            continue
-        if line.startswith("--- "):
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ b/"):
-            current_path = line[len("+++ b/"):].strip() or None
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ /dev/null"):
-            current_path = pending_removed_path
-            pending_removed_path = None
-            continue
-        if line.startswith("+++"):
-            continue
-        if line.startswith("@@"):
-            if current_path is None:
-                continue
-            mm = _EXPORT_HUNK_HEADER_RE.match(line)
-            if not mm:
-                continue
-            ctx = mm.group(1).strip()
-            if not ctx:
-                continue
-            bucket = symbols.setdefault(current_path, [])
-            if ctx not in bucket:
-                bucket.append(ctx)
+        bucket = symbols.setdefault(event.path, [])
+        if event.text not in bucket:
+            bucket.append(event.text)
     return symbols
 
 
@@ -16064,45 +16602,24 @@ _EXPORT_REMOVED_REFS_GREP_CHUNK = 20
 
 
 
-def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
+def _export_extract_removed_symbols(
+    unified_diff: str | tuple[_ExportDiffEvent, ...],
+) -> dict[str, str]:
     """Extract candidate removed symbol definitions from a diff.
 
     Returns `{symbol: defining_file}` for removed (`-`) lines in *source*
     files whose body matches a conservative definition pattern. First-seen
     defining file wins on name collision.
     """
-    if not unified_diff:
+    events = _export_diff_events(unified_diff)
+    if not events:
         return {}
     out: dict[str, str] = {}
     added: set[tuple[str, str]] = set()
-    current_path: Optional[str] = None
-    current_is_source = False
-    pending_removed_path: Optional[str] = None
-    for line in unified_diff.splitlines():
-        if line.startswith("diff --git "):
-            current_path = None
-            current_is_source = False
-            pending_removed_path = None
+    for event in events:
+        if event.kind not in ("add", "remove"):
             continue
-        if line.startswith("--- a/"):
-            pending_removed_path = line[len("--- a/"):].strip() or None
-            continue
-        if line.startswith("--- "):
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ b/"):
-            current_path = line[len("+++ b/"):].strip() or None
-            current_is_source = _export_path_is_source(current_path)
-            pending_removed_path = None
-            continue
-        if line.startswith("+++ /dev/null"):
-            current_path = pending_removed_path
-            current_is_source = _export_path_is_source(current_path)
-            pending_removed_path = None
-            continue
-        if line.startswith("+++") or line.startswith("@@"):
-            continue
-        if not current_is_source or current_path is None:
+        if not _export_path_is_source(event.path):
             continue
         # Track BOTH sides: a definition on a `-` line that reappears on a `+`
         # line anywhere in the diff is a signature edit / move, NOT a removal
@@ -16113,8 +16630,8 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
         # false candidates); an indented `+def` (refactor into a class) does
         # NOT replace the removed top-level export — `from lib import helper`
         # callers still break, so it must not suppress the report.
-        if line.startswith("-"):
-            body = line[1:]
+        if event.kind == "remove":
+            body = event.text
             if body[:1].isspace():
                 continue
             for regex in _EXPORT_REMOVED_DEF_RES:
@@ -16122,19 +16639,19 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
                 if mm:
                     sym = mm.group(1)
                     if sym and sym not in out:
-                        out[sym] = current_path
+                        out[sym] = event.path
                     break
             continue
-        if line.startswith("+"):
-            body = line[1:]
+        if event.kind == "add":
+            body = event.text
             if body[:1].isspace():
                 continue
             for regex in _EXPORT_REMOVED_DEF_RES:
                 mm = regex.match(body)
                 if mm:
                     sym = mm.group(1)
-                    if sym and current_path:
-                        added.add((sym, current_path))
+                    if sym:
+                        added.add((sym, event.path))
                     break
             continue
     # Suppress ONLY same-file re-additions (signature edit / move within the
@@ -16150,7 +16667,8 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
 def _export_removed_export_refs(
     merge_base_sha: str,
     repo_root: Path,
-    files: list[dict[str, Any]],
+    *,
+    unified_diff: Optional[str | tuple[_ExportDiffEvent, ...]] = None,
 ) -> list[dict[str, Any]]:
     """Deleted symbols in the diff that are STILL referenced in the repo.
 
@@ -16162,13 +16680,15 @@ def _export_removed_export_refs(
     render states "no removed symbols still referenced (checked at export
     time)". Never claims completeness — false positives steer a human look.
     """
-    rc_u, out_u, _ = _export_run_git(
-        ["diff", "-M", "--unified=0", f"{merge_base_sha}..HEAD"],
-        cwd=repo_root,
-    )
-    if rc_u != 0:
-        return []
-    removed = _export_extract_removed_symbols(out_u)
+    if unified_diff is None:
+        rc_u, out_u, _ = _export_run_git(
+            ["diff", "-M", "--unified=0", f"{merge_base_sha}..HEAD"],
+            cwd=repo_root,
+        )
+        if rc_u != 0:
+            return []
+        unified_diff = out_u
+    removed = _export_extract_removed_symbols(unified_diff)
     if not removed:
         return []
 
@@ -16274,155 +16794,137 @@ def _export_task_evidence_block(
     }
 
 
-def _export_find_glossaries_downward(repo_root: Path) -> list[Path]:
-    """Find every `GLOSSARY.md` within the repo (downward walk).
-
-    The flow-next glossary model supports glossaries at the repo root **and
-    in any subdirectory** (CLAUDE.md "Project glossary" section). For PR
-    export, we need the full set so subdirectory-glossary deltas (e.g.
-    `apps/web/GLOSSARY.md`) surface in `glossary_changes`. The ancestor-walk
-    helper `find_all_glossaries(repo_root)` only returns the root file —
-    not what we want here.
-
-    Skips the same vendored / generated prefixes the triage classifier
-    skips (`node_modules/`, `vendor/`, `third_party/`, `dist/`, `build/`,
-    `.next/`, plugins/flow-next/codex/), plus `.git/` and `.flow/memory/`
-    (memory has its own export channel). Capped at
-    `GLOSSARY_WALK_MAX_DEPTH` levels deep as a defensive bound.
-    """
-    found: list[Path] = []
-    skip_dirs = {".git", "node_modules", "vendor", "third_party", "dist", "build", ".next"}
-    repo_root_resolved = repo_root.resolve()
-    repo_root_str = str(repo_root_resolved)
-
-    # Use os.walk with in-place dirnames pruning so massive vendored trees
-    # (node_modules, vendor, etc.) are never descended into. rglob() would
-    # walk the entire subtree before the post-filter could reject matches —
-    # O(N) on the full repo even when 99% of N is junk in monorepos.
-    for dirpath, dirnames, filenames in os.walk(repo_root_str, topdown=True):
-        # Compute depth of current dir relative to repo root.
-        try:
-            rel_dir = Path(dirpath).relative_to(repo_root_resolved)
-        except ValueError:
-            dirnames[:] = []
-            continue
-        rel_dir_parts = rel_dir.parts if rel_dir != Path(".") else ()
-        depth = len(rel_dir_parts)
-
-        # Depth cap: don't descend further than GLOSSARY_WALK_MAX_DEPTH dirs deep.
-        if depth >= GLOSSARY_WALK_MAX_DEPTH:
-            dirnames[:] = []
-            continue
-
-        # Prune skip_dirs in place so os.walk never recurses into them.
-        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
-
-        # Prune codex mirror and .flow/memory subtrees by exact prefix match.
-        rel_dir_posix = rel_dir.as_posix() if rel_dir != Path(".") else ""
-        if rel_dir_posix == "plugins/flow-next" and "codex" in dirnames:
-            dirnames.remove("codex")
-        if rel_dir_posix == ".flow" and "memory" in dirnames:
-            dirnames.remove("memory")
-
-        if GLOSSARY_FILE in filenames:
-            candidate = Path(dirpath) / GLOSSARY_FILE
-            try:
-                if candidate.is_file():
-                    found.append(candidate)
-            except OSError:
-                continue
-
-    found.sort()
-    return found
+_EXPORT_GLOSSARY_SKIP_DIRS: frozenset[str] = frozenset(
+    {".git", "node_modules", "vendor", "third_party", "dist", "build", ".next"}
+)
 
 
-def _export_find_glossaries_at_base(merge_base_sha: str, repo_root: Path) -> list[str]:
-    """Enumerate `GLOSSARY.md` paths that existed at the merge base.
-
-    Uses `git ls-tree -r <merge_base_sha> --name-only` to surface every
-    glossary path that existed at base, including ones the feature branch
-    deleted entirely (which the HEAD-only walk in
-    `_export_find_glossaries_downward` cannot see). Combined with the HEAD
-    walk to form the union over which `_export_glossary_diff` iterates.
-
-    Skips the same vendored / generated prefixes the HEAD walk skips so a
-    base-only `node_modules/.../GLOSSARY.md` doesn't sneak in. Returns
-    repo-relative POSIX paths sorted; empty list on git failure.
-    """
-    rc, out, _ = _export_run_git(
-        ["ls-tree", "-r", merge_base_sha, "--name-only"],
-        cwd=repo_root,
+def _export_is_glossary_candidate(path: str) -> bool:
+    """True when a changed path belongs to the export glossary surface."""
+    if not (path == GLOSSARY_FILE or path.endswith("/" + GLOSSARY_FILE)):
+        return False
+    parts = path.split("/")
+    if len(parts) - 1 > GLOSSARY_WALK_MAX_DEPTH:
+        return False
+    if any(part in _EXPORT_GLOSSARY_SKIP_DIRS for part in parts[:-1]):
+        return False
+    return not (
+        path.startswith("plugins/flow-next/codex/")
+        or path.startswith(".flow/memory/")
     )
-    if rc != 0:
-        return []
-    skip_dirs = {".git", "node_modules", "vendor", "third_party", "dist", "build", ".next"}
-    found: list[str] = []
-    for line in out.splitlines():
-        rel = line.strip()
-        if not rel:
-            continue
-        # Filename must be GLOSSARY.md (root or any subdir).
-        if not (rel == GLOSSARY_FILE or rel.endswith("/" + GLOSSARY_FILE)):
-            continue
-        parts = rel.split("/")
-        # Depth cap mirrors the HEAD walk (parts include filename).
-        if len(parts) - 1 > GLOSSARY_WALK_MAX_DEPTH:
-            continue
-        if any(part in skip_dirs for part in parts[:-1]):
-            continue
-        if rel.startswith("plugins/flow-next/codex/"):
-            continue
-        if rel.startswith(".flow/memory/"):
-            continue
-        found.append(rel)
-    found.sort()
-    return found
 
 
-def _export_glossary_diff(base_ref: str, merge_base_sha: str, repo_root: Path) -> dict[str, Any]:
+def _export_changed_glossary_paths(name_status: str) -> list[str]:
+    """Extract the sorted old/new glossary-path union from name-status."""
+    paths: set[str] = set()
+    for line in name_status.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        status = parts[0][:1]
+        candidates = parts[1:3] if status in ("R", "C") else parts[1:2]
+        for path in candidates:
+            if _export_is_glossary_candidate(path):
+                paths.add(path)
+    return sorted(paths)
+
+
+def _export_read_base_blobs(
+    merge_base_sha: str,
+    paths: list[str],
+    repo_root: Path,
+) -> dict[str, str]:
+    """Read base-side blobs in one ``git cat-file --batch`` process."""
+    if not paths:
+        return {}
+    request = "".join(f"{merge_base_sha}:{path}\n" for path in paths).encode()
+    try:
+        proc = subprocess.run(
+            ["git", "cat-file", "--batch"],
+            cwd=str(repo_root),
+            input=request,
+            capture_output=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if proc.returncode != 0:
+        return {}
+
+    stream = io.BytesIO(proc.stdout or b"")
+    blobs: dict[str, str] = {}
+    for path in paths:
+        header = stream.readline()
+        if not header:
+            break
+        if header.rstrip().endswith(b" missing"):
+            continue
+        header_parts = header.rstrip(b"\n").rsplit(b" ", 2)
+        if len(header_parts) != 3:
+            break
+        try:
+            size = int(header_parts[2])
+        except ValueError:
+            break
+        body = stream.read(size)
+        if len(body) != size:
+            break
+        stream.read(1)  # git's record-separating newline
+        # Match the former ``git show(..., text=True, encoding="utf-8")``
+        # contract: an invalid glossary is an export error, never a silently
+        # missing base file that could erase the removed-term delta.
+        blobs[path] = body.decode("utf-8")
+    return blobs
+
+
+def _export_glossary_diff(
+    merge_base_sha: str,
+    repo_root: Path,
+    name_status: Optional[str] = None,
+    name_status_rc: Optional[int] = None,
+) -> dict[str, Any]:
     """Compute glossary added/removed terms vs the merge base.
 
-    Iterates the **union** of (HEAD-walk glossaries via
-    `_export_find_glossaries_downward`) and (base-tree glossaries via
-    `_export_find_glossaries_at_base`). For each repo-relative path:
-    reads HEAD text (empty if path doesn't exist in HEAD — covers
-    whole-file deletion), reads base text via `git show
-    <merge_base>:<rel_path>` (empty if path didn't exist at base — covers
-    new files), then diffs term sets. Empty diff or missing files →
+    Iterates only the old/new glossary path union in the branch diff. For each
+    repo-relative path:
+    reads HEAD text (empty if path doesn't exist in HEAD — covers whole-file
+    deletion), batch-reads base blobs with ``git cat-file`` (missing means the
+    path was added), then diffs term sets. Empty diff or missing files →
     `{"added": [], "removed": [], "renamed": []}`.
     """
     result: dict[str, Any] = {"added": [], "removed": [], "renamed": []}
-
-    # Build union of HEAD-walk and base-tree glossary paths (repo-relative POSIX).
-    head_glossaries = _export_find_glossaries_downward(repo_root)
-    head_rel_paths: dict[str, Path] = {}
-    for p in head_glossaries:
-        try:
-            head_rel_paths[p.relative_to(repo_root).as_posix()] = p
-        except ValueError:
-            continue
-    base_rel_paths = _export_find_glossaries_at_base(merge_base_sha, repo_root)
-    union_rel = sorted(set(head_rel_paths.keys()) | set(base_rel_paths))
-    if not union_rel:
+    if name_status is None:
+        name_status_rc, name_status, _ = _export_run_git(
+            ["diff", "--name-status", "-M", f"{merge_base_sha}..HEAD"],
+            cwd=repo_root,
+        )
+    if name_status_rc not in (None, 0):
         return result
 
-    for rel_posix in union_rel:
+    candidates = _export_changed_glossary_paths(name_status or "")
+    if not candidates:
+        return result
+    base_text_by_path = _export_read_base_blobs(
+        merge_base_sha, candidates, repo_root
+    )
+
+    for rel_posix in candidates:
         # HEAD content: read from disk if present; empty for whole-file deletion.
         head_text = ""
-        head_path = head_rel_paths.get(rel_posix)
-        if head_path is not None:
+        head_path = repo_root / rel_posix
+        try:
+            head_exists = head_path.is_file()
+        except OSError:
+            head_exists = False
+        if head_exists:
             try:
                 head_text = head_path.read_text(encoding="utf-8")
             except OSError:
                 head_text = ""
 
-        # Base content: empty for files added on the feature branch.
-        rc, base_text, _ = _export_run_git(
-            ["show", f"{merge_base_sha}:{rel_posix}"],
-            cwd=repo_root,
-        )
+        base_text = base_text_by_path.get(rel_posix, "")
         head_entries = parse_glossary_file(head_text) if head_text else []
-        base_entries = parse_glossary_file(base_text) if rc == 0 else []
+        base_entries = parse_glossary_file(base_text) if base_text else []
 
         head_terms = {
             re.sub(r"\s+", " ", e["term"].strip().lower()): e
@@ -16636,7 +17138,10 @@ def _export_memory_during_epic(
 
     # Decisions: knowledge/decisions/*
     for entry in _memory_iter_entries(
-        memory_dir, track="knowledge", category="decisions"
+        memory_dir,
+        track="knowledge",
+        category="decisions",
+        include_body=True,
     ):
         if not _within_window(entry["date"]):
             continue
@@ -16655,7 +17160,9 @@ def _export_memory_during_epic(
         )
 
     # Bugs: every bug-track category.
-    for entry in _memory_iter_entries(memory_dir, track="bug"):
+    for entry in _memory_iter_entries(
+        memory_dir, track="bug", include_body=True
+    ):
         if not _within_window(entry["date"]):
             continue
         body_first = _export_first_sentence(entry.get("body", ""))
@@ -16670,7 +17177,10 @@ def _export_memory_during_epic(
 
     # Architecture-patterns: knowledge/architecture-patterns/*
     for entry in _memory_iter_entries(
-        memory_dir, track="knowledge", category="architecture-patterns"
+        memory_dir,
+        track="knowledge",
+        category="architecture-patterns",
+        include_body=True,
     ):
         if not _within_window(entry["date"]):
             continue
@@ -16988,18 +17498,35 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         base_ref=base_ref,
     )
 
+    # Materialize all diff representations once. The parsed unified event
+    # stream is shared by summary/symbol/export/removed-reference analyses;
+    # name-status also bounds glossary work to changed candidates.
+    materialized_diff = _export_materialize_diff(merge_base_sha, repo_root)
+
     # --- Glossary diff ---
-    glossary_changes = _export_glossary_diff(base_ref, merge_base_sha, repo_root)
+    glossary_changes = _export_glossary_diff(
+        merge_base_sha,
+        repo_root,
+        name_status=materialized_diff.name_status,
+        name_status_rc=materialized_diff.name_status_rc,
+    )
 
     # --- Strategy alignment ---
     strategy_alignment = _export_strategy_alignment(spec_text)
 
     # --- Diff summary ---
-    diff_summary = _export_diff_summary(base_ref, merge_base_sha, repo_root)
+    diff_summary = _export_diff_summary(
+        base_ref,
+        merge_base_sha,
+        repo_root,
+        materialized=materialized_diff,
+    )
 
     # --- Removed-export references (fn-86 R3) ---
     removed_export_refs = _export_removed_export_refs(
-        merge_base_sha, repo_root, diff_summary["files"]
+        merge_base_sha,
+        repo_root,
+        unified_diff=materialized_diff.events,
     )
 
     # --- Deferred findings ---
@@ -17584,6 +18111,7 @@ def cmd_ready(args: argparse.Namespace) -> None:
 
     # MU-2: Get current actor for display (marks your tasks)
     current_actor = get_actor()
+    tasks_dir = flow_dir / TASKS_DIR
 
     # Spec-level dependency gate (GH PR #95): a spec blocked by unfinished
     # depends_on_epics must not report its tasks as ready. Same dep rule as
@@ -17620,22 +18148,21 @@ def cmd_ready(args: argparse.Namespace) -> None:
             print(f"Spec {spec_id} is blocked by: {', '.join(blocked_by_specs)}")
         return
 
-    # Get all tasks for spec (with merged runtime state)
-    tasks_dir = flow_dir / TASKS_DIR
+    # Get all tasks for spec from the command-scoped inventory.
     if not tasks_dir.exists():
         error_exit(
             f"{TASKS_DIR}/ missing. Run 'flowctl init' or fix repo state.",
             use_json=args.json,
         )
-    tasks = {}
-    for task_file in tasks_dir.glob(f"{spec_id}.*.json"):
-        task_id = task_file.stem
-        if not is_task_id(task_id):
-            continue  # Skip non-task files (e.g., fn-1.2-review.json)
-        task_data = load_task_with_state(task_id, use_json=args.json)
-        if "id" not in task_data:
-            continue  # Skip artifact files (GH-21)
-        tasks[task_data["id"]] = task_data
+    inventory = TaskInventory.load(
+        flow_dir,
+        use_json=args.json,
+        spec_id=spec_id,
+    )
+    tasks = {
+        task["id"]: task
+        for task in inventory.by_spec.get(spec_id, [])
+    }
 
     # Find ready tasks (status=todo, all deps done)
     ready = []
@@ -17764,6 +18291,8 @@ def cmd_next(args: argparse.Namespace) -> None:
         epic_ids.sort(key=id_sort_key)
 
     current_actor = get_actor()
+    tasks_dir = flow_dir / TASKS_DIR
+    inventory = None
 
     def sort_key(t: dict) -> tuple[int, int]:
         # fn-52.10: tracker-aware task suffix (parse_id is fn-only).
@@ -17816,23 +18345,28 @@ def cmd_next(args: argparse.Namespace) -> None:
                 print(f"plan {epic_id} needs_plan_review")
             return
 
-        tasks_dir = flow_dir / TASKS_DIR
         if not tasks_dir.exists():
             error_exit(
                 f"{TASKS_DIR}/ missing. Run 'flowctl init' or fix repo state.",
                 use_json=args.json,
             )
+        if inventory is None:
+            inventory = TaskInventory.load(
+                flow_dir,
+                use_json=args.json,
+                spec_ids=set(epic_ids),
+                collect_consistency_errors=True,
+                collect_load_errors=True,
+            )
 
-        tasks: dict[str, dict] = {}
-        for task_file in tasks_dir.glob(f"{epic_id}.*.json"):
-            task_id = task_file.stem
-            if not is_task_id(task_id):
-                continue  # Skip non-task files (e.g., fn-1.2-review.json)
-            # Load task with merged runtime state
-            task_data = load_task_with_state(task_id, use_json=args.json)
-            if "id" not in task_data:
-                continue  # Skip artifact files (GH-21)
-            tasks[task_data["id"]] = task_data
+        task_issues = inventory.issues_by_spec.get(epic_id, [])
+        if task_issues:
+            error_exit(task_issues[0], use_json=args.json)
+
+        tasks = {
+            task["id"]: task
+            for task in inventory.by_spec.get(epic_id, [])
+        }
 
         # Resume in_progress tasks owned by current actor
         in_progress = [
@@ -18331,7 +18865,10 @@ def validate_flow_root(flow_dir: Path) -> list[str]:
 
 
 def validate_epic(
-    flow_dir: Path, epic_id: str, use_json: bool = True
+    flow_dir: Path,
+    epic_id: str,
+    use_json: bool = True,
+    inventory: Optional[TaskInventory] = None,
 ) -> tuple[list[str], list[str], int]:
     """Validate a single epic. Returns (errors, warnings, task_count)."""
     errors = []
@@ -18370,19 +18907,19 @@ def validate_epic(
             if not dep_path.exists():
                 errors.append(f"Spec {epic_id}: depends_on_epics missing spec {dep}")
 
-    # Get all tasks (with merged runtime state for accurate status)
-    tasks_dir = flow_dir / TASKS_DIR
-    tasks = {}
-    if tasks_dir.exists():
-        for task_file in tasks_dir.glob(f"{epic_id}.*.json"):
-            task_id = task_file.stem
-            if not is_task_id(task_id):
-                continue  # Skip non-task files (e.g., fn-1.2-review.json)
-            # Use merged state to get accurate status
-            task_data = load_task_with_state(task_id, use_json=use_json)
-            if "id" not in task_data:
-                continue  # Skip artifact files (GH-21)
-            tasks[task_data["id"]] = task_data
+    # Get all tasks from one command-scoped task/runtime snapshot.
+    if inventory is None:
+        inventory = TaskInventory.load(
+            flow_dir,
+            use_json=use_json,
+            spec_id=epic_id,
+            collect_consistency_errors=True,
+        )
+    tasks = {
+        task["id"]: task
+        for task in inventory.by_spec.get(epic_id, [])
+    }
+    errors.extend(inventory.issues_by_spec.get(epic_id, []))
 
     # Validate each task
     for task_id, task in tasks.items():
@@ -18525,7 +19062,9 @@ def cmd_rp_chat_send(args: argparse.Namespace) -> None:
     if res.returncode != 0:
         oracle_error = (res.stderr or res.stdout or "").strip()
         if not is_rp_tool_missing_error(oracle_error, "oracle_send"):
-            error_exit(f"rp-cli failed: {oracle_error}", use_json=False, code=2)
+            error_exit(
+                f"RepoPrompt CLI failed: {oracle_error}", use_json=False, code=2
+            )
         res = run_rp_cli(legacy_cmd)
     output = (res.stdout or "") + ("\n" + res.stderr if res.stderr else "")
     chat_id = parse_chat_id(output)
@@ -18563,7 +19102,9 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
 
     # Step 1: pick-window
     roots = normalize_repo_root(repo_root)
-    win_id = bind_context_window(repo_root)
+    win_id = bind_context_window(
+        repo_root, create_if_missing=bool(getattr(args, "create", False))
+    )
     windows: list[dict[str, Any]] = []
     if win_id is None:
         result = run_rp_cli(["--raw-json", "-e", "windows"])
@@ -20787,6 +21328,7 @@ PILOT_RUNS_DIR_REL = ".flow/pilot-runs"
 # pilot skill records exactly one of these per tick; flowctl validates the
 # token but applies NO judgment about which is correct.
 PILOT_LOG_ACTIONS = ("triaged", "advanced", "asked", "blocked", "needs-human")
+PILOT_LOG_COUNTER_VERSION = 1
 
 
 def _pilot_log_id_slug(raw_id: str) -> str:
@@ -20885,6 +21427,99 @@ def _pilot_log_now() -> float:
     import time as _time
 
     return _time.time()
+
+
+def _pilot_log_recover_next_tick(
+    run_dir: Path,
+    id_slug: str,
+    raw_id: str,
+    state_hash: str,
+) -> int:
+    """Reconstruct next tick and backfill deterministic committed slots."""
+    max_tick = 0
+    for candidate in run_dir.glob(f"pilot-{id_slug}-*.json"):
+        try:
+            row = json.loads(candidate.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(row, dict) or row.get("id") != raw_id:
+            continue
+        tick = row.get("tick")
+        if not isinstance(tick, int) or isinstance(tick, bool) or tick < 1:
+            continue
+        max_tick = max(max_tick, tick)
+        slot_path = _pilot_log_tick_slot_path(run_dir, state_hash, tick)
+        if not slot_path.exists():
+            atomic_write_json(
+                slot_path,
+                {
+                    "version": PILOT_LOG_COUNTER_VERSION,
+                    "id": raw_id,
+                    "tick": tick,
+                    "row": candidate.name,
+                },
+            )
+    # Orphaned reservations (crash after slot, before row) remain consumed so
+    # recovery never reuses a tick that may have been observed by a caller.
+    slot_prefix = f".pilot-{state_hash}.tick-"
+    for slot_path in run_dir.glob(f"{slot_prefix}*.json"):
+        match = re.fullmatch(
+            re.escape(slot_prefix) + r"(\d+)\.json", slot_path.name
+        )
+        if match:
+            max_tick = max(max_tick, int(match.group(1)))
+    return max_tick + 1
+
+
+def _pilot_log_tick_slot_path(
+    run_dir: Path,
+    state_hash: str,
+    tick: int,
+) -> Path:
+    """Return the deterministic hidden reservation path for one tick."""
+    return run_dir / f".pilot-{state_hash}.tick-{tick}.json"
+
+
+def _pilot_log_read_next_tick(
+    counter_path: Path,
+    run_dir: Path,
+    raw_id: str,
+    state_hash: str,
+) -> Optional[int]:
+    """Read and validate counter state plus its one-row commit witness."""
+    try:
+        state = json.loads(counter_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(state, dict):
+        return None
+    next_tick = state.get("nextTick")
+    last_row_name = state.get("lastRow")
+    if (
+        state.get("version") != PILOT_LOG_COUNTER_VERSION
+        or state.get("id") != raw_id
+        or not isinstance(next_tick, int)
+        or isinstance(next_tick, bool)
+        or next_tick < 2
+        or not isinstance(last_row_name, str)
+        or Path(last_row_name).name != last_row_name
+    ):
+        return None
+    try:
+        last_row = json.loads(
+            (run_dir / last_row_name).read_text(encoding="utf-8")
+        )
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(last_row, dict):
+        return None
+    if last_row.get("id") != raw_id or last_row.get("tick") != next_tick - 1:
+        return None
+    # A committed/orphaned deterministic slot means this counter is stale even
+    # when its last-row witness is internally valid. Never reuse that tick.
+    if _pilot_log_tick_slot_path(run_dir, state_hash, next_tick).exists():
+        return None
+    return next_tick
 
 
 def _branch_slug(branch: Optional[str] = None) -> str:
@@ -21791,10 +22426,11 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     # Filename hash of the RAW id: stamped into both the lock-file name and the
     # row-file name so two distinct ids that normalize to the same slug never
     # share a lock OR clobber each other's path (review finding #1).
-    id_hash = hashlib.sha1(raw_id.encode("utf-8")).hexdigest()[:8]
+    full_id_hash = hashlib.sha1(raw_id.encode("utf-8")).hexdigest()
+    id_hash = full_id_hash[:8]
 
-    # The count+write is serialized under a per-id exclusive CROSS-PLATFORM lock
-    # so two concurrent same-id appends can't both read N rows and both write
+    # Tick reservation + write is serialized under a per-id CROSS-PLATFORM lock
+    # so two concurrent same-id appends can't both reserve N+1 and both write
     # tick=N+1 (review finding #1 follow-up — duplicate-tick race). The lock is a
     # `.pilot-<id-hash>.lock` DIRECTORY: `os.mkdir` is atomic on POSIX AND Windows
     # (raw `fcntl.flock` is Unix-only and a no-op on Windows, so it failed to
@@ -21804,20 +22440,31 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     # the summary glob ever sees it (and it still matches the `.pilot-*.lock`
     # glob a caller may use to spot the lock).
     lock_path = run_dir / f".pilot-{id_hash}.lock"
+    counter_path = run_dir / f".pilot-{full_id_hash}.counter.json"
     with _pilot_log_lock(lock_path):
-        # Per-id monotonic tick = (#existing rows whose STORED id == this raw
-        # id) + 1. The slug glob is a cheap pre-filter; we then read each
-        # candidate's `id` and count EXACT raw-id matches so two distinct ids
-        # that normalize to the same slug never share a counter. A row whose
-        # JSON can't be read is skipped — it can't belong to this id.
-        tick = 1
-        for cand in run_dir.glob(f"pilot-{id_slug}-*.json"):
-            try:
-                cand_data = json.loads(cand.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                continue
-            if isinstance(cand_data, dict) and cand_data.get("id") == raw_id:
-                tick += 1
+        # Steady state reads one counter + its one-row commit witness. Missing,
+        # malformed, mismatched, or crash-ahead state reconstructs once from
+        # historical rows, then self-heals the counter below.
+        tick = _pilot_log_read_next_tick(
+            counter_path, run_dir, raw_id, full_id_hash
+        )
+        if tick is None:
+            tick = _pilot_log_recover_next_tick(
+                run_dir, id_slug, raw_id, full_id_hash
+            )
+
+        slot_path = _pilot_log_tick_slot_path(run_dir, full_id_hash, tick)
+        if slot_path.exists():
+            tick = _pilot_log_recover_next_tick(
+                run_dir, id_slug, raw_id, full_id_hash
+            )
+            slot_path = _pilot_log_tick_slot_path(
+                run_dir, full_id_hash, tick
+            )
+
+        timestamp = now_iso()
+        ts_slug = timestamp.replace(":", "").replace("-", "").replace(".", "")
+        row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}-{id_hash}.json"
 
         row = {
             "tick": tick,
@@ -21825,14 +22472,32 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
             "action": action,
             "stage": stage,
             "costTokens": getattr(args, "cost_tokens", None),
-            "timestamp": now_iso(),
+            "timestamp": timestamp,
         }
 
-        # Filename: slug + tick + timestamp + id-hash, unique per write even
-        # for slug-colliding ids or two appends in the same timestamp tick.
-        ts_slug = now_iso().replace(":", "").replace("-", "").replace(".", "")
-        row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}-{id_hash}.json"
+        # Reserve the deterministic tick slot before publishing the row. A
+        # crash leaves an occupied slot, so recovery skips rather than reuses
+        # a possibly observed tick. Counter publication comes last: it is only
+        # a fast pointer to a fully committed slot+row pair.
+        atomic_write_json(
+            slot_path,
+            {
+                "version": PILOT_LOG_COUNTER_VERSION,
+                "id": raw_id,
+                "tick": tick,
+                "row": row_path.name,
+            },
+        )
         atomic_write_json(row_path, row)
+        atomic_write_json(
+            counter_path,
+            {
+                "version": PILOT_LOG_COUNTER_VERSION,
+                "id": raw_id,
+                "nextTick": tick + 1,
+                "lastRow": row_path.name,
+            },
+        )
 
     if args.json:
         json_output(
@@ -24932,10 +25597,19 @@ def cmd_validate(args: argparse.Namespace) -> None:
                         )
         total_tasks = 0
         epic_results = []
+        inventory = TaskInventory.load(
+            flow_dir,
+            use_json=args.json,
+            spec_ids=set(epic_ids),
+            collect_consistency_errors=True,
+        )
 
         for epic_id in epic_ids:
             errors, warnings, task_count = validate_epic(
-                flow_dir, epic_id, use_json=args.json
+                flow_dir,
+                epic_id,
+                use_json=args.json,
+                inventory=inventory,
             )
             all_errors.extend(errors)
             all_warnings.extend(warnings)
@@ -25085,6 +25759,12 @@ _PRIME_SIZE_MEDIUM = 400_000
 _PRIME_SIZE_LARGE = 2_000_000
 _PRIME_HUGE_FILES = 20000
 
+# Root containment is checked for thousands of tracked files. Cache only the
+# root's realpath (targets still resolve independently) and fingerprint the
+# lexical root so a replaced/retargeted symlink invalidates safely.
+_PRIME_ROOT_REAL_CACHE: dict[str, tuple[tuple[int, int, int], str]] = {}
+_PRIME_ROOT_REAL_CACHE_MAX = 32
+
 # Path-based exclusion sets (content-hash dedup handled separately). Matched on
 # any path SEGMENT (POSIX-split) so nested occurrences are caught.
 _PRIME_TOOL_MANAGED_DIRS = frozenset(
@@ -25224,6 +25904,54 @@ def _prime_git(
         return (1, "", str(exc))
 
 
+def _prime_git_many(
+    root: Path,
+    commands: "list[list[str]]",
+    collector: "_PrimeCollector",
+    timeout: int = _PRIME_GIT_TIMEOUT,
+) -> "list[tuple[int, str, str]]":
+    """Run independent Git probes concurrently; preserve result/error order."""
+    if not commands:
+        return []
+    if len(commands) == 1:
+        return [_prime_git(root, commands[0], collector, timeout=timeout)]
+
+    private_collectors = [
+        _PrimeCollector(f"{collector.name}-git-{index}")
+        for index in range(len(commands))
+    ]
+
+    def run(item: "tuple[list[str], _PrimeCollector]") -> "tuple[int, str, str]":
+        args, private = item
+        try:
+            return _prime_git(root, args, private, timeout=timeout)
+        except Exception as exc:
+            private.fail(exc)
+            return (1, "", str(exc))
+
+    try:
+        # Lazy import: Prime is specialized; ordinary flowctl startup must not
+        # pay concurrent.futures import cost.
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=min(4, len(commands))) as pool:
+            results = list(pool.map(run, zip(commands, private_collectors)))
+    except Exception:
+        # Thread/resource exhaustion must not turn the fail-soft classifier
+        # into a crash. Re-run in stable command order; read-only probes may
+        # repeat if executor submission failed partway through.
+        return [
+            _prime_git(root, args, collector, timeout=timeout)
+            for args in commands
+        ]
+
+    collector.op(len(commands))
+    for private in private_collectors:
+        for error in private.errors:
+            collector.fail(error)
+    return results
+
+
 def _prime_read_text(path: Path, cap: int = _PRIME_MAX_FILE_BYTES) -> Optional[str]:
     """Bounded, defensive text read (never raises; None on any failure)."""
     try:
@@ -25237,6 +25965,31 @@ def _prime_read_text(path: Path, cap: int = _PRIME_MAX_FILE_BYTES) -> Optional[s
         return None
 
 
+def _prime_root_real(root: Path) -> str:
+    """Resolve a classifier root once while detecting path retargeting."""
+    lexical = os.path.abspath(os.fspath(root))
+    try:
+        info = os.stat(lexical, follow_symlinks=False)
+        fingerprint = (info.st_dev, info.st_ino, info.st_mtime_ns)
+    except (OSError, ValueError):
+        return os.path.realpath(lexical)
+
+    cached = _PRIME_ROOT_REAL_CACHE.get(lexical)
+    if cached is not None and cached[0] == fingerprint:
+        return cached[1]
+
+    resolved = os.path.realpath(lexical)
+    if resolved != lexical:
+        # A symlinked root (including a symlinked parent) may retarget below
+        # the leaf fingerprint. Resolve it every time; containment beats cache.
+        _PRIME_ROOT_REAL_CACHE.pop(lexical, None)
+        return resolved
+    if len(_PRIME_ROOT_REAL_CACHE) >= _PRIME_ROOT_REAL_CACHE_MAX:
+        _PRIME_ROOT_REAL_CACHE.clear()
+    _PRIME_ROOT_REAL_CACHE[lexical] = (fingerprint, resolved)
+    return resolved
+
+
 def _prime_contained(root: Path, rel: str) -> Optional[Path]:
     """Join a git-tracked relative path onto `root` and confirm (via realpath)
     it stays inside `root`. Returns None on ANY escape - a `..` traversal, an
@@ -25245,7 +25998,7 @@ def _prime_contained(root: Path, rel: str) -> Optional[Path]:
     None sentinel as a skip. Does NOT open the file.
     """
     try:
-        base = os.path.realpath(str(root))
+        base = _prime_root_real(root)
         target = os.path.realpath(os.path.join(base, rel))
     except (OSError, ValueError):
         return None
@@ -25383,6 +26136,18 @@ def _prime_parse_ls_files_staged(
             pass
         if not entries:
             return ([], False)
+    finally:
+        if proc.stdout is not None:
+            try:
+                proc.stdout.close()
+            except OSError:
+                pass
+        try:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait(timeout=_PRIME_GIT_TIMEOUT)
+        except (OSError, subprocess.SubprocessError):
+            pass
     if truncated:
         collector.note_truncated()
     return (entries, truncated)
@@ -25503,14 +26268,25 @@ def _prime_collect_lifecycle(
     c = _PrimeCollector("lifecycle", budget=16)
     evidence: list[str] = []
 
-    rc, out, _err = _prime_git(root, ["rev-list", "--count", "HEAD"], c)
+    commit_result, tags_result, first_result, authors_result = _prime_git_many(
+        root,
+        [
+            ["rev-list", "--count", "HEAD"],
+            ["tag"],
+            ["log", "--reverse", "--max-parents=0", "--format=%ct"],
+            ["shortlog", "-sne", "HEAD"],
+        ],
+        c,
+    )
+
+    rc, out, _err = commit_result
     commit_count = int(out.strip()) if rc == 0 and out.strip().isdigit() else 0
     if rc != 0:
         evidence.append("no commits (unborn HEAD)")
     else:
         evidence.append(f"{commit_count} commits")
 
-    rc, out, _err = _prime_git(root, ["tag"], c)
+    rc, out, _err = tags_result
     tags = len([ln for ln in out.splitlines() if ln.strip()]) if rc == 0 else 0
 
     # Reuse the CAPPED streamed inventory count instead of re-materializing
@@ -25559,9 +26335,7 @@ def _prime_collect_lifecycle(
     c.op()
 
     first_commit_days = 0
-    rc, out, _err = _prime_git(
-        root, ["log", "--reverse", "--max-parents=0", "--format=%ct"], c
-    )
+    rc, out, _err = first_result
     if rc == 0 and out.strip():
         first_ts = out.strip().splitlines()[0].strip()
         if first_ts.isdigit():
@@ -25570,7 +26344,7 @@ def _prime_collect_lifecycle(
             first_commit_days = max(0, int((time.time() - int(first_ts)) / 86400))
 
     single_contributor = False
-    rc, out, _err = _prime_git(root, ["shortlog", "-sne", "HEAD"], c)
+    rc, out, _err = authors_result
     if rc == 0:
         authors = [ln for ln in out.splitlines() if ln.strip()]
         single_contributor = len(authors) == 1
@@ -25859,7 +26633,7 @@ def _prime_collect_topology(
     prose_cross_repo_refs: list[str] = []
     seen_refs: set[str] = set()
     try:
-        root_real = os.path.realpath(str(root))
+        root_real = _prime_root_real(root)
     except (OSError, ValueError):
         root_real = str(root)
 
@@ -26963,6 +27737,7 @@ def _prime_collect_atomic_pairs(
     if pre_dedup is not None:
         deduped = pre_dedup
     tracked = set(deduped)
+    tracked_lower = {path.lower() for path in tracked}
     pairs: list[dict[str, Any]] = []
 
     def _add(kind: str, a: str, b: str) -> None:
@@ -26973,7 +27748,7 @@ def _prime_collect_atomic_pairs(
         low = rel.lower()
         if low.endswith(".pas"):
             dfm = rel[:-4] + ".dfm"
-            if dfm in tracked or (rel[:-4] + ".dfm").lower() in {t.lower() for t in tracked}:
+            if dfm in tracked or dfm.lower() in tracked_lower:
                 _add("delphi-form", rel, dfm)
         if low.endswith(".designer.cs"):
             base = rel[: -len(".designer.cs")] + ".cs"
@@ -27047,19 +27822,27 @@ def _prime_collect_docs_freshness(
     """FH1: last-commit timestamps for instruction/docs files vs src churn."""
     c = _PrimeCollector("substance-docs-freshness", budget=30)
     instruction_files: list[dict[str, Any]] = []
-    for doc in ("CLAUDE.md", "AGENTS.md", "README.md"):
-        rc, out, _err = _prime_git(root, ["log", "-1", "--format=%ct", "--", doc], c)
-        ts = int(out.strip()) if rc == 0 and out.strip().isdigit() else None
-        if ts is not None:
-            instruction_files.append({"path": doc, "last_commit_ts": ts})
+    docs = ("CLAUDE.md", "AGENTS.md", "README.md")
     # Newest source-file commit timestamp (pathspec-restricted to source exts).
     src_exts = sorted({os.path.splitext(p)[1] for p in _prime_iter_source(deduped)})
     src_pathspecs = [f"*{ext}" for ext in src_exts[:12]]
+    commands = [
+        ["log", "-1", "--format=%ct", "--", doc]
+        for doc in docs
+    ]
+    if src_pathspecs:
+        commands.append(
+            ["log", "-1", "--format=%ct", "--", *src_pathspecs]
+        )
+    results = _prime_git_many(root, commands, c)
+
+    for doc, (rc, out, _err) in zip(docs, results[: len(docs)]):
+        ts = int(out.strip()) if rc == 0 and out.strip().isdigit() else None
+        if ts is not None:
+            instruction_files.append({"path": doc, "last_commit_ts": ts})
     src_last_ts: Optional[int] = None
     if src_pathspecs:
-        rc, out, _err = _prime_git(
-            root, ["log", "-1", "--format=%ct", "--", *src_pathspecs], c
-        )
+        rc, out, _err = results[-1]
         if rc == 0 and out.strip().isdigit():
             src_last_ts = int(out.strip())
     return (
@@ -30192,7 +30975,10 @@ def main() -> None:
         )
 
     args = parser.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except CrossProcessLockError as e:
+        error_exit(f"Runtime lock unavailable: {e}", use_json=args.json)
 
 
 if __name__ == "__main__":

@@ -294,6 +294,47 @@ class TestTransientFailureNotCached(_TempGitRepoCase):
                 flowctl.get_state_dir()
             self.assertEqual(calls, [])
 
+    def test_repo_and_state_oserrors_fall_back_without_poisoning(self) -> None:
+        for exc in (
+            FileNotFoundError("git missing"),
+            PermissionError("git denied"),
+            OSError("spawn unavailable"),
+        ):
+            with self.subTest(error=type(exc).__name__):
+                flowctl._REPO_ROOT_CACHE.pop(Path.cwd(), None)
+                flowctl._STATE_DIR_CACHE.pop((Path.cwd(), None), None)
+                with mock.patch.object(flowctl.subprocess, "run", side_effect=exc):
+                    self.assertEqual(flowctl.get_repo_root(), self.root)
+                    self.assertEqual(
+                        flowctl.get_state_dir(), self.root / ".flow" / "state"
+                    )
+                self.assertNotIn(Path.cwd(), flowctl._REPO_ROOT_CACHE)
+                self.assertNotIn((Path.cwd(), None), flowctl._STATE_DIR_CACHE)
+                self.assertEqual(flowctl.get_repo_root(), self.root)
+                self.assertEqual(flowctl.get_state_dir(), _git_state_dir(self.root))
+
+    def test_cli_version_oserror_is_retryable(self) -> None:
+        cases = (
+            ("codex", flowctl.get_codex_version, "codex 1.2.3"),
+            ("copilot", flowctl.get_copilot_version, "Copilot CLI 1.2.3"),
+            ("cursor-agent", flowctl.get_cursor_version, "2026.07.21-abc"),
+        )
+        for executable, getter, success_output in cases:
+            resolved = str(self.root / executable)
+            flowctl._CLI_VERSION_CACHE.pop(resolved, None)
+            completed = subprocess.CompletedProcess(
+                [resolved, "--version"], 0, stdout=success_output, stderr=""
+            )
+            with self.subTest(executable=executable):
+                with mock.patch.object(flowctl.shutil, "which", return_value=resolved), mock.patch.object(
+                    flowctl.subprocess,
+                    "run",
+                    side_effect=[PermissionError("denied"), completed],
+                ) as run:
+                    self.assertIsNone(getter())
+                    self.assertEqual(getter(), "1.2.3" if executable != "cursor-agent" else "2026.07.21-abc")
+                    self.assertEqual(run.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

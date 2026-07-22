@@ -211,7 +211,7 @@ Driver recipes:
 
 **The full pipeline** runs pilot and land **concurrently** — pilot builds spec N while land babysits spec N−1's PR. Same-session (two `/loop` jobs, ticks serialize) works for small backlogs; the real assembly line is **two instances** (Claude Code / Codex), each in **its own clone or git worktree** — both loops mutate the working tree (pilot checks out spec branches, land checks out PR branches for CI fixes), so two loops sharing one checkout would trip each other's dirty-tree guards. GitHub is the shared state: land pushes the spec close after merging, pilot pulls the base branch before planning, and the strike ledgers are per-clone by design. The loops never contend: land touches only specs with all tasks done (in-flight specs stay pilot's), and pilot skips specs that already have an open PR.
 
-The `rp` review backend runs headlessly via rp-cli as long as the Repo Prompt app is running on the same Mac (cold start: `open -ga "Repo Prompt"` — MCP responds within seconds; a stopped app fails fast, never hangs). On machines without the app (remote/CI), use `--review=codex`, `--review=copilot`, or `--review=none`.
+The `rp` review backend runs headlessly through the CE-first CLI ladder as long as RepoPrompt CE is running on the same Mac (cold start: `open -ga "RepoPrompt CE"`; a stopped app fails fast). Discontinued Classic remains only the final executable fallback. On machines without the app (remote/CI), use `--review=codex`, `--review=copilot`, `--review=cursor`, or `--review=none`.
 
 ---
 
@@ -529,7 +529,7 @@ SPECS_FILE="${SPECS_FILE:-${EPICS_FILE:-}}"
 SPECS="${SPECS:-${EPICS:-}}"
 ```
 
-Externally-set env vars are preserved (the resolver does not clobber `SPECS_FILE` if the user/script set it explicitly). The aliases follow the same telemetry-driven contract as the `flowctl epic` → `flowctl spec` rename: soft-removal target 2.0.0, NOT a hard sunset (R28). To migrate, edit `scripts/ralph/config.env` and rename the keys; no other action is required.
+Externally-set env vars are preserved (the resolver does not clobber `SPECS_FILE` if the user/script set it explicitly). These environment aliases are a Ralph-template compatibility seam; unlike the removed `flowctl epic` command aliases, they remain supported for existing `config.env` files. To migrate, edit `scripts/ralph/config.env` and rename the keys; no other action is required.
 
 ### Permissions
 
@@ -566,7 +566,7 @@ eval "$(flowctl rp setup-review --repo-root . --summary "Review ...")"  # W= win
 flowctl rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md
 ```
 
-> **Never call `rp-cli` directly in Ralph mode.** Use flowctl wrappers.
+> **Never call a RepoPrompt CLI directly in Ralph mode.** Use flowctl wrappers so CE-first discovery, window reuse, and failure semantics stay consistent.
 
 Window selection is atomic inside `setup-review`. With RP 1.5.68+, `--create` auto-opens windows.
 
@@ -663,8 +663,8 @@ Ralph checks sentinels at iteration boundaries. Prefer `ralphctl.py` over hand-t
 ### Task Retry/Rollback
 
 ```bash
-flowctl unblock fn-1.2                    # Re-enable blocked task
-flowctl update fn-1.2 --status pending    # Reset to pending
+flowctl start fn-1.2 --force  # Retry a blocked task now
+flowctl task reset fn-1.2     # Reset task state to todo for a later run
 ```
 
 ---
@@ -938,22 +938,22 @@ After `MAX_ATTEMPTS_PER_TASK` failures:
 **To retry:**
 
 ```bash
-flowctl unblock fn-1.2
+flowctl start fn-1.2 --force
 ```
 
 ### RepoPrompt Issues
 
-**"rp-cli not found":**
+**"RepoPrompt CLI not found":**
 
 ```bash
-# Install RepoPrompt, then:
-which rp-cli
+# Install RepoPrompt CE, then verify the preferred candidate:
+command -v rpce-cli
 ```
 
 **Window not found:**
 
-- RP 1.5.68+: Use `--create` flag
-- Older: Open RepoPrompt on your repo manually
+- Use `flowctl rp setup-review --repo-root "$PWD" --summary "review" --create`; it reuses a CE window already showing the repository and creates one only when necessary.
+- If discovery fails, open RepoPrompt CE on the repository and retry. A selected CE connection/command failure does not fall back to Classic.
 
 **Alternative:** Switch to Codex backend.
 
@@ -975,7 +975,7 @@ CODEX_SANDBOX=auto
 
 The `read-only` sandbox blocks all commands on Windows.
 
-**Ralph requires Git Bash on Windows.** The harness (`ralph.sh`) and its guard hooks are bash scripts, so Ralph mode runs under Git Bash (or WSL), never native `cmd.exe`/PowerShell. The interpreter is resolved through a functionality probe (`scripts/ralph/pick-python.sh`), so a Microsoft Store `python3` alias stub (present on `PATH` but exits 9009) is skipped in favor of `py -3` / `python`; no native `.cmd` guard is provided because the bash harness could not use one. If `python3` is the Store stub, install python.org Python (or the `py` launcher), or set `PYTHON_BIN` to a working interpreter. (The plain `flowctl.cmd` shim covers non-Ralph PowerShell/cmd use — see [platforms.md](platforms.md).)
+**Ralph requires Git Bash on Windows.** The harness (`ralph.sh`) and its guard hooks are bash scripts, so Ralph mode runs under Git Bash (or WSL), never native `cmd.exe`/PowerShell. The shared resolver (`scripts/ralph/pick-python.sh`) probes both functionality and Python 3.11+, so a Microsoft Store `python3` alias stub (present on `PATH` but exits 9009) and working-but-too-old interpreters are skipped; no native `.cmd` guard is provided because the bash harness could not use one. Install a supported python.org Python (or use the `py` launcher), or set `PYTHON_BIN` to a supported interpreter. (The plain `flowctl.cmd` shim covers non-Ralph PowerShell/cmd use — see [platforms.md](platforms.md).)
 
 ### Run Inspection
 

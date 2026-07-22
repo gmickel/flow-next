@@ -37,7 +37,9 @@ Works out of the box for parallel branches. No setup required.
 ├── bin/                       # Local flowctl install (via /flow-next:setup)
 │   ├── flowctl                # bash launcher (Git Bash / WSL / macOS / Linux)
 │   ├── flowctl.cmd            # batch launcher (cmd.exe / PowerShell)
-│   └── flowctl.py             # Python entrypoint (all CLI logic)
+│   ├── flowctl_bootstrap.py   # source-authoritative startup front end
+│   ├── flowctl-help.txt       # tracked root-help fast-path output
+│   └── flowctl.py             # source of truth (all CLI logic)
 ├── templates/spec.md          # Setup-managed copy of the canonical scaffold
 ├── specs/fn-N-slug.json       # Spec state - colocated with .md
 ├── specs/fn-N-slug.md         # Spec markdown
@@ -54,7 +56,7 @@ Works out of the box for parallel branches. No setup required.
 └── .cache/                    # (gitignored) CLI model-resolution cache
 ```
 
-Both launchers resolve a working Python by **probing functionality** (`<cand> -c "import sys"`, order `$PYTHON_BIN` → `py -3` → `python3` → `python`) so the Windows Microsoft Store `python3` alias stub is skipped (fn-77). `flowctl init` re-stamps **both** `bin/flowctl` and `bin/flowctl.cmd` from in-module launcher constants, so an existing install self-heals a pre-fix launcher without a full `/flow-next:setup` re-run - see [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
+Both launchers resolve Python by **probing functionality and the 3.11 minimum** (order `$PYTHON_BIN` → `py -3` → `python3` → `python`), so the Windows Microsoft Store `python3` alias stub and working-but-too-old interpreters are skipped before source loading. `flowctl init` re-stamps **both** `bin/flowctl` and `bin/flowctl.cmd` from in-module launcher constants, so an existing install self-heals a pre-fix launcher without a full `/flow-next:setup` re-run - see [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
 
 Pre-1.0 layout had spec JSON sidecars at `.flow/epics/fn-N-slug.json` (the markdown was already at `.flow/specs/fn-N-slug.md`). Port by hand via `.flow/usage.md` "Pre-1.0 layout porting" (and `docs/troubleshooting.md`); the automated migrate-rename path was removed in fn-111.
 
@@ -112,6 +114,8 @@ flowctl usage
 ```
 
 Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin — this is how plugin-mode repos read the guide), then the repo-local `.flow/usage.md` (copy-mode installs, where flowctl runs from `.flow/bin/` with no plugin tree around it). Exits 1 with a pointer to `/flow-next:setup` when neither exists.
+
+The Unix and Windows launchers route this exact command through the small `flowctl_bootstrap.py` fast path, so printing static guidance does not load the full CLI. Exact root `--help` similarly reads tracked `flowctl-help.txt`, with parity tests pinning it to argparse output. The bytecode-cache proof was rejected: a runtime-written ignored pyc can validate a source hash without proving its executable payload came from that source. Every non-static command therefore compiles tracked `flowctl.py` in memory, preserves it as the logical `__file__`, and never reads or writes executable cache state.
 
 ### setup-mode
 
@@ -705,8 +709,8 @@ flowctl config get [--json]
 flowctl config set memory.enabled true [--json]
 flowctl config set review.backend codex [--json]  # rp, codex, copilot, cursor, or none
 
-# Toggle boolean config
-flowctl config toggle memory.enabled [--json]
+# Disable a boolean config explicitly
+flowctl config set memory.enabled false [--json]
 ```
 
 `config get` has three read forms, all backed by one command-scoped snapshot (config.json is parsed at most once per invocation; exactly one parse when the file exists):
@@ -819,7 +823,7 @@ When a review runs **without an explicit model** (unconfigured `codex` / `copilo
 - **Ranking.** Each backend's model set is a curated **quality ranking** (strongest first); the ranking's top entry IS the encoded default (`codex` → `gpt-5.6-sol`, `copilot` → `gpt-5.5`, `cursor` → `gpt-5.6-sol-high`). The ranking is a *preference*, never a parse-time gate — an **unknown explicit model warns and is accepted** (the CLI stays the availability authority); the reasoning-effort axis stays strict.
 - **Happy path (zero overhead).** The top model dispatches directly — no probe, no list call, no extra subprocess. On a current CLI where the default just works, the argv is byte-identical to a hardcoded default.
 - **Fallback ladder (failure only).** If — and only if — that dispatch fails with the backend's **distinctive model-unavailable signature** (codex: *"requires a newer version of Codex"* / model-not-found; copilot: *`… from --model flag is not available`*; cursor: *`Cannot use this model: …`*), flow-next resolves a fallback: **cursor** consults `cursor-agent --list-models` and dispatches the best `list ∩ ranking` entry; **codex/copilot** step down the ranking (max 2 steps). The terminal **floor** never fails — codex omits `--model`, copilot/cursor use `--model auto` (and the reasoning-effort flag is dropped). Any *other* failure (auth / network / sandbox / timeout) propagates unchanged — the ladder never masks a real error. A ladder retry is the **same review round** (it does not consume an extra review-cap iteration).
-- **Cache.** The resolved fallback is memoized per **`(backend, CLI version)`** in `.flow/.cache/model-resolution.json` (atomic write, gitignored). A CLI upgrade changes the key → natural re-resolution; a corrupt/missing cache is a cold start, never an error; explicit models bypass the cache entirely. So the one failed round-trip after a ranking-top bump is paid at most once per CLI version.
+- **Cache.** The resolved fallback is memoized per **`(backend, CLI version, effective routing intent)`** in `.flow/.cache/model-resolution.json` (locked atomic write, gitignored). Changing a role-map pin or the registry ladder changes the intent and forces a fresh resolution even when the requested model name happens to match the old default. Downgrade/floor entries expire after 24 hours so newly available stronger models are re-probed without requiring a CLI upgrade. A corrupt, missing, legacy, or expired entry is a cold start, never an error; concurrent mutations preserve unrelated entries; explicit models bypass the cache entirely.
 - **Hygiene.** A downgrade or floor emits **one** stderr warning naming what was tried and what ran; the receipt records the model **actually used** (else `"auto"` / `"default"`), never a fabricated name.
 
 Explicit pins anywhere in the precedence chain (`--spec` > per-task/per-spec `review` > env > config) are byte-identical to before — no probing, no cache, no retry-downgrade; an explicit unavailable model errors clearly.
@@ -855,7 +859,7 @@ flowctl memory add --track bug --category runtime-errors \
 
 # Add entry — knowledge track
 flowctl memory add --track knowledge --category conventions \
-  --title "Use flowctl rp wrappers (not direct rp-cli)" \
+  --title "Use flowctl rp wrappers (not the direct RepoPrompt CLI)" \
   --module ralph --tags "rp,review" \
   --applies-when "any review-backend dispatch" \
   --body-file body.md [--json]
@@ -1169,16 +1173,16 @@ Lint and format commands are always-run and never receipted in v1. Remote CI gat
 
 ### rp
 
-RepoPrompt wrappers (preferred for reviews). Requires RepoPrompt 1.5.68+.
+RepoPrompt wrappers (preferred for reviews). RepoPrompt CE 1.1.0+ is primary; discontinued Classic remains the final compatibility fallback.
 
 **Primary entry point** (handles window selection + builder atomically):
 
 ```bash
-# Atomic setup - picks window by repo root and creates builder tab
+# Atomic setup - reuses/resolves the repo window and opens Context Builder
 eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "Review a plan to ...")"
 # Returns: W=<window> T=<tab>
 
-# With --create: auto-creates RP window if none matches (RP 1.5.68+)
+# With --create: reuses a matching CE window or creates one when none matches
 eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "..." --create)"
 ```
 

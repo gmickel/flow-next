@@ -7,13 +7,13 @@ Common recovery patterns for stuck tasks, broken state, Ralph debugging, and rev
 The **single most common post-update issue.** `flowctl` (in `.flow/bin/`) and `.flow/usage.md` are **snapshot copies inside your repo**, written by setup - a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) refreshes the *plugin* but NOT those in-repo copies. So symptoms like a `flowctl` flag that "should exist" erroring, an outdated `.flow/usage.md`, or the skills printing `Local setup vX differs from plugin vY. Run /flow-next:setup to refresh local scripts` on stderr all mean the same thing:
 
 ```bash
-/flow-next:setup      # re-copies flowctl + flowctl.cmd + flowctl.py, rewrites usage.md,
+/flow-next:setup      # re-copies launchers + flowctl.py + tracked fast-path files, rewrites usage.md,
                       # refreshes the model-routing scaffold + spec template, re-stamps setup_version
 ```
 
 It is idempotent and non-destructive (your specs/tasks/memory/config are untouched). **Copy-mode repos only:** re-run it in **each project** after every flow-next update - not just once globally, because the copies live per-repo under `.flow/`. **Plugin-mode repos** (Claude Code, `setup_mode: "plugin"` in `.flow/meta.json`) have no local copies to refresh - plugin updates land silently and this section does not apply. See [platforms.md → Setup modes](platforms.md#setup-modes-plugin-vs-copy-fn-121).
 
-## Pre-1.0 `.flow/epics/` layout still present?
+## Pre-1.0 layout porting
 
 `flowctl migrate-rename` / `migrate-rollback` are gone. Port by hand: rename `.flow/epics/` -> `.flow/specs/`, rewrite `next_epic`/`epic`/`epic_id` keys per `.flow/usage.md` "Pre-1.0 layout porting", then `flowctl validate --all`.
 
@@ -95,7 +95,7 @@ Ralph reads receipts to decide whether to advance, retry, or block. A missing or
 **Symptom:** a review prints one stderr line like
 
 ```
-warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached for this CLI version.
+warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached temporarily for this CLI version and routing intent.
 ```
 
 (or `… fell back to the never-fail floor (the CLI default / 'auto')`), and the review's receipt records `gpt-5.5` / `auto` / `default` rather than the ranking top.
@@ -103,25 +103,25 @@ warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached 
 **This is expected, not an error.** flow-next dispatches the *strongest* model by default and, when the local CLI can't run it, transparently resolves the best available one (the [model-resolution ladder](flowctl.md#model-resolution-strongest-available-never-fail--fn-76)). It fires ONLY on the distinctive model-unavailable signature (codex *"requires a newer version of Codex"*, copilot *`… from --model flag is not available`*, cursor *`Cannot use this model: …`*); auth / network / sandbox / timeout failures propagate unchanged.
 
 **What to do:**
-- **Want the top model?** Upgrade the backend CLI (e.g. `codex` ≥ 0.144 for `gpt-5.6-sol`). The cache key is `(backend, CLI version)`, so the upgrade re-resolves automatically on the next review.
-- **The downgrade repeats every review?** It shouldn't — the result is memoized in `.flow/.cache/model-resolution.json`. If it does, that file may be unwritable (check permissions) or you're on a fresh CLI version each run.
+- **Want the top model?** Upgrade the backend CLI (e.g. `codex` ≥ 0.144 for `gpt-5.6-sol`). The cache key is `(backend, CLI version, effective routing intent)`, so a CLI or routing change re-resolves automatically on the next review.
+- **The downgrade repeats every review?** It normally should not — the result is memoized in `.flow/.cache/model-resolution.json`. A changed routing role, CLI version, or the 24-hour stronger-model re-probe intentionally causes one fresh resolution. Otherwise, the cache file may be unwritable; check permissions.
 - **Force a specific model** (skip the ladder + cache entirely): pin it explicitly — `--spec codex:gpt-5.5`, a per-task/per-spec `review:` value, `FLOW_CODEX_MODEL`, or `review.backend`. An explicit unavailable model errors clearly instead of downgrading.
 - **Reset the cache:** `rm -rf .flow/.cache/` — it is regenerated (and gitignored) on the next review; a corrupt file is already treated as a cold start.
 
-## Custom rp-cli instructions conflicting
+## Custom RepoPrompt CLI instructions conflicting
 
-> **Caution**: If you have custom instructions for `rp-cli` in your `CLAUDE.md` or `AGENTS.md`, they may conflict with Flow-Next's RepoPrompt integration.
+> **Caution**: If you have custom RepoPrompt CLI instructions in your `CLAUDE.md` or `AGENTS.md`, they may conflict with Flow-Next's integration.
 
-Flow-Next's plan-review and impl-review skills include specific instructions for `rp-cli` usage (window selection, builder workflow, chat commands). Custom rp-cli instructions can override these and cause unexpected behavior.
+Flow-Next's plan-review and impl-review skills include specific instructions for CE-first CLI discovery, window selection, builder workflow, and chat commands. Custom instructions can override these and cause unexpected behavior.
 
 **Symptoms:**
 - Reviews not using the correct RepoPrompt window
 - Builder not selecting expected files
 - Chat commands failing or behaving differently
 
-**Fix:** Remove or comment out custom rp-cli instructions from your `CLAUDE.md`/`AGENTS.md` when using Flow-Next reviews. The plugin provides complete rp-cli guidance.
+**Fix:** Remove or comment out custom RepoPrompt CLI instructions from your `CLAUDE.md`/`AGENTS.md` when using Flow-Next reviews. The plugin provides the complete CE-first workflow.
 
-> **Note:** RepoPrompt is macOS-only. On non-Mac hosts without `rp-cli` on PATH, `/flow-next:plan` and `/flow-next:plan-review` don't propose the RepoPrompt path at all — `plan`'s setup offers Codex / export / none for review (research defaults to `repo-scout`), and `plan-review` steers only to the cross-platform backends (`codex`, `copilot`, `cursor`, `none`). `/flow-next:impl-review` and `/flow-next:spec-completion-review` apply the same gate to their steering (glance lists, ASK-error and override hints). An explicit `--review=rp` is still accepted and errors at runtime if `rp-cli` is missing.
+> **Note:** RepoPrompt is macOS-only. When the CE-first ladder (`rpce-cli`, the two CE user links, then Classic `rp-cli`) finds no runnable candidate, `/flow-next:plan` and the review skills do not propose RepoPrompt. Explicit `--review=rp` is still accepted and errors at runtime if no supported RepoPrompt CLI is available.
 
 ## Copilot review backend on Windows (fixed in 1.1.9)
 
@@ -131,7 +131,7 @@ Spec-driven `flowctl copilot {impl,plan,completion}-review` calls work on native
 
 POSIX (macOS / Linux / WSL) behavior is unchanged.
 
-**If you still see Windows argv errors:** check `flowctl --version` — anything below 1.1.9 hits the cap. Update with `flowctl setup` or pull the latest plugin.
+**If you still see Windows argv errors:** inspect the installed plugin version in your host's plugin manager. Update Flow-Next, then re-run `/flow-next:setup` only for copy-mode repositories so their checked-in launchers refresh; plugin-mode repositories consume the updated launcher directly.
 
 **Upstream:** [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) tracks a first-class `--prompt-file` flag. Once that lands, both POSIX and Windows paths will move to the cleaner file-based delivery.
 
@@ -141,14 +141,14 @@ POSIX (macOS / Linux / WSL) behavior is unchanged.
 
 **Cause:** `python3` resolves to the Microsoft Store **App Execution Alias** — a 0-byte reparse point at `%LOCALAPPDATA%\Microsoft\WindowsApps\python3.exe` that Windows ships **enabled by default**. When your real Python came from [python.org](https://python.org) or the `py` launcher (not the Store), the stub shadows it: it satisfies `command -v python3` (it *is* on `PATH`) but is non-functional. Older flowctl launchers trusted presence over function and picked the stub — so flow-next broke on every Windows machine in this configuration.
 
-**The shipped fix (no action needed on a fresh install):** the `flowctl` launchers now **probe interpreter functionality** — each candidate must actually run `<cand> -c "import sys"` and exit 0 — in order `$PYTHON_BIN` → `py -3` → `python3` → `python`, so the 9009 stub is skipped. A `flowctl.cmd` batch shim ships alongside the extensionless bash `flowctl`, so PowerShell / cmd.exe (Claude Desktop, native Codex, native Cursor) resolve a working interpreter too. See [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
+**The shipped fix (no action needed on a fresh install):** the `flowctl` launchers now probe interpreter functionality **and require Python 3.11+** in order `$PYTHON_BIN` → `py -3` → `python3` → `python`, so the 9009 stub and working-but-too-old interpreters are skipped before `flowctl.py` loads. If no candidate works, the error says so; if candidates work but are below 3.11, a distinct error tells you to install or select a supported Python. A `flowctl.cmd` batch shim ships alongside the extensionless bash `flowctl`, so PowerShell / cmd.exe (Claude Desktop, native Codex, native Cursor) resolve a supported interpreter too. See [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
 
 **Recovering an already-broken install** (a pre-fix `.flow/bin/flowctl` hardcodes `exec python3` and cannot fix itself). Pick either:
 
 1. **Re-stamp the launchers (recommended, durable).** `flowctl init` re-writes `.flow/bin/flowctl` **and** `.flow/bin/flowctl.cmd` from the fixed source. Because the broken bash launcher can't run, drive `init` through a working interpreter directly — `init` lives inside `flowctl.py`, so it never needs the launcher:
 
    ```powershell
-   py -3 .flow/bin/flowctl.py init      # or:  python .flow/bin/flowctl.py init
+   py -3.11 .flow/bin/flowctl.py init   # or use an explicit Python 3.11+ command
    ```
 
    or just re-run `/flow-next:setup` (its upgrade branch re-stamps both). After this, `flowctl` and `flowctl.cmd` work in every shell.

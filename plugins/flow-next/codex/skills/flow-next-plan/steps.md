@@ -188,7 +188,7 @@ Run ALL of these scouts in parallel:
 | the `spec_scout` agent | Dependencies on open specs | YES |
 | the `docs_gap_scout` agent | Docs needing updates | YES |
 
-**If user chose repo-scout (default/faster)** OR rp-cli unavailable:
+**If user chose repo-scout (default/faster)** OR no supported RepoPrompt CLI is available:
 
 Run ALL of these scouts in parallel:
 | Scout | Purpose | Required |

@@ -10,8 +10,8 @@ Asserts the read-only audit over `.flow/sync-runs/` receipts:
     receipts never clear; `--since` scopes out prior-run receipts.
   * Nested perEvent keys (`work.firstClaim`) route through the dotted config
     path; disabled / unconfigured events are never MISSING.
-  * `Z`-suffixed `--since` parses on Python 3.8-3.10 (`_parse_iso_ts`, not
-    bare `fromisoformat`); tracker handles (WOR-17) resolve as the spec id.
+  * `Z`-suffixed `--since` uses the shared ISO parser on every supported
+    Python 3.11+ runtime; tracker handles (WOR-17) resolve as the spec id.
   * Exit 0 always on evaluated checks (best-effort contract) — MISSING is an
     output line, never a non-zero exit.
 
@@ -232,8 +232,8 @@ class SyncCheckTestCase(unittest.TestCase):
     # --- input validation -------------------------------------------------------
 
     def test_z_suffix_since_parses(self) -> None:
-        # Regression: bare `fromisoformat` crashes on `Z` suffixes under
-        # Python 3.8-3.10 — `--since` must route through `_parse_iso_ts`.
+        # Keep `--since` routed through the shared timestamp parser rather
+        # than duplicating ISO normalization at the callsite.
         self.assertIsNotNone(self.flowctl._parse_iso_ts("2026-06-09T00:00:00Z"))
         self._activate()
         res = self._check_json("capture", since="2026-06-09T00:00:00Z")

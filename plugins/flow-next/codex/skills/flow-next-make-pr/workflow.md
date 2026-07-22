@@ -302,13 +302,13 @@ Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values.
 This phase is implemented in dependent tasks. Scaffold-task notes:
 
 - Single subprocess call (latency + atomicity per the spec's Decision Context).
-- Payload includes: `spec` (spec metadata + R-IDs; co-emitted as legacy `epic` key for back-compat callers), `tasks[]` (done summaries + evidence), `memory.{decisions,bugs,patterns}[]` (filtered to entries created or last-touched in the spec timeframe), `glossary.changes[]`, `strategy.tracks[]` + `## Strategy Alignment` block, `diff.{stat,name_status,log}`, `reviews.{deferred,suppressed_count,unaddressed}`.
-- Use `--section <name>` if a downstream phase needs only one slice (debugging or partial render). Accepted values include `spec` (canonical) and `epic` (legacy alias — same payload slice).
+- Payload includes the nine current top-level fields: `spec`, `tasks[]`, `tasks_summary`, `memory_during_epic`, `glossary_changes[]`, `strategy_alignment`, `diff_summary`, `removed_export_refs[]`, and `deferred_findings[]`. The historical name `memory_during_epic` remains part of the payload schema; there is no legacy top-level `epic` alias.
+- The export is one atomic full-payload read. It has no section filter; downstream phases reuse the in-memory payload.
 
 ### Done when
 
 - `flowctl spec export-cognitive-aid <SPEC_ID> --base <BASE_REF> --json` returned successfully; payload parsed into an in-memory dict matching the spec's "Architecture & Data Models" schema.
-- All nine input streams accounted for: `spec`, `tasks`, `memory.{decisions,bugs,patterns}`, `glossary.changes`, `strategy.tracks`, `strategy.alignment_block`, `diff.{stat,name_status,log}`, `reviews.{deferred,suppressed_count,unaddressed}`.
+- All nine top-level payload fields above are present and accounted for before rendering.
 
 ---
 
@@ -613,8 +613,8 @@ Your job — the calls the pipeline can't make:
 
 Field rules:
 
-- **Mechanically-verified summary** draws from three payload signals ONLY: `tasks[].evidence.tests[]` (the same evidence §2.3b Verification renders), R-ID coverage (`tasks_summary` — `covered` / `total` / `uncovered_r_ids`), and the cross-model review signal (`reviews.deferred` count + `reviews.suppressed_count`; fn-86's `review_receipts` verdicts opportunistically when present).
-- **No-overclaim rule (load-bearing).** Cite ONLY verification present in the payload. Absent verification is stated honestly, never implied: no test evidence → "no test evidence recorded on this PR"; empty `reviews.*` / no receipt → "no cross-model review recorded on this PR". NEVER write "reviewed by a second model" / "fully tested" unless the payload carries that signal — the reviewer must be able to trust every line of this block literally. (This is §2.5 rule 11 — the same no-invented-claims discipline the Review plan rests on.)
+- **Mechanically-verified summary** draws from two export signals only: `tasks[].evidence.tests[]` (the same evidence §2.3b Verification renders) and R-ID coverage (acceptance-criteria count minus `tasks_summary.uncovered_r_ids`). `deferred_findings[]` is an open-items signal, not proof that a cross-model review ran. The export carries no review-verdict or suppression field, so the cross-model line says `no cross-model review recorded on this PR` rather than inferring one.
+- **No-overclaim rule (load-bearing).** Cite ONLY verification present in the payload. Absent verification is stated honestly, never implied: no test evidence → "no test evidence recorded on this PR"; no review-verdict field → "no cross-model review recorded on this PR". NEVER write "reviewed by a second model" / "fully tested" without an authoritative signal — the reviewer must be able to trust every line of this block literally. (This is §2.5 rule 11 — the same no-invented-claims discipline the Review plan rests on.)
 - **≤ ~8 rendered lines** (priorities, not a hard cap): a coaching frame, not a report. It sets up the buckets; it does NOT restate the Review plan's per-file detail (no repetition between this block and the buckets — the eval flagged length only when the two duplicated each other).
 - **No-evidence payloads (specless / manual PRs)** — all three signals may be absent; the block then honestly states each absence and still frames "your job". The eval verified this degrades cleanly (honesty stayed high with zero evidence).
 
@@ -687,7 +687,7 @@ The 11 rules below are not advisory. They define what the body MAY and MAY NOT c
 8. **No stale references.** Cross-check against `diff_summary.files[].status`. A file with `status == "D"` (deleted) cannot appear in the body as if it still exists. A file with `status == "R"` (renamed) appears under its new path; the old path is mentioned only if the rename itself is the load-bearing change.
 9. **No invented "why".** The Decision Context section is a read-only mirror of `.flow/memory/knowledge/decisions/` + the spec's `## Decision Context`. NEVER paraphrase, never extend, never narrate a plausible-sounding rationale to fill a gap. If no decision exists for a structural change, the body says so honestly: `*No decision-track memory entry for this change. Decision context unclear — surface in PR comments if needed.*`
 10. **Trace every claim.** The meta-rule: every sentence in the body must trace to a structured field in the export payload (spec / tasks / memory / glossary / strategy / diff / reviews) or to a verbatim spec quote. If you can't point to which field a claim came from, drop the claim.
-11. **No invented risk claims.** Every WHY-risky clause in the Review plan (§2.4d) and every "verified" claim in the How-to-review block (§2.4c) traces to a payload signal — a `diff_summary` risk signal (`high_churn_files` / `public_exports_changed` / `security_sensitive_paths` / `cross_module_changes` / a user-facing surface prefix) for risk, or `tasks[].evidence` / `tasks_summary` / `reviews.*` for verification. NEVER narrate risk the payload doesn't support ("this looks fragile", "probably a hot path") and NEVER claim verification the payload doesn't carry (no-overclaim rule). If no signal anchors the risk, the file is not must-review; if no signal anchors the verification, say it is absent. Same discipline as rule 1 (paths) and rule 9 (why), applied to the risk-surfacing sections.
+11. **No invented risk claims.** Every WHY-risky clause in the Review plan (§2.4d) and every "verified" claim in the How-to-review block (§2.4c) traces to a payload signal — a `diff_summary` risk signal (`high_churn_files` / `public_exports_changed` / `security_sensitive_paths` / `cross_module_changes` / a user-facing surface prefix) for risk, or `tasks[].evidence` / `tasks_summary` for verification. NEVER narrate risk the payload doesn't support ("this looks fragile", "probably a hot path") and NEVER claim verification the payload doesn't carry (no-overclaim rule). If no signal anchors the risk, the file is not must-review; if no signal anchors the verification, say it is absent. Same discipline as rule 1 (paths) and rule 9 (why), applied to the risk-surfacing sections.
 
 When data is missing, surface that honestly:
 
@@ -894,14 +894,14 @@ Each entry → one bullet:
 
 Field rules:
 
-- **`<stripped item text>`** — `items[].raw` with the leading `- [ ] ` (or `- [x] `) marker stripped, so the renderer can re-emit a `- [ ]` checkbox at body level. If `raw` already starts with `- [` then strip that prefix; otherwise emit `raw` verbatim. (The export captures `raw` with its original prefix per the `_export_review_receipts` implementation.)
+- **`<stripped item text>`** — `items[].raw` with the leading `- [ ] ` (or `- [x] `) marker stripped, so the renderer can re-emit a `- [ ]` checkbox at body level. If `raw` already starts with `- [` then strip that prefix; otherwise emit `raw` verbatim. (The export captures `raw` with its original prefix in `deferred_findings[]`.)
 - **`<sink-relpath>`** — `deferred_findings[0].path` rendered as backticked relative path (e.g. `\`.flow/review-deferred/fn-42-foo.md\``).
 - **Provenance breadcrumb** — exact phrase ` — deferred from impl-review (<sink-relpath>)`. Branch-slug sink is the provenance because v1 has no per-task attribution; surfacing the sink path lets the reviewer drill in.
 - **Multiple sinks** — schema allows the array to grow if v2 splits per-task, but v1 only ever returns at most one element. Loop over `deferred_findings[]` regardless to be forward-compatible.
 
 #### Source C — Spec-completion-review-flagged items
 
-NOT in the export-cognitive-aid payload (`review_receipts` is empty in v1 per the implementation comment). Read directly from the spec JSON via flowctl:
+Completion-review state is not in the export-cognitive-aid payload. Read it directly from the spec JSON via flowctl:
 
 ```bash
 SPEC_REVIEW_STATUS=$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.completion_review_status // "unknown"')

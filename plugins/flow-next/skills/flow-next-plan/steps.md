@@ -186,7 +186,7 @@ Run ALL of these scouts in parallel:
 | `flow-next:spec-scout` | Dependencies on open specs | YES |
 | `flow-next:docs-gap-scout` | Docs needing updates | YES |
 
-**If user chose repo-scout (default/faster)** OR rp-cli unavailable:
+**If user chose repo-scout (default/faster)** OR no supported RepoPrompt CLI is available:
 
 Run ALL of these scouts in parallel:
 | Scout | Purpose | Required |

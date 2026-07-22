@@ -12,19 +12,19 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 PROSPECTS_DIR="$REPO_ROOT/.flow/prospects"
 TODAY="$(date -u +%Y-%m-%d)"
 
-# Python picker — CANONICAL copy. Resolve a working Python once per bash block
-# (functionality probe — the Windows Store python3 alias stub satisfies
+# Python picker — CANONICAL copy. Resolve Python 3.11+ once per bash block
+# (functionality/version probe — the Windows Store python3 alias stub satisfies
 # `command -v` but exits 9009; the probe skips it). Order mirrors the shared
 # scripts/lib/pick-python.sh resolver.
 PY=""
 for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
   [ -n "$_c" ] || continue
-  $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
+  $_c -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1 && { PY="$_c"; break; }
 done
-[ -n "$PY" ] || { echo "prospect: no working Python interpreter found" >&2; exit 1; }
+[ -n "$PY" ] || { echo "prospect: no working Python 3.11+ interpreter found" >&2; exit 1; }
 ```
 
-`jq` and a working Python (`python3`, `python`, or `py -3` on Windows) must be on PATH. **Bash vars do NOT survive across tool calls** — any later bash block that uses `$PY` (Phase 0 §0.2, Phase 2 §2.4, Phase 5 §5.2) must re-declare the Preamble picker block VERBATIM at its top before invoking `$PY`. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
+`jq` and Python 3.11+ (`python3`, `python`, or `py -3` on Windows) must be on PATH. **Bash vars do NOT survive across tool calls** — any later bash block that uses `$PY` (Phase 0 §0.2, Phase 2 §2.4, Phase 5 §5.2) must re-declare the Preamble picker block VERBATIM at its top before invoking `$PY`. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
 
 ---
 

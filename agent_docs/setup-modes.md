@@ -7,7 +7,7 @@ Contributor-facing map of the dual-mode install system. Read this BEFORE touchin
 | Mode | Stamp (`.flow/meta.json` `setup_mode`) | What exists in the repo | Hosts |
 |---|---|---|---|
 | **plugin** | `"plugin"` | ONLY the slim CLAUDE.md snippet (marker block). No `.flow/bin/`, no `.flow/templates/spec.md`, no `.flow/usage.md` | Claude Code only |
-| **copy** | `"copy"` | Full snapshots: `.flow/bin/flowctl{,.cmd,.py}`, `.flow/templates/spec.md`, `.flow/usage.md` + full snippet | All hosts |
+| **copy** | `"copy"` | Full snapshots: `.flow/bin/flowctl`, `.cmd`, `.py`, `_bootstrap.py`, `-help.txt`; `.flow/templates/spec.md`; `.flow/usage.md` + full snippet | All hosts |
 | **legacy/absent** | field missing | Whatever an older setup left | = copy semantics everywhere (pre-checks, uninstall, docs) |
 
 ## Per-artifact resolution chains
@@ -15,7 +15,7 @@ Contributor-facing map of the dual-mode install system. Read this BEFORE touchin
 | Artifact | Plugin mode | Copy mode |
 |---|---|---|
 | flowctl (skills) | `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl` → `.flow/bin/flowctl` — the FLOWCTL preamble, UNCHANGED by fn-121 | same preamble; `.flow/bin` rung is the one that matters for plugin-less consumers |
-| flowctl (plain Bash, no skill) | bare `flowctl` — Claude Code injects `<plugin>/bin/` onto the Bash PATH (`plugins/flow-next/bin/flowctl` execs `../scripts/flowctl.py`) | `.flow/bin/flowctl` |
+| flowctl (plain Bash, no skill) | bare `flowctl` — Claude Code injects `<plugin>/bin/` onto the Bash PATH (`plugins/flow-next/bin/flowctl` resolves the tracked bootstrap/source under `../scripts/`) | `.flow/bin/flowctl` |
 | Usage guide | `flowctl usage` → bundled `plugins/flow-next/templates/usage.md` (canonical location since fn-121) | same command falls back to `.flow/usage.md`; also readable on disk |
 | Spec template | 4-tier cascade bottoms out at the bundled `${PLUGIN_ROOT}/templates/spec.md` | cascade hits `.flow/templates/spec.md` first |
 | Agent rail | slim snippet (`claude-md-snippet-plugin.md`) in CLAUDE.md — trigger-shaped `flowctl usage` pull directives | full snippet (`claude-md-snippet.md` / `agents-md-snippet.md`) with `.flow/bin` paths |

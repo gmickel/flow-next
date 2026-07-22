@@ -426,7 +426,7 @@ Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugi
 
 ## Requirements
 
-- **Python 3.8+** (or the `py` launcher on Windows) — bundled `flowctl` CLI is pure-stdlib.
+- **Python 3.11+** (or the `py` launcher on Windows) — bundled `flowctl` CLI is pure-stdlib. Launchers skip broken aliases and working interpreters below the supported floor before loading flowctl.
 - **`jq`** and **`gh`** — required for the review subsystem and PR plumbing.
 - **`bun`** *(optional)* — only needed for the [Ralph TUI](flow-next-tui/).
 
@@ -443,7 +443,7 @@ Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugi
 
 Detailed install + cross-platform patterns in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md).
 
-> **Upgrading from 0.x?** The 1.0 release renamed `flowctl epic` → `flowctl spec` across the entire surface. All 0.x scripts keep working — the legacy CLI is preserved as a deprecation alias layer. Migrate interactively via `/flow-next:setup` or deterministically via `flowctl migrate-rename --yes` (both transactional with rollback). See the [CHANGELOG](CHANGELOG.md).
+> **Upgrading from 0.x?** The 1.0 release renamed the `epic` surface to `spec`; the legacy aliases and automated migration commands were removed in 3.0. Re-run `/flow-next:setup` for current scaffolding, then follow the manual three-step pre-1.0 layout port in [troubleshooting](plugins/flow-next/docs/troubleshooting.md#pre-10-layout-porting).
 
 ## Ecosystem
 

@@ -126,7 +126,11 @@ cleanup() {
 trap cleanup EXIT
 
 command -v "$CLAUDE_BIN" >/dev/null 2>&1 || fail "claude not found (set CLAUDE_BIN if needed)"
-command -v rp-cli >/dev/null 2>&1 || fail "rp-cli not found (required for rp review)"
+command -v rpce-cli >/dev/null 2>&1 \
+  || [[ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ]] \
+  || [[ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ]] \
+  || command -v rp-cli >/dev/null 2>&1 \
+  || fail "RepoPrompt CE CLI not found (rpce-cli; legacy rp-cli also accepted)"
 
 echo -e "${YELLOW}=== ralph e2e (rp reviews) ===${NC}"
 echo "Test dir: $TEST_DIR"
@@ -167,6 +171,8 @@ git commit -m "chore: init" >/dev/null
 mkdir -p scripts/ralph
 cp -R "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/." scripts/ralph/
 cp "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/flowctl.py
+cp "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" scripts/ralph/flowctl_bootstrap.py
+cp "$PLUGIN_ROOT/scripts/flowctl-help.txt" scripts/ralph/flowctl-help.txt
 cp "$PLUGIN_ROOT/scripts/flowctl" scripts/ralph/flowctl
 chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl
 FLOWCTL="scripts/ralph/flowctl"
@@ -193,6 +199,8 @@ scripts/ralph/flowctl init --json >/dev/null
 mkdir -p .flow/bin
 cp "$PLUGIN_ROOT/scripts/flowctl" .flow/bin/flowctl
 cp "$PLUGIN_ROOT/scripts/flowctl.py" .flow/bin/flowctl.py
+cp "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" .flow/bin/flowctl_bootstrap.py
+cp "$PLUGIN_ROOT/scripts/flowctl-help.txt" .flow/bin/flowctl-help.txt
 chmod +x .flow/bin/flowctl
 cp "$PLUGIN_ROOT/templates/usage.md" .flow/usage.md
 cat "$PLUGIN_ROOT/skills/flow-next-setup/templates/claude-md-snippet.md" > CLAUDE.md

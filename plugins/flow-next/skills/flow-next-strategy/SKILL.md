@@ -239,7 +239,7 @@ On `abandon`, leave the file as-is (partially populated is fine), exit 0.
 
 **2.1 — Summarize current state**
 
-Read the existing `STRATEGY.md` via `flowctl strategy read --json` and summarize current state in 3-5 lines so the user sees what's on file. Surface section names + 1-line excerpts.
+Read the existing `STRATEGY.md` via `"$FLOWCTL" strategy read --json` and summarize current state in 3-5 lines so the user sees what's on file. Surface section names + 1-line excerpts.
 
 If the focus-hint argument names a specific section, jump to that section. Otherwise, run the evidence scan (2.1b) then fire the routing question.
 
@@ -248,8 +248,8 @@ If the focus-hint argument names a specific section, jump to that section. Other
 The revisit routing otherwise ranks sections by `<!-- worth revisiting -->` markers + "looks weak" — pure vibes. But real drift is *measurable*: which declared tracks are actually shipping, and whether recent work maps to the stated direction. A maintenance run's job is to surface drift the user didn't notice — not just ask "which section feels stale?". (Ironic asymmetry otherwise: `/flow-next:prospect` does full repo grounding to generate ideas against this doc, while the doc itself is validated by feel.) Scan before asking:
 
 ```bash
-LAST_UPDATED="$(flowctl strategy read --json 2>/dev/null | jq -r '.last_updated // ""')"
-RECENT_SPECS="$(flowctl specs --json 2>/dev/null | jq -r '.specs[]? | "\(.id)\t\(.status)\t\(.title // "")"' 2>/dev/null)"
+LAST_UPDATED="$("$FLOWCTL" strategy read --json 2>/dev/null | jq -r '.last_updated // ""')"
+RECENT_SPECS="$("$FLOWCTL" specs --json 2>/dev/null | jq -r '.specs[]? | "\(.id)\t\(.status)\t\(.title // "")"' 2>/dev/null)"
 ```
 
 With the current `## Tracks` (from 2.1), the `## Not working on` list, and `RECENT_SPECS`, the host agent JUDGES the mapping (spec subject → track name — the same host-agent judgment prospect uses to ground candidates, NOT a keyword scorer) and surfaces drift signals:
@@ -310,7 +310,7 @@ One paragraph max. No follow-up questions.
 - **Auto-overwriting a foreign-file STRATEGY.md** — Phase 0.4 always asks. v1's stance is refusal; user can rename or delete to bootstrap.
 - **Writing more than 4 sentences per section** (except Tracks, where each track has its own short block). The post-write checklist in `references/strategy-template.md` catches this.
 - **Adding sections beyond the locked 5 + 2 optional**. CE's `Marketing` section is dropped on purpose; do not re-introduce it. Section order is locked.
-- **Inventing flowctl subcommands** — Task 1 ships `flowctl strategy {status,read,list}` only. Skill writes the file directly via `Write` tool; no `flowctl strategy add` exists.
+- **Inventing flowctl subcommands** — The supported read surface is `"$FLOWCTL" strategy {status,read}` only. The skill writes the file directly via `Write`; no strategy add/list command exists.
 
 ## Output rules
 

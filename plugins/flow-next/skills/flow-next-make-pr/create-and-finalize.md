@@ -95,11 +95,9 @@ PAYLOAD_OPEN=$(printf '%s' "$EXPORT_PAYLOAD" | jq '
   ( ([(.deferred_findings // [])[] | (.items // [])[]] | length) )
 ')
 
-# Source C — spec-completion-review verdict. Read directly from the spec JSON;
-# the export-cognitive-aid payload v1 emits review_receipts as a list ([]) —
-# NOT an object — so indexing it with a key like .completion_review_status
-# would throw "Cannot index array with string" under `set -e` and abort the
-# skill. Reuse the same flowctl path §2.11 Source C uses.
+# Source C — spec-completion-review verdict. The export-cognitive-aid payload
+# does not carry completion-review state, so reuse the direct flowctl read from
+# §2.11 Source C rather than inventing an export field.
 SPEC_REVIEW_STATUS=$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.completion_review_status // "unknown"')
 SPEC_REVIEW_OPEN=0
 if [[ "$SPEC_REVIEW_STATUS" == "needs_work" ]]; then

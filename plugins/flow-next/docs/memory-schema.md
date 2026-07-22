@@ -44,7 +44,7 @@ resolution_type: config-fix
 
 ```yaml
 ---
-title: Prefer flowctl rp wrappers over direct rp-cli
+title: Prefer flowctl rp wrappers over the direct RepoPrompt CLI
 date: 2026-04-24
 track: knowledge
 category: conventions

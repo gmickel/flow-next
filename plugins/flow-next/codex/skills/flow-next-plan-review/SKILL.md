@@ -23,16 +23,18 @@ Conduct a John Carmack-level review of spec plans.
 FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 
-# RepoPrompt is macOS-only (rp-cli bridges the GUI). Only offer the rp path
-# when it can actually run: on macOS, or when rp-cli is already on PATH.
-if [ "$(uname 2>/dev/null)" = "Darwin" ] || command -v rp-cli >/dev/null 2>&1; then
+# Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
+if command -v rpce-cli >/dev/null 2>&1 \
+ || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+ || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+ || command -v rp-cli >/dev/null 2>&1; then
  RP_ELIGIBLE=1
 else
  RP_ELIGIBLE=0
 fi
 ```
 
-When `RP_ELIGIBLE=0` (not macOS, no rp-cli), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor` (plus `none`). `export` is an explicit one-off review MODE (`--review=export`), not a configured backend — never present it as one. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()` as today.
+When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor` (plus `none`). `export` is an explicit one-off review MODE (`--review=export`), not a configured backend — never present it as one. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
 
 ## Backend Selection
 

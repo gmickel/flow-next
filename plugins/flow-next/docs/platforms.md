@@ -129,7 +129,7 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 | Worker (default) | *inherit (session model)* | *session default* | worker |
 | Inherited | parent model | parent | pr-comment-resolver |
 
-`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The worker defaults to `inherit` on BOTH platforms - your session model rules, and flow-next never hardcodes a model opinion into generated config. An OPT-IN pin is available at sync time (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`); the eval-motivated recommendation is `gpt-5.6-terra` @ `medium`. Note (Jul 2026): on Sol/Multi-Agent-V2 builds role-profile model application is currently unreliable (openai/codex#33268, #33314) - prefer the `codex exec -m` self-bridge to steer models from a Codex host until those are fixed (fn-97, 2026-07 controlled pipeline eval at n=3: terra-medium matched `gpt-5.6-sol` correctness at ~2/3 wall-clock on frontier-authored specs). The actual review backend (`flowctl impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults on its own to the backend's ranking-top model at `high` effort (current ids in [`flowctl.md`](flowctl.md)).
+`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The worker defaults to `inherit` on BOTH platforms - your session model rules, and flow-next never hardcodes a model opinion into generated config. An OPT-IN pin is available at sync time (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`); the eval-motivated recommendation is `gpt-5.6-terra` @ `medium`. Note (Jul 2026): on Sol/Multi-Agent-V2 builds role-profile model application is currently unreliable (openai/codex#33268, #33314) - prefer the `codex exec -m` self-bridge to steer models from a Codex host until those are fixed (fn-97, 2026-07 controlled pipeline eval at n=3: terra-medium matched `gpt-5.6-sol` correctness at ~2/3 wall-clock on frontier-authored specs). The actual review backend (`flowctl <backend> impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults on its own to the backend's ranking-top model at `high` effort (current ids in [`flowctl.md`](flowctl.md)).
 
 Override model defaults: the `CODEX_MODEL_*` / `CODEX_REASONING_EFFORT_*` env vars are read by **`sync-codex.sh`** (which generates the agent `.toml` files) — `install-codex.sh` only copies the pre-built mirror, so regenerate first, then install:
 
@@ -251,7 +251,7 @@ flow-next's **skills, commands, and subagents all register and run** on Cursor. 
 
 ## Windows: Python discovery
 
-flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows it resolves the Python interpreter by **probing functionality, not presence** (fn-77): each candidate must actually run `<cand> -c "import sys"` and exit 0. Probe order is `$PYTHON_BIN` → `py -3` → `python3` → `python`.
+flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows it resolves the Python interpreter by **probing functionality and the Python 3.11 minimum, not presence**: each candidate must run a version probe successfully. Probe order is `$PYTHON_BIN` → `py -3` → `python3` → `python`. Broken Store aliases are skipped; if only working interpreters below 3.11 exist, the launcher reports that distinct condition before loading flowctl.
 
 - **Dual launcher.** The extensionless bash `flowctl` runs under Git Bash / WSL (and macOS / Linux); a **`flowctl.cmd`** batch shim runs the same probe under **cmd.exe / PowerShell** — i.e. Claude Desktop, native Codex, and native Cursor, where the bash launcher's shebang is never honored. Both live under `.flow/bin/` and are (re-)written by `flowctl init` / `/flow-next:setup`.
 - **`py -3` preferred.** The [py launcher](https://docs.python.org/3/using/windows.html) (`C:\Windows\py.exe`, installed by python.org / [PEP 397](https://peps.python.org/pep-0397/)) is never a Store alias stub, so it's the most reliable Windows candidate.
@@ -260,7 +260,7 @@ flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows i
 
 ## RepoPrompt review backend (macOS-only)
 
-The `rp` review backend drives the [RepoPrompt](https://repoprompt.com) macOS GUI via `rp-cli` — it does not exist on Linux or Windows. `/flow-next:plan` and `/flow-next:plan-review` therefore only *propose* the RepoPrompt path when it can actually run (host is macOS, or `rp-cli` is on PATH). On other hosts, `/flow-next:plan`'s setup questions default research to `repo-scout` (no RepoPrompt question) and offer Codex / export / none for review; `/flow-next:plan-review`'s guidance steers only to the cross-platform backends (`codex`, `copilot`, `cursor`, `none`). `/flow-next:impl-review` and `/flow-next:spec-completion-review` apply the same gate: on ineligible hosts their backend summaries, "Backend at a glance" lists, and ASK-error/override hints omit rp and steer only to `codex` / `copilot` / `cursor` (+ `none`). An explicit `--review=rp` / `review.backend=rp` is still accepted anywhere and fails at runtime with a clear `rp-cli not found in PATH` error if the CLI is absent.
+The `rp` review backend drives [RepoPrompt Community Edition](https://repoprompt.com) on macOS. Flow-Next prefers `rpce-cli` on PATH, then the current and legacy CE user links, with discontinued Classic `rp-cli` retained only as the final compatibility fallback. Once CE is selected, a connection or command failure is authoritative and never retries against Classic. `/flow-next:plan` and the review skills only *propose* RepoPrompt when that CE-first capability ladder finds a runnable CLI; other hosts steer to the cross-platform backends (`codex`, `copilot`, `cursor`, `none`). Explicit `--review=rp` / `review.backend=rp` remains accepted anywhere and fails at runtime with a clear supported-RepoPrompt-CLI diagnostic when no candidate exists.
 
 ## Windows + Copilot review backend
 
@@ -275,9 +275,9 @@ Upstream tracking: [github/copilot-cli#3398](https://github.com/github/copilot-c
 
 ## Optional skill requirements
 
-Most flow-next skills run on the base flowctl install (Python 3.8+, `jq`, `gh`). A couple of opt-in skills carry an extra prerequisite:
+Most flow-next skills run on the base flowctl install (Python 3.11+, `jq`, `gh`). A couple of opt-in skills carry an extra prerequisite:
 
-> **Windows Python 3.8+ caveat:** the `py` launcher or a python.org install satisfies this; the Microsoft Store `python3` **alias stub does not** (it's on `PATH` but non-functional). flowctl's launcher probes past it automatically — see [Windows: Python discovery](#windows-python-discovery).
+> **Windows Python 3.11+ caveat:** the `py` launcher or a supported python.org install satisfies this; the Microsoft Store `python3` **alias stub does not** (it's on `PATH` but non-functional). flowctl's launcher probes past it automatically and separately identifies working but too-old interpreters — see [Windows: Python discovery](#windows-python-discovery).
 
 | Skill | Requires | Notes |
 |---|---|---|
@@ -296,6 +296,6 @@ Removing the skill is trivial: `rm -rf .clawpatch/` removes both the index and t
 ## See also
 
 - [`sync-codex.md`](sync-codex.md) — how the Codex mirror is generated from canonical sources; validation guards.
-- [`troubleshooting.md`](troubleshooting.md) — review-backend conflicts (`rp-cli` custom instructions), receipt validation.
+- [`troubleshooting.md`](troubleshooting.md) — review-backend conflicts (custom RepoPrompt CLI instructions), receipt validation.
 - [`ralph.md`](ralph.md) — Ralph hook limits on each platform.
 - [`../scripts/install-codex.sh`](../../../scripts/install-codex.sh) — canonical install script for Codex.

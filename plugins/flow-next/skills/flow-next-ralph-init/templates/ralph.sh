@@ -27,7 +27,7 @@ else
   # shellcheck source=/dev/null
   . "$SCRIPT_DIR/../../../scripts/lib/pick-python.sh"
 fi
-pick_python || { echo "ralph: python not found (need python3 or python in PATH)" >&2; exit 1; }
+pick_python || { flow_python_error "ralph"; exit 1; }
 
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG="$SCRIPT_DIR/config.env"
@@ -80,8 +80,13 @@ if [ -f "\$DIR/pick-python.sh" ]; then
 else
   . "\$DIR/../../../scripts/lib/pick-python.sh"
 fi
-pick_python || { echo "flowctl: no working Python interpreter found" >&2; exit 1; }
-exec "\${FLOW_PY[@]}" "\$DIR/flowctl.py" "\$@"
+pick_python || { flow_python_error "flowctl"; exit 1; }
+ENTRY="\$DIR/flowctl.py"
+if [ "\$#" -eq 1 ] && { [ "\$1" = "usage" ] || [ "\$1" = "--help" ]; } \
+  && [ -f "\$DIR/flowctl_bootstrap.py" ]; then
+  ENTRY="\$DIR/flowctl_bootstrap.py"
+fi
+exec "\${FLOW_PY[@]}" "\$ENTRY" "\$@"
 SH
     chmod +x "$wrapper" 2>/dev/null || true
     FLOWCTL="$wrapper"
@@ -856,7 +861,7 @@ PY
 }
 
 # Get list of open (non-done) spec IDs from `flowctl specs --json`.
-# `flowctl specs` is canonical post-1.0; `flowctl epics` remains as alias (T2).
+# `flowctl specs` is the canonical and only list surface post-3.0.
 list_open_specs() {
   local tmpfile
   tmpfile="$(mktemp)"

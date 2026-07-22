@@ -1,0 +1,22 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-21T12:52:52.500253Z",
+  "depends_on": [
+    "fn-122-flowctl-hardening-and-performance-completion-sweep.2",
+    "fn-122-flowctl-hardening-and-performance-completion-sweep.3",
+    "fn-122-flowctl-hardening-and-performance-completion-sweep.4",
+    "fn-122-flowctl-hardening-and-performance-completion-sweep.5",
+    "fn-122-flowctl-hardening-and-performance-completion-sweep.6",
+    "fn-122-flowctl-hardening-and-performance-completion-sweep.7",
+    "fn-122-flowctl-hardening-and-performance-completion-sweep.8"
+  ],
+  "id": "fn-122-flowctl-hardening-and-performance-completion-sweep.9",
+  "priority": null,
+  "spec": "fn-122-flowctl-hardening-and-performance-completion-sweep",
+  "spec_path": ".flow/tasks/fn-122-flowctl-hardening-and-performance-completion-sweep.9.md",
+  "status": "todo",
+  "title": "Dead-surface removal and focused coverage closure",
+  "updated_at": "2026-07-21T21:06:35.671666Z"
+}

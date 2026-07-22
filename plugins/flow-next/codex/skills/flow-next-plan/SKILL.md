@@ -141,7 +141,7 @@ Under `AUTONOMOUS=1`:
 Parse the arguments for these patterns. If found, use them and skip questions:
 
 **Research approach**:
-- `--research=rp` or `--research rp` or "use rp" or "context-scout" or "use repoprompt" → context-scout (errors at runtime if rp-cli missing)
+- `--research=rp` or `--research rp` or "use rp" or "context-scout" or "use repoprompt" → context-scout (errors at runtime if no supported RepoPrompt CLI resolves)
 - `--research=grep` or `--research grep` or "use grep" or "repo-scout" or "fast" → repo-scout
 
 **Review mode**:
@@ -155,16 +155,18 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 **RepoPrompt eligibility** (compute once, before any question below):
 
 ```bash
-# RepoPrompt is macOS-only (rp-cli bridges the GUI). Only offer the rp path
-# when it can actually run: on macOS, or when rp-cli is already on PATH.
-if [ "$(uname 2>/dev/null)" = "Darwin" ] || command -v rp-cli >/dev/null 2>&1; then
+# Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
+if command -v rpce-cli >/dev/null 2>&1 \
+ || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+ || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+ || command -v rp-cli >/dev/null 2>&1; then
  RP_ELIGIBLE=1
 else
  RP_ELIGIBLE=0
 fi
 ```
 
-Suppression governs *proposals only* — an explicit `--research=rp` / `--review=rp` argument (parsed above) is always honored and errors at runtime if rp-cli is missing, exactly as today.
+Suppression governs *proposals only* — an explicit `--research=rp` / `--review=rp` argument (parsed above) is always honored and errors at runtime if no supported RepoPrompt CLI resolves.
 
 **Plan depth** (parse from args or ask):
 - `--depth=short` or "quick" or "minimal" → SHORT
@@ -176,7 +178,7 @@ Suppression governs *proposals only* — an explicit `--research=rp` / `--review
 
 **If REVIEW_BACKEND is rp, codex, or none** (already configured): Only ask research question. Show override hint.
 
-When `RP_ELIGIBLE=0` (not macOS, no rp-cli): do NOT ask about RepoPrompt — context-scout cannot run here. Research = `repo-scout`; ask nothing in this branch and continue.
+When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI): do NOT ask about RepoPrompt — context-scout cannot run here. Research = `repo-scout`; ask nothing in this branch and continue.
 
 When `RP_ELIGIBLE=1`:
 
@@ -214,7 +216,7 @@ Quick setup before planning:
 (Reply: "1a 2b 3d", or just tell me naturally)
 ```
 
-When `RP_ELIGIBLE=0` (not macOS, no rp-cli): omit the Research question entirely (research = `repo-scout`) and drop the RepoPrompt review option:
+When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI): omit the Research question entirely (research = `repo-scout`) and drop the RepoPrompt review option:
 
 ```
 Quick setup before planning:

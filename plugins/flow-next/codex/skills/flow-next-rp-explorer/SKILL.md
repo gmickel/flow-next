@@ -5,7 +5,7 @@ description: Token-efficient codebase exploration using RepoPrompt CLI. Use when
 
 # RP-Explorer
 
-Token-efficient codebase exploration using RepoPrompt CLI.
+Token-efficient codebase exploration using RepoPrompt Community Edition's CLI.
 
 ## Trigger Phrases
 
@@ -23,26 +23,26 @@ Read [cli-reference.md](cli-reference.md) for complete command documentation.
 
 ### Step 1: Get Overview
 ```bash
-rp-cli -e 'tree'
-rp-cli -e 'structure .'
+rpce-cli -e 'tree'
+rpce-cli -e 'structure .'
 ```
 
 ### Step 2: Find Relevant Files
 ```bash
-rp-cli -e 'search "auth" --context-lines 2'
-rp-cli -e 'builder "understand authentication"'
+rpce-cli -e 'search "auth" --context-lines 2'
+rpce-cli -e 'builder "understand authentication"'
 ```
 
 ### Step 3: Deep Dive
 ```bash
-rp-cli -e 'select set src/auth/'
-rp-cli -e 'structure --scope selected'
-rp-cli -e 'read src/auth/login.ts'
+rpce-cli -e 'select set src/auth/'
+rpce-cli -e 'structure --scope selected'
+rpce-cli -e 'read src/auth/login.ts'
 ```
 
 ### Step 4: Export Context
 ```bash
-rp-cli -e 'context --all > codebase-map.md'
+rpce-cli -e 'context --all > codebase-map.md'
 ```
 
 ## Token Efficiency
@@ -56,12 +56,12 @@ rp-cli -e 'context --all > codebase-map.md'
 `builder` creates an isolated compose tab automatically. Use `-t` to target it:
 ```bash
 # Builder returns: Tab: <UUID> • <Name>
-rp-cli -w W -t "<Name>" -e 'select add extra.ts && context'
+rpce-cli -w W -t "<Name>" -e 'select add extra.ts && context'
 
 # Or chain commands:
-rp-cli -w W -e 'builder "find auth" && select add extra.ts && context'
+rpce-cli -w W -e 'builder "find auth" && select add extra.ts && context'
 ```
 
 ## Requirements
 
-RepoPrompt v1.5.62+ with rp-cli installed.
+RepoPrompt CE 1.1.0+ with `rpce-cli` installed. Direct Classic `rp-cli` instructions are intentionally not used; Classic is discontinued and survives only behind Flow-Next's wrapper compatibility ladder.
