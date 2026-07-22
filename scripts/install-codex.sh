@@ -96,37 +96,43 @@ echo -e "${GREEN}✓${NC} $SKILL_COUNT skills"
 # upgrades forever. Remove EXACTLY these two artifacts — never glob, never
 # touch unrelated user skills/prompts.
 #
-# Ownership guard: delete ONLY when the artifact is provably flow-next's own
-# retired shim, not a same-named file the user authored. `epic-review.md` is a
-# generic prompt name a first-time installer could legitimately already have,
-# so deletion requires TWO independent flow-next-redirect signals — both are
-# present in every era of our generated shim, neither is plausible in a user's
-# own file:
-#   (1) it names our target skill "flow-next-spec-completion-review", AND
-#   (2) it reads as a deprecation redirect ("renamed" / "deprecat…").
-# A file missing EITHER signal is treated as the user's and left untouched
-# (and noted). Bias is deliberate: a surviving stale flow-next file is cosmetic;
-# deleting a user's file is not.
-is_flow_next_redirect() {  # $1 = file path
-    grep -q "flow-next-spec-completion-review" "$1" 2>/dev/null \
-        && grep -Eiq "renamed|deprecat" "$1" 2>/dev/null
+# Ownership guard: delete ONLY when the artifact is provably flow-next's OWN
+# retired shim, never a same-named file the user authored. `epic-review.md` is
+# a generic prompt name a first-time installer could legitimately already have,
+# and body-text heuristics ("renamed to flow-next-spec-completion-review") can
+# appear verbatim in a user's own migration wrapper. The one thing a user's
+# file will NOT carry is our generator's exact frontmatter `name:` id:
+#   - the retired command-shim prompt: `name: flow-next:epic-review`
+#   - the retired generated skill:      `name: flow-next-epic-review`
+# These namespaced/prefixed ids are what flow-next's own tooling wrote and are
+# not values a hand-authored `epic-review.md` would set. Deletion is gated on an
+# EXACT match of that frontmatter id. Version-robust (the id was stable even as
+# bodies drifted across releases) and safe (bias: a surviving stale flow-next
+# file is cosmetic; deleting a user's file is not — anything not exactly ours
+# is left untouched and noted).
+frontmatter_name() {  # $1 = file → prints the leading-frontmatter `name:` value (unquoted), else nothing
+    awk '
+      NR==1 && $0!="---" { exit }            # no frontmatter block → no name
+      NR>1  && $0=="---" { exit }            # end of frontmatter → stop
+      /^name:[ \t]/ { sub(/^name:[ \t]*/, ""); gsub(/\r$/, ""); print; exit }
+    ' "$1" 2>/dev/null
 }
 LEGACY_SKILL="$CODEX_DIR/skills/flow-next-epic-review"
 if [ -d "$LEGACY_SKILL" ]; then
-    if [ -f "$LEGACY_SKILL/SKILL.md" ] && is_flow_next_redirect "$LEGACY_SKILL/SKILL.md"; then
+    if [ "$(frontmatter_name "$LEGACY_SKILL/SKILL.md")" = "flow-next-epic-review" ]; then
         rm -rf "$LEGACY_SKILL"
         echo -e "${GREEN}✓${NC} removed stale legacy skill flow-next-epic-review"
     else
-        echo -e "${YELLOW}!${NC} kept $LEGACY_SKILL (not a flow-next redirect shim — left untouched)"
+        echo -e "${YELLOW}!${NC} kept $LEGACY_SKILL (frontmatter name is not ours — left untouched)"
     fi
 fi
 LEGACY_PROMPT="$CODEX_DIR/prompts/epic-review.md"
 if [ -f "$LEGACY_PROMPT" ]; then
-    if is_flow_next_redirect "$LEGACY_PROMPT"; then
+    if [ "$(frontmatter_name "$LEGACY_PROMPT")" = "flow-next:epic-review" ]; then
         rm -f "$LEGACY_PROMPT"
         echo -e "${GREEN}✓${NC} removed stale legacy prompt epic-review.md"
     else
-        echo -e "${YELLOW}!${NC} kept $LEGACY_PROMPT (not a flow-next redirect shim — left untouched)"
+        echo -e "${YELLOW}!${NC} kept $LEGACY_PROMPT (frontmatter name is not ours — left untouched)"
     fi
 fi
 

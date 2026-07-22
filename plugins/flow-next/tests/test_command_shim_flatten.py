@@ -16,7 +16,7 @@ colon-free.
 This test pins all of that so a regression can't sneak back in:
 
   (a) no plugin-name-colliding nested command directory exists
-  (b) >= 23 flat `commands/*.md` shims exist
+  (b) the flat `commands/*.md` shim set is EXACTLY the 23 canonical commands
   (c) `.cursor-plugin/plugin.json` `commands` field == `./commands`
   (d) every shim carries a `name:` (fn-123 R11) and no `name:` contains a colon
   (e) `epic-review.md` is absent (alias removed on all platforms)
