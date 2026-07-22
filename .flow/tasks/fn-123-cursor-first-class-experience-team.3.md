@@ -16,9 +16,8 @@ Add the host-native review backend `host`. flowctl side (deterministic plumbing 
 
 
 ## Done summary
-TBD
-
+host backend: non-executable registry sentinel (models/efforts None, excluded from MODEL_ROLE_BACKENDS); host:<model>/effort rejected with AGENTS.md-routing hint; byte-identical .flow/bin/flowctl.py. Skill side: host branches in plan-review (inline) + impl-review/spec-completion-review (workflow-host.md): fresh cross-family read-only reviewer subagent, per-host pin table (Claude model param / Cursor in-prompt slug / other generic), fail-closed (interactive ask / autonomous NEEDS_HUMAN), receipts mode:host + actual model, fresh context per re-review. Backend enumerations updated in plan/work/pilot. 157 tests green; mirror twice-idempotent. Reviewed by session model: approved. Live host-review smoke on Claude+Cursor REMAINS OPEN (needs-human).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9ccbec27
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_backend_spec test_host_review_backend -q
 - PRs:

@@ -18,9 +18,8 @@ NOTE (from plan review): path overrides do NOT remove `codex/` from a marketplac
 
 
 ## Done summary
-TBD
-
+Root .cursor-plugin/marketplace.json (team-marketplace repo import); plugin.json component path overrides (skills/agents/commands/rules); rules/flow-next.mdc guidance rail; verify_cursor_install.py + new test_cursor_plugin_surface (21 tests) + parity test + CI triggers. Grok-implemented; reviewer fix applied: alwaysApply true->false with trigger-shaped description (plugin rules with alwaysApply:true inject into every workspace incl. non-flow repos) + test locked to false. Manual Teams import/install-modes/auto-refresh smoke REMAINS OPEN (needs-human).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f732bcaf
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_cursor_plugin_surface test_install_cursor_parity -q
 - PRs:

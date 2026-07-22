@@ -14,9 +14,8 @@ Enforce read-only Cursor agents. Add `readonly: true` frontmatter to every canon
 
 
 ## Done summary
-TBD
-
+Added readonly: true to all 18 read-only agents (derived: denies Edit+Write); worker/plan-sync/tracker-runner/pr-comment-resolver excluded. New bidirectional invariant test. sync-codex.sh tolerates + swallows the key (codex uses sandbox_mode); mirror unchanged, twice-idempotent verified. Reviewed by session model (Fable): approved.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: cf62db2d
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_cursor_agent_frontmatter -q
 - PRs:

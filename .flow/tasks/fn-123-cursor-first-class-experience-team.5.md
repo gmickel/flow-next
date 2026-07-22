@@ -15,9 +15,8 @@ Repair long approval read-backs (R13). Print-then-ask contract: skills that show
 
 
 ## Done summary
-TBD
-
+Print-then-ask contract: capture Phase 4 (SKILL/workflow/phases) prints full draft (+ rewrite diff) as ordinary markdown, then SHORT ask (pointer + tally + options); edit cycles reprint; autofix path unchanged (--yes contract intact). Interview decision-entry + write-back approvals converted to same contract; "inline in the question" allowance removed. New prose-contract test (7 tests). Mirror regenerated twice-idempotent. Reviewed by session model: approved (one remaining "Write render" mention is the unchanged autofix path, correct).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d4cd6e5f
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_readback_ask_contract -q
 - PRs:
