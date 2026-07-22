@@ -65,6 +65,7 @@ class TestLauncherConstantDriftGuard(unittest.TestCase):
         source = SRC_CMD.read_text(encoding="utf-8")
         probe = 'raise SystemExit(0 if sys.version_info >= (3, 11) else 3)'
         self.assertEqual(source.count(probe), 4)
+        self.assertEqual(source.count("  CALL "), 4)
         self.assertNotIn("^>=", source)
 
 

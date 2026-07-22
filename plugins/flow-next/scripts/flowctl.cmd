@@ -25,23 +25,25 @@ SET "_old="
 
 REM %PYTHON_BIN% is honored as a COMMAND NAME ONLY (e.g. python3.12, py) -- no
 REM quoted paths-with-spaces / embedded args, which keeps batch quoting trivial.
+REM CALL is required because a candidate may itself be a .cmd shim; without it,
+REM control transfers out of this launcher instead of resuming the probe ladder.
 IF DEFINED PYTHON_BIN (
-  "%PYTHON_BIN%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
+  CALL "%PYTHON_BIN%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
   IF NOT ERRORLEVEL 1 SET "_prog=%PYTHON_BIN%"
   IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=%PYTHON_BIN%"
 )
 IF NOT DEFINED _prog (
-  py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
+  CALL py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
   IF NOT ERRORLEVEL 1 SET "_prog=py -3"
   IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=py -3"
 )
 IF NOT DEFINED _prog (
-  python3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
+  CALL python3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
   IF NOT ERRORLEVEL 1 SET "_prog=python3"
   IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=python3"
 )
 IF NOT DEFINED _prog (
-  python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
+  CALL python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
   IF NOT ERRORLEVEL 1 SET "_prog=python"
   IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=python"
 )
