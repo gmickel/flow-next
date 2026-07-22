@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-22T19:36:20.255331Z",
+  "depends_on": [
+    "fn-126-grok-build-host-fidelity-positive.2",
+    "fn-126-grok-build-host-fidelity-positive.3"
+  ],
+  "id": "fn-126-grok-build-host-fidelity-positive.4",
+  "priority": null,
+  "spec": "fn-126-grok-build-host-fidelity-positive",
+  "spec_path": ".flow/tasks/fn-126-grok-build-host-fidelity-positive.4.md",
+  "status": "todo",
+  "title": "Publish the verified Grok setup contract",
+  "updated_at": "2026-07-22T19:36:20.255331Z"
+}

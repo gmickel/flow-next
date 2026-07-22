@@ -36,9 +36,9 @@ Detection is the hard part: `env | grep -iE 'grok|xai'` in a Grok session shows 
 
 | R-ID | Task |
 |------|------|
-| R1 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R2 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R3 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R4 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R5 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R6 | fn-N.M (TBD - populate via /flow-next:plan) |
+| R1 | fn-126-grok-build-host-fidelity-positive.1 |
+| R2 | fn-126-grok-build-host-fidelity-positive.2 |
+| R3 | fn-126-grok-build-host-fidelity-positive.2 |
+| R4 | fn-126-grok-build-host-fidelity-positive.3 |
+| R5 | fn-126-grok-build-host-fidelity-positive.4 |
+| R6 | fn-126-grok-build-host-fidelity-positive.2 |

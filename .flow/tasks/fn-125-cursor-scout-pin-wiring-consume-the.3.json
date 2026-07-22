@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-22T19:36:18.631986Z",
+  "depends_on": [
+    "fn-125-cursor-scout-pin-wiring-consume-the.2"
+  ],
+  "id": "fn-125-cursor-scout-pin-wiring-consume-the.3",
+  "priority": null,
+  "spec": "fn-125-cursor-scout-pin-wiring-consume-the",
+  "spec_path": ".flow/tasks/fn-125-cursor-scout-pin-wiring-consume-the.3.md",
+  "status": "todo",
+  "title": "Harden fallback semantics + document runtime contract",
+  "updated_at": "2026-07-22T19:36:18.631986Z"
+}

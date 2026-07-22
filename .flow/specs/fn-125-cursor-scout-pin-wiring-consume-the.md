@@ -30,8 +30,8 @@ The host-review path is the proven template: it reads the AGENTS.md pin and pass
 
 | R-ID | Task |
 |------|------|
-| R1 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R2 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R3 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R4 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R5 | fn-N.M (TBD - populate via /flow-next:plan) |
+| R1 | fn-125-cursor-scout-pin-wiring-consume-the.2 |
+| R2 | fn-125-cursor-scout-pin-wiring-consume-the.2 |
+| R3 | fn-125-cursor-scout-pin-wiring-consume-the.3 |
+| R4 | fn-125-cursor-scout-pin-wiring-consume-the.1 |
+| R5 | fn-125-cursor-scout-pin-wiring-consume-the.4 |
