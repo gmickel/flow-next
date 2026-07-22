@@ -43,9 +43,9 @@ BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
   if [ "$RP_ELIGIBLE" = 1 ]; then
-    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
+    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|host|none"
   else
-    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|none"
+    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|host|none"
   fi
   exit 1
 fi
@@ -77,6 +77,7 @@ Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 | `codex`    | [workflow-codex.md](workflow-codex.md) |
 | `copilot`  | [workflow-copilot.md](workflow-copilot.md) |
 | `cursor`   | [workflow-cursor.md](workflow-cursor.md) |
+| `host`     | [workflow-host.md](workflow-host.md) |
 | `rp`       | [workflow-rp.md](workflow-rp.md) |
 
 Only the file for the active backend should enter context. Do not read the other backend files.

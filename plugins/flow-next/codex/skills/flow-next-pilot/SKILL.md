@@ -209,4 +209,4 @@ Execute [workflow.md](workflow.md) in order:
 
 ## Unattended runs — rp caveat
 
-The `rp` review backend runs headlessly through the CE-first CLI ladder — it needs RepoPrompt CE running on the same Mac (cold start: `open -ga "RepoPrompt CE"`; a stopped app fails fast). Classic is only the final compatibility fallback. On remote/CI machines, use `--review=codex`, `--review=copilot`, `--review=cursor`, or `--review=none`. Wall-clock limits and iteration caps belong to the driver (`/goal --tokens`, `/goal` stop clauses, or `/loop` cadence); a pilot tick has no timeout machinery.
+The `rp` review backend runs headlessly through the CE-first CLI ladder — it needs RepoPrompt CE running on the same Mac (cold start: `open -ga "RepoPrompt CE"`; a stopped app fails fast). Classic is only the final compatibility fallback. On remote/CI machines, use `--review=codex`, `--review=copilot`, `--review=cursor`, `--review=host` (host-native subagent; needs a cross-family pin in AGENTS.md model-routing), or `--review=none`. Wall-clock limits and iteration caps belong to the driver (`/goal --tokens`, `/goal` stop clauses, or `/loop` cadence); a pilot tick has no timeout machinery.
