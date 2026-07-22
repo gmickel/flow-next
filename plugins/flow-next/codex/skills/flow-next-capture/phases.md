@@ -188,9 +188,13 @@ Ralph mode? (FLOW_RALPH=1 or REVIEW_RECEIPT_PATH set)
  yes → exit 2 with Ralph-block message (see SKILL.md)
  no → continue
 
-Compaction detected without --from-compacted-ok?
- yes → refuse with overrides hint (interactive); exit 2 (autofix)
+Compaction signal detected?
  no → continue
+ yes → evidence needed for this capture missing / truncated / summary-only?
+ no → continue; note prior compaction in Phase 4 warnings
+ yes → --from-compacted-ok set?
+ no → refuse with override hint (interactive); exit 2 (autofix)
+ yes → continue
 
 Duplicate detection: ≥2 strong spec-title matches AND --rewrite not set?
  yes → ask: extend / supersede / proceed-anyway / abort (interactive); exit 2 (autofix)

@@ -10,4 +10,4 @@ The ONLY purpose of this command is to call the `flow-next-capture` skill. You M
 
 **Arguments:** $ARGUMENTS
 
-Pass the arguments to the skill verbatim. The skill handles mode detection (`mode:autofix` token + `--rewrite <id>` + `--from-compacted-ok` + `--yes`), pre-flight checks (duplicate / compaction / idempotency), conversation evidence extraction, source-tagged synthesis, must-ask cases, mandatory read-back loop, and the flowctl `spec create` + `spec set-plan` write.
+Pass the arguments to the skill verbatim. The skill handles mode detection (`mode:autofix` token + `--rewrite <id>` + `--from-compacted-ok` + `--yes`), pre-flight checks (duplicate / relevant evidence completeness after compaction / idempotency), conversation evidence extraction, source-tagged synthesis, must-ask cases, mandatory read-back loop, and the flowctl `spec create` + `spec set-plan` write.

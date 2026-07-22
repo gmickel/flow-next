@@ -74,12 +74,12 @@ fi
 | Mode | When | Behavior |
 |------|------|----------|
 | **Interactive** (default) | User is at the terminal | Phase 0 asks on duplicate detection; Phase 3 asks on must-ask ambiguities; Phase 4 print-then-ask read-back (full draft as ordinary markdown, then short plain-text numbered prompt) — write only on `approve` |
-| **Autofix** (`mode:autofix`) | Batch usage from another skill / scripted invocation | No user questions. Phase 0 hard-errors on duplicates / compaction without explicit overrides. Phase 3 must-ask cases hard-error (autofix can't ask). Phase 4 Writes the full draft once + prints the summary tally to stdout (autofix path unchanged). **Writes to `.flow/` ONLY when `--yes` is also passed**; without `--yes`, exit 0 with "draft written; rerun with --yes to commit" |
+| **Autofix** (`mode:autofix`) | Batch usage from another skill / scripted invocation | No user questions. Phase 0 hard-errors on duplicates / relevant evidence made incomplete by compaction without explicit overrides. Historical compaction signals alone do not block. Phase 3 must-ask cases hard-error (autofix can't ask). Phase 4 Writes the full draft once + prints the summary tally to stdout (autofix path unchanged). **Writes to `.flow/` ONLY when `--yes` is also passed**; without `--yes`, exit 0 with "draft written; rerun with --yes to commit" |
 
 ### Autofix mode rules
 
 - **No user questions.** Never call the plain-text numbered prompt.
-- **Phase 0 hard-errors:** duplicate detected → list overlapping spec IDs to stderr, exit 2 unless `--rewrite <id>` was passed; compaction detected → exit 2 unless `--from-compacted-ok` was passed.
+- **Phase 0 hard-errors:** duplicate detected → list overlapping spec IDs to stderr, exit 2 unless `--rewrite <id>` was passed; relevant capture evidence is missing / truncated / summary-only after compaction → exit 2 unless `--from-compacted-ok` was passed. A historical compaction marker or system-summary block alone is advisory and does not block.
 - **Phase 3 must-ask hard-errors:** ambiguous title / untestable acceptance / scope-conflict-with-existing-spec → exit 2 with which case fired and why. Autofix cannot resolve must-ask cases.
 - **Phase 4 single emission, no `.flow/` write.** Full draft Written once to the §4.1 draft file (all sections + R-IDs); summary payload (`[inferred]` tally + 8+ acceptance suggestion if applicable) printed to stdout. Without `--yes`, exit 0 with the "rerun with --yes" hint. With `--yes`, proceed to Phase 5 write. (Autofix has no interactive print-then-ask; `--yes` is the consent substitute.)
 - **Phase 5 commits identically to interactive once it runs.**
@@ -183,7 +183,7 @@ Any other output (the one-line differs notice, or nothing) is non-blocking: cont
 
 Execute the phases in [workflow.md](workflow.md) in order:
 
-0. **Pre-flight** — duplicate detection (scan `.flow/specs/` + `flowctl memory search` on extracted keywords); compaction detection (scan transcript for truncation markers); idempotency (refuse silent overwrite without `--rewrite`).
+0. **Pre-flight** — duplicate detection (scan `.flow/specs/` + `flowctl memory search` on extracted keywords); compaction relevance check (refuse only when the evidence needed for this capture is missing / truncated / summary-only, not merely because history contains a compaction signal); idempotency (refuse silent overwrite without `--rewrite`).
 1. **Extract conversation evidence** — build a verbatim `## Conversation Evidence` block FIRST (raw quotes from recent user turns, capped ~30 lines). Spec sections refer to it by line, not from agent memory.
 2. **Source-tagged synthesis** — draft each section with per-line tags (`[user]` / `[paraphrase]` / `[inferred]`). Apply the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — cross-link, never re-embed the section list inline). At runtime the template is resolved via the 4-tier discovery cascade — first match wins: `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. Route explicit biz-context signals (nine SIGNAL CATEGORIES per fn-44 R24, only `[user]` / `[paraphrase]` tags) to their destinations; sections without conversation signal stay absent. Compute `BIZ_SIGNAL_CATEGORIES` (0..9) for Phase 6's R25 dispatch.
 3. **Must-ask cases (R9)** — interactive only; autofix exits 2 if any fire. Hard-error conditions: ambiguous title / untestable acceptance / scope-conflict. Optional ambiguities use lead-with-recommendation + confidence tier.

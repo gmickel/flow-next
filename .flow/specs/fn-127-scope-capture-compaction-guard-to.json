@@ -1,0 +1,24 @@
+{
+  "branch_name": "codex/fix-capture-compaction",
+  "created_at": "2026-07-22T21:25:36.910268Z",
+  "depends_on_epics": [],
+  "id": "fn-127-scope-capture-compaction-guard-to",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-127-scope-capture-compaction-guard-to.md",
+  "status": "open",
+  "title": "Scope capture compaction guard to relevant evidence",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-22T21:25:36.910458Z"
+}

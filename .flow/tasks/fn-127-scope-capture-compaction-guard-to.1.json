@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-22T21:25:40.870755Z",
+  "depends_on": [],
+  "id": "fn-127-scope-capture-compaction-guard-to.1",
+  "priority": null,
+  "spec": "fn-127-scope-capture-compaction-guard-to",
+  "spec_path": ".flow/tasks/fn-127-scope-capture-compaction-guard-to.1.md",
+  "status": "todo",
+  "title": "Fix capture compaction relevance guard and release 3.3.2",
+  "updated_at": "2026-07-22T21:25:40.870755Z"
+}

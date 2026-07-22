@@ -23,7 +23,7 @@ The Ralph-block (SKILL.md) runs before this preamble. Phase 0 starts after the R
 
 ## Phase 0: Pre-flight (R5, R6, R8)
 
-**Goal:** catch the three conditions that make capture unsafe BEFORE drafting a spec — duplicate specs, compacted conversation, idempotency conflict. Each has its own decision branch.
+**Goal:** catch the three conditions that make capture unsafe BEFORE drafting a spec — duplicate specs, incomplete relevant evidence after compaction, idempotency conflict. Each has its own decision branch.
 
 ### 0.1 — Extract candidate keywords from conversation
 
@@ -109,29 +109,37 @@ When `STRATEGY_PRESENT=false`, Phase 2 emits no `[strategy:*]` tags and Phase 5'
 
 ### 0.4 — Compaction detection (R6)
 
-Scan the visible conversation for any of:
+Scan the visible conversation for compaction signals:
 
 - Literal `[compacted]` markers.
 - Truncated tool-result patterns: `<...output too large to include>`, `(output truncated)`, `... (N more lines)`.
 - System-summary blocks (e.g. "Earlier in the conversation, the user...").
 - Suspicious gaps where a prompt turn shows no output but later turns reference its result.
 
-If any are detected AND `FROM_COMPACTED_OK` is `0`, refuse:
+These signals are **advisory, not an automatic refusal**. A conversation may have been compacted earlier while the feature or decision being captured is fully present in later visible user turns. A historical system-summary block, `[compacted]` marker, or unrelated truncated tool result alone does not make the capture source incomplete.
+
+For each signal, judge whether it removed evidence **relevant to this capture**:
+
+- **Proceed normally** when the requested feature / decision is fully stated or fully restated in visible user turns, including when those turns occur after the latest compaction. Record `Prior compaction detected; relevant capture evidence remains visible.` in the Phase 4 read-back warnings.
+- **Treat evidence as incomplete** when a relevant requirement exists only in a system summary, a relevant user turn or tool result is truncated / missing, later turns depend on a relevant unavailable result, or the evidence block cannot support the draft without guessing what disappeared.
+- When uncertain whether a gap is relevant, treat the evidence as incomplete. `--from-compacted-ok` is the explicit user override for that uncertainty.
+
+If relevant evidence is incomplete AND `FROM_COMPACTED_OK` is `0`, refuse:
 
 ```text
-Error: conversation appears compacted (detected: <markers>). Capture refuses to
-synthesize from a compacted transcript — risk of fabricating requirements that
-were edited out of the visible context.
+Error: relevant conversation evidence appears incomplete after compaction
+(detected: <markers and relevant gaps>). Capture refuses to synthesize while
+requirements needed for this spec may be missing.
 
 Options:
- - Expand context (open a fresh session with the full discussion).
- - Re-run with --from-compacted-ok if you've verified the visible turns
- contain the full intent.
+ - Restate or restore the missing relevant requirements in visible user turns.
+ - Re-run with --from-compacted-ok if you've verified the remaining context
+ contains the full intent despite the identified gaps.
 ```
 
-In **autofix mode**, exit 2. In **interactive mode**, this is a hard refusal — capture does not offer to "ask the user to confirm anyway" (the user can re-invoke with the flag if they trust the transcript).
+In **autofix mode**, exit 2. In **interactive mode**, this is a hard refusal — capture does not offer to "ask the user to confirm anyway" (the user can restate the missing material or re-invoke with the flag if they trust the transcript).
 
-If no compaction signal is detected, proceed to 0.5.
+If no compaction signal is detected, or signals exist but the relevant evidence remains fully visible, proceed to 0.5.
 
 ### 0.5 — Branch on duplicate (interactive only)
 
