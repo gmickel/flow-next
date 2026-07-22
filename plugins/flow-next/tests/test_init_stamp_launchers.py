@@ -59,6 +59,20 @@ class TestLauncherConstantDriftGuard(unittest.TestCase):
             "LAUNCHER_CMD drifted from scripts/flowctl.cmd — edit both together.",
         )
 
+    def test_launcher_cmd_escapes_python_probe_grouping(self) -> None:
+        # cmd.exe parses parentheses while collecting an IF (...) block, even
+        # when they appear inside a quoted Python -c argument. Keep every probe
+        # block-safe so the launcher reaches the working fallback interpreter.
+        source = SRC_CMD.read_text(encoding="utf-8")
+        escaped = (
+            'raise SystemExit^(0 if sys.version_info ^>= ^(3, 11^) else 3^)'
+        )
+        self.assertEqual(source.count(escaped), 4)
+        self.assertNotIn(
+            'raise SystemExit(0 if sys.version_info ^>= (3, 11) else 3)',
+            source,
+        )
+
 
 class TestStampFlowBinLaunchers(unittest.TestCase):
     """`_stamp_flow_bin_launchers(flow_dir) -> list` invariants."""
