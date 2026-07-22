@@ -405,3 +405,6 @@ jobs:
           if ($exitCode -eq 0) { Write-Error "old Python probe unexpectedly succeeded"; exit 1 }
           if ($out -notmatch "Python 3.11 or newer is required") { Write-Error "missing minimum-version error: $out"; exit 1 }
           if ($out -match '^usage:') { Write-Error "flowctl.py loaded before minimum-version rejection"; exit 1 }
+          # The tested native failure is expected; do not let the Actions pwsh
+          # wrapper propagate its retained LASTEXITCODE after our assertions.
+          exit 0
