@@ -15,30 +15,10 @@ Store this as `PLUGIN_ROOT` for use in later steps.
 Detect which platform is running:
 
 ```bash
-# Positive Cursor install signal: resolved PLUGIN_ROOT lives under ~/.cursor/
-# (local install-cursor.sh OR team-marketplace repo-import cache). Do NOT key
-# on codex/ absence — marketplace whole-repo imports contain codex/ and still
-# classify as cursor. Codex installs resolve under $CODEX_HOME (~/.codex) and
-# the shared source tree resolves to a workspace path; neither matches.
-PLUGIN_ROOT_ABS="$(cd "${PLUGIN_ROOT}" 2>/dev/null && pwd -P || printf '%s' "${PLUGIN_ROOT}")"
-CURSOR_HOME_ABS="$(cd "${HOME}/.cursor" 2>/dev/null && pwd -P || printf '%s' "${HOME}/.cursor")"
-
-if [ -n "${DROID_PLUGIN_ROOT:-}" ]; then
- PLATFORM="droid"
-elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
- PLATFORM="claude-code"
-elif [ -n "${CURSOR_AGENT:-}" ] \
- && [ -f "${PLUGIN_ROOT}/.cursor-plugin/plugin.json" ] \
- && case "${PLUGIN_ROOT_ABS}" in \
- "${CURSOR_HOME_ABS}"|"${CURSOR_HOME_ABS}"/*) true ;; \
- *) false ;; \
- esac; then
- PLATFORM="cursor"
-elif [ -n "${GROK_AGENT:-}" ]; then
- PLATFORM="grok"
-else
- PLATFORM="codex"
-fi
+# Codex mirror: this workflow is consumed only by Codex.
+# Host detection is irrelevant — always PLATFORM=codex
+# (canonical Claude-format hosts never read this mirror).
+PLATFORM="codex"
 ```
 
 **Cursor ordering matters.** Cursor exposes **no** plugin-root env var, so without the `CURSOR_AGENT` check it would fall through to the `codex` branch and get Codex-shaped project instructions (`$flow-next-plan` command names + `.codex/` setup) — wrong, because a Cursor install (local or team-marketplace) drives the workflow with `/flow-next:*` slash commands and resolves `flowctl` via `.flow/bin/flowctl`. `CURSOR_AGENT` is Cursor's own signal (set in its agent shell; it also sets `CI=1` / `CURSOR_TRACE_ID`, but `CURSOR_AGENT` is the canonical one). The `CURSOR_AGENT` branch MUST come before the `else → codex` fallback.

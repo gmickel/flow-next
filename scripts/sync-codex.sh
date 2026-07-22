@@ -447,9 +447,35 @@ fi
 # the mirrored pre-check's "Refresh now" path reads it, and excluding it would
 # strand a plugin-mode repo's snippet refresh when visited from Codex. Data, not
 # doctrine: the file alone offers nothing. Validation below guards regression.
+#
+# fn-126 R4: the Codex mirror is consumed ONLY by Codex. Replace the multi-host
+# Step-0 detection cascade with unconditional PLATFORM="codex" (canonical hosts
+# never read this mirror; a GROK_AGENT / CURSOR_AGENT inheritance must not
+# reclassify a Codex session). Hard-fail guard below enforces no host-detection
+# branches in the mirror Step-0 bash fence.
 setup_wf="$CODEX_DIR/skills/flow-next-setup/workflow.md"
 if [ -f "$setup_wf" ]; then
   awk '
+    # fn-126 R4: first ```bash under Step 0 Platform detection → unconditional codex
+    /^## Step 0: Resolve plugin path and detect platform/ {in_step0=1}
+    in_step0 && /^## / && !/^## Step 0:/ {in_step0=0; det_done=0}
+    in_step0 && !det_done && /^```bash$/ {
+      print "```bash"
+      print "# Codex mirror: this workflow is consumed only by Codex."
+      print "# Host detection is irrelevant — always PLATFORM=codex"
+      print "# (canonical Claude-format hosts never read this mirror)."
+      print "PLATFORM=\"codex\""
+      skip_det=1
+      det_done=1
+      next
+    }
+    skip_det && /^```$/ {
+      print
+      skip_det=0
+      next
+    }
+    skip_det {next}
+
     /^## Step 2b: Setup mode/ {
       print "## Existing-mode guard (before Step 3)";
       print "";
@@ -1874,6 +1900,40 @@ if grep -q '^## Step 3: Create .flow/bin/' "$CODEX_DIR/skills/flow-next-setup/wo
   echo -e "  ${GREEN}✓${NC} Copy-mode setup path retained in codex mirror (Step 3 + copy stamp)"
 else
   echo -e "  ${RED}✗${NC} Copy-mode setup path missing from codex mirror (Step 3 heading or copy stamp gone)"
+  errors=$((errors + 1))
+fi
+
+# fn-126 R4: mirror Step-0 detection bash must be unconditional PLATFORM=codex
+# (no multi-host cascade — Codex always reads this mirror as PLATFORM=codex).
+# Scope: the first ```bash fence under the Step 0 heading only (prose may still
+# mention host signals for documentation; the executable detection block must not).
+setup_mirror_wf="$CODEX_DIR/skills/flow-next-setup/workflow.md"
+if [ -f "$setup_mirror_wf" ]; then
+  det_block=$(awk '
+    /^## Step 0: Resolve plugin path and detect platform/ {in_s0=1; next}
+    in_s0 && /^## / {exit}
+    in_s0 && /^```bash$/ {grab=1; next}
+    grab && /^```$/ {exit}
+    grab {print}
+  ' "$setup_mirror_wf")
+  det_bad=0
+  for sig in GROK_AGENT CURSOR_AGENT DROID_PLUGIN_ROOT CLAUDE_PLUGIN_ROOT; do
+    if printf '%s\n' "$det_block" | grep -q "$sig"; then
+      echo -e "  ${RED}✗${NC} codex mirror setup Step-0 detection bash still branches on $sig (fn-126 R4 — must be unconditional PLATFORM=codex)"
+      det_bad=1
+    fi
+  done
+  if ! printf '%s\n' "$det_block" | grep -q 'PLATFORM="codex"'; then
+    echo -e "  ${RED}✗${NC} codex mirror setup Step-0 detection bash missing unconditional PLATFORM=\"codex\" (fn-126 R4)"
+    det_bad=1
+  fi
+  if [ "$det_bad" = "0" ]; then
+    echo -e "  ${GREEN}✓${NC} Codex mirror setup Step-0 is unconditional PLATFORM=codex (no host-detection branches)"
+  else
+    errors=$((errors + 1))
+  fi
+else
+  echo -e "  ${RED}✗${NC} codex mirror setup workflow missing — cannot validate Step-0 (fn-126 R4)"
   errors=$((errors + 1))
 fi
 
