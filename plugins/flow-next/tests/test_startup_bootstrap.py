@@ -68,23 +68,6 @@ class StartupBootstrapTest(unittest.TestCase):
             env=env,
         )
 
-    @staticmethod
-    def _launcher_command(launcher: Path, *args: str) -> list[str]:
-        # The extensionless launcher is Bash, not a Win32 executable. GitHub's
-        # Windows image ships Git Bash; invoke it explicitly there and use the
-        # forward-slash path form that Git Bash accepts.
-        if os.name == "nt":
-            return ["bash", launcher.as_posix(), *args]
-        return [str(launcher), *args]
-
-    def test_windows_launcher_command_uses_git_bash(self) -> None:
-        launcher = Path("flowctl")
-        with mock.patch.object(os, "name", "nt"):
-            self.assertEqual(
-                self._launcher_command(launcher, "usage"),
-                ["bash", "flowctl", "usage"],
-            )
-
     def test_non_static_commands_never_create_executable_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -177,12 +160,16 @@ class StartupBootstrapTest(unittest.TestCase):
         load.assert_not_called()
         self.assertIn("Python 3.11 or newer is required", err.getvalue())
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "extensionless launchers are covered by the Git Bash smoke on Windows",
+    )
     def test_plugin_launchers_share_exact_usage_fast_path(self) -> None:
         expected = BUNDLED_USAGE.read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as tmp:
             for launcher in (SCRIPT_LAUNCHER, BIN_LAUNCHER):
                 result = subprocess.run(
-                    self._launcher_command(launcher, "usage"),
+                    [str(launcher), "usage"],
                     cwd=tmp,
                     capture_output=True,
                     text=True,
@@ -190,6 +177,10 @@ class StartupBootstrapTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, expected)
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "extensionless launchers are covered by the Git Bash smoke on Windows",
+    )
     def test_copy_launcher_uses_local_usage_and_preserves_help(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -208,7 +199,7 @@ class StartupBootstrapTest(unittest.TestCase):
             usage = bindir.parent / "usage.md"
             usage.write_text("COPY-USAGE\n", encoding="utf-8")
             found = subprocess.run(
-                self._launcher_command(launcher, "usage"),
+                [str(launcher), "usage"],
                 cwd=root / "repo",
                 capture_output=True,
                 text=True,
@@ -216,7 +207,7 @@ class StartupBootstrapTest(unittest.TestCase):
             self.assertEqual(found.returncode, 0, found.stderr)
             self.assertEqual(found.stdout, "COPY-USAGE\n")
             help_result = subprocess.run(
-                self._launcher_command(launcher, "--help"),
+                [str(launcher), "--help"],
                 cwd=root / "repo",
                 capture_output=True,
                 text=True,
@@ -225,9 +216,7 @@ class StartupBootstrapTest(unittest.TestCase):
             self.assertTrue(help_result.stdout.startswith("usage: flowctl.py"))
             (bindir.parent / "meta.json").write_text("{}\n", encoding="utf-8")
             setup_mode = subprocess.run(
-                self._launcher_command(
-                    launcher, "setup-mode", "set", "copy", "--json"
-                ),
+                [str(launcher), "setup-mode", "set", "copy", "--json"],
                 cwd=root / "repo",
                 capture_output=True,
                 text=True,
