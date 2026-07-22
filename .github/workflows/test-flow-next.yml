@@ -394,9 +394,14 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $false
           $env:PATH = $env:PYOLD_DIR
           $flowctl = Join-Path $env:GITHUB_WORKSPACE "plugins/flow-next/scripts/flowctl.cmd"
-          $outputLines = & $flowctl --help 2>&1
+          # PowerShell's direct .cmd invocation does not reliably preserve the
+          # batch exit code on every runner. Assert it at the native cmd.exe
+          # boundary; the preceding step already proves direct pwsh invocation.
+          $command = "call `"$flowctl`" --help"
+          $outputLines = & $env:ComSpec /d /c $command 2>&1
           $exitCode = $LASTEXITCODE
           $out = $outputLines | Out-String
+          Write-Host $out
           if ($exitCode -eq 0) { Write-Error "old Python probe unexpectedly succeeded"; exit 1 }
           if ($out -notmatch "Python 3.11 or newer is required") { Write-Error "missing minimum-version error: $out"; exit 1 }
           if ($out -match '^usage:') { Write-Error "flowctl.py loaded before minimum-version rejection"; exit 1 }
