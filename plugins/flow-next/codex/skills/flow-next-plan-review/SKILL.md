@@ -182,6 +182,7 @@ When `BACKEND="host"`, do **not** call any `flowctl <backend> plan-review` — t
 3. **Dispatch** a fresh read-only reviewer subagent with the pin:
  - Claude Code: `Task` / subagent with `model: <cross-family-slug>`, `disallowedTools: Edit, Write, Task` (or host equivalent read-only)
  - Cursor: subagent with the slug stated in the prompt (Cursor honors in-prompt model pins) AND `readonly: true` enforcement — dispatch via a read-only agent definition (the fn-123 R4 `readonly: true` agents) or Cursor's read-only subagent mode; never a mutation-capable subagent. The reviewer analyzes untrusted diff content — read-only must be TOOL-enforced, not prompt-requested
+ - Codex: fresh read-only reviewer via the platform subagent primitive (`spawn_agent`) with the pin stated in the prompt; read-only via the platform sandbox
  - Elsewhere: fresh-context reviewer; note in the receipt that pin enforcement is host-dependent
 4. Give the subagent the plan-review rubric ([references/plan-review-prompt.md](references/plan-review-prompt.md)), the spec content, and any prior findings for convergence. Require the same verdict tags (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`).
 5. **Receipt** — path `RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt${SPEC_ID:+-${SPEC_ID}}.json}"` (explicit env always wins). Write exactly:

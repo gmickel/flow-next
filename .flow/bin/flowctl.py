@@ -8828,6 +8828,20 @@ def cmd_config_set(args: argparse.Namespace) -> None:
 
     canonical_key, _ = resolve_config_key_for_write(args.key)
 
+    # fn-123 R5 - reject invalid host backend specs at WRITE time. The read-time
+    # lenient parser treats a bad host spec as unset (loud, but late); accepting
+    # `host:opus` here and failing later is a worse contract. Only host is
+    # write-validated - legacy lenience for other backends' stored values stays.
+    if canonical_key == "review.backend" and isinstance(args.value, str):
+        _rb_first = args.value.strip().split(":", 1)[0].strip()
+        if _rb_first == "host" and ":" in args.value.strip():
+            error_exit(
+                f"Backend 'host' does not accept a model/effort (got {args.value!r}). "
+                f"Pins live in the AGENTS.md model-routing section, not the backend "
+                f"string. Use: flowctl config set review.backend host",
+                use_json=args.json,
+            )
+
     # fn-115.1 - validate models.roles / verifiedAt before write. Coerce the
     # value the same way set_config will so JSON object pins validate as dicts.
     if canonical_key == "models" or canonical_key.startswith("models."):
