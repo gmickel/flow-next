@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -44,16 +44,33 @@ class RepoPromptDiscoveryTest(unittest.TestCase):
         self.bin = self.root / "bin"
         self.home.mkdir()
         self.bin.mkdir()
+        self.non_executable: set[Path] = set()
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
+    @contextmanager
     def env(self):
-        return mock.patch.dict(
+        # Model PATH and X_OK deterministically. Windows does not preserve POSIX
+        # execute bits on these extensionless fixtures, while the production CE
+        # links are macOS paths; discovery policy should not depend on the host
+        # running this unit test.
+        def which(name: str):
+            candidate = self.bin / name
+            return str(candidate) if candidate.is_file() else None
+
+        def executable(path, _mode):
+            candidate = Path(path)
+            return candidate.is_file() and candidate not in self.non_executable
+
+        with mock.patch.dict(
             os.environ,
             {"HOME": str(self.home), "PATH": str(self.bin)},
             clear=False,
-        )
+        ), mock.patch.object(flowctl.shutil, "which", side_effect=which), mock.patch.object(
+            flowctl.os, "access", side_effect=executable
+        ):
+            yield
 
     def test_ladder_prefers_path_ce_over_every_classic_candidate(self) -> None:
         ce = _executable(self.bin / "rpce-cli")
@@ -81,6 +98,7 @@ class RepoPromptDiscoveryTest(unittest.TestCase):
             self.assertEqual(flowctl.require_rp_cli(), str(legacy))
 
         legacy.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        self.non_executable.add(legacy)
         with self.env():
             self.assertEqual(flowctl.require_rp_cli(), str(classic))
 

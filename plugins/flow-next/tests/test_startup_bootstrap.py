@@ -68,6 +68,22 @@ class StartupBootstrapTest(unittest.TestCase):
             env=env,
         )
 
+    @staticmethod
+    def _launcher_command(launcher: Path, *args: str) -> list[str]:
+        # The extensionless launcher is Bash, not a Win32 executable. GitHub's
+        # Windows image ships Git Bash; invoke it explicitly there.
+        if os.name == "nt":
+            return ["bash", str(launcher), *args]
+        return [str(launcher), *args]
+
+    def test_windows_launcher_command_uses_git_bash(self) -> None:
+        launcher = Path("flowctl")
+        with mock.patch.object(os, "name", "nt"):
+            self.assertEqual(
+                self._launcher_command(launcher, "usage"),
+                ["bash", "flowctl", "usage"],
+            )
+
     def test_non_static_commands_never_create_executable_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -165,7 +181,7 @@ class StartupBootstrapTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             for launcher in (SCRIPT_LAUNCHER, BIN_LAUNCHER):
                 result = subprocess.run(
-                    [str(launcher), "usage"],
+                    self._launcher_command(launcher, "usage"),
                     cwd=tmp,
                     capture_output=True,
                     text=True,
@@ -191,7 +207,7 @@ class StartupBootstrapTest(unittest.TestCase):
             usage = bindir.parent / "usage.md"
             usage.write_text("COPY-USAGE\n", encoding="utf-8")
             found = subprocess.run(
-                [str(launcher), "usage"],
+                self._launcher_command(launcher, "usage"),
                 cwd=root / "repo",
                 capture_output=True,
                 text=True,
@@ -199,7 +215,7 @@ class StartupBootstrapTest(unittest.TestCase):
             self.assertEqual(found.returncode, 0, found.stderr)
             self.assertEqual(found.stdout, "COPY-USAGE\n")
             help_result = subprocess.run(
-                [str(launcher), "--help"],
+                self._launcher_command(launcher, "--help"),
                 cwd=root / "repo",
                 capture_output=True,
                 text=True,
@@ -208,7 +224,9 @@ class StartupBootstrapTest(unittest.TestCase):
             self.assertTrue(help_result.stdout.startswith("usage: flowctl.py"))
             (bindir.parent / "meta.json").write_text("{}\n", encoding="utf-8")
             setup_mode = subprocess.run(
-                [str(launcher), "setup-mode", "set", "copy", "--json"],
+                self._launcher_command(
+                    launcher, "setup-mode", "set", "copy", "--json"
+                ),
                 cwd=root / "repo",
                 capture_output=True,
                 text=True,
