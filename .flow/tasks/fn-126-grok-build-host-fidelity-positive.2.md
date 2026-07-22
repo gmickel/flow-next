@@ -12,9 +12,8 @@ Testability + Codex mirror. Add an EXECUTABLE detection test (plugins/flow-next/
 - `./scripts/sync-codex.sh` twice-idempotent (byte-identical 2nd pass).
 - Focused suites green: `cd plugins/flow-next/tests && python3 -m unittest test_setup_grok_host test_setup_cursor_host -q`.
 ## Done summary
-TBD
-
+Executable detection test (test_setup_grok_host.py): extracts the Step-0 bash fence (one-match assert), runs it via subprocess under fake envs - GROK_AGENT=1->grok; +higher signal->higher host wins; plain->codex; no droid/claude/cursor/codex regression. 32 tests green w/ cursor-host. Codex mirror Step-0 flattened to UNCONDITIONAL PLATFORM=codex (mirror consumed only by Codex); sync-codex.sh new hard-fail guard asserts no host-detection branches in the mirror fence; twice-idempotent byte-identical. grok-4.5 high (1 pass); reviewed by session model (note: mirror still carries dead cascade RATIONALE prose below the fence - flagged for impl-review, non-executable/cosmetic).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a7596038
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_setup_grok_host test_setup_cursor_host -q
 - PRs:
