@@ -1489,42 +1489,11 @@ generate_openai_yaml "flow-next-rp-explorer"    "Flow RP Explorer [internal]"   
 generate_openai_yaml "flow-next-worktree-kit"   "Flow Worktree Kit [internal]"   "Worktree helper used by Flow Work"                  "#9CA3AF" false
 generate_openai_yaml "flow-next-deps"           "Flow Deps [internal]"           "Dependency-graph helper used by planning skills"    "#9CA3AF" false
 
-# --- Deprecation redirect skills (1.0 alias surface, removed in 2.0) ---
-# Codex resolves `$flow-next-<name>` and bare-skill-name lookups via the
-# skills/ mirror — the Claude Code slash-command redirect file at
-# `commands/flow-next/<name>.md` doesn't help the Codex skill lookup. Mirror
-# the redirect as a thin skill so users invoking the legacy alias on Codex
-# get a redirect, not a "skill not found" error. Removed alongside the
-# `flowctl epic *` aliases in 2.0 per fn-43 spec R3 / R28.
-generate_redirect_skill() {
-  local old="$1" new="$2" display="$3"
-  local dir="$CODEX_DIR/skills/$old"
-  mkdir -p "$dir/agents"
-  cat > "$dir/SKILL.md" <<EOF
----
-name: $old
-description: "[deprecated alias] Renamed to $new in flow-next 1.0 — invoke the new skill. Removed in 2.0."
-user-invocable: false
----
-
-# \`$old\` is renamed to \`$new\`
-
-This skill name is a deprecation alias from the flow-next 1.0 epic→spec rename. The legacy alias still resolves so existing muscle memory doesn't break, but it will be removed in 2.0.
-
-Invoke the \`$new\` skill instead. Forward any arguments to it. Do not run the workflow yourself; the new skill handles backend dispatch and the fix loop.
-EOF
-  cat > "$dir/agents/openai.yaml" <<EOF
-interface:
-  display_name: "$display [deprecated]"
-  short_description: "Deprecated alias — use $new"
-  brand_color: "#9CA3AF"
-policy:
-  allow_implicit_invocation: false
-EOF
-  skill_count=$((skill_count + 1))
-}
-
-generate_redirect_skill "flow-next-epic-review" "flow-next-spec-completion-review" "Flow Epic Review"
+# --- Deprecation redirect skills (1.0 alias surface) ---
+# The last redirect alias, flow-next-epic-review, was retired on all platforms
+# in fn-124 (self-declared dead since 2.0), which left the redirect generator
+# with no callers — removed here. Reintroduce a generator only if a new
+# deprecation alias is ever needed on the Codex mirror.
 
 # --- Catalog description diet (surfaced skills only) ---
 # Codex injects each implicit skill's SKILL.md frontmatter `description` into

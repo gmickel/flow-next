@@ -17,7 +17,7 @@
 #   - Agents:    codex/agents/*.toml       → ~/.codex/agents/
 #   - Hooks:     none by default (fn-114). Ralph guard is opt-in via
 #                /flow-next:ralph-init → project .codex/hooks.json
-#   - Prompts:   commands/flow-next/*.md   → ~/.codex/prompts/
+#   - Prompts:   commands/*.md             → ~/.codex/prompts/
 #   - CLI tools: flowctl, flowctl.py       → ~/.codex/scripts/
 #   - Scripts:   worktree.sh              → ~/.codex/scripts/  (from codex/skills/)
 #   - Templates: ralph-init templates      → ~/.codex/templates/
@@ -86,6 +86,80 @@ for skill_dir in "$CODEX_SRC/skills/"*/; do
     SKILL_COUNT=$((SKILL_COUNT + 1))
 done
 echo -e "${GREEN}✓${NC} $SKILL_COUNT skills"
+
+# ====================
+# Legacy alias cleanup (upgrade path)
+# ====================
+# The flow-next-epic-review deprecation alias was removed from the source tree
+# (fn-124). The loops above only replace skills still present in source and
+# only copy current prompts, so stale copies from older installs would keep
+# surfacing as a live (if still-functional) redirect forever. We RETIRE those
+# two artifacts on upgrade — but NON-DESTRUCTIVELY.
+#
+# Two safety layers, because deleting a user's file is unacceptable while a
+# lingering stale redirect is merely cosmetic:
+#   1. Identity gate — act ONLY on an artifact whose leading-frontmatter `name:`
+#      is EXACTLY the generator's own id (`flow-next:epic-review` for the prompt,
+#      `flow-next-epic-review` for the skill). A hand-authored file rarely
+#      carries our namespaced id; body-text heuristics (which a user migration
+#      wrapper can mimic) are deliberately NOT used.
+#   2. Non-destructive move — even on a match we never `rm`. We MOVE the artifact
+#      into `~/.codex/.flow-next-retired/` (outside the scanned skills/ + prompts/
+#      trees), so it stops surfacing as a command/skill but every byte is
+#      preserved and trivially restorable. So even the pathological case (a user
+#      file that really does carry our exact id) loses nothing — it is relocated,
+#      recoverable, and logged.
+RETIRED_DIR="$CODEX_DIR/.flow-next-retired"
+frontmatter_name() {  # $1 = file → prints the leading-frontmatter `name:` value, ONLY if the block is well-formed (closing fence seen)
+    awk '
+      NR==1 && $0!="---" { exit }                         # no frontmatter block
+      NR>1  && $0=="---" { print name; exit }             # closing fence → emit buffered name (empty if none)
+      NR>1  && name=="" && /^name:[ \t]/ { name=$0; sub(/^name:[ \t]*/, "", name); gsub(/\r$/, "", name) }
+    ' "$1" 2>/dev/null
+}
+# A path counts as "occupied" if anything is there — including a DANGLING
+# symlink, which `[ -e ]` reports false (it follows the link to a missing
+# target). `[ -L ]` catches the symlink itself, so we never select an existing
+# symlink as a free name and never clobber it.
+occupied() { [ -e "$1" ] || [ -L "$1" ]; }
+retire_artifact() {  # $1 = path to move, $2 = subdir under RETIRED_DIR, $3 = human label
+    local src="$1" destdir="$RETIRED_DIR/$2" label="$3"
+    mkdir -p "$destdir"
+    local dest="$destdir/$(basename "$src")"
+    # No-clobber: NEVER overwrite a previously retired backup (a user could
+    # recreate the live alias with different content between upgrades — the
+    # earlier backup must survive too). Also avoids `mv`'s move-INTO-an-existing
+    # -dir semantics for the skill directory. Pick the first free numbered name.
+    if occupied "$dest"; then
+        local n=1
+        while occupied "$dest.$n"; do n=$((n + 1)); done
+        dest="$dest.$n"
+    fi
+    # `mv -n` is the atomic backstop: even if something raced into $dest after
+    # the probe, -n refuses to overwrite it (the stale artifact simply stays in
+    # place unretired — a cosmetic miss, never data loss). Portable on GNU + BSD mv.
+    if mv -n "$src" "$dest" 2>/dev/null && [ ! -e "$src" ]; then
+        echo -e "${GREEN}✓${NC} retired stale legacy $label → $dest (recoverable)"
+    else
+        echo -e "${YELLOW}!${NC} kept $src (retirement destination busy — left untouched)"
+    fi
+}
+LEGACY_SKILL="$CODEX_DIR/skills/flow-next-epic-review"
+if [ -d "$LEGACY_SKILL" ]; then
+    if [ "$(frontmatter_name "$LEGACY_SKILL/SKILL.md")" = "flow-next-epic-review" ]; then
+        retire_artifact "$LEGACY_SKILL" "skills" "skill flow-next-epic-review"
+    else
+        echo -e "${YELLOW}!${NC} kept $LEGACY_SKILL (frontmatter name is not ours — left untouched)"
+    fi
+fi
+LEGACY_PROMPT="$CODEX_DIR/prompts/epic-review.md"
+if [ -f "$LEGACY_PROMPT" ]; then
+    if [ "$(frontmatter_name "$LEGACY_PROMPT")" = "flow-next:epic-review" ]; then
+        retire_artifact "$LEGACY_PROMPT" "prompts" "prompt epic-review.md"
+    else
+        echo -e "${YELLOW}!${NC} kept $LEGACY_PROMPT (frontmatter name is not ours — left untouched)"
+    fi
+fi
 
 # ====================
 # Agents (pre-built .toml)
@@ -249,7 +323,7 @@ fi
 # Prompts (commands → prompts, no patching needed)
 # ====================
 PROMPT_COUNT=0
-for cmd in "$PLUGIN_DIR/commands/$PLUGIN/"*.md; do
+for cmd in "$PLUGIN_DIR/commands/"*.md; do
     [ -f "$cmd" ] || continue
     cp "$cmd" "$CODEX_DIR/prompts/"
     PROMPT_COUNT=$((PROMPT_COUNT + 1))

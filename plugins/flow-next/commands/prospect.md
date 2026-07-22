@@ -1,5 +1,5 @@
 ---
-name: flow-next:prospect
+name: prospect
 description: Generate ranked candidate ideas grounded in the repo, upstream of /flow-next:plan
 argument-hint: "[focus hint — concept, path, constraint, or volume]"
 ---

@@ -22,7 +22,7 @@ HOOKS_JSON = HOOKS_DIR / "hooks.json"
 CODEX_HOOKS_JSON = PLUGIN_DIR / "codex" / "hooks.json"
 RALPH_INIT = PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "SKILL.md"
 SETUP_WORKFLOW = PLUGIN_DIR / "skills" / "flow-next-setup" / "workflow.md"
-UNINSTALL = PLUGIN_DIR / "commands" / "flow-next" / "uninstall.md"
+UNINSTALL = PLUGIN_DIR / "commands" / "uninstall.md"
 
 
 class TestNoDefaultHooks(unittest.TestCase):

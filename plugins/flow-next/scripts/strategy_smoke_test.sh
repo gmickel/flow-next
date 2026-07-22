@@ -532,21 +532,21 @@ echo -e "${YELLOW}--- T7: ci_test.sh R19 fluff guard catches banned word ---${NC
 # Build a fixture plugin tree that mirrors the real layout enough for ci_test
 # to run section 5d (R19) against it. The guard scopes to:
 #   PLUGIN_ROOT/skills/flow-next-strategy/SKILL.md
-#   PLUGIN_ROOT/commands/flow-next/strategy.md
+#   PLUGIN_ROOT/commands/strategy.md
 #   PLUGIN_ROOT/scripts/flowctl.py (cmd_strategy_* functions)
 # We seed a fixture SKILL.md with a banned word and run ci_test.sh against
 # the fixture; the section 5d block should non-zero out.
 
 FIXTURE_PLUGIN="$TEST_DIR/fluff-fixture-plugin"
 mkdir -p "$FIXTURE_PLUGIN/skills/flow-next-strategy"
-mkdir -p "$FIXTURE_PLUGIN/commands/flow-next"
+mkdir -p "$FIXTURE_PLUGIN/commands"
 mkdir -p "$FIXTURE_PLUGIN/scripts"
 
 cat > "$FIXTURE_PLUGIN/skills/flow-next-strategy/SKILL.md" <<'EOF'
 # /flow-next:strategy -- fluff fixture
 This skill creates synergy across teams.
 EOF
-cat > "$FIXTURE_PLUGIN/commands/flow-next/strategy.md" <<'EOF'
+cat > "$FIXTURE_PLUGIN/commands/strategy.md" <<'EOF'
 # strategy command
 EOF
 cat > "$FIXTURE_PLUGIN/scripts/flowctl.py" <<'EOF'
@@ -562,7 +562,7 @@ T7_OUT="$TEST_DIR/t7-fluff.txt"
 {
   grep -RnEi '\bsynergy\b|\bpivot\b|\bdisrupt\b|thought[ -]leadership|best-in-class|world-class|\b10x\b' \
     "$FIXTURE_PLUGIN/skills/flow-next-strategy/SKILL.md" \
-    "$FIXTURE_PLUGIN/commands/flow-next/strategy.md" 2>/dev/null
+    "$FIXTURE_PLUGIN/commands/strategy.md" 2>/dev/null
   awk '/^def cmd_strategy_/,/^def [^_]/' "$FIXTURE_PLUGIN/scripts/flowctl.py" 2>/dev/null \
     | grep -nEi '\bsynergy\b|\bpivot\b|\bdisrupt\b|thought[ -]leadership|best-in-class|world-class|\b10x\b' \
     | sed 's|^|flowctl.py(cmd_strategy_*):|'

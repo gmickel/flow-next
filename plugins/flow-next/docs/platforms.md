@@ -83,7 +83,7 @@ cd flow-next
 ./scripts/install-codex.sh flow-next
 ```
 
-The script copies pre-built files from `codex/` to `~/.codex/` (skills, 21 `.toml` agents, hooks, flowctl, prompts, ralph templates) and merges agent + feature entries into `config.toml`. Idempotent — re-run after `git pull` to update. The native `/plugins` install path isn't used because Codex's plugin manifest only declares `skills`, not custom agents or hooks; until that changes, the script is the only way to get the full multi-agent experience.
+The script copies pre-built files from `codex/` to `~/.codex/` (skills, 22 `.toml` agents, hooks, flowctl, prompts, ralph templates) and merges agent + feature entries into `config.toml`. Idempotent — re-run after `git pull` to update. The native `/plugins` install path isn't used because Codex's plugin manifest only declares `skills`, not custom agents or hooks; until that changes, the script is the only way to get the full multi-agent experience.
 
 ### Skill invocation
 
@@ -198,14 +198,14 @@ chmod +x .flow/bin/flowctl
 
 ### What works (verified, Grok 0.2.27 alpha)
 
-- All 24 flow-next **skills** load (`grok inspect`: `plugin: flow-next`); discovery used the **Claude Code plugin install** directly (`Marketplaces (0)`, no Grok-side config).
+- All 28 flow-next **skills** load (`grok inspect`: `plugin: flow-next`); discovery used the **Claude Code plugin install** directly (`Marketplaces (0)`, no Grok-side config).
 - **The `/flow-next:<name>` commands run when typed.** Typing `/flow-next:plan` fires `user_prompt_submit`, loads the `flow-next-plan` skill, and runs its workflow. Plugin-level Ralph hooks are **not** shipped; project hooks appear only after ralph-init merges them into `.claude/settings.json`.
 - **Multi-agent flows work — verified end-to-end.** A real `/flow-next:plan` run under Grok 0.2.27 **fanned out all seven scout subagents** (`repo-scout`, `practice-scout`, `docs-scout`, `spec-scout`, `docs-gap-scout`, `memory-scout`, `flow-gap-analyst`) in parallel; they spawned, completed, and the skill drove `flowctl` to create the spec + tasks and validate — a full plan, start to finish. So Grok **dispatches flow-next's custom `subagent_type`s** even though `grok inspect` doesn't list them in its agent UI. (UI listing ≠ functionality — see below.)
 - **MCP servers** resolve (e.g. RepoPrompt, linear-server); `flowctl` resolves via the bundled `.flow/bin/flowctl` copy.
 
 ### Caveats (cosmetic, not functional)
 
-- **Grok's UI under-lists flow-next's commands and agents — but both work when invoked.** `grok inspect` shows only Grok's 3 builtin agents (not flow-next's 21), and the slash *autocomplete* lists only the ~7 skills with **no** `user-invocable` key (`flow-next`, `flow-next-deps`, `flow-next-drive`, `flow-next-export-context`, `flow-next-rp-explorer`, `flow-next-worktree-kit`). The 20 `user-invocable: false` skills + the 22 `commands/flow-next/*.md` wrappers don't show in the menu, and the custom agents don't show in `inspect` — yet **the commands run when typed in full** (e.g. `/flow-next:plan`) and **the subagents dispatch** (verified above). flow-next marks skills `user-invocable: false` because the Claude Code entry point is the command wrapper; Grok's menu keys on that flag and its `inspect` summary just doesn't surface plugin agents. **Discoverability gap, not a functional one — type the command.**
+- **Grok's UI under-lists flow-next's commands and agents — but both work when invoked.** `grok inspect` shows only Grok's 3 builtin agents (not flow-next's 22), and the slash *autocomplete* lists only the 6 skills with **no** `user-invocable` key (`flow-next`, `flow-next-deps`, `flow-next-drive`, `flow-next-export-context`, `flow-next-rp-explorer`, `flow-next-worktree-kit`). The 22 `user-invocable: false` skills + the 23 `commands/*.md` wrappers don't show in the menu, and the custom agents don't show in `inspect` — yet **the commands run when typed in full** (e.g. `/flow-next:plan`) and **the subagents dispatch** (verified above). flow-next marks skills `user-invocable: false` because the Claude Code entry point is the command wrapper; Grok's menu keys on that flag and its `inspect` summary just doesn't surface plugin agents. **Discoverability gap, not a functional one — type the command.**
 - **Ralph autonomous mode — not yet validated.** The verified run was interactive multi-agent work; Ralph's hook-gated `Stop`/`SubagentStop` loop hasn't been exercised under Grok. Hooks load and fire; the autonomous gating specifically is untested.
 
 > **Status (Grok 0.2.27 alpha):** skills load; `/flow-next:*` commands **run when typed**; MCP + `flowctl` resolve; and **multi-agent subagent dispatch works** — a full `/flow-next:plan` fanned out all seven scouts end-to-end. Caveat: Grok's autocomplete + `grok inspect` under-list flow-next's commands/agents (cosmetic — they work when invoked). Ralph is opt-in (project hooks) and still to validate under Grok.
@@ -255,7 +255,9 @@ cd flow-next
 powershell -ExecutionPolicy Bypass -File .\scripts\install-cursor.ps1
 ```
 
-Both write a **real directory** (NOT a symlink — Cursor's plugin loader rejects a symlink whose realpath escapes `~/.cursor/`), with the `.cursor-plugin/plugin.json` manifest pointing at nested `commands/flow-next/` and shipping `rules/*.mdc`. They exclude the Codex mirror + tests. It's a **snapshot — re-run after `git pull`** to update. Fully restart Cursor (Cmd-Q / Quit, reopen), then run `/flow-next:setup` in the project. The Windows installer is a robocopy sibling of the bash script (Git Bash / WSL work too).
+The Windows installer (`install-cursor.ps1`) is a robocopy-based sibling of the bash script — same destination, same excludes, same real-directory contract. (Running the bash script under Git Bash / WSL works too, since `~/.cursor` resolves the same.)
+
+Both copy the plugin into `~/.cursor/plugins/local/flow-next` (`%USERPROFILE%\.cursor\plugins\local\flow-next` on Windows) as a **real directory** (NOT a symlink — Cursor's plugin loader rejects a symlink whose realpath escapes `~/.cursor/`), with the `.cursor-plugin/plugin.json` manifest (its `commands` field points Cursor at the flat `./commands` directory) shipping `rules/*.mdc`. They exclude the Codex mirror + tests. It's a **snapshot — re-run after `git pull`** to update. Then **fully restart Cursor** (Cmd-Q / Quit, reopen — a new local plugin needs a full restart) and run `/flow-next:setup` in your project.
 
 ### What works (verified)
 

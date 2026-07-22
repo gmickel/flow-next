@@ -1,5 +1,5 @@
 ---
-name: flow-next:uninstall
+name: uninstall
 description: Remove flow-next files from project
 ---
 

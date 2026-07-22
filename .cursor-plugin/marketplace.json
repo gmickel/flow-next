@@ -11,7 +11,7 @@
     {
       "name": "flow-next",
       "source": "./plugins/flow-next",
-      "description": "Zero-dependency planning + execution with .flow/ task tracking. Spec-driven workflow skills, agents, and commands for Cursor."
+      "description": "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, and receipts. (Ralph autonomous mode is available on other hosts; intentionally not registered on Cursor.)"
     }
   ]
 }

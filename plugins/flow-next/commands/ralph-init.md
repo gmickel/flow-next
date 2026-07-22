@@ -1,5 +1,5 @@
 ---
-name: flow-next:ralph-init
+name: ralph-init
 description: Scaffold repo-local Ralph autonomous harness (scripts/ralph/)
 ---
 

@@ -9,10 +9,11 @@ on:
       # Dogfood copies guarded against template drift (test_dogfood_template_parity).
       - ".flow/usage.md"
       - ".flow/templates/spec.md"
-      # Cursor local-installers live at repo-root scripts/ (1.9.0) — outside
-      # plugins/flow-next/**, so trigger explicitly to run the install smoke.
+      # Cursor + Codex local-installers live at repo-root scripts/ — outside
+      # plugins/flow-next/**, so trigger explicitly to run the install smokes.
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
+      - "scripts/install-codex.sh"
       - "scripts/ci/verify_cursor_install.py"
       # Root Cursor team-marketplace manifest (fn-123) — outside plugins/**
       - ".cursor-plugin/**"
@@ -27,6 +28,7 @@ on:
       - ".flow/templates/spec.md"
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
+      - "scripts/install-codex.sh"
       - "scripts/ci/verify_cursor_install.py"
       - ".cursor-plugin/**"
       - "scripts/run_tests_parallel.py"

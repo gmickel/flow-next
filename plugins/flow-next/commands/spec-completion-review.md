@@ -1,5 +1,5 @@
 ---
-name: flow-next:spec-completion-review
+name: spec-completion-review
 description: Spec completion review - verify implementation matches spec
 argument-hint: "<fn-N> [--review=rp|codex|copilot|cursor|none]"
 ---

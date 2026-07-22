@@ -437,7 +437,7 @@ echo -e "\n${YELLOW}--- Strategy-doc fluff guard (R19) ---${NC}"
 set +e
 FLUFF_HITS="$(grep -RnEi '\bsynergy\b|\bpivot\b|\bdisrupt\b|thought[ -]leadership|best-in-class|world-class|\b10x\b' \
   "$PLUGIN_ROOT/skills/flow-next-strategy/SKILL.md" \
-  "$PLUGIN_ROOT/commands/flow-next/strategy.md" 2>/dev/null \
+  "$PLUGIN_ROOT/commands/strategy.md" 2>/dev/null \
   ; awk '/^def cmd_strategy_/,/^def [^_]/' "$PLUGIN_ROOT/scripts/flowctl.py" 2>/dev/null \
     | grep -nEi '\bsynergy\b|\bpivot\b|\bdisrupt\b|thought[ -]leadership|best-in-class|world-class|\b10x\b' \
     | sed 's|^|flowctl.py(cmd_strategy_*):|')"

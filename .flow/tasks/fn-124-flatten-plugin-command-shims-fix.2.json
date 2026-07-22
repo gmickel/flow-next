@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-22T15:06:53.457374Z",
+  "depends_on": [
+    "fn-124-flatten-plugin-command-shims-fix.1"
+  ],
+  "id": "fn-124-flatten-plugin-command-shims-fix.2",
+  "priority": null,
+  "spec": "fn-124-flatten-plugin-command-shims-fix",
+  "spec_path": ".flow/tasks/fn-124-flatten-plugin-command-shims-fix.2.md",
+  "status": "todo",
+  "title": "Docs sweep + CHANGELOG Unreleased entry",
+  "updated_at": "2026-07-22T15:14:15.546347Z"
+}

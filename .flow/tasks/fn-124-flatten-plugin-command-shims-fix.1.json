@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-22T15:06:53.136072Z",
+  "depends_on": [],
+  "id": "fn-124-flatten-plugin-command-shims-fix.1",
+  "priority": null,
+  "spec": "fn-124-flatten-plugin-command-shims-fix",
+  "spec_path": ".flow/tasks/fn-124-flatten-plugin-command-shims-fix.1.md",
+  "status": "todo",
+  "title": "Flatten command shims + update Cursor manifest, scripts, tests",
+  "updated_at": "2026-07-22T15:14:15.148752Z"
+}
