@@ -249,7 +249,14 @@ wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL r
 its backend rather than the project default. `none` still skips review. (This is why the worker passes
 `--review=$REVIEW_MODE` below — the value already carries the correct explicit-or-per-task precedence.)
 
-**Host review routes OUTSIDE the worker (fn-123 R5).** The worker agent carries `disallowedTools: Task` and cannot dispatch the fresh reviewer subagent the `host` backend requires. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker skips its in-worker review dispatch in Phase 4 (treats it like `none` for dispatch purposes, but does NOT self-certify SHIP) and returns with the task implemented + committed. The HOST (this conductor) then runs `/flow-next:impl-review <task-id> --review=host` itself after the worker returns, and only proceeds on a SHIP verdict. All other backends keep the worker-owned review dispatch unchanged.
+**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE `done`.** The worker agent carries `disallowedTools: Task` and cannot dispatch the fresh reviewer subagent the `host` backend requires. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker, and the completion contract changes:
+
+1. The worker skips its in-worker review dispatch in Phase 4 (never self-certifies SHIP) **and defers Phase 5's `flowctl done`**: it implements, commits, writes its summary + evidence files to the handover paths, and returns WITHOUT calling `flowctl done` (the task stays `in_progress`).
+2. The conductor then runs `/flow-next:impl-review <task-id> --review=host` itself — this is the mandatory gate; `rg host-deferred` in this file must always find it.
+3. On `SHIP`: the conductor runs `flowctl done <task-id> --summary-file <worker summary> --evidence-json <worker evidence>` (append the review receipt path/model to the evidence). On `NEEDS_WORK`: drive the impl-review fix loop (bounded by the standard cap) and only `done` after a SHIP verdict — so review fixes land INSIDE the task's evidence, never after it.
+4. Mirror this exact contract on the Codex mirror path (`$flow-next-work` / `spawn_agent` worker): host-deferred defers `done` there too.
+
+All other backends keep the worker-owned review dispatch + worker-owned `flowctl done` unchanged.
 
 ```
 Implement flow-next task.

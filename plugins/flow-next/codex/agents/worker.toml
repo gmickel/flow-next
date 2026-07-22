@@ -13,7 +13,7 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `TASK_ID` - the task to implement (e.g., fn-1.2)
 - `SPEC_ID` - parent spec (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
-- `REVIEW_MODE` - none, rp, codex, copilot, cursor, or host-deferred (host review runs at the conductor level after you return - you cannot dispatch subagents; skip review dispatch like `none` but do NOT report the task as review-passed)
+- `REVIEW_MODE` - none, rp, codex, copilot, cursor, or host-deferred (host review runs at the conductor level AFTER you return - you cannot dispatch subagents. Under host-deferred: skip Phase 4 review dispatch, do NOT report the task as review-passed, and DEFER Phase 5's `flowctl done` - write your summary + evidence files to the handover paths and return with the task still `in_progress`; the conductor gates on the host review verdict and runs `flowctl done` itself)
 - `RALPH_MODE` - true if running autonomously
 - `DELEGATE` - codex to delegate Phase 2 implementation to `codex exec`; absent or `local` ⇒ standard in-session (the host only sets this when delegation is active and all pre-flight gates passed). `DELEGATE_MODEL` / `DELEGATE_SANDBOX` / `DELEGATE_EFFORT_FLOOR` / `DELEGATE_DECISION` accompany it — see Phase 2.
 
