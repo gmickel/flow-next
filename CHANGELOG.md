@@ -18,6 +18,10 @@ All notable changes to the flow-next.
 - **Print-then-ask read-back contract** for `/flow-next:capture` and `/flow-next:interview`: the full draft prints as ordinary markdown first, then a short approval ask (pointer + tally + options), never a multi-paragraph draft embedded in the question body (which renders as collapsed plain text on every host).
 - **Docs truth pass** (platforms.md, README, installers, flow-next.dev): slash autocomplete lists hyphenated commands, natural-language triggering works, AskUserQuestion renders natively including multi-question batches; Cursor has a full agent-hook set but flow-next intentionally does not build/register Ralph there. Admin onboarding runbook added to `platforms.md`.
 
+### Fixed
+
+- **Flattened plugin command shims: no more tripled names in the Claude Code slash menu (fn-124).** The command shims moved from the plugin-name-colliding `commands/flow-next/` subdirectory to a flat `commands/*.md` layout, and the pre-plugin-era `name: flow-next:<cmd>` frontmatter was dropped so the filename governs. Claude Code now renders `/flow-next:qa` instead of `/flow-next:flow-next:flow-next:qa`. The Cursor manifest `commands` path, Cursor installers and CI verifier, the Codex prompts installer, CI gates, tests, and smoke fixtures were updated in lockstep. The long-dead `epic-review` alias (slated for removal in 2.0.0) is removed on every platform: the Claude/Cursor shim and the Codex redirect skill are gone, and `install-codex.sh` cleans up the stale alias from existing installs on upgrade. A regression test locks the flat layout in place. No version bump; release numbering remains batched.
+
 ## [flow-next 3.2.1] - 2026-07-22
 
 ### Fixed
