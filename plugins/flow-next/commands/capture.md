@@ -1,4 +1,5 @@
 ---
+name: capture
 description: Synthesize the current conversation into a flow-next spec at `.flow/specs/<spec-id>.md` — source-tagged, mandatory read-back, no silent overwrite
 argument-hint: "[mode:autofix] [--rewrite <spec-id>] [--from-compacted-ok] [--yes]"
 ---

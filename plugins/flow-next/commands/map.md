@@ -1,4 +1,5 @@
 ---
+name: map
 description: Wrap `clawpatch map` for a semantic feature index of the repo (~20 languages, provider-free by default)
 argument-hint: "[--source <heuristic|auto|agent>] [-- <extra clawpatch args>]"
 ---

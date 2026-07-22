@@ -207,12 +207,14 @@ class TestComponentFrontmatter(unittest.TestCase):
                     f"{path.name}: empty description",
                 )
 
-    def test_commands_have_description(self) -> None:
+    def test_commands_have_name_and_description(self) -> None:
         # fn-124 flattened the shims out of the plugin-name-colliding nested
-        # command directory to ``commands/*.md`` and dropped the
-        # ``name:`` frontmatter (the basename governs the command name now), so
-        # this checks the flat path and requires ``description`` only — no
-        # ``name`` (see test_command_shim_flatten.py for the flatten guard).
+        # command directory to ``commands/*.md`` and de-prefixed the ``name:``
+        # frontmatter to the BARE command name (``name: qa``, not
+        # ``name: flow-next:qa``). Cursor's marketplace review checklist (R11)
+        # still requires both ``name`` and ``description`` on every command, so
+        # both must stay present; the bare (colon-free) name is what keeps
+        # Claude Code from re-tripling the prefix (see test_command_shim_flatten.py).
         commands = sorted((PLUGIN_DIR / "commands").glob("*.md"))
         self.assertGreater(len(commands), 0)
         for path in commands:
@@ -220,6 +222,7 @@ class TestComponentFrontmatter(unittest.TestCase):
                 fm = _parse_frontmatter(path.read_text(encoding="utf-8"))
                 self.assertIsNotNone(fm, f"{path.name}: missing frontmatter")
                 assert fm is not None
+                self.assertTrue(_nonempty(fm.get("name")), f"{path.name}: empty name")
                 self.assertTrue(
                     _nonempty(fm.get("description")),
                     f"{path.name}: empty description",

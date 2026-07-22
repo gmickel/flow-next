@@ -1,4 +1,5 @@
 ---
+name: work
 description: Execute a plan end-to-end with checks
 argument-hint: "<fn-N or idea> [--branch=current|new|worktree] [--review=rp|export|none] [delegate:codex|delegate:local]"
 ---

@@ -4,6 +4,14 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Flattened plugin command shims: no more tripled names in the Claude Code slash menu (fn-124).** The command shims moved from the plugin-name-colliding `commands/flow-next/` subdirectory to a flat `commands/*.md` layout, and the pre-plugin-era `name: flow-next:<cmd>` frontmatter was de-prefixed to the bare command name (`name: qa`) so Claude Code's plugin prefix is prepended exactly once. Claude Code now renders `/flow-next:qa` instead of `/flow-next:flow-next:flow-next:qa`, while every command keeps the `name` + `description` frontmatter Cursor's marketplace review checklist requires (fn-123 R11). The Cursor manifest `commands` path, Cursor installers and CI verifier, the Codex prompts installer, CI gates, tests, and smoke fixtures were updated in lockstep. The long-dead `epic-review` alias (slated for removal in 2.0.0) is removed on every platform: the Claude/Cursor shim and the Codex redirect skill are gone, and `install-codex.sh` cleans up the stale alias from existing installs on upgrade. A regression test locks the flat layout in place. No version bump; release numbering remains batched.
+
+### Changed
+
+- **Plugin manifest descriptions aligned to the flow-next.dev messaging register.** The `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `.cursor-plugin/marketplace.json` plugin descriptions now read "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, and receipts." — matching the README hero and the `.cursor-plugin/plugin.json` line — and the component counts are corrected to the current 22 subagents / 23 commands / 28 skills. No version bump.
+
 ## [flow-next 3.3.0] - 2026-07-22
 
 ### Added
@@ -17,10 +25,6 @@ All notable changes to the flow-next.
 - **Setup is host-aware on Cursor.** Platform detection uses a positive signal (resolved plugin root under `~/.cursor/`) instead of `codex/`-directory absence, so whole-repo marketplace imports classify correctly; the review-backend menu leads with `host`; setup scaffolds the AGENTS.md model-routing section with live Cursor slugs + dispatch-pin rules (cheap scout pin, cross-family review pin, inherit otherwise). `agents/*.md` family aliases degrade to inherit (session model) on Cursor; caller-side pins are the escape hatch (no alias-to-slug rewrite).
 - **Print-then-ask read-back contract** for `/flow-next:capture` and `/flow-next:interview`: the full draft prints as ordinary markdown first, then a short approval ask (pointer + tally + options), never a multi-paragraph draft embedded in the question body (which renders as collapsed plain text on every host).
 - **Docs truth pass** (platforms.md, README, installers, flow-next.dev): slash autocomplete lists hyphenated commands, natural-language triggering works, AskUserQuestion renders natively including multi-question batches; Cursor has a full agent-hook set but flow-next intentionally does not build/register Ralph there. Admin onboarding runbook added to `platforms.md`.
-
-### Fixed
-
-- **Flattened plugin command shims: no more tripled names in the Claude Code slash menu (fn-124).** The command shims moved from the plugin-name-colliding `commands/flow-next/` subdirectory to a flat `commands/*.md` layout, and the pre-plugin-era `name: flow-next:<cmd>` frontmatter was dropped so the filename governs. Claude Code now renders `/flow-next:qa` instead of `/flow-next:flow-next:flow-next:qa`. The Cursor manifest `commands` path, Cursor installers and CI verifier, the Codex prompts installer, CI gates, tests, and smoke fixtures were updated in lockstep. The long-dead `epic-review` alias (slated for removal in 2.0.0) is removed on every platform: the Claude/Cursor shim and the Codex redirect skill are gone, and `install-codex.sh` cleans up the stale alias from existing installs on upgrade. A regression test locks the flat layout in place. No version bump; release numbering remains batched.
 
 ## [flow-next 3.2.1] - 2026-07-22
 

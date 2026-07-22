@@ -1,4 +1,5 @@
 ---
+name: plan-review
 description: Carmack-level plan review via RepoPrompt or Codex
 argument-hint: "<fn-N> [--review=rp|codex|copilot|cursor|none] [focus areas]"
 ---

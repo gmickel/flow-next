@@ -1,4 +1,5 @@
 ---
+name: memory-migrate
 description: Migrate legacy `.flow/memory/{pitfalls,conventions,decisions}.md` flat files into the categorized YAML schema — host agent classifies each entry directly
 argument-hint: "[mode:autofix] [optional scope hint — e.g. pitfalls.md]"
 ---

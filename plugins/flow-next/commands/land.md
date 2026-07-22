@@ -1,4 +1,5 @@
 ---
+name: land
 description: Cadence-tick autonomous PR babysitter (CI-fix, resolve, converge, merge, close, release)
 argument-hint: "[--dry-run]"
 ---

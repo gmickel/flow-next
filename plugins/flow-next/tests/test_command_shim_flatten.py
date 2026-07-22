@@ -5,15 +5,20 @@ Claude Code's slash menu rendered flow-next command shims as
 plugin-name-colliding nested command directory AND carried
 pre-plugin-era frontmatter `name: flow-next:<cmd>` (colon inside `name` is
 literal under v2.1.216+ last-segment semantics). The fix flattened the shims
-to `commands/*.md`, dropped the `name:` field so the basename governs, pointed
-the Cursor manifest at `./commands`, and deleted the dead epic-review alias.
+to `commands/*.md` and de-prefixed the `name:` field to the BARE command name
+(`name: qa`, not `name: flow-next:qa`) so the plugin prefix is prepended
+exactly once, pointed the Cursor manifest at `./commands`, and deleted the
+dead epic-review alias. The bare name (not a removed name) is deliberate:
+Cursor's marketplace review checklist (fn-123 R11) requires every command to
+carry both `name` and `description`, so the name stays present — just
+colon-free.
 
 This test pins all of that so a regression can't sneak back in:
 
   (a) no plugin-name-colliding nested command directory exists
   (b) >= 23 flat `commands/*.md` shims exist
   (c) `.cursor-plugin/plugin.json` `commands` field == `./commands`
-  (d) no shim frontmatter `name:` contains a colon (none should exist at all)
+  (d) every shim carries a `name:` (fn-123 R11) and no `name:` contains a colon
   (e) `epic-review.md` is absent (alias removed on all platforms)
 
 Run:
@@ -72,18 +77,28 @@ class TestCursorPluginSurface(unittest.TestCase):
             "./commands dir (kept in lockstep with the shim layout).",
         )
 
-    def test_no_shim_frontmatter_name_with_colon(self) -> None:
+    def test_every_shim_has_bare_colon_free_name(self) -> None:
         for shim in self.shims:
             with self.subTest(shim=shim.name):
                 fm = _frontmatter(shim.read_text(encoding="utf-8"))
-                for m in FRONTMATTER_NAME.finditer(fm):
+                names = FRONTMATTER_NAME.findall(fm)
+                # (fn-123 R11) every command must carry a name for Cursor's
+                # marketplace review checklist.
+                self.assertTrue(
+                    names,
+                    f"{shim.name}: missing frontmatter 'name:' -- Cursor's "
+                    "marketplace review checklist (fn-123 R11) requires it.",
+                )
+                for value in names:
+                    # (fn-124) the name must be bare/colon-free: under Claude
+                    # Code v2.1.216+ the plugin prefix is always prepended, so a
+                    # namespaced name renders a doubled prefix.
                     self.assertNotIn(
                         ":",
-                        m.group(1),
-                        f"{shim.name}: frontmatter name '{m.group(1)}' contains "
-                        "a colon -- under Claude Code v2.1.216+ semantics the "
-                        "plugin prefix is always prepended, so a namespaced "
-                        "name renders doubled (fn-124).",
+                        value,
+                        f"{shim.name}: frontmatter name '{value}' contains a "
+                        "colon -- it renders doubled on Claude Code (fn-124). "
+                        "Use the bare command name, e.g. 'name: qa'.",
                     )
 
     def test_epic_review_alias_deleted(self) -> None:
