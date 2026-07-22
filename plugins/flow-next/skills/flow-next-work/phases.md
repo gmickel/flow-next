@@ -249,13 +249,15 @@ wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL r
 its backend rather than the project default. `none` still skips review. (This is why the worker passes
 `--review=$REVIEW_MODE` below — the value already carries the correct explicit-or-per-task precedence.)
 
+**Host review routes OUTSIDE the worker (fn-123 R5).** The worker agent carries `disallowedTools: Task` and cannot dispatch the fresh reviewer subagent the `host` backend requires. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker skips its in-worker review dispatch in Phase 4 (treats it like `none` for dispatch purposes, but does NOT self-certify SHIP) and returns with the task implemented + committed. The HOST (this conductor) then runs `/flow-next:impl-review <task-id> --review=host` itself after the worker returns, and only proceeds on a SHIP verdict. All other backends keep the worker-owned review dispatch unchanged.
+
 ```
 Implement flow-next task.
 
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
-REVIEW_MODE: none|rp|codex|copilot|cursor|host
+REVIEW_MODE: none|rp|codex|copilot|cursor|host-deferred
 RALPH_MODE: true|false
 
 Follow your phases in worker.md exactly.

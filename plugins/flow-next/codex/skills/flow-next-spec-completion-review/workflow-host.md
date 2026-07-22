@@ -29,7 +29,7 @@ Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
 | Host | How to pin |
 |------|------------|
 | Claude Code | Native subagent `model` param; `disallowedTools: Edit, Write, Task` (or host read-only equivalent) |
-| Cursor | In-prompt slug pin on the subagent (Cursor honors in-prompt model pins) |
+| Cursor | In-prompt slug pin on the subagent + TOOL-enforced read-only (dispatch via a `readonly: true` agent definition or Cursor's read-only subagent mode — never a mutation-capable subagent; the reviewer reads untrusted diff content, so read-only cannot be prompt-requested only) |
 | Other | Generic fresh-context reviewer; note in the receipt that pin enforcement is host-dependent |
 
 Give the subagent:
@@ -60,6 +60,7 @@ Write:
  "model": "<actual-reviewer-slug>",
  "spec": "host",
  "session_id": null,
+ "review": "<full reviewer output text - findings + verdict>",
  "timestamp": "<ISO-8601>"
 }
 ```
