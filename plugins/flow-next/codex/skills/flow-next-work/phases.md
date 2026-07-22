@@ -236,7 +236,7 @@ Use the **worker** agent role to implement the task. The worker gets fresh conte
 - Implementation
 - Committing
 - Review cycles (if enabled)
-- Completing the task (flowctl done)
+- Completing the task (flowctl done) — EXCEPT under `REVIEW_MODE: host-deferred`, where the worker defers `flowctl done` and the conductor's 3d.0 gate owns completion
 
 **`REVIEW_MODE` is per-task, not a fixed run-wide value.** Resolve it for THIS task: if the user
 passed an explicit `--review=<backend>` to `/flow-next:work`, use that (a deliberate run-wide override
@@ -272,10 +272,11 @@ $FLOWCTL show <task-id> --json
 
 A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification:
 
-1. Confirm the worker's handover: commits present since `BASE_COMMIT`, summary + evidence files at the handover paths it reported. (Missing handover WITH `in_progress` status = genuine worker failure — fall through to the failure path below.)
-2. Run the mandatory gate: `/flow-next:impl-review <task-id> --base $BASE_COMMIT --review=host`.
-3. On `SHIP`: run `$FLOWCTL done <task-id> --summary-file <worker summary> --evidence-json <worker evidence>` (append the review receipt path + reviewer model to the evidence JSON first), then re-run `$FLOWCTL show` — status is now `done`; continue to 3d.1/plan-sync as normal.
-4. On `NEEDS_WORK`: drive the impl-review fix loop (standard bounded cap); `done` only after a SHIP verdict. On cap exhaustion: escalate exactly like the failure path below (NEEDS_HUMAN under autonomy; surface and stop interactively).
+1. Re-read the task's base FIRST — shell vars never survive across contexts: `BASE_COMMIT=$(cat .flow/tmp/base_commit)` (the worker persisted it in Phase 1). If the file is missing/empty, derive it from the worker's reported base or `$FLOWCTL show` metadata — never run the gate with an unset base (an empty `--base` silently widens the review beyond the task diff).
+2. Confirm the worker's handover: commits present since `$BASE_COMMIT`, summary + evidence files at the handover paths it reported. (Missing handover WITH `in_progress` status = genuine worker failure — fall through to the failure path below.)
+3. Run the mandatory gate: `$flow-next-impl-review <task-id> --base $BASE_COMMIT --review=host`.
+4. On `SHIP`: UPDATE the evidence JSON before completing — append the review receipt path + reviewer model, AND when the fix loop committed changes (step 5), add those commits and any test commands run during fixes (the worker's pre-review evidence alone omits exactly the changes that earned the SHIP). Then run `$FLOWCTL done <task-id> --summary-file <worker summary> --evidence-json <updated evidence>` and re-run `$FLOWCTL show` — status is now `done`; continue to 3d.1/plan-sync as normal.
+5. On `NEEDS_WORK`: drive the impl-review fix loop (standard bounded cap); `done` only after a SHIP verdict (whose evidence update in step 4 captures the fix commits). On cap exhaustion: escalate exactly like the failure path below (NEEDS_HUMAN under autonomy; surface and stop interactively).
 
 Only after this gate does the standard rule below apply to host-deferred tasks.
 

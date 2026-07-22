@@ -341,6 +341,12 @@ done
 # flow-next-work: phases.md
 phases="$CODEX_DIR/skills/flow-next-work/phases.md"
 if [ -f "$phases" ]; then
+  # fn-123 R5: the 3d.0 host-deferred gate is an ACTIONABLE invocation — rewrite
+  # the canonical slash-command to the Codex skill name (passive /flow-next:
+  # mentions elsewhere stay; this one the agent must execute).
+  sed -i.bak 's|`/flow-next:impl-review <task-id> --base \$BASE_COMMIT --review=host`|`$flow-next-impl-review <task-id> --base $BASE_COMMIT --review=host`|g' "$phases"
+  rm -f "${phases}.bak"
+
   # Replace section 3c with agent invocation
   start_line=$(grep -n "^### 3c\. Spawn Worker" "$phases" | cut -d: -f1)
   end_line=$(grep -n "^### 3d\." "$phases" | cut -d: -f1)
@@ -355,7 +361,7 @@ Use the **worker** agent role to implement the task. The worker gets fresh conte
 - Implementation
 - Committing
 - Review cycles (if enabled)
-- Completing the task (flowctl done)
+- Completing the task (flowctl done) — EXCEPT under `REVIEW_MODE: host-deferred`, where the worker defers `flowctl done` and the conductor's 3d.0 gate owns completion
 
 **`REVIEW_MODE` is per-task, not a fixed run-wide value.** Resolve it for THIS task: if the user
 passed an explicit `--review=<backend>` to `/flow-next:work`, use that (a deliberate run-wide override

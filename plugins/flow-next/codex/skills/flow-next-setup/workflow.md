@@ -844,7 +844,7 @@ _Scaffolded by `/flow-next:setup` on Cursor (<YYYY-MM-DD>). Model ids are volati
 - Host review (`review.backend host`): pin `<REVIEW_PIN>` (cross-family; never same-family self-review).
 - Implementation, plan, judgment, and all other work: **inherit** the session model unless the user pins otherwise.
 - Reviews prefer a different family than the writer — uncorrelated blind spots.
-- Graceful degrade: unavailable slug → fall back to the session model; never block.
+- Graceful degrade: unavailable slug → fall back to the session model; never block. **EXCEPTION — host review:** the `REVIEW_PIN` never degrades to the session model (that would silently turn the required cross-family review into same-family self-review). If the pin is unavailable, host review fails closed per its own rule: interactive → ask for a replacement pin; autonomous → NEEDS_HUMAN. Re-run `/flow-next:setup` to refresh the pin.
 <!-- flow-next:model-routing:end -->
 ```
 
