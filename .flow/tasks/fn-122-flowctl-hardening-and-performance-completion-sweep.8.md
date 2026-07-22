@@ -31,6 +31,6 @@ Completed the memory, pilot-log, and frontmatter performance pass.
 
 Deterministic evidence: exact full-ID lookup dropped from 48 reads to 1 on the 24-entry fixture; metadata/search scans dropped from 2N to N reads; steady-state pilot tick 41 dropped from 40 historical-row reads to 1 commit-witness read. Live memory-list timing remained at a 0.19s median (no regression).
 ## Evidence
-- Commits: ef54951d, a3f5aa37, 5327eed5, 8928e69a
+- Commits: ae9b5b4e, f30cc2d6, 1a7a3ae1, 589ba7a5
 - Tests: cd plugins/flow-next/tests && PATH=/opt/homebrew/bin:$PATH PYTHON_BIN=/opt/homebrew/bin/python3 /opt/homebrew/bin/python3 -m unittest test_memory_performance test_memory_list_read_search test_memory_during_spec_null_safe test_frontmatter_performance test_pilot_log test_pilot_backlog_substrate test_startup_bootstrap -q (105 passed), canonical/dogfood flowctl.py cmp parity, git diff --check
 - PRs:

@@ -26,6 +26,6 @@ Quick commands:
 ## Done summary
 Established Python 3.11 as the minimum runtime across every launcher, generated copy, docs surface, and CI lane. Shipped source-authoritative static fast paths for exact usage and non-interactive root help, with authenticated help/source pairing and safe fallback for stale, corrupt, mixed-version, custom-width, and interactive cases. Rejected executable bytecode caching after proving its payload trust gap. Recorded same-machine evidence showing 67–72% lower help/usage latency and no ordinary-path regression above 1.7%.
 ## Evidence
-- Commits: 1884e301, 761a520c, f81ce041, 2e4d4c8f
+- Commits: 4043112b, 636a11a1, 2a8ff0a9, 45c725d2
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_startup_bootstrap test_init_stamp_launchers test_bin_launcher_parity test_cmd_usage test_setup_mode_stamp test_precheck_mode_contract test_dogfood_template_parity test_ralph_docs_truth test_ralphctl test_install_cursor_parity -q (73 tests), bash plugins/flow-next/scripts/pick_python_test.sh (14 tests), ./scripts/sync-codex.sh && ./scripts/sync-codex.sh, claude plugin validate plugins/flow-next, python3 -m py_compile canonical and dogfood flowctl/bootstrap copies, same-machine 12-process startup benchmark with two warmups discarded
 - PRs:

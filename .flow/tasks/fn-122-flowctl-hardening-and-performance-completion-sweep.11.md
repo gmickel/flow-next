@@ -64,6 +64,6 @@ Root Unreleased and flow-next.dev describe the actual source-authoritative stati
 
 Retained/deferred findings: no correctness or performance finding remains open in fn-122. Actual Windows-host CI remains the post-PR platform execution surface; local tests exercise the portable lock contract and generated Windows launchers. No version bump or release occurred.
 ## Evidence
-- Commits: ea1b82c9, 3a326a59
+- Commits: 54ccb097, 8618b360
 - Tests: Python 3.11.14: python3.11 scripts/run_tests_parallel.py (2056 passed, 0 failures/errors, 3 skips), Python 3.14.5: python3 scripts/run_tests_parallel.py (2057 passed, 0 failures/errors, 3 skips), plugins/flow-next/scripts/ci_test.sh (67 passed, 0 failed), plugins/flow-next/scripts/smoke_test.sh with full PATH (136 passed, 0 failed; Codex and Copilot live reviews passed), test_hot_path_sweep test_task_inventory test_prime_performance test_export_cognitive_aid test_memory_performance test_pilot_log test_portable_locks test_startup_bootstrap (65 passed), test_rp_wrappers test_startup_bootstrap on Python 3.11 and 3.14 (30 passed on each), scripts/sync-codex.sh twice; generated mirror unchanged, claude plugin validate plugins/flow-next (passed), canonical/dogfood flowctl.py, bootstrap, and help cmp parity (passed), flow-next.dev bun x pnpm build (0 Astro diagnostics, 74 pages), live RepoPrompt CE 1.1.0 wrapper/reuse smoke (all wrappers passed; window 2 reused; chat id preserved), same-machine 12-process benchmark with two warmups discarded (10 measured runs per path; no comparable regression over 10%)
 - PRs:

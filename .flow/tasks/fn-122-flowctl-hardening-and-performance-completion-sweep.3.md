@@ -25,6 +25,6 @@ Quick commands:
 ## Done summary
 Made model-resolution caching intent-aware and bounded: cache identity now includes backend, CLI version, and routing intent; entries expire after 24 hours; malformed or stale signatures self-heal; and explicit pins continue to bypass auto-resolution. Serialized cache mutations preserve unrelated entries across concurrent puts and invalidations, while pruning obsolete same-backend keys to avoid growth and repeat probes.
 ## Evidence
-- Commits: 85b414be, e3fae840
+- Commits: 07a88207, 53083ad6
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_model_resolution test_backend_spec test_config_snapshot test_anchor_bundle test_pilot_backlog_substrate -q (292 tests passed), python3 -m py_compile plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py, cmp -s plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py
 - PRs:

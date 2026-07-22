@@ -25,6 +25,6 @@ Quick commands:
 ## Done summary
 Optimized Prime classification without changing its JSON contract: Pascal/Delphi atomic-pair matching now builds one lowercase inventory; root realpath resolution is fingerprint-cached while every target containment check remains live; independent lifecycle/docs Git probes run concurrently with ordered, fail-soft sequential fallback; and streamed Git inventory always closes/reaps its process handles. Added deterministic asymptotic, containment-retarget, concurrency/fallback, and resource-cleanup tests.
 ## Evidence
-- Commits: f75a17d6, 6b814891
+- Commits: 0967ac38, 318feb9d
 - Tests: PATH=/opt/homebrew/bin:$PATH PYTHON_BIN=/opt/homebrew/bin/python3 /opt/homebrew/bin/python3 -m unittest test_prime_eval test_prime_performance test_startup_bootstrap test_hot_path_memoization -q (220 tests), Prime classify JSON SHA-256 matches pre-change output byte-for-byte, Prime classify warm median: 0.5742s before, 0.4758s after (10 runs after 2 warmups; 17.1% faster), flowctl codex impl-review --base e47ee9ac (round 2 SHIP)
 - PRs:

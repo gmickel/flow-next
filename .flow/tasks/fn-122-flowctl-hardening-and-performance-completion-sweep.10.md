@@ -30,6 +30,6 @@ Repaired the active post-3.1 command and payload contract across README, plugin/
 
 Verification: 134 focused fn-121/fn-122 contract tests passed; sync-codex ran twice idempotently; plugin validation passed; isolated deterministic shell smoke passed 131/131; flow-next.dev Astro check/build passed with 0 diagnostics and 74 pages; Copilot implementation review reached SHIP after one fix round. A full-PATH smoke additionally passed 135/136: Codex plan-review and both Copilot live reviews passed, while one Codex impl-review call returned exit 2. That backend-specific anomaly is retained for task .11's explicit integration reproduction.
 ## Evidence
-- Commits: 36341f3c
+- Commits: 4194eb6e
 - Tests: ./scripts/sync-codex.sh && ./scripts/sync-codex.sh, cd plugins/flow-next/tests && python3 -m unittest test_cmd_usage test_setup_block_helper test_setup_mode_stamp test_precheck_mode_contract test_startup_bootstrap test_skill_prose_diet test_template_canonical test_flowctl_surface test_sync_check -q (134 passed), claude plugin validate plugins/flow-next, PATH=/usr/bin:/bin PYTHON_BIN=/opt/homebrew/bin/python3 plugins/flow-next/scripts/smoke_test.sh from /tmp (131 passed, 0 failed; optional model CLIs skipped), cd /Users/gordon/work/flow-next.dev && bun x pnpm build (Astro check 0 diagnostics; 74 pages built), flowctl copilot impl-review fn-122...10 --base f7d24e83 (SHIP after one fix round)
 - PRs:

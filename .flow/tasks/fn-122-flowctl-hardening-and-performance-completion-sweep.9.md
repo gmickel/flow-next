@@ -45,6 +45,6 @@ Completed the dead-surface, focused-coverage, and RepoPrompt CE compatibility pa
 
 Live CE 1.1.0 evidence: first empty-repo setup created window 3 and the immediate repeat reused window 3; two setup calls for this worktree both reused window 2. Prompt get/set, selection get/add, prompt export, and chat-send all succeeded; chat returned `CE_SMOKE_OK`. Classic 2.1.33 remained installed but was never selected.
 ## Evidence
-- Commits: a999399f, 0e9728ff, c029d0eb, 7317a713
+- Commits: c0dcc36d, 1e21e5c5, d70e4942, b5b97905
 - Tests: 246 focused RP/surface/review/backend/hot-path/inventory/startup tests passed, plugins/flow-next/scripts/ci_test.sh: 67 passed, 0 failed, plugins/flow-next/scripts/strategy_smoke_test.sh: 62 passed, 0 failed, scripts/sync-codex.sh twice: idempotent validation passed, RepoPrompt CE 1.1.0 live: first-run create, repeated same-window reuse, prompt-get, prompt-set, select-get, select-add, prompt-export, chat-send, canonical/dogfood flowctl.py cmp parity and bootstrap hash tests, Codex implementation review round 4: SHIP
 - PRs:
