@@ -1,21 +1,15 @@
 ---
-satisfies: [R2, R3, R6]
+satisfies: [R4]
 ---
-# fn-126-grok-build-host-fidelity-positive.2 Implement the investigation-selected Grok setup profile
+# fn-126-grok-build-host-fidelity-positive.2 Executable detection test + Codex mirror guard
 
 ## Description
-Implement the investigation-selected Grok setup profile. Update flow-next-setup/workflow.md; add test_setup_grok_host.py; touch sync-codex.sh only where the chosen branch requires; regenerate codex/skills/flow-next-setup/workflow.md. Audit EVERY PLATFORM consumer (manifest, setup mode, Codex-only agent copy, snippet family, docs target, review menu, model-routing target/syntax, Ralph handling, summary).
-POSITIVE-SIGNAL branch: add `PLATFORM=grok` BEFORE the else->codex fallback, guarded against Codex-launched-from-a-Grok-shell.
-NO-SIGNAL branch: the unknown-host path ASKS Grok-vs-Codex before Step 1 / any write; cancel or non-interactive ambiguity -> NEEDS_HUMAN; the Codex mirror stays deterministically Codex (does not inherit the ambiguity). Manual selection is run-scoped (no stale repo-level host override).
-Grok profile: .claude-plugin/plugin.json, copy mode, .flow/bin/flowctl, CLAUDE.md default, claude-md-snippet.md, `/flow-next:*` slash syntax, NO .codex/agents, host-aware review menu incl. `host` (with the fail-closed cross-family caveat) + external backends, NO Ralph offer/registration. A pre-existing wrong Codex `$flow-next-*` marker block can be consentfully refreshed to the Grok slash snippet without touching text outside the markers.
+Testability + Codex mirror. Add an EXECUTABLE detection test (plugins/flow-next/tests/test_setup_grok_host.py or extend the setup-host test): extract the Step-0 fenced bash from flow-next-setup/workflow.md and run it under fake-env fixtures - assert `GROK_AGENT=1` (no higher signal) -> PLATFORM=grok; inherited-env/precedence cases (DROID/CLAUDE/CURSOR present alongside GROK_AGENT) classify by the higher-precedence host; plain -> codex; no regression to the existing matrix. Update scripts/sync-codex.sh: the regenerated codex mirror of the setup workflow must render a real Codex host deterministically as `codex` (the mirror cascade carries NO grok rung - Codex consumes the mirror, canonical-file hosts consume canonical), enforced by a hard-fail sync guard (fn-100 pattern); regenerate the mirror. Covers R4.
 
 ## Acceptance
-- Executable fixture matrix: Droid, Claude Code, Cursor, Codex, Grok, non-Grok-host-with-Grok-installed, Codex-from-Grok-shell.
-- No PATH/home/config/hook-only var auto-classifies Grok.
-- Grok -> slash/canonical-copy profile; Codex keeps `$flow-next-*` + Codex project setup.
-- Wrong Codex-shaped marker consentfully refreshable to Grok slash snippet, marker-scoped only.
-- Grok review menu includes `host` (fail-closed caveat) + external backends; no unsupported routing advertised; Grok skips Ralph entirely.
-- New test <500 LOC; workflow edits narrow, no duplicated host blocks; sync-codex twice-idempotent.
+- Executable fixture runs the actual detection bash (not a prose regex): GROK_AGENT=1 -> grok; precedence cases correct; plain -> codex; Droid/Claude/Cursor/Codex unregressed.
+- sync-codex hard-fail guard asserts the mirror setup cascade contains no grok rung / no GROK_AGENT branch; `./scripts/sync-codex.sh` twice-idempotent (byte-identical 2nd pass).
+- Focused suites green: `cd plugins/flow-next/tests && python3 -m unittest test_setup_grok_host test_setup_cursor_host -q`.
 
 
 ## Done summary

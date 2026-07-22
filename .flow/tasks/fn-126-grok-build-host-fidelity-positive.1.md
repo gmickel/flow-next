@@ -1,17 +1,17 @@
 ---
-satisfies: [R1]
+satisfies: [R1, R2, R3]
 ---
-# fn-126-grok-build-host-fidelity-positive.1 Investigate a reliable Grok session signal (live)
+# fn-126-grok-build-host-fidelity-positive.1 Setup: GROK_AGENT detection rung + Grok host profile
 
 ## Description
-INVESTIGATION GATE (NEEDS-HUMAN, live Grok) - no detector ships before this evidence exists. In two fresh real Grok Build sessions, probe the ordinary skill-shell environment BEFORE setup runs; record sanitized findings + the branch decision in a new `## Investigation outcome` section of the spec. Capture: env var NAMES (never values), resolved plugin root/manifest, grok version/mode, command path, parent-process comm names, `grok inspect --json` if it exists, candidate ~/.grok/ markers. Repeat from a plain shell AND from Codex on the same machine (incl. Codex launched from a Grok-owned shell if possible) as negative controls. A candidate signal is accepted ONLY if it identifies the ACTIVE host (not merely a Grok install) and does NOT leak into the Codex control. Reject GROK_PLUGIN_ROOT/GROK_HOME/.grok//grok-on-PATH/process-ancestry unless live evidence + an official xAI contract make it reliable. Likely outcome (per xAI docs): manual-selection branch.
+Setup: add the positive Grok detection rung + the Grok host profile. In plugins/flow-next/skills/flow-next-setup/workflow.md platform-detection block: add `elif [ -n "${GROK_AGENT:-}" ]` -> `PLATFORM=grok` BEFORE the `else -> codex` fallback and AFTER the DROID/CLAUDE_PLUGIN_ROOT/CURSOR rungs (a real Droid/Claude/Cursor host that inherited GROK_AGENT from a parent grok shell must still classify by its own higher-precedence signal). Add a short rationale paragraph citing the probe evidence (GROK_AGENT=1 set by grok; ~/.grok and PATH rejected as non-signals). Then the Grok PROFILE across every PLATFORM consumer: docs snippet = `/flow-next-` slash syntax to CLAUDE.md (canonical target), copy mode, `.flow/bin/flowctl`, NO `.codex/agents` copy, NO Ralph offer/registration; consent-refresh a pre-existing wrong Codex `$flow-next-` marker block to the slash form (marker-scoped). Review menu on grok: offer `host` (fail-closed cross-family caveat) + rp/codex/copilot/cursor/none. Extend the host-native model-routing scaffold (currently PLATFORM=cursor-gated) to platform=grok, enumerating Grok's available models at setup (grok models / equivalent); document that Grok is single-native-family (grok-4.5) so native host review fails closed unless the writer is non-Grok, cross-family via bridges. Covers R1,R2,R3.
 
 ## Acceptance
-- Evidence: grok version/mode, two Grok sessions, same-machine negative controls (plain shell + Codex, incl. Codex-from-Grok-shell if possible).
-- Candidate accepted only if it identifies the active host and is absent in the Codex control.
-- Fragile signals (PATH/home/config/hook-only/process-name) rejected without a stable official contract.
-- Outcome selects ONE branch: `positive signal` (exact predicate + false-positive guard) OR `no reliable signal` (manual-selection fallback).
-- NEEDS-HUMAN: probes run inside real Grok Build; secret redaction + reproducibility reviewed.
+- `GROK_AGENT` rung added before `else->codex`, after DROID/CLAUDE/CURSOR; ordering keeps inherited-GROK_AGENT hosts correctly classified.
+- Probe evidence (GROK_AGENT=1) cited in the workflow rationale; ~/.grok + PATH explicitly noted as non-signals.
+- grok profile: `/flow-next-` slash snippet to CLAUDE.md, copy mode, `.flow/bin/flowctl`, no `.codex/agents`, no Ralph; wrong Codex `$` block consent-refreshed marker-scoped.
+- grok review menu offers `host` (fail-closed caveat) + external backends; host-native model-routing scaffold fires for platform=grok with enumerated grok models; single-family fail-closed behavior documented.
+- NEEDS-HUMAN smoke: standalone grok session (not launched from another agent) -> `/flow-next:setup` reports platform=grok, writes the slash snippet to CLAUDE.md, no `.codex/agents`, Ralph not offered.
 
 
 ## Done summary

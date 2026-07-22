@@ -2,13 +2,13 @@
   "assignee": null,
   "claim_note": "",
   "claimed_at": null,
-  "created_at": "2026-07-22T19:36:19.274122Z",
+  "created_at": "2026-07-22T20:46:16.379868Z",
   "depends_on": [],
   "id": "fn-126-grok-build-host-fidelity-positive.1",
   "priority": null,
   "spec": "fn-126-grok-build-host-fidelity-positive",
   "spec_path": ".flow/tasks/fn-126-grok-build-host-fidelity-positive.1.md",
   "status": "todo",
-  "title": "Investigate a reliable Grok session signal (live)",
-  "updated_at": "2026-07-22T19:36:19.274122Z"
+  "title": "Setup: GROK_AGENT detection rung + Grok host profile",
+  "updated_at": "2026-07-22T20:46:16.379868Z"
 }

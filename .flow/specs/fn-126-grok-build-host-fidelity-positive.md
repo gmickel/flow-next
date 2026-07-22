@@ -1,44 +1,52 @@
 ## Goal & Context
 
-Grok Build (xAI's `grok` CLI) is listed as a verified-compat host that reads the canonical Claude plugin format directly. Dogfood (2026-07-22, grok-dogfood-330) found it is **undetected** by the flow-next-setup platform cascade and falls through the `else -> codex` catch-all, so it is treated as Codex.
+Grok Build (xAI's `grok` CLI) is a verified-compat host that reads the canonical Claude plugin format directly. Dogfood (2026-07-22, grok-dogfood-330) found it **undetected** by the `/flow-next:setup` platform cascade: it falls through the `else -> codex` catch-all, so setup wrote the docs snippet to `AGENTS.md` with **`$flow-next-setup`** (Codex `$` command syntax) even though Grok drives with **`/flow-next-setup`** (slash) and reads the canonical Claude files, not the Codex mirror. Setup otherwise ran fine (copy mode, flowctl via `.flow/bin`, model-routing scaffold written, AskUserQuestion rendered).
 
-Impact (confirmed): `/flow-next-setup` on Grok wrote the docs snippet to **AGENTS.md** with **`$flow-next-setup`** (Codex command syntax) - but Grok drives with **`/flow-next-setup`** (slash form, like Cursor/Claude) and reads the canonical Claude files, NOT the Codex mirror. So the written guidance tells the agent to invoke commands the wrong way. Setup otherwise ran fine (copy mode, flowctl via `.flow/bin`, model-routing scaffold written). A second, likely-separate symptom: Grok's slash-command menu under-lists flow-next commands ("can't find flow-next-setup / analyse") - probably the fn-124 command-shim structure issue.
+The original spec assumed Grok exposed **no** host signal (so it planned a heavy investigation gate + a manual-host-selection fallback). A follow-up non-interactive probe **disproved that**: there is a clean positive signal. This spec is now small: add a `GROK_AGENT` detection rung + a Grok host profile, mirroring the existing Cursor rung.
 
-Detection is the hard part: `env | grep -iE 'grok|xai'` in a Grok session shows **no host env var** (only `~/.grok/bin` on PATH and shell completions) - unlike Cursor (`CURSOR_AGENT`), Droid (`DROID_PLUGIN_ROOT`), or Claude (`CLAUDE_PLUGIN_ROOT`). So the env-var cascade cannot cleanly catch Grok, and it precedes `codex` only if a positive signal exists.
+## Investigation outcome (RESOLVED — 2026-07-22, non-interactive probe)
+
+Ran a probe script inside a real grok session (`grok --always-approve -m grok-4.5 -p "run probe.sh > /tmp/out"`) and diffed its shell environment against a plain-shell control on the same machine/profile:
+
+- **`GROK_AGENT=1` is set in grok's shell environment** and is ABSENT from the plain-shell control. It is set BY grok (not the user's profile). This is the direct analog of `CURSOR_AGENT` / `CLAUDECODE` / `CLAUDE_PLUGIN_ROOT`.
+- Corroborating: the process ancestry from grok's shell shows a `grok` process in the chain (second signal if the env var ever regressed).
+- Rejected non-signals (confirmed against the control): `~/.grok/` directory EXISTS on the machine regardless (install dir), and `~/.grok/bin` is on `PATH` regardless (shell profile) — neither distinguishes a grok session. Fable's caution was right; only `GROK_AGENT` survives.
+- Test-method caveat: the probe launched grok FROM a Claude Code shell, so grok's env also inherited `CLAUDECODE=1` etc. — a standalone grok session won't have those. Crucially `CLAUDE_PLUGIN_ROOT` (the actual cascade key) did NOT propagate, so the existing Claude rung does not misfire. A standalone-session confirmation is a NEEDS-HUMAN smoke (R1).
 
 ## Architecture & Data Models
 
-- Grok reads canonical Claude files as-is (no rewrite pass), like Cursor - so its correct treatment is the SLASH-command / Claude-file profile, not the Codex `$`-command / mirror profile. [paraphrase]
-- The blocker is a reliable positive discriminator. Candidates to investigate (INVESTIGATION-FIRST task): a Grok-specific env var not matched by the grok/xai grep (widen the probe); a `~/.grok/` marker; the `grok` binary resolving on PATH combined with absence of the other host signals; a version/capability probe. Fragile PATH-substring matching is a last resort. [inferred]
+- Grok reads canonical Claude files AS-IS (like Cursor) and drives with `/flow-next-` slash commands (NOT the Codex `$flow-next-` mirror). So its correct profile is the slash/Claude profile, copy mode, CLAUDE.md docs target.
+- `GROK_AGENT=1` is the detection signal; add the rung before `else -> codex`, ordered after the existing higher-precedence host checks (DROID/CLAUDE/CURSOR) so an agent that merely inherited `GROK_AGENT` from a parent grok shell is not misclassified.
+- Grok's only NATIVE model family is grok (`grok models` returns just `grok-4.5`). So a native `host` review on Grok is single-family and behaves exactly like Claude Code's: it fails closed (ask / NEEDS_HUMAN) unless the writer is non-Grok. Cross-family review on Grok comes through the bridge backends (`codex`/`cursor`/`copilot`), not a native subagent.
 
 ## Acceptance Criteria
 
-- **R1:** INVESTIGATION: determine whether a Grok Build session exposes ANY reliable positive signal (env, marker file, process ancestry) distinguishing it from a bare Codex/other session. Document the finding; if none exists, the spec's later ACs adapt (e.g. a setup question, or accept the limitation with a corrected fallback). [user]
-- **R2:** If a signal exists, add a positive `grok` detection rung to the flow-next-setup cascade BEFORE the `else -> codex` fallback, without regressing Claude/Droid/Cursor/Codex classification (fixture matrix incl. Grok, Codex, and Codex-launched-from-a-Grok-shell if that inherits anything). [paraphrase]
-- **R3:** On `platform=grok`, setup writes the docs snippet with the correct **`/flow-next-...` slash** command syntax (Claude/Cursor profile) to the right instruction file, NOT the Codex `$flow-next-...` form; copy mode, `.flow/bin/flowctl`, host-aware review menu + model-routing scaffold as for other copy-mode hosts. [user]
-- **R4:** Command-discovery gap assessed and either fixed here or explicitly folded into fn-124 (flatten command shims) - confirm whether Grok's under-listing shares the shim-structure root cause. [paraphrase]
-- **R5:** Docs updated (platforms.md + flow-next.dev + vault Platforms note): Grok's actual profile (slash commands, canonical files, copy mode, review backends incl. host) and any detection caveat. [paraphrase]
-- **R6:** If R1 finds NO reliable signal, ship the honest fallback instead: document that Grok is manually selectable / treated as a slash-command copy-mode host, and correct the wrong-syntax outcome rather than leaving it as codex. [user]
+- **R1:** Setup adds a positive `elif [ -n "${GROK_AGENT:-}" ]` -> `PLATFORM=grok` rung BEFORE the `else -> codex` fallback and AFTER the DROID/CLAUDE/CURSOR rungs (precedence: a real Droid/Claude/Cursor host that inherited `GROK_AGENT` from a parent grok process still classifies correctly). Investigation evidence (`GROK_AGENT=1`) recorded in the spec. NEEDS-HUMAN smoke: in a STANDALONE grok session (not launched from another agent), `/flow-next:setup` reports platform=grok. [user]
+- **R2:** On `PLATFORM=grok`, setup writes the docs snippet with `/flow-next-` slash syntax to `CLAUDE.md` (canonical target), copy mode, `.flow/bin/flowctl`, NO `.codex/agents` copy, NO Ralph offer/registration. A pre-existing wrong Codex `$flow-next-` snippet block is consent-refreshed to the slash form, marker-scoped (text outside the markers untouched). [user]
+- **R3:** Grok review-backend menu offers `host` (with the existing fail-closed cross-family caveat) alongside the external backends (rp/codex/copilot/cursor/none); the host-native model-routing scaffold (currently `PLATFORM=cursor`-gated) extends to `platform=grok`, enumerating Grok's available models at setup. Docs state the honest single-family behavior: native `host` on Grok fails closed unless the writer is non-Grok; cross-family comes via bridge backends. [user]
+- **R4:** An EXECUTABLE detection test (extract the Step-0 fenced bash, run under fake-env fixtures): `GROK_AGENT=1` -> `grok`; inherited-env / precedence cases classify correctly; no regression to Droid/Claude/Cursor/Codex. `scripts/sync-codex.sh` renders a real Codex host deterministically as `codex` (the mirror cascade carries no Grok rung), enforced by a hard-fail sync guard; sync twice-idempotent. [inferred]
+- **R5:** Downstream: `plugins/flow-next/docs/platforms.md` + flow-next.dev + vault `Platforms & Install` note state the Grok profile (GROK_AGENT detection, slash syntax, canonical files, copy mode, review incl. host, no-Ralph). Command-discovery gap validated now that fn-124 (command-shim flatten) has landed — record fixed-by-fn-124 or a linked residual follow-up (no double-fix). CHANGELOG `## [Unreleased]` + docs-site `## Unreleased`; NO version bump (batched). [paraphrase]
 
 ## Boundaries
 
-- Investigation-gated: do NOT hardcode a fragile detector without R1 evidence. [user]
-- Command-discovery gap coordinates with fn-124; avoid double-fixing. [user]
-- No Ralph on Grok (same posture as Cursor). [inferred]
+- Positive detection via `GROK_AGENT` — the earlier manual-host-selection / no-signal fallback and its interactive Grok-vs-Codex ask are DROPPED (a reliable signal exists). [user]
+- Command-discovery gap coordinates with fn-124 (now landed); validate only, do not re-implement shim flattening. [user]
+- No Ralph on Grok (same posture as Cursor). [user]
+- Cross-family `host` review keeps its fail-closed contract; do not imply a native cross-family reviewer exists on single-family Grok. [user]
 
 ## Decision Context
 
 ### Motivation
 
-- Direct fn-123/dogfood follow-up: Grok is advertised as a verified host but setup mis-shapes its project instructions (Codex `$` syntax) because it is undetected. Correctness gap, higher priority than the fn-125 cost gap. [user]
+- Direct fn-123/dogfood follow-up: Grok was advertised as a verified host but setup mis-shaped its instructions (Codex `$` syntax) because it was undetected. The probe found `GROK_AGENT=1`, so the fix is a clean positive rung, not a fallback. Correctness gap; smaller than first planned. [user]
+- Grok single-native-family (grok-4.5) means `host` review mirrors the Claude Code semantics already shipped in fn-123. [user]
 
 ## Requirement coverage
 
 | R-ID | Task |
 |------|------|
 | R1 | fn-126-grok-build-host-fidelity-positive.1 |
-| R2 | fn-126-grok-build-host-fidelity-positive.2 |
-| R3 | fn-126-grok-build-host-fidelity-positive.2 |
-| R4 | fn-126-grok-build-host-fidelity-positive.3 |
-| R5 | fn-126-grok-build-host-fidelity-positive.4 |
-| R6 | fn-126-grok-build-host-fidelity-positive.2 |
+| R2 | fn-126-grok-build-host-fidelity-positive.1 |
+| R3 | fn-126-grok-build-host-fidelity-positive.1 |
+| R4 | fn-126-grok-build-host-fidelity-positive.2 |
+| R5 | fn-126-grok-build-host-fidelity-positive.3 |
