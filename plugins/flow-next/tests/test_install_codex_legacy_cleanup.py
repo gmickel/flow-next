@@ -1,26 +1,32 @@
-"""install-codex.sh upgrade cleanup: stale legacy aliases removed, nothing else.
+"""install-codex.sh upgrade cleanup: stale legacy alias RETIRED non-destructively.
 
 The flow-next-epic-review deprecation alias was removed from the source tree
 (fn-124), but install-codex.sh's copy loops only replace skills still present
 in source and only copy current prompts -- a stale alias from an older install
-would survive upgrades forever. The installer therefore removes EXACTLY:
+would keep surfacing as a live redirect forever. On upgrade the installer
+retires exactly:
 
     ~/.codex/skills/flow-next-epic-review/
     ~/.codex/prompts/epic-review.md
 
-and must never touch unrelated user skills or prompts. Because ``epic-review.md``
-is a generic prompt name a user could legitimately author -- and body text can
-be mimicked -- deletion is gated on an EXACT match of the generator's own
-frontmatter ``name:`` id, which a hand-authored file will not carry:
-  - retired command-shim prompt: ``name: flow-next:epic-review``
-  - retired generated skill:     ``name: flow-next-epic-review``
+Two safety layers (see scripts/install-codex.sh):
+  1. Identity gate -- act ONLY when the artifact's leading-frontmatter ``name:``
+     is EXACTLY the generator's own id (``flow-next:epic-review`` for the prompt,
+     ``flow-next-epic-review`` for the skill). Body-text is NOT used (a user
+     migration wrapper can mimic it); frontmatter id is what our tooling wrote.
+  2. Non-destructive move -- even on a match nothing is deleted. The artifact is
+     MOVED into ``~/.codex/.flow-next-retired/`` (outside the scanned skills/ +
+     prompts/ trees), so it stops surfacing but every byte is preserved and
+     restorable. So even the pathological case (a user file that really does
+     carry our exact id) loses nothing -- it is relocated, not destroyed.
 
 These tests run the real installer against a temp HOME and assert:
-  1. flow-next's own stale artifacts (exact frontmatter id) are removed, the
-     current canonical prompt set is delivered exactly, and unrelated user
-     entries survive;
-  2. a user-authored ``epic-review.md`` is preserved even when its BODY mimics
-     the redirect text -- because its frontmatter id is not ours.
+  1. flow-next's own stale artifacts are de-surfaced AND recoverable, the
+     canonical prompt set is delivered exactly, unrelated user entries survive;
+  2. user files whose frontmatter id is NOT ours are left untouched in place --
+     including one whose BODY mimics the redirect text;
+  3. even a file carrying our EXACT id is relocated (not destroyed) -- its bytes
+     survive under the retired-backups dir.
 Skipped on native Windows (plain ``bash`` there resolves to the WSL stub).
 
 Run:
@@ -42,7 +48,7 @@ REPO_ROOT = HERE.parents[3]
 INSTALLER = REPO_ROOT / "scripts" / "install-codex.sh"
 COMMANDS_DIR = REPO_ROOT / "plugins" / "flow-next" / "commands"
 
-# The installer gates deletion on an EXACT frontmatter `name:` id (see
+# Deletion is gated on an EXACT frontmatter `name:` id (see
 # scripts/install-codex.sh frontmatter_name). These are the generator's own ids.
 SKILL_BODY = (
     "---\nname: flow-next-epic-review\n"
@@ -78,7 +84,7 @@ def _run_installer(home: Path) -> subprocess.CompletedProcess:
 )
 @unittest.skipIf(shutil.which("bash") is None, "bash not available")
 class TestInstallCodexLegacyCleanup(unittest.TestCase):
-    def test_flow_next_stale_alias_removed_unrelated_survive(self) -> None:
+    def test_flow_next_stale_alias_retired_and_recoverable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             codex = home / ".codex"
@@ -87,8 +93,9 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             stale_skill.mkdir(parents=True)
             (stale_skill / "SKILL.md").write_text(SKILL_BODY)
             (codex / "prompts").mkdir(parents=True)
-            (codex / "prompts" / "epic-review.md").write_text(PROMPT_BODY)
-            # Unrelated user entries that MUST survive.
+            stale_prompt = codex / "prompts" / "epic-review.md"
+            stale_prompt.write_text(PROMPT_BODY)
+            # Unrelated user entries that MUST survive in place.
             user_skill = codex / "skills" / "my-own-skill"
             user_skill.mkdir(parents=True)
             (user_skill / "SKILL.md").write_text("mine\n")
@@ -102,25 +109,33 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
                 f"install-codex.sh failed:\n{result.stdout}\n{result.stderr}",
             )
 
-            # flow-next's own stale artifacts gone.
-            self.assertFalse(stale_skill.exists(), "stale legacy skill survived upgrade")
-            self.assertFalse(
-                (codex / "prompts" / "epic-review.md").exists(),
-                "stale legacy prompt survived upgrade",
+            # De-surfaced from the scanned trees...
+            self.assertFalse(stale_skill.exists(), "stale legacy skill still surfaced")
+            self.assertFalse(stale_prompt.exists(), "stale legacy prompt still surfaced")
+            # ...but preserved (recoverable) under the retired-backups dir.
+            retired = codex / ".flow-next-retired"
+            self.assertEqual(
+                (retired / "skills" / "flow-next-epic-review" / "SKILL.md").read_text(),
+                SKILL_BODY,
+                "retired skill not preserved byte-for-byte",
             )
-            # Unrelated user entries untouched.
+            self.assertEqual(
+                (retired / "prompts" / "epic-review.md").read_text(),
+                PROMPT_BODY,
+                "retired prompt not preserved byte-for-byte",
+            )
+            # Unrelated user entries untouched in place.
             self.assertEqual((user_skill / "SKILL.md").read_text(), "mine\n")
             self.assertEqual(user_prompt.read_text(), "mine too\n")
 
             # Installer delivers EXACTLY the current canonical command set as
             # prompts. Set-based, not count-only: every canonical shim present,
-            # the retired epic-review alias absent, and no OTHER canonical-named
-            # prompt lingering. (The user's own prompt is expected alongside.)
+            # the retired epic-review alias absent from the live surface, and no
+            # OTHER canonical-named prompt lingering. (User prompt expected too.)
             installed = {p.name for p in (codex / "prompts").glob("*.md")}
             expected = {p.name for p in COMMANDS_DIR.glob("*.md")}
             self.assertTrue(expected, "no canonical command shims found in source")
             self.assertNotIn("epic-review.md", expected, "epic-review shim not deleted from source")
-            # The flow-next-owned prompt subset installed == exactly the canonical set.
             installed_canonical = installed & (expected | {"epic-review.md"})
             self.assertEqual(
                 installed_canonical,
@@ -129,22 +144,19 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
                 f"missing={sorted(expected - installed)} "
                 f"stale={sorted(installed_canonical - expected)}",
             )
-            # The user's own prompt still there alongside the canonical set.
             self.assertIn("my-own-prompt.md", installed)
 
-    def test_user_authored_epic_review_prompt_is_preserved(self) -> None:
-        # A user's OWN epic-review.md must NOT be deleted by the upgrade cleanup
-        # (the HIGH finding from the sol review). Deletion is gated on the exact
-        # frontmatter `name:` id, so these user files -- including one whose BODY
-        # deliberately mimics the flow-next redirect text (the adversarial
-        # migration-wrapper case) -- must all survive, because none carries the
-        # `name: flow-next:epic-review` frontmatter id:
+    def test_user_file_without_our_id_is_untouched(self) -> None:
+        # A user's OWN epic-review.md whose frontmatter id is NOT ours must be
+        # left untouched IN PLACE (not even relocated). Includes the adversarial
+        # case whose BODY mimics the redirect text (sol review) -- body is never
+        # a signal, only the frontmatter id is.
         cases = {
             "no-frontmatter": "# My own epic review checklist\n- step 1\n",
             "own-frontmatter-name": (
                 "---\nname: epic-review\n---\n\n# My epic review\n- step 1\n"
             ),
-            "body-mimics-redirect": (  # sol's adversarial example
+            "body-mimics-redirect": (
                 "---\nname: my-epic-review\n---\n\n# My epic review\n"
                 "Flow Next renamed epic-review to flow-next-spec-completion-review.\n"
                 "Run that review, then apply our private release checklist.\n"
@@ -159,21 +171,43 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
                 user_epic.write_text(body)
 
                 result = _run_installer(home)
-                self.assertEqual(
-                    result.returncode,
-                    0,
-                    f"install-codex.sh failed:\n{result.stdout}\n{result.stderr}",
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+                self.assertTrue(user_epic.exists(), f"[{label}] user file was moved/deleted")
+                self.assertEqual(user_epic.read_text(), body, f"[{label}] user file modified")
+                # Never relocated to the retired dir either.
+                self.assertFalse(
+                    (codex / ".flow-next-retired" / "prompts" / "epic-review.md").exists(),
+                    f"[{label}] user file was wrongly retired",
                 )
 
-                self.assertTrue(
-                    user_epic.exists(),
-                    f"[{label}] user-authored epic-review.md was deleted",
-                )
-                self.assertEqual(
-                    user_epic.read_text(),
-                    body,
-                    f"[{label}] user-authored epic-review.md was modified",
-                )
+    def test_exact_id_file_is_relocated_not_destroyed(self) -> None:
+        # The pathological case: a file that genuinely carries our exact
+        # frontmatter id but custom body. It IS de-surfaced (treated as our
+        # retired shim) -- but non-destructively: nothing is deleted, the bytes
+        # survive under the retired-backups dir and are restorable.
+        custom = PROMPT_BODY.replace(
+            "Invoke the flow-next-spec-completion-review skill now.\n",
+            "Run the renamed review, then my private release checklist.\n",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            codex = home / ".codex"
+            (codex / "prompts").mkdir(parents=True)
+            (codex / "prompts" / "epic-review.md").write_text(custom)
+
+            result = _run_installer(home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            self.assertFalse(
+                (codex / "prompts" / "epic-review.md").exists(),
+                "exact-id file should be de-surfaced from prompts/",
+            )
+            self.assertEqual(
+                (codex / ".flow-next-retired" / "prompts" / "epic-review.md").read_text(),
+                custom,
+                "exact-id file was not preserved byte-for-byte on retirement",
+            )
 
 
 if __name__ == "__main__":

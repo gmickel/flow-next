@@ -92,36 +92,40 @@ echo -e "${GREEN}✓${NC} $SKILL_COUNT skills"
 # ====================
 # The flow-next-epic-review deprecation alias was removed from the source tree
 # (fn-124). The loops above only replace skills still present in source and
-# only copy current prompts, so stale copies from older installs would survive
-# upgrades forever. Remove EXACTLY these two artifacts — never glob, never
-# touch unrelated user skills/prompts.
+# only copy current prompts, so stale copies from older installs would keep
+# surfacing as a live (if still-functional) redirect forever. We RETIRE those
+# two artifacts on upgrade — but NON-DESTRUCTIVELY.
 #
-# Ownership guard: delete ONLY when the artifact is provably flow-next's OWN
-# retired shim, never a same-named file the user authored. `epic-review.md` is
-# a generic prompt name a first-time installer could legitimately already have,
-# and body-text heuristics ("renamed to flow-next-spec-completion-review") can
-# appear verbatim in a user's own migration wrapper. The one thing a user's
-# file will NOT carry is our generator's exact frontmatter `name:` id:
-#   - the retired command-shim prompt: `name: flow-next:epic-review`
-#   - the retired generated skill:      `name: flow-next-epic-review`
-# These namespaced/prefixed ids are what flow-next's own tooling wrote and are
-# not values a hand-authored `epic-review.md` would set. Deletion is gated on an
-# EXACT match of that frontmatter id. Version-robust (the id was stable even as
-# bodies drifted across releases) and safe (bias: a surviving stale flow-next
-# file is cosmetic; deleting a user's file is not — anything not exactly ours
-# is left untouched and noted).
-frontmatter_name() {  # $1 = file → prints the leading-frontmatter `name:` value (unquoted), else nothing
+# Two safety layers, because deleting a user's file is unacceptable while a
+# lingering stale redirect is merely cosmetic:
+#   1. Identity gate — act ONLY on an artifact whose leading-frontmatter `name:`
+#      is EXACTLY the generator's own id (`flow-next:epic-review` for the prompt,
+#      `flow-next-epic-review` for the skill). A hand-authored file rarely
+#      carries our namespaced id; body-text heuristics (which a user migration
+#      wrapper can mimic) are deliberately NOT used.
+#   2. Non-destructive move — even on a match we never `rm`. We MOVE the artifact
+#      into `~/.codex/.flow-next-retired/` (outside the scanned skills/ + prompts/
+#      trees), so it stops surfacing as a command/skill but every byte is
+#      preserved and trivially restorable. So even the pathological case (a user
+#      file that really does carry our exact id) loses nothing — it is relocated,
+#      recoverable, and logged.
+RETIRED_DIR="$CODEX_DIR/.flow-next-retired"
+frontmatter_name() {  # $1 = file → prints the leading-frontmatter `name:` value, ONLY if the block is well-formed (closing fence seen)
     awk '
-      NR==1 && $0!="---" { exit }            # no frontmatter block → no name
-      NR>1  && $0=="---" { exit }            # end of frontmatter → stop
-      /^name:[ \t]/ { sub(/^name:[ \t]*/, ""); gsub(/\r$/, ""); print; exit }
+      NR==1 && $0!="---" { exit }                         # no frontmatter block
+      NR>1  && $0=="---" { print name; exit }             # closing fence → emit buffered name (empty if none)
+      NR>1  && name=="" && /^name:[ \t]/ { name=$0; sub(/^name:[ \t]*/, "", name); gsub(/\r$/, "", name) }
     ' "$1" 2>/dev/null
+}
+retire_artifact() {  # $1 = path to move, $2 = subdir under RETIRED_DIR, $3 = human label
+    mkdir -p "$RETIRED_DIR/$2"
+    mv -f "$1" "$RETIRED_DIR/$2/$(basename "$1")"
+    echo -e "${GREEN}✓${NC} retired stale legacy $3 → ${RETIRED_DIR}/$2/ (recoverable)"
 }
 LEGACY_SKILL="$CODEX_DIR/skills/flow-next-epic-review"
 if [ -d "$LEGACY_SKILL" ]; then
     if [ "$(frontmatter_name "$LEGACY_SKILL/SKILL.md")" = "flow-next-epic-review" ]; then
-        rm -rf "$LEGACY_SKILL"
-        echo -e "${GREEN}✓${NC} removed stale legacy skill flow-next-epic-review"
+        retire_artifact "$LEGACY_SKILL" "skills" "skill flow-next-epic-review"
     else
         echo -e "${YELLOW}!${NC} kept $LEGACY_SKILL (frontmatter name is not ours — left untouched)"
     fi
@@ -129,8 +133,7 @@ fi
 LEGACY_PROMPT="$CODEX_DIR/prompts/epic-review.md"
 if [ -f "$LEGACY_PROMPT" ]; then
     if [ "$(frontmatter_name "$LEGACY_PROMPT")" = "flow-next:epic-review" ]; then
-        rm -f "$LEGACY_PROMPT"
-        echo -e "${GREEN}✓${NC} removed stale legacy prompt epic-review.md"
+        retire_artifact "$LEGACY_PROMPT" "prompts" "prompt epic-review.md"
     else
         echo -e "${YELLOW}!${NC} kept $LEGACY_PROMPT (frontmatter name is not ours — left untouched)"
     fi
