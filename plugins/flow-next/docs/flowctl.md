@@ -673,6 +673,7 @@ All specs output:
 {
   "success": false,
   "valid": false,
+  "root_errors": ["Spec ID collision: fn-1 used by multiple specs: fn-1-alpha, fn-1-beta"],
   "specs": [{"spec": "fn-1", "valid": true, ...}],
   "total_specs": 2,
   "total_tasks": 10,
@@ -686,6 +687,7 @@ Checks:
 - Task statuses are valid (`todo`, `in_progress`, `blocked`, `done`)
 - Dependencies exist and are within same spec
 - No dependency cycles
+- Native `fn-N` prefixes are unique; repository-level failures appear in `root_errors`
 - Done status consistency
 
 Exits with code 1 if validation fails (for CI use).

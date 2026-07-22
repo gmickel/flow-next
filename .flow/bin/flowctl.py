@@ -25571,15 +25571,17 @@ def cmd_validate(args: argparse.Namespace) -> None:
             if num is not None:
                 epic_nums.setdefault(num, []).append(spec_id)
 
-        # Start with root errors
-        all_errors = list(root_errors)
-
-        # Detect spec ID collisions (multiple native specs with same fn-N prefix)
-        for num, ids in epic_nums.items():
+        # Spec ID collisions are repository-level errors. Keep them in the
+        # canonical root inventory so JSON and text render the same failures.
+        for num in sorted(epic_nums):
+            ids = epic_nums[num]
             if len(ids) > 1:
-                all_errors.append(
+                root_errors.append(
                     f"Spec ID collision: fn-{num} used by multiple specs: {', '.join(sorted(ids))}"
                 )
+
+        # One combined inventory drives validity, totals, and text rendering.
+        all_errors = list(root_errors)
 
         all_warnings = []
 

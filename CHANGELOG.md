@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Complete JSON diagnostics for native spec-ID collisions (FLOW-56).** `flowctl validate --all --json` now includes every counted `fn-N` collision in `root_errors`, matching the actionable text output and preserving exact `total_errors` parity. This fixes behavior present through flow-next 3.2.0; the first fixed version will be the next batched release.
+
 ## [flow-next 3.2.0] - 2026-07-22
 
 ### Changed
