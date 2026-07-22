@@ -6,6 +6,18 @@ Root cause: scout agents carry `model:` frontmatter (haiku/sonnet aliases) which
 
 The host-review path is the proven template: it reads the AGENTS.md pin and passes it as the caller-side subagent model (Cursor honors in-prompt/caller-side pins even though it ignores frontmatter). Scout dispatch needs the same treatment.
 
+## Investigation outcome (dogfood 2026-07-22, cursor-dogfood-330 — OVERTURNS the premise above)
+
+Followed up with reproducible A/B runs. **The scout pin is NOT inert.** With the *shipped* fn-123 scaffold (original AGENTS.md routing bullet, no extra prose, no skill wiring), `/flow-next:plan` reliably pinned **4 of 5 scouts to `composer-2.5-fast`** across two fresh sessions (repo-scout, spec-scout, memory-scout, docs-gap-scout all on Composer 2.5 Fast). The AGENTS.md routing table IS consumed via normal prompt-adherence; the original "all scouts on Terra" observation was a single non-adherent session (long/cluttered context), not the norm.
+
+The one scout that stayed on the session model was **`flow-gap-analyst`** — consistently, in every run. That is almost certainly **correct, not a miss**: `flow-gap-analyst` is a reasoning/analysis subagent (maps flows, finds requirement gaps), not a dumb scanner, so pinning it to a cheap fast model would degrade the judgment it exists for. It belongs on inherit/judgment tier, not the cheap scout tier.
+
+**Consequence for this spec:** the heavy CONSUME wiring (per-dispatch prose across plan+prime, a shared reference, fallback machinery — the 4-task plan) is UNNECESSARY; the scaffold already delivers the cost win. What actually remains is marginal:
+1. (optional) A reliability nudge — strengthen the setup-scaffolded AGENTS.md scout directive (a MANDATORY-style imperative naming the slug + mechanism) to push adherence from ~4/5 toward 5/5 and eliminate the occasional non-adherent (0/5) session. One-line scaffold-copy tweak in setup, NOT skill wiring.
+2. Document the scanner-vs-judgment boundary: read-only scanner scouts → cheap pin; `flow-gap-analyst` and other reasoning subagents → inherit. A doc sentence.
+
+**Recommendation: CLOSE or reduce to a doc-only crumb.** The 4-task consume-vs-drop plan is obsolete. If kept, fn-125 slims to a single task: "strengthen the scaffold scout directive + document the scanner-vs-judgment boundary." The existing tasks fn-125.1-.4 should be discarded/replaced at that point. DROP is moot (there is nothing broken to drop). Decision deferred to the maintainer.
+
 ## Acceptance Criteria
 
 - **R1:** On a host that ignores agent-frontmatter `model:` (Cursor; detect via the same signal as the routing degrade), read-only-scout dispatch reads the AGENTS.md model-routing "read-only scouts" pin and passes it as the spawned subagent's model - so scouts run on the cheap pinned slug, not the session model. [user]
