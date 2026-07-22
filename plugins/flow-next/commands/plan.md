@@ -1,5 +1,4 @@
 ---
-name: flow-next:plan
 description: Draft a structured build plan from a short request
 argument-hint: "<idea or fn-N> [--research=rp|grep] [--review=rp|export|none]"
 ---

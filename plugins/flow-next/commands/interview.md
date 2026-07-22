@@ -1,5 +1,4 @@
 ---
-name: flow-next:interview
 description: Interview & refine a spec, task, or spec file in-depth
 argument-hint: "[spec ID, task ID, or file path] [--scope=business|technical|both | --biz | --tech] [--docs | --no-docs] [--strategy | --no-strategy]"
 ---

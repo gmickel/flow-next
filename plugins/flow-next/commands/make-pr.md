@@ -1,5 +1,4 @@
 ---
-name: flow-next:make-pr
 description: Render a cognitive-aid PR body from flow-next state and open via gh
 argument-hint: "[spec-id] [--draft|--ready] [--no-mermaid] [--base <ref>] [--memory] [--dry-run]"
 ---

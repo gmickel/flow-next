@@ -1,5 +1,4 @@
 ---
-name: flow-next:tracker-sync
 description: Project a flow spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile body/status/comments two-way — projection, not coordination. NOT plan-sync (/flow-next:sync).
 argument-hint: "[discover|push|pull|reconcile|link|unlink] [<id>]"
 ---

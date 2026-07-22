@@ -1,5 +1,4 @@
 ---
-name: flow-next:pilot
 description: Single-tick autonomous build-loop conductor (one item, one stage per invocation); --backlog/--auto widens it to triage the whole open backlog
 argument-hint: "[--backlog|--auto] [--spec <fn-N>] [--dry-run] [--review=<backend>] [--research=<grep|rp>] [--depth=<level>]"
 ---

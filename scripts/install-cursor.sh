@@ -20,7 +20,7 @@
 # What gets installed:
 #   - Manifest:  .cursor-plugin/plugin.json   (explicit skills/agents/commands/rules paths)
 #   - Skills:    skills/<name>/SKILL.md        (via the manifest override)
-#   - Commands:  commands/flow-next/*.md       (via the manifest override)
+#   - Commands:  commands/*.md                 (via the manifest override; flattened, no flow-next/ subdir)
 #   - Agents:    agents/*.md                   (via the manifest override)
 #   - Rules:     rules/*.mdc                   (flow-next.mdc guidance rail)
 #   - Hooks:     none shipped at plugin level (Ralph is opt-in via ralph-init project settings)
@@ -88,7 +88,7 @@ fi
 echo ""
 echo "Installed. Cursor registers the components on next launch:"
 echo "  skills:   $(ls -d "$DEST"/skills/*/ 2>/dev/null | wc -l | tr -d ' ')"
-echo "  commands: $(ls "$DEST"/commands/flow-next/*.md 2>/dev/null | wc -l | tr -d ' ')"
+echo "  commands: $(ls "$DEST"/commands/*.md 2>/dev/null | wc -l | tr -d ' ')"
 echo "  agents:   $(ls "$DEST"/agents/*.md 2>/dev/null | wc -l | tr -d ' ')"
 echo "  rules:    $(ls "$DEST"/rules/*.mdc 2>/dev/null | wc -l | tr -d ' ')"
 echo ""

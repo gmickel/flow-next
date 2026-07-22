@@ -1976,7 +1976,7 @@ PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- sync command files ---${NC}"
 # Test 1: Command stub exists
-if [[ -f "$PLUGIN_ROOT/commands/flow-next/sync.md" ]]; then
+if [[ -f "$PLUGIN_ROOT/commands/sync.md" ]]; then
   echo -e "${GREEN}✓${NC} sync command stub exists"
   PASS=$((PASS + 1))
 else
@@ -1994,7 +1994,7 @@ else
 fi
 
 # Test 3: Command invokes skill
-if grep -q "flow-next-sync" "$PLUGIN_ROOT/commands/flow-next/sync.md"; then
+if grep -q "flow-next-sync" "$PLUGIN_ROOT/commands/sync.md"; then
   echo -e "${GREEN}✓${NC} sync command invokes skill"
   PASS=$((PASS + 1))
 else

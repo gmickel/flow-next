@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SKILL_DIR="$PLUGIN_ROOT/skills/flow-next-resolve-pr"
 SKILL_SCRIPTS="$SKILL_DIR/scripts"
-COMMAND_FILE="$PLUGIN_ROOT/commands/flow-next/resolve-pr.md"
+COMMAND_FILE="$PLUGIN_ROOT/commands/resolve-pr.md"
 AGENT_FILE="$PLUGIN_ROOT/agents/pr-comment-resolver.md"
 RALPH_TEMPLATES="$PLUGIN_ROOT/skills/flow-next-ralph-init/templates"
 
@@ -137,7 +137,7 @@ check_file_exists() {
 check_file_exists "$SKILL_DIR/SKILL.md" "SKILL.md"
 check_file_exists "$SKILL_DIR/workflow.md" "workflow.md"
 check_file_exists "$SKILL_DIR/cluster-analysis.md" "cluster-analysis.md"
-check_file_exists "$COMMAND_FILE" "commands/flow-next/resolve-pr.md"
+check_file_exists "$COMMAND_FILE" "commands/resolve-pr.md"
 check_file_exists "$AGENT_FILE" "agents/pr-comment-resolver.md"
 
 # SKILL.md must carry required frontmatter keys.

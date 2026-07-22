@@ -17,7 +17,7 @@
 #   - Agents:    codex/agents/*.toml       → ~/.codex/agents/
 #   - Hooks:     none by default (fn-114). Ralph guard is opt-in via
 #                /flow-next:ralph-init → project .codex/hooks.json
-#   - Prompts:   commands/flow-next/*.md   → ~/.codex/prompts/
+#   - Prompts:   commands/*.md             → ~/.codex/prompts/
 #   - CLI tools: flowctl, flowctl.py       → ~/.codex/scripts/
 #   - Scripts:   worktree.sh              → ~/.codex/scripts/  (from codex/skills/)
 #   - Templates: ralph-init templates      → ~/.codex/templates/
@@ -86,6 +86,23 @@ for skill_dir in "$CODEX_SRC/skills/"*/; do
     SKILL_COUNT=$((SKILL_COUNT + 1))
 done
 echo -e "${GREEN}✓${NC} $SKILL_COUNT skills"
+
+# ====================
+# Legacy alias cleanup (upgrade path)
+# ====================
+# The flow-next-epic-review deprecation alias was removed from the source tree
+# (fn-124). The loops above only replace skills still present in source and
+# only copy current prompts, so stale copies from older installs would survive
+# upgrades forever. Remove EXACTLY these two artifacts — never glob, never
+# touch unrelated user skills/prompts.
+if [ -d "$CODEX_DIR/skills/flow-next-epic-review" ]; then
+    rm -rf "$CODEX_DIR/skills/flow-next-epic-review"
+    echo -e "${GREEN}✓${NC} removed stale legacy skill flow-next-epic-review"
+fi
+if [ -f "$CODEX_DIR/prompts/epic-review.md" ]; then
+    rm -f "$CODEX_DIR/prompts/epic-review.md"
+    echo -e "${GREEN}✓${NC} removed stale legacy prompt epic-review.md"
+fi
 
 # ====================
 # Agents (pre-built .toml)
@@ -249,7 +266,7 @@ fi
 # Prompts (commands → prompts, no patching needed)
 # ====================
 PROMPT_COUNT=0
-for cmd in "$PLUGIN_DIR/commands/$PLUGIN/"*.md; do
+for cmd in "$PLUGIN_DIR/commands/"*.md; do
     [ -f "$cmd" ] || continue
     cp "$cmd" "$CODEX_DIR/prompts/"
     PROMPT_COUNT=$((PROMPT_COUNT + 1))

@@ -21,7 +21,7 @@ Four groups:
   (c) uninstall removal — a reference marker-removal transform (mirroring
       uninstall.md): well-formed → removed inclusive; every damaged state
       (0/2 starts, 0/2 ends, out-of-order) → untouched. PLUS prose-contract
-      assertions on `commands/flow-next/uninstall.md`.
+      assertions on `commands/uninstall.md`.
   (d) workflow prose contracts on the setup skill (canonical AND Codex mirror):
       headless-skip rule, frozen option strings (as-built casing), never-pre-set
       `work.delegateConsent`, scaffold processing ordered after the Docs block.
@@ -42,7 +42,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 PLUGIN = REPO_ROOT / "plugins" / "flow-next"
 
 TEMPLATE = PLUGIN / "skills" / "flow-next-setup" / "templates" / "model-routing-snippet.md"
-UNINSTALL = PLUGIN / "commands" / "flow-next" / "uninstall.md"
+UNINSTALL = PLUGIN / "commands" / "uninstall.md"
 CANONICAL_WORKFLOW = PLUGIN / "skills" / "flow-next-setup" / "workflow.md"
 MIRROR_WORKFLOW = PLUGIN / "codex" / "skills" / "flow-next-setup" / "workflow.md"
 

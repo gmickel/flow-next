@@ -1492,7 +1492,7 @@ generate_openai_yaml "flow-next-deps"           "Flow Deps [internal]"          
 # --- Deprecation redirect skills (1.0 alias surface, removed in 2.0) ---
 # Codex resolves `$flow-next-<name>` and bare-skill-name lookups via the
 # skills/ mirror — the Claude Code slash-command redirect file at
-# `commands/flow-next/<name>.md` doesn't help the Codex skill lookup. Mirror
+# `commands/<name>.md` doesn't help the Codex skill lookup. Mirror
 # the redirect as a thin skill so users invoking the legacy alias on Codex
 # get a redirect, not a "skill not found" error. Removed alongside the
 # `flowctl epic *` aliases in 2.0 per fn-43 spec R3 / R28.
@@ -1524,7 +1524,7 @@ EOF
   skill_count=$((skill_count + 1))
 }
 
-generate_redirect_skill "flow-next-epic-review" "flow-next-spec-completion-review" "Flow Epic Review"
+# (flow-next-epic-review redirect removed in fn-124: alias retired on all platforms.)
 
 # --- Catalog description diet (surfaced skills only) ---
 # Codex injects each implicit skill's SKILL.md frontmatter `description` into

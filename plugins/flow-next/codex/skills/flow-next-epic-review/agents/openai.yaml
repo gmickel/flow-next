@@ -1,6 +1,0 @@
-interface:
-  display_name: "Flow Epic Review [deprecated]"
-  short_description: "Deprecated alias — use flow-next-spec-completion-review"
-  brand_color: "#9CA3AF"
-policy:
-  allow_implicit_invocation: false

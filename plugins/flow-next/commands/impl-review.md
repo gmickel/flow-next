@@ -1,5 +1,4 @@
 ---
-name: flow-next:impl-review
 description: John Carmack-level implementation review via RepoPrompt or Codex
 argument-hint: "[--review=rp|codex|copilot|cursor|none] [focus areas]"
 ---

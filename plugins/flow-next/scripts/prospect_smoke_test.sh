@@ -214,7 +214,7 @@ mkdir -p "$TEST_DIR"
 # =============================================================================
 echo -e "${YELLOW}--- Case 1: skeleton + slash command ---${NC}"
 
-CMD_FILE="$PLUGIN_ROOT/commands/flow-next/prospect.md"
+CMD_FILE="$PLUGIN_ROOT/commands/prospect.md"
 SKILL_FILE="$PLUGIN_ROOT/skills/flow-next-prospect/SKILL.md"
 WORKFLOW_FILE="$PLUGIN_ROOT/skills/flow-next-prospect/workflow.md"
 PERSONAS_FILE="$PLUGIN_ROOT/skills/flow-next-prospect/personas.md"

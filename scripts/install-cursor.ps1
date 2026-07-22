@@ -22,7 +22,7 @@
   What gets installed (mirrors install-cursor.sh exactly):
     - Manifest:  .cursor-plugin\plugin.json   (explicit skills/agents/commands/rules paths)
     - Skills:    skills\<name>\SKILL.md       (via the manifest override)
-    - Commands:  commands\flow-next\*.md      (via the manifest override)
+    - Commands:  commands\*.md                 (via the manifest override; flattened, no flow-next\ subdir)
     - Agents:    agents\*.md                  (via the manifest override)
     - Rules:     rules\*.mdc                  (flow-next.mdc guidance rail)
     - Hooks:     none shipped at plugin level (Ralph is opt-in via ralph-init project settings)
@@ -104,7 +104,7 @@ function Get-FileCount($path, $filter) {
 }
 
 $skills   = Get-DirCount  (Join-Path $Dest "skills")
-$commands = Get-FileCount (Join-Path $Dest "commands\flow-next") "*.md"
+$commands = Get-FileCount (Join-Path $Dest "commands") "*.md"
 $agents   = Get-FileCount (Join-Path $Dest "agents") "*.md"
 $rules    = Get-FileCount (Join-Path $Dest "rules") "*.mdc"
 

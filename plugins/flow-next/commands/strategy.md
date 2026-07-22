@@ -1,5 +1,4 @@
 ---
-name: flow-next:strategy
 description: Create or maintain `STRATEGY.md` — repo-root anchor for target problem, approach, users, key metrics, and tracks
 argument-hint: "[optional: section to revisit, e.g. 'metrics' or 'approach']"
 ---

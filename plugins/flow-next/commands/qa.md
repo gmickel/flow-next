@@ -1,5 +1,4 @@
 ---
-name: flow-next:qa
 description: Live-app real-user QA pass derived from the spec
 argument-hint: "<fn-N>"
 ---

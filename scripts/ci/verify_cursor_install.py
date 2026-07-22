@@ -45,7 +45,7 @@ def _skill_dirs(root: Path) -> set[str]:
 
 
 def _command_files(root: Path) -> set[str]:
-    base = root / "commands" / "flow-next"
+    base = root / "commands"
     if not base.is_dir():
         return set()
     return {p.name for p in base.glob("*.md")}

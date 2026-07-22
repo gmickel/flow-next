@@ -129,7 +129,7 @@ assert_grep_re() {
 # =============================================================================
 echo -e "${YELLOW}--- Case 1: skeleton + slash command ---${NC}"
 
-CMD_FILE="$PLUGIN_ROOT/commands/flow-next/map.md"
+CMD_FILE="$PLUGIN_ROOT/commands/map.md"
 SKILL_FILE="$PLUGIN_ROOT/skills/flow-next-map/SKILL.md"
 WORKFLOW_FILE="$PLUGIN_ROOT/skills/flow-next-map/workflow.md"
 

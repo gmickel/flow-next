@@ -1,5 +1,4 @@
 ---
-name: flow-next:setup
 description: Optional local install of flowctl CLI and project docs
 ---
 
