@@ -117,6 +117,11 @@ frontmatter_name() {  # $1 = file → prints the leading-frontmatter `name:` val
       NR>1  && name=="" && /^name:[ \t]/ { name=$0; sub(/^name:[ \t]*/, "", name); gsub(/\r$/, "", name) }
     ' "$1" 2>/dev/null
 }
+# A path counts as "occupied" if anything is there — including a DANGLING
+# symlink, which `[ -e ]` reports false (it follows the link to a missing
+# target). `[ -L ]` catches the symlink itself, so we never select an existing
+# symlink as a free name and never clobber it.
+occupied() { [ -e "$1" ] || [ -L "$1" ]; }
 retire_artifact() {  # $1 = path to move, $2 = subdir under RETIRED_DIR, $3 = human label
     local src="$1" destdir="$RETIRED_DIR/$2" label="$3"
     mkdir -p "$destdir"
@@ -125,13 +130,19 @@ retire_artifact() {  # $1 = path to move, $2 = subdir under RETIRED_DIR, $3 = hu
     # recreate the live alias with different content between upgrades — the
     # earlier backup must survive too). Also avoids `mv`'s move-INTO-an-existing
     # -dir semantics for the skill directory. Pick the first free numbered name.
-    if [ -e "$dest" ]; then
+    if occupied "$dest"; then
         local n=1
-        while [ -e "$dest.$n" ]; do n=$((n + 1)); done
+        while occupied "$dest.$n"; do n=$((n + 1)); done
         dest="$dest.$n"
     fi
-    mv "$src" "$dest"   # dest is guaranteed free → plain mv, no -f clobber
-    echo -e "${GREEN}✓${NC} retired stale legacy $label → $dest (recoverable)"
+    # `mv -n` is the atomic backstop: even if something raced into $dest after
+    # the probe, -n refuses to overwrite it (the stale artifact simply stays in
+    # place unretired — a cosmetic miss, never data loss). Portable on GNU + BSD mv.
+    if mv -n "$src" "$dest" 2>/dev/null && [ ! -e "$src" ]; then
+        echo -e "${GREEN}✓${NC} retired stale legacy $label → $dest (recoverable)"
+    else
+        echo -e "${YELLOW}!${NC} kept $src (retirement destination busy — left untouched)"
+    fi
 }
 LEGACY_SKILL="$CODEX_DIR/skills/flow-next-epic-review"
 if [ -d "$LEGACY_SKILL" ]; then

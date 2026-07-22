@@ -242,6 +242,52 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             self.assertTrue(parked, "recreated alias B was not parked under a new name")
             self.assertIn(body_b, [p.read_text() for p in parked], "body B not preserved")
 
+    def test_dangling_symlink_backup_is_not_clobbered(self) -> None:
+        # A dangling symlink at the backup path is invisible to `[ -e ]`; the
+        # `[ -L ]` check must still treat it as occupied so the new backup lands
+        # at a fresh name and the symlink is never overwritten/followed.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            codex = home / ".codex"
+            retired_prompts = codex / ".flow-next-retired" / "prompts"
+            retired_prompts.mkdir(parents=True)
+            dangling = retired_prompts / "epic-review.md"
+            os.symlink(str(home / "does-not-exist"), dangling)  # dangling
+            (codex / "prompts").mkdir(parents=True)
+            (codex / "prompts" / "epic-review.md").write_text(PROMPT_BODY)
+
+            result = _run_installer(home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            self.assertFalse((codex / "prompts" / "epic-review.md").exists())
+            # Dangling symlink still present, still dangling (not clobbered/followed).
+            self.assertTrue(dangling.is_symlink(), "dangling backup symlink was replaced")
+            self.assertFalse(dangling.exists(), "symlink target was created (followed)")
+            # New backup parked under a fresh numbered name with the real bytes.
+            numbered = sorted(p for p in retired_prompts.glob("epic-review.md.*"))
+            self.assertTrue(numbered, "new backup not parked under a numbered name")
+            self.assertIn(PROMPT_BODY, [p.read_text() for p in numbered])
+
+    def test_preexisting_numbered_suffix_advances(self) -> None:
+        # Both epic-review.md and epic-review.md.1 already taken → new backup
+        # must advance to .2, clobbering neither.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            codex = home / ".codex"
+            retired_prompts = codex / ".flow-next-retired" / "prompts"
+            retired_prompts.mkdir(parents=True)
+            (retired_prompts / "epic-review.md").write_text("backup-0\n")
+            (retired_prompts / "epic-review.md.1").write_text("backup-1\n")
+            (codex / "prompts").mkdir(parents=True)
+            (codex / "prompts" / "epic-review.md").write_text(PROMPT_BODY)
+
+            result = _run_installer(home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            self.assertEqual((retired_prompts / "epic-review.md").read_text(), "backup-0\n")
+            self.assertEqual((retired_prompts / "epic-review.md.1").read_text(), "backup-1\n")
+            self.assertEqual((retired_prompts / "epic-review.md.2").read_text(), PROMPT_BODY)
+
     def test_second_run_is_idempotent_no_op(self) -> None:
         # A plain second run (no live alias recreated) must not touch backups.
         with tempfile.TemporaryDirectory() as tmp:
