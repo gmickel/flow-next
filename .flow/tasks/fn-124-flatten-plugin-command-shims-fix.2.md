@@ -34,9 +34,8 @@ Update all live docs and manifest descriptions that reference the old nested shi
 - [ ] CHANGELOG entry staged under `## Unreleased`; no version bump anywhere
 
 ## Done summary
-TBD
-
+Swept all live docs and manifests for the flattened command-shim layout: adding-skills.md authoring path, platforms.md Grok wrapper count/path (23 commands/*.md) and Cursor manifest prose (flat ./commands), strategy.md jargon-scan path, teams.md adoption-ladder count, plugin.json + marketplace.json descriptions (24 -> 23 commands, no version fields), and staged the fn-124 CHANGELOG entry under ## Unreleased with no version bump. Impl-review (codex): SHIP first pass.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a36ff8662b733db5ac9854ac9e085f57e12f5230
+- Tests: baseline: green - python3 -m unittest test_install_cursor_parity test_cursor_review_commands test_cursor_clean_tree test_model_routing_scaffold test_no_default_hooks test_cursor_plugin_surface -q (72 tests OK, pre-edit), python3 -m unittest test_install_cursor_parity test_cursor_review_commands test_cursor_clean_tree test_model_routing_scaffold test_no_default_hooks test_cursor_plugin_surface -q (72 tests OK, post-edit), ./scripts/sync-codex.sh x2 (idempotent, mirror unchanged), grep -rn commands/flow-next live trees -> zero hits
 - PRs:
