@@ -516,7 +516,7 @@ Print the prompt content built above and stop for the user's reply.
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 
-**Note:** If none of rp-cli, codex, copilot, or cursor-agent is detected, add note to the Review question: "No review backend detected. Install rp-cli, codex, copilot, or cursor-agent for review support."
+**Note:** If no supported RepoPrompt CLI, codex, copilot, or cursor-agent is detected, add this note to the Review question: "No review backend detected. Install RepoPrompt CE (`rpce-cli`), codex, copilot, or cursor-agent for review support."
 
 ### 6e: Model-pin refresh ceremony (fn-115.2)
 

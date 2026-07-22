@@ -38,7 +38,7 @@ Compose a 1-2 sentence `REVIEW_SUMMARY` describing the changes for the setup-rev
 **Only run ONCE. Uses the summary composed in Phase 1.**
 
 ```bash
-# Atomic: pick-window + builder (uses REVIEW_SUMMARY from Phase 1)
+# Atomic: resolve/reuse window + open Context Builder (uses REVIEW_SUMMARY from Phase 1)
 eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUMMARY" --create)"
 
 # Verify we have W and T

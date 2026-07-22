@@ -91,7 +91,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
      (Reply: "a", "rp", "b", "codex", "c", "copilot", "d", "cursor", or just tell me)
      ```
      Wait for response. Default if empty/ambiguous: prefer `rp` > `codex` > `copilot` > `cursor`.
-   - If only rp-cli available: use `rp`
+   - If only the RepoPrompt CLI ladder resolves: use `rp`
    - If only codex available: use `codex`
    - If only copilot available: use `copilot`
    - If only cursor-agent available: use `cursor`

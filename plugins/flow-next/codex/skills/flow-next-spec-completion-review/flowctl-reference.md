@@ -5,12 +5,12 @@ Use `flowctl rp` wrappers only.
 ## Primary Command (Ralph mode)
 
 ```bash
-# Atomic setup: pick-window + builder
+# Atomic setup: resolve/reuse window + open Context Builder
 eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..." --create)"
 # Returns: W=<window> T=<tab>
 ```
 
-This is the **only** way to initialize a review session. Do not call `pick-window` or `builder` individually.
+This is the **only** supported way to initialize a review session; the deleted component commands are not public surfaces.
 
 ## Post-Setup Commands
 

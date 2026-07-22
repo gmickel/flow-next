@@ -186,6 +186,66 @@ FLOWCTL_INVOCATION = re.compile(
     r"([a-z][a-z0-9-]*)(?:\s+([a-z][a-z0-9-]*))?"
 )
 
+ACTIVE_REFERENCE_ROOTS = (
+    REPO_ROOT / "README.md",
+    PLUGIN / "docs",
+    PLUGIN / "skills",
+    PLUGIN / "agents",
+    PLUGIN / "codex" / "skills",
+    PLUGIN / "codex" / "agents",
+    REPO_ROOT / "agent_docs",
+)
+ACTIVE_REFERENCE_EXCLUDES = (
+    "agent_docs/guidance-eval/",
+    "agent_docs/optimization-log.md",
+)
+SHELL_FENCE_LANGUAGES = {"", "bash", "sh", "shell", "zsh", "powershell"}
+EXECUTABLE_FLOWCTL_INVOCATION = re.compile(
+    r'(?m)^\s*(?:"?\$FLOWCTL"?|(?:\.flow/bin/|scripts/)?flowctl)'
+    r'(?![.A-Za-z0-9_-])\s+'
+    r"([a-z][a-z0-9-]*)(?:\s+([a-z][a-z0-9-]*))?"
+)
+
+
+def _active_reference_files() -> list[Path]:
+    paths: list[Path] = []
+    for root in ACTIVE_REFERENCE_ROOTS:
+        candidates = (
+            [root]
+            if root.is_file()
+            else (
+                path
+                for path in root.rglob("*")
+                if path.suffix in {".md", ".toml"}
+            )
+        )
+        for path in candidates:
+            relative = path.relative_to(REPO_ROOT).as_posix()
+            if any(relative.startswith(prefix) for prefix in ACTIVE_REFERENCE_EXCLUDES):
+                continue
+            paths.append(path)
+    return sorted(set(paths))
+
+
+def _shell_fence_bodies(text: str) -> list[tuple[str, bool]]:
+    bodies: list[tuple[str, bool]] = []
+    open_language: str | None = None
+    body: list[str] = []
+    for line in text.splitlines():
+        if open_language is None:
+            match = re.match(r"^\s*```([^\s`]*)\s*$", line)
+            if match and match.group(1).lower() in SHELL_FENCE_LANGUAGES:
+                open_language = match.group(1).lower()
+                body = []
+            continue
+        if re.match(r"^\s*```\s*$", line):
+            bodies.append(("\n".join(body), bool(open_language)))
+            open_language = None
+            body = []
+            continue
+        body.append(line)
+    return bodies
+
 
 class _ParserCaptured(Exception):
     pass
@@ -304,6 +364,103 @@ class CliSurfaceContractTest(unittest.TestCase):
                 timeout=10,
             )
             self.assertEqual(result.returncode, 0, (path, result.stderr))
+
+
+class ActiveReferenceContractTest(unittest.TestCase):
+    def test_active_shell_snippets_only_invoke_registered_commands(self) -> None:
+        failures: list[str] = []
+        for path in _active_reference_files():
+            text = path.read_text(encoding="utf-8")
+            for body, strict in _shell_fence_bodies(text):
+                for match in EXECUTABLE_FLOWCTL_INVOCATION.finditer(body):
+                    top, child = match.groups()
+                    if top not in {path.split(" ", 1)[0] for path in EXPECTED_LEAF_PATHS}:
+                        if strict:
+                            failures.append(
+                                f"{path.relative_to(REPO_ROOT)}: {top}"
+                            )
+                        # Unlabelled fences also carry prose and diagrams. The
+                        # removed-surface test below guards historical command
+                        # names even there; language-tagged shell fences are
+                        # strict and reject every unknown top-level command.
+                        continue
+                    if top in GROUPED_COMMANDS and child:
+                        command = f"{top} {child}"
+                        if command not in EXPECTED_LEAF_PATHS:
+                            failures.append(
+                                f"{path.relative_to(REPO_ROOT)}: {command}"
+                            )
+        self.assertEqual(failures, [])
+
+    def test_known_removed_surfaces_are_not_runnable_in_active_snippets(self) -> None:
+        removed = re.compile(
+            r'(?:flowctl|"?\$FLOWCTL"?|\.flow/bin/flowctl|scripts/flowctl)\s+'
+            r"(?:epics?(?:\s|$)|migrate-(?:rename|rollback|state)\b|"
+            r"config\s+toggle\b|unblock\b|update\s+[^\n]+--status\b|"
+            r"--version\b|setup(?:\s|$)|rp\s+(?:pick-window|builder)\b|"
+            r"(?:impl|plan|completion)-review\b|"
+            r"spec\s+export-cognitive-aid[^\n]*--section\b)"
+        )
+        failures: list[str] = []
+        for path in _active_reference_files():
+            text = path.read_text(encoding="utf-8")
+            for body, _strict in _shell_fence_bodies(text):
+                if removed.search(body):
+                    failures.append(path.relative_to(REPO_ROOT).as_posix())
+        self.assertEqual(failures, [])
+
+    def test_strategy_commands_use_the_resolved_flowctl_path(self) -> None:
+        strategy = PLUGIN / "skills" / "flow-next-strategy"
+        for path in strategy.rglob("*.md"):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotRegex(
+                text,
+                r'(?<!\$)(?<!["/])\bflowctl\s+(?:strategy|specs)\b',
+                path.relative_to(REPO_ROOT).as_posix(),
+            )
+
+    def test_active_payload_contract_omits_removed_export_fields(self) -> None:
+        paths = (
+            PLUGIN / "skills" / "flow-next-make-pr" / "workflow.md",
+            PLUGIN / "skills" / "flow-next-make-pr" / "create-and-finalize.md",
+            PLUGIN / "skills" / "flow-next-qa" / "workflow.md",
+        )
+        combined = "\n".join(path.read_text(encoding="utf-8") for path in paths)
+        self.assertNotIn("review_receipts", combined)
+        self.assertNotRegex(combined, r"export-cognitive-aid[^\n]*--section")
+        self.assertIn("deferred_findings", combined)
+
+    def test_smoke_labels_name_the_canonical_operation(self) -> None:
+        smoke = (PLUGIN / "scripts" / "smoke_test.sh").read_text(encoding="utf-8")
+        for stale_label in (
+            "config toggle",
+            "planSync config toggle",
+            "--- epic set-title ---",
+            "epic close",
+            "stdin epic set-plan",
+            "set-title updates epic JSON",
+            "epic set-backend",
+        ):
+            self.assertNotIn(stale_label, smoke)
+        for canonical_label in (
+            "config set false/get",
+            "--- spec set-title ---",
+            "spec close",
+            "stdin spec set-plan",
+            "spec set-backend",
+        ):
+            self.assertIn(canonical_label, smoke)
+
+    def test_direct_rp_exploration_targets_community_edition(self) -> None:
+        paths = (
+            PLUGIN / "skills" / "flow-next-rp-explorer" / "SKILL.md",
+            PLUGIN / "skills" / "flow-next-rp-explorer" / "cli-reference.md",
+            PLUGIN / "agents" / "context-scout.md",
+        )
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("rpce-cli", text)
+            self.assertNotRegex(text, r"(?m)^\s*rp-cli\s")
 
 
 class RepoPromptCapabilityProbeTest(unittest.TestCase):

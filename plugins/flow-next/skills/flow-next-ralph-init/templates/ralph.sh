@@ -861,7 +861,7 @@ PY
 }
 
 # Get list of open (non-done) spec IDs from `flowctl specs --json`.
-# `flowctl specs` is canonical post-1.0; `flowctl epics` remains as alias (T2).
+# `flowctl specs` is the canonical and only list surface post-3.0.
 list_open_specs() {
   local tmpfile
   tmpfile="$(mktemp)"

@@ -173,7 +173,7 @@ fi
 scripts/flowctl config set memory.enabled false --json >/dev/null
 
 echo -e "${YELLOW}--- next: plan/work/none + priority ---${NC}"
-# Capture epic ID from create output (fn-N-xxx format)
+# Capture spec ID from create output (fn-N-xxx format)
 EPIC1_JSON="$(scripts/flowctl spec create --title "Epic One" --json)"
 EPIC1="$(echo "$EPIC1_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$EPIC1" --title "Low pri" --priority 5 --json >/dev/null
@@ -322,16 +322,16 @@ PY
 echo -e "${GREEN}✓${NC} branch_name set"
 PASS=$((PASS + 1))
 
-echo -e "${YELLOW}--- epic set-title ---${NC}"
-# Create epic with tasks for rename test
+echo -e "${YELLOW}--- spec set-title ---${NC}"
+# Create spec with tasks for rename test
 RENAME_EPIC_JSON="$(scripts/flowctl spec create --title "Old Title" --json)"
 RENAME_EPIC="$(echo "$RENAME_EPIC_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$RENAME_EPIC" --title "First task" --json >/dev/null
 scripts/flowctl task create --spec "$RENAME_EPIC" --title "Second task" --json >/dev/null
-# Add task dependency within epic
+# Add task dependency within spec
 scripts/flowctl dep add "${RENAME_EPIC}.2" "${RENAME_EPIC}.1" --json >/dev/null
 
-# Rename epic
+# Rename spec
 rename_result="$(scripts/flowctl spec set-title "$RENAME_EPIC" --title "New Shiny Title" --json)"
 NEW_EPIC="$(echo "$rename_result" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["new_id"])')"
 
@@ -354,7 +354,7 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Test 3: Verify epic JSON content updated
+# Test 3: Verify spec JSON content updated
 "${FLOW_PY[@]}" - "$NEW_EPIC" "$NEW_EPIC_JSON_PATH" <<'PY'
 import json, sys
 from pathlib import Path
@@ -364,7 +364,7 @@ assert epic_data["id"] == new_id, f"Epic ID not updated: {epic_data['id']}"
 assert epic_data["title"] == "New Shiny Title", f"Title not updated: {epic_data['title']}"
 assert new_id in epic_data["spec_path"], f"spec_path not updated: {epic_data['spec_path']}"
 PY
-echo -e "${GREEN}✓${NC} set-title updates epic JSON"
+echo -e "${GREEN}✓${NC} set-title updates spec JSON"
 PASS=$((PASS + 1))
 
 # Test 4: Verify task files renamed
@@ -408,7 +408,7 @@ PY
 echo -e "${GREEN}✓${NC} set-title show works with new ID"
 PASS=$((PASS + 1))
 
-# Test 7: depends_on_epics update in other epics
+# Test 7: depends_on_epics schema field updates in other specs
 DEP_EPIC_JSON="$(scripts/flowctl spec create --title "Depends on renamed" --json)"
 DEP_EPIC="$(echo "$DEP_EPIC_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl spec add-dep "$DEP_EPIC" "$NEW_EPIC" --json >/dev/null
@@ -427,10 +427,10 @@ data = json.loads(sys.argv[2])
 deps = data.get("depends_on_epics", [])
 assert final_epic in deps, f"depends_on_epics not updated: {deps}, expected {final_epic}"
 PY
-echo -e "${GREEN}✓${NC} set-title updates depends_on_epics in other epics"
+echo -e "${GREEN}✓${NC} set-title updates depends_on_epics in other specs"
 PASS=$((PASS + 1))
 
-echo -e "${YELLOW}--- block + validate + epic close ---${NC}"
+echo -e "${YELLOW}--- block + validate + spec close ---${NC}"
 EPIC2_JSON="$(scripts/flowctl spec create --title "Epic Two" --json)"
 EPIC2="$(echo "$EPIC2_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$EPIC2" --title "Block me" --json >/dev/null
@@ -446,10 +446,10 @@ scripts/flowctl spec close "$EPIC2" --json >/dev/null
 rc=$?
 set -e
 if [[ "$rc" -ne 0 ]]; then
-  echo -e "${GREEN}✓${NC} epic close fails when blocked"
+  echo -e "${GREEN}✓${NC} spec close fails when blocked"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} epic close fails when blocked"
+  echo -e "${RED}✗${NC} spec close fails when blocked"
   FAIL=$((FAIL + 1))
 fi
 
@@ -458,7 +458,7 @@ scripts/flowctl done "${EPIC2}.1" --summary-file "$TEST_DIR/summary.md" --eviden
 scripts/flowctl start "${EPIC2}.2" --json >/dev/null
 scripts/flowctl done "${EPIC2}.2" --summary-file "$TEST_DIR/summary.md" --evidence-json "$TEST_DIR/evidence.json" --json >/dev/null
 scripts/flowctl spec close "$EPIC2" --json >/dev/null
-echo -e "${GREEN}✓${NC} epic close succeeds when done"
+echo -e "${GREEN}✓${NC} spec close succeeds when done"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- spec ready/unready + badge (fn-58.1) ---${NC}"
@@ -543,7 +543,7 @@ import json, sys
 data = json.loads(sys.argv[1])
 assert data["value"] == False, f"Expected False, got {data['value']}"
 PY
-echo -e "${GREEN}✓${NC} config toggle"
+echo -e "${GREEN}✓${NC} config set false/get"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- planSync config ---${NC}"
@@ -564,7 +564,7 @@ import json, sys
 data = json.loads(sys.argv[1])
 assert data["value"] is False, f"Expected False, got {data['value']}"
 PY
-echo -e "${GREEN}✓${NC} planSync config toggle"
+echo -e "${GREEN}✓${NC} planSync config set false/get"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- memory commands ---${NC}"
@@ -1556,16 +1556,16 @@ echo -e "${YELLOW}--- codex e2e (requires codex CLI) ---${NC}"
 # Check if codex is available (handles its own auth)
 codex_available="$(command -v codex >/dev/null && echo True || echo False)"
 if [[ "$codex_available" == "True" ]]; then
-  # Create a simple epic + task for testing
-  EPIC3_JSON="$(scripts/flowctl spec create --title "Codex test epic" --json)"
+  # Create a simple spec + task for testing
+  EPIC3_JSON="$(scripts/flowctl spec create --title "Codex test spec" --json)"
   EPIC3="$(echo "$EPIC3_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --spec "$EPIC3" --title "Test task" --json >/dev/null
 
   # Write a simple spec
   cat > ".flow/specs/${EPIC3}.md" << 'EOF'
-# Codex Test Epic
+# Codex Test Spec
 
-Simple test epic for smoke testing codex reviews.
+Simple test spec for smoke testing codex reviews.
 
 ## Scope
 - Test that codex can review a plan
@@ -1668,8 +1668,8 @@ if [[ "$copilot_available" == "True" ]]; then
   export FLOW_COPILOT_MODEL=gpt-5-mini
   export FLOW_COPILOT_EFFORT=low
 
-  # Create a simple epic + task for testing
-  EPIC4_JSON="$(scripts/flowctl spec create --title "Copilot test epic" --json)"
+  # Create a simple spec + task for testing
+  EPIC4_JSON="$(scripts/flowctl spec create --title "Copilot test spec" --json)"
   EPIC4="$(echo "$EPIC4_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --spec "$EPIC4" --title "Test task" --json >/dev/null
 
@@ -1677,7 +1677,7 @@ if [[ "$copilot_available" == "True" ]]; then
   cat > ".flow/specs/${EPIC4}.md" << 'EOF'
 # Copilot Test Epic
 
-Simple test epic for smoke testing copilot reviews.
+Simple test spec for smoke testing copilot reviews.
 
 ## Scope
 - Test that copilot can review a plan
@@ -1808,7 +1808,7 @@ fi
 
 echo -e "${YELLOW}--- depends_on_epics gate ---${NC}"
 cd "$TEST_DIR/repo"  # Back to test repo
-# Create epics and capture their IDs
+# Create specs and capture their IDs
 DEP_BASE_JSON="$(scripts/flowctl spec create --title "Dep base" --json)"
 DEP_BASE_ID="$(echo "$DEP_BASE_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$DEP_BASE_ID" --title "Base task" --json >/dev/null
@@ -1881,7 +1881,7 @@ echo -e "${YELLOW}--- stdin support ---${NC}"
 cd "$TEST_DIR/repo"
 STDIN_EPIC_JSON="$(scripts/flowctl spec create --title "Stdin test" --json)"
 STDIN_EPIC="$(echo "$STDIN_EPIC_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-# Test epic set-plan with stdin
+# Test spec set-plan with stdin
 scripts/flowctl spec set-plan "$STDIN_EPIC" --file - --json <<'EOF'
 # Stdin Test Plan
 
@@ -1894,7 +1894,7 @@ EOF
 # Verify content was written
 spec_content="$(scripts/flowctl cat "$STDIN_EPIC")"
 echo "$spec_content" | grep -q "Testing stdin support" || { echo "stdin set-plan failed"; FAIL=$((FAIL + 1)); }
-echo -e "${GREEN}✓${NC} stdin epic set-plan"
+echo -e "${GREEN}✓${NC} stdin spec set-plan"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- task set-spec combined ---${NC}"
@@ -1962,7 +1962,7 @@ echo -e "${YELLOW}--- checkpoint save/restore ---${NC}"
 scripts/flowctl checkpoint save --spec "$STDIN_EPIC" --json >/dev/null
 # Verify checkpoint file exists
 [[ -f ".flow/.checkpoint-${STDIN_EPIC}.json" ]] || { echo "checkpoint file not created"; FAIL=$((FAIL + 1)); }
-# Modify epic spec
+# Modify spec
 scripts/flowctl spec set-plan "$STDIN_EPIC" --file - --json <<'EOF'
 # Modified content
 EOF
@@ -2072,7 +2072,7 @@ else
 fi
 
 echo -e "${YELLOW}--- backend spec validation (fn-28.2) ---${NC}"
-# Fresh epic + task for backend spec tests
+# Fresh spec + task for backend tests
 BSPEC_EPIC_JSON="$(scripts/flowctl spec create --title "Backend spec test" --json)"
 BSPEC_EPIC="$(echo "$BSPEC_EPIC_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$BSPEC_EPIC" --title "Backend task" --json >/dev/null
@@ -2144,13 +2144,13 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Test 8: epic set-backend also validates
+# Test 8: spec set-backend also validates
 epic_invalid="$(scripts/flowctl spec set-backend "$BSPEC_EPIC" --impl "bogus:foo" --json 2>&1 || true)"
 if echo "$epic_invalid" | grep -q '"success": false' && echo "$epic_invalid" | grep -q "Unknown backend"; then
-  echo -e "${GREEN}✓${NC} epic set-backend rejects unknown backend"
+  echo -e "${GREEN}✓${NC} spec set-backend rejects unknown backend"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} epic set-backend didn't reject unknown backend: $epic_invalid"
+  echo -e "${RED}✗${NC} spec set-backend didn't reject unknown backend: $epic_invalid"
   FAIL=$((FAIL + 1))
 fi
 

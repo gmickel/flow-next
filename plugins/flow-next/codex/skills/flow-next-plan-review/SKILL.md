@@ -34,7 +34,7 @@ else
 fi
 ```
 
-When `RP_ELIGIBLE=0` (not macOS, no rp-cli), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor` (plus `none`). `export` is an explicit one-off review MODE (`--review=export`), not a configured backend — never present it as one. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()` as today.
+When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor` (plus `none`). `export` is an explicit one-off review MODE (`--review=export`), not a configured backend — never present it as one. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
 
 ## Backend Selection
 

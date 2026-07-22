@@ -709,8 +709,8 @@ flowctl config get [--json]
 flowctl config set memory.enabled true [--json]
 flowctl config set review.backend codex [--json]  # rp, codex, copilot, cursor, or none
 
-# Toggle boolean config
-flowctl config toggle memory.enabled [--json]
+# Disable a boolean config explicitly
+flowctl config set memory.enabled false [--json]
 ```
 
 `config get` has three read forms, all backed by one command-scoped snapshot (config.json is parsed at most once per invocation; exactly one parse when the file exists):
@@ -859,7 +859,7 @@ flowctl memory add --track bug --category runtime-errors \
 
 # Add entry — knowledge track
 flowctl memory add --track knowledge --category conventions \
-  --title "Use flowctl rp wrappers (not direct rp-cli)" \
+  --title "Use flowctl rp wrappers (not the direct RepoPrompt CLI)" \
   --module ralph --tags "rp,review" \
   --applies-when "any review-backend dispatch" \
   --body-file body.md [--json]
@@ -1173,16 +1173,16 @@ Lint and format commands are always-run and never receipted in v1. Remote CI gat
 
 ### rp
 
-RepoPrompt wrappers (preferred for reviews). Requires RepoPrompt 1.5.68+.
+RepoPrompt wrappers (preferred for reviews). RepoPrompt CE 1.1.0+ is primary; discontinued Classic remains the final compatibility fallback.
 
 **Primary entry point** (handles window selection + builder atomically):
 
 ```bash
-# Atomic setup - picks window by repo root and creates builder tab
+# Atomic setup - reuses/resolves the repo window and opens Context Builder
 eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "Review a plan to ...")"
 # Returns: W=<window> T=<tab>
 
-# With --create: auto-creates RP window if none matches (RP 1.5.68+)
+# With --create: reuses a matching CE window or creates one when none matches
 eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "..." --create)"
 ```
 

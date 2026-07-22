@@ -77,7 +77,7 @@ The subagent-reads-prompt trick above is right for scouts/agents. For a prompt c
 **CLI/GUI review backend** — `build_review_prompt` (codex/copilot/cursor) and the RP skill
 rubrics — a stronger harness puts the *real engine* in the loop: monkeypatch the actual
 `build_review_prompt` (swap rubric-block constants / inject a candidate block), then run the
-prompt through `codex exec` / `rp-cli setup-review`+`chat-send` / `cursor-agent` — the same
+prompt through `codex exec` / `flowctl rp setup-review`+`chat-send` / `cursor-agent` — the same
 engine a real review uses. **Reusable scaffold + worked example: [`optimization/review-prompt/`](../optimization/review-prompt/README.md); scores in [`optimization-log.md`](optimization-log.md).**
 Four techniques it adds to the base loop:
 

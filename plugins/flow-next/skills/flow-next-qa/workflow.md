@@ -80,7 +80,7 @@ $FLOWCTL show "$SPEC_ID" --json | jq -e '.tasks != null' >/dev/null \
 
 ### 1.2 — Resolve the diff base + pull the cognitive-aid payload
 
-`spec export-cognitive-aid` requires a `--base` ref. QA needs the **spec** section (AC / R-IDs / boundaries / decision context) to derive scenarios **and** the top-level `tasks[]` (with each task's `satisfies` + `evidence`) for the §2.0 evidence-aware subtraction — so load the **full** payload (a `--section spec` filter strips `tasks[]`, silently disabling R4):
+`spec export-cognitive-aid` requires a `--base` ref. QA needs the **spec** section (AC / R-IDs / boundaries / decision context) to derive scenarios **and** the top-level `tasks[]` (with each task's `satisfies` + `evidence`) for the §2.0 evidence-aware subtraction, so load the one full payload and reuse it:
 
 ```bash
 # Base-branch detection cascade (reuses make-pr §0.3): pick the first ref that

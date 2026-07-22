@@ -13,7 +13,7 @@ The **single most common post-update issue.** `flowctl` (in `.flow/bin/`) and `.
 
 It is idempotent and non-destructive (your specs/tasks/memory/config are untouched). **Copy-mode repos only:** re-run it in **each project** after every flow-next update - not just once globally, because the copies live per-repo under `.flow/`. **Plugin-mode repos** (Claude Code, `setup_mode: "plugin"` in `.flow/meta.json`) have no local copies to refresh - plugin updates land silently and this section does not apply. See [platforms.md → Setup modes](platforms.md#setup-modes-plugin-vs-copy-fn-121).
 
-## Pre-1.0 `.flow/epics/` layout still present?
+## Pre-1.0 layout porting
 
 `flowctl migrate-rename` / `migrate-rollback` are gone. Port by hand: rename `.flow/epics/` -> `.flow/specs/`, rewrite `next_epic`/`epic`/`epic_id` keys per `.flow/usage.md` "Pre-1.0 layout porting", then `flowctl validate --all`.
 
@@ -108,20 +108,20 @@ warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached 
 - **Force a specific model** (skip the ladder + cache entirely): pin it explicitly — `--spec codex:gpt-5.5`, a per-task/per-spec `review:` value, `FLOW_CODEX_MODEL`, or `review.backend`. An explicit unavailable model errors clearly instead of downgrading.
 - **Reset the cache:** `rm -rf .flow/.cache/` — it is regenerated (and gitignored) on the next review; a corrupt file is already treated as a cold start.
 
-## Custom rp-cli instructions conflicting
+## Custom RepoPrompt CLI instructions conflicting
 
-> **Caution**: If you have custom instructions for `rp-cli` in your `CLAUDE.md` or `AGENTS.md`, they may conflict with Flow-Next's RepoPrompt integration.
+> **Caution**: If you have custom RepoPrompt CLI instructions in your `CLAUDE.md` or `AGENTS.md`, they may conflict with Flow-Next's integration.
 
-Flow-Next's plan-review and impl-review skills include specific instructions for `rp-cli` usage (window selection, builder workflow, chat commands). Custom rp-cli instructions can override these and cause unexpected behavior.
+Flow-Next's plan-review and impl-review skills include specific instructions for CE-first CLI discovery, window selection, builder workflow, and chat commands. Custom instructions can override these and cause unexpected behavior.
 
 **Symptoms:**
 - Reviews not using the correct RepoPrompt window
 - Builder not selecting expected files
 - Chat commands failing or behaving differently
 
-**Fix:** Remove or comment out custom rp-cli instructions from your `CLAUDE.md`/`AGENTS.md` when using Flow-Next reviews. The plugin provides complete rp-cli guidance.
+**Fix:** Remove or comment out custom RepoPrompt CLI instructions from your `CLAUDE.md`/`AGENTS.md` when using Flow-Next reviews. The plugin provides the complete CE-first workflow.
 
-> **Note:** RepoPrompt is macOS-only. On non-Mac hosts without `rp-cli` on PATH, `/flow-next:plan` and `/flow-next:plan-review` don't propose the RepoPrompt path at all — `plan`'s setup offers Codex / export / none for review (research defaults to `repo-scout`), and `plan-review` steers only to the cross-platform backends (`codex`, `copilot`, `cursor`, `none`). `/flow-next:impl-review` and `/flow-next:spec-completion-review` apply the same gate to their steering (glance lists, ASK-error and override hints). An explicit `--review=rp` is still accepted and errors at runtime if `rp-cli` is missing.
+> **Note:** RepoPrompt is macOS-only. When the CE-first ladder (`rpce-cli`, the two CE user links, then Classic `rp-cli`) finds no runnable candidate, `/flow-next:plan` and the review skills do not propose RepoPrompt. Explicit `--review=rp` is still accepted and errors at runtime if no supported RepoPrompt CLI is available.
 
 ## Copilot review backend on Windows (fixed in 1.1.9)
 
@@ -131,7 +131,7 @@ Spec-driven `flowctl copilot {impl,plan,completion}-review` calls work on native
 
 POSIX (macOS / Linux / WSL) behavior is unchanged.
 
-**If you still see Windows argv errors:** check `flowctl --version` — anything below 1.1.9 hits the cap. Update with `flowctl setup` or pull the latest plugin.
+**If you still see Windows argv errors:** inspect the installed plugin version in your host's plugin manager. Update Flow-Next, then re-run `/flow-next:setup` only for copy-mode repositories so their checked-in launchers refresh; plugin-mode repositories consume the updated launcher directly.
 
 **Upstream:** [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) tracks a first-class `--prompt-file` flag. Once that lands, both POSIX and Windows paths will move to the cleaner file-based delivery.
 

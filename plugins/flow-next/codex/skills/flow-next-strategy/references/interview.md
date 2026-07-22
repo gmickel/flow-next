@@ -146,6 +146,6 @@ Clarity tool, not a blocker list. Skip by default. If the user names items, one 
 
 ## After the Interview
 
-Once sections 1-5 are captured (and any optional sections the user engaged with), the per-section atomic writes have already landed each section on disk. Run `flowctl strategy read --json` to get the current state, present the full draft in chat for read-back, offer one round of edits, then confirm.
+Once sections 1-5 are captured (and any optional sections the user engaged with), the per-section atomic writes have already landed each section on disk. Run `"$FLOWCTL" strategy read --json` to get the current state, present the full draft in chat for read-back, offer one round of edits, then confirm.
 
 The post-write checklist (in `strategy-template.md` §Post-write checklist) is the agent's own scan-pass before showing the read-back — catch placeholder leftovers, sentence-count violations, missing-frontmatter cases, metric/track count out of range, and Target-problem ↔ Our-approach disconnect.
