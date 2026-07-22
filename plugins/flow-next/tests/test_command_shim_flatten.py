@@ -39,6 +39,17 @@ CURSOR_MANIFEST = PLUGIN_DIR / ".cursor-plugin" / "plugin.json"
 
 FRONTMATTER_NAME = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
 
+# The exact canonical command surface after the fn-124 flatten (23 shims,
+# epic-review retired). Pinned so a silent delete-one-add-one swap fails CI:
+# adding or removing a command is a deliberate surface change that MUST update
+# this set. Keep alphabetical.
+EXPECTED_COMMANDS = frozenset({
+    "audit", "capture", "impl-review", "interview", "land", "make-pr", "map",
+    "memory-migrate", "pilot", "plan", "plan-review", "prime", "prospect", "qa",
+    "ralph-init", "resolve-pr", "setup", "spec-completion-review", "strategy",
+    "sync", "tracker-sync", "uninstall", "work",
+})
+
 
 def _frontmatter(text: str) -> str:
     """Return the YAML frontmatter block (between the first two --- fences)."""
@@ -61,11 +72,16 @@ class TestCursorPluginSurface(unittest.TestCase):
             "at commands/*.md.",
         )
 
-    def test_at_least_23_flat_shims(self) -> None:
-        self.assertGreaterEqual(
-            len(self.shims),
-            23,
-            f"expected >= 23 flat command shims, found {len(self.shims)}",
+    def test_exact_flat_command_surface(self) -> None:
+        # Pin the EXACT set (not just a >=23 floor): a silent delete-one +
+        # add-one swap must fail. Adding/removing a command requires updating
+        # EXPECTED_COMMANDS deliberately.
+        actual = {shim.stem for shim in self.shims}
+        self.assertEqual(
+            actual,
+            set(EXPECTED_COMMANDS),
+            f"command surface drifted: missing={sorted(EXPECTED_COMMANDS - actual)} "
+            f"unexpected={sorted(actual - EXPECTED_COMMANDS)}",
         )
 
     def test_cursor_manifest_points_at_flat_commands(self) -> None:

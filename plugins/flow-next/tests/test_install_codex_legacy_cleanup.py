@@ -106,43 +106,64 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             self.assertEqual(user_prompt.read_text(), "mine too\n")
 
             # Installer delivers EXACTLY the current canonical command set as
-            # prompts (count-only would pass if extras masked a missing shim).
+            # prompts. Set-based, not count-only: every canonical shim present,
+            # the retired epic-review alias absent, and no OTHER canonical-named
+            # prompt lingering. (The user's own prompt is expected alongside.)
             installed = {p.name for p in (codex / "prompts").glob("*.md")}
             expected = {p.name for p in COMMANDS_DIR.glob("*.md")}
             self.assertTrue(expected, "no canonical command shims found in source")
-            missing = expected - installed
-            self.assertFalse(missing, f"canonical prompts not installed: {sorted(missing)}")
-            # epic-review must NOT be among the canonical set (alias retired).
             self.assertNotIn("epic-review.md", expected, "epic-review shim not deleted from source")
+            # The flow-next-owned prompt subset installed == exactly the canonical set.
+            installed_canonical = installed & (expected | {"epic-review.md"})
+            self.assertEqual(
+                installed_canonical,
+                expected,
+                f"delivered flow-next prompts != canonical set: "
+                f"missing={sorted(expected - installed)} "
+                f"stale={sorted(installed_canonical - expected)}",
+            )
             # The user's own prompt still there alongside the canonical set.
             self.assertIn("my-own-prompt.md", installed)
 
     def test_user_authored_epic_review_prompt_is_preserved(self) -> None:
-        # A user's OWN epic-review.md (no flow-next sentinel) must NOT be
-        # deleted by the upgrade cleanup — the HIGH finding from the sol review.
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
-            codex = home / ".codex"
-            (codex / "prompts").mkdir(parents=True)
-            user_epic = codex / "prompts" / "epic-review.md"
-            user_epic.write_text("# My own epic review checklist\n- step 1\n")
+        # A user's OWN epic-review.md must NOT be deleted by the upgrade cleanup
+        # (the HIGH finding from the sol review). Two user files exercise the
+        # two-signal ownership guard's boundary:
+        #   (a) neither signal — an unrelated checklist;
+        #   (b) ONE signal only — mentions our skill name but is NOT a redirect
+        #       (no "renamed"/"deprecat"). Both must survive; only a file with
+        #       BOTH signals is treated as flow-next's retired shim.
+        cases = {
+            "no-signal": "# My own epic review checklist\n- step 1\n",
+            "one-signal": (
+                "# Notes\nSee flow-next-spec-completion-review for the flow-next "
+                "review flow; my own epic-review process is below.\n- step 1\n"
+            ),
+        }
+        for label, body in cases.items():
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp)
+                codex = home / ".codex"
+                (codex / "prompts").mkdir(parents=True)
+                user_epic = codex / "prompts" / "epic-review.md"
+                user_epic.write_text(body)
 
-            result = _run_installer(home)
-            self.assertEqual(
-                result.returncode,
-                0,
-                f"install-codex.sh failed:\n{result.stdout}\n{result.stderr}",
-            )
+                result = _run_installer(home)
+                self.assertEqual(
+                    result.returncode,
+                    0,
+                    f"install-codex.sh failed:\n{result.stdout}\n{result.stderr}",
+                )
 
-            self.assertTrue(
-                user_epic.exists(),
-                "user-authored epic-review.md (no flow-next sentinel) was deleted",
-            )
-            self.assertEqual(
-                user_epic.read_text(),
-                "# My own epic review checklist\n- step 1\n",
-                "user-authored epic-review.md was modified",
-            )
+                self.assertTrue(
+                    user_epic.exists(),
+                    f"[{label}] user-authored epic-review.md was deleted",
+                )
+                self.assertEqual(
+                    user_epic.read_text(),
+                    body,
+                    f"[{label}] user-authored epic-review.md was modified",
+                )
 
 
 if __name__ == "__main__":

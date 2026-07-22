@@ -97,28 +97,36 @@ echo -e "${GREEN}✓${NC} $SKILL_COUNT skills"
 # touch unrelated user skills/prompts.
 #
 # Ownership guard: delete ONLY when the artifact is provably flow-next's own
-# retired shim, not a same-named file the user authored. Both the legacy skill
-# and prompt bodies redirect to "flow-next-spec-completion-review"; that string
-# is the ownership sentinel. `epic-review.md` is a generic enough prompt name
-# that a first-time installer could legitimately already have one — so a prompt
-# WITHOUT the sentinel is left untouched (and noted).
-LEGACY_SENTINEL="flow-next-spec-completion-review"
+# retired shim, not a same-named file the user authored. `epic-review.md` is a
+# generic prompt name a first-time installer could legitimately already have,
+# so deletion requires TWO independent flow-next-redirect signals — both are
+# present in every era of our generated shim, neither is plausible in a user's
+# own file:
+#   (1) it names our target skill "flow-next-spec-completion-review", AND
+#   (2) it reads as a deprecation redirect ("renamed" / "deprecat…").
+# A file missing EITHER signal is treated as the user's and left untouched
+# (and noted). Bias is deliberate: a surviving stale flow-next file is cosmetic;
+# deleting a user's file is not.
+is_flow_next_redirect() {  # $1 = file path
+    grep -q "flow-next-spec-completion-review" "$1" 2>/dev/null \
+        && grep -Eiq "renamed|deprecat" "$1" 2>/dev/null
+}
 LEGACY_SKILL="$CODEX_DIR/skills/flow-next-epic-review"
 if [ -d "$LEGACY_SKILL" ]; then
-    if [ -f "$LEGACY_SKILL/SKILL.md" ] && grep -q "$LEGACY_SENTINEL" "$LEGACY_SKILL/SKILL.md" 2>/dev/null; then
+    if [ -f "$LEGACY_SKILL/SKILL.md" ] && is_flow_next_redirect "$LEGACY_SKILL/SKILL.md"; then
         rm -rf "$LEGACY_SKILL"
         echo -e "${GREEN}✓${NC} removed stale legacy skill flow-next-epic-review"
     else
-        echo -e "${YELLOW}!${NC} kept $LEGACY_SKILL (no flow-next redirect marker — not ours)"
+        echo -e "${YELLOW}!${NC} kept $LEGACY_SKILL (not a flow-next redirect shim — left untouched)"
     fi
 fi
 LEGACY_PROMPT="$CODEX_DIR/prompts/epic-review.md"
 if [ -f "$LEGACY_PROMPT" ]; then
-    if grep -q "$LEGACY_SENTINEL" "$LEGACY_PROMPT" 2>/dev/null; then
+    if is_flow_next_redirect "$LEGACY_PROMPT"; then
         rm -f "$LEGACY_PROMPT"
         echo -e "${GREEN}✓${NC} removed stale legacy prompt epic-review.md"
     else
-        echo -e "${YELLOW}!${NC} kept $LEGACY_PROMPT (no flow-next redirect marker — not ours)"
+        echo -e "${YELLOW}!${NC} kept $LEGACY_PROMPT (not a flow-next redirect shim — left untouched)"
     fi
 fi
 
