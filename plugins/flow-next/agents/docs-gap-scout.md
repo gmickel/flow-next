@@ -3,6 +3,7 @@ name: docs-gap-scout
 description: Identify documentation that may need updates based on the planned changes.
 model: sonnet
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#06B6D4"
 ---
 

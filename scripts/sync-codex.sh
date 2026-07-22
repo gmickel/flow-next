@@ -1634,6 +1634,11 @@ for md_file in "$SRC_AGENTS"/*.md; do
   codex_name=$(rename_agent "$basename_raw")
 
   # Parse YAML frontmatter
+  # Known keys: name/description/model map into TOML. Cursor-native `readonly:`
+  # (fn-123 R4) and Claude-only keys (disallowedTools, color, user-invocable)
+  # are recognized so they never leak into developer_instructions and never
+  # trip a future strict-key guard. Codex enforces read-only via sandbox_mode
+  # (sandbox_for), not a `readonly` TOML field — so we swallow, not emit.
   name="" description="" model=""
   in_frontmatter=0 frontmatter_done=0
   body=""
@@ -1649,9 +1654,14 @@ for md_file in "$SRC_AGENTS"/*.md; do
     fi
     if [ "$in_frontmatter" = "1" ]; then
       case "$line" in
-        name:*)        name="${line#name: }"; name="${name#name:}"; name="$(echo "$name" | xargs)" ;;
-        description:*) description="${line#description: }"; description="${description#description:}"; description="$(echo "$description" | xargs)" ;;
-        model:*)       model="${line#model: }"; model="${model#model:}"; model="$(echo "$model" | xargs)" ;;
+        name:*)             name="${line#name: }"; name="${name#name:}"; name="$(echo "$name" | xargs)" ;;
+        description:*)      description="${line#description: }"; description="${description#description:}"; description="$(echo "$description" | xargs)" ;;
+        model:*)            model="${line#model: }"; model="${model#model:}"; model="$(echo "$model" | xargs)" ;;
+        readonly:*)         ;; # Cursor-native; Codex uses sandbox_mode (tolerated, not emitted)
+        disallowedTools:*)  ;; # Claude/Droid-only capability blacklist
+        color:*)            ;; # Claude UI chrome
+        user-invocable:*)   ;; # Claude plugin catalog flag
+        ""|\#*)             ;; # blank / comment lines in frontmatter
       esac
     fi
   done < "$md_file"

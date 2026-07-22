@@ -3,6 +3,7 @@ name: claude-md-scout
 description: Used by /flow-next:prime to analyze CLAUDE.md and AGENTS.md quality and completeness. Do not invoke directly.
 model: sonnet
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#EC4899"
 ---
 

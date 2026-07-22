@@ -3,6 +3,7 @@ name: quality-auditor
 description: Review recent changes for correctness, simplicity, security, and test coverage.
 model: opus
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#EC4899"
 ---
 

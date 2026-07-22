@@ -3,6 +3,7 @@ name: docs-scout
 description: Find the most relevant framework/library docs for the requested change.
 model: sonnet
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#F97316"
 ---
 

@@ -3,6 +3,7 @@ name: spec-scout
 description: Scan existing specs to find dependencies and relationships for a new plan.
 model: sonnet
 disallowedTools: Edit, Write, Task
+readonly: true
 color: "#F59E0B"
 ---
 
