@@ -4,7 +4,7 @@ When adding a new `/flow-next:<name>` skill, every step below MUST be done. Skip
 
 1. **Canonical skill** at `plugins/flow-next/skills/flow-next-<name>/SKILL.md` (+ `workflow.md` / `phases.md` as needed). Frontmatter: `name`, `description`, `user-invocable: false` (default for slash-only skills), `allowed-tools`.
 
-2. **Slash command** at `plugins/flow-next/commands/<name>.md` (flat directory, no `name:` frontmatter - the basename governs; mirror existing `audit.md` / `prospect.md` shape).
+2. **Slash command** at `plugins/flow-next/commands/<name>.md` (flat directory - never a `commands/flow-next/` subdir). Frontmatter carries a **bare, colon-free `name: <name>`** (e.g. `name: qa`, NOT `name: flow-next:qa`) plus a non-empty `description`: Claude Code prepends the plugin prefix to the last segment, so a bare name renders `/flow-next:<name>` while a colon re-triples it; Cursor's marketplace review checklist (fn-123 R11) requires both `name` and `description` on every command. Mirror the existing `audit.md` / `prospect.md` shape.
 
 3. **Tool names in canonical = Claude-native** — write `AskUserQuestion`, `Task`, etc. directly. NO inline cross-platform tables. If you reference these tools, optionally add a parenthetical "(`sync-codex.sh` transforms `AskUserQuestion` into a plain-text numbered-prompt instruction for Codex)" for maintainer clarity — sync strips it from the Codex mirror. The Codex mirror never calls `request_user_input` (Plan-mode-only per openai/codex#10384/#11536/#12694).
 
