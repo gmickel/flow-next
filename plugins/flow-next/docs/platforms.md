@@ -224,11 +224,12 @@ Then run **`/flow-next:setup`** in the project (slash syntax - **not** `$flow-ne
 
 ### Caveats / intentional limits
 
-- **Command discovery (fn-124).** The pre-3.3.1 tripled-name slash-menu bug (`/flow-next:flow-next:flow-next:qa`) was fixed by **fn-124** (command-shim flatten; shipped in **3.3.1**). Grok slash-command discovery is **expected-fixed** by that change. **LIVE validation in a real grok session is a pending NEEDS-HUMAN check** - do not treat CI or prose as proof that Grok's autocomplete menu lists every command.
-- **UI listing ≠ functionality.** `grok inspect` may under-list plugin agents; commands still run when typed in full and subagents still dispatch (verified above). Type the command if autocomplete is incomplete.
+- **Command discovery (fn-124) - live-verified 2026-07-22.** The pre-3.3.1 tripled-name slash-menu bug (`/flow-next:flow-next:flow-next:qa`) is **fixed** by **fn-124** (command-shim flatten; shipped in **3.3.1**) - confirmed live in a real grok session: the autocomplete shows clean single-prefix names (`/flow-next-deps`, `/flow-next-drive`), no nesting.
+- **UI listing ≠ functionality (Grok limitation).** Grok's autocomplete **under-lists**: some commands (e.g. `/flow-next-plan`, `/flow-next-work`) do not appear in the menu even though they **run correctly when typed in full** (live-verified). The commands are registered fine; grok's autocomplete surfaces only a subset. This is a Grok UI limitation, not a flow-next defect - **type the command; it works.** (Same class as historical host autocomplete quirks.)
+- **Detection signal (live-verified 2026-07-22).** `GROK_AGENT=1` confirmed present in a STANDALONE grok session (`env \| grep GROK_AGENT` → `GROK_AGENT=1`, no other vars) - not an artifact of a launched-from-another-agent probe.
 - **Ralph is intentionally not built for Grok.** Same posture as Cursor - not a hook-schema gap and not "TBD validation." Setup never offers Ralph on `PLATFORM=grok`, never registers guard hooks, and never runs ralph-init from the ceremony. Interactive plan / work / review is the supported surface.
 
-> **Status:** verified-compat host. Detection: `GROK_AGENT=1` only. Canonical Claude files AS-IS; both CLAUDE.md and AGENTS.md loaded; `/flow-next:` slash syntax; copy mode + `.flow/bin/flowctl`; review includes `host` with single-family fail-closed; no Ralph (intentional). Multi-agent scout fan-out verified. Slash-menu discovery expected-fixed by fn-124 (3.3.1); live grok-session confirmation is NEEDS-HUMAN. Nested Droid→Grok unsupported pending propagation smoke.
+> **Status:** verified-compat host. Detection: `GROK_AGENT=1` only. Canonical Claude files AS-IS; both CLAUDE.md and AGENTS.md loaded; `/flow-next:` slash syntax; copy mode + `.flow/bin/flowctl`; review includes `host` with single-family fail-closed; no Ralph (intentional). Multi-agent scout fan-out verified. `GROK_AGENT=1` + no-nesting slash menu live-verified (2026-07-22); autocomplete under-lists some commands (they run when typed - Grok UI limitation). Nested Droid→Grok unsupported pending propagation smoke.
 
 ## Cursor
 
