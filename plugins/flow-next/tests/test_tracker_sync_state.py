@@ -32,6 +32,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -241,7 +242,10 @@ class TrackerSyncStateTestCase(unittest.TestCase):
     def test_list_stale_honors_flag_and_recency(self) -> None:
         s1 = self._create_spec("Fresh sync")
         self._set_id(s1, "uuid-fresh")
-        self._call(func=self.flowctl.cmd_sync_set_last_synced, id=s1, at=None)
+        # Keep the zero-hour assertion deterministic on clocks whose resolution
+        # can return the same instant for consecutive datetime.now() calls.
+        synced_at = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+        self._call(func=self.flowctl.cmd_sync_set_last_synced, id=s1, at=synced_at)
         # 24h threshold: just-synced spec is NOT stale.
         res = self._call(func=self.flowctl.cmd_sync_list_stale, older_than_hours=24)
         self.assertNotIn(s1, [i["id"] for i in res["stale"]])
