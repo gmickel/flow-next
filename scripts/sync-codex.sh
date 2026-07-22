@@ -370,12 +370,14 @@ its backend rather than the project default. `none` still skips review.
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
-REVIEW_MODE: none|rp|codex|copilot|cursor
+REVIEW_MODE: none|rp|codex|copilot|cursor|host-deferred
 RALPH_MODE: true|false
 
 Follow your phases exactly."
 
-**Worker returns**: Summary of implementation, files changed, test results, review verdict.
+**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE done.** When the resolved review mode is \`host\`, pass \`REVIEW_MODE: host-deferred\`: the worker skips review dispatch AND defers \`flowctl done\` (returns with the task still in_progress + summary/evidence files written). The conductor then runs \`$flow-next-impl-review <task-id> --review=host\` as the mandatory gate and only on SHIP runs \`flowctl done\` with the worker-prepared summary/evidence plus the review receipt; NEEDS_WORK drives the bounded fix loop before done.
+
+**Worker returns**: Summary of implementation, files changed, test results, review verdict (or, under host-deferred: implementation summary + handover paths, review pending at conductor level).
 
 SECTION3C
     tail -n +$end_line "$phases" >> "${phases}.tmp"

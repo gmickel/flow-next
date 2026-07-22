@@ -289,7 +289,9 @@ there is no independent impl-review gate, so Phase 5 below runs its own
 verification on the delegated diff — `verification_summary` from Codex is NOT
 trusted as the sole gate. See Phase 5.)
 
-**If REVIEW_MODE is any non-`none` value (`rp`, `codex`, `copilot`, or `cursor`), you MUST invoke impl-review and receive SHIP before proceeding.**
+**If REVIEW_MODE is `host-deferred`, SKIP this phase's review dispatch entirely** — you cannot dispatch subagents and the conductor runs the host review after you return. Do NOT invoke impl-review, do NOT report a review verdict, and (critically) do NOT run Phase 5's `flowctl done` — see the Phase 5 host-deferred branch.
+
+**If REVIEW_MODE is any other non-`none` value (`rp`, `codex`, `copilot`, or `cursor`), you MUST invoke impl-review and receive SHIP before proceeding.**
 (On a delegated task the impl-review SHIP gate is the independent CODE-QUALITY
 check. The Phase 5 Verify block still runs in every mode — it is the authoritative
 gate discipline (classify → tier-B or full gates → receipts → GATE_SKIPPED
@@ -393,6 +395,8 @@ When ambiguous, pick the most specific that fits. If truly none fit, default to 
 If capture fails (memory disabled mid-run, flowctl error, etc.), log and continue — never block task completion on memory capture.
 
 ## Phase 5: Complete
+
+**host-deferred branch (fn-123 R5) — DO NOT run `flowctl done`.** When `REVIEW_MODE` is `host-deferred`: run the Verify block below as normal (the gates still run), write your summary markdown and evidence JSON to the handover paths (same content you would pass to `done`), and RETURN with the task still `in_progress`. Report the file paths, commits, and gate evidence in your final message. The conductor runs the mandatory host review and calls `flowctl done` itself only on a SHIP verdict — a task must never be `done` before its host review. Every other REVIEW_MODE proceeds through this phase unchanged.
 
 **Verify before completing (if project has tests/lints):**
 ```bash
