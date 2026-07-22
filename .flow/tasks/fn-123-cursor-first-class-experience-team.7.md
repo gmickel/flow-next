@@ -16,9 +16,14 @@ Rewrite Cursor installation truth + downstream onboarding. flow-next repo: READM
 
 
 ## Done summary
-TBD
+Rewrote Cursor install truth for team-marketplace-first onboarding (R10/R12).
 
+- platforms.md: full Cursor section rewrite — team-marketplace recommended, admin runbook, corrected autocomplete/asks/hooks claims, documented rules rail / host backend / AGENTS routing / readonly / alias-inherit
+- install-cursor.sh + .ps1: removed under-lists caveat; team-marketplace recommended note
+- README Cursor row: marketplace import recommended + platforms.md#cursor link
+- CHANGELOG ## Unreleased: whole fn-123 summary (no version bump)
+- test_cursor_docs_contract.py: prose contracts for platforms/install/README
 ## Evidence
 - Commits:
-- Tests:
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_cursor_docs_contract test_install_cursor_parity -q
 - PRs:

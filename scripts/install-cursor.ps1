@@ -30,12 +30,15 @@
 
   Excludes the Codex mirror (codex\), tests\, and Python/OS cruft.
 
+  Team path: team-marketplace repo import is the RECOMMENDED install for orgs
+  (admin imports the GitHub repo via the Cursor GitHub App; Default Off/On/Required;
+  auto-refresh on push). This script is the individual / fallback path.
+
   Caveats (cosmetic / known) -- same as the bash installer:
-    - Cursor registers the skills/commands/agents but does NOT show flow-next as a
-      grouped "plugin" card in the marketplace UI -- the components still work.
-    - Ralph autonomous mode is NOT supported on Cursor: flow-next's hooks use Claude
-      Code's schema (PreToolUse/Stop + Bash|Execute matchers); Cursor's hook events
-      are afterFileEdit / beforeShellExecution, so the Ralph guard never fires.
+    - Local installs register skills/commands/agents; a grouped "plugin" card in
+      the marketplace UI is a team-marketplace concern -- the components still work.
+    - Ralph autonomous mode is intentionally not built for Cursor (Cursor has a
+      full agent-hook set; flow-next does not register Ralph guards there).
 
 .PARAMETER Plugin
   Plugin to install. Only 'flow-next' is supported (the default).
@@ -116,8 +119,12 @@ Write-Host "Next steps:"
 Write-Host "  1. Fully restart Cursor (Quit, reopen) - a new local plugin needs a full restart."
 Write-Host "  2. In your project, run /flow-next:setup (writes .flow\bin\flowctl + AGENTS.md;"
 Write-Host "     skills resolve flowctl via .flow\bin since Cursor exposes no plugin-root env var)."
-Write-Host "  3. Drive the workflow by TYPING the commands - /flow-next:plan, /flow-next:work, ..."
-Write-Host "     (they run when typed even though the slash autocomplete under-lists them)."
+Write-Host "  3. Drive the workflow: type or pick from slash autocomplete - hyphenated form"
+Write-Host "     shown (/flow-next-plan); colon form also works when typed (/flow-next:plan)."
+Write-Host ""
+Write-Host "Note: for teams, team-marketplace repo import is the recommended path"
+Write-Host "      (admin imports the GitHub repo via the Cursor GitHub App); this script"
+Write-Host "      is the individual / fallback install."
 Write-Host ""
 Write-Host "Re-run this script after 'git pull' to update the snapshot."
 Write-Host "Uninstall: Remove-Item -Recurse -Force `"$Dest`""
