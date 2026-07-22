@@ -2070,7 +2070,7 @@ def parse_builder_tab(output: str) -> str:
 
 
 def parse_chat_id(output: str) -> Optional[str]:
-    match = re.search(r"Chat\s*:\s*`([^`]+)`", output)
+    match = re.search(r"(?:\*\*)?Chat(?:\*\*)?\s*:\s*`([^`]+)`", output)
     if match:
         return match.group(1)
     match = re.search(r"\"chat_id\"\s*:\s*\"([^\"]+)\"", output)

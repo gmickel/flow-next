@@ -13,7 +13,7 @@ All notable changes to the flow-next.
 ### Fixed
 
 - **Concurrent state and model-cache correctness (fn-122).** Portable cross-process locks now protect task allocation/publication, setup/runtime state, and model-cache mutation on POSIX and Windows. Concurrent task creators cannot acknowledge lost or mismatched JSON/Markdown writes; model cache keys include effective routing intent, preserve unrelated concurrent entries, and never silently downgrade explicit pins. Git/CLI discovery catches non-sticky `OSError` failures.
-- **RepoPrompt CE window reuse regression (#228, fn-122).** CE-first discovery follows `rpce-cli` → current CE user link → legacy CE link → Classic `rp-cli`; only discovery failures advance, while selected-CE operational failures remain authoritative. Current `binding.window_id` and `windows[].tabs[].repo_paths` responses now reuse the existing repository window instead of cloning the workspace, with legacy response compatibility retained. Thanks [@aidancurry](https://github.com/aidancurry) for reporting the regression.
+- **RepoPrompt CE window reuse regression (#228, fn-122).** CE-first discovery follows `rpce-cli` → current CE user link → legacy CE link → Classic `rp-cli`; only discovery failures advance, while selected-CE operational failures remain authoritative. Current `binding.window_id` and `windows[].tabs[].repo_paths` responses now reuse the existing repository window instead of cloning the workspace, with legacy response compatibility retained. CE's Markdown-formatted chat response also retains its session ID through the JSON wrapper. Thanks [@aidancurry](https://github.com/aidancurry) for reporting the regression.
 
 ## [flow-next 3.1.2] - 2026-07-22
 

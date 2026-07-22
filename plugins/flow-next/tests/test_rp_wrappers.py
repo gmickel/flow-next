@@ -354,6 +354,18 @@ class RepoPromptWrapperCommandTest(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
         self.assertIn("call oracle_send ", run.call_args.args[0][-1])
 
+    def test_chat_id_parser_accepts_ce_markdown_and_json(self) -> None:
+        self.assertEqual(
+            flowctl.parse_chat_id(
+                "## Chat Send ✅\n- **Chat**: `untitled-chat-7741A9` | **Mode**: chat\n"
+            ),
+            "untitled-chat-7741A9",
+        )
+        self.assertEqual(
+            flowctl.parse_chat_id('{"chat_id":"chat-json-1"}\n'),
+            "chat-json-1",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
