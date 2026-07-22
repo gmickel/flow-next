@@ -14,7 +14,7 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `TASK_ID` - the task to implement (e.g., fn-1.2)
 - `SPEC_ID` - parent spec (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
-- `REVIEW_MODE` - none, rp, codex, copilot, or cursor
+- `REVIEW_MODE` - none, rp, codex, copilot, cursor, or host
 - `RALPH_MODE` - true if running autonomously
 - `DELEGATE` - codex to delegate Phase 2 implementation to `codex exec`; absent or `local` ⇒ standard in-session (the host only sets this when delegation is active and all pre-flight gates passed). `DELEGATE_MODEL` / `DELEGATE_SANDBOX` / `DELEGATE_EFFORT_FLOOR` / `DELEGATE_DECISION` accompany it — see Phase 2.
 

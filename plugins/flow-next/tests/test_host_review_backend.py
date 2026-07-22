@@ -77,3 +77,39 @@ class TestHostBackendSpecParse(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHostLenientResolution(unittest.TestCase):
+    """fn-123 review hardening (sol P1): the LENIENT read-time parser must not
+    silently degrade ``host:<model>`` to bare ``host`` — the stored pin the
+    user thought they set would be silently ignored. Invalid host specs are
+    treated as unset (None) with a loud stderr error."""
+
+    def test_lenient_host_model_returns_none(self) -> None:
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            spec = flowctl.parse_backend_spec_lenient("host:opus", warn=False)
+        self.assertIsNone(spec, "host:<model> must not degrade to bare host")
+        self.assertIn("invalid", buf.getvalue().lower())
+
+    def test_lenient_host_model_effort_returns_none(self) -> None:
+        import io, contextlib
+        with contextlib.redirect_stderr(io.StringIO()):
+            spec = flowctl.parse_backend_spec_lenient("host:opus:high", warn=True)
+        self.assertIsNone(spec)
+
+    def test_lenient_bare_host_still_parses(self) -> None:
+        spec = flowctl.parse_backend_spec_lenient("host", warn=False)
+        self.assertIsNotNone(spec)
+        self.assertEqual(spec.backend, "host")
+        resolved = spec.resolve()
+        self.assertIsNone(resolved.model)
+        self.assertIsNone(resolved.effort)
+
+    def test_lenient_other_backends_still_degrade(self) -> None:
+        import io, contextlib
+        with contextlib.redirect_stderr(io.StringIO()):
+            spec = flowctl.parse_backend_spec_lenient("rp:not-a-model", warn=True)
+        self.assertIsNotNone(spec, "legacy lenience for non-host backends must not change")
+        self.assertEqual(spec.backend, "rp")

@@ -184,7 +184,22 @@ When `BACKEND="host"`, do **not** call any `flowctl <backend> plan-review` — t
  - Cursor: subagent with the slug stated in the prompt (Cursor honors in-prompt model pins)
  - Elsewhere: fresh-context reviewer; note in the receipt that pin enforcement is host-dependent
 4. Give the subagent the plan-review rubric ([references/plan-review-prompt.md](references/plan-review-prompt.md)), the spec content, and any prior findings for convergence. Require the same verdict tags (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`).
-5. **Receipt** (when `REVIEW_RECEIPT_PATH` set, or default path): write JSON with `"mode": "host"`, `"model": "<actual-reviewer-slug>"`, verdict, timestamp, spec id — no fabricated `session_id` for resume (every re-review is a new subagent).
+5. **Receipt** — path `RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt${SPEC_ID:+-${SPEC_ID}}.json}"` (explicit env always wins). Write exactly:
+
+ ```json
+ {
+ "type": "plan_review",
+ "id": "<spec-id>",
+ "mode": "host",
+ "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK>",
+ "model": "<actual-reviewer-slug>",
+ "spec": "host",
+ "session_id": null,
+ "timestamp": "<ISO-8601>"
+ }
+ ```
+
+ `session_id` is literal `null` — every re-review is a new subagent; `null` marks by-design non-resumability (vs an incomplete receipt).
 6. **Status write:** `$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship|needs_work --json` as appropriate (host has no handler-owned write).
 7. Return the verdict to the Fix Loop below. On re-review, spawn a **new** subagent every time (no context reuse).
 

@@ -43,7 +43,13 @@ Wait for the subagent result (blocking — do not background).
 
 ## Step 3: Receipt
 
-When `REVIEW_RECEIPT_PATH` is set (or use the default path from SKILL.md), write a receipt compatible with existing consumers:
+Receipt path (same contract as the subprocess backends — fn-90 task-scoped default; explicit `REVIEW_RECEIPT_PATH` always wins):
+
+```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
+```
+
+Write a receipt compatible with existing consumers:
 
 ```json
 {
@@ -53,9 +59,12 @@ When `REVIEW_RECEIPT_PATH` is set (or use the default path from SKILL.md), write
   "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK>",
   "model": "<actual-reviewer-slug>",
   "spec": "host",
+  "session_id": null,
   "timestamp": "<ISO-8601>"
 }
 ```
+
+`session_id` is literal `null` — deliberate: host re-reviews are always fresh subagents, and `null` distinguishes "no resumable session by design" from an accidentally incomplete receipt.
 
 Do **not** invent a `session_id` for resume — host re-reviews always spawn a new subagent. Shape stays compatible with convergence/cap/pilot/land consumers (`mode`, `verdict`, `model`, `timestamp`).
 

@@ -199,3 +199,51 @@ class ReadbackAskContract(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPrintThenAskOrdering(unittest.TestCase):
+    """fn-123 review hardening: assert ORDER and ask-brevity, not just tokens.
+
+    The §4.1 contract is a numbered sequence: print the full draft FIRST
+    (item 1), then the short ask (item 2). Token presence alone would pass a
+    regressed skill that re-embedded the draft in the ask while keeping the
+    prose; these tests slice the owning section and check order + forbidden
+    embed wording.
+    """
+
+    def setUp(self) -> None:
+        self.workflow = _read(CAPTURE_WORKFLOW)
+
+    def _contract_block(self) -> str:
+        start = self.workflow.find("Print-then-ask contract")
+        self.assertGreater(start, -1, "capture workflow lost the print-then-ask contract block")
+        return self.workflow[start : start + 2500]
+
+    def test_print_precedes_ask_in_contract_block(self) -> None:
+        block = self._contract_block()
+        print_pos = block.find("Print the FULL draft markdown as an ordinary assistant message FIRST")
+        ask_pos = block.find("issue a **short** `AskUserQuestion`")
+        self.assertGreater(print_pos, -1, "contract lost the print-first step")
+        self.assertGreater(ask_pos, -1, "contract lost the short-ask step")
+        self.assertLess(print_pos, ask_pos, "print step must precede the ask step")
+
+    def test_ask_body_forbids_embedded_drafts(self) -> None:
+        block = self._contract_block()
+        self.assertIn(
+            "Never embed multi-paragraph drafts, diffs, or criteria lists in the ask body",
+            block,
+        )
+
+    def test_old_embed_wording_absent_everywhere(self) -> None:
+        for path in (CAPTURE_SKILL, CAPTURE_WORKFLOW, CAPTURE_PHASES, INTERVIEW_DOC_AWARE, INTERVIEW_WRITE_BACK):
+            text = _read(path)
+            for forbidden in (
+                "inline in the question or in the message preceding it",
+                "the question body must say the full draft is in the Write render above",
+                "rides in the §4.2 question body",
+            ):
+                self.assertNotIn(forbidden, text, f"{path.name}: regressed to old embed-in-ask wording: {forbidden!r}")
+
+    def test_edit_cycle_reprints_before_reask(self) -> None:
+        combined = "\n".join(_read(p) for p in (CAPTURE_SKILL, CAPTURE_WORKFLOW, INTERVIEW_DOC_AWARE, INTERVIEW_WRITE_BACK))
+        self.assertIn("reprint", combined.lower())

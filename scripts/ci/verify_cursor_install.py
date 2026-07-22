@@ -122,6 +122,30 @@ def main() -> int:
         if extra:
             errors.append(f"{label}: {len(extra)} unexpected in install: {sorted(extra)[:5]}")
 
+    # Content integrity: same names is not enough — stale/empty/corrupted
+    # copies with matching names must fail (fn-123 review hardening). Compare
+    # content hashes for every file under the copied component trees.
+    import hashlib
+
+    def _tree_hashes(root: Path, sub: str) -> dict[str, str]:
+        base = root / sub
+        if not base.is_dir():
+            return {}
+        return {
+            str(p.relative_to(base)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(base.rglob("*"))
+            if p.is_file()
+        }
+
+    for sub in ("skills", "commands", "agents", "rules"):
+        src_h, dst_h = _tree_hashes(SRC, sub), _tree_hashes(dest, sub)
+        stale = [rel for rel, h in src_h.items() if rel in dst_h and dst_h[rel] != h]
+        if stale:
+            errors.append(
+                f"{sub}: {len(stale)} file(s) differ from source (stale install?"
+                f" re-run installer): {stale[:5]}"
+            )
+
     # Cleanliness: excluded payload must NOT have leaked in.
     if (dest / "codex").exists():
         errors.append("codex/ mirror leaked into the install (should be excluded)")

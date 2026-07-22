@@ -5311,6 +5311,16 @@ def parse_backend_spec_lenient(
     except ValueError as e:
         # Try bare-backend fallback: first ':'-separated part.
         first = str(raw).strip().split(":", 1)[0].strip()
+        # fn-123 R5: never degrade an invalid host spec to bare ``host`` —
+        # that would silently ignore the model the user thought they pinned.
+        # Treat it as unset so resolution falls through, and always say why.
+        if first == "host":
+            print(
+                f"error: spec {str(raw)!r} is invalid: {e} Ignoring this "
+                f"value (treated as unset).",
+                file=sys.stderr,
+            )
+            return None
         if first in BACKEND_REGISTRY:
             if warn:
                 print(
