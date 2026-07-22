@@ -1,0 +1,17 @@
+{
+  "name": "flow-next",
+  "owner": {
+    "name": "Gordon Mickel",
+    "email": "gordon@mickel.tech"
+  },
+  "metadata": {
+    "description": "Plan-first workflows for Cursor Teams. Ships flow-next: zero-dep, spec-driven SDLC with durable specs, re-anchored workers, and cross-model review."
+  },
+  "plugins": [
+    {
+      "name": "flow-next",
+      "source": "./plugins/flow-next",
+      "description": "Zero-dependency planning + execution with .flow/ task tracking. Spec-driven workflow skills, agents, and commands for Cursor."
+    }
+  ]
+}

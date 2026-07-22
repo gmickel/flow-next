@@ -14,6 +14,8 @@ on:
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/ci/verify_cursor_install.py"
+      # Root Cursor team-marketplace manifest (fn-123) — outside plugins/**
+      - ".cursor-plugin/**"
       # fn-119 parallel unit-suite entrypoint
       - "scripts/run_tests_parallel.py"
   pull_request:
@@ -26,6 +28,7 @@ on:
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/ci/verify_cursor_install.py"
+      - ".cursor-plugin/**"
       - "scripts/run_tests_parallel.py"
   workflow_dispatch:
     inputs:
