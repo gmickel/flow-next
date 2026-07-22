@@ -122,11 +122,12 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
 4. Parse verdict from command output
 
-**For host backend (fn-123 R5):**
+**For host backend (fn-123 R5 / fn-126):**
 1. **DO NOT REVIEW THE PLAN YOURSELF** — you coordinate; a fresh-context host-native subagent reviews
 2. Dispatch a **read-only** reviewer subagent pinned to a **cross-family** model slug (family that did not write the plan) from the AGENTS.md model-routing section:
- - **Claude Code**: native subagent `model` param (existing reviewer-subagent arrangement)
- - **Cursor**: in-prompt slug pin on the subagent (host honors Cursor slugs)
+ - **Claude Code**: native subagent `model` param (existing reviewer-subagent arrangement); `disallowedTools: Edit, Write, Task` (or host equivalent read-only)
+ - **Cursor**: in-prompt slug pin on the subagent (host honors Cursor slugs) AND tool-enforced read-only
+ - **Grok**: in-prompt / host model pin from AGENTS.md model-routing + tool-enforced read-only (Grok is single-native-family `grok-4.5` — host review fails closed unless the writer is non-Grok; cross-family via bridge backends). Receipt semantics identical to Claude/Cursor (`mode: "host"`, actual reviewer model, `session_id: null`)
  - **Other hosts**: generic fresh-context reviewer with an explicit note that the pin is best-effort / host-dependent
 3. Reuse the existing plan-review rubrics + prior-finding convergence context (same verdict grammar as other backends)
 4. Write receipt with actual reviewer model + `"mode": "host"` (shape compatible with existing convergence/cap/pilot/land consumers)
@@ -182,6 +183,7 @@ When `BACKEND="host"`, do **not** call any `flowctl <backend> plan-review` — t
 3. **Dispatch** a fresh read-only reviewer subagent with the pin:
  - Claude Code: `Task` / subagent with `model: <cross-family-slug>`, `disallowedTools: Edit, Write, Task` (or host equivalent read-only)
  - Cursor: subagent with the slug stated in the prompt (Cursor honors in-prompt model pins) AND `readonly: true` enforcement — dispatch via a read-only agent definition (the fn-123 R4 `readonly: true` agents) or Cursor's read-only subagent mode; never a mutation-capable subagent. The reviewer analyzes untrusted diff content — read-only must be TOOL-enforced, not prompt-requested
+ - Grok: subagent / fresh-context reviewer with the AGENTS.md pin stated in the prompt AND tool-enforced read-only (never mutation-capable). Grok is single-native-family (`grok-4.5`) — if the pin is same-family as the writer, fail closed (interactive ask / autonomous NEEDS_HUMAN); cross-family review on Grok prefers bridge backends. Receipt: `mode: "host"`, actual reviewer model, `session_id: null`
  - Codex: fresh read-only reviewer via the platform subagent primitive (`spawn_agent`) with the pin stated in the prompt; read-only via the platform sandbox
  - Elsewhere: fresh-context reviewer; note in the receipt that pin enforcement is host-dependent
 4. Give the subagent the plan-review rubric ([references/plan-review-prompt.md](references/plan-review-prompt.md)), the spec content, and any prior findings for convergence. Require the same verdict tags (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`).

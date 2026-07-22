@@ -94,9 +94,13 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
 4. Parse verdict from command output
 
-**For host backend (fn-123 R5):**
+**For host backend (fn-123 R5 / fn-126):**
 1. **DO NOT REVIEW CODE YOURSELF** — you coordinate; a fresh-context host-native subagent reviews (see [workflow-host.md](workflow-host.md))
-2. Dispatch a **read-only** reviewer subagent pinned to a **cross-family** model slug from AGENTS.md model-routing (Claude Code: native `model` param; Cursor: in-prompt slug pin; elsewhere: generic fresh-context reviewer with host-dependent note)
+2. Dispatch a **read-only** reviewer subagent pinned to a **cross-family** model slug from AGENTS.md model-routing:
+ - **Claude Code**: native `model` param + tool-enforced read-only
+ - **Cursor**: in-prompt slug pin + tool-enforced read-only
+ - **Grok**: in-prompt / host model pin + tool-enforced read-only; single-native-family (`grok-4.5`) fails closed unless the writer is non-Grok (cross-family via bridges); receipt `mode: "host"` + actual model + `session_id: null`
+ - **Elsewhere**: generic fresh-context reviewer with host-dependent note
 3. Record actual reviewer model + `"mode": "host"` in the receipt
 4. **Every re-review is a fresh subagent** — no context reuse, no fabricated resume ids
 5. **Fail closed on missing cross-family pin:** interactive → ask user explicitly; autonomous → `NEEDS_HUMAN` (never silent same-family self-review)

@@ -1,6 +1,6 @@
 # Other Platforms
 
-Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre-built mirror), and Factory Droid (native cross-platform patterns). A community port exists for OpenCode. xAI **Grok Build** reads the Claude Code plugin with zero config — skills load, the `/flow-next:*` commands **run when typed**, and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Grok's UI just under-lists flow-next's commands/agents (cosmetic — they work when invoked); Ralph is fully opt-in (project hooks via ralph-init) and still to validate end-to-end on Grok (see [Grok Build](#grok-build-claude-code-compatibility) below). **Cursor** is first-class too: **recommended install is team-marketplace repo import** (admin imports the GitHub repo via the Cursor GitHub App; Default Off / On / Required modes; auto-refresh on push); local `install-cursor.sh` / `.ps1` remain the individual/fallback path. Skills, commands, multi-agent flows, native asks, and slash autocomplete verified; Ralph intentionally not built for Cursor. See [Cursor](#cursor) below.
+Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre-built mirror), and Factory Droid (native cross-platform patterns). A community port exists for OpenCode. xAI **Grok Build** reads the canonical Claude plugin format AS-IS (skills, agents, commands, MCP, instruction files). Skills load, `/flow-next:*` (and hyphenated `/flow-next-*`) slash commands run when typed, and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Setup detects Grok via **`GROK_AGENT=1`** (not Codex fallback / `$flow-next-` syntax). Copy mode + `.flow/bin/flowctl`; Ralph intentionally not built for Grok. See [Grok Build](#grok-build-claude-code-compatibility) below. **Cursor** is first-class too: **recommended install is team-marketplace repo import** (admin imports the GitHub repo via the Cursor GitHub App; Default Off / On / Required modes; auto-refresh on push); local `install-cursor.sh` / `.ps1` remain the individual/fallback path. Skills, commands, multi-agent flows, native asks, and slash autocomplete verified; Ralph intentionally not built for Cursor. See [Cursor](#cursor) below.
 
 ### Ralph hooks: per-host registration (no plugin-default)
 
@@ -12,7 +12,7 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 | Factory Droid | `.factory/hooks.json` (primary) | Fallback: `hooks` in `.factory/settings.json` if already used |
 | Codex | `.codex/hooks.json` (project) | Shell + Stop only; no plugin auto-hooks |
 | Cursor | *(none)* | Cursor has a full agent-hook set; flow-next intentionally does not build/register Ralph on Cursor |
-| Grok Build | same as Claude (`.claude/settings.json`) | Claude-compat path |
+| Grok Build | *(none)* | flow-next intentionally does not build/register Ralph on Grok (same posture as Cursor; not a schema gap) |
 
 ## Install matrix
 
@@ -21,7 +21,7 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 | Claude Code | `/plugin marketplace add https://github.com/gmickel/flow-next && /plugin install flow-next` | `.claude-plugin/plugin.json` | Canonical environment |
 | Factory Droid | `droid plugin marketplace add https://github.com/gmickel/flow-next && droid plugin install flow-next` (in Droid CLI) | `.claude-plugin/plugin.json` (Droid auto-translates Claude Code plugin format) | Native cross-platform patterns |
 | OpenAI Codex | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-codex.sh` | `.codex-plugin/plugin.json` | Pre-built mirror under `plugins/flow-next/codex/` |
-| Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (read via Claude Code compat) | **Works incl. multi-agent** (full `/flow-next:plan` scout fan-out verified). UI under-lists commands/agents (cosmetic); Ralph TBD — see below |
+| Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (canonical Claude files AS-IS; no Codex mirror) | **Detected via `GROK_AGENT=1`.** Slash commands (`/flow-next:*` / `/flow-next-*`), copy mode, multi-agent verified. Ralph intentionally not built. See [Grok Build](#grok-build-claude-code-compatibility) |
 | Cursor | **Recommended:** team-marketplace repo import (admin imports `gmickel/flow-next` via Cursor GitHub App). **Fallback:** `./scripts/install-cursor.sh` / `install-cursor.ps1` → `~/.cursor/plugins/local/` | `.cursor-plugin/plugin.json` (Cursor's own namespace — does NOT read `.claude-plugin/`) | **First-class** (multi-agent, native asks, autocomplete verified). Ralph intentionally not built for Cursor — see [Cursor](#cursor) |
 | OpenCode | See [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | n/a | Community port |
 
@@ -186,29 +186,50 @@ chmod +x .flow/bin/flowctl
 
 ## Grok Build (Claude Code compatibility)
 
-[xAI Grok Build](https://x.ai/cli) (the `grok` CLI) advertises zero-config Claude Code compatibility — per [xAI docs](https://docs.x.ai/build/features/skills-plugins-marketplaces) it *"automatically reads Claude Code marketplaces, plugins, skills, MCPs, agents, hooks, and instruction files."* If flow-next is already installed in Claude Code, Grok picks it up with no extra setup.
+[xAI Grok Build](https://x.ai/cli) (the `grok` CLI) reads the **canonical Claude plugin format AS-IS** - skills, agents, commands, MCP, and instruction files. Per [xAI docs](https://docs.x.ai/build/features/skills-plugins-marketplaces) it *"automatically reads Claude Code marketplaces, plugins, skills, MCPs, agents, hooks, and instruction files."* If flow-next is already installed in Claude Code, Grok picks it up with no extra setup.
+
+**Grok is not a Codex host.** It does **not** consume the Codex mirror, does **not** use `$flow-next-*` command syntax, and must not fall through setup's `else → codex` path. Drive with `/flow-next:*` / `/flow-next-*` slash commands; after `/flow-next:setup` resolve flowctl via `.flow/bin/flowctl` (copy mode only).
+
+### Setup detection (fn-126)
+
+`/flow-next:setup` classifies the host via a positive rung, ordered after Droid / Claude / Cursor and **before** the `else → codex` fallback:
+
+| Signal | Role |
+|--------|------|
+| **`GROK_AGENT=1`** | **Only valid detection signal.** Set BY grok in its agent shell. Probe-verified 2026-07-22 (present in a real grok session; absent from a plain-shell control on the same machine/profile). |
+| `~/.grok/` directory | **Not a signal.** Install dir exists on the machine regardless of whether a grok session is running. |
+| `~/.grok/bin` on `PATH` | **Not a signal.** Profile-level; present outside grok sessions too. |
+
+**Instruction files (probe-verified):** Grok loads **both** `CLAUDE.md` and `AGENTS.md` into context (seeded-codename probe, 2026-07-22). Setup therefore writes the lifecycle docs snippet to **CLAUDE.md** by default (`/flow-next:` slash syntax, not Codex `$flow-next-`) and the model-routing scaffold to **AGENTS.md** (where host-review workflows resolve pins). A pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form (marker-scoped).
+
+**Known nesting edge (Droid → Grok) - NEEDS-HUMAN:** if a grok child inherits `DROID_PLUGIN_ROOT` from a Droid parent shell, the cascade classifies as `droid` (higher precedence). Nested Droid→Grok is **unsupported** pending a this-process-is-grok discriminator, unless a live smoke confirms `DROID_PLUGIN_ROOT` does not propagate. Claude/Cursor launched from a grok shell still classify correctly via their own higher-precedence signals. The probe disproved `CLAUDE_PLUGIN_ROOT` propagation into a grok child.
 
 ### Install (pick one)
 
-- **Already in Claude Code?** Nothing to do — run `grok inspect` and you'll see flow-next's skills loaded (Ralph guard hooks only after project-level ralph-init + trust).
+- **Already in Claude Code?** Nothing to do - run `grok inspect` and you'll see flow-next's skills loaded.
 - **Add as a marketplace source:** flow-next's repo root is a Claude Code **marketplace** (`.claude-plugin/marketplace.json`), so register `gmickel/flow-next` via `[[marketplace.sources]]` in `~/.grok/config.toml` (or the TUI **Marketplace** tab, opened with `/plugins`), then enable the `flow-next` plugin.
 - **Local / dev:** `grok --plugin-dir /path/to/flow-next/plugins/flow-next`.
 
-> **Do NOT run `grok plugin install https://github.com/gmickel/flow-next`.** That is the **single-plugin** git installer; the repo root is a **marketplace** (the plugin is nested at `plugins/flow-next/`), so it errors `no plugins found in the source (no plugin.json or convention components)` — there is no single plugin at the repo root. This is the same reason you don't `claude plugin install` a marketplace repo. Use the marketplace / auto-read path above.
+Then run **`/flow-next:setup`** in the project (slash syntax - **not** `$flow-next-setup`). Grok is always **copy mode** (no plugin-root bin PATH injection): setup stamps `.flow/bin/flowctl`, writes the slash-syntax docs snippet, offers the Grok review + model-routing menus, and does **not** copy `.codex/agents` or offer Ralph.
 
-### What works (verified, Grok 0.2.27 alpha)
+> **Do NOT run `grok plugin install https://github.com/gmickel/flow-next`.** That is the **single-plugin** git installer; the repo root is a **marketplace** (the plugin is nested at `plugins/flow-next/`), so it errors `no plugins found in the source (no plugin.json or convention components)` - there is no single plugin at the repo root. This is the same reason you don't `claude plugin install` a marketplace repo. Use the marketplace / auto-read path above.
+
+### What works (verified, Grok 0.2.27 alpha + fn-126 setup)
 
 - All 28 flow-next **skills** load (`grok inspect`: `plugin: flow-next`); discovery used the **Claude Code plugin install** directly (`Marketplaces (0)`, no Grok-side config).
-- **The `/flow-next:<name>` commands run when typed.** Typing `/flow-next:plan` fires `user_prompt_submit`, loads the `flow-next-plan` skill, and runs its workflow. Plugin-level Ralph hooks are **not** shipped; project hooks appear only after ralph-init merges them into `.claude/settings.json`.
-- **Multi-agent flows work — verified end-to-end.** A real `/flow-next:plan` run under Grok 0.2.27 **fanned out all seven scout subagents** (`repo-scout`, `practice-scout`, `docs-scout`, `spec-scout`, `docs-gap-scout`, `memory-scout`, `flow-gap-analyst`) in parallel; they spawned, completed, and the skill drove `flowctl` to create the spec + tasks and validate — a full plan, start to finish. So Grok **dispatches flow-next's custom `subagent_type`s** even though `grok inspect` doesn't list them in its agent UI. (UI listing ≠ functionality — see below.)
-- **MCP servers** resolve (e.g. RepoPrompt, linear-server); `flowctl` resolves via the bundled `.flow/bin/flowctl` copy.
+- **Slash commands.** Drive with `/flow-next:<name>` or hyphenated `/flow-next-<name>` - **not** Codex `$flow-next-` syntax. Typing `/flow-next:plan` loads the `flow-next-plan` skill and runs its workflow.
+- **Multi-agent flows work - verified end-to-end.** A real `/flow-next:plan` run under Grok 0.2.27 **fanned out all seven scout subagents** (`repo-scout`, `practice-scout`, `docs-scout`, `spec-scout`, `docs-gap-scout`, `memory-scout`, `flow-gap-analyst`) in parallel; they spawned, completed, and the skill drove `flowctl` to create the spec + tasks and validate. Grok **dispatches flow-next's custom `subagent_type`s** even when `grok inspect` does not list them in its agent UI.
+- **MCP servers** resolve (e.g. RepoPrompt, linear-server); after setup, `flowctl` resolves via **`.flow/bin/flowctl`** (copy mode).
+- **Review menu includes `host`.** Setup offers `host` alongside `rp` / `codex` / `copilot` / `cursor` / `none`. **Single-family fail-closed:** Grok's only native model family is `grok-4.5`, so native `host` review fails closed (interactive → ask; autonomous → `NEEDS_HUMAN`) unless the writer is non-Grok. Cross-family review on Grok comes through bridge backends (`codex` / `cursor` / `copilot`), not a native multi-family subagent. Host-native model-routing scaffold lands in AGENTS.md and documents the same honesty.
 
-### Caveats (cosmetic, not functional)
+### Caveats / intentional limits
 
-- **Grok's UI under-lists flow-next's commands and agents — but both work when invoked.** `grok inspect` shows only Grok's 3 builtin agents (not flow-next's 22), and the slash *autocomplete* lists only the 6 skills with **no** `user-invocable` key (`flow-next`, `flow-next-deps`, `flow-next-drive`, `flow-next-export-context`, `flow-next-rp-explorer`, `flow-next-worktree-kit`). The 22 `user-invocable: false` skills + the 23 `commands/*.md` wrappers don't show in the menu, and the custom agents don't show in `inspect` — yet **the commands run when typed in full** (e.g. `/flow-next:plan`) and **the subagents dispatch** (verified above). flow-next marks skills `user-invocable: false` because the Claude Code entry point is the command wrapper; Grok's menu keys on that flag and its `inspect` summary just doesn't surface plugin agents. **Discoverability gap, not a functional one — type the command.**
-- **Ralph autonomous mode — not yet validated.** The verified run was interactive multi-agent work; Ralph's hook-gated `Stop`/`SubagentStop` loop hasn't been exercised under Grok. Hooks load and fire; the autonomous gating specifically is untested.
+- **Command discovery (fn-124) - live-verified 2026-07-22.** The pre-3.3.1 tripled-name slash-menu bug (`/flow-next:flow-next:flow-next:qa`) is **fixed** by **fn-124** (command-shim flatten; shipped in **3.3.1**) - confirmed live in a real grok session: the autocomplete shows clean single-prefix names (`/flow-next-deps`, `/flow-next-drive`), no nesting.
+- **UI listing ≠ functionality (Grok limitation).** Grok's autocomplete **under-lists**: some commands (e.g. `/flow-next-plan`, `/flow-next-work`) do not appear in the menu even though they **run correctly when typed in full** (live-verified). The commands are registered fine; grok's autocomplete surfaces only a subset. This is a Grok UI limitation, not a flow-next defect - **type the command; it works.** (Same class as historical host autocomplete quirks.)
+- **Detection signal (live-verified 2026-07-22).** `GROK_AGENT=1` confirmed present in a STANDALONE grok session (`env \| grep GROK_AGENT` → `GROK_AGENT=1`, no other vars) - not an artifact of a launched-from-another-agent probe.
+- **Ralph is intentionally not built for Grok.** Same posture as Cursor - not a hook-schema gap and not "TBD validation." Setup never offers Ralph on `PLATFORM=grok`, never registers guard hooks, and never runs ralph-init from the ceremony. Interactive plan / work / review is the supported surface.
 
-> **Status (Grok 0.2.27 alpha):** skills load; `/flow-next:*` commands **run when typed**; MCP + `flowctl` resolve; and **multi-agent subagent dispatch works** — a full `/flow-next:plan` fanned out all seven scouts end-to-end. Caveat: Grok's autocomplete + `grok inspect` under-list flow-next's commands/agents (cosmetic — they work when invoked). Ralph is opt-in (project hooks) and still to validate under Grok.
+> **Status:** verified-compat host. Detection: `GROK_AGENT=1` only. Canonical Claude files AS-IS; both CLAUDE.md and AGENTS.md loaded; `/flow-next:` slash syntax; copy mode + `.flow/bin/flowctl`; review includes `host` with single-family fail-closed; no Ralph (intentional). Multi-agent scout fan-out verified. `GROK_AGENT=1` + no-nesting slash menu live-verified (2026-07-22); autocomplete under-lists some commands (they run when typed - Grok UI limitation). Nested Droid→Grok unsupported pending propagation smoke.
 
 ## Cursor
 

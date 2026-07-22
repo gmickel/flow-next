@@ -14,9 +14,8 @@ Downstream + command-discovery validation + release staging. Docs: plugins/flow-
 
 
 ## Done summary
-TBD
-
+platforms.md Grok section: GROK_AGENT detection signal table, instruction-file probe (loads BOTH CLAUDE.md+AGENTS.md), slash syntax, copy mode, host review + single-family fail-closed note, no-Ralph (intentional), Droid-nesting NEEDS-HUMAN edge; stale codex-fallback claims corrected. CHANGELOG Unreleased fn-126 entry (plain hyphens, no bump). flow-next.dev: 6 existing pages updated (install/introduction/changelog/review-workflow/setup/architecture) + customer-register Unreleased entry, pnpm build green, committed separately (8561874). Command-discovery expected-fixed by fn-124 (3.3.1), live grok validation = NEEDS-HUMAN (recorded, not claimed). Vault Platforms note = release-time downstream (deferred to fn-126 release walk). grok-4.5 high (2 passes); reviewed by session model; no em dashes.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8872b744
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_cursor_docs_contract -q, cd ~/work/flow-next.dev && pnpm build
 - PRs:
