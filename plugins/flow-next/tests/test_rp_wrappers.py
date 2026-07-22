@@ -67,6 +67,8 @@ class RepoPromptDiscoveryTest(unittest.TestCase):
             os.environ,
             {"HOME": str(self.home), "PATH": str(self.bin)},
             clear=False,
+        ), mock.patch.object(
+            flowctl.Path, "home", return_value=self.home
         ), mock.patch.object(flowctl.shutil, "which", side_effect=which), mock.patch.object(
             flowctl.os, "access", side_effect=executable
         ):

@@ -71,9 +71,10 @@ class StartupBootstrapTest(unittest.TestCase):
     @staticmethod
     def _launcher_command(launcher: Path, *args: str) -> list[str]:
         # The extensionless launcher is Bash, not a Win32 executable. GitHub's
-        # Windows image ships Git Bash; invoke it explicitly there.
+        # Windows image ships Git Bash; invoke it explicitly there and use the
+        # forward-slash path form that Git Bash accepts.
         if os.name == "nt":
-            return ["bash", str(launcher), *args]
+            return ["bash", launcher.as_posix(), *args]
         return [str(launcher), *args]
 
     def test_windows_launcher_command_uses_git_bash(self) -> None:
