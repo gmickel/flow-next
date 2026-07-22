@@ -95,13 +95,31 @@ echo -e "${GREEN}✓${NC} $SKILL_COUNT skills"
 # only copy current prompts, so stale copies from older installs would survive
 # upgrades forever. Remove EXACTLY these two artifacts — never glob, never
 # touch unrelated user skills/prompts.
-if [ -d "$CODEX_DIR/skills/flow-next-epic-review" ]; then
-    rm -rf "$CODEX_DIR/skills/flow-next-epic-review"
-    echo -e "${GREEN}✓${NC} removed stale legacy skill flow-next-epic-review"
+#
+# Ownership guard: delete ONLY when the artifact is provably flow-next's own
+# retired shim, not a same-named file the user authored. Both the legacy skill
+# and prompt bodies redirect to "flow-next-spec-completion-review"; that string
+# is the ownership sentinel. `epic-review.md` is a generic enough prompt name
+# that a first-time installer could legitimately already have one — so a prompt
+# WITHOUT the sentinel is left untouched (and noted).
+LEGACY_SENTINEL="flow-next-spec-completion-review"
+LEGACY_SKILL="$CODEX_DIR/skills/flow-next-epic-review"
+if [ -d "$LEGACY_SKILL" ]; then
+    if [ -f "$LEGACY_SKILL/SKILL.md" ] && grep -q "$LEGACY_SENTINEL" "$LEGACY_SKILL/SKILL.md" 2>/dev/null; then
+        rm -rf "$LEGACY_SKILL"
+        echo -e "${GREEN}✓${NC} removed stale legacy skill flow-next-epic-review"
+    else
+        echo -e "${YELLOW}!${NC} kept $LEGACY_SKILL (no flow-next redirect marker — not ours)"
+    fi
 fi
-if [ -f "$CODEX_DIR/prompts/epic-review.md" ]; then
-    rm -f "$CODEX_DIR/prompts/epic-review.md"
-    echo -e "${GREEN}✓${NC} removed stale legacy prompt epic-review.md"
+LEGACY_PROMPT="$CODEX_DIR/prompts/epic-review.md"
+if [ -f "$LEGACY_PROMPT" ]; then
+    if grep -q "$LEGACY_SENTINEL" "$LEGACY_PROMPT" 2>/dev/null; then
+        rm -f "$LEGACY_PROMPT"
+        echo -e "${GREEN}✓${NC} removed stale legacy prompt epic-review.md"
+    else
+        echo -e "${YELLOW}!${NC} kept $LEGACY_PROMPT (no flow-next redirect marker — not ours)"
+    fi
 fi
 
 # ====================

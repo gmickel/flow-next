@@ -60,7 +60,11 @@ Work through the spec's "Live path-consumer inventory" table - it is the complet
 - [ ] Live-tree grep sweep clean (only task-.2 docs rows may remain, explicitly listed in the task summary)
 
 ## Done summary
-Flattened the 23 command shims to plugins/flow-next/commands/*.md (deleted the dead epic-review alias on all platforms incl. the Codex mirror redirect skill), removed the namespaced `name:` frontmatter so the basename governs, and updated every live path consumer in lockstep (Cursor manifest + installers + CI verifier, Codex prompts loop + exact-target stale-alias upgrade cleanup, ci_test.sh, 2 unit tests, 5 smoke tests, sync-codex). Live-menu evidence captured: fresh session renders `/flow-next:qa` cleanly and a typed invocation dispatches the flow-next-qa skill; `claude plugin validate` passes.
+Flattened the 23 command shims to plugins/flow-next/commands/*.md (deleted the dead epic-review alias on all platforms incl. the Codex mirror redirect skill), and updated every live path consumer in lockstep (Cursor manifest + installers + CI verifier, Codex prompts loop + exact-target stale-alias upgrade cleanup, ci_test.sh, 2 unit tests, 5 smoke tests, sync-codex).
+
+**Frontmatter `name:` — FINAL implementation (revised after rebase onto fn-123 + GPT-5.6-sol review):** each shim carries a BARE, colon-free `name: <cmd>` (e.g. `name: qa`), NOT a removed name. An earlier iteration removed `name:` entirely (basename governs), but fn-123 R11 / Cursor's marketplace review checklist require `name` + `description` on every command, so the field stays — just de-prefixed. Bare name fixes Claude Code's tripled prefix (v2.1.216+ prepends the plugin prefix to the last segment; a colon renders literally) while keeping the Cursor contract.
+
+**Live-menu evidence — re-captured on the bare-name head (2026-07-22):** fresh headless `claude --plugin-dir plugins/flow-next -p` inventory rendered all 23 as clean `/flow-next:<cmd>` (no duplicated prefixes, no epic-review), and a typed `/flow-next:qa` dispatched the skill; `claude plugin validate plugins/flow-next` passes. (The originally-recorded proof below was captured against the earlier name-removed commit d057f689; the bare-name variant was independently re-verified on the current head and by a GPT-5.6-sol regression review.)
 
 Live-menu raw capture (fresh headless `claude --plugin-dir plugins/flow-next -p`, 2026-07-22; relevant command-shim lines from the unfiltered live inventory):
 

@@ -77,29 +77,53 @@ class TestCursorPluginSurface(unittest.TestCase):
             "./commands dir (kept in lockstep with the shim layout).",
         )
 
-    def test_every_shim_has_bare_colon_free_name(self) -> None:
+    def test_every_shim_name_equals_stem_bare_and_unique(self) -> None:
+        # The load-bearing invariant: each shim carries EXACTLY ONE bare,
+        # colon-free `name:` that equals its own filename stem, and no two
+        # shims share a name. A weaker "name present + colon-free" check would
+        # pass even if every shim said `name: qa` (collision) or `qa.md` said
+        # `name: plan` (mismatch) -- both silently break the command surface.
+        seen: dict[str, str] = {}
         for shim in self.shims:
             with self.subTest(shim=shim.name):
                 fm = _frontmatter(shim.read_text(encoding="utf-8"))
                 names = FRONTMATTER_NAME.findall(fm)
                 # (fn-123 R11) every command must carry a name for Cursor's
                 # marketplace review checklist.
-                self.assertTrue(
-                    names,
-                    f"{shim.name}: missing frontmatter 'name:' -- Cursor's "
-                    "marketplace review checklist (fn-123 R11) requires it.",
+                self.assertEqual(
+                    len(names),
+                    1,
+                    f"{shim.name}: expected exactly one frontmatter 'name:', "
+                    f"found {len(names)} -- Cursor's marketplace review "
+                    "checklist (fn-123 R11) requires a single name.",
                 )
-                for value in names:
-                    # (fn-124) the name must be bare/colon-free: under Claude
-                    # Code v2.1.216+ the plugin prefix is always prepended, so a
-                    # namespaced name renders a doubled prefix.
-                    self.assertNotIn(
-                        ":",
-                        value,
-                        f"{shim.name}: frontmatter name '{value}' contains a "
-                        "colon -- it renders doubled on Claude Code (fn-124). "
-                        "Use the bare command name, e.g. 'name: qa'.",
-                    )
+                value = names[0]
+                # (fn-124) bare/colon-free: under Claude Code v2.1.216+ the
+                # plugin prefix is always prepended, so a namespaced name
+                # renders a doubled prefix.
+                self.assertNotIn(
+                    ":",
+                    value,
+                    f"{shim.name}: frontmatter name '{value}' contains a colon "
+                    "-- it renders doubled on Claude Code (fn-124). Use the "
+                    "bare command name, e.g. 'name: qa'.",
+                )
+                # name must match the filename stem, else the menu entry and the
+                # file diverge (a command silently renamed or shadowed).
+                self.assertEqual(
+                    value,
+                    shim.stem,
+                    f"{shim.name}: frontmatter name '{value}' does not match the "
+                    f"filename stem '{shim.stem}'.",
+                )
+                # uniqueness across the whole surface.
+                self.assertNotIn(
+                    value,
+                    seen,
+                    f"{shim.name}: duplicate command name '{value}' (also in "
+                    f"{seen.get(value)}) -- names collide in the slash menu.",
+                )
+                seen[value] = shim.name
 
     def test_epic_review_alias_deleted(self) -> None:
         self.assertFalse(
