@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+## [flow-next 3.3.3] - 2026-07-22
+
 ### Fixed
 
 - **Capture readiness prompts now follow the spec being authored (fn-128).** Rewriting a draft no longer asks to mark it ready merely because an unrelated spec is ready. Rewriting an already-ready target still asks whether to restore readiness after the rewrite; new captures retain the adopted-repo offer; tracker-authoritative and autofix behavior remain unchanged. The prompt now explains readiness as eligibility for Pilot or another autonomous driver.
