@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-23T09:55:26.933295Z",
+  "depends_on": [
+    "fn-120-windows-test-corpus-compatibility-sweep.3"
+  ],
+  "id": "fn-120-windows-test-corpus-compatibility-sweep.4",
+  "priority": 4,
+  "spec": "fn-120-windows-test-corpus-compatibility-sweep",
+  "spec_path": ".flow/tasks/fn-120-windows-test-corpus-compatibility-sweep.4.md",
+  "status": "todo",
+  "title": "Prove final zero-exclusion Windows corpus matrix",
+  "updated_at": "2026-07-23T09:55:26.933295Z"
+}

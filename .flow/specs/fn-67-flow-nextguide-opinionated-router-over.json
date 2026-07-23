@@ -15,7 +15,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-67-flow-nextguide-opinionated-router-over.md",
-  "status": "open",
+  "status": "done",
   "title": "/flow-next:guide \u2014 opinionated router over flow-next's skill flows",
   "tracker": {
     "baseHashFlow": "8f7007a2322298df2deefe99209ac2d073f75191c6a31d7781811c6a742639e6",
@@ -28,5 +28,5 @@
     "mergeBaseTracker": "# tracker projection on FLOW board, full reconcile 2026-06-26\n",
     "url": "https://linear.app/gmickel/issue/FLOW-16"
   },
-  "updated_at": "2026-06-26T12:13:58.012577Z"
+  "updated_at": "2026-07-23T09:32:19.396082Z"
 }

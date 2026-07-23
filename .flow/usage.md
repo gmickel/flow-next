@@ -71,6 +71,8 @@ grok --permission-mode acceptEdits -m grok-4.5 --reasoning-effort high -p "<self
 
 The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<prompt>"` steers a different GPT tier reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.
 
+**Thin-wrapper recipe:** a quick interactive bridge call can stay raw. For a long-running, unattended, or parallel bridge, dispatch a thin fast-tier subagent that composes the self-contained prompt, runs the bridge **in the foreground**, verifies non-empty/parseable output, repairs environment or flag failures once, and returns only a digest. The wrapper never changes the task, model, or verdict and never delegates recursively; judgment stays with the host.
+
 Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.
 
 **Cursor host** — agent-frontmatter tiering is ignored on Cursor; orchestration lives in AGENTS.md + caller-side pins (setup scaffolds both). Distinct from the headless `cursor` CLI backend below.

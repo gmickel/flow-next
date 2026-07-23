@@ -71,3 +71,21 @@ The fn-89 live probe (codex-cli 0.144.1, `codex exec` surface) confirmed the pla
 - **R3 probe harness exists:** reuse the fn-89 echo probe with model/effort params added and the child asked to report its model id. Recipe: `codex exec -m gpt-5.6-sol -s workspace-write --skip-git-repo-check "<spawn one subagent pinned to gpt-5.6-terra effort medium; child replies with its model id; parent ends with CHILD_MODEL=<id>>"`. One command, deterministic parse of the terminal line.
 - **Local-config gotcha (fold into R2 docs):** `--enable multi_agent_v2` errors with `agents.max_threads cannot be set when features.multi_agent_v2 is enabled` (-32600) against this machine's config - while the plain run (no enable flag) spawned fine, proving MAv2 is already default-active for sol. Docs guidance: never force-enable the feature flag; it is default-on for sol and force-enabling collides with `agents.max_threads` configs.
 - **#33267 scope narrowed:** the blanket "exec-surface results unusable" caveat is too broad - simple task-prompt spawns return results fine; the breakage evidently concerns richer shapes (output schemas / fork_turns / custom profiles). R2's docs updates should narrow the caveat accordingly.
+
+## Status check 2026-07-23 (Codex CLI 0.145.0 stable)
+
+The stable release this watch was waiting for is installed locally (`codex-cli 0.145.0`). Upstream state:
+
+- #32782 and #33268 remain closed; PR #32749 remains merged.
+- #33314 remains OPEN (updated 2026-07-22).
+- #33267 remains OPEN (updated 2026-07-22).
+
+Live R3 probe, run from this repository:
+
+```text
+parent: gpt-5.6-sol, high
+requested child: gpt-5.6-terra, medium
+terminal result: CHILD_MODEL=gpt-5.6-sol
+```
+
+The child override was not honored end to end. The probe did successfully spawn and join a child, so the defect remains specifically model/effort steering rather than basic fork/join. Disposition: keep the inheritance-safe behavior and the `codex exec -m` self-bridge guidance; do not pin the interview fact-scout through `spawn_agent`. Re-check only after #33314 reports a released fix or a later Codex release explicitly claims full profile/model application.

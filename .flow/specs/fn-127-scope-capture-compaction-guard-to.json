@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-127-scope-capture-compaction-guard-to.md",
-  "status": "open",
+  "status": "done",
   "title": "Scope capture compaction guard to relevant evidence",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-22T21:25:36.910458Z"
+  "updated_at": "2026-07-23T09:32:20.320492Z"
 }

@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-23T09:42:17.916906Z",
+  "depends_on": [
+    "fn-120-windows-test-corpus-compatibility-sweep.1"
+  ],
+  "id": "fn-120-windows-test-corpus-compatibility-sweep.2",
+  "priority": 2,
+  "spec": "fn-120-windows-test-corpus-compatibility-sweep",
+  "spec_path": ".flow/tasks/fn-120-windows-test-corpus-compatibility-sweep.2.md",
+  "status": "todo",
+  "title": "Reproduce and fix real Windows 8.3 path failures",
+  "updated_at": "2026-07-23T09:55:26.580106Z"
+}
