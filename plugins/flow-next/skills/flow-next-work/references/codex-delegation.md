@@ -1,17 +1,12 @@
 # Codex implementation-delegation — host pre-flight gates + one-time consent
 
-> **Loaded only when delegation MAY be active.** `phases.md` / `SKILL.md` read
-> this file ONLY after the cheap value-check resolves `delegation_active=true`
-> (host is Claude Code AND — arg `delegate:codex` / `delegate:local` > config
-> `work.delegate` > default OFF). With delegation off — the default — neither this
-> file nor any gate below ever runs; the work flow is byte-identical to today.
-> **On a non-Claude-Code host (Codex / Droid / OpenCode) the value-check resolves
-> FALSE, so this reference is never read into context there** — the cheap Phase 0
-> `host_is_claude_code` subset short-circuits *before* any load; Gate 1 below stays
-> the authoritative full platform check (defense in depth, e.g. an inherited
-> `CLAUDECODE` or an `OPENCODE_*`-only marker). This is the progressive-disclosure
-> contract (R3): mechanics live here, the default path stays a single cheap
-> value-check.
+> **Loaded only after delegation is selected.** `phases.md` first resolves the
+> cheap request check and the host/config/input/availability/consent/clean-tree
+> selection. Off, unavailable, or declined paths never read this file. Once
+> selected, the host reads it once and keeps the complete pre-flight,
+> path-handoff, safety, worker-signal, and circuit-breaker contract in context.
+> The authoritative probes remain below as defense in depth and as the single
+> source for active-path mechanics.
 
 This reference is the **host-side** substrate. The pre-flight gates + one-time
 consent run **once, in the host work skill** (the orchestrator), BEFORE the
@@ -21,7 +16,7 @@ subagent has no interactive consent path), so consent must live here. The host r
 (`delegate on/off`, sandbox, effort floor, decision) into each spawned worker's
 prompt where `phases.md` Phase 3c injects worker context.
 
-This file is the complete host-side substrate for delegation, top to bottom:
+This file is the complete selected-path substrate for delegation, top to bottom:
 pre-flight gates + one-time consent (below), the `codex exec` invocation /
 result-schema / background-launch+poll / per-run effort, the orchestration
 split / one-run-per-task / result-classification / safety, and the circuit-breaker /
@@ -44,39 +39,41 @@ review). Delegation must NOT reuse that phrase. Delegation activates ONLY via:
 Bare **"use codex"** / **"no codex"** keep their existing review-backend meaning.
 
 **Resolution chain (precedence):** arg token (`delegate:codex` / `delegate:local`)
-> flow config `work.delegate` > hard default **OFF**. This is the same predicate
-the host evaluates with the cheap value-check before reading this file
+> flow config `work.delegate` > hard default **OFF**. This is the request
+predicate the host evaluates before selection
 (`resolve_delegation_active(arg_token, config_value)`, locked in
 `tests/test_work_delegate_config.py`):
 
 ```text
-delegation_active =
+delegation_requested =
     arg == "delegate:codex"                  → true
     arg == "delegate:local"                  → false
     arg absent  AND  config == "codex"       → true
     arg absent  AND  config in (false, null) → false
 # the generic "use codex" string is NOT the token → never activates delegation
+
+delegation_active = delegation_requested AND Phase 1.5 selection passed
 ```
 
 ---
 
 ## Host pre-flight gates — run ONCE, pre-loop (R4)
 
-When `delegation_active` is true, the host runs the gates below **once**, before
-the Phase 3 per-task loop. **Any failure → standard in-session mode** for the
-rest of the run (delegation never blocks the worker; it silently degrades). The
-gates are ordered cheapest-first.
+When Phase 1.5 selects delegation, the host applies the gates below **once**,
+before the Phase 3 per-task loop. **Any failure → standard in-session mode**
+for the rest of the run (delegation never blocks the worker; it silently
+degrades). The gates are ordered cheapest-first.
 
 ### Gate 0 — Original-input-kind capture (BEFORE Phase 1 promotion)
 
 `phases.md` Phase 1 promotes a bare idea into a spec+task. The input-kind gate
 (Gate 5) must read the **ORIGINAL** input *before* Phase 1 runs — otherwise a
-promoted bare prompt would look like a spec and wrongly qualify. So the host
-captures `INPUT_WAS_BARE_PROMPT` here, at the top of delegation pre-flight.
+promoted bare prompt would look like a spec and wrongly qualify. Phase 1
+captures `INPUT_WAS_BARE_PROMPT` while `delegation_requested=true`; the
+selected path reuses that captured value here.
 
-**This capture runs ONLY when `delegation_active` is already true** (it sits
-after the cheap value-check). The default (delegation-off) path never reaches
-this step — it stays a single `flowctl config get work.delegate` value-check.
+**This capture runs ONLY when `delegation_requested=true`.** The default
+(delegation-off) path never reaches it and never reads this reference.
 
 ```bash
 # Set BEFORE Phase 1 resolves/promotes the input. A bare idea-text input (input

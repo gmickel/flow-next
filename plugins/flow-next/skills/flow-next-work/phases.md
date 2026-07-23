@@ -20,11 +20,11 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-## Phase 0: Delegation value-check (cheap, single step)
+## Phase 0: Delegation request check (cheap, single step)
 
 **This is the ONLY step the Codex-delegation feature adds to the default work
-path.** With delegation off (the default), it resolves to a no-op and the rest
-of `phases.md` is byte-identical to before (R1/R3).
+path.** With delegation off (the default), it resolves to a no-op and Work's
+observable lifecycle remains unchanged (R1/R3).
 
 ```bash
 # Cheap host short-circuit FIRST — delegation is Claude-Code-only. On a non-Claude
@@ -49,16 +49,15 @@ if [ -d .flow ]; then
 else
   DELEGATE_CFG=false
 fi
-# delegation_active = host_is_claude_code && (arg delegate:codex | DELEGATE_CFG == "codex") && not arg delegate:local
-#   On a non-Claude-Code host delegation_active is FALSE here — codex-delegation.md
-#   is never read. The generic "use codex" is NOT the token — review backend.
+# delegation_requested = host_is_claude_code && (arg delegate:codex | DELEGATE_CFG == "codex") && not arg delegate:local
+#   On a non-Claude-Code host delegation_requested is FALSE here. The generic
+#   "use codex" is NOT the token — it still selects the review backend.
 ```
 
-If `delegation_active` is **false** (the default), do nothing more here and run
+If `delegation_requested` is **false** (the default), do nothing more here and run
 Phase 1 onward exactly as written — no `INPUT_WAS_BARE_PROMPT` capture, no gates,
-no pointer. **If and only if `delegation_active` is true**, ALSO run the
-`INPUT_WAS_BARE_PROMPT` capture inside Phase 1 (below) and Phase 1.5
-(host pre-flight gates). See [references/codex-delegation.md](references/codex-delegation.md).
+and no delegation-reference read. **If and only if `delegation_requested` is
+true**, also capture `INPUT_WAS_BARE_PROMPT` inside Phase 1 and run Phase 1.5.
 
 ## Phase 1: Resolve Input
 
@@ -74,7 +73,7 @@ Detect input type in this order (first match wins):
 
 **Track the mode** — it controls looping in Phase 3.
 
-**Original-input-kind capture (ONLY when `delegation_active` — Phase 0).** A bare
+**Original-input-kind capture (ONLY when `delegation_requested` — Phase 0).** A bare
 idea-text input (match #5 above — not a Flow id, not a resolvable handle, not an
 existing `.md` spec path) gets promoted into a spec+task by the steps below, so
 its original kind must be recorded **before** that promotion. Set the flag here,
@@ -82,7 +81,7 @@ on the ORIGINAL input, immediately after detection and **before** running any
 "Spec file start" / "Spec-less start" promotion step:
 
 ```bash
-# Runs ONLY when delegation_active (resolved in Phase 0). On the default
+# Runs ONLY when delegation_requested (resolved in Phase 0). On the default
 # (delegation-off) path this step does not exist — Phase 0 already returned.
 if <original input matched #5 idea text>; then
   INPUT_WAS_BARE_PROMPT=1   # promoted bare prompt → NOT eligible for delegation (Gate 5)
@@ -119,45 +118,30 @@ fi
 3. Create single task: `$FLOWCTL task create --spec <spec-id> --title "Implement <idea>" --json`
 4. Continue with spec-id
 
-## Phase 1.5: Codex-delegation host pre-flight gates (ONLY when `delegation_active`)
+## Phase 1.5: Select the Codex-delegation path (ONLY when requested)
 
-**Skip this entire phase unless `delegation_active` is true (Phase 0).** On the
-default (delegation-off) path this phase does not exist — proceed straight to
-Phase 2.
+**Skip unless `delegation_requested=true`.** Before loading any delegation
+reference, the host resolves the ordered selection: authoritative Claude-only
+platform check (`CLAUDECODE`, no `DROID_PLUGIN_ROOT`, no bare or prefixed
+`OPENCODE*` marker); recursion guard (`CODEX_SANDBOX` outside
+`{read-only,workspace-write,danger-full-access,auto}` or
+`CODEX_SANDBOX_NETWORK_DISABLED`); `codex` availability; original input kind;
+one-time sandbox consent; and a clean non-`.flow/` code tree.
 
-When `delegation_active`, read [references/codex-delegation.md](references/codex-delegation.md)
-and run its host pre-flight gates + one-time consent **ONCE here**, before the
-Phase 3 per-task loop. Run them in the **host** (this skill) — NOT the worker
-subagent, which cannot call `AskUserQuestion` (#12890/#34592). The reference
-pins the exact probes; the gate sequence is:
+Unavailable CLI prints the existing install hint and continues standard mode.
+Interactive consent uses `AskUserQuestion`: yolo recommended or full-auto;
+persist `work.delegateConsent=true` plus the chosen `work.delegateSandbox` only
+on acceptance. Headless proceeds only with pre-granted consent. Resolve
+`work.delegateDecision` here: interactive `ask` prompts per task; headless
+`ask` behaves as `auto` only with pre-granted consent.
 
-1. **Platform gate** — Claude Code only: `CLAUDECODE` present AND
-   `DROID_PLUGIN_ROOT` unset AND no OpenCode marker. NOT keyed on `CODEX_*`
-   (so `CODEX_SANDBOX=auto`, Ralph's review-backend knob, stays eligible).
-2. **Recursion guard** — trips on a Codex-runtime `CODEX_SANDBOX` value (outside
-   the flow-next config set `{read-only,workspace-write,danger-full-access,auto}`)
-   or `CODEX_SANDBOX_NETWORK_DISABLED` — NOT on `CODEX_SANDBOX=auto`.
-3. **Availability** — `command -v codex` resolves.
-4. **One-time consent** — interactive `AskUserQuestion` for the sandbox mode
-   (yolo recommended | full-auto), persisted to `work.delegateConsent` /
-   `work.delegateSandbox`; a second run with consent already `true` does not
-   re-prompt. **Headless (Ralph):** no prompt — proceed only if consent already
-   `true`, else delegation stays silently off.
-5. **Input kind** — `INPUT_WAS_BARE_PROMPT != 1` (a promoted bare prompt is not
-   eligible; decided on the ORIGINAL input, Phase 1).
-6. **Clean baseline (code tree)** — `git status --porcelain` shows **no non-`.flow/`
-   worktree changes**. Load-bearing: on a rollback the worker reverts tracked files
-   authoritatively from `BASE_COMMIT` (`git reset --mixed` + `git checkout -- .
-   ':(exclude).flow'`), which would ALSO discard PRE-EXISTING non-`.flow` edits a
-   dirty tree carried in. So a dirty code tree ⇒ delegation OFF (commit/stash first,
-   or run standard mode). Host-owned `.flow/` dirtiness (plan-sync edits, scratch)
-   is excluded and never trips this — only non-`.flow/` changes do.
-
-**Any gate failure → standard in-session mode for the rest of the run** (never
-blocks the worker). When all gates pass, the host resolves the per-task decision
-(`work.delegateDecision`: `auto` delegates every eligible task; `ask` prompts
-before each in interactive mode — headless treats `ask` as `auto` only when
-consent is pre-granted) and carries the resolved flags into Phase 3c.
+**Any unavailable/failed/declined selection sets `delegation_active=false` and
+continues standard mode. Do not read the delegation reference.** When every
+selection passes, set `delegation_active=true`, then read
+[references/codex-delegation.md](references/codex-delegation.md) **once** and
+follow its complete host pre-flight, consent, invocation, path-handoff, safety,
+worker-signal, and circuit-breaker contract for the rest of the run. The
+reference owns the exact probes and mechanics; this phase owns only routing.
 
 ## Phase 2: Apply Branch Choice
 
@@ -184,18 +168,9 @@ In SPEC_MODE, inspect the whole ready frontier and prefer a concurrent safe
 subset. In SINGLE_TASK_MODE, the selected wave is always the requested task
 alone. Every task still gets a fresh-context worker.
 
-**Circuit-breaker counter init (ONLY when `delegation_active` — Phase 0/1.5).**
-The breaker counter is **host-owned**: each task is a fresh-context worker, so an
-in-worker counter would reset every task and never trip. Initialize ONCE here,
-before the per-task loop (skip entirely on the default delegation-off path):
-
-```text
-consecutive_failures = 0
-# delegation_active was resolved by the Phase 1.5 gates (true iff all passed).
-```
-
-After each delegated worker returns, the host bridges the worker's terminal
-`DELEGATION_RESULT=`/`DELEGATION_ACTION=` signal into this counter — see 3d.2.
+When `delegation_active=true`, initialize the **host-owned** circuit breaker
+once before the loop exactly as specified in the already-loaded delegation
+reference. Default/declined paths initialize nothing.
 
 ### 3a. Inspect Ready Frontier and Select a Wave
 
@@ -454,34 +429,14 @@ fi   # default branch: bare no-op — NO link, NO read path
 
 When the sentinel prints, STOP and Read [references/tracker-touchpoints.md](references/tracker-touchpoints.md) before any further step — its `Task done` section holds this touchpoint's `work.done` leaf check + dispatch (best-effort; never blocks the work loop). When the gate is silent (bridge inactive), continue — nothing fires here.
 
-#### 3d.2 Circuit breaker (ONLY when `delegation_active`) — bridge the worker signal
+#### 3d.2 Delegated worker signal (ONLY when `delegation_active`)
 
-**Skip unless `delegation_active`.** When a delegated worker returns, parse its
-terminal `DELEGATION_RESULT=<class>` + `DELEGATION_ACTION=<action>` lines (both
-from `flowctl codex classify-result`, fn-55.4) and update the host-owned counter
-(init'd at the top of Phase 3). The worker emits these lines ONLY when delegation
-was active for the task — **a missing signal means the task ran standard and the
-counter is untouched** (e.g. a gate failed mid-run, the task ran standard, or the
-worker fell back to in-session).
-
-```text
-case DELEGATION_ACTION:
-  rollback_and_disable →                       # a cli_failure — tool itself unhealthy
-      delegation_active = false                # disable IMMEDIATELY for ALL remaining tasks
-  rollback | finish_locally →                  # task_failure / partial — a per-task miss
-      consecutive_failures += 1
-      if consecutive_failures >= 3:
-          delegation_active = false            # 3 strikes → standard mode for the rest
-  commit →                                     # success
-      consecutive_failures = 0                 # reset the consecutive streak
-# (no DELEGATION_* lines → standard task → counter untouched)
-```
-
-Once `delegation_active` flips **false**, the host stops appending the
-`DELEGATE:*` flags to subsequent worker prompts (3c) — every remaining task runs
-standard in-session, and the loop **never blocks** (Ralph-safe: failures degrade,
-they don't halt). The inlined `evidence.delegation` the worker wrote into
-`flowctl done` is the durable proof-of-work surface (Ralph log / receipt).
+Apply the already-loaded delegation reference's host circuit-breaker contract
+after each returned delegated worker. A missing `DELEGATION_*` signal leaves
+the counter untouched; a tool failure disables delegation immediately; three
+consecutive task misses disable it; success resets the streak. Once disabled,
+omit `DELEGATE:*` flags from later workers and continue standard mode. Preserve
+the inlined delegation evidence as the durable Ralph/log receipt surface.
 
 ### 3e. Plan Sync After the Resolved Wave (if enabled) — BOTH MODES
 

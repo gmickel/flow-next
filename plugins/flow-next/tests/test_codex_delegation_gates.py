@@ -309,13 +309,54 @@ class CodexDelegationProseContract(unittest.TestCase):
 
     def test_phase0_host_short_circuit_documented(self) -> None:
         # Delegation is Claude-Code-only and the cheap Phase 0 check must gate
-        # delegation_active so the reference is NEVER read on a non-Claude host
+        # delegation_requested so the reference is NEVER read on a non-Claude host
         # (Codex / Droid / OpenCode). Both host skill files carry the check, ANDed
         # into the predicate; the reference header states it is not read there.
         for src in (self.phases, self.skill):
             self.assertIn("host_is_claude_code", src)
             self.assertRegex(src, r"host_is_claude_code\s*&&")
-        self.assertIn("never read into context", self.ref)
+            self.assertIn("delegation_requested", src)
+        self.assertIn("Off, unavailable, or declined paths never read this file", self.ref)
+
+    def test_reference_load_waits_for_completed_selection(self) -> None:
+        selection = self.phases.index("Any unavailable/failed/declined selection")
+        active = self.phases.index("set `delegation_active=true`", selection)
+        read = self.phases.index("references/codex-delegation.md", active)
+        self.assertLess(selection, active)
+        self.assertLess(active, read)
+        self.assertIn("Do not read the delegation reference", self.phases)
+
+    def test_cold_selection_router_preserves_decline_and_unavailable_behavior(self) -> None:
+        for contract in (
+            "no `DROID_PLUGIN_ROOT`",
+            "`OPENCODE*` marker",
+            "danger-full-access,auto",
+            "CODEX_SANDBOX_NETWORK_DISABLED",
+            "install hint",
+            "yolo recommended or full-auto",
+            "work.delegateConsent=true",
+            "work.delegateSandbox",
+            "clean non-`.flow/` code tree",
+            "headless",
+        ):
+            with self.subTest(contract=contract):
+                self.assertIn(contract, self.phases)
+
+    def test_active_reference_owns_complete_delegation_contract(self) -> None:
+        for heading in (
+            "Host pre-flight gates",
+            "The prompt template",
+            "Safety — git-ownership enforcement",
+            "Host circuit breaker",
+            "Ralph-safe",
+        ):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, self.ref)
+
+    def test_common_phases_only_keep_circuit_breaker_router(self) -> None:
+        self.assertIn("already-loaded delegation reference", self.phases)
+        self.assertNotIn("case DELEGATION_ACTION:", self.phases)
+        self.assertNotIn("consecutive_failures += 1", self.phases)
 
     def test_input_bare_prompt_capture_documented(self) -> None:
         self.assertIn("INPUT_WAS_BARE_PROMPT", self.phases)

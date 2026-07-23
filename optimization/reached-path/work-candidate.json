@@ -1,0 +1,81 @@
+{
+  "cluster": "work",
+  "lineage": {
+    "baseline": "B1",
+    "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "candidate": "fn-130-reached-path-skill-prompt-optimization.8",
+    "rule": "structural candidate compares to hash-verified B1 only; never B0"
+  },
+  "input_check": {
+    "command": "python3 optimization/reached-path/run_eval.py --check-b1-input work",
+    "result": "OK: work inputs match B1 (4 files)"
+  },
+  "prompt_hashes": {
+    "plugins/flow-next/skills/flow-next-work/SKILL.md": "3776419ed20ffd790e2b44cc2aaee000fa19a21aee1170be7200b047217c3629",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "3cd74bce3dd56434484fd1ec6fdfc6b703248814ff6c3ccdf0974a412d98a356",
+    "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "26d5ff37bfb9805e8f5c90a62f66425f2e2fd78ae9ab1614b0e8b1a7a01c4955",
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "657e0f2a5a6dd1f25e28317c0df61d836c2d78abe63e53ab5d94fe5b93d678ac"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "default_path": {
+      "baseline_reached_path_chars": 54358,
+      "candidate_reached_path_chars": 51522,
+      "reduction_chars": 2836,
+      "reduction_percent": 5.22
+    },
+    "delegation_active_path": {
+      "baseline_reached_path_chars": 100851,
+      "candidate_reached_path_chars": 97619,
+      "reduction_chars": 3232,
+      "reduction_percent": 3.2
+    }
+  },
+  "trace_arms": {
+    "baseline": "optimization/reached-path/fixtures/b1/work/*.json",
+    "candidate": "route_traces below",
+    "observable_behavior_delta": []
+  },
+  "route_traces": [
+    {"id": "serial", "delegation_reference": false, "tracker_reference": false},
+    {"id": "parallel-eligible", "delegation_reference": false, "tracker_reference": false},
+    {"id": "shared-file-conflict", "delegation_reference": false, "tracker_reference": false},
+    {"id": "worker-failure", "delegation_reference": false, "tracker_reference": false},
+    {"id": "host-deferred-handover", "delegation_reference": false, "tracker_reference": false},
+    {"id": "delegation-off", "delegation_reference": false, "tracker_reference": false},
+    {"id": "delegation-declined", "delegation_reference": false, "tracker_reference": false},
+    {"id": "delegation-cli-unavailable", "delegation_reference": false, "tracker_reference": false},
+    {"id": "delegation-on-consented", "delegation_reference": true, "tracker_reference": false},
+    {"id": "delegation-implementation-failure", "delegation_reference": true, "tracker_reference": false},
+    {"id": "delegation-circuit-breaker", "delegation_reference": true, "tracker_reference": false},
+    {"id": "tracker-inactive", "delegation_reference": false, "tracker_reference": false},
+    {"id": "tracker-active", "delegation_reference": false, "tracker_reference": true},
+    {"id": "tracker-probe-error", "delegation_reference": false, "tracker_reference": true},
+    {"id": "review-pass", "delegation_reference": false, "tracker_reference": false},
+    {"id": "review-fail", "delegation_reference": false, "tracker_reference": false},
+    {"id": "plan-sync-no-op", "delegation_reference": false, "tracker_reference": false},
+    {"id": "plan-sync-update", "delegation_reference": false, "tracker_reference": false},
+    {"id": "autonomous-consent-missing", "delegation_reference": false, "tracker_reference": false},
+    {"id": "autonomous-consent-granted", "delegation_reference": true, "tracker_reference": false}
+  ],
+  "oracles": {
+    "common_wave_lifecycle_preserved": true,
+    "host_git_ownership_preserved": true,
+    "host_deferred_handover_preserved": true,
+    "tracker_fail_open_sentinels_preserved": true,
+    "review_before_done_preserved": true,
+    "plan_sync_after_resolved_wave_preserved": true,
+    "path_handoff_preserved": true,
+    "composed_brief_absent": true,
+    "deterministic_plan_sync_skip_gate_absent": true
+  },
+  "ratchet": {
+    "verdict": "keep",
+    "reason": "All frozen Work contracts remain covered and both default and active reached paths shrink.",
+    "discarded_mutations": []
+  },
+  "manual_gates": [
+    "Codex mirror regeneration and mirror route assertions deferred to the parallel-wave conductor.",
+    "Live Claude/Cursor/Droid/Grok host traces remain closure-task gates."
+  ]
+}
