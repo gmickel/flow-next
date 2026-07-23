@@ -8,6 +8,7 @@ scheduler, schema, or deterministic path-overlap machinery.
 from __future__ import annotations
 
 import pathlib
+import re
 import unittest
 
 
@@ -61,7 +62,19 @@ class ParallelWorkConductorProse(unittest.TestCase):
         self.assertIn("wait for every dispatched worker", text)
         self.assertIn("Worker outcomes:", text)
         self.assertIn("Join: complete", text)
-        self.assertIn("normalize its evidence to the integrated commit IDs", text)
+        self.assertIn("normalize each task's evidence to the integrated commit IDs", text)
+        self.assertRegex(
+            text,
+            re.compile(
+                r"run the\s+existing Phase 5 Verify contract on the integrated target"
+            ),
+        )
+        self.assertRegex(
+            text,
+            re.compile(
+                r"integrated-target verification's exact commands/results"
+            ),
+        )
         self.assertIn("Do not run plan-sync while any peer worker is active", text)
         self.assertIn("recompute the next ready frontier", text)
 
@@ -85,6 +98,17 @@ class ParallelWorkerHandoverProse(unittest.TestCase):
         self.assertIn("mutate tracker state", text)
         self.assertIn("invoke plan-sync", text)
         self.assertIn("integrate the", text)
+        self.assertRegex(
+            text,
+            re.compile(
+                r'Complete the task only on the standard branch'
+                r'.{0,500}?SUMMARY_FILE="/tmp/summary\.md"'
+                r'.{0,200}?EVIDENCE_FILE="/tmp/evidence\.json"'
+                r'.{0,300}?--summary-file "\$SUMMARY_FILE"'
+                r' --evidence-json "\$EVIDENCE_FILE"',
+                re.DOTALL,
+            ),
+        )
 
     def test_canonical(self) -> None:
         self._assert_contract(CANONICAL_WORKER)

@@ -524,8 +524,12 @@ EOF
 ```
 
 Complete the task only on the standard branch (parallel-wave and host-deferred
-branches return before this command):
+branches return before this command). Recompute both standard paths in this
+same shell block — variables from the evidence/summary creation calls do not
+survive into a later tool call:
 ```bash
+SUMMARY_FILE="/tmp/summary.md"
+EVIDENCE_FILE="/tmp/evidence.json"
 <FLOWCTL> done <TASK_ID> --summary-file "$SUMMARY_FILE" --evidence-json "$EVIDENCE_FILE"
 ```
 

@@ -330,14 +330,20 @@ commits onto the target branch. Then, on the integrated target and one task at a
 time:
 
 1. confirm the task's code, tests, commit, and handover files;
-2. normalize its evidence to the integrated commit IDs/base and append any
- conductor-run tests;
-3. when its resolved `REVIEW_MODE` is not `none`, run
+2. after all successful worker commits for the wave are integrated, run the
+ existing Phase 5 Verify contract on the integrated target **before any task
+ is reviewed or marked done**. This verification is mandatory even when every
+ worker was green in isolation: classify the combined diff, honor only valid
+ integrated-HEAD receipts, otherwise run the required suite, and fix +
+ re-commit any failure;
+3. normalize each task's evidence to the integrated commit IDs/base and append
+ the integrated-target verification's exact commands/results;
+4. when its resolved `REVIEW_MODE` is not `none`, run
  `/flow-next:impl-review <task-id> --review=<backend>` and apply the existing
  bounded fix loop;
-4. only after the required SHIP verdict, run `flowctl done` with the updated
+5. only after the required SHIP verdict, run `flowctl done` with the updated
  task-unique summary/evidence;
-5. verify `flowctl show <task-id> --json` reports `done`, then run the existing
+6. verify `flowctl show <task-id> --json` reports `done`, then run the existing
  3d.1 tracker touchpoint.
 
 Partial failures use the existing ground-truth recovery rules below. Successful

@@ -54,9 +54,10 @@ Update the canonical plan, work, and worker skills so the planner exposes depend
 - [ ] A snapshot comparison proves `scripts/sync-codex.sh` makes no second-run mirror changes.
 - [ ] `python3 scripts/run_tests_parallel.py` passes.
 ## Done summary
-TBD
+Updated the planner, work conductor, and worker prompts to expose validated execution waves and prefer safe concurrent dispatch from the ready frontier. Parallel workers now use isolated workspaces, task-unique handovers, and defer integration, Flow completion, tracker updates, and plan-sync to the conductor. Added canonical/generated prose regression coverage and regenerated the Codex mirror.
 
+Validated end to end in `/tmp/fn118-claude-smoke.lxbYQ0` with Claude Code 2.1.218 and the inline plugin: the planner produced two dependency-free Wave 1 tasks; `/flow-next:work` claimed both, created two native Git worktrees, dispatched two workers concurrently, joined 2/2, merged cleanly, completed both tasks, and removed the worktrees.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a8176d05
+- Tests: python3 -m unittest plugins.flow-next.tests.test_parallel_work_prose -v, python3 -m unittest plugins.flow-next.tests.test_worker_anchor_prose -v, ./scripts/sync-codex.sh (twice; identical tree f39c5f85daa6c0c20f1c51f2cc6dbd291a288ecc), python3 scripts/run_tests_parallel.py (2181 tests, 0 failures, 0 errors), Claude Code inline-plugin plan/work smoke in /tmp/fn118-claude-smoke.lxbYQ0 (2 parallel workers, 2 native worktrees, 2/2 integrated tests)
 - PRs:

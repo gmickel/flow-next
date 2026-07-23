@@ -46,9 +46,8 @@ Atomic task claims protect task ownership only. Concurrent implementation also r
 - [ ] `cd /Users/gordon/work/flow-next.dev && pnpm build` passes.
 - [ ] The exact offline Lychee command from `.github/workflows/docs-linkcheck.yml` passes for repository markdown.
 ## Done summary
-TBD
-
+Aligned repository and flow-next.dev documentation with prompt-guided parallel waves. Clarified that atomic claims protect task ownership but not a shared checkout, that the host chooses safe isolation and integration, and that downstream plan-sync waits until the joined wave is resolved.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 53f98fdd, 46a37e3, e57e497
+- Tests: lychee --offline --no-progress --root-dir "$(pwd)" --exclude-path plugins/flow-next/codex --exclude-path .flow --exclude-path node_modules --exclude-path flow-next-tui/node_modules README.md CONTRIBUTING.md SECURITY.md GLOSSARY.md STRATEGY.md agent_docs plugins/flow-next/README.md plugins/flow-next/docs plugins/flow-next/skills, cd /Users/gordon/work/flow-next.dev && pnpm build (74 pages, 0 Astro errors/warnings/hints)
 - PRs:
