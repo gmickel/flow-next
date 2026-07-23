@@ -15,14 +15,14 @@
     "subtype": "success",
     "usage_totals": {
       "backend": {
-        "cache_creation_input_tokens": 10534,
+        "cache_creation_input_tokens": 10196,
         "cache_read_input_tokens": 19420,
         "input_tokens": 2,
         "output_tokens": 4
       },
-      "backend_total": 29960,
-      "model_total": 30494,
-      "total": 29960
+      "backend_total": 29622,
+      "model_total": 30153,
+      "total": 29622
     },
     "used_bare": false,
     "used_fresh_config_dir": false
@@ -54,33 +54,33 @@
     "ok": true,
     "rc": 0,
     "residual_note": "OAuth account email may appear as session identity; it carries no guidance content.",
-    "stdout_scrubbed": "I can see the following project instruction marker in the checked-in CLAUDE.md:\n\n`UNIQUE_MARKER=[REDACTED-MARKER]`\n\nNo other project instruction markers are present in the visible context.",
+    "stdout_scrubbed": "The project instructions contain one marker:\n\n```\nUNIQUE_MARKER=[REDACTED-MARKER]\n```\n\nThat's the only marker present in the CLAUDE.md project instructions shown to me.",
     "timed_out": false
   },
   "metrics": {
     "backend_telemetry": {
-      "cache_creation_input_tokens": 8422,
-      "cache_read_input_tokens": 51707,
-      "duration_api_ms": 11892,
-      "duration_ms": 10442,
+      "cache_creation_input_tokens": 8283,
+      "cache_read_input_tokens": 51681,
+      "duration_api_ms": 11188,
+      "duration_ms": 9901,
       "input_tokens": 26,
       "model_usage": {
         "claude-haiku-4-5-20251001": {
-          "cacheCreationInputTokens": 8422,
-          "cacheReadInputTokens": 51707,
+          "cacheCreationInputTokens": 8283,
+          "cacheReadInputTokens": 51681,
           "canonicalModel": "claude-haiku-4-5",
           "contextWindow": 200000,
-          "costUSD": 0.0260417,
+          "costUSD": 0.024876099999999998,
           "inputTokens": 617,
           "maxOutputTokens": 32000,
-          "outputTokens": 682,
+          "outputTokens": 505,
           "provider": "firstParty",
           "webSearchRequests": 0
         }
       },
       "note": "Backend cache counters are telemetry, not interchangeable with source bytes or billed input tokens.",
-      "output_tokens": 668,
-      "total_cost_usd": 0.0260417
+      "output_tokens": 490,
+      "total_cost_usd": 0.024876099999999998
     },
     "reached_path_chars": 1016,
     "reached_path_chars_div_4": 254.0,
@@ -124,14 +124,14 @@
       "offset": null,
       "path": "SKILL.md",
       "path_was_absolute": true,
-      "tool_use_id": "toolu_01SvDbhyNGFbP24zwJbrbn5d"
+      "tool_use_id": "toolu_01F1CBJanN4LC3amBvUm2yGY"
     },
     {
       "limit": null,
       "offset": null,
       "path": "references/active.md",
       "path_was_absolute": true,
-      "tool_use_id": "toolu_01AajoY6Reg8LgqvvPMmYfX4"
+      "tool_use_id": "toolu_01GJrHo7iGYPgYYrzf2AmDex"
     }
   ],
   "required_read_ok": true,

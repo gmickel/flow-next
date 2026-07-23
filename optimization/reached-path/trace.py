@@ -7,15 +7,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 
-def parse_stream_json_reads(stream_text: str) -> list[dict[str, Any]]:
-    """Extract Read tool_use inputs from a stream-json transcript.
-
-    Only successful tool_use records are returned; tool_result errors are
-    tracked separately via ``parse_stream_json_failed_reads``. Repeated Read
-    of the same path appear multiple times here — the character algorithm
-    dedupes by path+hash when counting.
-    """
-    reads: list[dict[str, Any]] = []
+def _collect_read_uses_and_results(
+    stream_text: str,
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Index Read tool_use and tool_result records by tool_use_id."""
+    uses: dict[str, dict[str, Any]] = {}
+    results: dict[str, dict[str, Any]] = {}
     for line in (stream_text or "").splitlines():
         line = line.strip()
         if not line:
@@ -27,47 +24,68 @@ def parse_stream_json_reads(stream_text: str) -> list[dict[str, Any]]:
         for tool in _iter_tool_use(obj):
             if tool.get("name") != "Read":
                 continue
+            tid = tool.get("id")
+            if not tid:
+                continue
             inp = tool.get("input") or {}
             path = inp.get("file_path") or inp.get("path")
             if not path:
                 continue
-            reads.append(
-                {
-                    "path": path,
-                    "offset": inp.get("offset"),
-                    "limit": inp.get("limit"),
-                    "tool_use_id": tool.get("id"),
-                }
-            )
+            uses[tid] = {
+                "path": path,
+                "offset": inp.get("offset"),
+                "limit": inp.get("limit"),
+                "tool_use_id": tid,
+            }
+        for tr in _iter_tool_result(obj):
+            tid = tr.get("tool_use_id")
+            if not tid:
+                continue
+            # Last result for an id wins (stream may repeat); keep is_error.
+            results[tid] = {
+                "tool_use_id": tid,
+                "is_error": bool(tr.get("is_error")),
+            }
+    return uses, results
+
+
+def parse_stream_json_reads(stream_text: str) -> list[dict[str, Any]]:
+    """Extract successfully completed Read activations from a stream-json transcript.
+
+    A Read is successful only when a matching ``tool_result`` exists for its
+    ``tool_use_id`` and that result is not an error. Unpaired ``tool_use``
+    (truncated/interrupted streams) and ``is_error`` results are excluded.
+    Repeated successful Reads of the same path appear multiple times here —
+    the character algorithm dedupes by path+hash when counting.
+    """
+    uses, results = _collect_read_uses_and_results(stream_text)
+    reads: list[dict[str, Any]] = []
+    # Preserve first-seen tool_use order from the stream index insertion order.
+    for tid, use in uses.items():
+        result = results.get(tid)
+        if result is None:
+            continue
+        if result.get("is_error"):
+            continue
+        reads.append(dict(use))
     return reads
 
 
 def parse_stream_json_failed_reads(stream_text: str) -> list[dict[str, Any]]:
-    """Best-effort failed Read detection from tool_result is_error flags."""
-    # Map tool_use_id -> path from Read tool_use events.
-    id_to_path: dict[str, str] = {}
-    for line in (stream_text or "").splitlines():
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        for tool in _iter_tool_use(obj):
-            if tool.get("name") == "Read" and tool.get("id"):
-                inp = tool.get("input") or {}
-                id_to_path[tool["id"]] = inp.get("file_path") or inp.get("path") or ""
+    """Failed Read detections: matching tool_result with ``is_error`` true.
+
+    Unpaired Read ``tool_use`` records are neither successful nor failed —
+    they inflate neither activation metrics nor the failed-read list.
+    """
+    uses, results = _collect_read_uses_and_results(stream_text)
     failed: list[dict[str, Any]] = []
-    for line in (stream_text or "").splitlines():
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
+    for tid, result in results.items():
+        if not result.get("is_error"):
             continue
-        for tr in _iter_tool_result(obj):
-            if not tr.get("is_error"):
-                continue
-            tid = tr.get("tool_use_id")
-            path = id_to_path.get(tid or "", "")
-            if path:
-                failed.append({"path": path, "tool_use_id": tid})
+        use = uses.get(tid)
+        if not use:
+            continue
+        failed.append({"path": use["path"], "tool_use_id": tid})
     return failed
 
 
@@ -116,16 +134,20 @@ def backend_telemetry(result_obj: Optional[dict[str, Any]]) -> dict[str, Any]:
 
 def successful_activations(
     reads: list[dict[str, Any]],
-    failed: list[dict[str, Any]],
+    failed: Optional[list[dict[str, Any]]] = None,
 ) -> list[str]:
-    """Paths of successful Read activations (failed excluded)."""
-    failed_paths = {f["path"] for f in failed}
+    """Paths of successful Read activations (order-preserving, path-deduped).
+
+    ``reads`` must already be success-filtered (see ``parse_stream_json_reads``).
+    ``failed`` is accepted for call-site compatibility and is not used to drop
+    paths — success is decided per ``tool_use_id``, not per path, so a later
+    failed re-read of the same path does not erase an earlier success.
+    """
+    del failed  # API compat; success is per tool_use_id upstream.
     out: list[str] = []
     seen: set[str] = set()
     for r in reads:
         p = r["path"]
-        if p in failed_paths:
-            continue
         if p in seen:
             continue
         seen.add(p)

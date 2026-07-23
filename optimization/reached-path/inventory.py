@@ -2,7 +2,8 @@
 
 Each fixture is a sanitized branch description. Answer-key conclusions live
 only under ``oracles`` / scorer side — never in subject-visible prompt text.
-Hashes are filled by ``freeze_b0`` from the live tree at baseline commit.
+Hashes are filled by ``freeze_b0`` from ``git show BASELINE_COMMIT:<path>``
+(not the live worktree).
 """
 
 from __future__ import annotations
