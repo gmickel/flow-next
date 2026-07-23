@@ -88,7 +88,169 @@ class TestReachedPathHarness(unittest.TestCase):
         self.assertNotIn("forbidden", lowered)
         self.assertNotIn("required action", lowered)
 
+    def test_trace_paired_success_included(self) -> None:
+        """Successful Read requires matching non-error tool_result by tool_use_id."""
+        stream = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": "a",
+                                    "name": "Read",
+                                    "input": {
+                                        "file_path": "/arena/skill/references/active.md",
+                                        "offset": 2,
+                                        "limit": 10,
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "a",
+                                    "content": "ok",
+                                }
+                            ]
+                        },
+                    }
+                ),
+                # Repeated successful read of the same path (evidence preserved).
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": "a2",
+                                    "name": "Read",
+                                    "input": {
+                                        "file_path": "/arena/skill/references/active.md",
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "a2",
+                                    "is_error": False,
+                                    "content": "ok again",
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps({"type": "result", "usage": {"input_tokens": 3}}),
+            ]
+        )
+        reads = self.trace.parse_stream_json_reads(stream)
+        self.assertEqual(len(reads), 2)
+        self.assertEqual(reads[0]["offset"], 2)
+        self.assertEqual(reads[0]["limit"], 10)
+        self.assertEqual(reads[0]["tool_use_id"], "a")
+        self.assertIsNone(reads[1].get("offset"))
+        acts = self.trace.successful_activations(reads, [])
+        self.assertEqual(len(acts), 1)  # path-deduped
+        self.assertTrue(acts[0].endswith("active.md"))
+
+    def test_trace_unpaired_tool_use_excluded(self) -> None:
+        """Truncated stream: unpaired Read tool_use is not a successful activation."""
+        stream = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": "orphan",
+                                    "name": "Read",
+                                    "input": {
+                                        "file_path": "/arena/skill/references/active.md"
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps({"type": "result", "usage": {"input_tokens": 1}}),
+            ]
+        )
+        reads = self.trace.parse_stream_json_reads(stream)
+        failed = self.trace.parse_stream_json_failed_reads(stream)
+        acts = self.trace.successful_activations(reads, failed)
+        self.assertEqual(reads, [])
+        self.assertEqual(failed, [])
+        self.assertEqual(acts, [])
+
+    def test_trace_error_tool_result_excluded_and_failed(self) -> None:
+        """is_error tool_result is failed, not successful."""
+        stream = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": "bad",
+                                    "name": "Read",
+                                    "input": {
+                                        "file_path": "/arena/skill/references/missing.md"
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "bad",
+                                    "is_error": True,
+                                    "content": "ENOENT",
+                                }
+                            ]
+                        },
+                    }
+                ),
+            ]
+        )
+        reads = self.trace.parse_stream_json_reads(stream)
+        failed = self.trace.parse_stream_json_failed_reads(stream)
+        acts = self.trace.successful_activations(reads, failed)
+        self.assertEqual(reads, [])
+        self.assertEqual(len(failed), 1)
+        self.assertTrue(failed[0]["path"].endswith("missing.md"))
+        self.assertEqual(failed[0]["tool_use_id"], "bad")
+        self.assertEqual(acts, [])
+
     def test_trace_cold_forbidden_non_read(self) -> None:
+        """Cold forbidden path never appears when only a paired active Read succeeded."""
         stream = "\n".join(
             [
                 json.dumps(
@@ -108,6 +270,20 @@ class TestReachedPathHarness(unittest.TestCase):
                         },
                     }
                 ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "a",
+                                    "content": "active",
+                                }
+                            ]
+                        },
+                    }
+                ),
                 json.dumps({"type": "result", "usage": {"input_tokens": 3}}),
             ]
         )
@@ -115,6 +291,149 @@ class TestReachedPathHarness(unittest.TestCase):
         acts = self.trace.successful_activations(reads, [])
         self.assertTrue(any(a.endswith("active.md") for a in acts))
         self.assertFalse(any(a.endswith("cold.md") for a in acts))
+
+    def test_freeze_b0_refuses_existing_canonical_before_writes(self) -> None:
+        """Existing fixtures/b0/ is nonempty/immutable — refuse before any write."""
+        index = HARNESS / "fixtures" / "b0" / "INDEX.json"
+        self.assertTrue(index.is_file())
+        before = index.read_bytes()
+        before_mtime = index.stat().st_mtime_ns
+        # Also snapshot a manifest to prove no rewrite.
+        sample = next((HARNESS / "fixtures" / "b0").glob("*/*.json"))
+        sample_before = sample.read_bytes()
+        rc = self.run_eval.freeze_b0()
+        self.assertEqual(rc, 1)
+        self.assertEqual(index.read_bytes(), before)
+        self.assertEqual(index.stat().st_mtime_ns, before_mtime)
+        self.assertEqual(sample.read_bytes(), sample_before)
+
+    def test_freeze_b0_refuses_nonempty_temp_without_index(self) -> None:
+        """Nonempty temp target without INDEX refuses; contents unchanged before HEAD."""
+        with tempfile.TemporaryDirectory(prefix="rp-freeze-nonempty-") as td:
+            out = Path(td) / "b0"
+            out.mkdir()
+            leftover = out / "plan" / "p1-flow-native.json"
+            leftover.parent.mkdir(parents=True)
+            marker = b'{"leftover": true}\n'
+            leftover.write_bytes(marker)
+            # Do not monkeypatch HEAD — nonempty guard must fire first.
+            resolve_calls: list[object] = []
+            real_resolve = self.run_eval.resolve_git_head
+
+            def _track_head(*args, **kwargs):
+                resolve_calls.append((args, kwargs))
+                return real_resolve(*args, **kwargs)
+
+            self.run_eval.resolve_git_head = _track_head  # type: ignore[method-assign]
+            try:
+                rc = self.run_eval.freeze_b0(output_dir=out)
+            finally:
+                self.run_eval.resolve_git_head = real_resolve  # type: ignore[method-assign]
+            self.assertEqual(rc, 1)
+            self.assertEqual(resolve_calls, [], "nonempty guard must precede HEAD resolve")
+            self.assertFalse((out / "INDEX.json").exists())
+            self.assertEqual(leftover.read_bytes(), marker)
+            # No extra freeze artifacts beside the leftover tree.
+            written = sorted(p for p in out.rglob("*") if p.is_file())
+            self.assertEqual(written, [leftover])
+
+    def test_freeze_b0_refuses_head_mismatch_before_writes(self) -> None:
+        """HEAD != BASELINE_COMMIT refuses bootstrap; temp output stays empty."""
+        with tempfile.TemporaryDirectory(prefix="rp-freeze-") as td:
+            out = Path(td) / "b0"
+            # Seam: absent output + wrong HEAD must not create INDEX or dirs.
+            real_resolve = self.run_eval.resolve_git_head
+
+            def _wrong_head(_repo_root=None):
+                return "0" * 40
+
+            self.run_eval.resolve_git_head = _wrong_head  # type: ignore[method-assign]
+            try:
+                rc = self.run_eval.freeze_b0(output_dir=out)
+            finally:
+                self.run_eval.resolve_git_head = real_resolve  # type: ignore[method-assign]
+            self.assertEqual(rc, 1)
+            self.assertFalse(out.exists())
+            self.assertFalse((out / "INDEX.json").exists())
+
+    def test_freeze_b0_bootstraps_absent_temp_at_exact_baseline(self) -> None:
+        """Temp seam: exact baseline + absent dir bootstraps from git-show sources."""
+        with tempfile.TemporaryDirectory(prefix="rp-freeze-ok-") as td:
+            out = Path(td) / "b0"
+            real_resolve = self.run_eval.resolve_git_head
+            baseline = self.run_eval.BASELINE_COMMIT
+
+            def _baseline_head(_repo_root=None):
+                return baseline
+
+            self.run_eval.resolve_git_head = _baseline_head  # type: ignore[method-assign]
+            try:
+                rc = self.run_eval.freeze_b0(output_dir=out)
+            finally:
+                self.run_eval.resolve_git_head = real_resolve  # type: ignore[method-assign]
+            self.assertEqual(rc, 0)
+            self.assertTrue((out / "INDEX.json").is_file())
+            index = json.loads((out / "INDEX.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["baseline"], "B0")
+            self.assertEqual(index["baseline_commit"], baseline)
+            self.assertGreater(index["fixture_count"], 0)
+            # Canonical B0 untouched.
+            canon_path = HARNESS / "fixtures" / "b0" / "INDEX.json"
+            self.assertTrue(canon_path.is_file())
+            self.assertNotEqual(canon_path.resolve(), (out / "INDEX.json").resolve())
+            # Prove baseline git-show sources — match checked-in INDEX ids/hashes/counts
+            # even when the live worktree may differ from BASELINE_COMMIT.
+            canon = json.loads(canon_path.read_text(encoding="utf-8"))
+            self.assertEqual(index["fixture_count"], canon["fixture_count"])
+            self.assertEqual(len(index["fixtures"]), len(canon["fixtures"]))
+            by_id_boot = {f["fixture_id"]: f for f in index["fixtures"]}
+            by_id_canon = {f["fixture_id"]: f for f in canon["fixtures"]}
+            self.assertEqual(set(by_id_boot), set(by_id_canon))
+            for fid, crow in by_id_canon.items():
+                brow = by_id_boot[fid]
+                self.assertEqual(
+                    brow["fixture_hash"],
+                    crow["fixture_hash"],
+                    f"fixture_hash drift for {fid}",
+                )
+                self.assertEqual(
+                    brow["reached_path_chars"],
+                    crow["reached_path_chars"],
+                    f"reached_path_chars drift for {fid}",
+                )
+                self.assertEqual(brow["cluster"], crow["cluster"])
+
+    def test_freeze_b0_ignores_poisoned_live_source_reader(self) -> None:
+        """Freeze uses preflighted baseline map; a live reader seam cannot alter hashes."""
+        items = self.inventory.inventory()
+        paths = self.run_eval.inventory_prompt_paths(items)
+        sources = self.run_eval.materialize_baseline_sources(
+            paths, commit=self.run_eval.BASELINE_COMMIT
+        )
+        fx = copy.deepcopy(items[0])
+
+        def _poison(_path: str) -> str:
+            return "POISONED_LIVE_WORKTREE_CONTENT\n"
+
+        live_poisoned = self.run_eval._fill_hashes(copy.deepcopy(fx), source_reader=_poison)
+        baseline_filled = self.run_eval._fill_hashes(copy.deepcopy(fx), sources=sources)
+        default_live = self.run_eval._fill_hashes(copy.deepcopy(fx))
+        self.assertNotEqual(
+            live_poisoned["fixture_hash"],
+            baseline_filled["fixture_hash"],
+            "poisoned live reader must diverge from baseline sources",
+        )
+        # Baseline sources match what freeze will write; default live may match
+        # or not depending on worktree dirtiness — only assert baseline path works.
+        self.assertTrue(
+            all(
+                not str(h).startswith("MISSING:")
+                for h in baseline_filled["prompt_hashes"].values()
+            )
+        )
+        # Sanity: default live path still functions (validation call sites).
+        self.assertIn("fixture_hash", default_live)
+        self.assertIn("prompt_hashes", default_live)
 
     def test_inventory_covers_required_clusters(self) -> None:
         items = self.inventory.inventory()

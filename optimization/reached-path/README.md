@@ -92,12 +92,14 @@ retained in `agent_docs/optimization-log.md`.
 
 ## Production-path tracing
 
-Where the host exposes loader traces (Claude `stream-json` Read `tool_use`),
-required reads must appear and cold forbidden reads must not. When a host cannot
-expose a precise loader trace (notably Cursor today), record that limitation
-honestly — never fabricate a pass. See `deferrals.md` for host evidence
-boundaries and non-target skill / open-spec (fn-129 / fn-122 / fn-61 / fn-73)
-deferrals.
+Where the host exposes loader traces (Claude `stream-json` Read `tool_use` +
+matching completed `tool_result`), required reads must appear and cold forbidden
+reads must not. A Read activation counts only when correlated by `tool_use_id`
+to a non-error `tool_result`; unpaired / truncated uses and `is_error` results
+do not inflate reached-path metrics. When a host cannot expose a precise loader
+trace (notably Cursor today), record that limitation honestly — never fabricate
+a pass. See `deferrals.md` for host evidence boundaries and non-target skill /
+open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 
 ## Layout
 
@@ -121,8 +123,12 @@ deferrals.
 # Offline deterministic proofs (also wired into CI via test_reached_path_harness.py)
 python3 optimization/reached-path/run_eval.py --self-test
 
-# Freeze / re-freeze B0 manifests from inventory + live prompt hashes
-python3 optimization/reached-path/run_eval.py --freeze-b0
+# B0 is already frozen under fixtures/b0/. --freeze-b0 is bootstrap-only:
+# it writes only when the output dir is absent/empty AND git HEAD exactly
+# equals BASELINE_COMMIT; prompt sources are read via
+# `git show BASELINE_COMMIT:<path>` (never the live worktree); refuses any
+# nonempty target (even if INDEX.json was deleted).
+# python3 optimization/reached-path/run_eval.py --freeze-b0
 python3 optimization/reached-path/run_eval.py --validate-b0
 
 # Authenticated Claude production-path smoke (active read + cold non-read)

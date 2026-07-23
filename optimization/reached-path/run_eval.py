@@ -6,13 +6,18 @@ scoring framework. See README.md.
 
 Modes:
   --self-test                 offline deterministic proofs (no model)
-  --freeze-b0                 write sanitized B0 manifests + INDEX from inventory
+  --freeze-b0                 bootstrap-only: write sanitized B0 when output dir is
+                              empty/absent and HEAD exactly equals BASELINE_COMMIT;
+                              prompt sources come from git show BASELINE_COMMIT
+                              (never the live worktree); refuses nonempty targets
   --validate-b0               load + validate every frozen B0 manifest
   --production-path-smoke     authenticated Claude proof: active read + cold non-read
   --fixture <id>              validate one frozen fixture
   --all                       validate-b0 + (optional) production-path smoke when --backend claude
 
 Never mutates canonical skill prompts. No live tracker calls.
+B0 is immutable after its initial freeze — never re-run --freeze-b0 against an
+existing (nonempty) fixtures/b0/.
 """
 
 from __future__ import annotations
@@ -23,10 +28,11 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Mapping, Optional
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
@@ -88,19 +94,49 @@ def recompute_fixture_hash(fx: dict[str, Any]) -> str:
     return _hash_obj(fixture_hash_body(fx))
 
 
-def _fill_hashes(fx: dict[str, Any]) -> dict[str, Any]:
+def _read_live_repo_text(repo_rel_path: str) -> Optional[str]:
+    """Read UTF-8 text from the live worktree; None if missing."""
+    path = REPO_ROOT / repo_rel_path
+    if not path.is_file():
+        return None
+    return path.read_text(encoding="utf-8")
+
+
+def _fill_hashes(
+    fx: dict[str, Any],
+    *,
+    sources: Optional[Mapping[str, str]] = None,
+    source_reader: Optional[Callable[[str], Optional[str]]] = None,
+) -> dict[str, Any]:
+    """Hash prompt paths and compute reached-path metrics.
+
+    Default (validation / current-tree): read live ``REPO_ROOT`` files.
+    Freeze passes a preflighted ``sources`` map (or ``source_reader``) so
+    ``freeze_b0`` never hashes live worktree content.
+    """
+    if sources is not None and source_reader is not None:
+        raise ValueError("pass sources or source_reader, not both")
+
+    def _get(path: str) -> Optional[str]:
+        if sources is not None:
+            return sources.get(path)
+        if source_reader is not None:
+            return source_reader(path)
+        return _read_live_repo_text(path)
+
     prompt_hashes: dict[str, str] = {}
     root_text = None
     root_path = None
     # Every prompt_files + required_reads path is hashed (required ⊆ counted).
-    paths_to_hash = list(dict.fromkeys([*(fx.get("prompt_files") or []), *(fx.get("required_reads") or [])]))
+    paths_to_hash = list(
+        dict.fromkeys([*(fx.get("prompt_files") or []), *(fx.get("required_reads") or [])])
+    )
     texts: dict[str, str] = {}
     for p in paths_to_hash:
-        path = REPO_ROOT / p
-        if not path.is_file():
+        text = _get(p)
+        if text is None:
             prompt_hashes[p] = f"MISSING:{p}"
             continue
-        text = path.read_text(encoding="utf-8")
         texts[p] = text
         prompt_hashes[p] = character.content_hash(text)
         if p.endswith("/SKILL.md") and root_text is None:
@@ -111,9 +147,13 @@ def _fill_hashes(fx: dict[str, Any]) -> dict[str, Any]:
         rp = fx["required_reads"][0]
         root_path = rp
         if rp not in texts:
-            root_text = (REPO_ROOT / rp).read_text(encoding="utf-8")
-            prompt_hashes[rp] = character.content_hash(root_text)
-            texts[rp] = root_text
+            root_text = _get(rp)
+            if root_text is None:
+                prompt_hashes[rp] = f"MISSING:{rp}"
+                root_text = ""
+            else:
+                prompt_hashes[rp] = character.content_hash(root_text)
+                texts[rp] = root_text
         else:
             root_text = texts[rp]
 
@@ -123,8 +163,10 @@ def _fill_hashes(fx: dict[str, Any]) -> dict[str, Any]:
             continue
         if p in texts:
             activated.append((p, texts[p]))
-        elif (REPO_ROOT / p).is_file():
-            activated.append((p, (REPO_ROOT / p).read_text(encoding="utf-8")))
+        else:
+            text = _get(p)
+            if text is not None:
+                activated.append((p, text))
 
     metrics = character.compute_reached_path(
         root_skill_text=root_text or "",
@@ -155,9 +197,163 @@ def _fill_hashes(fx: dict[str, Any]) -> dict[str, Any]:
     return privacy.scrub_obj(fx)
 
 
-def freeze_b0() -> int:
-    FIXTURES_B0.mkdir(parents=True, exist_ok=True)
+def resolve_git_head(repo_root: Path = REPO_ROOT) -> str:
+    """Return HEAD SHA; fail closed on missing git / non-repo / empty output."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "git executable unavailable — cannot verify HEAD for B0 bootstrap"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("git rev-parse HEAD timed out") from exc
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip() or f"exit {proc.returncode}"
+        raise RuntimeError(f"git rev-parse HEAD failed ({err})")
+    head = (proc.stdout or "").strip()
+    if not head:
+        raise RuntimeError("git rev-parse HEAD returned empty SHA")
+    return head
+
+
+def git_show_text(
+    commit: str, repo_rel_path: str, repo_root: Path = REPO_ROOT
+) -> str:
+    """Return UTF-8 text of ``repo_rel_path`` at ``commit`` via ``git show``.
+
+    Fail closed on missing git, bad commit, missing path, decode error, or
+    nonzero exit — never falls back to the live worktree.
+    """
+    rel = str(repo_rel_path).replace("\\", "/").lstrip("./")
+    if not rel or rel.startswith("/") or ".." in rel.split("/"):
+        raise RuntimeError(f"refusing unsafe repo-relative path for git show: {repo_rel_path!r}")
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_root), "show", f"{commit}:{rel}"],
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "git executable unavailable — cannot read baseline sources for B0 freeze"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"git show {commit}:{rel} timed out") from exc
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or b"").decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"git show {commit}:{rel} failed ({err or f'exit {proc.returncode}'})"
+        )
+    try:
+        return proc.stdout.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuntimeError(f"git show {commit}:{rel} is not valid UTF-8") from exc
+
+
+def inventory_prompt_paths(items: list[dict[str, Any]]) -> list[str]:
+    """Deduped ``prompt_files`` + ``required_reads`` across inventory fixtures."""
+    paths: list[str] = []
+    for fx in items:
+        paths.extend(fx.get("prompt_files") or [])
+        paths.extend(fx.get("required_reads") or [])
+    return list(dict.fromkeys(paths))
+
+
+def materialize_baseline_sources(
+    paths: list[str],
+    commit: str = BASELINE_COMMIT,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, str]:
+    """Preflight: load every path from ``commit`` into memory (no worktree reads)."""
+    sources: dict[str, str] = {}
+    for p in paths:
+        sources[p] = git_show_text(commit, p, repo_root=repo_root)
+    return sources
+
+
+def _output_dir_nonempty(out: Path) -> bool:
+    """True if ``out`` exists and is not an empty directory (or is a non-dir)."""
+    if not out.exists():
+        return False
+    if not out.is_dir():
+        return True
+    try:
+        next(out.iterdir())
+    except StopIteration:
+        return False
+    return True
+
+
+def freeze_b0(output_dir: Optional[Path] = None) -> int:
+    """Bootstrap-only B0 freeze.
+
+    Writes sanitized manifests only when:
+      1. ``output_dir`` is absent or an empty directory (never rewrite / never
+         overwrite leftover manifests after INDEX.json removal), and
+      2. ``git rev-parse HEAD`` exactly equals ``BASELINE_COMMIT``, and
+      3. every inventory ``prompt_files`` / ``required_reads`` path resolves via
+         ``git show BASELINE_COMMIT:<path>`` (live worktree is never hashed).
+
+    Guards 1–3 and full source materialization run before any directory or file
+    write. ``output_dir`` defaults to canonical ``fixtures/b0``; tests may pass a
+    temp path (HEAD gate still applies — monkeypatch ``resolve_git_head`` for
+    bootstrap proofs).
+    """
+    out = Path(output_dir) if output_dir is not None else FIXTURES_B0
+    index_path = out / "INDEX.json"
+
+    # Guard 1 — refuse nonempty targets before HEAD/source work (immutable B0).
+    if _output_dir_nonempty(out):
+        try:
+            shown = out.relative_to(REPO_ROOT)
+        except ValueError:
+            shown = out
+        detail = (
+            f"{index_path.name} present"
+            if index_path.is_file()
+            else "directory nonempty (INDEX.json may be absent)"
+        )
+        print(
+            f"FAIL: B0 output {shown} is not empty ({detail}) — --freeze-b0 is "
+            "bootstrap-only and refuses to overwrite an existing freeze or leftover "
+            "manifests. Validate with --validate-b0; do not re-freeze. Use an absent "
+            "or empty output directory only for a fresh bootstrap seam.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Guard 2 — exact baseline checkout (before any write / source resolve).
+    try:
+        head = resolve_git_head(REPO_ROOT)
+    except RuntimeError as exc:
+        print(f"FAIL: {exc}", file=sys.stderr)
+        return 1
+    if head != BASELINE_COMMIT:
+        print(
+            f"FAIL: HEAD {head} != BASELINE_COMMIT {BASELINE_COMMIT}. "
+            "--freeze-b0 may bootstrap only at the exact baseline checkout; "
+            "refusing so a stale HEAD cannot bless B0. Check out the baseline "
+            "commit first, or use --validate-b0 on the already-frozen tree.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Guard 3 — materialize baseline sources in memory before any write.
     items = inventory.inventory()
+    paths = inventory_prompt_paths(items)
+    try:
+        sources = materialize_baseline_sources(paths, commit=BASELINE_COMMIT)
+    except RuntimeError as exc:
+        print(f"FAIL: baseline source preflight: {exc}", file=sys.stderr)
+        return 1
+
     index = {
         "baseline": "B0",
         "baseline_commit": BASELINE_COMMIT,
@@ -178,27 +374,37 @@ def freeze_b0() -> int:
         },
         "fixtures": [],
     }
+    out.mkdir(parents=True, exist_ok=True)
     for fx in items:
-        filled = _fill_hashes(fx)
-        cluster_dir = FIXTURES_B0 / filled["cluster"]
+        filled = _fill_hashes(fx, sources=sources)
+        cluster_dir = out / filled["cluster"]
         cluster_dir.mkdir(parents=True, exist_ok=True)
         # Filename from fixture_id without cluster prefix if present.
         name = filled["fixture_id"].split(".", 1)[-1] + ".json"
         path = cluster_dir / name
         path.write_text(_stable_json(filled), encoding="utf-8")
+        try:
+            rel = str(path.relative_to(HERE)).replace("\\", "/")
+        except ValueError:
+            # Non-canonical temp output (tests): store path relative to out parent.
+            rel = str(path).replace("\\", "/")
         index["fixtures"].append(
             {
                 "fixture_id": filled["fixture_id"],
                 "cluster": filled["cluster"],
-                "path": str(path.relative_to(HERE)).replace("\\", "/"),
+                "path": rel,
                 "fixture_hash": filled["fixture_hash"],
                 "reached_path_chars": filled["metrics"]["reached_path_chars"],
             }
         )
         index["clusters"].setdefault(filled["cluster"], 0)
         index["clusters"][filled["cluster"]] += 1
-    (FIXTURES_B0 / "INDEX.json").write_text(_stable_json(index), encoding="utf-8")
-    print(f"froze {len(items)} B0 fixtures → {FIXTURES_B0.relative_to(REPO_ROOT)}")
+    index_path.write_text(_stable_json(index), encoding="utf-8")
+    try:
+        shown_out = out.relative_to(REPO_ROOT)
+    except ValueError:
+        shown_out = out
+    print(f"froze {len(items)} B0 fixtures → {shown_out}")
     print(f"clusters: {index['clusters']}")
     return 0
 
@@ -580,6 +786,7 @@ def self_test() -> int:
     print(f"[{'PASS' if c6 else 'FAIL'}] arena fs-diff + out-of-arena sentinel tripwire")
 
     # (7) Trace parser: active read present, cold absent; failed excluded.
+    # Successful Read requires a matching non-error tool_result (not bare tool_use).
     stream = "\n".join(
         [
             json.dumps(
@@ -592,6 +799,20 @@ def self_test() -> int:
                                 "id": "1",
                                 "name": "Read",
                                 "input": {"file_path": "/arena/skill/references/active.md"},
+                            }
+                        ]
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "user",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "1",
+                                "content": "active body",
                             }
                         ]
                     },
@@ -627,6 +848,25 @@ def self_test() -> int:
                     },
                 }
             ),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "3",
+                                "name": "Read",
+                                "input": {
+                                    "file_path": "/arena/skill/references/unpaired.md",
+                                    "offset": 1,
+                                    "limit": 5,
+                                },
+                            }
+                        ]
+                    },
+                }
+            ),
             json.dumps({"type": "result", "usage": {"input_tokens": 1, "output_tokens": 2}}),
         ]
     )
@@ -636,8 +876,15 @@ def self_test() -> int:
     c7 = (
         any(a.endswith("active.md") for a in acts)
         and not any(a.endswith("cold.md") for a in acts)
+        and not any(a.endswith("unpaired.md") for a in acts)
+        and not any(r["path"].endswith("unpaired.md") for r in reads)
         and any(f["path"].endswith("missing.md") for f in failed)
         and "missing.md" not in "".join(acts)
+        and any(
+            r.get("offset") is None and r.get("limit") is None
+            for r in reads
+            if r["path"].endswith("active.md")
+        )
     )
     ok &= c7
     print(f"[{'PASS' if c7 else 'FAIL'}] trace: active read + failed excluded + cold non-read")
