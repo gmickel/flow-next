@@ -67,6 +67,16 @@ PROBES = {
     "grok": ("grok", GROK_ROUTE_TOKENS),
 }
 
+
+def _read_setup_bundle(path: pathlib.Path) -> str:
+    """Read the routed Setup contract; pre-regen mirrors remain monolithic."""
+    text = _read(path)
+    refs = path.parent / "references"
+    if refs.is_dir():
+        for ref in sorted(refs.glob("model-routing-*.md")):
+            text += "\n" + _read(ref)
+    return text
+
 # Budget: the block is always-loaded context in every future session of the
 # target repo (spec R13, ≤ ~45 lines including markers + provenance).
 LINE_BUDGET = 45
@@ -351,7 +361,7 @@ class WorkflowProseContract(unittest.TestCase):
 
     def _assert_contract(self, path: pathlib.Path) -> None:
         self.assertTrue(path.is_file(), f"missing: {path}")
-        text = _read(path)
+        text = _read_setup_bundle(path)
         # Headless / non-interactive setup skips the question silently.
         self.assertIn("skipped SILENTLY", text, path)
         self.assertIn("ROUTING_ASK", text, path)
