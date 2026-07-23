@@ -1,0 +1,110 @@
+{
+  "cluster": "strategy",
+  "task": "fn-130-reached-path-skill-prompt-optimization.9",
+  "lineage": {
+    "baseline": "B1",
+    "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "verified_before_mutation": true,
+    "input_hashes": {
+      "plugins/flow-next/skills/flow-next-strategy/SKILL.md": "bb797d2bc1d5cca57688e391a588fbbfdf78133b0d684e1aaf0b8c05c901ba31",
+      "plugins/flow-next/skills/flow-next-strategy/references/interview.md": "229c81b7c4933aa65ec91bb4eb8781fc4e550b4026d6157061173c33f3aaf5a4",
+      "plugins/flow-next/skills/flow-next-strategy/references/strategy-template.md": "274e9d814398c3c276620040b5079f3581e4d3eb7512afdc6dee2e1b21ddd87e"
+    },
+    "rule": "candidate compares only to hash-verified B1; never to B0"
+  },
+  "candidate": {
+    "name": "route-first-run-vs-update",
+    "mutation": "Keep classification, foreign-file safety, and shared handoff in SKILL.md; load exactly one first-run or update workflow reference after classification.",
+    "source_hashes": {
+      "plugins/flow-next/skills/flow-next-strategy/SKILL.md": "37953c1ddd022857fab68af1322bd4cc7bf730b1a89da59475d8a77d56d3fe26",
+      "plugins/flow-next/skills/flow-next-strategy/references/first-run.md": "a9cb28955f316346a0250b8eec2c43bfcd81afa68129ae9f72ee6c15d7cc3450",
+      "plugins/flow-next/skills/flow-next-strategy/references/update.md": "5942190a575574e627731287268e65a1ebfac0e6eb82f4ae65bc8a9a5cee2190",
+      "plugins/flow-next/skills/flow-next-strategy/references/interview.md": "229c81b7c4933aa65ec91bb4eb8781fc4e550b4026d6157061173c33f3aaf5a4",
+      "plugins/flow-next/skills/flow-next-strategy/references/strategy-template.md": "274e9d814398c3c276620040b5079f3581e4d3eb7512afdc6dee2e1b21ddd87e"
+    }
+  },
+  "fixtures": [
+    {
+      "id": "strategy.absent",
+      "route": "first-run",
+      "baseline_reached_path_chars": 33798,
+      "candidate_reached_path_chars": 31898,
+      "delta_chars": -1900
+    },
+    {
+      "id": "strategy.husk",
+      "route": "first-run-before-first-write",
+      "baseline_reached_path_chars": 30029,
+      "candidate_reached_path_chars": 28129,
+      "delta_chars": -1900
+    },
+    {
+      "id": "strategy.foreign-keep",
+      "route": "inline-foreign-resolution",
+      "baseline_reached_path_chars": 17772,
+      "candidate_reached_path_chars": 11657,
+      "delta_chars": -6115
+    },
+    {
+      "id": "strategy.foreign-abort",
+      "route": "inline-foreign-resolution",
+      "baseline_reached_path_chars": 17772,
+      "candidate_reached_path_chars": 11657,
+      "delta_chars": -6115
+    },
+    {
+      "id": "strategy.generated-first-run",
+      "route": "first-run",
+      "baseline_reached_path_chars": 33798,
+      "candidate_reached_path_chars": 31898,
+      "delta_chars": -1900
+    },
+    {
+      "id": "strategy.update",
+      "route": "update",
+      "baseline_reached_path_chars": 30029,
+      "candidate_reached_path_chars": 28567,
+      "delta_chars": -1462
+    },
+    {
+      "id": "strategy.malformed-unknown",
+      "route": "safe-no-write-exit",
+      "baseline_reached_path_chars": null,
+      "candidate_reached_path_chars": 11657,
+      "delta_chars": null
+    }
+  ],
+  "accuracy_checks": {
+    "absent_husk_and_confirmed_rewrite_select_first_run": "pass",
+    "generated_populated_selects_update": "pass",
+    "foreign_keep_and_abort_never_write": "pass",
+    "per_section_atomic_writes_and_readback_preserved": "pass",
+    "untouched_update_sections_remain_byte_identical": "pass",
+    "malformed_or_unknown_state_exits_without_write": "pass"
+  },
+  "verdict": {
+    "decision": "keep",
+    "reason": "All frozen route and safety checks pass; every measured B1 fixture improves deterministic reached-path characters.",
+    "wall_time_claim": null
+  },
+  "discards": [
+    {
+      "mutation": "Move foreign-file resolution into a separate workflow reference.",
+      "score": {
+        "quality": "rejected-before-run: moves destructive confirmation away from classification",
+        "efficiency": "no predeclared improvement on first-run or update paths"
+      },
+      "decision": "discard",
+      "reason": "Discarded: non-clobber questions and destructive confirmation are safest beside classification; an extra read adds no value to first-run or update routing."
+    },
+    {
+      "mutation": "Single-source final read-back in a nested shared reference.",
+      "score": {
+        "quality": "rejected-before-run: moves confirmation semantics away from both write consumers",
+        "efficiency": "second-level read adds a reached path without removing selected-path behavior"
+      },
+      "decision": "discard",
+      "reason": "Discarded: would add second-level indirection and move confirmation semantics away from each consuming write path; short action-site repetition is retained."
+    }
+  ]
+}
