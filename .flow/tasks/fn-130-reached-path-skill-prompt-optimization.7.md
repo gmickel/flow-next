@@ -41,9 +41,8 @@ Move Plan tracker, HTML artifact, and review-only material behind explicit branc
 - [ ] Plan-specific prose/fixture/mirror tests pass and the Codex mirror keeps portable prompt/question behavior.
 - [ ] If either examples or routing candidate regresses any cell, revert that mutation independently and retain its evidence.
 ## Done summary
-TBD
-
+Sealed a B1-addressed no-code/research/Mermaid holdout, gated Plan tracker/review/HTML machinery behind existing signals, and retained the independent examples trim; default authoring reached-path falls 61,420→54,314 characters (-11.57%) with every selected/off route also smaller. Focused 549-test, offline reached-path, paired deterministic, and corrected disposable-repo smoke gates pass; the full suite has one proven inherited `test_tracker_sync_backlog_mode` failure from the prior version-precheck removal, and Codex mirror regeneration remains conductor-owned.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0a4400f7, ed9b6206, 63e9942e, 3e4e92ee, f3d1ff79, f7c85984, e901aa00, 1ab5bb3b, 0f08c608, c00dc797, c0142c0d, 97e9793a
+- Tests: ./scripts/sync-codex.sh twice: 28 skills, 22 agents, idempotent, python3 scripts/run_tests_parallel.py: 2,286 run, 3 skipped, 0 failures/errors, bash plugins/flow-next/scripts/smoke_test.sh from /tmp: 136 passed, 0 failed, flow-next.dev build: Astro check 0 errors/warnings/hints; 74 pages built, git diff --check and changed-reference existence audit: passed, Prime authenticated Claude baseline and candidate: 7/7 each; 6/6 synthetic plus negative control
 - PRs:

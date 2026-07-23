@@ -43,9 +43,10 @@ Replace Tracker Sync all-adapter eager loading with common reconciliation instru
 - [ ] Existing tracker suites plus new routing assertions pass on canonical and Codex mirror.
 - [ ] Measured selected-path reduction is recorded per provider; any adapter whose zero-loss matrix fails is reverted and logged independently.
 ## Done summary
-TBD
+Tracker Sync now resolves configuration fail-closed, loads the common reconciliation spine plus exactly one selected provider/fallback path, and keeps inactive/malformed routes transport-cold. Offline fake-transport traces cover Linear MCP/GraphQL, GitHub, GitLab, Jira, no-transport, auth-unavailable, operations, and conflict/defer behavior with zero external writes; every measured route reduces B1 reached-path size by 33.2–49.5%.
 
+Canonical skill changes and task-owned tests/evidence are committed as `be6aa2908d0148c541692f9fafc233d19e933225`. Codex mirror regeneration, cross-host smokes, review, lifecycle completion, and integration remain conductor-owned.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0a4400f7, ed9b6206, 63e9942e, 3e4e92ee, f3d1ff79, f7c85984, e901aa00, 1ab5bb3b, 0f08c608, c00dc797, c0142c0d, 97e9793a
+- Tests: ./scripts/sync-codex.sh twice: 28 skills, 22 agents, idempotent, python3 scripts/run_tests_parallel.py: 2,286 run, 3 skipped, 0 failures/errors, bash plugins/flow-next/scripts/smoke_test.sh from /tmp: 136 passed, 0 failed, flow-next.dev build: Astro check 0 errors/warnings/hints; 74 pages built, git diff --check and changed-reference existence audit: passed, Prime authenticated Claude baseline and candidate: 7/7 each; 6/6 synthetic plus negative control
 - PRs:

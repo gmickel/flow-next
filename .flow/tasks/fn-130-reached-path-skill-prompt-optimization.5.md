@@ -40,9 +40,8 @@ Repair Prime agentic-eval authentication isolation, establish a green current-ma
 - [ ] Route traces and measured reductions are recorded separately for classify/report/full/fix paths.
 - [ ] If the authenticated baseline cannot be made trustworthy, no Prime canonical mutation lands; the task records the harness blocker and discard.
 ## Done summary
-TBD
-
+Repaired Prime's authenticated Claude eval path with OAuth-preserving isolation, auth/leak preflight, and invalid-run classification; both baseline and candidate passed all seven judgment fixtures. Routed classify-only directly to classification.md, preserved report/fix side effects, and recorded B1-linked reductions (65.94% classify-only; every measured route smaller); Codex mirror regeneration remains deferred to the wave conductor.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0a4400f7, ed9b6206, 63e9942e, 3e4e92ee, f3d1ff79, f7c85984, e901aa00, 1ab5bb3b, 0f08c608, c00dc797, c0142c0d, 97e9793a
+- Tests: ./scripts/sync-codex.sh twice: 28 skills, 22 agents, idempotent, python3 scripts/run_tests_parallel.py: 2,286 run, 3 skipped, 0 failures/errors, bash plugins/flow-next/scripts/smoke_test.sh from /tmp: 136 passed, 0 failed, flow-next.dev build: Astro check 0 errors/warnings/hints; 74 pages built, git diff --check and changed-reference existence audit: passed, Prime authenticated Claude baseline and candidate: 7/7 each; 6/6 synthetic plus negative control
 - PRs:

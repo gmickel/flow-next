@@ -120,6 +120,7 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `runs/plan-review-candidate.json` | fn-130.6 B1→candidate route/corpus ratchet evidence |
 | `runs/candidates/` | Ignored timestamped candidate smoke evidence (ordinary runs) |
 | `deferrals.md` | Non-target skills + open-spec overlaps |
+| `fleet-results.md` | fn-130 closure: per-cluster metrics, host smokes, final gates, and rollback |
 
 ## Run
 

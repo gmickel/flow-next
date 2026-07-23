@@ -41,9 +41,15 @@ Refactor the 112 KB Setup workflow into a compact common path plus direct refere
 - [ ] Existing setup/model-routing/template tests and new route-read assertions pass on canonical and mirror.
 - [ ] Candidate records a measured reached-path improvement; if zero-loss cannot be demonstrated, revert the router and retain the fixture evidence as a discard.
 ## Done summary
-TBD
+Refactored Setup into a 69,591-character common path plus one-level, state-gated model-pin, host-routing, and Ralph references. Added canonical route-read contracts and frozen V1/B1 candidate evidence showing 27.81%–32.88% reached-path reduction across all 16 Setup fixtures; generated Codex mirror regeneration remains deferred to the conductor.
 
+Verification:
+- `python3 optimization/reached-path/run_eval.py --check-b1-input setup` — green before mutation.
+- `python3 optimization/reached-path/run_eval.py --validate-b1` — 117 manifests valid.
+- Parent focused structural suite — 545 tests green.
+- Setup router/model/template suite — 72 tests green.
+- Authenticated Claude reached-path eval not run: this parallel-wave task explicitly required Codex-only execution.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0a4400f7, ed9b6206, 63e9942e, 3e4e92ee, f3d1ff79, f7c85984, e901aa00, 1ab5bb3b, 0f08c608, c00dc797, c0142c0d, 97e9793a
+- Tests: ./scripts/sync-codex.sh twice: 28 skills, 22 agents, idempotent, python3 scripts/run_tests_parallel.py: 2,286 run, 3 skipped, 0 failures/errors, bash plugins/flow-next/scripts/smoke_test.sh from /tmp: 136 passed, 0 failed, flow-next.dev build: Astro check 0 errors/warnings/hints; 74 pages built, git diff --check and changed-reference existence audit: passed, Prime authenticated Claude baseline and candidate: 7/7 each; 6/6 synthetic plus negative control
 - PRs:

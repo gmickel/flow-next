@@ -1,6 +1,6 @@
 # Reached-path deferrals & open-spec overlaps (fn-130.1 / R11)
 
-Recorded at B0 freeze. Structural rewrite of these skills is **out of scope**
+Recorded at B0 freeze and rechecked at closure. Structural rewrite of these skills is **out of scope**
 unless a later task creates a new baseline and predeclared oracle that proves a
 concrete zero-loss win. Version-ceremony removal alone (task 130.2) is the only
 fleet-wide edit that may touch some of these surfaces.
@@ -38,6 +38,18 @@ Recheck status before each mutation task and at closure:
 | **fn-122** harden-verdict / graduate recurring | open (hardening sweep done; graduate open) | Audit surfaces | This program removes only version ceremony on Audit. |
 | **fn-61** Ralph v2 harness | open | Pilot/Land frozen verdict/receipt grammar | Frozen grammar wins; do not soften. |
 | **fn-73** glab git-ops / forge | open (stub) | Make PR / Resolve PR / Land forge semantics | Semantic forge work wins; no conflicting forge edits. |
+
+Closure status:
+
+- fn-129 remains open/deferred; no skill name, frontmatter, command, or alias changed.
+- `fn-122-flowctl-hardening-and-performance-completion-sweep` is done; the
+  distinct `fn-122-harden-verdict-graduate-recurring` remains open. Audit
+  received version-ceremony removal only.
+- fn-61 and fn-73 remain open. Pilot/Land terminal grammar and forge semantics
+  remain their authoritative surfaces.
+- No non-target skill above received a structural rewrite. The final fleet
+  result and rationale are recorded in
+  [`fleet-results.md`](fleet-results.md).
 
 ## Host evidence boundaries
 

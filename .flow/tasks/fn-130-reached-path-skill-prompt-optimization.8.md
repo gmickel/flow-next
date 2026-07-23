@@ -42,9 +42,10 @@ Move Codex delegation-only Phase 1.5 and circuit-breaker instructions behind the
 - [ ] Existing parallel/delegation/tracker/prose tests plus canonical/mirror route assertions pass.
 - [ ] Measured default-path reduction is recorded; any unsafe extraction is reverted and logged without further prose trimming.
 ## Done summary
-TBD
+Optimized Work's reached prompt path while preserving the fn-118 wave lifecycle, fn-103 path handoff and safety rails, tracker fail-open routing, review ordering, and plan-sync timing. Conductor review caught and repaired a circular summary-first consent router: delegation-off loads no reference; requested delegation loads an exact selection contract; only a passing selection loads active-only mechanics. The corrected B1-hash-anchored ratchet covers 20 behavior routes; default path shrinks 3,730 chars (6.86%) and delegation-active path shrinks 427 chars (0.42%).
 
+Verification: B1 input check passed before mutation; focused Work suite passed; canonical and Codex mirror routing regenerated twice and reviewed; combined full suite ran 2,286 tests with 3 skips and zero failures/errors. Plugin smoke passed from its required external working directory.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0a4400f7, ed9b6206, 63e9942e, 3e4e92ee, f3d1ff79, f7c85984, e901aa00, 1ab5bb3b, 0f08c608, c00dc797, c0142c0d, 97e9793a
+- Tests: ./scripts/sync-codex.sh twice: 28 skills, 22 agents, idempotent, python3 scripts/run_tests_parallel.py: 2,286 run, 3 skipped, 0 failures/errors, bash plugins/flow-next/scripts/smoke_test.sh from /tmp: 136 passed, 0 failed, flow-next.dev build: Astro check 0 errors/warnings/hints; 74 pages built, git diff --check and changed-reference existence audit: passed, Prime authenticated Claude baseline and candidate: 7/7 each; 6/6 synthetic plus negative control
 - PRs:

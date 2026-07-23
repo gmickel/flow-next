@@ -34,9 +34,8 @@ Apply one conservative Strategy cold-branch extraction: route absent/husk first-
 - [ ] Reached-path improvement and every discard reason are recorded without claiming unmeasured wall-time gains.
 
 ## Done summary
-TBD
-
+Conservatively split Strategy's mutually exclusive first-run and update workflows into selected direct references while keeping classification, foreign-file non-clobber, Ralph safety, and downstream handoff in the root router. Added fail-safe malformed-state handling, an exact V1/B1 candidate ledger with retained discards, and canonical route/metric tests; Codex mirror regeneration remains conductor-owned.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0a4400f7, ed9b6206, 63e9942e, 3e4e92ee, f3d1ff79, f7c85984, e901aa00, 1ab5bb3b, 0f08c608, c00dc797, c0142c0d, 97e9793a
+- Tests: ./scripts/sync-codex.sh twice: 28 skills, 22 agents, idempotent, python3 scripts/run_tests_parallel.py: 2,286 run, 3 skipped, 0 failures/errors, bash plugins/flow-next/scripts/smoke_test.sh from /tmp: 136 passed, 0 failed, flow-next.dev build: Astro check 0 errors/warnings/hints; 74 pages built, git diff --check and changed-reference existence audit: passed, Prime authenticated Claude baseline and candidate: 7/7 each; 6/6 synthetic plus negative control
 - PRs:

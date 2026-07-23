@@ -36,9 +36,8 @@ Apply one conservative Make PR cold-branch extraction: keep HTML artifact-lens m
 - [ ] Reached-path improvement and every discard reason are recorded without claiming unmeasured wall-time gains.
 
 ## Done summary
-TBD
-
+Gated Make PR's detailed HTML lens behind the existing enabled/non-dry-run check by extracting the enabled path to `html-lens.md`; Phase 0/1 and Phase 2 onward remain byte-identical to V1/B1, and create/finalize/forge behavior is untouched. Added a retained-candidate/discard ledger and focused canonical/Codex-route, frozen-corpus, safety, B1-slice, and reached-path metric assertions: default-off/create routes improve by 7,262 deterministic characters; HTML-on pays 450 characters of direct-reference overhead; no wall-time gain claimed.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0a4400f7, ed9b6206, 63e9942e, 3e4e92ee, f3d1ff79, f7c85984, e901aa00, 1ab5bb3b, 0f08c608, c00dc797, c0142c0d, 97e9793a
+- Tests: ./scripts/sync-codex.sh twice: 28 skills, 22 agents, idempotent, python3 scripts/run_tests_parallel.py: 2,286 run, 3 skipped, 0 failures/errors, bash plugins/flow-next/scripts/smoke_test.sh from /tmp: 136 passed, 0 failed, flow-next.dev build: Astro check 0 errors/warnings/hints; 74 pages built, git diff --check and changed-reference existence audit: passed, Prime authenticated Claude baseline and candidate: 7/7 each; 6/6 synthetic plus negative control
 - PRs:
