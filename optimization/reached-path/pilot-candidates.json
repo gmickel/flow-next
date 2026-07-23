@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "cluster": "pilot",
+  "lineage": {
+    "baseline": "B1",
+    "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "input_check": "python3 optimization/reached-path/run_eval.py --check-b1-input pilot",
+    "input_check_result": "pass: 4 files match B1"
+  },
+  "overlap_check": {
+    "spec": "fn-61-ralph-v2-hardened-harness-driving",
+    "status": "open; explicitly deferred in spec body",
+    "decision": "fn-61 does not override this behavior-neutral routing change; its verdict-line integration contract remains frozen"
+  },
+  "measurement": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "wall_time_claim": null
+  },
+  "candidates": [
+    {
+      "id": "pilot-backlog-verdict-grammar-reference",
+      "mutation": "Move the ASKED/TRIAGED backlog-only grammar from always-loaded SKILL.md into the existing backlog-mode direct reference selected by strict pilot.autonomy routing.",
+      "verdict": "keep",
+      "baseline": {
+        "ready_reached_path_chars": 63302,
+        "backlog_reached_path_chars": 90422,
+        "skill_chars": 16065,
+        "workflow_hash": "c32fc5221193cc64ffab22e321a6b8ff522032d67d9cca8d2fad9a54e049ac61",
+        "qa_reference_hash": "8f6119464248d3edb4ca821521e664fe2760589b4aa745745b6c73b5370d2d9f"
+      },
+      "candidate": {
+        "ready_reached_path_chars": 61293,
+        "backlog_reached_path_chars": 90135,
+        "skill_chars": 14056,
+        "skill_hash": "357a630e43c6e478b1012b04d79b1890efb1cb5b9773a274b6bfd3e92ebc3575",
+        "backlog_reference_hash": "bb52dcdff8597a927ee856142f6429a1608c98789f2d7f8269eac6c028d07855",
+        "workflow_hash": "c32fc5221193cc64ffab22e321a6b8ff522032d67d9cca8d2fad9a54e049ac61",
+        "qa_reference_hash": "8f6119464248d3edb4ca821521e664fe2760589b4aa745745b6c73b5370d2d9f"
+      },
+      "improvement": {
+        "ready_reached_path_chars": -2009,
+        "ready_percent": -3.173675397301823,
+        "backlog_reached_path_chars": -287
+      },
+      "oracles": [
+        "ready root retains ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN grammar",
+        "strict backlog route requires a top-to-bottom direct-reference read",
+        "backlog reference retains ASKED and dry-run-only TRIAGED grammar",
+        "workflow hash unchanged from B1, preserving action-site safety, strikes, receipts, failures, tracker dispatch, and terminals",
+        "qa-stage reference hash unchanged from B1"
+      ],
+      "discard_reason": null
+    }
+  ],
+  "discards": [],
+  "notes": [
+    "Deterministic source characters only; no backend token, cache, or wall-time claim.",
+    "Codex mirror regeneration is conductor-owned after parallel-wave integration."
+  ]
+}

@@ -32,6 +32,41 @@ downstream (land owns the merge — R6).
 
 ---
 
+## Backlog-only verdict grammar (R10)
+
+Backlog mode extends the common `SKILL.md` grammar with `ASKED`:
+
+```text
+PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"
+```
+
+Stage values add `triage` / `ask` to the common set.
+
+- **`ASKED <id> (<n>)`** — a **durable park**. The `ask` stage wrote a
+  `status=open` question anchor (spec `## Open Questions` for a spec-backed item,
+  or the tracker comment alone for a tracker-only item), so the next tick's SELECT
+  skips this subject. `<n>` is the count of open questions surfaced. Stage = `ask`.
+- **`ADVANCED <id> <stage>`** and **`BLOCKED <id> by <dep>`** — reused unchanged
+  (`BLOCKED` here is the ready-but-dep-unsatisfied state-changing dep-wait surface).
+- **`NO_WORK` and `DEFERRED_TO_LAND` stay VERBATIM** — drivers grep
+  `DEFERRED_TO_LAND` to route an all-done-with-open-PR spec to
+  `/flow-next:land`, and `/goal` / `/loop` stop clauses key on `NO_WORK`.
+  Coalescing either into generic idle breaks the land hand-off or loop stop.
+- **No `PROMOTED` verb** — the agent never sets the ready flag; promotion is the
+  human's board act.
+
+**`TRIAGED <id> <class>` is DIAGNOSTIC / dry-run ONLY:**
+
+- **Live backlog grammar** (no `--dry-run`): `ADVANCED | ASKED | NO_WORK |
+  DEFERRED_TO_LAND | BLOCKED | NEEDS_HUMAN`. **`TRIAGED` is NOT a live terminal.**
+  A live triage always resolves to a state-changing terminal; it MUST NOT end on a
+  bare `TRIAGED` no-op line.
+- **Dry-run-only grammar** (`--dry-run`): adds `TRIAGED <id> <class>` as the
+  diagnostic terminal. The tick classifies and stops, dispatching nothing and
+  parking nothing. A `/loop` / `/goal` driver never runs `--dry-run`.
+
+---
+
 ## How this extends pilot's ready-only tick
 
 Ready-only pilot (`workflow.md` Phase 1 SELECT) two-pass-filters on `status==open`
