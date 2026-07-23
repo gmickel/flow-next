@@ -9147,7 +9147,14 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
             and value[0] == value[-1]
             and value[0] in ('"', "'")
         ):
+            q = value[0]
             value = value[1:-1]
+            if q == '"':
+                value = (
+                    value.replace("\\\\", "\x00")
+                    .replace('\\"', '"')
+                    .replace("\x00", "\\")
+                )
             result[key] = value
             continue
         # Inline list: [a, b, c]
@@ -9165,7 +9172,14 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                         and item[0] == item[-1]
                         and item[0] in ('"', "'")
                     ):
+                        q = item[0]
                         item = item[1:-1]
+                        if q == '"':
+                            item = (
+                                item.replace("\\\\", "\x00")
+                                .replace('\\"', '"')
+                                .replace("\x00", "\\")
+                            )
                     cleaned.append(item)
                 result[key] = cleaned
             continue
@@ -9322,9 +9336,15 @@ def _yaml_scalar_needs_quoting(text: str) -> bool:
     # indicator — chokes PyYAML when it appears unquoted in a scalar.
     if ": " in text or text.endswith(":"):
         return True
+    # Leading/trailing whitespace is lost or mis-parsed if left unquoted.
+    if text != text.strip():
+        return True
+    # Block-sequence / mapping-key indicators: bare `-`/`?` or followed by space.
+    if text.startswith(("- ", "? ")) or text in {"-", "?"}:
+        return True
     # Leading characters that YAML treats as flow indicators / anchors /
-    # references / tags. Conservative — quote any of these.
-    if text and text[0] in "#&*!|>%@`":
+    # references / tags / quoted scalars. Conservative — quote any of these.
+    if text and text[0] in "#'\"&*!|>%@`":
         return True
     return False
 
@@ -10912,6 +10932,10 @@ def _memory_iter_entries(
                     include_raw=include_raw,
                 )
                 if descriptor is None:
+                    print(
+                        f"flowctl: skipping {entry_path}: malformed frontmatter",
+                        file=sys.stderr,
+                    )
                     continue
                 entries.append(descriptor)
     return entries
