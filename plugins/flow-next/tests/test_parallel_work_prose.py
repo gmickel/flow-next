@@ -63,10 +63,16 @@ class ParallelWorkConductorProse(unittest.TestCase):
         self.assertIn("Worker outcomes:", text)
         self.assertIn("Join: complete", text)
         self.assertIn("normalize each task's evidence to the integrated commit IDs", text)
+        self.assertIn(
+            "/flow-next:impl-review <task-id> --base "
+            "<task-normalized-integrated-base> --review=<backend>",
+            text,
+        )
         self.assertRegex(
             text,
             re.compile(
-                r"run the\s+existing Phase 5 Verify contract on the integrated target"
+                r"run\s+the existing Phase 5 Verify contract "
+                r"on the final integrated target"
             ),
         )
         self.assertRegex(
@@ -75,6 +81,19 @@ class ParallelWorkConductorProse(unittest.TestCase):
                 r"integrated-target verification's exact commands/results"
             ),
         )
+        review_pos = text.index("when its resolved `REVIEW_MODE` is not `none`")
+        verify_pos = next(
+            re.finditer(
+                r"run\s+the existing Phase 5 Verify contract "
+                r"on the final integrated target",
+                text,
+            )
+        ).start()
+        done_pos = text.index(
+            "run `flowctl done` with the updated task-unique summary/evidence"
+        )
+        self.assertLess(review_pos, verify_pos)
+        self.assertLess(verify_pos, done_pos)
         self.assertIn("Do not run plan-sync while any peer worker is active", text)
         self.assertIn("recompute the next ready frontier", text)
 

@@ -362,19 +362,21 @@ commits onto the target branch. Then, on the integrated target and one task at a
 time:
 
 1. confirm the task's code, tests, commit, and handover files;
-2. after all successful worker commits for the wave are integrated, run the
-   existing Phase 5 Verify contract on the integrated target **before any task
-   is reviewed or marked done**. This verification is mandatory even when every
-   worker was green in isolation: classify the combined diff, honor only valid
-   integrated-HEAD receipts, otherwise run the required suite, and fix +
-   re-commit any failure;
-3. normalize each task's evidence to the integrated commit IDs/base and append
-   the integrated-target verification's exact commands/results;
-4. when its resolved `REVIEW_MODE` is not `none`, run
-   `/flow-next:impl-review <task-id> --review=<backend>` and apply the existing
-   bounded fix loop;
-5. only after the required SHIP verdict, run `flowctl done` with the updated
-   task-unique summary/evidence;
+2. normalize each task's evidence to the integrated commit IDs/base and retain
+   its task-specific normalized integrated base;
+3. when its resolved `REVIEW_MODE` is not `none`, run
+   `/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
+   and apply the existing bounded fix loop;
+4. after the required SHIP verdict (or immediately when review is `none`), run
+   the existing Phase 5 Verify contract on the final integrated target
+   **immediately before the task is marked done**. This verification is
+   mandatory even when every worker was green in isolation: after all
+   successful worker commits for the wave are integrated, classify the combined
+   diff, honor only valid integrated-HEAD receipts, otherwise run the required
+   suite, and fix + re-commit any failure. Append any review-fix commits and the
+   integrated-target verification's exact commands/results to the task's
+   evidence;
+5. run `flowctl done` with the updated task-unique summary/evidence;
 6. verify `flowctl show <task-id> --json` reports `done`, then run the existing
    3d.1 tracker touchpoint.
 
