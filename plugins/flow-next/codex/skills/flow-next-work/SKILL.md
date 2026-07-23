@@ -162,10 +162,12 @@ If user chose review, pass the review mode to the worker. The worker agent invok
 ## Codex implementation-delegation (opt-in, off by default)
 
 **The in-session path is the documented default and is behaviorally unchanged.**
-With delegation off — the default — the work flow adds exactly ONE cheap
-value-check and nothing else; `/flow-next:work` stays byte-identical to today.
-All delegation mechanics live in [references/codex-delegation.md](references/codex-delegation.md),
-read **only when delegation is active** (progressive disclosure, R3).
+With delegation off — the default — Work performs one cheap request check and
+loads no delegation reference. A requested path reads
+[references/codex-delegation-selection.md](references/codex-delegation-selection.md)
+for the exact host/config/input/consent selection. Only a passing selection
+loads the active machinery in
+[references/codex-delegation.md](references/codex-delegation.md).
 
 **Activation is disambiguated from the review backend.** `/flow-next:work`
 already maps the generic fuzzy "use codex" to the **review backend** (Review-mode
@@ -175,24 +177,21 @@ parsing above). Delegation activates ONLY via the explicit arg token
 "delegate implementation to codex" — **never** bare "use codex".
 
 **Resolution chain (precedence):** arg token (`delegate:codex` / `delegate:local`)
-> flow config `work.delegate` > hard default OFF. The single value-check
-computes `delegation_active` ONCE, before the per-task loop:
+> flow config `work.delegate` > hard default OFF. Phase 0 combines that value
+with the cheap Claude-Code host check to compute `delegation_requested`.
+Phase 1.5 resolves the remaining host/input/availability/consent/clean-tree
+selection reference; only a passing selection sets `delegation_active=true`:
 
 ```text
-delegation_active = host_is_claude_code && (arg delegate:codex | work.delegate == "codex") && not arg delegate:local
+delegation_requested = host_is_claude_code && (arg delegate:codex | work.delegate == "codex") && not arg delegate:local
+delegation_active = delegation_requested && Phase 1.5 selection passed
 ```
 
-The executable value-check — the cheap `host_is_claude_code &&` short-circuit
-(on a non-Claude host the ~45k reference is never read) plus the
-`.flow`-missing guard — lives at its consumption site, [phases.md](phases.md)
-Phase 0, with the host pre-flight gates + one-time consent in Phase 1.5.
-
-When `delegation_active`, the host (NOT the worker agent) reads
-[references/codex-delegation.md](references/codex-delegation.md) and runs its
-pre-flight gates + one-time consent once, then passes the resolved flags into
-each spawned worker. Any gate failure (non-Claude-Code platform, inside a Codex
-sandbox, `codex` missing, no consent, bare-prompt input, dirty tree) → standard
-mode for the rest of the run; delegation never blocks the worker.
+The executable request check and fail-open selection stay beside their
+consuming phases in [phases.md](phases.md). Any selection failure runs the
+standard path and leaves the active reference cold. Once selected, the host
+(NOT the worker) reads the active reference once and follows its complete
+path-handoff, safety, worker-signal, and circuit-breaker contract.
 
 ## Guardrails
 

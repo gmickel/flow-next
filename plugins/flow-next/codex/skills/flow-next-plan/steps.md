@@ -545,40 +545,23 @@ and recompute these waves before presenting the final summary.
 
 ## Step 6.5: Tracker sync (opt-in) — NO sub-issues; optional body checklist only
 
-**Optional. Runs only when the tracker bridge is active AND `plan` is opted in. With no tracker configured this is a no-op — planning behaves exactly as today.** When opted in, planning projects the spec to the tracker issue. **If the spec is not yet linked (e.g. you started straight from `/flow-next:plan`, no `/flow-next:capture`), the tracker-sync skill flow-first-pushes — it creates the issue + links it — then reconciles** (tracker-sync §Phase 3 "create-if-unlinked"); an active bridge therefore never silently leaves a planned spec untracked. Planning **never auto-creates tracker sub-issues per task** — tasks stay flow-local (R3, Grain); the spec ↔ one-issue grain holds. The only optional task-level effect is rendering the task list as a **checklist inside the issue body** (off by default; a body-format concern owned by the merge engine).
-
 ```bash
 LEAF="$(jq -r '.value.tracker.perEvent.plan' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)" # leaf from the Step 0 root snapshot (shared gating predicate — work SKILL.md); missing → literal "null", same as the old per-key read
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
  && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
- # Invoke the flow-next-tracker-sync skill to push/reconcile the spec body
- # (which MAY render the task list as a body checklist — never sub-issues).
- # skill: flow-next-tracker-sync (operation: <leaf> <spec-id>)
- # Unlinked spec → flow-first push (create + link) first, then reconcile
- # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
- :
+ # Load and follow references/tracker-projection.md with <leaf> and <spec-id>.
 fi
 ```
 
-**Never** create one tracker issue per task. The grain is one spec ↔ one issue; tasks are flow-local. Best-effort — a tracker failure never blocks planning.
+Off, unset, inactive, or malformed: skip the reference and continue. This gate
+uses the Step 0 snapshot and the existing active probe; it adds no config read
+or default-path round trip.
 
 ## Step 7: Review (if chosen at start)
 
-If user chose "Yes" to review in SKILL.md setup question:
-1. Invoke `/flow-next:plan-review` with the spec ID
-2. If review returns "Needs Work" or "Major Rethink":
- - **Re-anchor EVERY iteration** (do not skip):
- ```bash
- $FLOWCTL show <spec-id> --json
- $FLOWCTL cat <spec-id>
- ```
- - **Immediately fix the issues** (do NOT ask for confirmation — user already consented)
- - Re-run `/flow-next:plan-review`
-3. Repeat until review returns "Ship"
-
-**No human gates here** — the review-fix-review loop is fully automated.
-
-**Why re-anchor every iteration?** Per Anthropic's long-running agent guidance: context compresses, you forget details. Re-read before each fix pass.
+When review mode is `none`, skip this step and load no review reference. When a
+review mode was selected, load and follow
+[`references/selected-review.md`](references/selected-review.md).
 
 ## Step 8: Offer next steps
 
@@ -611,55 +594,10 @@ Under `AUTONOMOUS=1` there is no options menu — run Step 8.5 directly after St
 
 ## Step 8.5: HTML render lens (opt-in) — regenerate the spec artifact with the plan layer
 
-**Gated on `artifacts.html.enabled` — this check is the ONLY addition when the mode is off.**
-
 ```bash
 HTML_LENS=$(jq -r 'if .value.artifacts.html.enabled == true then "true" else "false" end' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null || echo false) # from the Step 0 root snapshot — not a config get call
 ```
 
-When `HTML_LENS != true` (off or unset): **skip this entire step.** Load no reference file, write no artifact, open no session, print no artifact-related output — the gate read above is the only cost.
-
-When `HTML_LENS = true`:
-
-1. **Load the disclosure reference** [`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md) (relative cross-link — resolves from this skill dir in every install layout, same shape as the spec-template link). It owns ALL design and generation rules — hard rules, design contract, spec-lens content, DAG discipline, Lavish flow, pre-publish checklist. Never duplicate its rules here; follow it top to bottom.
-2. **Regenerate the artifact** at the SAME fixed path capture uses (reference §1.3) — one pathway, state-dependent (reference §4): tasks now exist, so the lens renders the plan layer too (task dependency DAG with critical path, R-ID → task coverage matrix, plan dials).
-
- ```bash
- mkdir -p ".flow/artifacts/<spec-id>"
- # Host agent regenerates .flow/artifacts/<spec-id>/spec.html per the reference.
- ```
-3. **Late-mutation rule:** if anything after this generation mutates tasks in the same plan session (e.g. the chosen option 3's `/flow-next:plan-review` fix loop, or the user re-opening go-deeper/simplify), regenerate before the final output — same path, never a second file.
-4. **Update the artifact link line in the spec markdown** per reference §1.4: replace the `<!-- flow-next:artifact-link -->` marker line in place (capture usually wrote it; insert once after the H1 if absent). Link target follows ignore status (reference §4):
-
- ```bash
- if git check-ignore --no-index -q ".flow/artifacts/<spec-id>/spec.html"; then
- LINK_MODE=local # file ignored (dir, glob, or exact-path rule) → local-open guidance, never a blob link that 404s
- # --no-index: an already-tracked artifact still honors a later ignore rule
- else
- LINK_MODE=repo # tracked → repo-relative link
- fi
- # Idempotency check — exactly one marker line after EVERY run. Non-fatal
- # (best-effort contract below): warn and continue, never abort planning.
- MARKER_COUNT=$(grep -c 'flow-next:artifact-link' ".flow/specs/<spec-id>.md" || true)
- if [ "${MARKER_COUNT:-0}" -ne 1 ]; then
- echo "warn: artifact link line check failed (${MARKER_COUNT:-0} markers in .flow/specs/<spec-id>.md) — link needs manual fix" >&2
- fi
- ```
-5. **Run the reference's pre-publish checklist (§8)**, including the self-containment self-check grep (§2) — it must print `OK: self-contained` before the output may claim the artifact.
-6. **Lavish session — interactive runs only** (reference §7). The guard is in the snippet, not just prose — open and poll sit INSIDE it:
-
- ```bash
- LAVISH_OK=true
- [[ "${AUTONOMOUS:-0}" == "1" || -n "${FLOW_AUTONOMOUS:-}" || -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]] && LAVISH_OK=false
- if [[ "$LAVISH_OK" == "true" ]] && command -v lavish-axi >/dev/null 2>&1; then
- lavish-axi "$(pwd)/.flow/artifacts/<spec-id>/spec.html" # absolute path — sessions key on it
- # ...then poll for feedback in the background via `lavish-axi poll` — ONLY inside this guard
- fi
- ```
-
- Each drained annotation maps to an edit of the spec/task markdown (never the HTML), then the lens regenerates at the same path. `lavish-axi` absent → plain artifact, zero mention of Lavish, never an error.
-
- **Non-interactive runs generate only** (any non-interactive marker: `AUTONOMOUS=1`, `FLOW_AUTONOMOUS=1`, `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set — treat the marker *family* as the gate, not a rigid var list; a marker the family implies but the snippet misses still means `LAVISH_OK=false`): never open a session, never poll; at most one stderr line noting pending prompts.
-7. **Name the artifact in the final output:** append `Artifact: .flow/artifacts/<spec-id>/spec.html (render lens — regenerable; markdown is the record)` to the plan summary. Omit entirely when the mode is off/unset.
-
-Best-effort: artifact generation failure is non-fatal — skip the link-line update, print one stderr note, never block planning (the plan is already on disk; markdown is the record).
+When false, unset, or malformed: skip the whole step. Load no reference, write
+no artifact, open no session, and print no artifact output. When true, load and
+follow [`references/html-render-lens.md`](references/html-render-lens.md).

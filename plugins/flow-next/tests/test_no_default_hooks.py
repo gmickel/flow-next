@@ -22,6 +22,20 @@ HOOKS_JSON = HOOKS_DIR / "hooks.json"
 CODEX_HOOKS_JSON = PLUGIN_DIR / "codex" / "hooks.json"
 RALPH_INIT = PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "SKILL.md"
 SETUP_WORKFLOW = PLUGIN_DIR / "skills" / "flow-next-setup" / "workflow.md"
+SETUP_RALPH_QUESTION = (
+    PLUGIN_DIR
+    / "skills"
+    / "flow-next-setup"
+    / "references"
+    / "ralph-question.md"
+)
+SETUP_RALPH_DISABLE = (
+    PLUGIN_DIR
+    / "skills"
+    / "flow-next-setup"
+    / "references"
+    / "ralph-disable.md"
+)
 UNINSTALL = PLUGIN_DIR / "commands" / "uninstall.md"
 
 
@@ -72,15 +86,18 @@ class TestNoDefaultHooks(unittest.TestCase):
         )
 
     def test_setup_asks_ralph_default_no(self) -> None:
-        text = SETUP_WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn('"header": "Ralph"', text)
-        self.assertIn("No (Recommended)", text)
-        self.assertIn("Yes, enable or keep", text)
+        workflow = SETUP_WORKFLOW.read_text(encoding="utf-8")
+        question = SETUP_RALPH_QUESTION.read_text(encoding="utf-8")
+        disable = SETUP_RALPH_DISABLE.read_text(encoding="utf-8")
+        self.assertIn("references/ralph-question.md", workflow)
+        self.assertIn('"header": "Ralph"', question)
+        self.assertIn("No (Recommended)", question)
+        self.assertIn("Yes, enable or keep", question)
         # Removal path on No
-        self.assertIn("scripts/ralph/hooks/ralph-guard", text)
-        self.assertIn("ask before deleting", text.lower())
+        self.assertIn("scripts/ralph/hooks/ralph-guard", disable)
+        self.assertIn("before deleting it", disable.lower())
         # Codex setup must not auto-copy hooks
-        self.assertNotIn("Copied hooks.json to .codex/hooks.json", text)
+        self.assertNotIn("Copied hooks.json to .codex/hooks.json", workflow)
 
     def test_uninstall_strips_hook_entries(self) -> None:
         text = UNINSTALL.read_text(encoding="utf-8")

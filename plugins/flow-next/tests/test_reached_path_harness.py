@@ -619,11 +619,18 @@ class TestReachedPathHarness(unittest.TestCase):
     def test_b1_input_check_fails_closed_on_drift(self) -> None:
         expected = self.run_eval.expected_b1_hashes("plan")
         self.assertTrue(expected)
-        self.assertEqual(self.run_eval.check_b1_input("plan"), 0)
         changed_path = next(iter(expected))
 
+        def frozen_reader(path: str) -> str | None:
+            return self.run_eval.git_show_text(self.inventory.B1_COMMIT, path)
+
+        self.assertEqual(
+            self.run_eval.check_b1_input("plan", source_reader=frozen_reader),
+            0,
+        )
+
         def changed_reader(path: str) -> str | None:
-            text = self.run_eval._read_live_repo_text(path)
+            text = frozen_reader(path)
             if path == changed_path and text is not None:
                 return text + "\nmutation\n"
             return text

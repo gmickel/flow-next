@@ -9,12 +9,52 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 
 The `.flow/specs/<id>.md` spec is the source of truth and the quality layer; the tracker (Linear, GitHub, GitLab, or Jira) is a **co-editable mirror** for teams that must live in it. This skill is **projection, not coordination** — the tracker mirrors the spec (body, status, comments all sync two-way) but never drives flow state or spawns agents (see the decision record at `.flow/memory/.../tracker-sync-is-projection-not-*`).
 
-This skill is the **spine**: the discovery ceremony, the spec↔issue grain, the identity/naming alias, and a **transport-blind** push/pull/reconcile orchestration skeleton. It does NOT contain transport code or merge logic — those plug in via the interface defined here:
+This skill is the **spine**: the discovery ceremony, the spec↔issue grain, the identity/naming alias, and a **transport-blind** push/pull/reconcile orchestration skeleton. It does NOT contain transport code or merge logic — those plug in via the normalized interface.
 
-- **Transports** (`fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` / `setStatus`) are implemented by the Linear, GitHub, GitLab, and Jira adapters. This skill calls them through the normalized interface; it never sees a wire shape. The **Linear adapter is a detect-best-available transport ladder** (MCP → GraphQL → no-op) — see [`references/linear-ladder.md`](references/linear-ladder.md); the **GitHub adapter** is the headless-robust `gh` transport (single rung + no-op, reduced-fidelity status) — see [`references/github.md`](references/github.md); the **GitLab adapter** is the headless-robust `glab` transport (`glab` CLI → raw-REST token fallback → no-op, reduced-fidelity status) — see [`references/gitlab.md`](references/gitlab.md); the **Jira adapter** is the REST transport (Cloud `/rest/api/3` + ADF → DC/Server `/rest/api/2` → no-op, workflow-aware status via the transitions API, NO MCP) — see [`references/jira.md`](references/jira.md).
+- **Transports** implement `fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` / `setStatus` plus the relation and enumeration methods. This skill calls the one selected adapter through the normalized interface; reconciliation never sees a wire shape.
 - **Reconcile** operates only on the **normalized payload structs** (`issue` / `comment` / `status`) the adapters exchange. The agentic 3-way **body merge** + format translation + scoped conflict is in [`references/body-merge.md`](references/body-merge.md); the per-field **status who-wins** is [`references/status-sync.md`](references/status-sync.md) and **comments/evidence append + dedup** is [`references/comments-sync.md`](references/comments-sync.md). The interface is defined in `references/adapter-interface.md`.
 
-**Read [steps.md](steps.md) for the full phase-by-phase execution.** Read [`references/adapter-interface.md`](references/adapter-interface.md) for the transport interface + normalized payload contract, [`references/body-merge.md`](references/body-merge.md) for the agentic 3-way body merge / format translation / scoped conflict, [`references/status-sync.md`](references/status-sync.md) for the per-field status who-wins + deadlock fallback, [`references/comments-sync.md`](references/comments-sync.md) for comments/evidence two-way append + dedup, [`references/identity.md`](references/identity.md) for the hybrid id model (tracker-first canonical vs flow-first alias), [`references/linear-ladder.md`](references/linear-ladder.md) (→ [`linear-mcp.md`](references/linear-mcp.md), [`linear-graphql.md`](references/linear-graphql.md)) for the Linear transport ladder, [`references/github.md`](references/github.md) for the GitHub adapter (`gh` transport, reduced-fidelity status), [`references/gitlab.md`](references/gitlab.md) for the GitLab adapter (`glab` CLI → raw-REST token fallback, reduced-fidelity status), and [`references/jira.md`](references/jira.md) for the Jira adapter (REST `/rest/api/{3,2}` token transport, ADF body translation, workflow-aware status via the transitions API).
+## Reached-path loading — common rules + one selected adapter
+
+Read the common reconciliation path on every active/configuration run:
+
+- [steps.md](steps.md) — phase-by-phase orchestration
+- [references/adapter-interface.md](references/adapter-interface.md) — normalized payload and nine-method boundary
+- [references/body-merge.md](references/body-merge.md) — semantic three-way body merge
+- [references/status-sync.md](references/status-sync.md) — status/readiness who-wins
+- [references/comments-sync.md](references/comments-sync.md) — comment/evidence append and dedup
+- [references/identity.md](references/identity.md) — hybrid id model
+
+Then resolve the configured tracker and read **exactly one** adapter path. Do not read an unselected adapter merely because common prose cross-links it:
+
+| Resolved state | Adapter reference to read | Forbidden cold reads |
+|---|---|---|
+| inactive / no config | none | every adapter |
+| `linear` | [references/linear-ladder.md](references/linear-ladder.md), then only the reached MCP **or** GraphQL rung | GitHub, GitLab, Jira, and the unreached Linear rung |
+| `github` | [references/github.md](references/github.md) | Linear, GitLab, Jira |
+| `gitlab` | [references/gitlab.md](references/gitlab.md) | Linear, GitHub, Jira |
+| `jira` | [references/jira.md](references/jira.md) | Linear, GitHub, GitLab |
+| malformed / unknown | none; keep the common safety rules, surface the invalid state, and make no remote call | every adapter |
+
+After defining `$FLOWCTL` in the Preamble below, resolve fail-closed before any transport call:
+
+```bash
+ROUTE_STATE=unknown
+ACTIVE_RAW=$($FLOWCTL sync active --json 2>/dev/null) && \
+ ACTIVE=$(printf '%s' "$ACTIVE_RAW" | jq -r '.active' 2>/dev/null) || ACTIVE=parse-error
+if [ "$ACTIVE" = "false" ]; then
+ ROUTE_STATE=inactive
+elif [ "$ACTIVE" = "true" ]; then
+ TYPE_RAW=$($FLOWCTL config get tracker.type --json 2>/dev/null) && \
+ TRACKER_TYPE=$(printf '%s' "$TYPE_RAW" | jq -r '.value // empty' 2>/dev/null | tr '[:upper:]' '[:lower:]') || TRACKER_TYPE=
+ case "$TRACKER_TYPE" in
+ linear|github|gitlab|jira) ROUTE_STATE="$TRACKER_TYPE" ;;
+ *) ROUTE_STATE=unknown ;;
+ esac
+fi
+```
+
+`inactive` may enter the common discovery ceremony; load an adapter only after the user confirms a provider. `unknown` is a safe stop for transport work: explain the invalid/unreadable `tracker.type`, do not guess a provider, do not call any tracker, do not mutate sync state, and emit a `noop`/`errored` receipt only when a valid spec id is available. Once selected, every command and payload comes from that adapter reference; never improvise a parallel wire form.
 
 > Sync engine shape (discovery ceremony, per-item `lastSyncedAt`, surface-diffs-never-overwrite) adapted from Ray Fernando's `running-bug-review-board` `issue-trackers.md` (Apache-2.0) — see CHANGELOG.
 
@@ -27,7 +67,7 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call plain-text numbered prompts (Claude Code issues #12890, #34592). The discovery ceremony (Phase 1) and genuine-conflict surfacing (body-merge / comments-sync) both require user choice in interactive mode. This inline requirement covers the ceremonies and interactive conflict resolution only — a background `tracker_runner` dispatch (fn-89) legitimately runs this skill in a fork with `DISPATCH=forked`, which folds into the setup pre-check above and the Phase 0 RALPH gate (steps.md), so in a fork every would-be prompt resolves to queue (`sync defer`) and no interactive prompt is ever reachable there.
+**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call plain-text numbered prompts (Claude Code issues #12890, #34592). The discovery ceremony (Phase 1) and genuine-conflict surfacing (body-merge / comments-sync) both require user choice in interactive mode. This inline requirement covers the ceremonies and interactive conflict resolution only — a background `tracker_runner` dispatch legitimately runs this skill in a fork with `DISPATCH=forked`, which folds into the Phase 0 RALPH gate (steps.md), so in a fork every would-be prompt resolves to queue (`sync defer`) and no interactive prompt is ever reachable there.
 
 ## flowctl owns plumbing; the skill owns judgment
 

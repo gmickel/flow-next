@@ -18,6 +18,12 @@ Install flowctl locally and add instructions to project docs. **Fully optional**
 
 Read [workflow.md](workflow.md) and follow each step in order.
 
+`workflow.md` is the common router. Resolve each documented gate before reading
+its direct `references/*.md` target. When a branch says **MUST read exactly
+one**, read that complete reference before acting; never preload sibling host,
+model-routing, model-pin, or Ralph references. Unknown/malformed routing state
+uses the safe/common fallback named at that gate.
+
 ## Notes
 
 - **Fully optional** - standard plugin usage works without local setup

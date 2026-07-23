@@ -120,28 +120,12 @@ fi
 
 ## Phase 1.5: Select the Codex-delegation path (ONLY when requested)
 
-**Skip unless `delegation_requested=true`.** Before loading any delegation
-reference, the host resolves the ordered selection: authoritative Claude-only
-platform check (`CLAUDECODE`, no `DROID_PLUGIN_ROOT`, no bare or prefixed
-`OPENCODE*` marker); recursion guard (`CODEX_SANDBOX` outside
-`{read-only,workspace-write,danger-full-access,auto}` or
-`CODEX_SANDBOX_NETWORK_DISABLED`); `codex` availability; original input kind;
-one-time sandbox consent; and a clean non-`.flow/` code tree.
-
-Unavailable CLI prints the existing install hint and continues standard mode.
-Interactive consent uses `AskUserQuestion`: yolo recommended or full-auto;
-persist `work.delegateConsent=true` plus the chosen `work.delegateSandbox` only
-on acceptance. Headless proceeds only with pre-granted consent. Resolve
-`work.delegateDecision` here: interactive `ask` prompts per task; headless
-`ask` behaves as `auto` only with pre-granted consent.
-
-**Any unavailable/failed/declined selection sets `delegation_active=false` and
-continues standard mode. Do not read the delegation reference.** When every
-selection passes, set `delegation_active=true`, then read
-[references/codex-delegation.md](references/codex-delegation.md) **once** and
-follow its complete host pre-flight, consent, invocation, path-handoff, safety,
-worker-signal, and circuit-breaker contract for the rest of the run. The
-reference owns the exact probes and mechanics; this phase owns only routing.
+**Skip unless `delegation_requested=true`.** When requested, **STOP and read
+[references/codex-delegation-selection.md](references/codex-delegation-selection.md)
+top to bottom**. It owns the exact ordered gates, consent ceremony, clean-tree
+check, and terminal routing. A failed or declined selection continues standard
+mode without loading active-only machinery. Only a passing selection loads
+`references/codex-delegation.md`.
 
 ## Phase 2: Apply Branch Choice
 

@@ -43,6 +43,7 @@ WORK_SKILL = REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-work"
 SKILL_MD = WORK_SKILL / "SKILL.md"
 PHASES_MD = WORK_SKILL / "phases.md"
 REFERENCE_MD = WORK_SKILL / "references" / "codex-delegation.md"
+SELECTION_MD = WORK_SKILL / "references" / "codex-delegation-selection.md"
 
 
 def _extract_bash_func(text: str, func_name: str) -> str:
@@ -280,6 +281,7 @@ class CodexDelegationProseContract(unittest.TestCase):
             assert p.exists(), f"missing required file: {p}"
         cls.skill = SKILL_MD.read_text(encoding="utf-8")
         cls.phases = PHASES_MD.read_text(encoding="utf-8")
+        cls.selection = SELECTION_MD.read_text(encoding="utf-8")
         cls.ref = REFERENCE_MD.read_text(encoding="utf-8")
 
     def test_reference_exists_with_preflight_section(self) -> None:
@@ -319,28 +321,31 @@ class CodexDelegationProseContract(unittest.TestCase):
         self.assertIn("Off, unavailable, or declined paths never read this file", self.ref)
 
     def test_reference_load_waits_for_completed_selection(self) -> None:
-        selection = self.phases.index("Any unavailable/failed/declined selection")
-        active = self.phases.index("set `delegation_active=true`", selection)
-        read = self.phases.index("references/codex-delegation.md", active)
-        self.assertLess(selection, active)
-        self.assertLess(active, read)
-        self.assertIn("Do not read the delegation reference", self.phases)
+        selection_read = self.phases.index(
+            "references/codex-delegation-selection.md"
+        )
+        active_read = self.phases.index(
+            "`references/codex-delegation.md`", selection_read
+        )
+        self.assertLess(selection_read, active_read)
+        self.assertIn("delegation_active=true", self.selection)
+        self.assertIn("reads no active reference", self.selection)
 
     def test_cold_selection_router_preserves_decline_and_unavailable_behavior(self) -> None:
         for contract in (
-            "no `DROID_PLUGIN_ROOT`",
-            "`OPENCODE*` marker",
-            "danger-full-access,auto",
+            "DROID_PLUGIN_ROOT",
+            "OPENCODE_",
+            "danger-full-access|auto",
             "CODEX_SANDBOX_NETWORK_DISABLED",
-            "install hint",
-            "yolo recommended or full-auto",
-            "work.delegateConsent=true",
+            "codex not found",
+            "yolo (Recommended)",
+            "work.delegateConsent",
             "work.delegateSandbox",
-            "clean non-`.flow/` code tree",
-            "headless",
+            "git status --porcelain",
+            "Headless",
         ):
             with self.subTest(contract=contract):
-                self.assertIn(contract, self.phases)
+                self.assertIn(contract, self.selection)
 
     def test_active_reference_owns_complete_delegation_contract(self) -> None:
         for heading in (
@@ -363,11 +368,11 @@ class CodexDelegationProseContract(unittest.TestCase):
         self.assertIn("INPUT_WAS_BARE_PROMPT", self.ref)
 
     def test_consent_lives_in_host_not_worker(self) -> None:
-        # Consent must be in the host skill files (SKILL.md/phases.md) and the
-        # reference must say it is host-side (the worker can't AskUserQuestion).
-        self.assertIn("AskUserQuestion", self.phases)
-        self.assertIn("work.delegateConsent", self.ref)
-        self.assertIn("work.delegateSandbox", self.ref)
+        # Consent must be in the host-owned selection reference and the active
+        # reference must retain its defense-in-depth contract.
+        self.assertIn("AskUserQuestion", self.selection)
+        self.assertIn("work.delegateConsent", self.selection)
+        self.assertIn("work.delegateSandbox", self.selection)
         # The "#12890/#34592" worker-cant-ask rationale is preserved.
         self.assertIn("#12890", self.ref)
 

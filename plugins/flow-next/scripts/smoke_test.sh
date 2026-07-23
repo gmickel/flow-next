@@ -2034,6 +2034,11 @@ echo -e "${YELLOW}--- model-routing scaffold ceremony prose (fn-88.4) ---${NC}"
 # pattern as the sync block above. These guard the ceremony prose the
 # deterministic transforms (test_model_routing_scaffold.py) depend on.
 MR_WORKFLOW="$PLUGIN_ROOT/skills/flow-next-setup/workflow.md"
+MR_ROUTING_REFS=(
+  "$PLUGIN_ROOT/skills/flow-next-setup/references/model-routing-bridge.md"
+  "$PLUGIN_ROOT/skills/flow-next-setup/references/model-routing-cursor.md"
+  "$PLUGIN_ROOT/skills/flow-next-setup/references/model-routing-grok.md"
+)
 
 # 1: Headless / non-interactive setup skips the Model Routing question silently.
 if grep -q "skipped SILENTLY" "$MR_WORKFLOW"; then
@@ -2053,8 +2058,9 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 3: Delegation opt-in never pre-sets the first-use consent gate.
-if grep -qE "NEVER.{0,40}work\.delegateConsent" "$MR_WORKFLOW"; then
+# 3: Delegation opt-in never pre-sets the first-use consent gate. This is an
+# enabled-path contract, so fn-130 routes it into each selected host reference.
+if grep -qE "NEVER.{0,40}(set or touch )?work\.delegateConsent|NEVER touch" "${MR_ROUTING_REFS[@]}"; then
   echo -e "${GREEN}✓${NC} setup workflow never pre-sets work.delegateConsent"
   PASS=$((PASS + 1))
 else

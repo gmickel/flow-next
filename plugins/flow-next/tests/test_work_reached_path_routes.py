@@ -27,6 +27,9 @@ class WorkReachedPathRoutes(unittest.TestCase):
         cls.evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
         cls.skill = _text(WORK / "SKILL.md")
         cls.phases = _text(WORK / "phases.md")
+        cls.selection = _text(
+            WORK / "references" / "codex-delegation-selection.md"
+        )
         cls.delegation = _text(WORK / "references" / "codex-delegation.md")
 
     def test_candidate_is_chained_from_b1_only(self) -> None:
@@ -50,7 +53,7 @@ class WorkReachedPathRoutes(unittest.TestCase):
             "lf-full-file-on-activation-once-per-path-hash",
         )
         default_chars = len(self.skill) + len(self.phases)
-        active_chars = default_chars + len(self.delegation)
+        active_chars = default_chars + len(self.selection) + len(self.delegation)
         self.assertEqual(
             default_chars, metrics["default_path"]["candidate_reached_path_chars"]
         )
@@ -65,6 +68,26 @@ class WorkReachedPathRoutes(unittest.TestCase):
                 row["baseline_reached_path_chars"],
             )
             self.assertGreater(row["reduction_chars"], 0)
+
+    def test_requested_path_loads_exact_selection_before_active_reference(self) -> None:
+        self.assertIn("STOP and read", self.phases)
+        self.assertIn("codex-delegation-selection.md", self.phases)
+        for contract in (
+            "platform_gate_ok()",
+            "not_inside_codex_sandbox()",
+            "codex_available()",
+            "work.delegateConsent",
+            "work.delegateSandbox",
+            "INPUT_WAS_BARE_PROMPT",
+            "git status --porcelain",
+            "delegation_active=true",
+        ):
+            with self.subTest(contract=contract):
+                self.assertIn(contract, self.selection)
+        self.assertLess(
+            self.phases.index("codex-delegation-selection.md"),
+            self.phases.index("Only a passing selection loads"),
+        )
 
     def test_route_matrix_covers_every_frozen_terminal(self) -> None:
         arms = self.evidence["trace_arms"]

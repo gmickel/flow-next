@@ -15,37 +15,11 @@ Plans describe WHAT to build and WHERE to look — not HOW to implement.
 
 ## Implementation
 
-### WorkerBackend Interface
-
 \`\`\`typescript
-interface WorkerBackend {
- name: string;
- spawn(opts: SpawnOpts): Promise<WorkerHandle>;
- isAlive(handle: WorkerHandle): Promise<boolean>;
- kill(handle: WorkerHandle): Promise<void>;
-}
-
-interface SpawnOpts {
- prompt: string;
- cwd: string;
- logFile: string;
- env?: Record<string, string>;
-}
-\`\`\`
-
-### Registry
-
-\`\`\`typescript
+interface WorkerBackend { /* every method and field */ }
 const backends = new Map<string, WorkerBackend>();
-
-export function registerBackend(backend: WorkerBackend): void {
+export function registerBackend(backend: WorkerBackend) {
  backends.set(backend.name, backend);
-}
-
-export function getBackend(name: string): WorkerBackend {
- const backend = backends.get(name);
- if (!backend) throw new Error(\`Unknown backend: \${name}\`);
- return backend;
 }
 \`\`\`
 ```
@@ -101,42 +75,13 @@ bun test src/lib/backend.test.ts
 
 ## Implementation
 
-Create claude backend in `src/lib/backends/claude.ts`:
-
 \`\`\`typescript
 export const claudeBackend: WorkerBackend = {
  name: 'claude',
-
- async spawn({ prompt, cwd, logFile, env }) {
- const proc = Bun.spawn(['claude', '-p', prompt], {
- cwd,
- stdout: Bun.file(logFile),
- stderr: 'inherit',
- env: { ...process.env, ...env },
- });
- return { pid: proc.pid, logFile };
- },
-
- async isAlive({ pid }) {
- try {
- process.kill(pid, 0);
- return true;
- } catch {
- return false;
- }
- },
-
- async kill({ pid }) {
- process.kill(pid, 'SIGTERM');
- },
+ async spawn(opts) { /* complete process implementation */ },
+ async isAlive(handle) { /* complete liveness implementation */ },
+ async kill(handle) { /* complete shutdown implementation */ },
 };
-\`\`\`
-
-Register in `src/lib/backend.ts`:
-
-\`\`\`typescript
-import { claudeBackend } from './backends/claude';
-registerBackend(claudeBackend);
 \`\`\`
 ```
 

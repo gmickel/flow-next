@@ -110,19 +110,22 @@ fi
 export PILOT_AUTONOMY
 ```
 
-When `PILOT_AUTONOMY=ready` (the default), pilot behaves exactly as documented in `workflow.md` Phases 1–6 — no backlog-mode code path runs, `references/backlog-mode.md` is not loaded, and the verdict grammar/stage set/forbidden block are unchanged. When `PILOT_AUTONOMY=backlog`, the SELECT and TRIAGE/ASK phases follow `references/backlog-mode.md` (loaded only then), the verdict grammar gains `ASKED`, and the safety invariants below are active. `FLOW_AUTONOMOUS=1` is exported into every sub-skill / tracker-sync dispatch so the whole tick runs unattended (`plain-text numbered prompt` is never reached).
+When `PILOT_AUTONOMY=ready` (the default), pilot behaves exactly as documented in `workflow.md` Phases 1–6 — no backlog-mode code path runs and `references/backlog-mode.md` is not loaded. When `PILOT_AUTONOMY=backlog`, **STOP and read [references/backlog-mode.md](references/backlog-mode.md) top to bottom before continuing**. It owns the backlog-only verdict extension plus SELECT/TRIAGE/ASK context; `workflow.md` keeps the enforcing guards and action sites.
 
 ## The verdict contract (read this before the workflow)
 
 The `/goal` validator is transcript-blind: it reads conversation output only and never runs tools. Every tick therefore echoes its verification evidence into the output: flowctl status fields, task counts, task status transitions, and the gh-confirmed PR URL for make-pr.
 
-Every tick ends with exactly one terminal line, the last line of the response, with nothing after it:
+Every tick ends with exactly one terminal line, the last line of the response,
+with nothing after it. The common ready-mode grammar is:
 
 ```text
-PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"
+PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"
 ```
 
-Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (opt-in — only when `pipeline.qa==on`), `make-pr`, `land`, plus `triage`/`ask` (backlog mode only), or `-`.
+Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly
+`plan`, `plan-review`, `work`, `qa` (opt-in — only when `pipeline.qa==on`),
+`make-pr`, `land`, or `-`.
 
 **Dry-run snapshot cleanup.** Under `--dry-run` (`PILOT_DRY_RUN=1`), at EVERY terminal `PILOT_VERDICT` emission — the classification stop, the diagnostic `TRIAGED` exit, every `NO_WORK` / `DEFERRED_TO_LAND` / hard-guard exit — remove the root config snapshot BEFORE printing the verdict, so a dry-run leaves no persistent scratch state:
 
@@ -133,20 +136,6 @@ rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/
 Recompute the path exactly as above (vars die across prompt turns). Live (non-dry-run) ticks keep the snapshot for the tick's remaining fences; it is overwritten fresh by the next tick's capture. Never blocks, fail-open (`rm -f` on a missing file is a no-op).
 
 `DEFERRED_TO_LAND` is a distinct *non-terminal-work* verdict (stage `land`): every remaining all-done candidate has an open PR that land — not pilot — owns. It is deliberately separated from `NO_WORK` so a driver can route it to `/flow-next:land` instead of stopping; an all-done spec with an open PR is real outstanding work, never absence of work.
-
-### Backlog-mode verdict grammar (R10 — only when `PILOT_AUTONOMY=backlog`)
-
-Backlog mode **ADDS** `ASKED` and reuses the existing terminals; it changes none of them:
-
-- **`ASKED <id> (<n>)`** — a **durable park**. The `ask` stage wrote a `status=open` question anchor (spec `## Open Questions` for a spec-backed item, or the tracker comment alone for a tracker-only item), so the next tick's SELECT skips this subject. `<n>` is the count of open questions surfaced. Stage = `ask`.
-- **`ADVANCED <id> <stage>`** and **`BLOCKED <id> by <dep>`** — reused unchanged (BLOCKED here = ready-but-dep-unsatisfied, a state-changing surface of the dep wait).
-- **`NO_WORK` and `DEFERRED_TO_LAND` are kept VERBATIM** — drivers grep `DEFERRED_TO_LAND` to route an all-done-with-open-PR spec to `/flow-next:land`, and `/goal`/`/loop` stop-clauses key on `NO_WORK`; coalescing either into a generic "idle" would break the land hand-off and the loop-stop. Never rename them.
-- **No `PROMOTED` verb** — the agent never sets the ready flag; promotion is the human's board act.
-
-**`TRIAGED <id> <class>` is DIAGNOSTIC / dry-run ONLY** — emitted only under a triage-only inspection (`--dry-run`). The split is explicit:
-
-- **Live backlog grammar** (no `--dry-run`): `ADVANCED | ASKED | NO_WORK | DEFERRED_TO_LAND | BLOCKED | NEEDS_HUMAN` — **`TRIAGED` is NOT a live terminal.** A live triage always resolves to a state-changing terminal, so an item can never re-select forever. A live tick MUST NOT end on a bare `TRIAGED` no-op line. The primary grammar line above (which `/loop`/`/goal` drivers read) is exactly this live set.
-- **Dry-run-only grammar** (`--dry-run`): adds `TRIAGED <id> <class>` as the diagnostic terminal — the tick classifies and stops, dispatching nothing and parking nothing. A `/loop`/`/goal` driver never runs `--dry-run`, so it never sees `TRIAGED`.
 
 Driver condition examples:
 

@@ -11,8 +11,9 @@
     "result": "OK: work inputs match B1 (4 files)"
   },
   "prompt_hashes": {
-    "plugins/flow-next/skills/flow-next-work/SKILL.md": "3776419ed20ffd790e2b44cc2aaee000fa19a21aee1170be7200b047217c3629",
-    "plugins/flow-next/skills/flow-next-work/phases.md": "3cd74bce3dd56434484fd1ec6fdfc6b703248814ff6c3ccdf0974a412d98a356",
+    "plugins/flow-next/skills/flow-next-work/SKILL.md": "e85b0a2730467f1a556825577eb05f53c865daaf62db118b498b42630cd26bc8",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "97be04a4de617d9447190f77c362e9645e5c6c0d2c6a751c3abb4e83d06c0bab",
+    "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "80a8a31e025b6bacbb45023f33b2f1184a7ae06265364acc1598cb49fe1efb4f",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "26d5ff37bfb9805e8f5c90a62f66425f2e2fd78ae9ab1614b0e8b1a7a01c4955",
     "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "657e0f2a5a6dd1f25e28317c0df61d836c2d78abe63e53ab5d94fe5b93d678ac"
   },
@@ -20,15 +21,15 @@
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
       "baseline_reached_path_chars": 54358,
-      "candidate_reached_path_chars": 51522,
-      "reduction_chars": 2836,
-      "reduction_percent": 5.22
+      "candidate_reached_path_chars": 50628,
+      "reduction_chars": 3730,
+      "reduction_percent": 6.86
     },
     "delegation_active_path": {
       "baseline_reached_path_chars": 100851,
-      "candidate_reached_path_chars": 97619,
-      "reduction_chars": 3232,
-      "reduction_percent": 3.2
+      "candidate_reached_path_chars": 100424,
+      "reduction_chars": 427,
+      "reduction_percent": 0.42
     }
   },
   "trace_arms": {
@@ -71,8 +72,10 @@
   },
   "ratchet": {
     "verdict": "keep",
-    "reason": "All frozen Work contracts remain covered and both default and active reached paths shrink.",
-    "discarded_mutations": []
+    "reason": "All frozen Work contracts remain covered; the default and active reached paths shrink, while requested-but-declined paths load only the exact selection contract.",
+    "discarded_mutations": [
+      "Rejected a circular summary-first consent router; selection now loads an exact, dedicated contract before active-only machinery."
+    ]
   },
   "manual_gates": [
     "Codex mirror regeneration and mirror route assertions deferred to the parallel-wave conductor.",

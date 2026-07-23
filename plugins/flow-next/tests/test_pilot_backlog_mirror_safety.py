@@ -415,7 +415,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         )
         self.assertNotIn("TRIAGED", live_line.split("`ADVANCED")[0] + "ADVANCED")
         self.assertRegex(
-            live_line,
+            mirror_route,
             r"`TRIAGED` is NOT a live terminal",
             "the live grammar must explicitly exclude TRIAGED as a terminal",
         )
