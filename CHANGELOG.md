@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+## [flow-next 3.4.1] - 2026-07-23
+
 ### Changed
 
 - **Planning and work now expose prompt-guided parallel waves (fn-118).** `/flow-next:plan` reports execution waves from the task DAG. `/flow-next:work` inspects the complete ready frontier and may dispatch a safe concurrent subset when dependencies, mutable surfaces, host capacity, workspace isolation, and integration are sound; otherwise it explains the constraint and serializes. Parallel workers return task-unique handovers, while the conductor joins and integrates the whole wave before the existing review, completion, tracker, and plan-sync gates. Atomic claims prevent duplicate ownership only — they do not make a shared Git index or filesystem race-safe.
