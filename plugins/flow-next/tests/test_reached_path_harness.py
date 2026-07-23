@@ -9,12 +9,14 @@ forbidden-reference non-read (deterministic trace fixture, no live model).
 from __future__ import annotations
 
 import copy
+import datetime as _dt
 import importlib.util
 import json
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[3]
 HARNESS = REPO / "optimization" / "reached-path"
@@ -308,7 +310,7 @@ class TestReachedPathHarness(unittest.TestCase):
         self.assertEqual(sample.read_bytes(), sample_before)
 
     def test_freeze_b0_refuses_nonempty_temp_without_index(self) -> None:
-        """Nonempty temp target without INDEX refuses; contents unchanged before HEAD."""
+        """Nonempty temp target without INDEX refuses before any git/source work."""
         with tempfile.TemporaryDirectory(prefix="rp-freeze-nonempty-") as td:
             out = Path(td) / "b0"
             out.mkdir()
@@ -316,64 +318,57 @@ class TestReachedPathHarness(unittest.TestCase):
             leftover.parent.mkdir(parents=True)
             marker = b'{"leftover": true}\n'
             leftover.write_bytes(marker)
-            # Do not monkeypatch HEAD — nonempty guard must fire first.
-            resolve_calls: list[object] = []
-            real_resolve = self.run_eval.resolve_git_head
+            mat_calls: list[object] = []
+            real_mat = self.run_eval.materialize_baseline_sources
 
-            def _track_head(*args, **kwargs):
-                resolve_calls.append((args, kwargs))
-                return real_resolve(*args, **kwargs)
+            def _track_mat(*args, **kwargs):
+                mat_calls.append((args, kwargs))
+                return real_mat(*args, **kwargs)
 
-            self.run_eval.resolve_git_head = _track_head  # type: ignore[method-assign]
+            self.run_eval.materialize_baseline_sources = _track_mat  # type: ignore[method-assign]
             try:
                 rc = self.run_eval.freeze_b0(output_dir=out)
             finally:
-                self.run_eval.resolve_git_head = real_resolve  # type: ignore[method-assign]
+                self.run_eval.materialize_baseline_sources = real_mat  # type: ignore[method-assign]
             self.assertEqual(rc, 1)
-            self.assertEqual(resolve_calls, [], "nonempty guard must precede HEAD resolve")
+            self.assertEqual(
+                mat_calls, [], "nonempty guard must precede baseline source materialize"
+            )
             self.assertFalse((out / "INDEX.json").exists())
             self.assertEqual(leftover.read_bytes(), marker)
             # No extra freeze artifacts beside the leftover tree.
             written = sorted(p for p in out.rglob("*") if p.is_file())
             self.assertEqual(written, [leftover])
 
-    def test_freeze_b0_refuses_head_mismatch_before_writes(self) -> None:
-        """HEAD != BASELINE_COMMIT refuses bootstrap; temp output stays empty."""
-        with tempfile.TemporaryDirectory(prefix="rp-freeze-") as td:
+    def test_freeze_b0_git_show_failure_leaves_no_output(self) -> None:
+        """Baseline git-show failure must leave absent output untouched."""
+        with tempfile.TemporaryDirectory(prefix="rp-freeze-gitsfail-") as td:
             out = Path(td) / "b0"
-            # Seam: absent output + wrong HEAD must not create INDEX or dirs.
-            real_resolve = self.run_eval.resolve_git_head
+            real_mat = self.run_eval.materialize_baseline_sources
 
-            def _wrong_head(_repo_root=None):
-                return "0" * 40
+            def _boom(*args, **kwargs):
+                raise RuntimeError("simulated git show failure")
 
-            self.run_eval.resolve_git_head = _wrong_head  # type: ignore[method-assign]
+            self.run_eval.materialize_baseline_sources = _boom  # type: ignore[method-assign]
             try:
                 rc = self.run_eval.freeze_b0(output_dir=out)
             finally:
-                self.run_eval.resolve_git_head = real_resolve  # type: ignore[method-assign]
+                self.run_eval.materialize_baseline_sources = real_mat  # type: ignore[method-assign]
             self.assertEqual(rc, 1)
             self.assertFalse(out.exists())
             self.assertFalse((out / "INDEX.json").exists())
 
-    def test_freeze_b0_bootstraps_absent_temp_at_exact_baseline(self) -> None:
-        """Temp seam: exact baseline + absent dir bootstraps from git-show sources."""
+    def test_freeze_b0_bootstraps_from_current_head_without_monkeypatch(self) -> None:
+        """Absent temp target bootstraps from git-show at current non-baseline HEAD."""
         with tempfile.TemporaryDirectory(prefix="rp-freeze-ok-") as td:
             out = Path(td) / "b0"
-            real_resolve = self.run_eval.resolve_git_head
-            baseline = self.run_eval.BASELINE_COMMIT
-
-            def _baseline_head(_repo_root=None):
-                return baseline
-
-            self.run_eval.resolve_git_head = _baseline_head  # type: ignore[method-assign]
-            try:
-                rc = self.run_eval.freeze_b0(output_dir=out)
-            finally:
-                self.run_eval.resolve_git_head = real_resolve  # type: ignore[method-assign]
+            # No HEAD monkeypatch — harness must work from the live checkout.
+            self.assertFalse(hasattr(self.run_eval, "resolve_git_head"))
+            rc = self.run_eval.freeze_b0(output_dir=out)
             self.assertEqual(rc, 0)
             self.assertTrue((out / "INDEX.json").is_file())
             index = json.loads((out / "INDEX.json").read_text(encoding="utf-8"))
+            baseline = self.run_eval.BASELINE_COMMIT
             self.assertEqual(index["baseline"], "B0")
             self.assertEqual(index["baseline_commit"], baseline)
             self.assertGreater(index["fixture_count"], 0)
@@ -434,6 +429,47 @@ class TestReachedPathHarness(unittest.TestCase):
         # Sanity: default live path still functions (validation call sites).
         self.assertIn("fixture_hash", default_live)
         self.assertIn("prompt_hashes", default_live)
+
+    def test_freeze_b0_output_immune_to_poisoned_live_reader_seam(self) -> None:
+        """End-to-end: poison live reader; freeze output still matches canonical B0."""
+        with tempfile.TemporaryDirectory(prefix="rp-freeze-poison-") as td:
+            out = Path(td) / "b0"
+            real_reader = self.run_eval._read_live_repo_text
+
+            def _poison(_path: str):
+                return "POISONED_LIVE_WORKTREE_CONTENT\n"
+
+            self.run_eval._read_live_repo_text = _poison  # type: ignore[method-assign]
+            try:
+                rc = self.run_eval.freeze_b0(output_dir=out)
+            finally:
+                self.run_eval._read_live_repo_text = real_reader  # type: ignore[method-assign]
+            self.assertEqual(rc, 0)
+            boot = json.loads((out / "INDEX.json").read_text(encoding="utf-8"))
+            canon = json.loads(
+                (HARNESS / "fixtures" / "b0" / "INDEX.json").read_text(encoding="utf-8")
+            )
+            by_boot = {f["fixture_id"]: f for f in boot["fixtures"]}
+            by_canon = {f["fixture_id"]: f for f in canon["fixtures"]}
+            self.assertEqual(set(by_boot), set(by_canon))
+            for fid, crow in by_canon.items():
+                self.assertEqual(by_boot[fid]["fixture_hash"], crow["fixture_hash"])
+                self.assertEqual(
+                    by_boot[fid]["reached_path_chars"], crow["reached_path_chars"]
+                )
+            # Spot-check one manifest body hash against canonical file.
+            sample_id = next(iter(by_canon))
+            cluster = by_canon[sample_id]["cluster"]
+            name = sample_id.split(".", 1)[-1] + ".json"
+            boot_fx = json.loads((out / cluster / name).read_text(encoding="utf-8"))
+            canon_fx = json.loads(
+                (HARNESS / "fixtures" / "b0" / cluster / name).read_text(encoding="utf-8")
+            )
+            self.assertEqual(boot_fx["fixture_hash"], canon_fx["fixture_hash"])
+            self.assertEqual(boot_fx["prompt_hashes"], canon_fx["prompt_hashes"])
+            self.assertTrue(
+                all("POISON" not in str(v) for v in boot_fx["prompt_hashes"].values())
+            )
 
     def test_inventory_covers_required_clusters(self) -> None:
         items = self.inventory.inventory()
@@ -781,6 +817,182 @@ class TestReachedPathHarness(unittest.TestCase):
             },
         )
         self.assertEqual(decision["verdict"], "discard")
+
+    def test_smoke_persist_candidate_leaves_tracked_proof_untouched(self) -> None:
+        """Ordinary success/failure candidate writes never touch tracked B0 proof."""
+        with tempfile.TemporaryDirectory(prefix="rp-smoke-cand-") as td:
+            runs = Path(td) / "runs"
+            runs.mkdir()
+            tracked = self.run_eval.tracked_b0_smoke_path(runs)
+            marker = b'{"status":"pass","immutable":true}\n'
+            tracked.write_bytes(marker)
+            before_mtime = tracked.stat().st_mtime_ns
+            when = _dt.datetime(2026, 7, 23, 12, 0, 0, 123456, tzinfo=_dt.timezone.utc)
+
+            path_ok, kind_ok = self.run_eval.persist_production_path_smoke(
+                {"status": "pass", "note": "ok", "email": "gordon@mickel.tech"},
+                runs_dir=runs,
+                mode="candidate",
+                when=when,
+            )
+            self.assertEqual(kind_ok, "candidate")
+            self.assertTrue(path_ok.is_file())
+            self.assertEqual(path_ok.parent.name, "candidates")
+            self.assertIn("production-path-smoke-pass", path_ok.name)
+            body_ok = json.loads(path_ok.read_text(encoding="utf-8"))
+            self.assertEqual(body_ok["status"], "pass")
+            self.assertIn("[REDACTED-EMAIL]", json.dumps(body_ok))
+            self.assertNotIn("gordon@mickel.tech", json.dumps(body_ok))
+
+            when_fail = when + _dt.timedelta(seconds=1)
+            path_fail, kind_fail = self.run_eval.persist_production_path_smoke(
+                {"status": "invalid_auth", "reason": "zero_token"},
+                runs_dir=runs,
+                mode="candidate",
+                when=when_fail,
+            )
+            self.assertEqual(kind_fail, "candidate")
+            self.assertIn("invalid_auth", path_fail.name)
+            self.assertNotEqual(path_ok, path_fail)
+
+            self.assertEqual(tracked.read_bytes(), marker)
+            self.assertEqual(tracked.stat().st_mtime_ns, before_mtime)
+
+    def test_smoke_persist_freeze_b0_pass_and_refreeze_refuse(self) -> None:
+        """One-time B0 pass creates only when absent; second promotion refuses."""
+        with tempfile.TemporaryDirectory(prefix="rp-smoke-freeze-") as td:
+            runs = Path(td) / "runs"
+            when = _dt.datetime(2026, 7, 23, 13, 0, 0, 1, tzinfo=_dt.timezone.utc)
+            path1, kind1 = self.run_eval.persist_production_path_smoke(
+                {"status": "pass", "proof": True},
+                runs_dir=runs,
+                mode="freeze_b0",
+                when=when,
+            )
+            self.assertEqual(kind1, "b0_proof")
+            self.assertEqual(path1.name, self.run_eval.B0_SMOKE_FILENAME)
+            before = path1.read_bytes()
+            before_mtime = path1.stat().st_mtime_ns
+
+            with self.assertRaises(RuntimeError) as ctx:
+                self.run_eval.persist_production_path_smoke(
+                    {"status": "pass", "proof": "second"},
+                    runs_dir=runs,
+                    mode="freeze_b0",
+                    when=when + _dt.timedelta(seconds=2),
+                )
+            self.assertIn("refuse overwrite", str(ctx.exception).lower())
+            self.assertEqual(path1.read_bytes(), before)
+            self.assertEqual(path1.stat().st_mtime_ns, before_mtime)
+            # Race/refreeze still parks candidate evidence.
+            cands = list((runs / "candidates").glob("*-production-path-smoke-pass.json"))
+            self.assertGreaterEqual(len(cands), 1)
+
+    def test_smoke_persist_freeze_b0_failure_candidate_only(self) -> None:
+        """One-time B0 failure creates candidate only — no tracked proof."""
+        with tempfile.TemporaryDirectory(prefix="rp-smoke-fail-") as td:
+            runs = Path(td) / "runs"
+            when = _dt.datetime(2026, 7, 23, 14, 0, 0, 99, tzinfo=_dt.timezone.utc)
+            path, kind = self.run_eval.persist_production_path_smoke(
+                {"status": "fail", "required_read_ok": False},
+                runs_dir=runs,
+                mode="freeze_b0",
+                when=when,
+            )
+            self.assertEqual(kind, "candidate")
+            self.assertEqual(path.parent.name, "candidates")
+            self.assertIn("fail", path.name)
+            self.assertFalse(self.run_eval.tracked_b0_smoke_path(runs).exists())
+
+    def test_smoke_candidate_names_exclusive_and_gitignore_pattern(self) -> None:
+        """Candidate basenames are distinct/exclusive; repo pattern ignores them."""
+        with tempfile.TemporaryDirectory(prefix="rp-smoke-excl-") as td:
+            runs = Path(td) / "runs"
+            when = _dt.datetime(2026, 7, 23, 15, 0, 0, 0, tzinfo=_dt.timezone.utc)
+            p1, _ = self.run_eval.persist_production_path_smoke(
+                {"status": "pass"}, runs_dir=runs, mode="candidate", when=when
+            )
+            # Force collision on same stamp — helper must exclusive-create distinct file.
+            p2, _ = self.run_eval.persist_production_path_smoke(
+                {"status": "pass"}, runs_dir=runs, mode="candidate", when=when
+            )
+            self.assertNotEqual(p1, p2)
+            self.assertTrue(p1.is_file() and p2.is_file())
+
+        gi = (HARNESS / "runs" / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("*\n", gi if gi.endswith("\n") else gi + "\n")
+        self.assertTrue(
+            any(line.strip() == "*" for line in gi.splitlines()),
+            "runs/.gitignore must ignore * so candidates/ stay local",
+        )
+        self.assertIn("!b0-production-path-smoke.json", gi)
+        self.assertNotIn("!candidates", gi)
+        # git check-ignore confirms candidate paths are ignored; tracked proof is not.
+        import subprocess
+
+        cand_rel = "optimization/reached-path/runs/candidates/example-production-path-smoke-pass.json"
+        tracked_rel = "optimization/reached-path/runs/b0-production-path-smoke.json"
+        cand_check = subprocess.run(
+            ["git", "check-ignore", "-q", cand_rel],
+            cwd=REPO,
+            check=False,
+        )
+        self.assertEqual(cand_check.returncode, 0, "candidate path must be gitignored")
+        tracked_check = subprocess.run(
+            ["git", "check-ignore", "-q", tracked_rel],
+            cwd=REPO,
+            check=False,
+        )
+        self.assertEqual(
+            tracked_check.returncode, 1, "tracked B0 proof must NOT be gitignored"
+        )
+
+    def test_smoke_cli_mode_wiring_deterministic(self) -> None:
+        """CLI flags wire freeze_b0 vs candidate without a live model."""
+        ap = self.run_eval.build_arg_parser()
+        args_ord = ap.parse_args(["--production-path-smoke", "--model", "haiku"])
+        self.assertTrue(args_ord.production_path_smoke)
+        self.assertFalse(args_ord.freeze_b0_smoke)
+        args_fr = ap.parse_args(["--freeze-b0-smoke"])
+        self.assertTrue(args_fr.freeze_b0_smoke)
+        self.assertFalse(args_fr.production_path_smoke)
+        args_all = ap.parse_args(["--all", "--backend", "claude"])
+        self.assertTrue(args_all.all)
+        self.assertEqual(args_all.backend, "claude")
+
+        calls: list[dict] = []
+
+        def _stub_smoke(**kwargs):
+            calls.append(kwargs)
+            return 0
+
+        with mock.patch.object(self.run_eval, "production_path_smoke", _stub_smoke):
+            self.assertEqual(self.run_eval.main(["--production-path-smoke"]), 0)
+            self.assertEqual(self.run_eval.main(["--freeze-b0-smoke"]), 0)
+            with mock.patch.object(self.run_eval, "validate_b0", return_value=0):
+                self.assertEqual(
+                    self.run_eval.main(["--all", "--backend", "claude"]), 0
+                )
+        self.assertEqual(calls[0].get("freeze_b0"), False)
+        self.assertEqual(calls[1].get("freeze_b0"), True)
+        self.assertEqual(calls[2].get("freeze_b0"), False)
+
+    def test_freeze_b0_smoke_refuses_existing_tracked_before_backend(self) -> None:
+        """--freeze-b0-smoke refuses when tracked proof exists; no claude required."""
+        with tempfile.TemporaryDirectory(prefix="rp-smoke-refuse-") as td:
+            runs = Path(td) / "runs"
+            runs.mkdir()
+            tracked = self.run_eval.tracked_b0_smoke_path(runs)
+            tracked.write_text('{"status":"pass"}\n', encoding="utf-8")
+            before = tracked.read_bytes()
+            # Ensure we would have skipped only due to tracked presence, not missing CLI.
+            with mock.patch.object(self.run_eval.shutil, "which", return_value="/bin/claude"):
+                rc = self.run_eval.production_path_smoke(
+                    freeze_b0=True, runs_dir=runs, model="haiku", timeout=5
+                )
+            self.assertEqual(rc, 1)
+            self.assertEqual(tracked.read_bytes(), before)
+            self.assertFalse((runs / "candidates").exists())
 
 
 if __name__ == "__main__":

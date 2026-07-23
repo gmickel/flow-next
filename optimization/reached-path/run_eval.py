@@ -7,17 +7,23 @@ scoring framework. See README.md.
 Modes:
   --self-test                 offline deterministic proofs (no model)
   --freeze-b0                 bootstrap-only: write sanitized B0 when output dir is
-                              empty/absent and HEAD exactly equals BASELINE_COMMIT;
-                              prompt sources come from git show BASELINE_COMMIT
-                              (never the live worktree); refuses nonempty targets
+                              empty/absent; every counted prompt byte comes from
+                              git show BASELINE_COMMIT:<path> (never the live
+                              worktree); usable from any HEAD; refuses nonempty
+                              targets
   --validate-b0               load + validate every frozen B0 manifest
-  --production-path-smoke     authenticated Claude proof: active read + cold non-read
+  --production-path-smoke     authenticated Claude proof → ignored candidate under
+                              runs/candidates/ (never touches tracked B0 proof)
+  --freeze-b0-smoke           one-time: exclusive-create tracked
+                              runs/b0-production-path-smoke.json on pass only;
+                              failures stay as candidate evidence
   --fixture <id>              validate one frozen fixture
   --all                       validate-b0 + (optional) production-path smoke when --backend claude
 
 Never mutates canonical skill prompts. No live tracker calls.
-B0 is immutable after its initial freeze — never re-run --freeze-b0 against an
-existing (nonempty) fixtures/b0/.
+B0 manifests are immutable after their initial freeze — never re-run --freeze-b0
+against an existing (nonempty) fixtures/b0/. Tracked production-path smoke proof
+is write-once via --freeze-b0-smoke; ordinary smoke always writes candidates.
 """
 
 from __future__ import annotations
@@ -197,31 +203,6 @@ def _fill_hashes(
     return privacy.scrub_obj(fx)
 
 
-def resolve_git_head(repo_root: Path = REPO_ROOT) -> str:
-    """Return HEAD SHA; fail closed on missing git / non-repo / empty output."""
-    try:
-        proc = subprocess.run(
-            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError(
-            "git executable unavailable — cannot verify HEAD for B0 bootstrap"
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("git rev-parse HEAD timed out") from exc
-    if proc.returncode != 0:
-        err = (proc.stderr or proc.stdout or "").strip() or f"exit {proc.returncode}"
-        raise RuntimeError(f"git rev-parse HEAD failed ({err})")
-    head = (proc.stdout or "").strip()
-    if not head:
-        raise RuntimeError("git rev-parse HEAD returned empty SHA")
-    return head
-
-
 def git_show_text(
     commit: str, repo_rel_path: str, repo_root: Path = REPO_ROOT
 ) -> str:
@@ -297,19 +278,20 @@ def freeze_b0(output_dir: Optional[Path] = None) -> int:
     Writes sanitized manifests only when:
       1. ``output_dir`` is absent or an empty directory (never rewrite / never
          overwrite leftover manifests after INDEX.json removal), and
-      2. ``git rev-parse HEAD`` exactly equals ``BASELINE_COMMIT``, and
-      3. every inventory ``prompt_files`` / ``required_reads`` path resolves via
-         ``git show BASELINE_COMMIT:<path>`` (live worktree is never hashed).
+      2. every inventory ``prompt_files`` / ``required_reads`` path resolves via
+         ``git show BASELINE_COMMIT:<path>`` and is fully materialized in memory
+         before any output write (live worktree is never hashed for counted
+         prompt bytes). Usable from any HEAD — the baseline commit predates this
+         harness, so an exact-HEAD checkout is not required.
 
-    Guards 1–3 and full source materialization run before any directory or file
+    Both guards and full source materialization run before any directory or file
     write. ``output_dir`` defaults to canonical ``fixtures/b0``; tests may pass a
-    temp path (HEAD gate still applies — monkeypatch ``resolve_git_head`` for
-    bootstrap proofs).
+    temp path.
     """
     out = Path(output_dir) if output_dir is not None else FIXTURES_B0
     index_path = out / "INDEX.json"
 
-    # Guard 1 — refuse nonempty targets before HEAD/source work (immutable B0).
+    # Guard 1 — refuse nonempty targets before any git/source work (immutable B0).
     if _output_dir_nonempty(out):
         try:
             shown = out.relative_to(REPO_ROOT)
@@ -329,23 +311,7 @@ def freeze_b0(output_dir: Optional[Path] = None) -> int:
         )
         return 1
 
-    # Guard 2 — exact baseline checkout (before any write / source resolve).
-    try:
-        head = resolve_git_head(REPO_ROOT)
-    except RuntimeError as exc:
-        print(f"FAIL: {exc}", file=sys.stderr)
-        return 1
-    if head != BASELINE_COMMIT:
-        print(
-            f"FAIL: HEAD {head} != BASELINE_COMMIT {BASELINE_COMMIT}. "
-            "--freeze-b0 may bootstrap only at the exact baseline checkout; "
-            "refusing so a stale HEAD cannot bless B0. Check out the baseline "
-            "commit first, or use --validate-b0 on the already-frozen tree.",
-            file=sys.stderr,
-        )
-        return 1
-
-    # Guard 3 — materialize baseline sources in memory before any write.
+    # Guard 2 — materialize baseline sources in memory before any write.
     items = inventory.inventory()
     paths = inventory_prompt_paths(items)
     try:
@@ -1007,11 +973,190 @@ def self_test() -> int:
 
 # ── production-path Claude smoke ──────────────────────────────────────────────
 
+B0_SMOKE_FILENAME = "b0-production-path-smoke.json"
+CANDIDATES_DIRNAME = "candidates"
 
-def production_path_smoke(*, model: str = "haiku", timeout: int = 120) -> int:
-    """Prove one active direct-reference read and one cold forbidden non-read."""
-    RUNS.mkdir(parents=True, exist_ok=True)
-    RESULTS.mkdir(parents=True, exist_ok=True)
+
+def tracked_b0_smoke_path(runs_dir: Path) -> Path:
+    """Immutable tracked B0 production-path proof path."""
+    return Path(runs_dir) / B0_SMOKE_FILENAME
+
+
+def candidates_dir(runs_dir: Path) -> Path:
+    return Path(runs_dir) / CANDIDATES_DIRNAME
+
+
+def _safe_status_slug(status: str) -> str:
+    raw = (status or "unknown").strip() or "unknown"
+    return "".join(c if (c.isalnum() or c in "-_") else "_" for c in raw)
+
+
+def smoke_candidate_basename(
+    status: str, *, when: Optional[_dt.datetime] = None
+) -> str:
+    """UTC microsecond stamp + status — exclusive-create friendly."""
+    ts = when or _dt.datetime.now(_dt.timezone.utc)
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=_dt.timezone.utc)
+    else:
+        ts = ts.astimezone(_dt.timezone.utc)
+    stamp = ts.strftime("%Y%m%dT%H%M%S%fZ")
+    return f"{stamp}-production-path-smoke-{_safe_status_slug(status)}.json"
+
+
+def _utc_now() -> _dt.datetime:
+    return _dt.datetime.now(_dt.timezone.utc)
+
+
+def _exclusive_write_text(path: Path, text: str) -> Path:
+    """Create ``path`` exclusively (O_EXCL / mode ``x``); never overwrite."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8") as fh:
+        fh.write(text)
+    return path
+
+
+def persist_production_path_smoke(
+    record: Mapping[str, Any],
+    *,
+    runs_dir: Path,
+    mode: str = "candidate",
+    when: Optional[_dt.datetime] = None,
+    max_candidate_attempts: int = 16,
+) -> tuple[Path, str]:
+    """Persist sanitized smoke evidence.
+
+    ``mode="candidate"`` (default / ordinary smoke): always writes under
+    ``runs_dir/candidates/`` via exclusive create. Never touches tracked B0.
+
+    ``mode="freeze_b0"``: on ``status==pass`` exclusive-creates the tracked
+    ``b0-production-path-smoke.json``; on non-pass (or tracked create race)
+    writes candidate evidence only and raises if a pass could not be promoted.
+
+    Returns ``(path, kind)`` where ``kind`` is ``"b0_proof"`` or ``"candidate"``.
+    """
+    if mode not in ("candidate", "freeze_b0"):
+        raise ValueError(f"unknown smoke persist mode: {mode!r}")
+
+    stamp = when or _utc_now()
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=_dt.timezone.utc)
+    else:
+        stamp = stamp.astimezone(_dt.timezone.utc)
+
+    body = privacy.scrub_obj(dict(record))
+    body.setdefault(
+        "timestamp_utc",
+        stamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+    )
+    text = _stable_json(body)
+    status = str(body.get("status") or "unknown")
+
+    if mode == "freeze_b0" and status == "pass":
+        tracked = tracked_b0_smoke_path(runs_dir)
+        try:
+            return _exclusive_write_text(tracked, text), "b0_proof"
+        except FileExistsError as exc:
+            # Refuse overwrite; still park the pass as candidate evidence.
+            cand = _persist_candidate_smoke(
+                text,
+                status=status,
+                runs_dir=runs_dir,
+                when=stamp,
+                max_attempts=max_candidate_attempts,
+            )
+            raise RuntimeError(
+                f"tracked B0 smoke already exists at {tracked} — refuse overwrite; "
+                f"pass evidence saved as candidate {cand}"
+            ) from exc
+
+    cand = _persist_candidate_smoke(
+        text,
+        status=status,
+        runs_dir=runs_dir,
+        when=stamp,
+        max_attempts=max_candidate_attempts,
+    )
+    return cand, "candidate"
+
+
+def _persist_candidate_smoke(
+    text: str,
+    *,
+    status: str,
+    runs_dir: Path,
+    when: _dt.datetime,
+    max_attempts: int,
+) -> Path:
+    last_err: Optional[BaseException] = None
+    for attempt in range(max_attempts):
+        ts = when + _dt.timedelta(microseconds=attempt)
+        path = candidates_dir(runs_dir) / smoke_candidate_basename(status, when=ts)
+        try:
+            return _exclusive_write_text(path, text)
+        except FileExistsError as exc:
+            last_err = exc
+            continue
+    raise RuntimeError(
+        f"could not exclusive-create candidate smoke evidence under "
+        f"{candidates_dir(runs_dir)} after {max_attempts} attempts"
+    ) from last_err
+
+
+def tracked_b0_smoke_present(runs_dir: Path) -> bool:
+    """True when the immutable tracked proof file already exists (any size)."""
+    return tracked_b0_smoke_path(runs_dir).exists()
+
+
+def production_path_smoke(
+    *,
+    model: str = "haiku",
+    timeout: int = 120,
+    freeze_b0: bool = False,
+    runs_dir: Optional[Path] = None,
+    when: Optional[_dt.datetime] = None,
+) -> int:
+    """Prove one active direct-reference read and one cold forbidden non-read.
+
+    Ordinary runs (``freeze_b0=False``) always persist sanitized candidate
+    evidence under ``runs/candidates/`` and never write the tracked B0 proof.
+
+    ``freeze_b0=True`` (``--freeze-b0-smoke``) refuses if tracked proof already
+    exists (before any backend work); on pass exclusive-creates the tracked
+    proof; on failure writes candidate evidence only.
+    """
+    runs = Path(runs_dir) if runs_dir is not None else RUNS
+    results = RESULTS if runs_dir is None else (runs.parent / "results")
+    runs.mkdir(parents=True, exist_ok=True)
+    results.mkdir(parents=True, exist_ok=True)
+
+    persist_mode = "freeze_b0" if freeze_b0 else "candidate"
+    clock = when  # fixed stamp seam for tests; None → wall clock at persist
+
+    if freeze_b0 and tracked_b0_smoke_present(runs):
+        tracked = tracked_b0_smoke_path(runs)
+        try:
+            shown = tracked.relative_to(REPO_ROOT)
+        except ValueError:
+            shown = tracked
+        print(
+            f"FAIL: tracked B0 smoke proof already exists at {shown} — "
+            "--freeze-b0-smoke is write-once; use --production-path-smoke for "
+            "ordinary candidate evidence.",
+            file=sys.stderr,
+        )
+        return 1
+
+    def _persist(record: Mapping[str, Any]) -> Path:
+        path, kind = persist_production_path_smoke(
+            record, runs_dir=runs, mode=persist_mode, when=clock
+        )
+        try:
+            shown = path.relative_to(REPO_ROOT)
+        except ValueError:
+            shown = path
+        print(f"wrote {kind} evidence → {shown}")
+        return path
 
     if not shutil.which("claude"):
         print("SKIP: claude CLI unavailable — cannot run production-path smoke", file=sys.stderr)
@@ -1024,27 +1169,25 @@ def production_path_smoke(*, model: str = "haiku", timeout: int = 120) -> int:
             "zero-token/auth failure is not a model judgment miss.",
             file=sys.stderr,
         )
-        out = {
-            "status": "invalid_auth",
-            "auth_probe": privacy.scrub_obj(auth),
-            "baseline_commit": BASELINE_COMMIT,
-        }
-        (RUNS / "b0-production-path-smoke.json").write_text(
-            _stable_json(out), encoding="utf-8"
+        _persist(
+            {
+                "status": "invalid_auth",
+                "auth_probe": privacy.scrub_obj(auth),
+                "baseline_commit": BASELINE_COMMIT,
+            }
         )
         return 1
 
     leak = isolation.instruction_leak_probe(model=model, timeout=min(90, timeout))
     if not leak.get("ok"):
         print(f"INVALID RUN: instruction-leak probe failed: {leak}", file=sys.stderr)
-        out = {
-            "status": "invalid_leak_probe",
-            "auth_probe": privacy.scrub_obj(auth),
-            "leak_probe": privacy.scrub_obj(leak),
-            "baseline_commit": BASELINE_COMMIT,
-        }
-        (RUNS / "b0-production-path-smoke.json").write_text(
-            _stable_json(out), encoding="utf-8"
+        _persist(
+            {
+                "status": "invalid_leak_probe",
+                "auth_probe": privacy.scrub_obj(auth),
+                "leak_probe": privacy.scrub_obj(leak),
+                "baseline_commit": BASELINE_COMMIT,
+            }
         )
         return 1
 
@@ -1180,6 +1323,7 @@ def production_path_smoke(*, model: str = "haiku", timeout: int = 120) -> int:
                     "loader_trace_precise": loader_trace_precise,
                     "rc": rc,
                     "timed_out": timed_out,
+                    "smoke_persist_mode": persist_mode,
                 },
                 "result_text_scrubbed": privacy.scrub_text(
                     (result_obj or {}).get("result", "")[:500]
@@ -1191,9 +1335,11 @@ def production_path_smoke(*, model: str = "haiku", timeout: int = 120) -> int:
         # Never persist the sentinel token.
         record = json.loads(isolation.redact_token(json.dumps(record), token))
 
-        out_path = RUNS / "b0-production-path-smoke.json"
-        out_path.write_text(_stable_json(record), encoding="utf-8")
-        print(f"wrote {out_path.relative_to(REPO_ROOT)}")
+        try:
+            _persist(record)
+        except RuntimeError as exc:
+            print(f"FAIL: {exc}", file=sys.stderr)
+            return 1
         print(
             f"status={status} active_read={active_ok} cold_absent={not cold_read} "
             f"chars={metrics['reached_path_chars']}"
@@ -1216,18 +1362,32 @@ def _claude_version() -> str:
 # ── main ──────────────────────────────────────────────────────────────────────
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+def build_arg_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--freeze-b0", action="store_true")
     ap.add_argument("--validate-b0", action="store_true")
     ap.add_argument("--production-path-smoke", action="store_true")
+    ap.add_argument(
+        "--freeze-b0-smoke",
+        action="store_true",
+        help="one-time exclusive-create of tracked b0-production-path-smoke.json on pass",
+    )
     ap.add_argument("--fixture", help="validate one fixture_id")
     ap.add_argument("--all", action="store_true", help="validate-b0 (+ smoke if --backend claude)")
     ap.add_argument("--backend", default="none", choices=["none", "claude", "auto"])
     ap.add_argument("--model", default=os.environ.get("REACHED_PATH_MODEL", "haiku"))
-    ap.add_argument("--timeout", type=int, default=int(os.environ.get("REACHED_PATH_TIMEOUT", "120")))
-    args = ap.parse_args()
+    ap.add_argument(
+        "--timeout", type=int, default=int(os.environ.get("REACHED_PATH_TIMEOUT", "120"))
+    )
+    return ap
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    ap = build_arg_parser()
+    args = ap.parse_args(argv)
 
     if args.self_test:
         return self_test()
@@ -1235,8 +1395,14 @@ def main() -> int:
         return freeze_b0()
     if args.validate_b0:
         return validate_b0()
+    if args.freeze_b0_smoke:
+        return production_path_smoke(
+            model=args.model, timeout=args.timeout, freeze_b0=True
+        )
     if args.production_path_smoke:
-        return production_path_smoke(model=args.model, timeout=args.timeout)
+        return production_path_smoke(
+            model=args.model, timeout=args.timeout, freeze_b0=False
+        )
     if args.fixture:
         manifests = {m["fixture_id"]: m for m in _load_all_manifests()}
         if args.fixture not in manifests:
@@ -1256,11 +1422,17 @@ def main() -> int:
         if backend == "auto":
             backend = "claude" if shutil.which("claude") else "none"
         if backend == "claude":
-            return production_path_smoke(model=args.model, timeout=args.timeout)
+            # Ordinary candidate evidence only — never re-freeze tracked B0.
+            return production_path_smoke(
+                model=args.model, timeout=args.timeout, freeze_b0=False
+            )
         print("validated B0; skipped production-path smoke (no --backend claude)")
         return 0
 
-    ap.error("choose --self-test, --freeze-b0, --validate-b0, --production-path-smoke, --fixture, or --all")
+    ap.error(
+        "choose --self-test, --freeze-b0, --validate-b0, --production-path-smoke, "
+        "--freeze-b0-smoke, --fixture, or --all"
+    )
     return 2
 
 
