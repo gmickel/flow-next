@@ -140,7 +140,7 @@ Run `/flow-next:plan-review <spec-id>` before handover. A different model (RepoP
 
 ### [4] Implementation plan — Handover #3
 
-`/flow-next:plan <spec-id>` reads the spec, scans the codebase via parallel scouts (repo-scout, context-scout, docs-scout, practice-scout, github-scout, ...), and decomposes the spec into ordered tasks with explicit dependencies.
+`/flow-next:plan <spec-id>` reads the spec, scans the codebase via parallel scouts (repo-scout, context-scout, docs-scout, practice-scout, github-scout, ...), and decomposes the spec into ordered tasks with explicit dependencies. Its summary shows the resulting execution waves so the parallel candidates are visible before work starts.
 
 Tasks are sized to fit one `/flow-next:work` iteration (~100k tokens of fresh context). If a task wouldn't fit, the planner splits it. R-IDs from the spec are propagated into per-task `satisfies: [R1, R3]` frontmatter — a task says exactly which acceptance criteria it advances.
 
@@ -150,9 +150,11 @@ Run `/flow-next:plan-review` again on the plan itself. The plan is a separate ha
 
 ### [5] Working implementation — Handover #4
 
-`/flow-next:work <spec-id>` loops over ready tasks. Each task runs in a **worker subagent with fresh context** (no token bleed from prior tasks). Before each task, the worker re-anchors: re-reads the spec, the task, and `git log` since branch base.
+`/flow-next:work <spec-id>` inspects the full ready frontier on every loop. When several tasks are independent and their mutable surfaces can be isolated, the host may dispatch a safe subset concurrently; otherwise it explains the constraint and serializes. Each task runs in a **worker subagent with fresh context** (no token bleed from prior tasks). Before each task, the worker re-anchors: re-reads the spec, the task, and `git log` since branch base.
 
-Per-task output: an evidence record (commits, tests, files touched) plus a `done_summary` block. The summary is the conversation the worker had with itself about *why* it made the choices it made — load-bearing for `/make-pr` to write the Decisions section without confabulating.
+Parallel workers implement, test, commit, and return task-unique handover files. The conductor joins the whole wave, integrates the commits, then owns the existing per-task review, completion, and tracker gates; plan-sync runs only after the wave is joined and resolved. Atomic claims prevent duplicate ownership, but do not make concurrent edits in one checkout safe.
+
+Per-task output remains an evidence record (commits, tests, files touched) plus a `done_summary` block. The summary is the conversation the worker had with itself about *why* it made the choices it made — load-bearing for `/make-pr` to write the Decisions section without confabulating.
 
 Branch strategy is a per-team choice:
 
@@ -281,12 +283,12 @@ When the spec decomposes into independent tasks, multiple agents (or humans + ag
 
 | Pattern | How |
 |---------|-----|
-| Decompose at spec level | `/flow-next:plan` writes per-task `requires: [task-ids]` frontmatter. Independent tasks are ready immediately; dependent tasks wait. |
+| Decompose at spec level | `/flow-next:plan` writes per-task `requires: [task-ids]` frontmatter and reports the resulting execution waves. Independent tasks are ready immediately; dependent tasks wait. |
 | Module boundaries in spec | Spec sections name the module: "Auth API" and "Auth UI" become separate task clusters with the API contract between them. Each cluster runs in its own worker subagent (fresh context) without coordination overhead. |
 | Cross-task evidence | Per-task `done_summary` is the breadcrumb the next task reads to re-anchor. No standup needed. |
-| Worktree-per-cluster | `/flow-next:work --branch=worktree` isolates clusters at the filesystem level. Each cluster's worker has its own checkout — no merge conflicts during the build. |
+| Host-selected isolation | `/flow-next:work` evaluates dependencies, declared files, shared resources, and host capacity. Concurrent workers use isolated mutable workspaces plus a safe integration arrangement; the host serializes when those conditions are not met. |
 
-The anti-pattern is two agents working on overlapping files from the same spec without coordination. The fix is **clearer boundaries in the spec itself**, not better merge conflict resolution. If the boundaries are unclear, run `/flow-next:interview <spec-id>` to add them.
+The anti-pattern is two agents editing the same checkout because both successfully claimed different tasks. Claims protect ownership, not the Git index or filesystem. The fix is **clearer boundaries in the spec plus safe workspace isolation**, not better merge conflict resolution. If the boundaries are unclear, run `/flow-next:interview <spec-id>` to add them.
 
 ### Frozen-at-handover
 
@@ -394,7 +396,7 @@ What `.flow/` looks like with N developers in parallel:
 - **Spec-level isolation.** Each spec is `fn-<N>-<slug>` with its markdown at `.flow/specs/fn-<N>-<slug>.md`, sidecar JSON at `.flow/specs/fn-<N>-<slug>.json`, and its own task tree under `.flow/tasks/fn-<N>-<slug>.M.json|md`. Two devs working on `fn-12-...` and `fn-15-...` never touch each other's files.
 - **Task-level dependencies.** Within a spec, `requires: [task-ids]` frontmatter is the contract. A task is *ready* when all its requires have status `done`. `flowctl ready --spec fn-12-...` lists ready tasks.
 - **Branch strategy.** Per-spec branch is the default (`--branch=new`). Worktrees scale to several specs in flight (`--branch=worktree`). Current-branch is for solo, single-spec work.
-- **Worker isolation.** Each task runs in a worker subagent with fresh context. The worker reads only what it needs — it does not see the conversation in the spawning session, and it does not see the other tasks. This is what enables N tasks to run in parallel without context-bleed.
+- **Worker isolation has two layers.** Each task runs in a fresh-context worker, preventing context bleed. Concurrent writers also need separate mutable workspaces and a conductor-owned integration step; an atomic task claim alone provides neither.
 - **Memory tree as shared state.** `.flow/memory/` is the only multi-writer surface. The convention: bug entries are auto-written by Ralph on review-loop iteration; knowledge entries (`decisions/`, `architecture-patterns/`, `conventions/`) are written by humans or by `/work` with explicit confirmation. `/flow-next:audit` reconciles drift periodically.
 - **`.flow/` lives in the repo.** Commit it. Code review it. The spec PRs and implementation PRs both touch `.flow/` — that's intentional. The team's `.flow/` evolves alongside the code.
 

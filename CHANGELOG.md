@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Changed
+
+- **Planning and work now expose prompt-guided parallel waves (fn-118).** `/flow-next:plan` reports execution waves from the task DAG. `/flow-next:work` inspects the complete ready frontier and may dispatch a safe concurrent subset when dependencies, mutable surfaces, host capacity, workspace isolation, and integration are sound; otherwise it explains the constraint and serializes. Parallel workers return task-unique handovers, while the conductor joins and integrates the whole wave before the existing review, completion, tracker, and plan-sync gates. Atomic claims prevent duplicate ownership only — they do not make a shared Git index or filesystem race-safe.
+
 ### Fixed
 
 - **Corrected Grok command-discovery guidance.** Live verification on Grok 0.2.111 shows that `/flow-next:` opens the plugin command namespace, including plan/work; `/flow-next-` filters the separate hyphen-named skill surface. The prior “autocomplete under-lists commands” diagnosis conflated those two prefix families. A command-free skill probe also confirmed that Grok renders the skill's `argument-hint` after autocomplete selection.
