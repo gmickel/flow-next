@@ -387,10 +387,17 @@ and all review-fix commits are integrated:
 6. verify `flowctl show <task-id> --json` reports `done`, then run the existing
    3d.1 tracker touchpoint.
 
-Partial failures use the existing ground-truth recovery rules below. Successful
-tasks may be integrated and completed, but the wave is not resolved until each
-failed task has been continued, retried within the existing cap, or surfaced as
-blocked. No batch state is introduced.
+Partial failures use the existing ground-truth recovery rules below, but first
+diagnose each failed or missing-result worker **inside its assigned workspace**.
+The conductor already knows that workspace plus the task-unique
+`HANDOVER_SUMMARY` and `HANDOVER_EVIDENCE` paths from dispatch; enter and
+physically verify the workspace, inspect those handovers, and run
+`flowctl show`, `git log`, and `git status` there before classifying the
+failure. Never infer "nothing landed" from the wave target or conductor
+checkout when the worker used an isolated workspace. Successful tasks may be
+integrated and completed, but the wave is not resolved until each failed task
+has been continued, retried within the existing cap, or surfaced as blocked.
+No batch state is introduced.
 
 On the single-worker path, verify completion as before:
 

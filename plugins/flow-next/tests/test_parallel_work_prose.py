@@ -96,6 +96,29 @@ class ParallelWorkConductorProse(unittest.TestCase):
                 r"integrated-target verification's exact\s+commands/results"
             ),
         )
+        self.assertRegex(
+            text,
+            re.compile(
+                r"diagnose each failed or missing-result worker "
+                r"\*\*inside its assigned workspace\*\*"
+            ),
+        )
+        self.assertIn(
+            "The conductor already knows that workspace plus the task-unique",
+            text,
+        )
+        self.assertIn("`HANDOVER_SUMMARY` and `HANDOVER_EVIDENCE` paths", text)
+        self.assertRegex(
+            text,
+            re.compile(
+                r"run\s+`flowctl show`, `git log`, and `git status` there "
+                r"before classifying"
+            ),
+        )
+        self.assertIn(
+            'Never infer "nothing landed" from the wave target or conductor',
+            text,
+        )
         review_pos = text.index("when its resolved `REVIEW_MODE` is not `none`")
         all_reviews_pos = text.index(
             "After every successful task has the required SHIP verdict"
