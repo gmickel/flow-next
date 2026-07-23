@@ -358,25 +358,32 @@ Join: complete (2/2 returned)
 ```
 
 Use the host's chosen integration mechanism to bring each successful worker's
-commits onto the target branch. Then, on the integrated target and one task at a
-time:
+commits onto the target branch. Reuse the existing per-task review contract in
+two passes:
 
 1. confirm the task's code, tests, commit, and handover files;
-2. normalize each task's evidence to the integrated commit IDs/base and retain
-   its task-specific normalized integrated base;
+2. normalize each task's evidence to the integrated commit IDs and retain its
+   exact task-specific normalized integrated base **and head**;
 3. when its resolved `REVIEW_MODE` is not `none`, run
    `/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
-   and apply the existing bounded fix loop;
-4. after the required SHIP verdict (or immediately when review is `none`), run
-   the existing Phase 5 Verify contract on the final integrated target
-   **immediately before the task is marked done**. This verification is
-   mandatory even when every worker was green in isolation: after all
-   successful worker commits for the wave are integrated, classify the combined
-   diff, honor only valid integrated-HEAD receipts, otherwise run the required
-   suite, and fix + re-commit any failure. Append any review-fix commits and the
-   integrated-target verification's exact commands/results to the task's
-   evidence;
-5. run `flowctl done` with the updated task-unique summary/evidence;
+   from a safe review context whose `HEAD` is that task's normalized integrated
+   head. The host chooses that context and isolation mechanism; it must not use
+   the wave target's later `HEAD` when peer commits extend it. Apply the existing
+   bounded fix loop, integrate any review-fix commits onto the target branch,
+   and append them to that task's evidence.
+
+After every successful task has the required SHIP verdict (or review is `none`)
+and all review-fix commits are integrated:
+
+4. run the existing Phase 5 Verify contract once on the final integrated target
+   **immediately before tasks are marked done**. This verification is mandatory
+   even when every worker was green in isolation: classify the combined diff,
+   honor only valid integrated-HEAD receipts, otherwise run the required suite,
+   and fix + re-commit any failure. Append verification-fix commits (distinct
+   from review-fix commits) plus the integrated-target verification's exact
+   commands/results to every affected task's evidence;
+5. for each successful task, run `flowctl done` with the updated task-unique
+   summary/evidence;
 6. verify `flowctl show <task-id> --json` reports `done`, then run the existing
    3d.1 tracker touchpoint.
 

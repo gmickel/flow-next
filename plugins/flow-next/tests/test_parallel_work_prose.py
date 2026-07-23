@@ -62,32 +62,61 @@ class ParallelWorkConductorProse(unittest.TestCase):
         self.assertIn("wait for every dispatched worker", text)
         self.assertIn("Worker outcomes:", text)
         self.assertIn("Join: complete", text)
-        self.assertIn("normalize each task's evidence to the integrated commit IDs", text)
+        self.assertIn(
+            "normalize each task's evidence to the integrated commit IDs", text
+        )
+        self.assertIn(
+            "task-specific normalized integrated base **and head**", text
+        )
         self.assertRegex(
             text,
             re.compile(
-                r"run\s+the existing Phase 5 Verify contract "
+                r"safe review context whose `HEAD` is that task's "
+                r"normalized\s+integrated\s+head"
+            ),
+        )
+        self.assertRegex(
+            text,
+            re.compile(
+                r"must not use\s+the wave target's later `HEAD` when peer "
+                r"commits extend it"
+            ),
+        )
+        self.assertIn("Append verification-fix commits", text)
+        self.assertRegex(
+            text,
+            re.compile(
+                r"run\s+the existing Phase 5 Verify contract once "
                 r"on the final integrated target"
             ),
         )
         self.assertRegex(
             text,
             re.compile(
-                r"integrated-target verification's exact commands/results"
+                r"integrated-target verification's exact\s+commands/results"
             ),
         )
         review_pos = text.index("when its resolved `REVIEW_MODE` is not `none`")
+        all_reviews_pos = text.index(
+            "After every successful task has the required SHIP verdict"
+        )
         verify_pos = next(
             re.finditer(
-                r"run\s+the existing Phase 5 Verify contract "
+                r"run\s+the existing Phase 5 Verify contract once "
                 r"on the final integrated target",
                 text,
             )
         ).start()
-        done_pos = text.index(
-            "run `flowctl done` with the updated task-unique summary/evidence"
-        )
+        done_pos = next(
+            re.finditer(
+                r"for each successful task, run `flowctl done` with the "
+                r"updated task-unique\s+summary/evidence",
+                text,
+            )
+        ).start()
         self.assertLess(review_pos, verify_pos)
+        self.assertLess(review_pos, all_reviews_pos)
+        self.assertLess(all_reviews_pos, verify_pos)
         self.assertLess(verify_pos, done_pos)
         self.assertIn("Do not run plan-sync while any peer worker is active", text)
         self.assertIn("recompute the next ready frontier", text)
