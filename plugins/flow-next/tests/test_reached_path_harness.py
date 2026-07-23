@@ -1175,6 +1175,96 @@ class TestReachedPathHarness(unittest.TestCase):
                     )
                     self.assertEqual(len(self._smoke_candidate_records(runs2)), 1)
 
+    def test_smoke_nonzero_backend_with_successful_read_stays_error(self) -> None:
+        """A successful required read cannot mask a nonzero backend exit."""
+        when = _dt.datetime(2026, 7, 23, 17, 30, 0, 0, tzinfo=_dt.timezone.utc)
+        auth_ok = {
+            "ok": True,
+            "invalid": False,
+            "reason": "ok",
+            "flags": [],
+            "used_bare": False,
+            "used_fresh_config_dir": False,
+        }
+        leak_ok = {"ok": True, "leaked": False, "needles": []}
+        stream = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": "active-read",
+                                    "name": "Read",
+                                    "input": {
+                                        "file_path": "/arena/skill/references/active.md"
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "active-read",
+                                    "is_error": False,
+                                    "content": "ACTIVE_OK_42",
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "result",
+                        "subtype": "error",
+                        "is_error": True,
+                        "usage": {"input_tokens": 3, "output_tokens": 1},
+                    }
+                ),
+            ]
+        )
+
+        def _relative_active(_root, path):
+            if str(path).endswith("references/active.md"):
+                return "references/active.md"
+            return None
+
+        with tempfile.TemporaryDirectory(prefix="rp-smoke-active-error-") as td:
+            runs = Path(td) / "runs"
+            with self._patch_smoke_backend(
+                auth=auth_ok,
+                leak=leak_ok,
+                run_ret=(2, stream, "backend failed after read", False),
+            ):
+                with mock.patch.object(
+                    self.run_eval.trace, "rel_under", side_effect=_relative_active
+                ):
+                    rc = self.run_eval.production_path_smoke(
+                        freeze_b0=False,
+                        runs_dir=runs,
+                        model="haiku",
+                        timeout=5,
+                        when=when,
+                    )
+
+            self.assertNotEqual(rc, 0)
+            cands = self._smoke_candidate_records(runs)
+            self.assertEqual(len(cands), 1)
+            body = json.loads(cands[0].read_text(encoding="utf-8"))
+            self.assertEqual(body["status"], "backend_error")
+            self.assertTrue(body["required_read_ok"])
+            self.assertTrue(body["forbidden_read_absent"])
+            self.assertEqual(body["provenance"]["rc"], 2)
+            self.assertFalse(self.run_eval.tracked_b0_smoke_path(runs).exists())
+
 
 if __name__ == "__main__":
     unittest.main()

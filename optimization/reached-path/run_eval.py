@@ -1279,7 +1279,7 @@ def production_path_smoke(
             status = "timeout"
         elif iso["breached"]:
             status = "isolation_breach"
-        elif rc != 0 and not active_ok:
+        elif rc != 0:
             status = "backend_error"
         elif not active_ok or cold_read:
             status = "fail"
