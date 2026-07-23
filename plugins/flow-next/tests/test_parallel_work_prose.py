@@ -57,6 +57,13 @@ class ParallelWorkConductorProse(unittest.TestCase):
         self.assertIn("Dispatch count:", text)
         self.assertIn("Sequential fallback:", text)
         self.assertIn("Claim every selected task before dispatch", text)
+        self.assertIn(
+            "Retain every successfully\nclaimed task in the selected wave",
+            text,
+        )
+        self.assertIn(
+            "never abandon a task that this conductor already", text
+        )
         self.assertIn("HANDOVER_SUMMARY", text)
         self.assertIn("HANDOVER_EVIDENCE", text)
         self.assertIn("wait for every dispatched worker", text)
@@ -212,6 +219,30 @@ class ParallelWorkerHandoverProse(unittest.TestCase):
             "parallel-wave and host-deferred handovers must report "
             "`in_progress`",
             text,
+        )
+        self.assertRegex(
+            text,
+            re.compile(
+                r"The parallel-wave terminal contract still\s+overrides "
+                r"review and done"
+            ),
+        )
+        self.assertRegex(
+            text,
+            re.compile(
+                r"On a\s+parallel-wave or host-deferred path, never call "
+                r"`flowctl done`"
+            ),
+        )
+        self.assertIn(
+            "report the exact workspace plus\nuncommitted state", text
+        )
+        self.assertRegex(
+            text,
+            re.compile(
+                r"before the standard\s+path's `flowctl done` or the "
+                r"parallel path's handover"
+            ),
         )
         self.assertRegex(
             text,

@@ -265,8 +265,11 @@ host's counter stays untouched - not a failure, not a strike).
    - Before committing a `completed` result, run the `git status --porcelain` ∩
      `files_modified` trust cross-check; a mismatch downgrades to partial/failed.
 
-Phase 3 commit / Phase 4 review / Phase 5 done are **unchanged** by delegation —
-the orchestrator (you) still owns all git, review, and `flowctl done`.
+On the standard single-worker path, Phase 3 commit / Phase 4 review / Phase 5
+done are **unchanged** by delegation — the orchestrator (you) still owns all
+git, review, and `flowctl done`. The parallel-wave terminal contract still
+overrides review and done: commit in the assigned workspace, write the
+task-unique handovers, and return `in_progress` for the conductor.
 
 Read relevant code, implement the feature/fix. Follow existing patterns.
 
@@ -468,12 +471,20 @@ BASE_COMMIT=$(cat .flow/tmp/base_commit)
 ```
 If verification fails, fix and re-commit before proceeding.
 
-**Sandbox-blocked commit:** if the environment's sandbox denies `git commit`, do NOT stall or loop retrying - still write the evidence file and complete `flowctl done`, and record the sandbox restriction in the done summary so the orchestrator can commit on your behalf. A blocked commit is never a reason to block the task.
+**Sandbox-blocked commit:** if the environment's sandbox denies `git commit`,
+do NOT stall or loop retrying. On the standard single-worker path, still write
+the evidence file and complete `flowctl done`, recording the restriction in
+the done summary so the orchestrator can commit on your behalf. On a
+parallel-wave or host-deferred path, never call `flowctl done`: write the
+assigned handovers, return `in_progress`, and report the exact workspace plus
+uncommitted state so the conductor can recover and commit it. A blocked commit
+is never a reason to discard finished work.
 
 **Delegation verification backstop — `DELEGATE: codex` AND `REVIEW_MODE: none`.**
 When delegation was active AND no impl-review gate ran (Phase 4 skipped), you MUST
-run the Phase 5 Verify block yourself on the delegated diff before `flowctl done` —
-do NOT trust Codex's `verification_summary` as the sole gate. Delegated tasks route through this SAME Verify block; its Suite-output capture rule applies without a separate delegation test site. The Verify block is
+run the Phase 5 Verify block yourself on the delegated diff before the standard
+path's `flowctl done` or the parallel path's handover — do NOT trust Codex's
+`verification_summary` as the sole gate. Delegated tasks route through this SAME Verify block; its Suite-output capture rule applies without a separate delegation test site. The Verify block is
 authoritative here too: classify first, honor green receipts, and run the full
 tests/lints when neither applies (a docs-only tier-B or receipt-honored outcome
 with its GATE_SKIPPED evidence lines satisfies this backstop); on failure, fix +

@@ -235,9 +235,11 @@ Claim every selected task before dispatch:
 $FLOWCTL start <task-id> --json
 ```
 
-If any claim fails, do not dispatch that task. Recompute the selected wave from
-ground truth. A successful atomic claim prevents duplicate ownership; it does
-not make shared-checkout Git or filesystem mutations safe.
+If any claim fails, do not dispatch that task. Retain every successfully
+claimed task in the selected wave and recompute only the failed/unclaimed
+membership from ground truth; never abandon a task that this conductor already
+moved to `in_progress`. A successful atomic claim prevents duplicate ownership;
+it does not make shared-checkout Git or filesystem mutations safe.
 
 #### 3b.1 Tracker sync (opt-in) — first claim → In-Progress
 
