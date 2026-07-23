@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-23T15:23:33.616046Z",
+  "depends_on": [
+    "fn-130-reached-path-skill-prompt-optimization.2"
+  ],
+  "id": "fn-130-reached-path-skill-prompt-optimization.11",
+  "priority": null,
+  "spec": "fn-130-reached-path-skill-prompt-optimization",
+  "spec_path": ".flow/tasks/fn-130-reached-path-skill-prompt-optimization.11.md",
+  "status": "todo",
+  "title": "Gate Make PR HTML and creation branches",
+  "updated_at": "2026-07-23T15:24:12.526282Z"
+}

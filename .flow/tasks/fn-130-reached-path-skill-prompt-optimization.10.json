@@ -1,0 +1,24 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-23T15:17:42.443075Z",
+  "depends_on": [
+    "fn-130-reached-path-skill-prompt-optimization.3",
+    "fn-130-reached-path-skill-prompt-optimization.4",
+    "fn-130-reached-path-skill-prompt-optimization.5",
+    "fn-130-reached-path-skill-prompt-optimization.6",
+    "fn-130-reached-path-skill-prompt-optimization.7",
+    "fn-130-reached-path-skill-prompt-optimization.8",
+    "fn-130-reached-path-skill-prompt-optimization.9",
+    "fn-130-reached-path-skill-prompt-optimization.11",
+    "fn-130-reached-path-skill-prompt-optimization.12"
+  ],
+  "id": "fn-130-reached-path-skill-prompt-optimization.10",
+  "priority": null,
+  "spec": "fn-130-reached-path-skill-prompt-optimization",
+  "spec_path": ".flow/tasks/fn-130-reached-path-skill-prompt-optimization.10.md",
+  "status": "todo",
+  "title": "Close fleet evidence, mirrors, docs, and host smokes",
+  "updated_at": "2026-07-23T15:24:13.261514Z"
+}

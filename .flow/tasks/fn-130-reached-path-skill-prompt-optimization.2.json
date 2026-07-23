@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-23T15:15:32.563581Z",
+  "depends_on": [
+    "fn-130-reached-path-skill-prompt-optimization.1"
+  ],
+  "id": "fn-130-reached-path-skill-prompt-optimization.2",
+  "priority": null,
+  "spec": "fn-130-reached-path-skill-prompt-optimization",
+  "spec_path": ".flow/tasks/fn-130-reached-path-skill-prompt-optimization.2.md",
+  "status": "todo",
+  "title": "Consolidate copy-mode version drift contract",
+  "updated_at": "2026-07-23T15:23:33.076154Z"
+}
