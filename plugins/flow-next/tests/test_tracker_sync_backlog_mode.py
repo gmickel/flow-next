@@ -167,13 +167,16 @@ class TrackerSyncBacklogModeProseContract(unittest.TestCase):
             "DISPATCH=forked must be in the single RALPH=1 gate condition (fn-89)",
         )
 
-    def test_forked_dispatch_has_no_legacy_setup_prompt(self) -> None:
-        """fn-130: Tracker Sync no longer owns setup-version prompting.
+    def test_tracker_skill_has_no_legacy_setup_precheck(self) -> None:
+        """The Plan-only version contract removed lifecycle prechecks.
 
-        The Phase-0 forked-dispatch gate above remains authoritative; removing
-        the fleet precheck eliminates the earlier prompt-before-gate risk.
+        Fork safety now has one owner: the Phase-0 RALPH gate asserted above.
+        A stale FLOW_SETUP_ASK ceremony here would reload dead instructions and
+        reintroduce a prompt before that gate.
         """
         self.assertNotIn("FLOW_SETUP_ASK", self.skill)
+        self.assertNotIn("setup_version", self.skill)
+        self.assertNotIn("snippet_ack", self.skill)
 
     # ---- listOpenIssues: the 9th adapter method ------------------------
 

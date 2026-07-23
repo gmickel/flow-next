@@ -2,7 +2,7 @@
 
 Read [SKILL.md](SKILL.md) first for the architecture, the flowctl-vs-skill split, and the boundaries. This file is the execution detail. `$FLOWCTL` is defined in SKILL.md's Preamble.
 
-This file is the transport-blind orchestration **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the push/pull/reconcile skeleton with named hooks. The hook bodies live in dedicated reference files: transports (`fetchIssue`/`writeIssue`/… — Linear [`references/linear-ladder.md`](references/linear-ladder.md), GitHub [`references/github.md`](references/github.md), GitLab [`references/gitlab.md`](references/gitlab.md), Jira [`references/jira.md`](references/jira.md)) and reconcile (3-way body merge [`references/body-merge.md`](references/body-merge.md); status who-wins [`references/status-sync.md`](references/status-sync.md); comments/evidence append [`references/comments-sync.md`](references/comments-sync.md)), all plugging through the contract in [`references/adapter-interface.md`](references/adapter-interface.md). Inline, a hook points at its reference with **[→ ref: <file>]** — read that file for the body; this file owns only the routing.
+This file is the transport-blind orchestration **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the push/pull/reconcile skeleton with named hooks. Reconcile hooks live in the common references loaded by SKILL.md; transport hooks come from the **single selected adapter** loaded by SKILL.md's reached-path router. Inline, **[→ selected adapter]** means use that already-loaded adapter; it never means read every provider reference.
 
 ## Phase 0 — Mode + Ralph/autonomous awareness
 
@@ -10,7 +10,7 @@ Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile
 
 `comment <spec-id>` is the lifecycle-event op the host skills invoke for opted-in touchpoints (`work.done` / `resolvePr` / `completionReview` / `qa` set to `comment` — see SKILL.md's perEvent table). It routes to the **comments-sync hook** (`postLifecycleComment` → `postComment` **[→ ref: comments-sync.md]**): append the structured lifecycle comment + evidence, dedup, receipt — it does NOT touch the body or status. Like `push` / `reconcile`, a `comment` op on an unlinked spec triggers the **Phase 3 create-if-unlinked** flow-first link first (create + attach), then posts the comment on the now-linked spec.
 
-`list-open`, `list-relations <tracker-id>`, and `question <spec-id | tracker-id>` are the **backlog-mode named ops** (pilot's autonomous backlog scheduler invokes them). Here `<tracker-id>` is the issue's **tracker handle** — the display `identifier`, not the opaque global id. For a **tracker-only** subject (no flow spec) the value passed is the `listOpenIssues` normalized `issue.identifier` (`<project>#<iid>` / `WOR-17` / `#123`): on GitLab the adapter must index `/projects/:id/issues/:iid` from the `<project>#<iid>` it carries (a global id is not a valid path index; gitlab.md § identity). The op drives the adapter with this identifier **directly** — it does **not** rely on `flowctl` resolving a bare GitLab key (the resolver accepts only `fn-*` / `KEY-N`; a `<project>#<iid>` does not resolve). A spec-backed subject passes its `<spec-id>`, which resolves to the stored `tracker.identifier`. They are **skill-level, transport-blind operations** — NOT new flowctl transport (flowctl has no tracker transport and must not grow one). `list-open` enumerates the promoted-lane open issues via the `listOpenIssues` adapter method; `list-relations` READS one issue's dependency relations via the `listIssueRelations` adapter method (dep-ordering edges, never a write); `question` posts a question-valve comment carrying the stable anchor. All route through the same adapter ladder as every other op. See **Phase 7 — Backlog-mode ops** below for their bodies.
+`list-open`, `list-relations <tracker-id>`, and `question <spec-id | tracker-id>` are the **backlog-mode named ops** (pilot's autonomous backlog scheduler invokes them). Here `<tracker-id>` is the issue's **tracker handle** — the display `identifier`, not the opaque global id. For a **tracker-only** subject (no flow spec) the value passed is the `listOpenIssues` normalized `issue.identifier` (`<project>#<iid>` / `WOR-17` / `#123`): on GitLab the selected adapter must index `/projects/:id/issues/:iid` from the `<project>#<iid>` it carries (a global id is not a valid path index; gitlab.md § identity). The op drives the selected adapter with this identifier **directly** — it does **not** rely on `flowctl` resolving a bare GitLab key (the resolver accepts only `fn-*` / `KEY-N`; a `<project>#<iid>` does not resolve). A spec-backed subject passes its `<spec-id>`, which resolves to the stored `tracker.identifier`. They are **skill-level, transport-blind operations** — NOT new flowctl transport (flowctl has no tracker transport and must not grow one). `list-open` enumerates the promoted-lane open issues via the `listOpenIssues` adapter method; `list-relations` READS one issue's dependency relations via the `listIssueRelations` adapter method (dep-ordering edges, never a write); `question` posts a question-valve comment carrying the stable anchor. All route through the selected adapter as every other op. See **Phase 7 — Backlog-mode ops** below for their bodies.
 
 **Event tag (R1).** When a lifecycle touchpoint invokes this skill, the invocation carries the perEvent key it serves — an `event: <perEvent-key>` token alongside the operation, e.g. `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.done)`. Parse it into `EVENT`; **every `sync receipt` this run** then carries `--event "$EVENT"` — the call sites here and in the reference files use `${EVENT:+--event "$EVENT"}`, which expands to nothing when `EVENT` is empty, so one call-site shape serves both modes. The tag is what `flowctl sync check` audits at end-of-skill (an untagged receipt never clears a lifecycle event). **Manual invocations are NOT lifecycle touchpoints** — a user typing `/flow-next:tracker-sync push <id>`, the interactive menu, the discovery ceremony, `unlink`, and the round-trip spikes all leave `EVENT` empty, and their receipts legitimately carry no event tag (null event = not a lifecycle touchpoint).
 
@@ -238,7 +238,7 @@ Attach sync state **on link**. Pick the flow by where the user is starting:
 
 ### 2a — Flow-first (author-in-flow-then-push)
 
-A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via the body-sync hook **[→ ref: body-merge.md]**, which creates the issue via `writeIssue` **[→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]**, then attach state.
+A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via the body-sync hook **[→ ref: body-merge.md]**, which creates the issue via `writeIssue` **[→ selected adapter]**, then attach state.
 
 > **The pushed body is the COMPLETE spec — every section, in full.** The render (`renderFlowToTracker`, body-merge.md Step 3) is a *format translation*, NOT a summary: never condense, truncate, abbreviate, or drop a section. Projection means the issue mirrors the whole spec (the Step 3.5 structural gate enforces "no section silently dropped"). If you find yourself summarizing to save tokens, stop — read body-merge.md Step 3 and render the full body.
 
@@ -246,11 +246,11 @@ A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via
 $FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_UUID" --identifier "WOR-17" --url "$ISSUE_URL"
 ```
 
-Write the back-reference into the issue: a `flow:<id>` label and/or a `[<id>]` title prefix (transport call — `writeIssue`/`setStatus` **[→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]**) so the issue points back at the spec. The tracker key `WOR-17` becomes a resolvable alias for the `fn-NN` spec (`work wor-17` resolves via flowctl's widened resolver).
+Write the back-reference into the issue: a `flow:<id>` label and/or a `[<id>]` title prefix (transport call — `writeIssue`/`setStatus` **[→ selected adapter]**) so the issue points back at the spec. The tracker key `WOR-17` becomes a resolvable alias for the `fn-NN` spec (`work wor-17` resolves via flowctl's widened resolver).
 
 ### 2b — Tracker-first (link an existing issue — "grab issue X and spec it")
 
-Fetch the issue via the transport (`fetchIssue` **[→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]**) → normalized `issue` struct. Create the spec **keyed by the tracker key** so the repo artifact mirrors the board:
+Fetch the issue via the transport (`fetchIssue` **[→ selected adapter]**) → normalized `issue` struct. Create the spec **keyed by the tracker key** so the repo artifact mirrors the board:
 
 ```bash
 $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<issue title>" --json
@@ -319,13 +319,13 @@ If `set-tracker-id` reports a collision, ask the user (interactive) or queue (`s
 
 **Always snapshot the merge base at create time — even when the triggering op is `comment`.** The `comment` path leaves body/status untouched and seeds no base of its own, and `reconcile` on a brand-new issue echo-fences to a noop, so the **auto-create** step is the only place the base gets written on a `comment`-first (or `reconcile`-first) auto-link. The tracker half of that snapshot is the **fetched-back stored body** (body-merge.md Step 5 § Fetch-back rule) - NOT the `renderFlowToTracker` output we sent, because trackers normalize markdown on save (Linear rewrites links/lists; Jira round-trips ADF) and a sent-render base false-diverges on the next reconcile. Skip this and a `comment`-first auto-create leaves the linked issue **base-less** until some later body sync; the no-base bootstrap then treats that sync as a fast-forward projection and can silently **overwrite tracker-side edits** made after the issue was created. (`push`-first auto-link is unaffected either way — the `push` skeleton below re-snapshots the base after writing; the create-time snapshot just makes the `comment`/`reconcile`-first paths match.)
 
-Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are the `gh` transport in [`references/github.md`](references/github.md) (single rung + no-op, reduced-fidelity status); GitLab's are the `glab` transport in [`references/gitlab.md`](references/gitlab.md) (`glab` CLI → raw-REST token fallback → no-op, reduced-fidelity status); Jira's are the REST transport in [`references/jira.md`](references/jira.md) (Cloud `/rest/api/3` + ADF → DC/Server `/rest/api/2` → no-op, workflow-aware status via the transitions API). The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md); the **status who-wins** hook (`reconcileStatus`) is [`references/status-sync.md`](references/status-sync.md) and the **comments/evidence append + dedup** hooks (`postLifecycleComment` / `pullCommentsToSyncLog`) are [`references/comments-sync.md`](references/comments-sync.md).
+Route the operation through the adapter selected by SKILL.md; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). Never inspect or combine another provider's commands. The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md); the **status who-wins** hook (`reconcileStatus`) is [`references/status-sync.md`](references/status-sync.md) and the **comments/evidence append + dedup** hooks (`postLifecycleComment` / `pullCommentsToSyncLog`) are [`references/comments-sync.md`](references/comments-sync.md).
 
 ```
 push(spec):
   prEvidence = mergeEvidenceProbe(spec.branch_name)  → status-sync.md (merged|open|closed-unmerged|none|ambiguous|probe-error)
   body    = renderFlowToTracker(spec)            → body-merge.md Step 3 (flow→tracker) — COMPLETE spec, ALL sections; never summarize/truncate
-  writeIssue(issue{... body ...})                [→ ref: transport]  # A full-body UPDATE on an adapter that carries the <!-- flow:deps --> block (GitHub on its fenced fallback; GitLab on EVERY tier — native is_blocked_by AND degraded relates_to) preserves the flow-owned region (github.md / gitlab.md § writeIssue) — body=renderFlowToTracker output never contains it, so a raw full-body replace would wipe it and make projectDepRelations misread the ledgered edge as a remote removal → false collision. Write retains; merge strips (body-merge.md Step 0.5).
+  writeIssue(issue{... body ...})                [→ selected adapter]  # A full-body UPDATE on an adapter that carries the <!-- flow:deps --> block (GitHub on its fenced fallback; GitLab on EVERY tier — native is_blocked_by AND degraded relates_to) preserves the flow-owned region (selected adapter § writeIssue) — body=renderFlowToTracker output never contains it, so a raw full-body replace would wipe it and make projectDepRelations misread the ledgered edge as a remote removal → false collision. Write retains; merge strips (body-merge.md Step 0.5).
   setStatus(flowToNormalized(spec, prEvidence) → tracker status)    → status-sync.md (who-wins)
             # MERGE-EVIDENCE GATE: the terminal rung (done/verified) is reachable
             # ONLY when prEvidence == merged. flowToNormalized refuses terminal for
@@ -339,16 +339,16 @@ push(spec):
   receipt: pushed
 
 pull(spec):
-  issue   = fetchIssue(trackerId)                [→ ref: transport]  → normalized issue
-  comments= listComments(trackerId)              [→ ref: transport]  → normalized comment[]
-  status  = readStatus(trackerId)                [→ ref: transport]  → normalized status
+  issue   = fetchIssue(trackerId)                [→ selected adapter]  → normalized issue
+  comments= listComments(trackerId)              [→ selected adapter]  → normalized comment[]
+  status  = readStatus(trackerId)                [→ selected adapter]  → normalized status
   foldTrackerIntoFlow(spec, issue, status)       → body-merge.md Step 3 (tracker→flow) + status-sync.md (who-wins) + comments-sync.md (pull genuine comments to sync log)
             # echo-fence first: pulled body hash == baseHashTracker ⇒ noop (body-merge.md Step 1 / Fixture D)
   projectReadiness(spec, issue)                  → status-sync.md § Readiness projection — tracker.readyState → local `ready` flag (skipped when readyState null; change-only receipt; one-way pull)
   receipt: pulled | noop
 
 comment(spec):                                   # lifecycle touchpoint (work.done / resolvePr / completionReview / qa)
-  postLifecycleComment(spec, event marker + evidence)   → comments-sync.md (append + dedup) [→ ref: transport: postComment]
+  postLifecycleComment(spec, event marker + evidence)   → comments-sync.md (append + dedup) [→ selected adapter: postComment]
             # body + status untouched; create-if-unlinked already linked + base-snapshotted an unlinked spec before we got here
   receipt: updated | noop
 ```
@@ -363,7 +363,7 @@ conflict) lives in that reference:
 ```
 reconcile(spec):
   base    = sync get-state → merge-base snapshot (BOTH forms: mergeBaseFlow + mergeBaseTracker) + lastSyncedAt
-  issue   = fetchIssue(trackerId)                [→ ref: transport]
+  issue   = fetchIssue(trackerId)                [→ selected adapter]
   # ── UNCHANGED-BOTH-SIDES SHORT-CIRCUIT (R22) ────────────────────────────────────
   # If the issue has NOT moved since we last synced AND the local spec body still equals
   # the flow-side merge-base snapshot, there is genuinely nothing to reconcile. Emit a
@@ -388,7 +388,7 @@ reconcile(spec):
      Ralph       → sync defer (queue the scoped conflict, never block)   [R9/R11]
      receipt: diverged
   else:
-     writeIssue(merged) + setStatus(reconcileStatus(spec, issue, prEvidence))    [→ ref: transport] + status-sync.md (who-wins)
+     writeIssue(merged) + setStatus(reconcileStatus(spec, issue, prEvidence))    [→ selected adapter] + status-sync.md (who-wins)
             # MERGE-EVIDENCE GATE: reconcileStatus runs flowToNormalized(spec, prEvidence)
             # first — a manual reconcile MAY terminal-write Done/verified IFF prEvidence == merged
             # (status-sync.md S-I); closed-unmerged/ambiguous/probe-error → in-review + NEEDS_HUMAN
@@ -427,7 +427,7 @@ For each edge, in order:
 
 3. **Resolved edge ⇒ project the blocked-by relation (R3/R8).** Drive the transport with **read-before-write** dedup baked into the adapter (`listIssueRelations` first — neither platform reliably no-ops a duplicate). The direction is anchored once in adapter-interface.md: `setIssueRelation(issue = this spec's issue, blockedBy = dep issue)`:
    ```bash
-   setIssueRelation(issue=$ISSUE, blockedBy=$DEP_ISSUE)   [→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]
+   setIssueRelation(issue=$ISSUE, blockedBy=$DEP_ISSUE)   [→ selected adapter]
    ```
    On a successful **new** create, record provenance in the ledger so the rerun is idempotent and removal stays provably-ours-only (R6/R7):
    ```bash
@@ -511,7 +511,7 @@ For each linked spec, render a line like `wor-17-slug  ↔  WOR-17  (linked, syn
 
 ## Phase 7 — Backlog-mode ops (`list-open` / `list-relations` / `question`) — R14/R15
 
-Three **skill-level, transport-blind** named ops that pilot's autonomous backlog scheduler invokes. They route through the same adapter ladder (`listOpenIssues` / `listIssueRelations` / `listComments` / `postComment` **[→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]**) as every other op — pilot never calls a tracker-specific API and **never** calls flowctl for transport (flowctl has no tracker transport; architecture rule). `list-open` and `list-relations` are **read-only** (they never write to the tracker); `question` writes a comment. All run under the **autonomy gate** (Phase 0) — `question` authoring resolves "ask the human" to a queued/best-effort post, never `AskUserQuestion`.
+Three **skill-level, transport-blind** named ops that pilot's autonomous backlog scheduler invokes. They route through the selected adapter (`listOpenIssues` / `listIssueRelations` / `listComments` / `postComment` **[→ selected adapter]**) as every other op — pilot never calls a tracker-specific API and **never** calls flowctl for transport (flowctl has no tracker transport; architecture rule). `list-open` and `list-relations` are **read-only** (they never write to the tracker); `question` writes a comment. All run under the **autonomy gate** (Phase 0) — `question` authoring resolves "ask the human" to a queued/best-effort post, never `AskUserQuestion`.
 
 ### 7a — `list-open` — enumerate the promoted-lane open issues
 
@@ -535,7 +535,7 @@ list-open:
 
 - **`tracker.readyState` unset ⇒ no-op + note, return `[]`** (NOT an error). No promoted lane exists to filter on, so backlog mode falls back to the flow-ready specs only.
 - **Exact-match, bounded.** `listOpenIssues` lists issues at the **exact** `tracker.readyState` state/label — never "beyond" it (no state ordering exists; an ordered promoted-set is a future config, never inferred). It is the promoted lane, not the whole backlog.
-- **Transport-blind.** Pilot consumes the normalized `issue[]`; it never branches on per-tracker (Linear / GitHub / GitLab / Jira). The adapter (`listOpenIssues` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md) / [`references/gitlab.md`](references/gitlab.md) / [`references/jira.md`](references/jira.md)) owns the wire query.
+- **Transport-blind.** Pilot consumes the normalized `issue[]`; it never branches on per-tracker (Linear / GitHub / GitLab / Jira). The selected adapter's `listOpenIssues` owns the wire query.
 - **No-transport ⇒ `noop` + note, `[]`** — same documented no-op floor as the other methods.
 
 ### 7b — `question <spec-id | tracker-id>` — post a question-valve comment
@@ -632,13 +632,13 @@ list-relations(trackerId):
   receipt: noop  --note "list-relations: <N> relation(s) for <trackerId>"   # a read-only enumeration never advances lastSyncedAt
 ```
 
-- **Transport-blind.** Pilot consumes the normalized `relation[]`; it never branches on per-tracker (Linear / GitHub / GitLab / Jira). The adapter (`listIssueRelations` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md) / [`references/gitlab.md`](references/gitlab.md) / [`references/jira.md`](references/jira.md)) owns the wire query.
+- **Transport-blind.** Pilot consumes the normalized `relation[]`; it never branches on per-tracker (Linear / GitHub / GitLab / Jira). The selected adapter's `listIssueRelations` owns the wire query.
 - **No-transport / no-relations ⇒ `noop` + note, `[]`** — same documented no-op floor as `list-open`; selection then dep-orders on the flow `blockedBy` edges alone.
 - **Read-only.** This op NEVER drives `setIssueRelation` — it only reads. Relation *projection* (writes) stays on the `push` / `reconcile` `projectDepRelations` path, never on a backlog-mode tick.
 
 ## Boundaries (repeat — load-bearing for this scaffold)
 
-- Hook bodies marked **[→ ref: <file>]** are NOT inlined here — this file routes; read the referenced file for the body. Transports live in `linear-ladder.md` / `github.md` / `gitlab.md` / `jira.md`; reconcile in `body-merge.md` / `status-sync.md` / `comments-sync.md`.
+- Hook bodies marked **[→ ref: <file>]** are NOT inlined here — this file routes; read the referenced common file for the body. **[→ selected adapter]** always means the single adapter already selected by SKILL.md; never load the other transports. Reconcile lives in `body-merge.md` / `status-sync.md` / `comments-sync.md`.
 - `set-merge-base` always writes BOTH halves (paired-snapshot invariant).
 - Receipts on every run — event-tagged on lifecycle runs (`${EVENT:+--event "$EVENT"}`, Phase 0); conflicts queue (`sync defer`), never block (R11).
 - **Autonomy parity (R14):** the Phase-0 `RALPH` gate recognizes the full marker family (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH` / `FLOW_AUTONOMOUS` / `mode:autonomous`); under it NO path reaches `AskUserQuestion` — every "ask the human" resolves to `sync defer`.
