@@ -167,18 +167,13 @@ class TrackerSyncBacklogModeProseContract(unittest.TestCase):
             "DISPATCH=forked must be in the single RALPH=1 gate condition (fn-89)",
         )
 
-    def test_setup_precheck_suppresses_prompt_on_forked_dispatch(self) -> None:
-        """fn-89: the SKILL.md setup-version pre-check runs BEFORE Phase 0, so
-        its ask-suppression gate must ALSO recognize DISPATCH=forked - otherwise
-        a forked runner could hit FLOW_SETUP_ASK and stall on a prompt no
-        subagent can answer."""
-        self.assertIn("FLOW_SETUP_ASK", self.skill)
-        precheck_window = self.skill.split("FLOW_SETUP_ASK", 1)[0][-1200:]
-        self.assertIn(
-            '"${DISPATCH:-}" == "forked"',
-            precheck_window,
-            "SKILL.md setup pre-check suppression must recognize DISPATCH=forked (fn-89)",
-        )
+    def test_forked_dispatch_has_no_legacy_setup_prompt(self) -> None:
+        """fn-130: Tracker Sync no longer owns setup-version prompting.
+
+        The Phase-0 forked-dispatch gate above remains authoritative; removing
+        the fleet precheck eliminates the earlier prompt-before-gate risk.
+        """
+        self.assertNotIn("FLOW_SETUP_ASK", self.skill)
 
     # ---- listOpenIssues: the 9th adapter method ------------------------
 
