@@ -566,7 +566,10 @@ Return a concise summary to the main conversation:
 - What was implemented (1-2 sentences)
 - Key files changed
 - Tests run (if any)
-- Review verdict (if REVIEW_MODE != none)
+- Review verdict only on the standard single-worker path when
+  `REVIEW_MODE != none`. A parallel-wave worker reports the task-unique
+  handover paths and `in_progress` status instead; it must not claim a review
+  verdict.
 
 **Delegation signal — ONLY when `DELEGATE: codex` was active for this task.** Emit
 these as the **last two lines** of your return summary so the host circuit breaker
@@ -587,13 +590,23 @@ failed, the task ran standard, or `DELEGATE: local`), emit **no** `DELEGATION_*`
 
 ## Rules
 
+The review/done terminal rules below apply to the standard single-worker path.
+When `PARALLEL_WAVE` is `true`, the terminal contract is only: green Verify
+gates, committed task code, task-unique summary/evidence handovers, and a return
+with status still `in_progress`. Do not run impl-review or `flowctl done`; the
+conductor owns both after integration. The existing host-deferred exception
+likewise returns `in_progress` for the conductor's review.
+
 - **Re-anchor first** - always read spec before implementing
 - **Investigate first** - if task spec has investigation targets, read them before coding
 - **No TodoWrite** - flowctl tracks tasks
 - **git add -A** - never list files explicitly
 - **One task only** - implement only the task you were given
-- **Review before done** - if REVIEW_MODE != none, get SHIP verdict before `flowctl done`
-- **Verify done** - flowctl show must report status: done
+- **Review before done (standard single-worker only)** - if
+  `PARALLEL_WAVE` is `false` and `REVIEW_MODE` is neither `none` nor
+  `host-deferred`, get a SHIP verdict before `flowctl done`
+- **Verify terminal state** - standard single-worker `flowctl show` must report
+  `done`; parallel-wave and host-deferred handovers must report `in_progress`
 - **Return summary** - main conversation needs outcome
 - **Typed escalation** — when blocking a task, use this format:
   ```

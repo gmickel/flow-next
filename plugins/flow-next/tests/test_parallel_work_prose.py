@@ -186,6 +186,33 @@ class ParallelWorkerHandoverProse(unittest.TestCase):
         self.assertIn("mutate tracker state", text)
         self.assertIn("invoke plan-sync", text)
         self.assertIn("integrate the", text)
+        self.assertIn(
+            "A parallel-wave worker reports the task-unique", text
+        )
+        self.assertIn(
+            "it must not claim a review\n  verdict", text
+        )
+        self.assertIn(
+            "The review/done terminal rules below apply to the standard "
+            "single-worker path",
+            text,
+        )
+        self.assertRegex(
+            text,
+            re.compile(
+                r"When `PARALLEL_WAVE` is `true`, the terminal contract "
+                r"is only:.{0,300}?status still `in_progress`",
+                re.DOTALL,
+            ),
+        )
+        self.assertIn(
+            "**Review before done (standard single-worker only)**", text
+        )
+        self.assertIn(
+            "parallel-wave and host-deferred handovers must report "
+            "`in_progress`",
+            text,
+        )
         self.assertRegex(
             text,
             re.compile(
