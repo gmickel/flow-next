@@ -21,6 +21,27 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE` - task-unique output paths chosen by the conductor. Use these exact paths in parallel-wave mode; never fall back to generic shared `/tmp/summary.md` or `/tmp/evidence.json`.
 - `DELEGATE` - codex to delegate Phase 2 implementation to `codex exec`; absent or `local` ⇒ standard in-session (the host only sets this when delegation is active and all pre-flight gates passed). `DELEGATE_MODEL` / `DELEGATE_SANDBOX` / `DELEGATE_EFFORT_FLOOR` / `DELEGATE_DECISION` accompany it — see Phase 2.
 
+## Phase 0: Enter the assigned workspace (FIRST)
+
+Before any `flowctl` or git operation, baseline test, file read, or edit:
+
+- When `PARALLEL_WAVE` is `true`, resolve and enter the exact `WORKSPACE` from
+  the prompt without using git, then verify the physical current directory
+  matches it:
+
+  ```bash
+  EXPECTED_WORKSPACE="$(cd -- "<WORKSPACE>" && pwd -P)" || exit 1
+  cd -- "$EXPECTED_WORKSPACE" || exit 1
+  test "$(pwd -P)" = "$EXPECTED_WORKSPACE" || exit 1
+  ```
+
+  Keep every later shell call and file operation rooted in that directory
+  (set the tool's working directory to `EXPECTED_WORKSPACE` when shell
+  directory changes do not persist). Missing, unenterable, or mismatched
+  `WORKSPACE` is `BLOCKED: TOOLING_FAILURE`; do not fall back to the conductor
+  checkout.
+- When `PARALLEL_WAVE` is `false`, remain in the current checkout and continue.
+
 ## Phase 1: Re-anchor (CRITICAL - DO NOT SKIP)
 
 Use the FLOWCTL path and IDs from your prompt. ONE call fetches the whole re-anchor bundle:

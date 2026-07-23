@@ -341,10 +341,12 @@ done
 # flow-next-work: phases.md
 phases="$CODEX_DIR/skills/flow-next-work/phases.md"
 if [ -f "$phases" ]; then
-  # fn-123 R5: the 3d.0 host-deferred gate is an ACTIONABLE invocation — rewrite
-  # the canonical slash-command to the Codex skill name (passive /flow-next:
-  # mentions elsewhere stay; this one the agent must execute).
-  sed -i.bak 's|`/flow-next:impl-review <task-id> --base \$BASE_COMMIT --review=host`|`$flow-next-impl-review <task-id> --base $BASE_COMMIT --review=host`|g' "$phases"
+  # Actionable impl-review invocations must use the Codex skill name. Passive
+  # /flow-next: mentions elsewhere stay.
+  sed -i.bak \
+    -e 's|`/flow-next:impl-review <task-id> --base \$BASE_COMMIT --review=host`|`$flow-next-impl-review <task-id> --base $BASE_COMMIT --review=host`|g' \
+    -e 's|`/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`|`$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`|g' \
+    "$phases"
   rm -f "${phases}.bak"
 
   # Replace section 3c with agent invocation

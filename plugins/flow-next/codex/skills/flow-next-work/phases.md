@@ -333,7 +333,7 @@ time:
 2. normalize each task's evidence to the integrated commit IDs/base and retain
  its task-specific normalized integrated base;
 3. when its resolved `REVIEW_MODE` is not `none`, run
- `/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
+ `$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
  and apply the existing bounded fix loop;
 4. after the required SHIP verdict (or immediately when review is `none`), run
  the existing Phase 5 Verify contract on the final integrated target

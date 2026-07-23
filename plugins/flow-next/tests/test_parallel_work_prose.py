@@ -63,11 +63,6 @@ class ParallelWorkConductorProse(unittest.TestCase):
         self.assertIn("Worker outcomes:", text)
         self.assertIn("Join: complete", text)
         self.assertIn("normalize each task's evidence to the integrated commit IDs", text)
-        self.assertIn(
-            "/flow-next:impl-review <task-id> --base "
-            "<task-normalized-integrated-base> --review=<backend>",
-            text,
-        )
         self.assertRegex(
             text,
             re.compile(
@@ -99,9 +94,25 @@ class ParallelWorkConductorProse(unittest.TestCase):
 
     def test_canonical(self) -> None:
         self._assert_contract(CANONICAL_WORK)
+        self.assertIn(
+            "/flow-next:impl-review <task-id> --base "
+            "<task-normalized-integrated-base> --review=<backend>",
+            _read(CANONICAL_WORK),
+        )
 
     def test_codex_mirror(self) -> None:
         self._assert_contract(MIRROR_WORK)
+        text = _read(MIRROR_WORK)
+        self.assertIn(
+            "$flow-next-impl-review <task-id> --base "
+            "<task-normalized-integrated-base> --review=<backend>",
+            text,
+        )
+        self.assertNotIn(
+            "/flow-next:impl-review <task-id> --base "
+            "<task-normalized-integrated-base> --review=<backend>",
+            text,
+        )
 
 
 class ParallelWorkerHandoverProse(unittest.TestCase):
@@ -112,6 +123,12 @@ class ParallelWorkerHandoverProse(unittest.TestCase):
         self.assertIn("task-unique", text)
         self.assertIn("HANDOVER_SUMMARY", text)
         self.assertIn("HANDOVER_EVIDENCE", text)
+        self.assertIn("Phase 0: Enter the assigned workspace (FIRST)", text)
+        self.assertIn('EXPECTED_WORKSPACE="$(cd -- "<WORKSPACE>" && pwd -P)"', text)
+        self.assertIn("do not fall back to the conductor", text)
+        workspace_pos = text.index("Phase 0: Enter the assigned workspace (FIRST)")
+        anchor_pos = text.index("<FLOWCTL> anchor <TASK_ID> --md")
+        self.assertLess(workspace_pos, anchor_pos)
         self.assertIn("DO NOT run `flowctl done`", text)
         self.assertIn("invoke impl-review", text)
         self.assertIn("mutate tracker state", text)
