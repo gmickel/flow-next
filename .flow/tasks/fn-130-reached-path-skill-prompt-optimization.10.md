@@ -42,9 +42,16 @@ Reconcile every independently kept/discarded mutation into one auditable fleet r
 - [ ] Final evidence table and rollback notes are complete enough for make-pr and later release review.
 
 ## Done summary
-TBD
-
+Closed fn-130's fleet evidence across all independent mutation clusters. Added
+the B0→V1/B1→candidate result table, model/telemetry separation, kept/discarded
+ledger, current-source Claude/Codex/Cursor/Droid/Grok activation smokes,
+explicit Cursor-GUI/TUI pre-release manual gates, overlap/no-op recheck, docs
+truth scan, and atomic rollback guidance. Regenerated the Codex mirror twice,
+validated privacy and hash lineage, ran the full repository and plugin gates,
+and built flow-next.dev. Temporary Grok/Droid test installations were removed;
+no version manifest, release, deployment, live tracker, or downstream docs
+source changed.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 97e9793a93bcad8c2bf18bdb1b8d28d3ae80b2ff, dc1dfe1c
+- Tests: python3 optimization/reached-path/run_eval.py --self-test, python3 optimization/reached-path/run_eval.py --validate-b0 (117 manifests), python3 optimization/reached-path/run_eval.py --validate-b1 (117 manifests), evidence privacy regex + candidate B1 lineage/hash audit, ./scripts/sync-codex.sh twice (28 skills, 22 agents, idempotent), focused prompt/parity suites, python3 scripts/run_tests_parallel.py (2,286 run, 3 skipped, 0 failures/errors), bash plugins/flow-next/scripts/smoke_test.sh from /tmp (136 passed, 0 failed), flow-next.dev pnpm build (Astro check clean, 74 pages), Claude direct + natural-language, Codex mirror, Cursor CLI, Droid, Grok current-source smokes, git diff --check + changed-reference existence + docs truth scan
 - PRs:
