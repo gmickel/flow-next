@@ -15,6 +15,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
 
@@ -993,6 +994,186 @@ class TestReachedPathHarness(unittest.TestCase):
             self.assertEqual(rc, 1)
             self.assertEqual(tracked.read_bytes(), before)
             self.assertFalse((runs / "candidates").exists())
+
+    def _smoke_candidate_records(self, runs: Path) -> list[Path]:
+        cand = runs / "candidates"
+        if not cand.is_dir():
+            return []
+        return sorted(cand.glob("*-production-path-smoke-*.json"))
+
+    def test_smoke_missing_claude_cli_ordinary_persists_candidate(self) -> None:
+        """Missing CLI is invalid/non-run: nonzero + candidate evidence, no tracked proof."""
+        when = _dt.datetime(2026, 7, 23, 16, 0, 0, 111111, tzinfo=_dt.timezone.utc)
+        with tempfile.TemporaryDirectory(prefix="rp-smoke-no-cli-") as td:
+            runs = Path(td) / "runs"
+            with mock.patch.object(self.run_eval.shutil, "which", return_value=None):
+                rc = self.run_eval.production_path_smoke(
+                    freeze_b0=False,
+                    runs_dir=runs,
+                    model="haiku",
+                    timeout=5,
+                    when=when,
+                )
+            self.assertNotEqual(rc, 0)
+            cands = self._smoke_candidate_records(runs)
+            self.assertEqual(len(cands), 1)
+            body = json.loads(cands[0].read_text(encoding="utf-8"))
+            self.assertEqual(body["status"], "claude_cli_missing")
+            self.assertIn("reason", body)
+            self.assertTrue(str(body["reason"]).strip())
+            self.assertEqual(body.get("baseline"), "B0")
+            self.assertEqual(
+                body.get("baseline_commit"), self.run_eval.BASELINE_COMMIT
+            )
+            dumped = json.dumps(body)
+            self.assertNotIn("gordon@mickel.tech", dumped)
+            self.assertNotIn("/Users/", dumped)
+            self.assertFalse(self.run_eval.tracked_b0_smoke_path(runs).exists())
+            self.assertIn("claude_cli_missing", cands[0].name)
+
+    def test_smoke_missing_claude_cli_freeze_candidate_only(self) -> None:
+        """Freeze + missing CLI: nonzero, candidate only — never creates tracked proof."""
+        when = _dt.datetime(2026, 7, 23, 16, 1, 0, 222222, tzinfo=_dt.timezone.utc)
+        with tempfile.TemporaryDirectory(prefix="rp-smoke-no-cli-fr-") as td:
+            runs = Path(td) / "runs"
+            with mock.patch.object(self.run_eval.shutil, "which", return_value=None):
+                rc = self.run_eval.production_path_smoke(
+                    freeze_b0=True,
+                    runs_dir=runs,
+                    model="haiku",
+                    timeout=5,
+                    when=when,
+                )
+            self.assertNotEqual(rc, 0)
+            cands = self._smoke_candidate_records(runs)
+            self.assertEqual(len(cands), 1)
+            body = json.loads(cands[0].read_text(encoding="utf-8"))
+            self.assertEqual(body["status"], "claude_cli_missing")
+            self.assertFalse(self.run_eval.tracked_b0_smoke_path(runs).exists())
+
+    def test_smoke_missing_claude_cli_preserves_existing_tracked(self) -> None:
+        """Ordinary missing-CLI must not mutate an existing tracked B0 proof."""
+        when = _dt.datetime(2026, 7, 23, 16, 2, 0, 333333, tzinfo=_dt.timezone.utc)
+        with tempfile.TemporaryDirectory(prefix="rp-smoke-no-cli-trk-") as td:
+            runs = Path(td) / "runs"
+            runs.mkdir()
+            tracked = self.run_eval.tracked_b0_smoke_path(runs)
+            marker = b'{"status":"pass","immutable":true}\n'
+            tracked.write_bytes(marker)
+            before_mtime = tracked.stat().st_mtime_ns
+            with mock.patch.object(self.run_eval.shutil, "which", return_value=None):
+                rc = self.run_eval.production_path_smoke(
+                    freeze_b0=False,
+                    runs_dir=runs,
+                    model="haiku",
+                    timeout=5,
+                    when=when,
+                )
+            self.assertNotEqual(rc, 0)
+            self.assertEqual(tracked.read_bytes(), marker)
+            self.assertEqual(tracked.stat().st_mtime_ns, before_mtime)
+            self.assertEqual(len(self._smoke_candidate_records(runs)), 1)
+
+    def _patch_smoke_backend(self, *, auth, leak=None, run_ret=None):
+        """Stack mocks so smoke never hits a live model / long wait."""
+        stack = ExitStack()
+        stack.enter_context(
+            mock.patch.object(self.run_eval.shutil, "which", return_value="/bin/claude")
+        )
+        stack.enter_context(
+            mock.patch.object(self.run_eval.isolation, "auth_probe", return_value=auth)
+        )
+        if leak is not None:
+            stack.enter_context(
+                mock.patch.object(
+                    self.run_eval.isolation,
+                    "instruction_leak_probe",
+                    return_value=leak,
+                )
+            )
+        if run_ret is not None:
+            stack.enter_context(
+                mock.patch.object(
+                    self.run_eval.isolation, "run_cmd", return_value=run_ret
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(self.run_eval, "_claude_version", return_value="test")
+            )
+        return stack
+
+    def test_smoke_auth_leak_timeout_backend_candidate_only(self) -> None:
+        """Auth/leak/timeout/backend failures stay nonzero candidate-only (mocked)."""
+        when = _dt.datetime(2026, 7, 23, 17, 0, 0, 0, tzinfo=_dt.timezone.utc)
+        auth_ok = {
+            "ok": True,
+            "invalid": False,
+            "reason": "ok",
+            "flags": [],
+            "used_bare": False,
+            "used_fresh_config_dir": False,
+        }
+        leak_ok = {"ok": True, "leaked": False, "needles": []}
+        cases = (
+            (
+                "invalid_auth",
+                {"ok": False, "invalid": True, "reason": "zero_token"},
+                None,
+                None,
+            ),
+            (
+                "invalid_leak_probe",
+                auth_ok,
+                {"ok": False, "leaked": True, "needles": ["Owner block"]},
+                None,
+            ),
+            ("timeout", auth_ok, leak_ok, (0, "", "", True)),
+            ("backend_error", auth_ok, leak_ok, (2, "", "backend blew up", False)),
+        )
+        for expected_status, auth, leak, run_ret in cases:
+            with self.subTest(status=expected_status):
+                with tempfile.TemporaryDirectory(prefix="rp-smoke-fail-") as td:
+                    runs = Path(td) / "runs"
+                    runs.mkdir()
+                    tracked = self.run_eval.tracked_b0_smoke_path(runs)
+                    marker = b'{"status":"pass","keep":true}\n'
+                    tracked.write_bytes(marker)
+                    before_mtime = tracked.stat().st_mtime_ns
+                    with self._patch_smoke_backend(
+                        auth=auth, leak=leak, run_ret=run_ret
+                    ):
+                        rc = self.run_eval.production_path_smoke(
+                            freeze_b0=False,
+                            runs_dir=runs,
+                            model="haiku",
+                            timeout=5,
+                            when=when,
+                        )
+                    self.assertNotEqual(rc, 0)
+                    cands = self._smoke_candidate_records(runs)
+                    self.assertEqual(len(cands), 1)
+                    body = json.loads(cands[0].read_text(encoding="utf-8"))
+                    self.assertEqual(body["status"], expected_status)
+                    self.assertEqual(tracked.read_bytes(), marker)
+                    self.assertEqual(tracked.stat().st_mtime_ns, before_mtime)
+
+                with tempfile.TemporaryDirectory(prefix="rp-smoke-fail-fr-") as td2:
+                    runs2 = Path(td2) / "runs"
+                    with self._patch_smoke_backend(
+                        auth=auth, leak=leak, run_ret=run_ret
+                    ):
+                        rc2 = self.run_eval.production_path_smoke(
+                            freeze_b0=True,
+                            runs_dir=runs2,
+                            model="haiku",
+                            timeout=5,
+                            when=when,
+                        )
+                    self.assertNotEqual(rc2, 0)
+                    self.assertFalse(
+                        self.run_eval.tracked_b0_smoke_path(runs2).exists()
+                    )
+                    self.assertEqual(len(self._smoke_candidate_records(runs2)), 1)
 
 
 if __name__ == "__main__":
