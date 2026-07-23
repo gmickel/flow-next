@@ -1,0 +1,6 @@
+# Raw stream-json / unsanitized traces stay local. Sanitized production-path
+# smokes that are safe to commit live beside this ignore as named files
+# (e.g. b0-production-path-smoke.json) — force-add those explicitly.
+*
+!.gitignore
+!b0-production-path-smoke.json

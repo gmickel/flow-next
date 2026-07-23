@@ -1,0 +1,4 @@
+# Eval run outputs are provenance-stamped artifacts, not source. Keep the dir.
+*
+!.gitkeep
+!.gitignore
