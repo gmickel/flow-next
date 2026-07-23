@@ -1159,8 +1159,22 @@ def production_path_smoke(
         return path
 
     if not shutil.which("claude"):
-        print("SKIP: claude CLI unavailable — cannot run production-path smoke", file=sys.stderr)
-        return 0
+        # Missing CLI is an invalid/non-run outcome — never soft-SKIP as success
+        # (that would let --freeze-b0-smoke falsely succeed without a tracked proof).
+        print(
+            "INVALID RUN: claude CLI unavailable — cannot run production-path smoke",
+            file=sys.stderr,
+        )
+        _persist(
+            {
+                "status": "claude_cli_missing",
+                "reason": "claude CLI not found on PATH",
+                "baseline": "B0",
+                "baseline_commit": BASELINE_COMMIT,
+                "fixture": "synthetic.production-path-smoke",
+            }
+        )
+        return 1
 
     auth = isolation.auth_probe(model=model, timeout=min(60, timeout))
     if auth.get("invalid") or not auth.get("ok"):
