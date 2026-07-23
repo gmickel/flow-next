@@ -279,9 +279,9 @@ longer rather than drop coverage (flow-gap-analyst exp1-vs-exp3).
 ## Promoting a kept mutation to ship
 
 The `opt/*` branch stays experimental. When a mutation is confirmed: apply it to the canonical
-file → `scripts/sync-codex.sh` (agent/skill change mirrors to Codex) → **version bump**
-(`scripts/bump.sh`) → `CHANGELOG.md` + flow-next.dev → tag + release. Only then does it reach users.
-Full step list (incl. the **re-sync local Cursor/Codex installs** step, which editing an agent does
-NOT do automatically) lives in [`agent_docs/releasing.md`](releasing.md) — to *dogfood* an optimized
-agent before release, re-run `./scripts/install-cursor.sh` / `install-codex.sh` (idempotent; snapshots
-the current working tree).
+file → `scripts/sync-codex.sh` (agent/skill change mirrors to Codex) → record it under
+`CHANGELOG.md` **Unreleased** and update flow-next.dev only when behavior or public guidance changes.
+Do not bump manifests or release per mutation; versioning is batched later. The release operator then
+follows [`agent_docs/releasing.md`](releasing.md), including the local Cursor/Codex re-sync step.
+To *dogfood* an optimized agent before release, re-run `./scripts/install-cursor.sh` /
+`install-codex.sh` (idempotent; snapshots the current working tree).

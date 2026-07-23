@@ -55,9 +55,8 @@ Create the shared production-path measurement and autoresearch substrate used by
 - [ ] Focused harness self-tests pass. Eval execution produces no unplanned side effects outside disposable arena/result paths; declared `optimization/**`, `agent_docs/**`, and focused test changes are allowed and reviewed.
 
 ## Done summary
-TBD
-
+Built and hardened the reached-path optimization foundation: deterministic full-file activation accounting, 117 hash-frozen B0 branch manifests, commit-sourced reproducible bootstrap, immutable production proof plus candidate reruns, privacy/isolation/auth controls, and a retained Claude production trace proving the active reference was read while the cold reference remained absent. Backend nonzero exits, missing CLI, auth/leak failures, timeouts, and tool-result failures now fail closed and retain only candidate evidence.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 46e4e3d62d9d6403fd6600f37d64b2e4169e05e9, e4420bb916bec7cba6f13543d859dd4684d42838, e4459d96791a715e192cd0df1f96fb16781535d4, 30cbc59fc51b514d5fd883141d673c7c1d9135d0, b45a3613
+- Tests: python3 -m unittest -q test_reached_path_harness (35 passed), focused fn-130 suite (581 passed), python3 optimization/reached-path/run_eval.py --self-test (passed), python3 optimization/reached-path/run_eval.py --validate-b0 (117 manifests passed), python3 optimization/reached-path/run_eval.py --all --backend claude (candidate PASS: rc=0, active read true, cold read absent), tracked B0 SHA unchanged across candidate run, git diff --check (passed)
 - PRs:

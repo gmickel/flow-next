@@ -27,7 +27,6 @@ Hard-stop when pilot is invoked under the Ralph harness. Emit the parseable term
 ```bash
 if [[ -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   echo "Ralph and pilot are alternative drivers — never nest them" >&2
-  [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale
   echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
   exit 1
 fi
@@ -39,7 +38,6 @@ Refuse a dirty non-`.flow/` tree at tick start. Leave state untouched for diagno
 if git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' >/dev/null; then
   echo "Evidence: dirty non-.flow working tree at tick start"
   git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' || true
-  [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale
   echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="dirty working tree at tick start"'
   exit 0
 fi
@@ -85,7 +83,6 @@ else
       "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) return 0 ;;
       *)
         echo "Evidence: backlog mode attempted a forbidden dispatch ($1)"
-        [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale   # verdict contract: SETUP_STALE before EVERY terminal
         echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — never merges/lands/resolves (R6)"'
         exit 1 ;;
     esac
@@ -98,7 +95,6 @@ else
   assert_spec_write_allowed() {  # $1 = SUBJECT_ID, $2 = SPEC_PATH (empty for tracker-only)
     if [ -z "$2" ] || [ ! -f "$2" ]; then
       echo "Evidence: backlog mode attempted to author a spec for a specless item ($1)"
-      [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale   # verdict contract: SETUP_STALE before EVERY terminal
       echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=ask reason="backlog mode never authors specs — surfaced as needs capture/interview gap (R3/R4)"'
       exit 1
     fi
@@ -150,7 +146,6 @@ Apply the full predicate:
 3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--dry-run`, do not write — report the entry as would-clear in the classification report instead. **EXCEPTION — active `tracker.readyState` projection:** backlog 1a re-projects `ready=true` from the board on **every tick**, so a "ready again" under a configured `tracker.readyState` is MECHANICAL, not a human re-bless. Clearing the strike on it would re-dispatch the same failing spec every tick forever — the strike limit's entire purpose, defeated. So when `tracker.readyState` is set, **do NOT clear a `count >= 2` strike on projection-set ready**; the strikeout stands (skip the candidate as still-struck) until a genuine human signal clears it — the human answering the surfaced failure, or an explicit re-ready made after the failure is understood (not a projection echo). The `BLOCKED spec=… reason="strike 2/2"` terminal already surfaces the failure for that human.
 4. No gh here. PR state belongs exclusively to the all-done classification branch.
 
-The first candidate passing everything becomes `SELECTED_SPEC`. If none pass, echo a compact skip table with counts by reason and stop (emit the stashed setup-mismatch line first if present - `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`):
 
 ```text
 PILOT_VERDICT=NO_WORK spec=- stage=- reason="no ready spec with satisfied deps"
@@ -229,7 +224,6 @@ SELECTED_SUBJECTS="${SUBJECT_ID:-}"
 SELECTED_COUNT="$(printf '%s\n' "$SELECTED_SUBJECTS" | grep -c . )"
 if [ "$SELECTED_COUNT" -gt 1 ]; then
   echo "Evidence: backlog selection yielded $SELECTED_COUNT subjects — single-tick contract violated"
-  [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale   # verdict contract: SETUP_STALE before EVERY terminal
   echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog single-tick — selection must pick exactly one item (R6 invariant #3)"'
   exit 1
 fi
@@ -276,7 +270,6 @@ if [ "${PILOT_DRY_RUN:-0}" = "1" ]; then
   # $TRIAGE_CLASS = the class resolved above (workable | ready-but-thin | needs-spec | dep-unsatisfied | needs-human).
   # Dry-run leaves NO persistent scratch state: remove the root config snapshot (recomputed path).
   rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
-  [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale   # verdict contract: SETUP_STALE before EVERY terminal
   echo "PILOT_VERDICT=TRIAGED spec=$SUBJECT_ID stage=triage reason=\"dry-run: classified $TRIAGE_CLASS, nothing dispatched or parked\""
   exit 0
 fi
@@ -355,7 +348,7 @@ Classification outcomes for the all-done branch (the all-done invariant: an all-
 - CLOSED PR exists and no OPEN PR exists: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
 - MERGED PR exists while the spec is still open: `NEEDS_HUMAN`, because the state is inconsistent and pilot must not create a second PR.
 
-Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so a dry-run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`. Emit the stashed setup-mismatch line first if present, so it sits immediately before this terminal (SKILL.md verdict contract): `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`.
+Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so a dry-run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`.
 
 ```text
 PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification only, nothing dispatched"
@@ -548,7 +541,6 @@ The question is then posted via tracker-sync's transport-blind `question` op (it
 
 Where the question parks (spec-backed `## Open Questions` anchor + mirrored tracker comment, vs tracker-only comment ALONE — never a spec stub), the idempotent anchor-id dedup (R7/R15), and the spec-first floor / no-transport `NEEDS_HUMAN` degradation (R17) are single-sourced in [references/backlog-mode.md](references/backlog-mode.md) Phase 3 — execute them as written there.
 
-The terminal is `ASKED <id> (<n>)` — a **durable park** (the `status=open` anchor makes Phase 1.5d skip it next tick). Count `<n>` = open questions surfaced. Append the `asked` decision-log row (Phase 6), emit the stashed setup-mismatch line first if present (SKILL.md verdict contract - `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`), then emit:
 
 ```text
 PILOT_VERDICT=ASKED spec=<id> stage=ask reason="parked behind <n> open question(s): <one line>"
@@ -558,7 +550,6 @@ PILOT_VERDICT=ASKED spec=<id> stage=ask reason="parked behind <n> open question(
 
 ## Phase 6 — REPORT + strikes ledger
 
-Before printing whichever terminal `PILOT_VERDICT` line below applies, emit the stashed setup-mismatch line if present, so it sits immediately before the verdict (SKILL.md verdict contract): `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`.
 
 On `ADVANCED`, clear the selected spec's ledger entry if present and write the ledger atomically with `jq` plus `mv`:
 
