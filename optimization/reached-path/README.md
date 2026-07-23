@@ -114,7 +114,8 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `run_eval.py` | CLI: self-test / freeze / validate / production-path smoke |
 | `fixtures/b0/` | Sanitized frozen manifests + `INDEX.json` |
 | `fixtures/synthetic/` | Subject skill for the Claude production-path smoke |
-| `runs/b0-production-path-smoke.json` | Sanitized retained Claude proof |
+| `runs/b0-production-path-smoke.json` | Write-once tracked B0 Claude proof (immutable) |
+| `runs/candidates/` | Ignored timestamped candidate smoke evidence (ordinary runs) |
 | `deferrals.md` | Non-target skills + open-spec overlaps |
 
 ## Run
@@ -123,18 +124,25 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 # Offline deterministic proofs (also wired into CI via test_reached_path_harness.py)
 python3 optimization/reached-path/run_eval.py --self-test
 
-# B0 is already frozen under fixtures/b0/. --freeze-b0 is bootstrap-only:
-# it writes only when the output dir is absent/empty AND git HEAD exactly
-# equals BASELINE_COMMIT; prompt sources are read via
-# `git show BASELINE_COMMIT:<path>` (never the live worktree); refuses any
-# nonempty target (even if INDEX.json was deleted).
+# B0 manifests are already frozen under fixtures/b0/. --freeze-b0 is
+# bootstrap-only: writes only when the output dir is absent/empty. Usable from
+# any HEAD — every counted prompt byte is fully materialized via
+# `git show BASELINE_COMMIT:<path>` before any output write (never hashed from
+# the live worktree). Refuses any nonempty target (even if INDEX.json was deleted).
+# Do not check out the pre-harness baseline commit to bootstrap.
 # python3 optimization/reached-path/run_eval.py --freeze-b0
 python3 optimization/reached-path/run_eval.py --validate-b0
 
-# Authenticated Claude production-path smoke (active read + cold non-read)
-python3 optimization/reached-path/run_eval.py --production-path-smoke --backend claude
+# Ordinary authenticated Claude production-path smoke → ignored candidate under
+# runs/candidates/<UTC µs>-production-path-smoke-<status>.json (never touches
+# the tracked B0 proof, including on auth/leak/backend failure).
+python3 optimization/reached-path/run_eval.py --production-path-smoke
 
-# Validate all B0 + smoke when Claude available
+# One-time initial tracked proof (exclusive create; refuse if already present).
+# Pass → runs/b0-production-path-smoke.json; failure → candidate only.
+# python3 optimization/reached-path/run_eval.py --freeze-b0-smoke
+
+# Validate all B0 + ordinary candidate smoke when Claude available
 python3 optimization/reached-path/run_eval.py --all --backend claude
 ```
 
