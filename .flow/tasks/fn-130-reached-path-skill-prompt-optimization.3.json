@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-23T15:15:48.975043Z",
+  "depends_on": [
+    "fn-130-reached-path-skill-prompt-optimization.2"
+  ],
+  "id": "fn-130-reached-path-skill-prompt-optimization.3",
+  "priority": null,
+  "spec": "fn-130-reached-path-skill-prompt-optimization",
+  "spec_path": ".flow/tasks/fn-130-reached-path-skill-prompt-optimization.3.md",
+  "status": "todo",
+  "title": "Route Setup host and optional branches on demand",
+  "updated_at": "2026-07-23T15:24:20.898753Z"
+}

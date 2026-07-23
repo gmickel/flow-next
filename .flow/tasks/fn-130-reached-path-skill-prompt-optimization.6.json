@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-23T15:16:37.870626Z",
+  "depends_on": [
+    "fn-130-reached-path-skill-prompt-optimization.2"
+  ],
+  "id": "fn-130-reached-path-skill-prompt-optimization.6",
+  "priority": null,
+  "spec": "fn-130-reached-path-skill-prompt-optimization",
+  "spec_path": ".flow/tasks/fn-130-reached-path-skill-prompt-optimization.6.md",
+  "status": "todo",
+  "title": "Split Plan Review by selected backend",
+  "updated_at": "2026-07-23T15:23:33.254218Z"
+}

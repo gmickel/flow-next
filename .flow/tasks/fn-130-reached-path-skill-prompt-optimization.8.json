@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-23T15:17:09.068597Z",
+  "depends_on": [
+    "fn-130-reached-path-skill-prompt-optimization.2"
+  ],
+  "id": "fn-130-reached-path-skill-prompt-optimization.8",
+  "priority": null,
+  "spec": "fn-130-reached-path-skill-prompt-optimization",
+  "spec_path": ".flow/tasks/fn-130-reached-path-skill-prompt-optimization.8.md",
+  "status": "todo",
+  "title": "Gate Work delegation-only machinery",
+  "updated_at": "2026-07-23T15:24:21.622858Z"
+}
