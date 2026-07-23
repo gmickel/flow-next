@@ -42,7 +42,7 @@ Accepts:
 - No arguments (scans current repo)
 - `--report-only` or `report only` (skip remediation, just show report)
 - `--fix-all` or `fix all` (apply all agent readiness fixes without asking)
-- `--classify-only` or `classify only` (print the Phase 0.5 classification block and EXIT - the cheap portfolio-triage sweep over many repos; see Phase 0.5 in workflow.md)
+- `--classify-only` or `classify only` (print the Phase 0.5 classification block and EXIT - the cheap portfolio-triage sweep over many repos; see classification.md)
 - A path to a different repo root (first non-flag argument)
 
 Examples:
@@ -59,9 +59,21 @@ every scout dispatch prompt in Phase 1 starts "Assess the repo at `ROOT`" (scout
 - without this they'd scan the wrong repo and the report would be confidently wrong end-to-end). If
 threading `ROOT` isn't feasible, error rather than silently scan cwd.
 
-`--classify-only` is the fast path: it runs Phase 0.5 (emitter + the skill's judgment layer), prints
-the classification block, and exits - it NEVER asks (Phase 0.6 is skipped), NEVER dispatches scouts,
-and NEVER remediates. It must stay cheap (<~10s even on a multi-M-LOC repo).
+## Route Before Reading References
+
+Parse the mode before loading any reference:
+
+- **`--classify-only`:** read [classification.md](classification.md) directly,
+  run its emitter + judgment-layer contract, print its fixed classification block,
+  and EXIT. Do **not** read `workflow.md`, `pillars.md`, `playbooks.md`, or
+  `remediation.md`; never ask, dispatch scouts, verify, report, or remediate.
+- **All other modes:** read [workflow.md](workflow.md) and execute it. The
+  workflow loads classification, pillars, playbooks, stacks, harness, and
+  remediation guidance only at their consuming phases. `--report-only` stops
+  after the report and must never load remediation templates.
+
+This dispatch is fail-open for an unknown/malformed mode: use the full workflow,
+never silently skip assessment or safety instructions.
 
 ## The Eight Pillars
 
@@ -85,19 +97,8 @@ and NEVER remediates. It must stay cheap (<~10s even on a multi-M-LOC repo).
 
 ## Workflow
 
-Read [workflow.md](workflow.md) and execute each phase in order.
-
-**Key phases:**
-0.5. **Classify** - host-inline five-axis classification (lifecycle / topology / size / stack / shape) via the `flowctl prime classify` emitter + the skill's judgment layer, per [classification.md](classification.md). Parameterizes everything downstream (scout dispatch, N/A denominators, report shape, playbook selection). `--classify-only` prints this block and exits.
-0.6. **Targeted clarification** - the bounded R15 ask protocol: at most one question call for low-confidence or uninferable facts that change a playbook or verdict; confirmed answers offered for durable recording in the agent file. Suppressed under `--classify-only` / `--report-only` / autonomous.
-1. **Parallel Assessment** - 9 scouts run in parallel (7 haiku fast scanners; claude-md-scout + docs-gap-scout on sonnet for judgment), each consuming the Phase 0.5 classification (~15-20 seconds)
-2. **Verification** — Verify test commands actually work
-3. **Score, Synthesize & Assemble the Verdict** - Calculate pillar scores + maturity level (includes the deterministic DC8 glossary signal - `flowctl glossary list --json`, gated on `total_terms == 0`, never file presence); evaluate the host-inline AO/DR/TO/HP groups as level-excluded pass-count lines; derive the DR-core QA-readiness line + feedback-latency + gh-CLI host lines; assemble the verdict headline inputs
-4. **Present Report** — Full report with all 8 pillars
-5. **Interactive Remediation** — `AskUserQuestion` for agent readiness fixes only
-5.5. **Glossary Bootstrap** — when the glossary has zero terms (absent or husk), propose evidence-backed terms from the repo and seed `GLOSSARY.md` via `flowctl glossary add` after read-back approval; a populated glossary gets a coverage line, never a rewrite
-6. **Apply Fixes** — Create/modify files based on selections
-7. **Summary** — Show what was changed
+The mode router above selects the entry reference. Do not pre-read references
+for branches that will not execute.
 
 ## Maturity Levels (Agent Readiness)
 

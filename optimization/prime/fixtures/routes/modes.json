@@ -1,0 +1,102 @@
+{
+  "lineage": {
+    "baseline": "B1",
+    "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "input_check": "python3 optimization/reached-path/run_eval.py --check-b1-input prime",
+    "input_check_result": "OK: prime inputs match B1 (8 files)",
+    "candidate_prompt_hashes": {
+      "plugins/flow-next/skills/flow-next-prime/SKILL.md": "4ac7d9af49e812e3166bf7f05a470b232ae49d03871f2a1bfe19e760e1f8abd4",
+      "plugins/flow-next/skills/flow-next-prime/workflow.md": "d3a8552e810b37374dbef9370475468af6aabb52232d3ab7f4cbdfe3dd96b70d"
+    }
+  },
+  "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+  "routes": {
+    "classify-only": {
+      "args": ["--classify-only"],
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+        "plugins/flow-next/skills/flow-next-prime/classification.md"
+      ],
+      "forbidden_reads": [
+        "plugins/flow-next/skills/flow-next-prime/workflow.md",
+        "plugins/flow-next/skills/flow-next-prime/pillars.md",
+        "plugins/flow-next/skills/flow-next-prime/playbooks.md",
+        "plugins/flow-next/skills/flow-next-prime/remediation.md"
+      ],
+      "b1_reached_path_chars": 96190,
+      "candidate_reached_path_chars": 32759,
+      "reduction_chars": 63431,
+      "reduction_percent": 65.94,
+      "writes": false,
+      "asks": false
+    },
+    "report-only": {
+      "args": ["--report-only"],
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+        "plugins/flow-next/skills/flow-next-prime/workflow.md",
+        "plugins/flow-next/skills/flow-next-prime/classification.md",
+        "plugins/flow-next/skills/flow-next-prime/playbooks.md"
+      ],
+      "forbidden_reads": [
+        "plugins/flow-next/skills/flow-next-prime/remediation.md"
+      ],
+      "b1_reached_path_chars": 116992,
+      "candidate_reached_path_chars": 115715,
+      "reduction_chars": 1277,
+      "reduction_percent": 1.09,
+      "writes": false,
+      "asks": false
+    },
+    "full-no-fixes": {
+      "args": [],
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+        "plugins/flow-next/skills/flow-next-prime/workflow.md",
+        "plugins/flow-next/skills/flow-next-prime/classification.md",
+        "plugins/flow-next/skills/flow-next-prime/pillars.md",
+        "plugins/flow-next/skills/flow-next-prime/playbooks.md",
+        "plugins/flow-next/skills/flow-next-prime/stacks.md"
+      ],
+      "forbidden_reads": [
+        "plugins/flow-next/skills/flow-next-prime/remediation.md"
+      ],
+      "b1_reached_path_chars": 165779,
+      "candidate_reached_path_chars": 164502,
+      "reduction_chars": 1277,
+      "reduction_percent": 0.77,
+      "writes": false,
+      "asks": true
+    },
+    "full-fixes": {
+      "args": ["--fix-all"],
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+        "plugins/flow-next/skills/flow-next-prime/workflow.md",
+        "plugins/flow-next/skills/flow-next-prime/classification.md",
+        "plugins/flow-next/skills/flow-next-prime/pillars.md",
+        "plugins/flow-next/skills/flow-next-prime/playbooks.md",
+        "plugins/flow-next/skills/flow-next-prime/stacks.md",
+        "plugins/flow-next/skills/flow-next-prime/remediation.md"
+      ],
+      "forbidden_reads": [],
+      "b1_reached_path_chars": 187883,
+      "candidate_reached_path_chars": 186606,
+      "reduction_chars": 1277,
+      "reduction_percent": 0.68,
+      "writes": true,
+      "asks": false
+    }
+  },
+  "accuracy_oracles": [
+    "classification axes and confidence unchanged",
+    "would-ask and playbook selection unchanged",
+    "report shape unchanged",
+    "fix consent and write boundaries unchanged",
+    "classify-only and report-only remain no-write"
+  ],
+  "ratchet": {
+    "verdict": "keep",
+    "reason": "all seven authenticated judgment fixtures pass; negative control passes; every measured route is smaller than B1"
+  }
+}

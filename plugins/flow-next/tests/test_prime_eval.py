@@ -2953,6 +2953,103 @@ class PrimeProseContractTestCase(unittest.TestCase):
         self._assert_build_rc_captured_before_tail(PRIME_MIRROR_DIR)
 
 
+class PrimeReachedPathRoutingTestCase(unittest.TestCase):
+    """fn-130.5: mode routing is explicit, B1-linked, and mechanically sized."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.skill = (PRIME_SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        cls.workflow = (PRIME_SKILL_DIR / "workflow.md").read_text(encoding="utf-8")
+        route_path = (
+            REPO_ROOT
+            / "optimization"
+            / "prime"
+            / "fixtures"
+            / "routes"
+            / "modes.json"
+        )
+        cls.routes = json.loads(route_path.read_text(encoding="utf-8"))
+        character_py = REPO_ROOT / "optimization" / "reached-path" / "character.py"
+        spec = importlib.util.spec_from_file_location(
+            "prime_route_character_under_test", character_py
+        )
+        cls.character = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = cls.character
+        spec.loader.exec_module(cls.character)
+
+    def test_root_dispatches_classify_before_workflow(self) -> None:
+        route = self.skill.index("## Route Before Reading References")
+        classify = self.skill.index("**`--classify-only`:**", route)
+        workflow = self.skill.index("**All other modes:**", classify)
+        self.assertLess(route, classify)
+        self.assertLess(classify, workflow)
+        classify_block = self.skill[classify:workflow]
+        self.assertIn("read [classification.md](classification.md) directly", classify_block)
+        self.assertIn("Do **not** read `workflow.md`", classify_block)
+        self.assertIn("and EXIT", classify_block)
+
+    def test_unknown_mode_fails_open_to_full_workflow(self) -> None:
+        self.assertIn(
+            "unknown/malformed mode: use the full workflow",
+            self.skill,
+        )
+
+    def test_report_only_stops_before_remediation_template_read(self) -> None:
+        report_stop = self.workflow.index("**If `--report-only`**: Stop here")
+        remediation_read = self.workflow.index(
+            "Read [remediation.md](remediation.md)",
+        )
+        self.assertLess(report_stop, remediation_read)
+
+    def test_route_fixture_preserves_side_effect_contracts(self) -> None:
+        routes = self.routes["routes"]
+        self.assertFalse(routes["classify-only"]["writes"])
+        self.assertFalse(routes["classify-only"]["asks"])
+        self.assertFalse(routes["report-only"]["writes"])
+        self.assertFalse(routes["report-only"]["asks"])
+        self.assertFalse(routes["full-no-fixes"]["writes"])
+        self.assertTrue(routes["full-no-fixes"]["asks"])
+        self.assertTrue(routes["full-fixes"]["writes"])
+        self.assertFalse(routes["full-fixes"]["asks"])
+
+    def test_measured_routes_match_live_candidate_and_improve_on_b1(self) -> None:
+        root_skill = PRIME_SKILL_DIR / "SKILL.md"
+        routes = self.routes["routes"]
+        for name, row in routes.items():
+            activated = [
+                REPO_ROOT / rel
+                for rel in row["required_reads"]
+                if not rel.endswith("/SKILL.md")
+            ]
+            metrics = self.character.compute_reached_path_from_paths(
+                REPO_ROOT,
+                root_skill,
+                activated,
+            )
+            self.assertEqual(
+                metrics["reached_path_chars"],
+                row["candidate_reached_path_chars"],
+                name,
+            )
+            self.assertLess(
+                row["candidate_reached_path_chars"],
+                row["b1_reached_path_chars"],
+                name,
+            )
+        self.assertGreaterEqual(
+            routes["classify-only"]["reduction_percent"],
+            60,
+        )
+
+    def test_classify_forbids_all_cold_references(self) -> None:
+        forbidden = set(self.routes["routes"]["classify-only"]["forbidden_reads"])
+        for name in ("workflow.md", "pillars.md", "playbooks.md", "remediation.md"):
+            self.assertIn(
+                f"plugins/flow-next/skills/flow-next-prime/{name}",
+                forbidden,
+            )
+
+
 class AgenticEvalIsolationTestCase(unittest.TestCase):
     """Regression (PR #207): tampering with projection.json - the ONLY arena
     file - leaves the created-files diff empty, so the harness must catch it
@@ -2989,6 +3086,45 @@ class AgenticEvalIsolationTestCase(unittest.TestCase):
         iso = self._report()
         self.assertFalse(iso["projection_tampered"])
         self.assertFalse(self.harness._isolation_breached(iso))
+
+    def test_claude_backend_preserves_oauth_isolation_flags(self) -> None:
+        cmd = self.harness._backend_cmd("claude", "sonnet", self.tmp / "schema.json")
+        self.assertIn("--setting-sources", cmd)
+        self.assertIn("project,local", cmd)
+        self.assertIn("--no-session-persistence", cmd)
+        self.assertNotIn("--bare", cmd)
+
+    def test_claude_auth_error_envelope_is_never_a_judgment(self) -> None:
+        transport = json.dumps(
+            {
+                "is_error": True,
+                "result": (
+                    "Failed to authenticate: OAuth session expired "
+                    "and could not be refreshed"
+                ),
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+            }
+        )
+        self.assertIsNone(self.harness._extract_json(transport))
+
+    def test_failed_auth_preflight_is_invalid_not_scored(self) -> None:
+        auth = {
+            "ok": False,
+            "invalid": True,
+            "reason": "zero_token_auth_failure",
+        }
+        with mock.patch.object(
+            self.harness.reached_path_isolation,
+            "auth_probe",
+            return_value=auth,
+        ), mock.patch.object(
+            self.harness.reached_path_isolation,
+            "instruction_leak_probe",
+        ) as leak:
+            verdict = self.harness._claude_preflight("sonnet", 10)
+        self.assertEqual(verdict["status"], "invalid_auth")
+        self.assertFalse(verdict["valid"])
+        leak.assert_not_called()
 
     def test_stderr_token_leak_is_a_breach(self) -> None:
         # Regression (PR #207): stderr is captured and persisted in
