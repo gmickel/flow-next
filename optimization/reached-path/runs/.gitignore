@@ -7,3 +7,4 @@
 *
 !.gitignore
 !b0-production-path-smoke.json
+!plan-review-candidate.json

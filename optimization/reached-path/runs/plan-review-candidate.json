@@ -1,0 +1,194 @@
+{
+  "task": "fn-130-reached-path-skill-prompt-optimization.6",
+  "lineage": "B0 -> V1/B1 -> candidate",
+  "b1_input_validation": {
+    "status": "pass",
+    "command": "python3 optimization/reached-path/run_eval.py --check-b1-input plan-review",
+    "detail": "OK: plan-review inputs match B1 (4 files); run before mutation"
+  },
+  "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+  "baseline_b1_chars": 48486,
+  "routes": [
+    {
+      "route": "none",
+      "selected_backend": null,
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow.md"
+      ],
+      "forbidden_backend_reads": [
+        "workflow-codex.md",
+        "workflow-copilot.md",
+        "workflow-cursor.md",
+        "workflow-host.md",
+        "workflow-rp.md"
+      ],
+      "candidate_chars": 10080,
+      "reduction_chars": 38406,
+      "reduction_percent": 79.21
+    },
+    {
+      "route": "export",
+      "selected_backend": null,
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow.md"
+      ],
+      "forbidden_backend_reads": [
+        "workflow-codex.md",
+        "workflow-copilot.md",
+        "workflow-cursor.md",
+        "workflow-host.md",
+        "workflow-rp.md"
+      ],
+      "candidate_chars": 10080,
+      "reduction_chars": 38406,
+      "reduction_percent": 79.21
+    },
+    {
+      "route": "host",
+      "selected_backend": "host",
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow-host.md"
+      ],
+      "forbidden_backend_reads": [
+        "workflow-codex.md",
+        "workflow-copilot.md",
+        "workflow-cursor.md",
+        "workflow-rp.md"
+      ],
+      "candidate_chars": 12986,
+      "reduction_chars": 35500,
+      "reduction_percent": 73.22
+    },
+    {
+      "route": "codex",
+      "selected_backend": "codex",
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow-codex.md"
+      ],
+      "forbidden_backend_reads": [
+        "workflow-copilot.md",
+        "workflow-cursor.md",
+        "workflow-host.md",
+        "workflow-rp.md"
+      ],
+      "candidate_chars": 11893,
+      "reduction_chars": 36593,
+      "reduction_percent": 75.47
+    },
+    {
+      "route": "copilot",
+      "selected_backend": "copilot",
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow-copilot.md"
+      ],
+      "forbidden_backend_reads": [
+        "workflow-codex.md",
+        "workflow-cursor.md",
+        "workflow-host.md",
+        "workflow-rp.md"
+      ],
+      "candidate_chars": 11873,
+      "reduction_chars": 36613,
+      "reduction_percent": 75.51
+    },
+    {
+      "route": "cursor",
+      "selected_backend": "cursor",
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow-cursor.md"
+      ],
+      "forbidden_backend_reads": [
+        "workflow-codex.md",
+        "workflow-copilot.md",
+        "workflow-host.md",
+        "workflow-rp.md"
+      ],
+      "candidate_chars": 11915,
+      "reduction_chars": 36571,
+      "reduction_percent": 75.43
+    },
+    {
+      "route": "rp",
+      "selected_backend": "rp",
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow-rp.md"
+      ],
+      "forbidden_backend_reads": [
+        "workflow-codex.md",
+        "workflow-copilot.md",
+        "workflow-cursor.md",
+        "workflow-host.md"
+      ],
+      "candidate_chars": 17550,
+      "reduction_chars": 30936,
+      "reduction_percent": 63.8
+    },
+    {
+      "route": "configured-but-unavailable",
+      "selected_backend": "codex",
+      "required_reads": [
+        "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+        "plugins/flow-next/skills/flow-next-plan-review/workflow-codex.md"
+      ],
+      "forbidden_backend_reads": [
+        "workflow-copilot.md",
+        "workflow-cursor.md",
+        "workflow-host.md",
+        "workflow-rp.md"
+      ],
+      "candidate_chars": 11893,
+      "reduction_chars": 36593,
+      "reduction_percent": 75.47,
+      "terminal": "<promise>RETRY</promise>; no backend fallback"
+    }
+  ],
+  "production_path_corpora": {
+    "builder": "flowctl.build_review_prompt(plan)",
+    "risky": {
+      "prompt_sha256": "0f07f3967d6cf3ea4d60bdd13e41bdc727191ea7cd27b53137dce4ef884b0193",
+      "spec_grounded_verbatim": true,
+      "task_specs_grounded_verbatim": true,
+      "verdict_grammar_present": true
+    },
+    "clean": {
+      "prompt_sha256": "93772f17a31305a15150c6d4a1ff010579ba5fc800491f608355533cdcff1a61",
+      "spec_grounded_verbatim": true,
+      "task_specs_grounded_verbatim": true,
+      "verdict_grammar_present": true
+    },
+    "user-edited-spec": {
+      "prompt_sha256": "ba514fae460ade281207bb257713886ef693a572456a17849fb395a71a314b08",
+      "spec_grounded_verbatim": true,
+      "task_specs_grounded_verbatim": true,
+      "verdict_grammar_present": true
+    },
+    "reviewer_prompt": {
+      "path": "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md",
+      "b1_sha256": "9c64c2962b1a38c82f8f26d5d756be215d4a1816ae60f2a5c1955e94c71a5315",
+      "candidate_sha256": "9c64c2962b1a38c82f8f26d5d756be215d4a1816ae60f2a5c1955e94c71a5315",
+      "byte_identical_to_b1": true,
+      "quality_basis": "The prior real-engine risky/clean B1 cells remain the comparison oracle because the production reviewer prompt is byte-identical; fn-130.6 changes coordinator loading only."
+    }
+  },
+  "ratchet": {
+    "verdict": "keep",
+    "reason": "zero_loss_and_predeclared_improvement",
+    "all_routes_reduced": true,
+    "none_export_backend_cold": true,
+    "exactly_one_selected_backend": true,
+    "discarded_backend_splits": []
+  }
+}

@@ -13,10 +13,10 @@ Pins the round-trip diet so future edits cannot silently regress it:
     (and references/qa-stage.md) carry ZERO flowctl config calls (R5).
   * make-pr workflow Phase 0: exactly THREE bash fences (R6).
   * impl-review SKILL.md: exactly ONE `for arg in $ARGUMENTS` fence (R6).
-  * plan-review: per-backend execution blocks single-sourced in workflow.md
-    (SKILL.md has zero backend plan-review invocations); the Foreground rule
-    and the fn-90 deterministic-cap sentence are byte-exact; no agent-side
-    iteration counting is (re)introduced (R6).
+  * plan-review: common orchestration + exactly one selected backend workflow;
+    none/export stay backend-cold; the Foreground rule and the fn-90
+    deterministic-cap sentence are byte-exact; no agent-side iteration
+    counting is (re)introduced (R6).
 
 All assertions run against the canonical files AND (where the invariant is
 count-shaped and survives the sync rewrite) the codex mirror copies.
@@ -247,17 +247,44 @@ class ImplReviewArgFenceTestCase(unittest.TestCase):
 
 class PlanReviewSingleSourceTestCase(unittest.TestCase):
     INVOKE = re.compile(r"^\$FLOWCTL (codex|copilot|cursor) plan-review", re.M)
+    BACKENDS = ("codex", "copilot", "cursor", "host", "rp")
 
-    def test_backend_blocks_live_only_in_workflow_md(self):
-        for skill_md in both_copies("flow-next-plan-review/SKILL.md"):
+    def test_backend_blocks_live_only_in_selected_workflows(self):
+        skill_dir = SKILLS / "flow-next-plan-review"
+        self.assertEqual(self.INVOKE.findall(read(skill_dir / "SKILL.md")), [])
+        self.assertEqual(self.INVOKE.findall(read(skill_dir / "workflow.md")), [])
+        for backend in ("codex", "copilot", "cursor"):
+            path = skill_dir / f"workflow-{backend}.md"
             self.assertEqual(
-                len(self.INVOKE.findall(read(skill_md))), 0,
-                f"{skill_md}: backend execution blocks must be single-sourced in workflow.md",
+                self.INVOKE.findall(read(path)),
+                [backend],
+                f"{path}: must contain exactly its selected backend dispatch",
             )
-        for workflow_md in both_copies("flow-next-plan-review/workflow.md"):
-            backends = set(self.INVOKE.findall(read(workflow_md)))
-            self.assertEqual(backends, {"codex", "copilot", "cursor"},
-                             f"{workflow_md}: canonical backend blocks incomplete")
+
+    def test_router_lists_every_backend_once_and_keeps_none_export_cold(self):
+        skill = read(SKILLS / "flow-next-plan-review/SKILL.md")
+        for backend in self.BACKENDS:
+            link = f"[workflow-{backend}.md](workflow-{backend}.md)"
+            self.assertEqual(skill.count(link), 1, f"router drift for {backend}")
+        self.assertIn("`BACKEND=none` and explicit\n`--review=export`", skill)
+        common = read(SKILLS / "flow-next-plan-review/workflow.md")
+        self.assertIn("Load no backend file", common)
+        self.assertIn("Do not resolve or load any configured\nbackend", common)
+
+    def test_codex_mirror_is_b1_or_regenerated_split(self):
+        """Parallel workers defer mirror regen; integrated tree must be split."""
+        mirror = MIRROR_SKILLS / "flow-next-plan-review"
+        if (mirror / "workflow-codex.md").exists():
+            for backend in self.BACKENDS:
+                self.assertTrue((mirror / f"workflow-{backend}.md").is_file())
+            self.assertEqual(self.INVOKE.findall(read(mirror / "workflow.md")), [])
+        else:
+            # The conductor owns the combined sync. Before that sync, the
+            # isolated worker must leave the known B1 monolith untouched.
+            self.assertEqual(
+                set(self.INVOKE.findall(read(mirror / "workflow.md"))),
+                {"codex", "copilot", "cursor"},
+            )
 
     def test_protected_prose_byte_exact(self):
         text = read(SKILLS / "flow-next-plan-review/SKILL.md")
@@ -266,25 +293,17 @@ class PlanReviewSingleSourceTestCase(unittest.TestCase):
         self.assertIn(CAP_SENTENCE, text,
                       "fn-90 deterministic-cap sentence drifted (must stay byte-exact)")
 
-    def test_status_fences_redeclare_spec_id(self):
-        # Vars die across tool calls: every set-plan-review-status fence must
-        # re-declare SPEC_ID or the mutation targets an empty id.
-        for path in both_copies("flow-next-plan-review/workflow.md"):
+    def test_subprocess_fences_redeclare_spec_id(self):
+        for backend in ("codex", "copilot", "cursor"):
+            path = SKILLS / "flow-next-plan-review" / f"workflow-{backend}.md"
             text = read(path)
-            status_calls = text.count('set-plan-review-status "$SPEC_ID" --status ship')
-            self.assertEqual(status_calls, 3, f"{path}: expected one status fence per backend")
-            # Substring tolerant of the sync rewrite (spacing + "tool calls" →
-            # "prompt turns" in the codex mirror).
-            redeclares = len(re.findall(
-                r'SPEC_ID="\$\{1:-\}"\s+# re-declare in THIS fence too', text))
-            self.assertEqual(redeclares, 3,
-                             f"{path}: every status fence must re-declare SPEC_ID")
+            self.assertIn('SPEC_ID="${1:-}"', text)
+            self.assertIn(f"$FLOWCTL {backend} plan-review", text)
 
     def test_no_agent_side_iteration_counting(self):
-        for rel in ("flow-next-plan-review/SKILL.md", "flow-next-plan-review/workflow.md"):
-            for path in both_copies(rel):
-                self.assertNotIn("iteration counter in agent context", read(path),
-                                 f"{path}: agent-side review counting reintroduced (fn-90)")
+        for path in (SKILLS / "flow-next-plan-review").glob("*.md"):
+            self.assertNotIn("iteration counter in agent context", read(path),
+                             f"{path}: agent-side review counting reintroduced (fn-90)")
 
 
 if __name__ == "__main__":

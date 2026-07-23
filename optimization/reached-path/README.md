@@ -112,10 +112,12 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `trace.py` | Parse stream-json Read activations |
 | `inventory.py` | Declarative B0 fixture inventory + frozen B1 source commit |
 | `run_eval.py` | CLI: self-test / B0+B1 freeze/validate/input checks / production-path smoke |
+| `plan_review_candidate.py` | fn-130.6 selected-backend route traces + production plan-prompt corpus checks |
 | `fixtures/b0/` | Sanitized frozen manifests + `INDEX.json` |
 | `fixtures/b1/` | Post-version V1/B1 manifests + structural input hashes |
 | `fixtures/synthetic/` | Subject skill for the Claude production-path smoke |
 | `runs/b0-production-path-smoke.json` | Write-once tracked B0 Claude proof (immutable) |
+| `runs/plan-review-candidate.json` | fn-130.6 B1→candidate route/corpus ratchet evidence |
 | `runs/candidates/` | Ignored timestamped candidate smoke evidence (ordinary runs) |
 | `deferrals.md` | Non-target skills + open-spec overlaps |
 

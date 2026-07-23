@@ -2080,3 +2080,105 @@ class TestReviewJsonBlockHardening(unittest.TestCase):
         self.assertEqual(
             self.flowctl.extract_review_json_block(extracted), {"unaddressed": ["R7"]}
         )
+
+
+class TestPlanReviewSelectedBackendRouting(unittest.TestCase):
+    """fn-130.6: production Plan Review route + corpus evidence."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repo = Path(__file__).resolve().parents[3]
+        harness_dir = cls.repo / "optimization" / "reached-path"
+        sys.path.insert(0, str(harness_dir))
+        try:
+            import plan_review_candidate  # type: ignore
+
+            cls.candidate = plan_review_candidate
+        finally:
+            sys.path.remove(str(harness_dir))
+
+    def test_all_routes_load_common_plus_at_most_one_backend(self) -> None:
+        evidence = self.candidate.route_evidence(self.repo)
+        self.assertEqual(
+            [row["route"] for row in evidence["routes"]],
+            list(self.candidate.ROUTES),
+        )
+        self.assertTrue(all(evidence["accuracy"].values()))
+        self.assertEqual(evidence["ratchet"]["verdict"], "keep")
+        for row in evidence["routes"]:
+            selected_reads = [
+                path
+                for path in row["required_reads"]
+                if "/workflow-" in path
+            ]
+            if row["route"] in ("none", "export"):
+                self.assertEqual(selected_reads, [])
+            else:
+                self.assertEqual(len(selected_reads), 1)
+            self.assertGreater(row["reduction_chars"], 0)
+
+    def test_configured_but_unavailable_keeps_selected_backend(self) -> None:
+        row = self.candidate.route_trace(self.repo, "unavailable")
+        self.assertEqual(row["selected_backend"], "codex")
+        self.assertIn(
+            "plugins/flow-next/skills/flow-next-plan-review/workflow-codex.md",
+            row["required_reads"],
+        )
+        common = (
+            self.repo
+            / "plugins/flow-next/skills/flow-next-plan-review/workflow.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Backend unavailable/transport/no verdict", common)
+        self.assertIn("Never mix or fall back", common)
+
+    def test_export_is_distinct_backend_cold_terminal(self) -> None:
+        row = self.candidate.route_trace(self.repo, "export")
+        self.assertIsNone(row["selected_backend"])
+        common = (
+            self.repo
+            / "plugins/flow-next/skills/flow-next-plan-review/workflow.md"
+        ).read_text(encoding="utf-8")
+        for contract in (
+            "review-export-<timestamp>.md",
+            "Exported review",
+            "write review receipt/status",
+            "enter the review fix loop",
+        ):
+            self.assertIn(contract, common)
+
+    def test_real_production_prompt_path_preserves_corpus_and_rubric(self) -> None:
+        evidence = self.candidate.corpus_evidence(
+            self.repo, flowctl.build_review_prompt
+        )
+        for corpus in ("risky", "clean", "user-edited-spec"):
+            row = evidence[corpus]
+            self.assertEqual(
+                row["production_builder"], "flowctl.build_review_prompt(plan)"
+            )
+            self.assertTrue(row["spec_grounded_verbatim"])
+            self.assertTrue(row["task_specs_grounded_verbatim"])
+            self.assertTrue(row["verdict_grammar_present"])
+        self.assertTrue(evidence["prompt_template"]["byte_identical_to_b1"])
+
+    def test_tracked_candidate_evidence_matches_live_routes(self) -> None:
+        tracked = json.loads(
+            (
+                self.repo
+                / "optimization/reached-path/runs/plan-review-candidate.json"
+            ).read_text(encoding="utf-8")
+        )
+        live = {
+            row["route"]: row
+            for row in self.candidate.route_evidence(self.repo)["routes"]
+        }
+        for row in tracked["routes"]:
+            route = (
+                "unavailable"
+                if row["route"] == "configured-but-unavailable"
+                else row["route"]
+            )
+            self.assertEqual(
+                row["candidate_chars"],
+                live[route]["metrics"]["reached_path_chars"],
+            )
+            self.assertEqual(row["reduction_chars"], live[route]["reduction_chars"])

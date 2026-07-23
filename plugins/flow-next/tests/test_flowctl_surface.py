@@ -466,13 +466,12 @@ class ActiveReferenceContractTest(unittest.TestCase):
 class RepoPromptCapabilityProbeTest(unittest.TestCase):
     PROBE_PATHS = (
         "skills/flow-next-plan/SKILL.md",
-        "skills/flow-next-plan-review/SKILL.md",
+        "skills/flow-next-plan-review/workflow.md",
         "skills/flow-next-impl-review/workflow-common.md",
         "skills/flow-next-spec-completion-review/workflow-common.md",
         "skills/flow-next-setup/workflow.md",
         "skills/flow-next-ralph-init/SKILL.md",
         "codex/skills/flow-next-plan/SKILL.md",
-        "codex/skills/flow-next-plan-review/SKILL.md",
         "codex/skills/flow-next-impl-review/workflow-common.md",
         "codex/skills/flow-next-spec-completion-review/workflow-common.md",
         "codex/skills/flow-next-setup/workflow.md",
@@ -490,7 +489,18 @@ class RepoPromptCapabilityProbeTest(unittest.TestCase):
             "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli",
             "rp-cli",
         )
-        for relative in self.PROBE_PATHS:
+        paths = list(self.PROBE_PATHS)
+        mirror_plan_review = PLUGIN / "codex/skills/flow-next-plan-review"
+        # Parallel workers defer the combined mirror regeneration. Before
+        # sync, the B1 mirror keeps the probe in SKILL.md; after sync, the
+        # split mirror keeps it in workflow.md.
+        mirror_probe = (
+            "codex/skills/flow-next-plan-review/workflow.md"
+            if (mirror_plan_review / "workflow-codex.md").exists()
+            else "codex/skills/flow-next-plan-review/SKILL.md"
+        )
+        paths.append(mirror_probe)
+        for relative in paths:
             text = (PLUGIN / relative).read_text(encoding="utf-8")
             probe_start = text.index("command -v rpce-cli")
             probe = text[probe_start : probe_start + 600]
