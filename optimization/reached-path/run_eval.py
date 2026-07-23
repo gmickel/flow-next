@@ -29,6 +29,7 @@ is write-once via --freeze-b0-smoke; ordinary smoke always writes candidates.
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as _dt
 import hashlib
 import json
@@ -43,6 +44,7 @@ from typing import Any, Callable, Mapping, Optional
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 FIXTURES_B0 = HERE / "fixtures" / "b0"
+FIXTURES_B1 = HERE / "fixtures" / "b1"
 SYNTHETIC = HERE / "fixtures" / "synthetic"
 RUNS = HERE / "runs"
 RESULTS = HERE / "results"
@@ -57,6 +59,7 @@ import ratchet as ratchet  # noqa: E402
 import trace as trace  # noqa: E402
 
 BASELINE_COMMIT = inventory.BASELINE_COMMIT
+B1_COMMIT = inventory.B1_COMMIT
 
 
 # ── freeze / validate ─────────────────────────────────────────────────────────
@@ -375,14 +378,138 @@ def freeze_b0(output_dir: Optional[Path] = None) -> int:
     return 0
 
 
-def _load_all_manifests() -> list[dict[str, Any]]:
+def _b1_inventory() -> list[dict[str, Any]]:
+    """Post-version structural baseline with task-130.2 behavior as truth."""
+    items = copy.deepcopy(inventory.inventory())
+    version_oracles = {
+        "version.copy-match": "versions equal → silent continue",
+        "version.interactive-mismatch-refresh": (
+            "Ask exact refresh question with Refresh now (Recommended) / "
+            "Continue this run; refresh stops and directs /flow-next:setup then rerun Plan"
+        ),
+        "version.interactive-mismatch-continue": (
+            "Ask exact refresh question; Continue this run warns once and proceeds"
+        ),
+        "version.interactive-mismatch-remind": (
+            "legacy remind branch removed; no acknowledgement write"
+        ),
+        "version.autonomous-mismatch": (
+            "autonomous/Ralph/receipt path warns once and proceeds without asking"
+        ),
+        "version.missing-setup-metadata": "missing setup metadata → silent continue",
+        "version.missing-plugin-version": "missing plugin version → silent continue",
+        "version.plugin-mode": "plugin mode → silent continue; Setup owns snippet integrity",
+        "version.unavailable-jq": (
+            "comparison evidence unavailable → silent continue"
+        ),
+        "version.prior-acknowledgement-fields": (
+            "legacy acknowledgement fields ignored; no acknowledgement read/write"
+        ),
+    }
+    for fx in items:
+        fx["baseline"] = "B1"
+        fx["baseline_commit"] = B1_COMMIT
+        fx["lineage"] = {
+            "B0": BASELINE_COMMIT,
+            "V1_B1": B1_COMMIT,
+            "candidate": None,
+            "rule": "structural candidates compare to hash-verified B1 only",
+        }
+        fx["ratchet"] = dict(fx.get("ratchet") or {}, verdict="baseline")
+        fx["prompt_hashes"] = {}
+        fx["fixture_hash"] = None
+        if fx["cluster"] == "version":
+            fx["oracles"] = {
+                "output": [
+                    {
+                        "kind": "behavior_note",
+                        "detail": version_oracles[fx["fixture_id"]],
+                    }
+                ],
+                "tools": [],
+                "writes": [{"kind": "no_acknowledgement_write"}],
+                "receipts": [],
+            }
+    return items
+
+
+def freeze_b1(output_dir: Optional[Path] = None) -> int:
+    """Write-once V1/B1 manifests from the committed post-version prompt tree."""
+    out = Path(output_dir) if output_dir is not None else FIXTURES_B1
+    if _output_dir_nonempty(out):
+        print(
+            f"FAIL: B1 output {out} is nonempty — V1/B1 is write-once; "
+            "validate with --validate-b1",
+            file=sys.stderr,
+        )
+        return 1
+    items = _b1_inventory()
+    paths = inventory_prompt_paths(items)
+    try:
+        sources = materialize_baseline_sources(paths, commit=B1_COMMIT)
+    except RuntimeError as exc:
+        print(f"FAIL: B1 source preflight: {exc}", file=sys.stderr)
+        return 1
+    index = {
+        "baseline": "B1",
+        "baseline_commit": B1_COMMIT,
+        "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+        "frozen_at_utc": _dt.datetime.now(_dt.timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        ),
+        "fixture_count": len(items),
+        "clusters": {},
+        "subjective_policy": ratchet.subjective_policy(),
+        "privacy": {
+            "scrubbed": True,
+            "no_live_tracker": True,
+            "answer_key_separated": True,
+        },
+        "lineage": {
+            "B0": BASELINE_COMMIT,
+            "V1_B1": B1_COMMIT,
+            "rule": "later structural tasks compare only to hash-verified B1",
+        },
+        "fixtures": [],
+    }
+    out.mkdir(parents=True, exist_ok=True)
+    for fx in items:
+        filled = _fill_hashes(fx, sources=sources)
+        cluster_dir = out / filled["cluster"]
+        cluster_dir.mkdir(parents=True, exist_ok=True)
+        path = cluster_dir / (filled["fixture_id"].split(".", 1)[-1] + ".json")
+        path.write_text(_stable_json(filled), encoding="utf-8")
+        rel = str(path.relative_to(HERE)).replace("\\", "/")
+        index["fixtures"].append(
+            {
+                "fixture_id": filled["fixture_id"],
+                "cluster": filled["cluster"],
+                "path": rel,
+                "fixture_hash": filled["fixture_hash"],
+                "reached_path_chars": filled["metrics"]["reached_path_chars"],
+            }
+        )
+        index["clusters"][filled["cluster"]] = (
+            index["clusters"].get(filled["cluster"], 0) + 1
+        )
+    (out / "INDEX.json").write_text(_stable_json(index), encoding="utf-8")
+    print(f"froze {len(items)} V1/B1 fixtures → {out.relative_to(REPO_ROOT)}")
+    return 0
+
+
+def _load_all_manifests(root: Path = FIXTURES_B0) -> list[dict[str, Any]]:
     out = []
-    for p in sorted(FIXTURES_B0.glob("*/*.json")):
+    for p in sorted(root.glob("*/*.json")):
         out.append(json.loads(p.read_text(encoding="utf-8")))
     return out
 
 
-def validate_manifest(fx: dict[str, Any]) -> list[str]:
+def validate_manifest(
+    fx: dict[str, Any],
+    *,
+    expected_baseline: str = "B0",
+    expected_commit: str = BASELINE_COMMIT,
+) -> list[str]:
     errs: list[str] = []
     for key in (
         "fixture_id",
@@ -403,10 +530,10 @@ def validate_manifest(fx: dict[str, Any]) -> list[str]:
     ):
         if key not in fx:
             errs.append(f"missing field {key}")
-    if fx.get("baseline_commit") != BASELINE_COMMIT:
+    if fx.get("baseline_commit") != expected_commit:
         errs.append(f"baseline_commit mismatch: {fx.get('baseline_commit')}")
-    if fx.get("baseline") != "B0":
-        errs.append("baseline must be B0 for this freeze")
+    if fx.get("baseline") != expected_baseline:
+        errs.append(f"baseline must be {expected_baseline} for this freeze")
     # Required/forbidden disjoint.
     overlap = set(fx.get("required_reads") or []) & set(fx.get("forbidden_reads") or [])
     if overlap:
@@ -418,7 +545,7 @@ def validate_manifest(fx: dict[str, Any]) -> list[str]:
         if str(h).startswith("MISSING:"):
             continue
         try:
-            source = git_show_text(BASELINE_COMMIT, path)
+            source = git_show_text(expected_commit, path)
         except RuntimeError as exc:
             errs.append(f"frozen source unavailable: {path}: {exc}")
             continue
@@ -480,7 +607,7 @@ def validate_manifest(fx: dict[str, Any]) -> list[str]:
     if r.get("flat_or_noisy") != "discard":
         errs.append("ratchet.flat_or_noisy must be discard")
     # Version B0 answer keys must freeze current-main behavior, not 130.2 Plan-only.
-    if fx.get("cluster") == "version":
+    if expected_baseline == "B0" and fx.get("cluster") == "version":
         future_as_baseline = {
             "no runtime snippet/version ceremony in Plan",
             "warn once; continue planning; no acknowledgement write",
@@ -500,6 +627,8 @@ def validate_index(
     index: dict[str, Any],
     manifests: list[dict[str, Any]],
     root: Path,
+    *,
+    baseline: str = "B0",
 ) -> list[str]:
     """Pure INDEX ↔ manifest cross-check (no I/O beyond ``root`` path probes).
 
@@ -562,7 +691,10 @@ def validate_index(
             errs.append(f"{fid}: INDEX fixture_hash != manifest")
         if row.get("cluster") != m.get("cluster"):
             errs.append(f"{fid}: INDEX cluster != manifest")
-        expected_path = f"fixtures/b0/{m['cluster']}/{fid.split('.', 1)[-1]}.json"
+        expected_path = (
+            f"fixtures/{baseline.lower()}/{m['cluster']}/"
+            f"{fid.split('.', 1)[-1]}.json"
+        )
         row_path = row.get("path") or ""
         if row_path != expected_path:
             disk = root / row_path
@@ -608,6 +740,96 @@ def validate_b0() -> int:
         return 1
     have = {m["cluster"] for m in manifests}
     print(f"OK: {len(manifests)} B0 manifests valid across {sorted(have)}")
+    return 0
+
+
+def validate_b1() -> int:
+    index_path = FIXTURES_B1 / "INDEX.json"
+    if not index_path.is_file():
+        print("FAIL: B1 INDEX.json missing — run --freeze-b1", file=sys.stderr)
+        return 1
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    manifests = _load_all_manifests(FIXTURES_B1)
+    index_errs = validate_index(index, manifests, HERE, baseline="B1")
+    if index.get("baseline") != "B1":
+        index_errs.append("B1 INDEX baseline mismatch")
+    if index.get("baseline_commit") != B1_COMMIT:
+        index_errs.append("B1 INDEX commit mismatch")
+    if index_errs:
+        for error in index_errs:
+            print(f"FAIL: {error}", file=sys.stderr)
+        return 1
+    bad = 0
+    for manifest in manifests:
+        errors = validate_manifest(
+            manifest, expected_baseline="B1", expected_commit=B1_COMMIT
+        )
+        if errors:
+            bad += 1
+            print(
+                f"FAIL {manifest.get('fixture_id')}: {errors}", file=sys.stderr
+            )
+    if bad:
+        print(
+            f"FAIL: {bad}/{len(manifests)} B1 manifests invalid",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"OK: {len(manifests)} V1/B1 manifests valid")
+    return 0
+
+
+def expected_b1_hashes(cluster: str) -> dict[str, str]:
+    """Return the internally consistent B1 input hash set for one cluster."""
+    expected: dict[str, str] = {}
+    manifests = [
+        manifest
+        for manifest in _load_all_manifests(FIXTURES_B1)
+        if manifest.get("cluster") == cluster
+    ]
+    if not manifests:
+        raise ValueError(f"unknown B1 cluster: {cluster}")
+    for manifest in manifests:
+        for path, digest in (manifest.get("prompt_hashes") or {}).items():
+            previous = expected.get(path)
+            if previous is not None and previous != digest:
+                raise ValueError(
+                    f"inconsistent B1 hash for {path}: {previous} != {digest}"
+                )
+            expected[path] = digest
+    return expected
+
+
+def check_b1_input(
+    cluster: str,
+    *,
+    source_reader: Optional[Callable[[str], Optional[str]]] = None,
+) -> int:
+    """Fail closed unless the current cluster inputs match frozen B1 exactly."""
+    try:
+        expected = expected_b1_hashes(cluster)
+    except ValueError as exc:
+        print(f"FAIL: {exc}", file=sys.stderr)
+        return 1
+    reader = source_reader or _read_live_repo_text
+    observed: dict[str, str] = {}
+    for path in expected:
+        text = reader(path)
+        observed[path] = (
+            character.content_hash(text) if text is not None else f"MISSING:{path}"
+        )
+    result = ratchet.validate_lineage(
+        stage="B1",
+        expected_input_hashes=expected,
+        observed_input_hashes=observed,
+    )
+    if not result["ok"]:
+        print(
+            f"FAIL: B1 input mismatch for {cluster}: {result['mismatches']}",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"OK: {cluster} inputs match B1 ({len(expected)} files)")
     return 0
 
 
@@ -1386,6 +1608,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--freeze-b0", action="store_true")
     ap.add_argument("--validate-b0", action="store_true")
+    ap.add_argument("--freeze-b1", action="store_true")
+    ap.add_argument("--validate-b1", action="store_true")
+    ap.add_argument("--check-b1-input", metavar="CLUSTER")
     ap.add_argument("--production-path-smoke", action="store_true")
     ap.add_argument(
         "--freeze-b0-smoke",
@@ -1412,6 +1637,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         return freeze_b0()
     if args.validate_b0:
         return validate_b0()
+    if args.freeze_b1:
+        return freeze_b1()
+    if args.validate_b1:
+        return validate_b1()
+    if args.check_b1_input:
+        return check_b1_input(args.check_b1_input)
     if args.freeze_b0_smoke:
         return production_path_smoke(
             model=args.model, timeout=args.timeout, freeze_b0=True
@@ -1447,7 +1678,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     ap.error(
-        "choose --self-test, --freeze-b0, --validate-b0, --production-path-smoke, "
+        "choose --self-test, --freeze-b0, --validate-b0, --freeze-b1, "
+        "--validate-b1, --check-b1-input CLUSTER, --production-path-smoke, "
         "--freeze-b0-smoke, --fixture, or --all"
     )
     return 2

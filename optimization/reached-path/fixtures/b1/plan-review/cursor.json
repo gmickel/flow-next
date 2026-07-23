@@ -1,0 +1,99 @@
+{
+  "activation": {
+    "args": [
+      "--review=cursor"
+    ],
+    "form": "slash",
+    "skill": "flow-next-plan-review"
+  },
+  "baseline": "B1",
+  "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+  "branch_inputs": {
+    "backend": "cursor"
+  },
+  "cluster": "plan-review",
+  "fixture_hash": "d0c912f0838806986013d1badd03a1d097e010286276c7eea2b01245db086dfa",
+  "fixture_id": "plan-review.cursor",
+  "forbidden_reads": [],
+  "host": "claude",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "candidate": null,
+    "rule": "structural candidates compare to hash-verified B1 only"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "reached_path_chars": 48486,
+    "reached_path_chars_div_4": 12121.5,
+    "reached_path_files": [
+      {
+        "chars_lf": 19193,
+        "content_hash": "a2fff07faa91d4667e83c62581a71f1b0e807938eefdce71a7aa247b44d2ef47",
+        "path": "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 29293,
+        "content_hash": "641f02629a7fec5fe30fad077620544d84b63eedff25fb84ed1e5dd28fe7ec46",
+        "path": "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "mirror_skill": null,
+  "mutation_targets": {},
+  "notes": "B0 packs all backends into workflow.md; 130.6 splits selected backend into a single reference.",
+  "oracles": {
+    "output": [],
+    "receipts": [],
+    "tools": [],
+    "writes": []
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "prompt_files": [
+    "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+    "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+    "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md",
+    "plugins/flow-next/skills/flow-next-plan-review/flowctl-reference.md"
+  ],
+  "prompt_hashes": {
+    "plugins/flow-next/skills/flow-next-plan-review/SKILL.md": "a2fff07faa91d4667e83c62581a71f1b0e807938eefdce71a7aa247b44d2ef47",
+    "plugins/flow-next/skills/flow-next-plan-review/flowctl-reference.md": "1feac5c53876dfffb253cc6fc95761573463de078c32fd5dbbae649a188b74f4",
+    "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md": "9c64c2962b1a38c82f8f26d5d756be215d4a1816ae60f2a5c1955e94c71a5315",
+    "plugins/flow-next/skills/flow-next-plan-review/workflow.md": "641f02629a7fec5fe30fad077620544d84b63eedff25fb84ed1e5dd28fe7ec46"
+  },
+  "provenance": {
+    "capture_kind": "deterministic_freeze",
+    "capture_reason": "route_manifest_inventory_hash_only; not a backend execution (model/cli_version intentionally null)",
+    "cli_version": null,
+    "date_utc": "2026-07-23",
+    "fixture_hash": "d0c912f0838806986013d1badd03a1d097e010286276c7eea2b01245db086dfa",
+    "host": "claude",
+    "model": null
+  },
+  "ratchet": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "subjective_majority_n": [
+      3,
+      5
+    ],
+    "verdict": "baseline"
+  },
+  "required_reads": [
+    "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+    "plugins/flow-next/skills/flow-next-plan-review/workflow.md"
+  ],
+  "resume": {
+    "borderline": false,
+    "parent": null,
+    "sealed_holdout": false,
+    "subjective": false
+  }
+}

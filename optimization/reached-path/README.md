@@ -110,9 +110,10 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `privacy.py` | Scrubs + answer-key separation helper |
 | `isolation.py` | Arena, sentinel, auth/leak probes, Claude flags |
 | `trace.py` | Parse stream-json Read activations |
-| `inventory.py` | Declarative B0 fixture inventory |
-| `run_eval.py` | CLI: self-test / freeze / validate / production-path smoke |
+| `inventory.py` | Declarative B0 fixture inventory + frozen B1 source commit |
+| `run_eval.py` | CLI: self-test / B0+B1 freeze/validate/input checks / production-path smoke |
 | `fixtures/b0/` | Sanitized frozen manifests + `INDEX.json` |
+| `fixtures/b1/` | Post-version V1/B1 manifests + structural input hashes |
 | `fixtures/synthetic/` | Subject skill for the Claude production-path smoke |
 | `runs/b0-production-path-smoke.json` | Write-once tracked B0 Claude proof (immutable) |
 | `runs/candidates/` | Ignored timestamped candidate smoke evidence (ordinary runs) |
@@ -133,6 +134,10 @@ python3 optimization/reached-path/run_eval.py --self-test
 # python3 optimization/reached-path/run_eval.py --freeze-b0
 python3 optimization/reached-path/run_eval.py --validate-b0
 
+# V1/B1 is already frozen from the committed fleet-version mutation.
+python3 optimization/reached-path/run_eval.py --validate-b1
+python3 optimization/reached-path/run_eval.py --check-b1-input plan
+
 # Ordinary authenticated Claude production-path smoke → ignored candidate under
 # runs/candidates/<UTC µs>-production-path-smoke-<status>.json (never touches
 # the tracked B0 proof, including on auth/leak/backend failure).
@@ -149,8 +154,9 @@ python3 optimization/reached-path/run_eval.py --all --backend claude
 ## Resume procedure
 
 1. Read this README + `deferrals.md` + `fixtures/b0/INDEX.json`.
-2. Confirm `HEAD` prompt hashes still match B0 (or, after 130.2, B1) via
-   `--validate-b0` / lineage checks — fail closed on drift.
+2. Validate immutable evidence with `--validate-b0` and `--validate-b1`, then
+   confirm the target cluster's live inputs with `--check-b1-input <cluster>`.
+   The last command fails closed on drift before a structural mutation starts.
 3. Mutate **one** cluster router/reference set.
 4. Re-run the cluster's fixtures (paired N≥2 on borderline; majority N=3–5 on
    subjective). Keep only on ratchet pass; log keep **and** discard.

@@ -1,0 +1,101 @@
+{
+  "activation": {
+    "args": [],
+    "form": "slash",
+    "skill": "flow-next-setup"
+  },
+  "baseline": "B1",
+  "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+  "branch_inputs": {
+    "target_host": "codex"
+  },
+  "cluster": "setup",
+  "fixture_hash": "544e2c74fa4cfd730c8735c0dfd84b213159d1729e2428aeda584fe90233df31",
+  "fixture_id": "setup.host-codex",
+  "forbidden_reads": [],
+  "host": "codex",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "candidate": null,
+    "rule": "structural candidates compare to hash-verified B1 only"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "reached_path_chars": 103688,
+    "reached_path_chars_div_4": 25922.0,
+    "reached_path_files": [
+      {
+        "chars_lf": 917,
+        "content_hash": "082fc3ebd8774237e9e60e496e42cf72581e34e02dfc18c3ed177e3f51a05a2c",
+        "path": "plugins/flow-next/skills/flow-next-setup/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 102771,
+        "content_hash": "3e75bcf2b30d82d2e6716786020bcc1c9b3c960220d8b3fb444a61319473f360",
+        "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "mirror_skill": null,
+  "mutation_targets": {},
+  "notes": "B0: all host branches live inside workflow.md; later routing loads only selected host.",
+  "oracles": {
+    "output": [],
+    "receipts": [],
+    "tools": [],
+    "writes": []
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "prompt_files": [
+    "plugins/flow-next/skills/flow-next-setup/SKILL.md",
+    "plugins/flow-next/skills/flow-next-setup/workflow.md",
+    "plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet.md",
+    "plugins/flow-next/skills/flow-next-setup/templates/agents-md-snippet.md",
+    "plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet-plugin.md",
+    "plugins/flow-next/skills/flow-next-setup/templates/model-routing-snippet.md"
+  ],
+  "prompt_hashes": {
+    "plugins/flow-next/skills/flow-next-setup/SKILL.md": "082fc3ebd8774237e9e60e496e42cf72581e34e02dfc18c3ed177e3f51a05a2c",
+    "plugins/flow-next/skills/flow-next-setup/templates/agents-md-snippet.md": "86f9f627cd0cbb93580195d333498b2abf3724112a709665fac3f5630e7e2db6",
+    "plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet-plugin.md": "bc8d0aea98275e6fb94d177475956cc8084954513b84c0f271c3be1a80181543",
+    "plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet.md": "de6b082414e956b3b8e2c02b2f7823bcabc1b18b96f56b3095191265d4e06d07",
+    "plugins/flow-next/skills/flow-next-setup/templates/model-routing-snippet.md": "1811b989ee226d1b53c6f6bb1d776a7aefdc773ab112f472f780ac4b067d62d7",
+    "plugins/flow-next/skills/flow-next-setup/workflow.md": "3e75bcf2b30d82d2e6716786020bcc1c9b3c960220d8b3fb444a61319473f360"
+  },
+  "provenance": {
+    "capture_kind": "deterministic_freeze",
+    "capture_reason": "route_manifest_inventory_hash_only; not a backend execution (model/cli_version intentionally null)",
+    "cli_version": null,
+    "date_utc": "2026-07-23",
+    "fixture_hash": "544e2c74fa4cfd730c8735c0dfd84b213159d1729e2428aeda584fe90233df31",
+    "host": "codex",
+    "model": null
+  },
+  "ratchet": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "subjective_majority_n": [
+      3,
+      5
+    ],
+    "verdict": "baseline"
+  },
+  "required_reads": [
+    "plugins/flow-next/skills/flow-next-setup/SKILL.md",
+    "plugins/flow-next/skills/flow-next-setup/workflow.md"
+  ],
+  "resume": {
+    "borderline": false,
+    "parent": null,
+    "sealed_holdout": false,
+    "subjective": false
+  }
+}

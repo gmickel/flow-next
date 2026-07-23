@@ -599,6 +599,42 @@ class TestReachedPathHarness(unittest.TestCase):
             )
         )
 
+    def test_b1_manifests_frozen_and_valid(self) -> None:
+        self.assertTrue((HARNESS / "fixtures" / "b1" / "INDEX.json").is_file())
+        self.assertEqual(self.run_eval.validate_b1(), 0)
+        version = {
+            item["fixture_id"]: item
+            for item in self.run_eval._load_all_manifests(
+                HARNESS / "fixtures" / "b1"
+            )
+            if item["cluster"] == "version"
+        }
+        refresh = version["version.interactive-mismatch-refresh"]
+        detail = refresh["oracles"]["output"][0]["detail"]
+        self.assertIn("Refresh now (Recommended)", detail)
+        self.assertIn("Continue this run", detail)
+        self.assertNotIn("Remind me next version", detail)
+        self.assertEqual(refresh["lineage"]["V1_B1"], self.inventory.B1_COMMIT)
+
+    def test_b1_input_check_fails_closed_on_drift(self) -> None:
+        expected = self.run_eval.expected_b1_hashes("plan")
+        self.assertTrue(expected)
+        self.assertEqual(self.run_eval.check_b1_input("plan"), 0)
+        changed_path = next(iter(expected))
+
+        def changed_reader(path: str) -> str | None:
+            text = self.run_eval._read_live_repo_text(path)
+            if path == changed_path and text is not None:
+                return text + "\nmutation\n"
+            return text
+
+        self.assertEqual(
+            self.run_eval.check_b1_input(
+                "plan", source_reader=changed_reader
+            ),
+            1,
+        )
+
     def test_auth_envelope_positive_and_zero_token(self) -> None:
         """Deterministic JSON-envelope auth contract — no live model."""
         positive = {

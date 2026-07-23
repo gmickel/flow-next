@@ -1,0 +1,862 @@
+{
+  "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+  "baseline": "B1",
+  "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+  "clusters": {
+    "cross-host": 7,
+    "make-pr": 7,
+    "pilot": 8,
+    "plan": 11,
+    "plan-review": 11,
+    "prime": 13,
+    "setup": 16,
+    "strategy": 5,
+    "tracker": 15,
+    "version": 10,
+    "work": 14
+  },
+  "fixture_count": 117,
+  "fixtures": [
+    {
+      "cluster": "version",
+      "fixture_hash": "fdb3fb120daea4a3f56167a1b02fa03c86b4f4576e6cfa6e5f933c612f8d31e2",
+      "fixture_id": "version.copy-match",
+      "path": "fixtures/b1/version/copy-match.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "version",
+      "fixture_hash": "74161583db8581cfa977fe21baa2afa0cd8bdcc9eef75e0abfa36fde5180f967",
+      "fixture_id": "version.interactive-mismatch-refresh",
+      "path": "fixtures/b1/version/interactive-mismatch-refresh.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "version",
+      "fixture_hash": "dd5a807bffc0a4b054cc27b7e26c0441a0d02c7c330817d6317aa19416ad401f",
+      "fixture_id": "version.interactive-mismatch-continue",
+      "path": "fixtures/b1/version/interactive-mismatch-continue.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "version",
+      "fixture_hash": "9778ed092435b005a9783f2fed42d76ab13053995192bba266d09994eb296f2f",
+      "fixture_id": "version.interactive-mismatch-remind",
+      "path": "fixtures/b1/version/interactive-mismatch-remind.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "version",
+      "fixture_hash": "f59f5e14e411a609a59028969bf59e6aba25a7adae95fe896e0ac50a80d8f120",
+      "fixture_id": "version.autonomous-mismatch",
+      "path": "fixtures/b1/version/autonomous-mismatch.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "version",
+      "fixture_hash": "0b12d83986846f1c518558cc93c81ddd73879997f97598187b9b2c53ef534243",
+      "fixture_id": "version.missing-setup-metadata",
+      "path": "fixtures/b1/version/missing-setup-metadata.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "version",
+      "fixture_hash": "e6f14e1f06d5b2e348fa29b49bfcffcdde4d94bf08a676639c1c5baefebb9278",
+      "fixture_id": "version.missing-plugin-version",
+      "path": "fixtures/b1/version/missing-plugin-version.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "version",
+      "fixture_hash": "b5df2984bb2f9bed626801f5aa966c99e075b336902b5251e8961ce3e3ecdbfd",
+      "fixture_id": "version.plugin-mode",
+      "path": "fixtures/b1/version/plugin-mode.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "version",
+      "fixture_hash": "c7afd80b701fd987edb5f60202f66914e372f9841133edf32613ebcc53fb0276",
+      "fixture_id": "version.unavailable-jq",
+      "path": "fixtures/b1/version/unavailable-jq.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "version",
+      "fixture_hash": "2128b361570e16c90d37e4a4dba38bb3beffec81b5d9eb2078857469edc29b0e",
+      "fixture_id": "version.prior-acknowledgement-fields",
+      "path": "fixtures/b1/version/prior-acknowledgement-fields.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "4ebc1298429ef88885027de0fb344528f3f60bd7cc689c1601b04d0a1e61db04",
+      "fixture_id": "setup.copy-first-install",
+      "path": "fixtures/b1/setup/copy-first-install.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "a41a303ab72532f7f67613923618b3b1301133e810e52d36c60563157cfd4e0a",
+      "fixture_id": "setup.copy-refresh",
+      "path": "fixtures/b1/setup/copy-refresh.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "7a03e6d5eb6c492be3ad384dd80d9c3cab6678542a0cfc2893898769e0049a32",
+      "fixture_id": "setup.plugin-mode",
+      "path": "fixtures/b1/setup/plugin-mode.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "ddc0e5ed75d2a12e063de3b5a9fd7e87f8113ccc532291cd4ac49a8f70dfd74d",
+      "fixture_id": "setup.autonomous",
+      "path": "fixtures/b1/setup/autonomous.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "a8fc3337fa56bb8e0afbf09d7676f976faedf67ec2713d3d29219f1c9ab383f4",
+      "fixture_id": "setup.customized-snippet-keep",
+      "path": "fixtures/b1/setup/customized-snippet-keep.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "52ac8de9047a729ef86697eb8a8c505ce9447ebcb921930f902e77d26681a04c",
+      "fixture_id": "setup.customized-snippet-overwrite",
+      "path": "fixtures/b1/setup/customized-snippet-overwrite.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "3445ea3036a6adb38f84514e78a9b35172eeef2be4eaff1193805fc527acfd54",
+      "fixture_id": "setup.malformed-metadata",
+      "path": "fixtures/b1/setup/malformed-metadata.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "6145be4b4dd0efb3a0f0c21e2eff30375f95956803e316e7fac44f563a9aabcc",
+      "fixture_id": "setup.host-claude",
+      "path": "fixtures/b1/setup/host-claude.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "544e2c74fa4cfd730c8735c0dfd84b213159d1729e2428aeda584fe90233df31",
+      "fixture_id": "setup.host-codex",
+      "path": "fixtures/b1/setup/host-codex.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "6fcfd01c78914e2dff5799d0e2bb9db7eeed7cc5d5601ba426ea844c40cd44c8",
+      "fixture_id": "setup.host-droid",
+      "path": "fixtures/b1/setup/host-droid.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "bcd2b41096aae388af51f21d87ca7c41e64763eff4588f600935a341ffe3f27c",
+      "fixture_id": "setup.host-cursor",
+      "path": "fixtures/b1/setup/host-cursor.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "f97b6259e6f9b9001150996815c4c80ad27cb7bfd312b3e37f97787dc62ab20e",
+      "fixture_id": "setup.host-grok",
+      "path": "fixtures/b1/setup/host-grok.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "241f07924547c550bb85e5e86c31ddddf3a91f369531671e7f41265a721c626d",
+      "fixture_id": "setup.model-routing-accepted",
+      "path": "fixtures/b1/setup/model-routing-accepted.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "2cb2b5212dbf78475a6bdc7f61cc54962b021197a813bdf2e31ff631d1fe7577",
+      "fixture_id": "setup.model-routing-skipped",
+      "path": "fixtures/b1/setup/model-routing-skipped.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "4884e5a3ad95a1f4442cd0f295f6826eb7b6b8b865d54ebf73ea4b60e7d76404",
+      "fixture_id": "setup.ralph-available",
+      "path": "fixtures/b1/setup/ralph-available.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "setup",
+      "fixture_hash": "e07db516ed0e15cd3f3ee6dcc90f49191f0f02b0b3dc1bd42f362e0c4199a7eb",
+      "fixture_id": "setup.ralph-unsupported",
+      "path": "fixtures/b1/setup/ralph-unsupported.json",
+      "reached_path_chars": 103688
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "12c713f97f75c1afa94654e715714a055bc69045b31243d3c07847f1ac3997ee",
+      "fixture_id": "tracker.inactive",
+      "path": "fixtures/b1/tracker/inactive.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "1f2f0ed07156a029292a75d2d52fcc13e4e5e2832f520c223bbecace9f27e6e5",
+      "fixture_id": "tracker.linear-mcp",
+      "path": "fixtures/b1/tracker/linear-mcp.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "32eee54d55633a588fc490b49ca832daf92b4de29a6ca4b1ea372dff2b0c7377",
+      "fixture_id": "tracker.linear-graphql",
+      "path": "fixtures/b1/tracker/linear-graphql.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "28d323e0a4d307830bd5b6d7491bbe0442abc6c5ff23429984300814b9c6b731",
+      "fixture_id": "tracker.github",
+      "path": "fixtures/b1/tracker/github.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "88b216e4e8a1e68f9bdf99a0b34643bfe17b9c8f952deb511fbf7df00858041c",
+      "fixture_id": "tracker.gitlab",
+      "path": "fixtures/b1/tracker/gitlab.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "a72048307bb86592b6ac368e994f8a0009f9a9081a2b0a85feabe90822b48b5c",
+      "fixture_id": "tracker.jira",
+      "path": "fixtures/b1/tracker/jira.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "c60c4a380ccb77d73334f3414b7a50698045a6343b319b79690e6fab1b3cca30",
+      "fixture_id": "tracker.op-push",
+      "path": "fixtures/b1/tracker/op-push.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "188b32f310165d62aa252ca18233153007ca988765d93379ce00597f6eaab893",
+      "fixture_id": "tracker.op-pull",
+      "path": "fixtures/b1/tracker/op-pull.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "1da8e1e08648bbf335e809f08a821999c0e2df649ddf09ab85ebbbef8dc271bb",
+      "fixture_id": "tracker.op-reconcile",
+      "path": "fixtures/b1/tracker/op-reconcile.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "1125de8d7d1d68d08735903a824ed0c597cbeed12fdeeb787d60459b7d7d248c",
+      "fixture_id": "tracker.op-create-if-unlinked",
+      "path": "fixtures/b1/tracker/op-create-if-unlinked.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "a3c0b60a3993d6fe384deebd5767d80e109250f0b7ef3f050d3ef21a08784aca",
+      "fixture_id": "tracker.conflict-body",
+      "path": "fixtures/b1/tracker/conflict-body.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "378ee7370c4b4b7bb1a9a83f3fd7bb3f76cfa27a21d8661e7dc185198b8d2c5c",
+      "fixture_id": "tracker.conflict-status",
+      "path": "fixtures/b1/tracker/conflict-status.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "22606283754a3a66a335f986f4583eb82b7496ab32e2778f2a4ee0d6bfbafeb7",
+      "fixture_id": "tracker.conflict-comments",
+      "path": "fixtures/b1/tracker/conflict-comments.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "a98f1b4067acba45dd13212838ada92c1768132604bd21f05cbd63ca590f129b",
+      "fixture_id": "tracker.conflict-dependency",
+      "path": "fixtures/b1/tracker/conflict-dependency.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "tracker",
+      "fixture_hash": "f5570eff6b58346d0db5471c0209df790bce5406cedbb553f672a4879ff84e50",
+      "fixture_id": "tracker.malformed-config",
+      "path": "fixtures/b1/tracker/malformed-config.json",
+      "reached_path_chars": 452552
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "36930026a984970a15764f65c434313418161efb9155513e9ba358e6572e2b88",
+      "fixture_id": "prime.classify-only",
+      "path": "fixtures/b1/prime/classify-only.json",
+      "reached_path_chars": 96190
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "8adcffb8e9ffc7b4f0b060b30c20af2b2fbcd5151c6f20ddd963ad97abeeeabc",
+      "fixture_id": "prime.report-only",
+      "path": "fixtures/b1/prime/report-only.json",
+      "reached_path_chars": 116992
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "217c4d4fdf82c753634e77ec94c3b04a32a8331fc8d0a8ba0746db0f6f4b3ee6",
+      "fixture_id": "prime.full-no-fixes",
+      "path": "fixtures/b1/prime/full-no-fixes.json",
+      "reached_path_chars": 165779
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "76eedbf720fd9bdb6e3217847ba9a33dfacc59e5620a92c2bad6ae46c44d6102",
+      "fixture_id": "prime.full-fixes",
+      "path": "fixtures/b1/prime/full-fixes.json",
+      "reached_path_chars": 187883
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "4dcc27ade1ebca02af6746c9117ac9c351795d5a8b15345ff9798dfdff23988d",
+      "fixture_id": "prime.unknown-classification",
+      "path": "fixtures/b1/prime/unknown-classification.json",
+      "reached_path_chars": 96190
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "f4b19e46cd597086c65ef79afc1f61581adc06acd6abe158ea23dc5756b37fd0",
+      "fixture_id": "prime.auth-unavailable",
+      "path": "fixtures/b1/prime/auth-unavailable.json",
+      "reached_path_chars": 74955
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "4ed29b011b7789d6d31d6425611a31bed4758694be53d96199e07ac055ff68e9",
+      "fixture_id": "prime.topology-greenfield",
+      "path": "fixtures/b1/prime/topology-greenfield.json",
+      "reached_path_chars": 96190
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "3929a7a50feba6822610f834578abd598ddd786a4a9515283b6438909cb79624",
+      "fixture_id": "prime.topology-greenfield-x-constellation",
+      "path": "fixtures/b1/prime/topology-greenfield-x-constellation.json",
+      "reached_path_chars": 96190
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "f47b54e429cb6a191cfe60fe075de0056a1e79a0aa1ce2676c75bb8edfc2f398",
+      "fixture_id": "prime.topology-tier-a-siblings",
+      "path": "fixtures/b1/prime/topology-tier-a-siblings.json",
+      "reached_path_chars": 96190
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "e3e7c898fd39bf3158172fa1c10a151c92c43aee0d9a0fcff52f2a3381dcb034",
+      "fixture_id": "prime.topology-tier-b-home-base",
+      "path": "fixtures/b1/prime/topology-tier-b-home-base.json",
+      "reached_path_chars": 96190
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "9db0b0dc63a3419832c3b79e74096f02141c21e8e05a19c70676b2c5e06f5cf4",
+      "fixture_id": "prime.topology-workspace-parent",
+      "path": "fixtures/b1/prime/topology-workspace-parent.json",
+      "reached_path_chars": 96190
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "6b4384cbad1c05daa64d9d6dc60c8caabc88896c8684970306e746f26c5f166a",
+      "fixture_id": "prime.topology-worktree-sibling",
+      "path": "fixtures/b1/prime/topology-worktree-sibling.json",
+      "reached_path_chars": 96190
+    },
+    {
+      "cluster": "prime",
+      "fixture_hash": "a5fa8fa01fad57540e9fc2c29516e21a8bce997acaedf7f7333f5ee435e8782d",
+      "fixture_id": "prime.topology-real-repo-flow-next",
+      "path": "fixtures/b1/prime/topology-real-repo-flow-next.json",
+      "reached_path_chars": 96190
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "92b6ab2f4faea787fa2520b92063ca2d8d3a8eb2cf5cd3dd798a0c0812868d2a",
+      "fixture_id": "plan-review.none",
+      "path": "fixtures/b1/plan-review/none.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "9b413b0270a86b8f4c6e4b2317d45cb78860453ddb76137df42dcde967267d95",
+      "fixture_id": "plan-review.export",
+      "path": "fixtures/b1/plan-review/export.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "fc3e74d6661b48216e112d61ed8c7a594be8953d1774958ab210b4fab17662b1",
+      "fixture_id": "plan-review.host",
+      "path": "fixtures/b1/plan-review/host.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "2d91ffc95c0be4f799c3fe9751ff468ff141d0fb593348833de8e150440663a7",
+      "fixture_id": "plan-review.codex",
+      "path": "fixtures/b1/plan-review/codex.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "565db44486587cf6239ffa29c0c42305f743266f57403c897e2a70ce67797314",
+      "fixture_id": "plan-review.copilot",
+      "path": "fixtures/b1/plan-review/copilot.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "d0c912f0838806986013d1badd03a1d097e010286276c7eea2b01245db086dfa",
+      "fixture_id": "plan-review.cursor",
+      "path": "fixtures/b1/plan-review/cursor.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "97f67faa1503a8dcd0e39c63b85c7725ee36d520e2e0620bdc7c6aa5a11bc78b",
+      "fixture_id": "plan-review.rp",
+      "path": "fixtures/b1/plan-review/rp.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "787c575a9e412e7ce4c52643f17c244edcc013f2533a8eec19c76106fccc3978",
+      "fixture_id": "plan-review.unavailable",
+      "path": "fixtures/b1/plan-review/unavailable.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "903bd523a32a6ad6d74413f53bc816b52ee9868db7db3e6b32093cb1479c10db",
+      "fixture_id": "plan-review.corpus-risky",
+      "path": "fixtures/b1/plan-review/corpus-risky.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "6f59bc7c4479410ef0ed144917589a65cdb0eab9e9b05f99c245e4847393cb7f",
+      "fixture_id": "plan-review.corpus-clean",
+      "path": "fixtures/b1/plan-review/corpus-clean.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan-review",
+      "fixture_hash": "06c4737a7193692b36dd08e03486fc7a334e526a674f5d8d8c96076d371e5fb6",
+      "fixture_id": "plan-review.user-edited-spec",
+      "path": "fixtures/b1/plan-review/user-edited-spec.json",
+      "reached_path_chars": 48486
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "adad7b516ad4d766d1a8493a5aa8a2c360782240882c0c359cd01d0cff2a281e",
+      "fixture_id": "plan.p1-flow-native",
+      "path": "fixtures/b1/plan/p1-flow-native.json",
+      "reached_path_chars": 61420
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "dfdbe8b90a6192803bda143c255c0e50bfc3e2d6c60fd3eaf9577cfe8f5aca25",
+      "fixture_id": "plan.p2-dociq",
+      "path": "fixtures/b1/plan/p2-dociq.json",
+      "reached_path_chars": 61420
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "7135fa2a52fafddea75cc3b546a69dbc1148328a3883c68bc912015317b647bf",
+      "fixture_id": "plan.p3-hand-edited",
+      "path": "fixtures/b1/plan/p3-hand-edited.json",
+      "reached_path_chars": 61420
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "a8c16cdeb57c86b42421a9b158f0457d164aae071cc6150b957e5ce95c59a515",
+      "fixture_id": "plan.p4-ordering-sizing",
+      "path": "fixtures/b1/plan/p4-ordering-sizing.json",
+      "reached_path_chars": 61420
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "f03475d1f439d64803d35247e710708ebaa72d2fc84e5ac333df60cc56e199ae",
+      "fixture_id": "plan.sealed-holdout-nocode-research-mermaid",
+      "path": "fixtures/b1/plan/sealed-holdout-nocode-research-mermaid.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "805945a90e3e0449210735aefd190043d0d9920cbaacc0fb9f65c599d5d2df67",
+      "fixture_id": "plan.tracker-on",
+      "path": "fixtures/b1/plan/tracker-on.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "c9bb54f9bdaf7dce915ad33e0fb9edf32ca6f7bf7c05ceb2d58caf295eee67ce",
+      "fixture_id": "plan.tracker-off",
+      "path": "fixtures/b1/plan/tracker-off.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "d0ef4ce78617568d0a88922af1897b79ae335d7cabe7bd820ea2822831de8926",
+      "fixture_id": "plan.html-on",
+      "path": "fixtures/b1/plan/html-on.json",
+      "reached_path_chars": 69838
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "8535c0d84d7b08210e3bb496d879d0e5eccd046775af0d05a9dd5898628b8d20",
+      "fixture_id": "plan.html-off",
+      "path": "fixtures/b1/plan/html-off.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "f9218186c43d566f0f65bd42e12252144d4059a7863d7dcdc1f1d4c5ca844f18",
+      "fixture_id": "plan.review-on",
+      "path": "fixtures/b1/plan/review-on.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "plan",
+      "fixture_hash": "5843cffe418de1990d9673d8dd8b23e29e5110aa19b3781ef8831f06cc363dd7",
+      "fixture_id": "plan.review-off",
+      "path": "fixtures/b1/plan/review-off.json",
+      "reached_path_chars": 50243
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "dedfc20f5738b1918932af4111779e8ee6ab2ece4a0e29636f1c8d41781cc26c",
+      "fixture_id": "work.serial",
+      "path": "fixtures/b1/work/serial.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "48015b468160d1d260a8a7b724854a5edb17e2a2b74e1534ba99925d6b6364f7",
+      "fixture_id": "work.parallel-eligible",
+      "path": "fixtures/b1/work/parallel-eligible.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "3703ce02fa5df12babe9aae067645e40aff5b426ae8a26015721fb404eef3b75",
+      "fixture_id": "work.shared-file-conflict",
+      "path": "fixtures/b1/work/shared-file-conflict.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "1852f4b9725fbef3911e9144b2a72a923de955be4b76f9564241eacb881c03d8",
+      "fixture_id": "work.worker-failure",
+      "path": "fixtures/b1/work/worker-failure.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "378cadb746bf170d6006ae0e3e8bf92f5cb999a1d61c8191d1bc16fa3fb5a9a0",
+      "fixture_id": "work.host-deferred-handover",
+      "path": "fixtures/b1/work/host-deferred-handover.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "faa300945c3398c3360d3ecc1d13db7c44c9928abf4b98f644f7e1f93fca15a9",
+      "fixture_id": "work.delegation-off",
+      "path": "fixtures/b1/work/delegation-off.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "31a10c714e7938f2ae79662ec2712c04ccb5f0505bb0bc7c41c6239e557e8d43",
+      "fixture_id": "work.delegation-on",
+      "path": "fixtures/b1/work/delegation-on.json",
+      "reached_path_chars": 100851
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "518fbbf2395c34483ff878ef597e9cd60a22293be9e9f12b10c7057568b81c21",
+      "fixture_id": "work.delegation-declined",
+      "path": "fixtures/b1/work/delegation-declined.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "b1e14ebf8588f400739ed1e70be1271a0c9966f8f94e7a418bf619f6175244ec",
+      "fixture_id": "work.delegation-failure",
+      "path": "fixtures/b1/work/delegation-failure.json",
+      "reached_path_chars": 100851
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "672d14a0158db9e46143013477fa0b254cca8cefac9063ca4bb5530986776004",
+      "fixture_id": "work.tracker-off",
+      "path": "fixtures/b1/work/tracker-off.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "29b6c0a1d93e3f83b47eb6b32aa34d31c38c1abd71741c094ba160eaf1a50bc6",
+      "fixture_id": "work.tracker-on",
+      "path": "fixtures/b1/work/tracker-on.json",
+      "reached_path_chars": 63999
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "8fa4fe5bd8da4d3a35da4a918e6e8e4cb7b83108292558803721b7f8f544ede1",
+      "fixture_id": "work.tracker-error",
+      "path": "fixtures/b1/work/tracker-error.json",
+      "reached_path_chars": 63999
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "855d46a30d967fbd21fa934960c21ded8255892901d02e03a172b67c75f558ed",
+      "fixture_id": "work.plan-sync",
+      "path": "fixtures/b1/work/plan-sync.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "work",
+      "fixture_hash": "6fca36a46bbb10db4b7d44219e5889a4771266bb22b33905209ee89bf6cf8037",
+      "fixture_id": "work.review",
+      "path": "fixtures/b1/work/review.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "strategy",
+      "fixture_hash": "31c78cdb105880b43664b645f7c7ec8ff4c52f628fb0df3f74105f528e9c1112",
+      "fixture_id": "strategy.absent",
+      "path": "fixtures/b1/strategy/absent.json",
+      "reached_path_chars": 33798
+    },
+    {
+      "cluster": "strategy",
+      "fixture_hash": "059485afc98e95be2ee514e241307269002109e55f00678afc778af5b6cd7f2c",
+      "fixture_id": "strategy.husk",
+      "path": "fixtures/b1/strategy/husk.json",
+      "reached_path_chars": 30029
+    },
+    {
+      "cluster": "strategy",
+      "fixture_hash": "3ec978352169d261c27be28f11ccaa8e74a824b01dadae7279c6576b0fbb6a10",
+      "fixture_id": "strategy.foreign",
+      "path": "fixtures/b1/strategy/foreign.json",
+      "reached_path_chars": 17772
+    },
+    {
+      "cluster": "strategy",
+      "fixture_hash": "261a0c2a597e4d0912fb36c1e41a72e540188575913fa6413aa761f935492d0a",
+      "fixture_id": "strategy.generated-first-run",
+      "path": "fixtures/b1/strategy/generated-first-run.json",
+      "reached_path_chars": 33798
+    },
+    {
+      "cluster": "strategy",
+      "fixture_hash": "7b667927b4a44ed16705df38a51ce285e81af409a1603804de3570a6a9ef6ed0",
+      "fixture_id": "strategy.update",
+      "path": "fixtures/b1/strategy/update.json",
+      "reached_path_chars": 30029
+    },
+    {
+      "cluster": "make-pr",
+      "fixture_hash": "0856051c63ef8a869f569ba8a0838e22c4199abe3f0f82534e0d6811049c6004",
+      "fixture_id": "make-pr.dry-run",
+      "path": "fixtures/b1/make-pr/dry-run.json",
+      "reached_path_chars": 145723
+    },
+    {
+      "cluster": "make-pr",
+      "fixture_hash": "3230be1a8fac2c3f6ea3c42f73f03fdcee4b7df8e116898958dcfbed3fa7be60",
+      "fixture_id": "make-pr.html-off",
+      "path": "fixtures/b1/make-pr/html-off.json",
+      "reached_path_chars": 191058
+    },
+    {
+      "cluster": "make-pr",
+      "fixture_hash": "2d77054828d21eff9ab619fbdc1b39c771d76f2cafc664ba785f1aa0e5979f5a",
+      "fixture_id": "make-pr.html-on",
+      "path": "fixtures/b1/make-pr/html-on.json",
+      "reached_path_chars": 210653
+    },
+    {
+      "cluster": "make-pr",
+      "fixture_hash": "4dd38e6f997abf85535c12ed3675fbdd0278ad480ae7204bada1c74054224c60",
+      "fixture_id": "make-pr.create",
+      "path": "fixtures/b1/make-pr/create.json",
+      "reached_path_chars": 191058
+    },
+    {
+      "cluster": "make-pr",
+      "fixture_hash": "e04c69f687c1aac1c417eb5474e932aa0c309295540976fcd3a343a4da634354",
+      "fixture_id": "make-pr.finalize",
+      "path": "fixtures/b1/make-pr/finalize.json",
+      "reached_path_chars": 179412
+    },
+    {
+      "cluster": "make-pr",
+      "fixture_hash": "b88c6d76217f2d67d4b7df8a96feee15614cbb3e94704e5dbff7da4e364cca53",
+      "fixture_id": "make-pr.existing-pr",
+      "path": "fixtures/b1/make-pr/existing-pr.json",
+      "reached_path_chars": 179412
+    },
+    {
+      "cluster": "make-pr",
+      "fixture_hash": "12115732a9ae5f4cce35fa5b8efb584634907a0170faf0ad20d2bdb1e53e2fdd",
+      "fixture_id": "make-pr.push-retry",
+      "path": "fixtures/b1/make-pr/push-retry.json",
+      "reached_path_chars": 179412
+    },
+    {
+      "cluster": "pilot",
+      "fixture_hash": "5d321e8efee7dee09b01f4dc8261ddec4804b940b2f8cb678bc6e130b5087d36",
+      "fixture_id": "pilot.ready",
+      "path": "fixtures/b1/pilot/ready.json",
+      "reached_path_chars": 63302
+    },
+    {
+      "cluster": "pilot",
+      "fixture_hash": "47a37f095d0956e62d8b860d3c7f8fbaa3a369a9dccec286f7a246f6ba3a91fc",
+      "fixture_id": "pilot.backlog",
+      "path": "fixtures/b1/pilot/backlog.json",
+      "reached_path_chars": 90422
+    },
+    {
+      "cluster": "pilot",
+      "fixture_hash": "ec2a00710b570ba62e681504bb00c9e5daebf98ec36d7142ee3249bc438738a4",
+      "fixture_id": "pilot.blocked",
+      "path": "fixtures/b1/pilot/blocked.json",
+      "reached_path_chars": 63302
+    },
+    {
+      "cluster": "pilot",
+      "fixture_hash": "227d99933f5a5b0652239b251554e5985952a1e9ce2cc7c21a3c51a5ca3d701e",
+      "fixture_id": "pilot.deferred",
+      "path": "fixtures/b1/pilot/deferred.json",
+      "reached_path_chars": 63302
+    },
+    {
+      "cluster": "pilot",
+      "fixture_hash": "56b2d656592d875d2c026e38bb5e8cb2f4077e1d1a806b0ab546670fb43ea275",
+      "fixture_id": "pilot.strike",
+      "path": "fixtures/b1/pilot/strike.json",
+      "reached_path_chars": 63302
+    },
+    {
+      "cluster": "pilot",
+      "fixture_hash": "5496f101f5d4e1a2d36c283ddb52230ba23ab1859445953a9091b2d45fa7e146",
+      "fixture_id": "pilot.failure",
+      "path": "fixtures/b1/pilot/failure.json",
+      "reached_path_chars": 63302
+    },
+    {
+      "cluster": "pilot",
+      "fixture_hash": "d5e205f143beb7728a43c5f29389a72b4c49285e960de5cfc4e370747cee068c",
+      "fixture_id": "pilot.qa-on",
+      "path": "fixtures/b1/pilot/qa-on.json",
+      "reached_path_chars": 67368
+    },
+    {
+      "cluster": "pilot",
+      "fixture_hash": "864f7f3baacac589252d0deba7f7cdc2aa73a94ae39a84f7e89bfdc6f9d4c923",
+      "fixture_id": "pilot.qa-off",
+      "path": "fixtures/b1/pilot/qa-off.json",
+      "reached_path_chars": 63302
+    },
+    {
+      "cluster": "cross-host",
+      "fixture_hash": "2fc88d1a15bf56eafb1b8aba69e54921e48321aec9d70e4824b41f21813e910e",
+      "fixture_id": "cross-host.claude-slash",
+      "path": "fixtures/b1/cross-host/claude-slash.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "cross-host",
+      "fixture_hash": "61f60f08f11eba6c5f6fd72f2968e56d09391030a43396ced8d747daf9f56c33",
+      "fixture_id": "cross-host.claude-natural-language",
+      "path": "fixtures/b1/cross-host/claude-natural-language.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "cross-host",
+      "fixture_hash": "42025bbf332b6a859bb66c12322de72e8ae0a2c9de3672fc631f662bd60ad858",
+      "fixture_id": "cross-host.codex-slash",
+      "path": "fixtures/b1/cross-host/codex-slash.json",
+      "reached_path_chars": 51288
+    },
+    {
+      "cluster": "cross-host",
+      "fixture_hash": "2a8c6b4e7b057ec8fcc152cc58da084a089bea44d61dacab3ecbbf4724e13a5c",
+      "fixture_id": "cross-host.cursor-cli",
+      "path": "fixtures/b1/cross-host/cursor-cli.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "cross-host",
+      "fixture_hash": "03cc7c29f5304db8c3f57635026a8eb845a55ad1e86a053190e8141dd75daed8",
+      "fixture_id": "cross-host.cursor-gui",
+      "path": "fixtures/b1/cross-host/cursor-gui.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "cross-host",
+      "fixture_hash": "eab453b44d0fdc65650910abda614fa10d9d3da54ae61aede8499edc9866af08",
+      "fixture_id": "cross-host.droid-slash",
+      "path": "fixtures/b1/cross-host/droid-slash.json",
+      "reached_path_chars": 54358
+    },
+    {
+      "cluster": "cross-host",
+      "fixture_hash": "fdb5fc261c64297bb7a99d2f50a48eef6e70e0609e1cceee92ade0c17a441967",
+      "fixture_id": "cross-host.grok-inspect",
+      "path": "fixtures/b1/cross-host/grok-inspect.json",
+      "reached_path_chars": 54358
+    }
+  ],
+  "frozen_at_utc": "2026-07-23T20:52:09Z",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "rule": "later structural tasks compare only to hash-verified B1"
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "subjective_policy": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "lineage": "B0 -> V1/B1 -> candidate (immutable; fail closed on hash mismatch)",
+    "sealed_holdout": "required_when_judgment_or_examples_can_overfit",
+    "subjective_majority_default": 3,
+    "subjective_majority_n": [
+      3,
+      5
+    ]
+  }
+}

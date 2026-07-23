@@ -1,0 +1,95 @@
+{
+  "activation": {
+    "args": [],
+    "form": "slash",
+    "skill": "flow-next-work"
+  },
+  "baseline": "B1",
+  "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+  "branch_inputs": {
+    "evidence": "smoke"
+  },
+  "cluster": "cross-host",
+  "fixture_hash": "42025bbf332b6a859bb66c12322de72e8ae0a2c9de3672fc631f662bd60ad858",
+  "fixture_id": "cross-host.codex-slash",
+  "forbidden_reads": [
+    "plugins/flow-next/codex/skills/flow-next-work/references/codex-delegation.md"
+  ],
+  "host": "codex",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "candidate": null,
+    "rule": "structural candidates compare to hash-verified B1 only"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "reached_path_chars": 51288,
+    "reached_path_chars_div_4": 12822.0,
+    "reached_path_files": [
+      {
+        "chars_lf": 12318,
+        "content_hash": "13d16c8421c6f5210e3d68baa760f70803ed608470fc6e6931e6e5258d7c7162",
+        "path": "plugins/flow-next/codex/skills/flow-next-work/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 38970,
+        "content_hash": "56116c2a60a6bfff59c3b8c9dbb79c0d784980d281d6c57c4d4e3518760c4106",
+        "path": "plugins/flow-next/codex/skills/flow-next-work/phases.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "mirror_skill": "plugins/flow-next/codex/skills/flow-next-work",
+  "mutation_targets": {},
+  "notes": "regenerated mirror; count mirror files",
+  "oracles": {
+    "output": [],
+    "receipts": [],
+    "tools": [],
+    "writes": []
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "prompt_files": [
+    "plugins/flow-next/codex/skills/flow-next-work/SKILL.md",
+    "plugins/flow-next/codex/skills/flow-next-work/phases.md"
+  ],
+  "prompt_hashes": {
+    "plugins/flow-next/codex/skills/flow-next-work/SKILL.md": "13d16c8421c6f5210e3d68baa760f70803ed608470fc6e6931e6e5258d7c7162",
+    "plugins/flow-next/codex/skills/flow-next-work/phases.md": "56116c2a60a6bfff59c3b8c9dbb79c0d784980d281d6c57c4d4e3518760c4106"
+  },
+  "provenance": {
+    "capture_kind": "deterministic_freeze",
+    "capture_reason": "route_manifest_inventory_hash_only; not a backend execution (model/cli_version intentionally null)",
+    "cli_version": null,
+    "date_utc": "2026-07-23",
+    "fixture_hash": "42025bbf332b6a859bb66c12322de72e8ae0a2c9de3672fc631f662bd60ad858",
+    "host": "codex",
+    "model": null
+  },
+  "ratchet": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "subjective_majority_n": [
+      3,
+      5
+    ],
+    "verdict": "baseline"
+  },
+  "required_reads": [
+    "plugins/flow-next/codex/skills/flow-next-work/SKILL.md",
+    "plugins/flow-next/codex/skills/flow-next-work/phases.md"
+  ],
+  "resume": {
+    "borderline": false,
+    "parent": null,
+    "sealed_holdout": false,
+    "subjective": false
+  }
+}

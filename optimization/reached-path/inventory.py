@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 BASELINE_COMMIT = "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b"
+B1_COMMIT = "8ed71a73ccc593a8a018dcdb805a86f396dcf76f"
 
 # Canonical skill roots (repo-relative).
 S = {

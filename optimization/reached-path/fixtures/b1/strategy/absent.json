@@ -1,0 +1,102 @@
+{
+  "activation": {
+    "args": [],
+    "form": "slash",
+    "skill": "flow-next-strategy"
+  },
+  "baseline": "B1",
+  "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+  "branch_inputs": {
+    "state": "absent"
+  },
+  "cluster": "strategy",
+  "fixture_hash": "31c78cdb105880b43664b645f7c7ec8ff4c52f628fb0df3f74105f528e9c1112",
+  "fixture_id": "strategy.absent",
+  "forbidden_reads": [],
+  "host": "claude",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "candidate": null,
+    "rule": "structural candidates compare to hash-verified B1 only"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "reached_path_chars": 33798,
+    "reached_path_chars_div_4": 8449.5,
+    "reached_path_files": [
+      {
+        "chars_lf": 17772,
+        "content_hash": "bb797d2bc1d5cca57688e391a588fbbfdf78133b0d684e1aaf0b8c05c901ba31",
+        "path": "plugins/flow-next/skills/flow-next-strategy/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 12257,
+        "content_hash": "229c81b7c4933aa65ec91bb4eb8781fc4e550b4026d6157061173c33f3aaf5a4",
+        "path": "plugins/flow-next/skills/flow-next-strategy/references/interview.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 3769,
+        "content_hash": "274e9d814398c3c276620040b5079f3581e4d3eb7512afdc6dee2e1b21ddd87e",
+        "path": "plugins/flow-next/skills/flow-next-strategy/references/strategy-template.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "mirror_skill": null,
+  "mutation_targets": {},
+  "notes": "",
+  "oracles": {
+    "output": [],
+    "receipts": [],
+    "tools": [],
+    "writes": []
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "prompt_files": [
+    "plugins/flow-next/skills/flow-next-strategy/SKILL.md",
+    "plugins/flow-next/skills/flow-next-strategy/references/interview.md",
+    "plugins/flow-next/skills/flow-next-strategy/references/strategy-template.md"
+  ],
+  "prompt_hashes": {
+    "plugins/flow-next/skills/flow-next-strategy/SKILL.md": "bb797d2bc1d5cca57688e391a588fbbfdf78133b0d684e1aaf0b8c05c901ba31",
+    "plugins/flow-next/skills/flow-next-strategy/references/interview.md": "229c81b7c4933aa65ec91bb4eb8781fc4e550b4026d6157061173c33f3aaf5a4",
+    "plugins/flow-next/skills/flow-next-strategy/references/strategy-template.md": "274e9d814398c3c276620040b5079f3581e4d3eb7512afdc6dee2e1b21ddd87e"
+  },
+  "provenance": {
+    "capture_kind": "deterministic_freeze",
+    "capture_reason": "route_manifest_inventory_hash_only; not a backend execution (model/cli_version intentionally null)",
+    "cli_version": null,
+    "date_utc": "2026-07-23",
+    "fixture_hash": "31c78cdb105880b43664b645f7c7ec8ff4c52f628fb0df3f74105f528e9c1112",
+    "host": "claude",
+    "model": null
+  },
+  "ratchet": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "subjective_majority_n": [
+      3,
+      5
+    ],
+    "verdict": "baseline"
+  },
+  "required_reads": [
+    "plugins/flow-next/skills/flow-next-strategy/SKILL.md",
+    "plugins/flow-next/skills/flow-next-strategy/references/interview.md",
+    "plugins/flow-next/skills/flow-next-strategy/references/strategy-template.md"
+  ],
+  "resume": {
+    "borderline": false,
+    "parent": null,
+    "sealed_holdout": false,
+    "subjective": false
+  }
+}
