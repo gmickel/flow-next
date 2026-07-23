@@ -10,7 +10,7 @@ A human-owned boolean on the spec record (default `false`, toggled via `flowctl 
 
 ## Task
 
-An execution unit under a spec, sized to fit one `/flow-next:work` iteration (~100k tokens fresh context). Tasks declare dependencies (`requires:`) and may declare which spec acceptance criteria they advance (`satisfies: [R1, R3]`). Implemented by a worker subagent with re-anchored context.
+An execution unit under a spec, sized to fit one `/flow-next:work` iteration (~100k tokens fresh context). Tasks declare dependencies (`requires:`) and may declare which spec acceptance criteria they advance (`satisfies: [R1, R3]`). The dependency graph forms execution waves: tasks in the same wave are candidates for parallel work, not a mandate to share a checkout. Implemented by a worker subagent with re-anchored context.
 
 ## R-ID
 
@@ -50,7 +50,7 @@ _Relates to_: Triage skip, Receipt
 
 ## Worker subagent
 
-A subagent dispatched by `/flow-next:work` to implement a single task with fresh context. Re-anchors on the spec + task + git state (one `flowctl anchor` bundle — same information as the old discrete reads, one call), implements the task, records evidence (commits + tests + done summary), and exits. The fresh context per task is what enables N tasks to run in parallel without context-bleed.
+A subagent dispatched by `/flow-next:work` to implement a single task with fresh context. Re-anchors on the spec + task + git state (one `flowctl anchor` bundle — same information as the old discrete reads, one call), implements the task, records evidence (commits + tests + done summary), and exits. In a parallel wave, each worker uses an isolated mutable workspace and returns task-unique handover files; the conductor joins and integrates the wave before review, completion, tracker updates, and plan-sync. Fresh context prevents context bleed. Atomic claims prevent duplicate ownership. Neither substitutes for filesystem and Git isolation.
 
 ## Carmack-level review
 

@@ -54,14 +54,22 @@ Use **T-shirt sizes** based on observable metrics — not token estimates (model
 - ❌ Over-split (6 tasks): `…5 "docs + CHANGELOG"` + `…6 "wire tests into CI"` as two S tasks
 - ✅ Better: one `"docs + CHANGELOG + CI wiring"` S/M task (CI-wiring is part of a task's Definition of Done, not its own task)
 
-**Minimize file overlap for parallel work:**
+**Expose useful parallelism without harming task quality:**
 
-When splitting tasks, design for minimal file overlap. Tasks touching disjoint files can be worked in parallel without merge conflicts.
+When splitting tasks, keep cohesive M-sized work intact, then prefer boundaries
+with disjoint ownership when the decomposition is otherwise equally good. Avoid
+unnecessary dependency edges: dependencies express real ordering, not a
+conservative default.
 
 - ❌ Bad: Task A and B both modify `src/auth.ts`
 - ✅ Good: Task A modifies `src/auth.ts`, Task B modifies `src/routes.ts`
 
-List expected files in each task's `**Files:**` field. If multiple tasks must touch the same file, mark dependencies explicitly with `flowctl dep add`.
+List expected files in each task's `**Files:**` field. Disjoint file lists are
+evidence of a parallel candidate, not proof: generated outputs, lockfiles,
+migrations, fixtures, services, and other shared resources can still couple
+tasks. If multiple tasks must touch the same file or one consumes another's
+output, mark the real dependency explicitly with `flowctl dep add`. Never split
+cohesive work merely to manufacture a parallel wave.
 
 ## Step 0: Initialize .flow
 
@@ -513,6 +521,28 @@ $FLOWCTL validate --spec <spec-id> --json
 
 Fix any errors before proceeding.
 
+### Step 6.1: Derive execution waves
+
+After validation, derive dependency-ordered execution waves from the task DAG
+you authored:
+
+- Wave 1 contains tasks with no task dependencies.
+- Each later wave contains tasks whose dependencies are all in earlier waves.
+- Tasks in the same wave are **parallel candidates**, not a promise of
+ concurrent execution; `/flow-next:work` still judges shared resources,
+ isolation, integration, and host capacity.
+
+Keep the result compact and carry it into the Step 8 summary:
+
+```text
+Execution waves:
+- Wave 1 (parallel candidates): fn-N.1, fn-N.2
+- Wave 2: fn-N.3
+```
+
+If review or a Step 8 refinement changes tasks or dependencies, re-run Step 6
+and recompute these waves before presenting the final summary.
+
 ## Step 6.5: Tracker sync (opt-in) — NO sub-issues; optional body checklist only
 
 **Optional. Runs only when the tracker bridge is active AND `plan` is opted in. With no tracker configured this is a no-op — planning behaves exactly as today.** When opted in, planning projects the spec to the tracker issue. **If the spec is not yet linked (e.g. you started straight from `/flow-next:plan`, no `/flow-next:capture`), the tracker-sync skill flow-first-pushes — it creates the issue + links it — then reconciles** (tracker-sync §Phase 3 "create-if-unlinked"); an active bridge therefore never silently leaves a planned spec untracked. Planning **never auto-creates tracker sub-issues per task** — tasks stay flow-local (R3, Grain); the spec ↔ one-issue grain holds. The only optional task-level effect is rendering the task list as a **checklist inside the issue body** (off by default; a body-format concern owned by the merge engine).
@@ -557,6 +587,9 @@ Show spec summary with size breakdown and offer options:
 ```
 Spec fn-N-slug created: "<title>"
 Tasks: M total | Sizes: Ns S, Nm M
+Execution waves:
+- Wave 1 (parallel candidates): fn-N.1, fn-N.2
+- Wave 2: fn-N.3
 
 Next steps:
 1) Start work: `/flow-next:work fn-N-slug`

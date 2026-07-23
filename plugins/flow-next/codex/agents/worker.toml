@@ -15,7 +15,31 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `FLOWCTL` - path to flowctl CLI
 - `REVIEW_MODE` - none, rp, codex, copilot, cursor, or host-deferred (host review runs at the conductor level AFTER you return - you cannot dispatch subagents. Under host-deferred: skip Phase 4 review dispatch, do NOT report the task as review-passed, and DEFER Phase 5's `flowctl done` - write your summary + evidence files to the handover paths and return with the task still `in_progress`; the conductor gates on the host review verdict and runs `flowctl done` itself)
 - `RALPH_MODE` - true if running autonomously
+- `PARALLEL_WAVE` - true only when the conductor dispatched this task concurrently in an isolated mutable workspace. In that mode, implement/test/commit, but defer review and every shared lifecycle mutation to the conductor.
+- `WORKSPACE` - the isolated mutable workspace assigned by the conductor (parallel-wave mode only)
+- `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE` - task-unique output paths chosen by the conductor. Use these exact paths in parallel-wave mode; never fall back to generic shared `/tmp/summary.md` or `/tmp/evidence.json`.
 - `DELEGATE` - codex to delegate Phase 2 implementation to `codex exec`; absent or `local` ⇒ standard in-session (the host only sets this when delegation is active and all pre-flight gates passed). `DELEGATE_MODEL` / `DELEGATE_SANDBOX` / `DELEGATE_EFFORT_FLOOR` / `DELEGATE_DECISION` accompany it — see Phase 2.
+
+## Phase 0: Enter the assigned workspace (FIRST)
+
+Before any `flowctl` or git operation, baseline test, file read, or edit:
+
+- When `PARALLEL_WAVE` is `true`, resolve and enter the exact `WORKSPACE` from
+  the prompt without using git, then verify the physical current directory
+  matches it:
+
+  ```bash
+  EXPECTED_WORKSPACE="$(cd -- "<WORKSPACE>" && pwd -P)" || exit 1
+  cd -- "$EXPECTED_WORKSPACE" || exit 1
+  test "$(pwd -P)" = "$EXPECTED_WORKSPACE" || exit 1
+  ```
+
+  Keep every later shell call and file operation rooted in that directory
+  (set the tool's working directory to `EXPECTED_WORKSPACE` when shell
+  directory changes do not persist). Missing, unenterable, or mismatched
+  `WORKSPACE` is `BLOCKED: TOOLING_FAILURE`; do not fall back to the conductor
+  checkout.
+- When `PARALLEL_WAVE` is `false`, remain in the current checkout and continue.
 
 ## Phase 1: Re-anchor (CRITICAL - DO NOT SKIP)
 
@@ -24,6 +48,11 @@ Use the FLOWCTL path and IDs from your prompt. ONE call fetches the whole re-anc
 ```bash
 <FLOWCTL> anchor <TASK_ID> --md
 ```
+
+In parallel-wave mode the conductor owns the authoritative task claim. An
+isolated workspace created from a committed base can show the task's local
+`.flow` snapshot as `todo`; do not re-claim it or treat that stale local status
+as a failure. Implement only the prompted task and leave Flow state untouched.
 
 The bundle carries, verbatim and in fixed order: the task record + body (`show`/`cat`), the parent spec record + body, `git status` / `git log -5 --oneline` / current branch, `memory.enabled`, the glossary, the memory index (when memory is enabled), and each dependency's id/title/status/done summary. If a section reports `(section unavailable: ...)`, run that one command directly — the bundle is fail-open.
 
@@ -235,8 +264,11 @@ host's counter stays untouched - not a failure, not a strike).
    - Before committing a `completed` result, run the `git status --porcelain` ∩
      `files_modified` trust cross-check; a mismatch downgrades to partial/failed.
 
-Phase 3 commit / Phase 4 review / Phase 5 done are **unchanged** by delegation —
-the orchestrator (you) still owns all git, review, and `flowctl done`.
+On the standard single-worker path, Phase 3 commit / Phase 4 review / Phase 5
+done are **unchanged** by delegation — the orchestrator (you) still owns all
+git, review, and `flowctl done`. The parallel-wave terminal contract still
+overrides review and done: commit in the assigned workspace, write the
+task-unique handovers, and return `in_progress` for the conductor.
 
 Read relevant code, implement the feature/fix. Follow existing patterns.
 
@@ -282,6 +314,11 @@ commit (no delegation, or a `partial` you finished locally) carries **no**
 `AI-Implementer` trailer — attribute honestly.
 
 ## Phase 4: Review (MANDATORY if REVIEW_MODE != none)
+
+**If `PARALLEL_WAVE` is `true`, SKIP this phase's review dispatch entirely.**
+The conductor reviews only after it joins the wave and integrates this commit
+onto the target branch. Do not report a review verdict; continue to Phase 5's
+parallel-wave handover branch.
 
 **If REVIEW_MODE is `none`, skip to Phase 5.** (When `DELEGATE: codex` is also set,
 there is no independent impl-review gate, so Phase 5 below runs its own
@@ -396,6 +433,16 @@ If capture fails (memory disabled mid-run, flowctl error, etc.), log and continu
 
 ## Phase 5: Complete
 
+**parallel-wave branch — DO NOT run `flowctl done`.** When `PARALLEL_WAVE` is
+`true`, run the Verify block below, commit the finished task, and write the
+summary/evidence to the exact task-unique `HANDOVER_SUMMARY` and
+`HANDOVER_EVIDENCE` paths from the prompt. Return the task ID, workspace,
+commits, paths, and gate results with the task still `in_progress`. Do not
+invoke impl-review, mutate tracker state, invoke plan-sync, integrate the
+commit, or select more work. The conductor joins the full wave, integrates,
+reviews, updates the evidence for integrated commit IDs, and calls
+`flowctl done`.
+
 **host-deferred branch (fn-123 R5) — DO NOT run `flowctl done`.** When `REVIEW_MODE` is `host-deferred`: run the Verify block below as normal (the gates still run), write your summary markdown and evidence JSON to the handover paths (same content you would pass to `done`), and RETURN with the task still `in_progress`. Report the file paths, commits, and gate evidence in your final message. The conductor runs the mandatory host review and calls `flowctl done` itself only on a SHIP verdict — a task must never be `done` before its host review. Every other REVIEW_MODE proceeds through this phase unchanged.
 
 **Verify before completing (if project has tests/lints):**
@@ -424,12 +471,20 @@ BASE_COMMIT=$(cat .flow/tmp/base_commit)
 ```
 If verification fails, fix and re-commit before proceeding.
 
-**Sandbox-blocked commit:** if the environment's sandbox denies `git commit`, do NOT stall or loop retrying - still write the evidence file and complete `flowctl done`, and record the sandbox restriction in the done summary so the orchestrator can commit on your behalf. A blocked commit is never a reason to block the task.
+**Sandbox-blocked commit:** if the environment's sandbox denies `git commit`,
+do NOT stall or loop retrying. On the standard single-worker path, still write
+the evidence file and complete `flowctl done`, recording the restriction in
+the done summary so the orchestrator can commit on your behalf. On a
+parallel-wave or host-deferred path, never call `flowctl done`: write the
+assigned handovers, return `in_progress`, and report the exact workspace plus
+uncommitted state so the conductor can recover and commit it. A blocked commit
+is never a reason to discard finished work.
 
 **Delegation verification backstop — `DELEGATE: codex` AND `REVIEW_MODE: none`.**
 When delegation was active AND no impl-review gate ran (Phase 4 skipped), you MUST
-run the Phase 5 Verify block yourself on the delegated diff before `flowctl done` —
-do NOT trust Codex's `verification_summary` as the sole gate. Delegated tasks route through this SAME Verify block; its Suite-output capture rule applies without a separate delegation test site. The Verify block is
+run the Phase 5 Verify block yourself on the delegated diff before the standard
+path's `flowctl done` or the parallel path's handover — do NOT trust Codex's
+`verification_summary` as the sole gate. Delegated tasks route through this SAME Verify block; its Suite-output capture rule applies without a separate delegation test site. The Verify block is
 authoritative here too: classify first, honor green receipts, and run the full
 tests/lints when neither applies (a docs-only tier-B or receipt-honored outcome
 with its GATE_SKIPPED evidence lines satisfies this backstop); on failure, fix +
@@ -438,11 +493,24 @@ impl-review SHIP gate covered the CODE-QUALITY judgment only — the Phase 5 Ver
 block above still runs (classify → receipts → gates); it is cheap when a receipt
 or docs-only classification applies and load-bearing when neither does.
 
-Write the evidence file — re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered) in the SAME block, so no shell variable has to survive across tool calls. `base_commit` is an additive evidence field — always include it. Include any `GATE_SKIPPED` lines recorded during this task as plain strings in `tests[]` alongside real command strings (fn-99 plain-string schema - no new fields or objects), and echo those `GATE_SKIPPED` lines verbatim in the worker summary:
+Write the evidence file — use the exact `HANDOVER_EVIDENCE` path in
+parallel-wave mode; otherwise use the existing `/tmp/evidence.json` path.
+Re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
+(`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered)
+in the SAME block, so no shell variable has to survive across tool calls.
+`base_commit` is an additive evidence field — always include it. Include any
+`GATE_SKIPPED` lines recorded during this task as plain strings in `tests[]`
+alongside real command strings (fn-99 plain-string schema - no new fields or
+objects), and echo those `GATE_SKIPPED` lines verbatim in the worker summary:
 ```bash
 BASE_COMMIT=$(cat .flow/tmp/base_commit)
 COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
-cat > /tmp/evidence.json << EOF
+if [ "<PARALLEL_WAVE>" = "true" ]; then
+  EVIDENCE_FILE="<exact HANDOVER_EVIDENCE path from prompt>"
+else
+  EVIDENCE_FILE="/tmp/evidence.json"
+fi
+cat > "$EVIDENCE_FILE" << EOF
 {"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands + any GATE_SKIPPED lines>"], "prs": []}
 EOF
 ```
@@ -457,7 +525,12 @@ Codex `result-batch-*.json`; `class` comes from `flowctl codex classify-result`;
 ```bash
 BASE_COMMIT=$(cat .flow/tmp/base_commit)
 COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
-cat > /tmp/evidence.json << EOF
+if [ "<PARALLEL_WAVE>" = "true" ]; then
+  EVIDENCE_FILE="<exact HANDOVER_EVIDENCE path from prompt>"
+else
+  EVIDENCE_FILE="/tmp/evidence.json"
+fi
+cat > "$EVIDENCE_FILE" << EOF
 {"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands + any GATE_SKIPPED lines>"], "prs": [],
  "delegation": {
    "result": {"status": "completed", "files_modified": ["<f>"], "issues": [],
@@ -469,16 +542,27 @@ On a `cli_failure` / missing / malformed result (no result body), still inline
 `evidence.delegation` with the known `class` + `model` + `effort` and a minimal
 `result` (`status: null`, empty arrays, the failure summary) — never omit it.
 
-Write summary file:
+Write summary file — use exact `HANDOVER_SUMMARY` in parallel-wave mode,
+otherwise `/tmp/summary.md`:
 ```bash
-cat > /tmp/summary.md << 'EOF'
+if [ "<PARALLEL_WAVE>" = "true" ]; then
+  SUMMARY_FILE="<exact HANDOVER_SUMMARY path from prompt>"
+else
+  SUMMARY_FILE="/tmp/summary.md"
+fi
+cat > "$SUMMARY_FILE" << 'EOF'
 <1-2 sentence summary of what was implemented>
 EOF
 ```
 
-Complete the task:
+Complete the task only on the standard branch (parallel-wave and host-deferred
+branches return before this command). Recompute both standard paths in this
+same shell block — variables from the evidence/summary creation calls do not
+survive into a later tool call:
 ```bash
-<FLOWCTL> done <TASK_ID> --summary-file /tmp/summary.md --evidence-json /tmp/evidence.json
+SUMMARY_FILE="/tmp/summary.md"
+EVIDENCE_FILE="/tmp/evidence.json"
+<FLOWCTL> done <TASK_ID> --summary-file "$SUMMARY_FILE" --evidence-json "$EVIDENCE_FILE"
 ```
 
 Verify completion:
@@ -493,7 +577,10 @@ Return a concise summary to the main conversation:
 - What was implemented (1-2 sentences)
 - Key files changed
 - Tests run (if any)
-- Review verdict (if REVIEW_MODE != none)
+- Review verdict only on the standard single-worker path when
+  `REVIEW_MODE != none`. A parallel-wave worker reports the task-unique
+  handover paths and `in_progress` status instead; it must not claim a review
+  verdict.
 
 **Delegation signal — ONLY when `DELEGATE: codex` was active for this task.** Emit
 these as the **last two lines** of your return summary so the host circuit breaker
@@ -514,13 +601,23 @@ failed, the task ran standard, or `DELEGATE: local`), emit **no** `DELEGATION_*`
 
 ## Rules
 
+The review/done terminal rules below apply to the standard single-worker path.
+When `PARALLEL_WAVE` is `true`, the terminal contract is only: green Verify
+gates, committed task code, task-unique summary/evidence handovers, and a return
+with status still `in_progress`. Do not run impl-review or `flowctl done`; the
+conductor owns both after integration. The existing host-deferred exception
+likewise returns `in_progress` for the conductor's review.
+
 - **Re-anchor first** - always read spec before implementing
 - **Investigate first** - if task spec has investigation targets, read them before coding
 - **No TodoWrite** - flowctl tracks tasks
 - **git add -A** - never list files explicitly
 - **One task only** - implement only the task you were given
-- **Review before done** - if REVIEW_MODE != none, get SHIP verdict before `flowctl done`
-- **Verify done** - flowctl show must report status: done
+- **Review before done (standard single-worker only)** - if
+  `PARALLEL_WAVE` is `false` and `REVIEW_MODE` is neither `none` nor
+  `host-deferred`, get a SHIP verdict before `flowctl done`
+- **Verify terminal state** - standard single-worker `flowctl show` must report
+  `done`; parallel-wave and host-deferred handovers must report `in_progress`
 - **Return summary** - main conversation needs outcome
 - **Typed escalation** — when blocking a task, use this format:
   ```
