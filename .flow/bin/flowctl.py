@@ -23948,7 +23948,14 @@ def build_completion_review_prompt(
         review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
     )
 
-    parts = []
+    parts = [
+        """## TERMINAL REVIEWER ROLE — execute this review directly
+
+You are the terminal reviewer, not a workflow coordinator. Review the supplied
+spec and implementation yourself. Do not invoke Flow-Next skills, run any
+`flowctl *-review` command, delegate the review, or launch another reviewer.
+Follow only the review contract below and end with exactly one verdict tag."""
+    ]
 
     parts.append(f"<spec>\n{epic_spec}\n</spec>")
 
@@ -23963,7 +23970,7 @@ def build_completion_review_prompt(
 
     parts.append(f"<review_instructions>\n{instruction}\n</review_instructions>")
 
-    return "\n\n".join(parts)
+    return "\n\n".join(parts) + "\n"
 
 def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     """Run epic completion review via codex exec."""

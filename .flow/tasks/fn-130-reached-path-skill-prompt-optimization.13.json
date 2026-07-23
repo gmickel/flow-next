@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-23T23:40:57.674054Z",
+  "depends_on": [],
+  "id": "fn-130-reached-path-skill-prompt-optimization.13",
+  "priority": 13,
+  "spec": "fn-130-reached-path-skill-prompt-optimization",
+  "spec_path": ".flow/tasks/fn-130-reached-path-skill-prompt-optimization.13.md",
+  "status": "todo",
+  "title": "Prevent recursive completion-review orchestration",
+  "updated_at": "2026-07-23T23:40:57.674054Z"
+}
