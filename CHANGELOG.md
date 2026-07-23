@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Corrected Grok command-discovery guidance.** Live verification on Grok 0.2.111 shows that `/flow-next:` opens the plugin command namespace, including plan/work; `/flow-next-` filters the separate hyphen-named skill surface. The prior “autocomplete under-lists commands” diagnosis conflated those two prefix families. A command-free skill probe also confirmed that Grok renders the skill's `argument-hint` after autocomplete selection.
+
 ## [flow-next 3.4.0] - 2026-07-23
 
 ### Added
