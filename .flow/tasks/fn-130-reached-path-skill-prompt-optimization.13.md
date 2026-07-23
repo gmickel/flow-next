@@ -19,9 +19,8 @@ cd plugins/flow-next/tests && python3 -m unittest test_review_prompt_template_pa
 ```
 
 ## Done summary
-TBD
-
+Added a terminal-reviewer override at the shared completion-review prompt boundary so Codex, Copilot, and Cursor review directly without invoking Flow-Next skills, nested review commands, delegation, or reviewer subprocesses. Pinned the rendered prompt and refreshed the bootstrap checksum.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b56d21ce
+- Tests: cd plugins/flow-next/tests && python3 -m unittest -q test_review_prompt_template_parity test_backend_spec test_cursor_review_commands, cd plugins/flow-next/tests && python3 -m unittest -q test_startup_bootstrap test_review_prompt_template_parity, python3 scripts/run_tests_parallel.py (125 files, 2287 tests, 0 failures, 0 errors, 3 skipped), ./scripts/sync-codex.sh twice (idempotent, 28 skills/22 agents)
 - PRs:
