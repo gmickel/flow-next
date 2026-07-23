@@ -4,7 +4,7 @@ Common recovery patterns for stuck tasks, broken state, Ralph debugging, and rev
 
 ## Just updated the plugin and something is off? Re-run `/flow-next:setup`
 
-The **single most common post-update issue.** `flowctl` (in `.flow/bin/`) and `.flow/usage.md` are **snapshot copies inside your repo**, written by setup - a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) refreshes the *plugin* but NOT those in-repo copies. So symptoms like a `flowctl` flag that "should exist" erroring, an outdated `.flow/usage.md`, or the skills printing `Local setup vX differs from plugin vY. Run /flow-next:setup to refresh local scripts` on stderr all mean the same thing:
+The **single most common post-update issue.** `flowctl` (in `.flow/bin/`) and `.flow/usage.md` are **snapshot copies inside your repo**, written by setup - a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) refreshes the *plugin* but NOT those in-repo copies. A `flowctl` flag that "should exist" erroring or an outdated `.flow/usage.md` means the project copy needs refreshing. Plan also detects a known copy/plugin version mismatch before planning; direct invocation of other skills does not run a version preflight.
 
 ```bash
 /flow-next:setup      # re-copies launchers + flowctl.py + tracked fast-path files, rewrites usage.md,

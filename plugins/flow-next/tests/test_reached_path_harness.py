@@ -577,6 +577,28 @@ class TestReachedPathHarness(unittest.TestCase):
         )
         self.assertEqual(self.run_eval.validate_b0(), 0)
 
+    def test_b0_validation_uses_frozen_commit_not_live_tree(self) -> None:
+        """A legitimate post-B0 prompt mutation must not invalidate immutable B0."""
+        sample = json.loads(
+            next((HARNESS / "fixtures" / "b0").glob("*/*.json")).read_text(
+                encoding="utf-8"
+            )
+        )
+        prompt_path = next(iter(sample["prompt_hashes"]))
+        frozen = self.run_eval.git_show_text(
+            self.inventory.BASELINE_COMMIT, prompt_path
+        )
+        self.assertEqual(
+            self.character.content_hash(frozen),
+            sample["prompt_hashes"][prompt_path],
+        )
+        self.assertFalse(
+            any(
+                "prompt hash drift" in error
+                for error in self.run_eval.validate_manifest(sample)
+            )
+        )
+
     def test_auth_envelope_positive_and_zero_token(self) -> None:
         """Deterministic JSON-envelope auth contract — no live model."""
         positive = {

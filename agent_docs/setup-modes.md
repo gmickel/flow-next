@@ -8,7 +8,7 @@ Contributor-facing map of the dual-mode install system. Read this BEFORE touchin
 |---|---|---|---|
 | **plugin** | `"plugin"` | ONLY the slim CLAUDE.md snippet (marker block). No `.flow/bin/`, no `.flow/templates/spec.md`, no `.flow/usage.md` | Claude Code only |
 | **copy** | `"copy"` | Full snapshots: `.flow/bin/flowctl`, `.cmd`, `.py`, `_bootstrap.py`, `-help.txt`; `.flow/templates/spec.md`; `.flow/usage.md` + full snippet | All hosts |
-| **legacy/absent** | field missing | Whatever an older setup left | = copy semantics everywhere (pre-checks, uninstall, docs) |
+| **legacy/absent** | field missing | Whatever an older setup left | = copy semantics for artifact resolution, uninstall, and docs |
 
 ## Per-artifact resolution chains
 
@@ -24,19 +24,15 @@ Contributor-facing map of the dual-mode install system. Read this BEFORE touchin
 
 1. **No silent writes to tracked repo files, ever.** The rejected fn-96 design (silent snapshot refresh) stays dead. Every mode switch, artifact cleanup, or snippet refresh is consented (AskUserQuestion) and marker-bounded.
 2. **Setup-block markers are EXACT strings.** The engine (`flowctl setup-block apply/resolve`) matches the standalone lines `<!-- BEGIN FLOW-NEXT -->` / `<!-- END FLOW-NEXT -->`. Never parameterize the marker; the snippet schema version is the INTERNAL sentinel line `<!-- flow-next:snippet:vN -->` (first line inside the block). Expected N = `SNIPPET_SCHEMA_VERSION` in flowctl.py; bump it ONLY on a genuine snippet-contract change (it re-arms one consented refresh ask per repo).
-3. **Every sync-codex guard pairs with a generation transform.** A guard asserting absence without a transform producing that absence fails every sync. fn-121's pair: the plugin-mode strip transform (setup workflow Step 2b / plugin-Docs variant / Step 7c → copy-only), guarded negatively (no plugin-mode prose in the mirror's setup workflow) and positively (copy path + copy stamp retained; the slim TEMPLATE ships in the mirror on purpose - the retained per-skill pre-check's Refresh-now path reads it cross-host, PR #227 review).
+3. **Every sync-codex guard pairs with a generation transform.** A guard asserting absence without a transform producing that absence fails every sync. fn-121's pair: the plugin-mode strip transform (setup workflow Step 2b / plugin-Docs variant / Step 7c → copy-only), guarded negatively (no plugin-mode prose in the mirror's setup workflow) and positively (copy path + copy stamp retained; the slim template ships in the mirror on purpose for a visiting Codex teammate in a plugin-mode repo).
 4. **Plugin mode is Claude-Code-only** until bin/ injection is probe-verified elsewhere (Cursor: no env vars, no injection; Codex: `$HOME/.codex/scripts/`; Droid: unverified). Setup never offers the question off Claude Code.
 5. **Canonical skill prose never assumes plugin mode.** FLOWCTL preambles stay untouched in every skill; bare `flowctl` appears ONLY in the plugin snippet template, never in skill/agent prose. `which flowctl` failing is still the documented cross-host expectation.
 
-## The pre-check contract (fn-95 mechanism, fn-121 mode-aware)
+## Copy-mode version drift
 
-Carriers: 14 blocking skills (FLOW_SETUP_ASK; 3 bash variants - base, +`mode:autofix`, tracker-sync +`DISPATCH=forked`), 3 notice-only (pilot/land/map), ralph-init EXEMPT. Enforced by `tests/test_precheck_mode_contract.py`.
+Plan is the sole lifecycle consumer of `setup_version`. When copy-mode metadata and the installed plugin version are both available and differ, interactive Plan offers **Refresh now (Recommended)** or **Continue this run**. Refresh stops and directs the user to run `/flow-next:setup`, then rerun Plan; autonomous, Ralph, and receipt-driven invocations warn once and continue. Match, plugin mode, and unavailable comparison evidence are silent. Direct invocation of other skills performs no version preflight.
 
-- `setup_mode == "plugin"` → the version compare is skipped (nothing local to go stale). The block checks the CLAUDE.md sentinel against the expected version; drift emits `FLOW_SNIPPET_ASK` → one consented marker-bounded refresh via the setup-block engine. Suppressed to a stderr note under each variant's autonomy markers (FLOW_RALPH / REVIEW_RECEIPT_PATH / FLOW_AUTONOMOUS / mode tokens) or after a recorded `snippet_ack`.
-- copy/absent → the original fn-95 behavior, byte-unchanged.
-- ralph-init keeps its version ask in BOTH modes: its `scripts/ralph/` flowctl copies genuinely drift and would otherwise never surface.
-- Notice-only carriers wrap their stale notice in `"$SETUP_MODE" != "plugin"`.
-- The plugin branch ships in the Codex mirror on purpose: it is inert unless meta says plugin, and it keeps a plugin-mode repo workable for a visiting Codex teammate (Codex preambles self-resolve flowctl from `$HOME/.codex/scripts/`). Cursor CANNOT self-resolve (no env vars) - a Cursor visitor gets the consented convert-to-copy offer in setup instead; setup re-runs on any host route through the mode gate on every pass, including same-version refreshes.
+Setup remains the sole owner of setup-mode transitions, snippet integrity, setup-version stamping, and marker-bounded refresh. Legacy `version_ack` / `snippet_ack` fields are tolerated as unknown metadata but are neither read nor written by lifecycle skills. `tests/test_precheck_mode_contract.py` locks this division of responsibility across canonical and Codex paths.
 
 ## The commit-point state machine (`flowctl setup-mode set`)
 

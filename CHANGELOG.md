@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Changed
+
+- **Copy-mode drift detection is now Plan-only (fn-130).** Copy-mode projects still need `/flow-next:setup` after plugin updates, but the duplicated version/snippet ceremony is gone from the lifecycle fleet. When both versions are known and differ, interactive Plan offers a refresh or a one-run continuation; autonomous, Ralph, and receipt-driven Plan invocations warn once and continue. Setup remains the sole owner of setup-mode transitions, snippet integrity, and setup-version stamping. Direct invocation of other skills performs no version preflight.
+
 ## [flow-next 3.4.2] - 2026-07-23
 
 ### Fixed

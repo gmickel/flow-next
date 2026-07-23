@@ -411,15 +411,18 @@ def validate_manifest(fx: dict[str, Any]) -> list[str]:
     overlap = set(fx.get("required_reads") or []) & set(fx.get("forbidden_reads") or [])
     if overlap:
         errs.append(f"required∩forbidden nonempty: {sorted(overlap)}")
-    # Prompt hashes must match live tree for non-MISSING entries.
+    # B0 is immutable original-main evidence. Validate its prompt hashes against
+    # the frozen Git source, never the mutable live worktree (which legitimately
+    # diverges as soon as task 130.2 creates B1).
     for path, h in (fx.get("prompt_hashes") or {}).items():
         if str(h).startswith("MISSING:"):
             continue
-        live = REPO_ROOT / path
-        if not live.is_file():
-            errs.append(f"hashed path missing on disk: {path}")
+        try:
+            source = git_show_text(BASELINE_COMMIT, path)
+        except RuntimeError as exc:
+            errs.append(f"frozen source unavailable: {path}: {exc}")
             continue
-        got = character.content_hash(live.read_text(encoding="utf-8"))
+        got = character.content_hash(source)
         if got != h:
             errs.append(f"prompt hash drift: {path}")
     # Every required read must be hashed and counted in reached-path files.
@@ -430,7 +433,7 @@ def validate_manifest(fx: dict[str, Any]) -> list[str]:
         if req not in (fx.get("prompt_hashes") or {}):
             errs.append(f"required_read missing from prompt_hashes: {req}")
         elif str((fx.get("prompt_hashes") or {}).get(req, "")).startswith("MISSING:"):
-            errs.append(f"required_read file missing on disk: {req}")
+            errs.append(f"required_read missing from frozen source: {req}")
         if req not in reached_paths:
             errs.append(f"required_read missing from reached_path_files: {req}")
     # Recompute fixture_hash from the frozen hash-body contract; fail closed.
