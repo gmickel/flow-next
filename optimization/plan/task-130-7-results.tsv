@@ -1,0 +1,11 @@
+mutation	baseline_commit	accuracy_contract	baseline_chars	candidate_chars	delta_chars	reduction_pct	deterministic_runs	backend_telemetry	status	description
+sealed-holdout	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H1-H10 frozen before candidate	50243	50243	0	0.00	1	null	baseline	Scorer-only oracle separated from subject input; B1 router metric records SKILL+steps. P4 remains contaminated and cannot decide the examples mutation.
+routing-default	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H2-H10 contract-preserving audit	61420	55271	-6149	10.01	2	null	keep	Tracker, selected-review, and HTML machinery moved behind existing signals into one-level direct references; authoring path includes unchanged B1 examples for independent mutation accounting.
+examples-only	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H1-H7 contract-preserving audit	61420	60463	-957	1.56	2	null	keep	Only the two BAD implementation dumps became short anti-pattern anchors; Golden Rule, allowed/forbidden list, GOOD examples, research, sizing, R-ID, dependency, and Mermaid guidance remain.
+combined-default	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H1-H10 contract-preserving audit	61420	54314	-7106	11.57	2	null	keep	Default authoring path. Deterministic full-file-on-activation metrics; not a billed-token or wall-time claim.
+tracker-off	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H8 pass	50243	44094	-6149	12.24	2	null	keep	Tracker reference cold.
+tracker-on	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H8 pass	50243	44860	-5383	10.71	2	null	keep	Exactly tracker-projection.md activated after existing active+leaf gate.
+review-off	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H10 pass	50243	44094	-6149	12.24	2	null	keep	Selected-review reference cold.
+review-on	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H10 pass	50243	44920	-5323	10.59	2	null	keep	Exactly selected-review.md activated after selected mode, including export passthrough.
+html-off	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H9 pass	50243	44094	-6149	12.24	2	null	keep	HTML route and shared disclosure references cold.
+html-on	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H9 pass	69838	66644	-3194	4.57	2	null	keep	html-render-lens.md then shared disclosure reference activated after snapshot gate.

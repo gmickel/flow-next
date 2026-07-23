@@ -97,6 +97,30 @@ Before mutating `examples.md` or optional routing prose:
 This freeze is the new baseline for the previously held examples trim. P4 is
 still contaminated and cannot make the keep decision by itself.
 
+## Task 130.7 candidate — KEEP routing and examples independently
+
+Two independent mutations were compared only to hash-verified V1/B1:
+
+1. **Optional routing — KEEP.** Step 6.5 retains the existing tracker
+   active+leaf probe; Step 7 uses the already selected review mode; Step 8.5
+   retains the existing HTML value from the single Step 0 snapshot. Only after
+   a signal is on does Plan load its one-level direct reference. Default
+   authoring falls 6,149 characters (10.01%); selected paths also improve:
+   tracker 10.71%, review 10.59%, HTML 4.57%.
+2. **Examples trim — KEEP.** The two BAD full implementation dumps became
+   short anti-pattern anchors. The Golden Rule, forbidden/allowed lists, both
+   GOOD examples, research/investigation, sizing/cohesion/dependency, R-ID, and
+   Mermaid guidance remain. Independently saves 957 characters (1.56%) on the
+   authoring path.
+
+The combined default authoring path is 61,420 → 54,314 characters (-7,106,
+11.57%). Deterministic pairs were repeated N=2 and matched exactly.
+`test_skill_prose_diet` pins gate-before-read ordering, cold details, one-level
+references, short BAD anchors, and holdout answer-key separation. The H1–H10
+contract audit is zero-loss; backend/model telemetry is `null` because this
+worker was constrained to the current Codex session. No token, cache, quality,
+or wall-time claim is inferred from deterministic characters.
+
 ---
 
 ## Review pass (fable, our review rules) — verdict SHIP; rigor fixes applied

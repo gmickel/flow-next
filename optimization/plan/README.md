@@ -51,7 +51,8 @@ apples-to-apples (the ratchet needs constancy, not a specific tier). Recorded in
 `test-inputs.md` (3 frozen fixtures) · `evals.md` (5 binary: E1–E4 accuracy, E5 the quality-lever
 scoring eval, all finalized before baseline) · `results.tsv` (extended schema) · `changelog.md`
 (per-experiment log — resume from here) · `baseline/{SKILL,steps,examples}.md` (pre-mutation prose) ·
-`holdout/{input,oracle,README}.md` (task-130.7 sealed P5; input and answer key are separated).
+`holdout/{input,oracle,README}.md` (task-130.7 sealed P5; input and answer key are separated) ·
+`task-130-7-results.tsv` (independent routing/examples keep ledger and reached-path pairs).
 
 ## Resume
 

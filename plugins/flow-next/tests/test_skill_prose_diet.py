@@ -152,6 +152,65 @@ class PlanDietTestCase(unittest.TestCase):
             f"plan fixture reduction below 40% ({before} -> {after})",
         )
 
+    def test_plan_optional_routes_load_one_level_references_after_gates(self):
+        steps = read(SKILLS / "flow-next-plan/steps.md")
+        cases = (
+            ("## Step 6.5", "## Step 7", "tracker.perEvent.plan",
+             "references/tracker-projection.md"),
+            ("## Step 7", "## Step 8", "review mode is `none`",
+             "references/selected-review.md"),
+            ("## Step 8.5", None, "artifacts.html.enabled",
+             "references/html-render-lens.md"),
+        )
+        for start, end, gate, reference in cases:
+            body = section(steps, start, end) if end else steps[steps.index(start):]
+            self.assertIn(gate, body)
+            self.assertIn(reference, body)
+            self.assertLess(body.index(gate), body.index(reference),
+                            f"{reference}: reference must follow its route gate")
+            root = SKILLS / "flow-next-plan"
+            path = root / reference
+            self.assertTrue(path.is_file(), f"missing routed reference: {path}")
+            # References remain exactly one directory level under the skill root.
+            self.assertEqual(len(path.relative_to(root).parts), 2)
+
+    def test_plan_optional_details_are_cold_in_steps(self):
+        steps = read(SKILLS / "flow-next-plan/steps.md")
+        for detail in (
+            "Never create one tracker issue per task",
+            "lavish-axi \"$(pwd)/.flow/artifacts",
+            "Repeat until review returns `Ship`",
+        ):
+            self.assertNotIn(detail, steps)
+        for rel, detail in (
+            ("references/tracker-projection.md", "Never create one tracker issue per task"),
+            ("references/html-render-lens.md", "lavish-axi \"$(pwd)/.flow/artifacts"),
+            ("references/selected-review.md", "Repeat until review returns `Ship`"),
+        ):
+            self.assertIn(detail, read(SKILLS / "flow-next-plan" / rel))
+
+    def test_plan_bad_examples_are_short_anti_pattern_anchors(self):
+        examples = read(SKILLS / "flow-next-plan/examples.md")
+        epic_bad = section(examples, "### ❌ BAD: Epic", "### ✅ GOOD: Epic")
+        task_bad = section(examples, "### ❌ BAD: Task", "### ✅ GOOD: Task")
+        for name, bad in (("epic", epic_bad), ("task", task_bad)):
+            code_lines = [
+                line for line in bad.splitlines()
+                if line and not line.startswith(("###", "```", "\\`\\`\\`", "**", "- "))
+            ]
+            self.assertLessEqual(len(code_lines), 12,
+                                 f"{name} BAD anchor regrew into an implementation dump")
+        self.assertNotIn("Bun.spawn", task_bad)
+        self.assertNotIn("process.kill", task_bad)
+
+    def test_plan_holdout_keeps_subject_and_answer_key_separate(self):
+        holdout = REPO / "optimization" / "plan" / "holdout"
+        subject = read(holdout / "input.md")
+        oracle = read(holdout / "oracle.md")
+        self.assertIn("no-code permit-intake architecture", subject)
+        self.assertIn("H10 — review route", oracle)
+        self.assertNotIn("H1 — no implementation leakage", subject)
+
 
 class PilotSnapshotTestCase(unittest.TestCase):
     def test_exactly_one_config_call_located_in_skill_md(self):
