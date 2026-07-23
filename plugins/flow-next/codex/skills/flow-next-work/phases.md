@@ -178,9 +178,11 @@ git merge-base HEAD <base-branch> > .flow/tmp/spec_base # <base-branch> = the br
 ```
 Like the worker `BASE_COMMIT`, bash variables do not survive across prompt turns, so later phases re-read this persisted base via `$(cat .flow/tmp/spec_base)`. Capture it once at branch setup; Phase 4 uses it for classify calls.
 
-## Phase 3: Task Loop
+## Phase 3: Task Wave Loop
 
-**For each task**, use the worker agent with fresh context.
+In SPEC_MODE, inspect the whole ready frontier and prefer a concurrent safe
+subset. In SINGLE_TASK_MODE, the selected wave is always the requested task
+alone. Every task still gets a fresh-context worker.
 
 **Circuit-breaker counter init (ONLY when `delegation_active` — Phase 0/1.5).**
 The breaker counter is **host-owned**: each task is a fresh-context worker, so an
@@ -195,7 +197,7 @@ consecutive_failures = 0
 After each delegated worker returns, the host bridges the worker's terminal
 `DELEGATION_RESULT=`/`DELEGATION_ACTION=` signal into this counter — see 3d.2.
 
-### 3a. Find Next Task
+### 3a. Inspect Ready Frontier and Select a Wave
 
 ```bash
 $FLOWCTL ready --spec <spec-id> --json
@@ -203,11 +205,39 @@ $FLOWCTL ready --spec <spec-id> --json
 
 If no ready tasks, check for completion review gate (see 3g below).
 
-### 3b. Start Task
+In SPEC_MODE, consider every returned task. Prefer concurrent dispatch when a
+useful subset is meaningfully disjoint and the host can safely isolate mutable
+workspaces and integrate their results. Dependencies and `**Files:**` are
+evidence; also consider shared lockfiles, generated outputs, migrations,
+fixtures, services, and other hidden coupling. The host chooses eligibility,
+worker count, isolation mechanism, and integration mechanism from its available
+capabilities. Never run concurrent writers in one checkout.
+
+If safety, host capacity, or integration is uncertain, select one task and
+continue sequentially. An explicit request to parallelize strengthens the
+preference but never overrides safety.
+
+Report the decision before claiming:
+
+```text
+Ready frontier: [fn-X.1, fn-X.2]
+Selected wave: [fn-X.1, fn-X.2]
+Isolation: <native worktrees | linked worktrees | other safe mechanism>
+Dispatch count: 2
+Sequential fallback: <reason> # only when multiple tasks were ready but one selected
+```
+
+### 3b. Claim the Selected Wave
+
+Claim every selected task before dispatch:
 
 ```bash
 $FLOWCTL start <task-id> --json
 ```
+
+If any claim fails, do not dispatch that task. Recompute the selected wave from
+ground truth. A successful atomic claim prevents duplicate ownership; it does
+not make shared-checkout Git or filesystem mutations safe.
 
 #### 3b.1 Tracker sync (opt-in) — first claim → In-Progress
 
@@ -229,14 +259,23 @@ fi # default branch: bare no-op — NO link, NO read path
 
 When the sentinel prints, STOP and Read [references/tracker-touchpoints.md](references/tracker-touchpoints.md) before any further step — its `First claim` section holds this touchpoint's `work.firstClaim` leaf check + dispatch (best-effort; never blocks the worker). When the gate is silent (bridge inactive), continue — nothing fires here.
 
-### 3c. Run Worker Agent
+### 3c. Run Worker Agent(s)
 
-Use the **worker** agent role to implement the task. The worker gets fresh context and handles:
+Use the **worker** agent role to implement each selected task. For a multi-task
+wave, create one isolated mutable workspace and task-unique summary/evidence
+paths per worker, then dispatch the selected workers concurrently. For a
+one-task wave, use the existing single-worker path.
+
+The worker gets fresh context and handles:
 - Re-anchoring (reading spec, git status, task-relevant glossary terms when populated)
 - Implementation
 - Committing
 - Review cycles (if enabled)
-- Completing the task (flowctl done) — EXCEPT under `REVIEW_MODE: host-deferred`, where the worker defers `flowctl done` and the conductor's 3d.0 gate owns completion
+- Completing the task (flowctl done)
+
+The last two responsibilities apply only to the existing single-worker path. A
+parallel-wave worker defers review and all shared lifecycle work to the
+conductor after integration.
 
 **`REVIEW_MODE` is per-task, not a fixed run-wide value.** Resolve it for THIS task: if the user
 passed an explicit `--review=<backend>` to `/flow-next:work`, use that (a deliberate run-wide override
@@ -253,22 +292,66 @@ SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
 REVIEW_MODE: none|rp|codex|copilot|cursor|host-deferred
 RALPH_MODE: true|false
+PARALLEL_WAVE: true|false
+WORKSPACE: <isolated mutable workspace>
+HANDOVER_SUMMARY: <task-unique summary path>
+HANDOVER_EVIDENCE: <task-unique evidence path>
 
 Follow your phases exactly."
 
+Set `PARALLEL_WAVE: true` only for a concurrently dispatched multi-task wave.
+Those workers implement, test, commit, and return their workspace, commits, and
+the exact handover paths. They do **not** call `flowctl done`, project tracker
+state, invoke plan-sync, run impl-review, or integrate their own commit. This
+host-deferred shape is independent of `REVIEW_MODE`; the conductor preserves
+the resolved backend and applies it after integration. The prompt fields are an
+internal handoff, not a public CLI or stored schema.
+
 **Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE done.** When the resolved review mode is \`host\`, pass \`REVIEW_MODE: host-deferred\`: the worker skips review dispatch AND defers \`flowctl done\` (returns with the task still in_progress + summary/evidence files written). The conductor then runs \`$flow-next-impl-review <task-id> --review=host\` as the mandatory gate and only on SHIP runs \`flowctl done\` with the worker-prepared summary/evidence plus the review receipt; NEEDS_WORK drives the bounded fix loop before done.
 
-**Worker returns**: Summary of implementation, files changed, test results, review verdict (or, under host-deferred: implementation summary + handover paths, review pending at conductor level).
+**Worker returns**: Summary of implementation, files changed, test results,
+review verdict on the single-worker path; or task ID, workspace, commits, and
+task-unique handover paths on the parallel path.
 
-### 3d. Verify Completion
+### 3d. Join, Integrate, and Verify
 
-After the worker agent returns, verify the task completed:
+For a parallel wave, wait for every dispatched worker before selecting more
+work or running plan-sync. Report each worker outcome and the completed join:
+
+```text
+Worker outcomes:
+- fn-X.1: success — <commit/workspace>
+- fn-X.2: failed — <typed reason or ground-truth state>
+Join: complete (2/2 returned)
+```
+
+Use the host's chosen integration mechanism to bring each successful worker's
+commits onto the target branch. Then, on the integrated target and one task at a
+time:
+
+1. confirm the task's code, tests, commit, and handover files;
+2. normalize its evidence to the integrated commit IDs/base and append any
+ conductor-run tests;
+3. when its resolved `REVIEW_MODE` is not `none`, run
+ `/flow-next:impl-review <task-id> --review=<backend>` and apply the existing
+ bounded fix loop;
+4. only after the required SHIP verdict, run `flowctl done` with the updated
+ task-unique summary/evidence;
+5. verify `flowctl show <task-id> --json` reports `done`, then run the existing
+ 3d.1 tracker touchpoint.
+
+Partial failures use the existing ground-truth recovery rules below. Successful
+tasks may be integrated and completed, but the wave is not resolved until each
+failed task has been continued, retried within the existing cap, or surfaced as
+blocked. No batch state is introduced.
+
+On the single-worker path, verify completion as before:
 
 ```bash
 $FLOWCTL show <task-id> --json
 ```
 
-#### 3d.0 host-deferred gate (runs FIRST when this task's REVIEW_MODE was `host-deferred`)
+#### 3d.0 host-deferred gate (runs FIRST on the single-worker path when this task's REVIEW_MODE was `host-deferred`)
 
 A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification:
 
@@ -344,11 +427,14 @@ standard in-session, and the loop **never blocks** (Ralph-safe: failures degrade
 they don't halt). The inlined `evidence.delegation` the worker wrote into
 `flowctl done` is the durable proof-of-work surface (Ralph log / receipt).
 
-### 3e. Plan Sync (if enabled) — BOTH MODES
+### 3e. Plan Sync After the Resolved Wave (if enabled) — BOTH MODES
 
 **Runs in SINGLE_TASK_MODE and SPEC_MODE.** Only the loop-back in 3f differs by mode.
 
-Only run plan-sync if the task status is `done` (from step 3d). If not `done`, skip plan-sync and investigate/retry.
+Do not run plan-sync while any peer worker is active or the wave is unresolved.
+After the join, integration, review, and completion steps finish, run this
+section once for each task that reached `done` in the resolved wave. If a task
+is not `done`, skip plan-sync for it and investigate/retry.
 
 Check if plan-sync should run:
 
@@ -398,11 +484,13 @@ Plan-sync returns summary. Log it but don't block - task updates are best-effort
 
 ### 3f. Loop or Finish
 
-**IMPORTANT**: Steps 3d and 3e ALWAYS run after worker returns, regardless of mode. Only the loop-back behavior differs:
+**IMPORTANT**: Steps 3d and 3e ALWAYS run after the whole selected wave returns,
+regardless of mode. Only the loop-back behavior differs:
 
 **SINGLE_TASK_MODE**: After 3d→3e, go to Phase 4 (Quality). No loop.
 
-**SPEC_MODE**: After 3d→3e, return to 3a for next task.
+**SPEC_MODE**: After 3d→3e, recompute the next ready frontier at 3a. Never
+select it before the current wave is joined and resolved.
 
 ### 3g. Completion Review Gate (SPEC_MODE only)
 
@@ -581,9 +669,9 @@ Confirm before ship:
 
 ```
 Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
- ├─ 3a-c: find task → start → run worker agent
- ├─ 3d: verify done
- ├─ 3e: plan-sync (if enabled + downstream tasks exist)
+ ├─ 3a-c: inspect frontier → select/claim wave → dispatch isolated worker(s)
+ ├─ 3d: join → integrate → review/complete each task
+ ├─ 3e: plan-sync after the wave resolves (if enabled + downstream tasks exist)
  ├─ 3f: SPEC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
  ├─ no more tasks → 3g: check completion_review_status
  │ ├─ status != ship → invoke /flow-next:spec-completion-review → fix loop until SHIP → set status=ship

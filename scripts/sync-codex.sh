@@ -354,14 +354,23 @@ if [ -f "$phases" ]; then
     end_line=$((end_line - 1))
     head -n $((start_line - 1)) "$phases" > "${phases}.tmp"
     cat >> "${phases}.tmp" << 'SECTION3C'
-### 3c. Run Worker Agent
+### 3c. Run Worker Agent(s)
 
-Use the **worker** agent role to implement the task. The worker gets fresh context and handles:
+Use the **worker** agent role to implement each selected task. For a multi-task
+wave, create one isolated mutable workspace and task-unique summary/evidence
+paths per worker, then dispatch the selected workers concurrently. For a
+one-task wave, use the existing single-worker path.
+
+The worker gets fresh context and handles:
 - Re-anchoring (reading spec, git status, task-relevant glossary terms when populated)
 - Implementation
 - Committing
 - Review cycles (if enabled)
-- Completing the task (flowctl done) — EXCEPT under `REVIEW_MODE: host-deferred`, where the worker defers `flowctl done` and the conductor's 3d.0 gate owns completion
+- Completing the task (flowctl done)
+
+The last two responsibilities apply only to the existing single-worker path. A
+parallel-wave worker defers review and all shared lifecycle work to the
+conductor after integration.
 
 **`REVIEW_MODE` is per-task, not a fixed run-wide value.** Resolve it for THIS task: if the user
 passed an explicit `--review=<backend>` to `/flow-next:work`, use that (a deliberate run-wide override
@@ -378,12 +387,26 @@ SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
 REVIEW_MODE: none|rp|codex|copilot|cursor|host-deferred
 RALPH_MODE: true|false
+PARALLEL_WAVE: true|false
+WORKSPACE: <isolated mutable workspace>
+HANDOVER_SUMMARY: <task-unique summary path>
+HANDOVER_EVIDENCE: <task-unique evidence path>
 
 Follow your phases exactly."
 
+Set `PARALLEL_WAVE: true` only for a concurrently dispatched multi-task wave.
+Those workers implement, test, commit, and return their workspace, commits, and
+the exact handover paths. They do **not** call `flowctl done`, project tracker
+state, invoke plan-sync, run impl-review, or integrate their own commit. This
+host-deferred shape is independent of `REVIEW_MODE`; the conductor preserves
+the resolved backend and applies it after integration. The prompt fields are an
+internal handoff, not a public CLI or stored schema.
+
 **Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE done.** When the resolved review mode is \`host\`, pass \`REVIEW_MODE: host-deferred\`: the worker skips review dispatch AND defers \`flowctl done\` (returns with the task still in_progress + summary/evidence files written). The conductor then runs \`$flow-next-impl-review <task-id> --review=host\` as the mandatory gate and only on SHIP runs \`flowctl done\` with the worker-prepared summary/evidence plus the review receipt; NEEDS_WORK drives the bounded fix loop before done.
 
-**Worker returns**: Summary of implementation, files changed, test results, review verdict (or, under host-deferred: implementation summary + handover paths, review pending at conductor level).
+**Worker returns**: Summary of implementation, files changed, test results,
+review verdict on the single-worker path; or task ID, workspace, commits, and
+task-unique handover paths on the parallel path.
 
 SECTION3C
     tail -n +$end_line "$phases" >> "${phases}.tmp"

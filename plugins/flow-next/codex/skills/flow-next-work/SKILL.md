@@ -202,7 +202,7 @@ Wait for response. Parse naturally — user may reply terse or ramble via voice.
 
 After setup questions answered, read [phases.md](phases.md) and execute each phase in order.
 
-**Worker agent model**: Each task is implemented by the `worker` agent role with fresh context. This prevents context bleed between tasks and keeps re-anchor info with the implementation. The main conversation handles task selection and looping; worker agent handles implementation, commits, and reviews.
+**Worker agent model**: Each task is implemented by the `worker` agent role with fresh context. This prevents context bleed between tasks and keeps re-anchor info with the implementation. The main conversation owns the ready frontier: it prefers a concurrent wave when tasks are safely disjoint and the host can isolate and integrate them, otherwise it explains the sequential fallback. A parallel worker implements, tests, and commits in its isolated workspace, then returns task-unique handover files without completing shared Flow state. The conductor joins and integrates the whole wave before review, completion, tracker projection, plan-sync, or selecting the next frontier.
 
 If user chose review, pass the review mode to the worker. The worker agent invokes `/flow-next:impl-review` after implementation and loops until SHIP.
 
