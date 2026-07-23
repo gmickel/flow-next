@@ -78,6 +78,27 @@ Zero accuracy loss. The kept mutation is live in `plugins/flow-next/skills/flow-
 
 ---
 
+## Task 130.7 pre-candidate freeze — V1/B1 + sealed P5
+
+Before mutating `examples.md` or optional routing prose:
+
+- `python3 optimization/reached-path/run_eval.py --validate-b1` passed for all
+  117 manifests.
+- `python3 optimization/reached-path/run_eval.py --check-b1-input plan` passed
+  for all four Plan prompt files.
+- P5 was frozen under `holdout/`: a non-flow-next no-code architecture request,
+  a fixed research bundle, R1–R6, a Mermaid condition, and tracker/HTML/review
+  on/off inputs. Its H1–H10 scorer lives in a separate file not visible to the
+  subject.
+- B1 deterministic router evidence is 50,243 reached-path characters. Backend
+  telemetry is explicitly unavailable in this Codex-session-only worker run
+  and is not inferred from source bytes or wall time.
+
+This freeze is the new baseline for the previously held examples trim. P4 is
+still contaminated and cannot make the keep decision by itself.
+
+---
+
 ## Review pass (fable, our review rules) — verdict SHIP; rigor fixes applied
 
 Fable-model adversarial review confirmed the ratchet is honest (the a-priori E5 lever was invalidated
