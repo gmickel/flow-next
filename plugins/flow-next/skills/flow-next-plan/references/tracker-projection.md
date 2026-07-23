@@ -12,4 +12,3 @@ best-effort no-op; tracker failure never blocks planning.
 Never create one tracker issue per task. The grain is one spec ↔ one issue and
 tasks remain Flow-local. The only optional task-level effect is a task checklist
 inside the issue body, owned by the merge engine and off by default.
-

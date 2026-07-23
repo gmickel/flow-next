@@ -106,7 +106,7 @@ Two independent mutations were compared only to hash-verified V1/B1:
    retains the existing HTML value from the single Step 0 snapshot. Only after
    a signal is on does Plan load its one-level direct reference. Default
    authoring falls 6,149 characters (10.01%); selected paths also improve:
-   tracker 10.71%, review 10.59%, HTML 4.57%.
+   tracker 10.72%, review 10.59%, HTML 4.58%.
 2. **Examples trim — KEEP.** The two BAD full implementation dumps became
    short anti-pattern anchors. The Golden Rule, forbidden/allowed lists, both
    GOOD examples, research/investigation, sizing/cohesion/dependency, R-ID, and

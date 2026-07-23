@@ -21,4 +21,3 @@ The fixture and answer key are immutable for task 130.7. A prompt candidate
 that fails any baseline-pass H-cell is reverted independently. A flat candidate
 is discarded. P4 remains contaminated by the earlier sizing example and is not
 the sole evidence for an examples mutation.
-

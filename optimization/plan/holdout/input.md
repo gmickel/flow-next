@@ -53,4 +53,3 @@ Score the same planning judgment under these independent route inputs:
 | Tracker | bridge inactive / `perEvent.plan` unset | bridge active / `perEvent.plan=push` |
 | HTML | `artifacts.html.enabled=false` | `artifacts.html.enabled=true` |
 | Review | review choice `none` | review choice `host` |
-

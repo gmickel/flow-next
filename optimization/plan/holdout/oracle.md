@@ -19,4 +19,3 @@ prose comprehension alone is insufficient.
 | H8 — tracker route | Off: the tracker reference is not read and there is no tracker side effect/output. On: exactly the tracker reference is read after the existing active+leaf gate; one spec maps to one issue and failure remains best-effort. |
 | H9 — HTML route | Off: the HTML reference is not read and there is no artifact output. On: exactly the HTML reference is read after the existing config-snapshot gate; late regeneration, link marker, checklist, Lavish guard, and best-effort behavior remain intact. |
 | H10 — review route | Off: the review reference is not read and no review runs. On: exactly the review reference is read after the chosen review signal; re-anchor/fix/review behavior and terminal SHIP contract remain intact. |
-

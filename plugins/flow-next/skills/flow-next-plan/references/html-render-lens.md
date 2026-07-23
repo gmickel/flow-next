@@ -46,4 +46,3 @@ Load this reference only after Step 8.5 derives
 
 Best-effort: generation failure is non-fatal. Skip the link update, print one
 stderr note, and never block planning; markdown remains the record.
-
