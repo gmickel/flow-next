@@ -4,6 +4,12 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+## [flow-next 3.4.2] - 2026-07-23
+
+### Fixed
+
+- **Memory titles starting with `'`, `"`, or `- ` no longer produce invalid YAML frontmatter (#235).** `flowctl memory add` emitted these leading sequences unquoted, writing files its own PyYAML reader rejected; the entry then vanished from `memory list`/`search` with zero diagnostics. The quoting gate now covers leading quotes, block-sequence/mapping-key indicators (`- `, `? `, bare `-`/`?`), and unstripped whitespace; the no-PyYAML inline parser also unescapes double-quoted scalars so both readers round-trip identically. Companion fix: malformed entries are no longer dropped silently - `memory list`/`search` now warn on stderr (`flowctl: skipping <path>: malformed frontmatter`). Thanks to @TechupBusiness for the exceptionally thorough report, down to line numbers and verified breaking sequences.
+
 ## [flow-next 3.4.1] - 2026-07-23
 
 ### Changed
