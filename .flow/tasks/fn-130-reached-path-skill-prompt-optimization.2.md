@@ -55,9 +55,8 @@ Canonical Plan uses `AskUserQuestion`; `scripts/sync-codex.sh` applies the repos
 - [ ] `scripts/sync-codex.sh` runs twice idempotently and focused precheck/setup/mirror tests pass.
 
 ## Done summary
-TBD
-
+Replaced the duplicated lifecycle setup-version ceremony with one concise Plan-only copy-mode contract across canonical and Codex surfaces. Interactive Plan now offers the frozen refresh/continue choice; autonomous, Ralph, and receipt-driven Plan paths warn once and continue; all other lifecycle skills perform no version preflight. Setup remains the sole owner of setup mode, snippet integrity, and setup-version stamping. Updated repository and flow-next.dev guidance, corrected optimization promotion policy to Unreleased plus batched releases, made immutable B0 validation commit-sourced, and froze 117 V1/B1 manifests from commit 8ed71a73ccc593a8a018dcdb805a86f396dcf76f with a fail-closed per-cluster input checker.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8ed71a73ccc593a8a018dcdb805a86f396dcf76f, b5a8a42b
+- Tests: python3 -m unittest -q test_precheck_mode_contract test_setup_mode_stamp test_setup_snippet_lockstep test_setup_cursor_host test_setup_grok_host test_token_budgets test_skill_prose_diet test_pilot_backlog_mirror_safety test_reached_path_harness (128 passed), python3 optimization/reached-path/run_eval.py --self-test (passed), python3 optimization/reached-path/run_eval.py --validate-b0 (117 manifests passed), python3 optimization/reached-path/run_eval.py --validate-b1 (117 manifests passed), python3 optimization/reached-path/run_eval.py --check-b1-input <each of 11 clusters> (passed), ./scripts/sync-codex.sh twice (idempotent), bun run build in flow-next.dev (Astro check/build passed), git diff --check (passed)
 - PRs:
