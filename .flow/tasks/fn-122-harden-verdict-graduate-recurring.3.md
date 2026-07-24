@@ -37,6 +37,8 @@ Known hits from plan-time scouting (re-verify line numbers):
 
 Then regenerate the Codex mirror: run `./scripts/sync-codex.sh` TWICE (the second run proves idempotency) and commit the mirror diff alongside the canonical changes. Its validation guards must stay green.
 
+<!-- Updated by plan-sync: fn-122-harden-verdict-graduate-recurring.2 already ran sync-codex.sh (twice, idempotent, guards green) and committed the regenerated mirror, including a widened flow-next-audit description at scripts/sync-codex.sh:1577 ("keep, update, consolidate, replace, delete, or harden" / "graduate a recurring lesson into a gate"). This task's docs edits (memory-schema.md, flowctl.md, README.md, self-improving.md, agents/memory-scout.md, CHANGELOG.md) are not mirror inputs, so re-running sync-codex.sh here is expected to produce NO diff on either run -- that is a pass, not a sign something is missing. Still run it twice per the checklist as a regression check (someone could have edited a mirrored skill file since .2 landed), but do not go looking for a description to widen -- that edit already happened. -->
+
 Check `GLOSSARY.md` — it currently defines neither memory statuses nor audit outcomes. Add a `Harden` / `Hardened` term only if the sweep shows the vocabulary is otherwise undiscoverable; otherwise leave it and say so.
 
 ### Investigation targets
