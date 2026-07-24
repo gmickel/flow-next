@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-131-review-round-cap-transport-failures.md",
-  "status": "open",
+  "status": "done",
   "title": "Review-round cap: transport failures must not consume rounds",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-24T08:15:34.331724Z"
+  "updated_at": "2026-07-24T09:43:23.884549Z"
 }
