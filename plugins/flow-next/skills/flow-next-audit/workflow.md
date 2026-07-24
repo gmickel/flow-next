@@ -42,6 +42,8 @@ For each kept path, read the frontmatter (parser pattern from `prospect/workflow
 
 If the entry's `status` is `stale` already, surface it in the report under "Already stale" and skip investigation in autofix mode (mark-stale is idempotent — re-marking adds noise). In interactive mode, offer to refresh-investigate (rare path; user-driven).
 
+If the entry's `status` is `hardened`, capture its `hardened_into` value into the entry record. Hardened entries are **not** dropped from the walk: they get the cheap gate-liveness check in §0.75, never a full re-investigation. Note that `flowctl memory list` excludes hardened entries by default (same treatment as stale) — the audit's own Glob walk in §0.1 sees them regardless, which is why the walk, not `memory list`, is the source of truth here.
+
 **Decisions are auto-walked.** `MEMORY_CATEGORIES["knowledge"]` includes `decisions` (fn-38 schema extension), so the glob in §0.1 picks up `.flow/memory/knowledge/decisions/*.md` automatically — no separate phase. Decision entries get a calibrated judging question and a different `Replace` shape; see [phases.md](phases.md) §Decision-entry calibration. Decision-specific frontmatter (`decision_status`, `superseded_by`, `alternatives_considered`) is captured into the entry record for Phase 1 to use; entries with `decision_status: superseded` are surfaced as historical record and skipped (the audit target is the successor, not the superseded entry).
 
 ### 0.2 — Detect legacy flat files
@@ -284,7 +286,37 @@ Capture the per-term outcomes into a glossary section of the report (see §5.1 b
 
 **Goal:** a mature store re-audited from scratch dispatches a Phase-1 investigation subagent *per entry*, even for entries whose referenced code hasn't moved since the last audit. Those are still current — auto-Keep them without investigation. This turns the dominant runtime cost from **O(all entries) → O(changed)** and concentrates the model's attention on entries with an actual drift signal.
 
-For each discovered entry (§0.1), decide whether it needs Phase-1 investigation:
+### 0.75.1 — Recurrence pre-scan (runs BEFORE the auto-Keep decision)
+
+**Order matters, and it is load-bearing for Harden.** Auto-Keep below excludes unchanged-module entries from Phase 1 entirely. The entries most likely to deserve a gate are exactly the old, settled, repeatedly re-taught ones whose module stopped moving long ago — so gathering recurrence evidence inside Phase 1 would guarantee those entries are never seen. Gather it here instead, before anything is auto-Kept. The cost is three cheap file-local commands per entry, no code investigation:
+
+```bash
+# per entry: $entry_file (path from §0.1), $entry_id
+UPDATE_HEADINGS=$(grep -c '^## Update ' "$entry_file" 2>/dev/null || echo 0)
+ENTRY_COMMITS=$(git -C "$REPO_ROOT" log --oneline -- "$entry_file" 2>/dev/null | wc -l | tr -d ' ')
+# plus, from the frontmatter already parsed in §0.1: related_to length, last_updated
+```
+
+An entry is **recurrence-qualified** when `UPDATE_HEADINGS >= 2` OR `ENTRY_COMMITS >= 4`. A `related_to` cluster of `>= 3` corroborates but never qualifies on its own — see [phases.md](phases.md) §Harden for the thresholds and the calibration evidence behind them.
+
+- **Recurrence-qualified → bypass auto-Keep.** The entry (or, for a cluster, the cluster) enters the Phase-1 investigation set for Harden consideration even when its module is unchanged. Record why: `recurrence bypass — 2 Update headings, module unchanged`.
+- Not qualified → fall through to the normal auto-Keep decision below.
+
+Recurrence is inferred from these **write-side artifacts plus LLM judgment**. There is no read-side usage telemetry anywhere in flow-next: `memory-scout` retrieval and worker re-anchor reads leave no trace on the entry, and nothing records that an entry fired during a run. Do not claim a usage count in evidence bullets — cite the artifacts.
+
+### 0.75.2 — Hardened entries: gate-liveness check only
+
+An entry with `status: hardened` skips both auto-Keep and full investigation. Instead, grep the `<path>` from its `hardened_into` for the `<rule-id>` token, and apply the same activeness check as Phase 4's verification (resolved lint config, live CI job, substantive instruction file):
+
+- **Gate present and active** → report as still-hardened. No investigation, no write.
+- **Gate gone or inactive** → propose un-graduation via `flowctl memory mark-fresh "$entry_id"` (returns the entry to `active` and drops `hardened_into`), citing which surface was checked and what was missing. Interactive asks in Phase 3; autofix reports it under Recommended without applying.
+- **Gate upgraded** (a better surface now enforces the class) → re-`mark-hardened` with the new ref; it is idempotent and replaces `hardened_into`.
+
+Without this check a reverted lint rule would strand the lesson permanently: excluded from default `memory list` / `search` (so memory-scout never re-injects it) with no path back.
+
+### 0.75.3 — Auto-Keep decision
+
+For each remaining discovered entry (§0.1) — not recurrence-qualified, not hardened — decide whether it needs Phase-1 investigation:
 
 ```bash
 # per entry: $entry_id, $module (frontmatter), $last_audited (frontmatter, may be empty),
@@ -304,6 +336,8 @@ fi
 
 **Auto-Kept entries STILL flow into Phase 1.75 cross-doc analysis and the Phase-5 report** — the pre-filter skips only the expensive per-entry investigation, never the cheap pairwise contradiction scan, so an entry that went stale because a *different* entry changed is still caught. Autofix always applies the pre-filter; interactive mode may offer "re-investigate all anyway" (rare, user-driven).
 
+A recurrence-qualified entry (§0.75.1) is never auto-Kept, even when its module is untouched.
+
 ## Phase 1: Investigate (per entry)
 
 **Goal:** for each entry in scope, verify its claims against the current codebase and form a recommendation with evidence.
@@ -315,6 +349,7 @@ A memory entry has dimensions that can independently go stale:
 - **Code examples** — if the body includes code snippets, do they reflect current implementation?
 - **Related entries** — `related_to: [<id>, ...]` cross-references — do those entries still exist? Are they consistent?
 - **Problem domain** — does the application still face the problem this entry solves? A bug entry about a deleted feature is misleading.
+- **Recurrence** — is this lesson being re-taught rather than absorbed? Carried in from the §0.75.1 pre-scan (`## Update` heading count, entry-file commit count, `related_to` size). Recurrence plus mechanizability is the Harden signal.
 
 ### 1.1 — Per-entry investigation steps
 
@@ -325,7 +360,8 @@ For each entry:
 3. **Verify referenced files** in the body — same pattern. List broken references.
 4. **Check git log** in the affected area (if the path resolves): `git log --oneline -10 -- <path>`. Recent activity = code is alive; long quiet = candidate for deletion if also unreferenced elsewhere.
 5. **Search for successor patterns** — if the entry is a bug, Grep for the symptom keywords in the current codebase. If matches turn up in code that looks like a re-implementation, the problem domain may persist under a new shape (Replace, not Delete).
-6. **Form a recommendation:** Keep / Update / Consolidate / Replace / Delete + 2-4 evidence bullets + confidence (low / medium / high).
+6. **Carry the recurrence artifacts** from the §0.75.1 pre-scan into the evidence (`## Update` heading count, entry-file commit count, `related_to` size). **State them as artifacts, never as a usage count** — there is no read-side telemetry; nothing records that an entry fired during a run, so recurrence is inference over write-side artifacts plus judgment. For a recurrence-qualified entry, additionally judge **mechanizability** (is the lesson a deterministic check a gate could run?) and, if yes, discover which gate surfaces exist in this repo — an existing linter config, an existing CI workflow, the substantive instruction file. Never assume a surface; never scaffold one.
+7. **Form a recommendation:** Keep / Update / Consolidate / Replace / Delete / Harden + 2-4 evidence bullets + confidence (low / medium / high). Apply the precedence rule in [phases.md](phases.md) — correctness (Replace / Delete) wins over Consolidate, which wins over Harden.
 
 Match investigation depth to entry specificity. An entry referencing exact file paths and code snippets needs more verification than one describing a general principle.
 
@@ -345,12 +381,17 @@ Investigation subagents are **read-only**. They must not Edit, Write, Bash beyon
 
 ```yaml
 entry_id: bug/runtime-errors/oauth-callback-2025-08-12
-recommendation: Update | Keep | Consolidate | Replace | Delete
+recommendation: Update | Keep | Consolidate | Replace | Delete | Harden
 confidence: low | medium | high
 evidence:
   - "file `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts` (git log shows move 2025-11-03)"
   - "function signature unchanged — solution still applies"
   - "no successor entry found"
+recurrence:            # carried from §0.75.1; artifacts only, never a usage count
+  update_headings: 2
+  entry_commits: 4
+  related_to: 0
+mechanizable: yes | no | n/a   # required whenever recommendation is Harden
 open_questions:
   - "should this be consolidated with bug/runtime-errors/oauth-token-2025-09-04?"
 ```
@@ -444,7 +485,7 @@ Default to consolidate when none apply.
 
 ## Phase 2: Classify
 
-**Goal:** assign each entry exactly one of the 5 outcomes, applying [phases.md](phases.md) decision criteria.
+**Goal:** assign each entry exactly one of the 6 outcomes, applying [phases.md](phases.md) decision criteria.
 
 For each entry, the recommendation from Phase 1 + cross-doc context from Phase 1.75 produces:
 
@@ -453,6 +494,15 @@ For each entry, the recommendation from Phase 1 + cross-doc context from Phase 1
 - **Consolidate** — overlaps heavily with another entry (canonical doc identified)
 - **Replace** — guidance now misleading; successor needs writing
 - **Delete** — code gone AND problem domain gone
+- **Harden** — correct, recurring (§0.75.1 signal) AND mechanizable; graduate into a gate and demote the entry to a pointer
+
+### Outcome precedence (when several apply)
+
+Apply [phases.md](phases.md) §Outcome precedence: **correctness (Replace / Delete) > Consolidate > Harden**. A wrong lesson is never graduated into a gate, and a `related_to` cluster is consolidated before the merged entry is considered — the cluster, not each member, is the Harden unit. An entry classified Consolidate this run may be re-evaluated for Harden once, as the merged canonical entry.
+
+### Harden gate (both conditions, AND)
+
+A Harden classification requires BOTH a recurrence signal from §0.75.1 (`>= 2` `## Update` headings OR `>= 4` entry-file commits; `related_to >= 3` corroborates only) AND an LLM judgment that the lesson is mechanizable. Missing either → Keep. The duplication guard runs before the candidate reaches Phase 3: an already-enforced-and-active class becomes a pointer-demotion proposal with no new artifact; a matched-but-inactive rule is a broken gate, so the entry stays `active` and the finding is reported. **In autofix mode, Harden candidates are never applied** — they are classified and reported under Recommended only.
 
 ### Replace evidence sufficiency check
 
@@ -488,6 +538,8 @@ Bundle the easy ones, isolate the hard ones:
 3. **Present Consolidate clusters individually** — show canonical doc + what merges + what gets deleted.
 4. **Present Replace candidates individually** — show old guidance + current code finding + proposed successor outline.
 5. **Present non-auto Delete cases individually** — show evidence, ask explicitly. Auto-Delete bypasses this.
+6. **Present Harden candidates individually** — never batched. Each one edits shared repo infrastructure, so each needs its own explicit consent. See §3.4.
+7. **Present un-graduation proposals individually** — a hardened entry whose gate is gone (§0.75.2). Show which surface was checked and what was missing; options are `mark-fresh` (recommended) / leave hardened / skip.
 
 ### 3.2 — Question style
 
@@ -497,7 +549,7 @@ Rules:
 
 - **One question at a time.**
 - **Multiple choice** when natural.
-- **Lead with the recommendation** — don't enumerate all 5 outcomes if only 2 are plausible.
+- **Lead with the recommendation** — don't enumerate all 6 outcomes if only 2 are plausible.
 - **One-sentence rationale** — evidence is in the report, not the question.
 
 Example question shape (single entry):
@@ -516,7 +568,41 @@ Options:
   3. Mark stale
 ```
 
-### 3.3 — Skip discoverability check until Phase 6
+### 3.3 — Harden candidate questions
+
+One question per candidate, via the same blocking-question tool. Show the proposed gate type, the **draft artifact exactly as it would be written**, and the recurrence evidence as artifacts (never as a usage count — there is no read-side telemetry):
+
+```
+Entry: knowledge/conventions/timestamps-utc-2026-03-04
+Lesson: always stamp timestamps UTC ISO-8601; naive datetime.now() broke receipt comparisons
+Evidence:
+  - 2 `## Update` headings (re-taught in fn-97 and fn-104)
+  - 4 commits on the entry file
+  - mechanizable: naive-datetime use is lint-detectable
+  - duplication guard: no `DTZ` rule found in pyproject.toml
+Proposed gate: (a) lint rule — add `DTZ` to the ruff `select` list in pyproject.toml
+
+  [tool.ruff.lint]
+  select = ["E", "F", "DTZ"]     # <- DTZ added
+
+On accept: the edit is written, `ruff check` is run to confirm DTZ is active in the
+resolved config, and only then is the entry demoted to a pointer at the gate
+(file stays on disk, body intact).
+
+Options:
+  1. Accept — write the lint rule, verify, demote (recommended)
+  2. Pick a different gate type (CI step / CLAUDE.md rule)
+  3. Decline — keep the entry as context
+```
+
+Rules for these questions:
+
+- **Always three options**: accept / pick a different gate type / decline. Declining is a first-class answer, not a failure.
+- If the user picks option 2, present the alternative surfaces that actually exist in this repo with their drafts; never offer a surface the repo does not have, and never offer to scaffold one.
+- For a **pointer-demotion** candidate (duplication guard found an active gate), there is no draft artifact — the question shows the existing gate and asks only accept / decline.
+- Nothing is written before the answer. The draft is staging, not a preview of an applied edit.
+
+### 3.4 — Skip discoverability check until Phase 6
 
 Phase 3 only handles per-entry decisions. The CLAUDE.md / AGENTS.md discoverability question runs in Phase 6 — separate, after the report exists.
 
@@ -604,6 +690,41 @@ Only execute Delete when ALL auto-Delete criteria hold (Phase 2 §Auto-Delete). 
 
 Execute per [phases.md](phases.md) §"Mark stale (autofix ambiguous + Replace-insufficient)" — the `flowctl memory mark-stale` helper with `--reason` + `--audited-by "/flow-next:audit"`. Never hand-edit frontmatter for stale-flagging; the helper is atomic and preserves unknown fields.
 
+### 4.7 — Harden flow (interactive only — autofix never applies)
+
+**Autofix stops here.** In `mode:autofix` no gate artifact is written and no entry is demoted; candidates go straight to the Phase-5 Recommended bucket. Everything below runs only after an explicit accept in Phase 3.
+
+Process Harden candidates **one at a time, sequentially** — each one edits shared repo infrastructure and each needs its own verification run.
+
+1. **Write the artifact** to the accepted surface via Edit / Write — exactly the draft the user accepted, nothing more. Lint and CI edits are surgical (one rule, one step); instruction-file edits stay 1-2 lines and never restructure the file.
+2. **Verify the gate actually fires.** This is a hard precondition of demotion, not a formality — writing config is not enforcing a rule, and a gate that does not fire is strictly worse than no gate: it retires the only working copy of the lesson while enforcing nothing. By gate type:
+   - **lint** — run the linter and confirm the new rule is active in the **resolved** config: not merely present as text in a file the tool does not read, and not neutralized by a later `ignore` / disable entry.
+   - **CI** — confirm the step parses and sits in a workflow AND a job that actually run on the relevant trigger, not a disabled, unreferenced, or manual-only one.
+   - **instruction file** — confirm the rule landed in the substantive file the agents actually read (same discovery as Phase 6 §6.1), not an `@`-including stub.
+3. **Verification failed** → **stop**. The entry stays `active`, `mark-hardened` is NOT called, and the artifact edit is reported alongside a **failed graduation** with the reason (`ruff does not read this file`, `job never runs on push`, `landed in the @-include shim`). Leave the artifact for a human to fix or revert; do not silently retry with a different gate type.
+4. **Verification passed** → demote:
+
+   ```bash
+   "$FLOWCTL" memory mark-hardened "$ENTRY_ID" \
+     --gate-ref "<path>#<rule-id> -- <note>" \
+     --audited-by "/flow-next:audit"
+   ```
+
+   The helper sets `status: hardened`, stores `hardened_into` verbatim, clears the stale-only fields, and stamps `last_audited` (UTC date). It is atomic and preserves unknown frontmatter fields — **never hand-edit frontmatter to demote**.
+5. **`--gate-ref` format** is the skill's contract (flowctl stores it verbatim and validates only non-emptiness): `<path>#<rule-id> -- <note>`, with `<path>` repo-relative and `<rule-id>` a token a later `grep` can find in that file, so the next run's gate-liveness check has something to look at. See [phases.md](phases.md) §Harden for an example per gate type.
+
+**Never `git rm` on Harden — on any track.** The entry file stays on disk with its body intact; it becomes a pointer at the gate, so provenance survives and "why does this rule exist?" stays answerable. For `knowledge/decisions/` entries the supersession fields (`decision_status`, `superseded_by`, `alternatives_considered`) are preserved alongside the new status — `mark-hardened` touches only status, `hardened_into`, `last_audited`, and `audit_notes`.
+
+**Pointer-demotion (duplication guard found an active gate):** skip steps 1-3 entirely — the gate already exists and was already confirmed active. Go straight to step 4 with the existing gate as `--gate-ref`. No new artifact is written.
+
+**Un-graduation (§0.75.2, gate gone):**
+
+```bash
+"$FLOWCTL" memory mark-fresh "$ENTRY_ID" --audited-by "/flow-next:audit"
+```
+
+Returns the entry to `active` and drops `hardened_into`, so the lesson re-enters the context window. Autofix reports the proposal instead of applying it.
+
 ### Done when
 
 - Every classified entry has been acted on (or skipped, in interactive mode with user consent).
@@ -631,6 +752,7 @@ Updated: <Y>
 Consolidated: <C>  (clusters: <K>)
 Replaced: <Z>
 Deleted: <W>
+Hardened: <H>  (failed graduations: <HF>; un-graduated: <HU>)
 Marked stale: <S>
 Skipped (no decision): <U>
 
@@ -647,7 +769,7 @@ Then per-entry detail (one block each):
 
 ```
 - <entry_id>
-  Classification: <Keep|Update|Consolidate|Replace|Delete|Stale>
+  Classification: <Keep|Update|Consolidate|Replace|Delete|Harden|Stale>
   Evidence:
     - <bullet>
     - <bullet>
@@ -655,9 +777,17 @@ Then per-entry detail (one block each):
   [Consolidate only] Canonical: <entry_id>; merged: [<list>]; deleted: [<list>]
   [Replace only] Old guidance: <one-line>; New entry: <new_id>
   [Decision Replace] Successor: <new_id>; old marked decision_status=superseded (NOT git-rm'd)
+  [Harden only] Gate type: <lint|CI|instruction file>; Artifact: <path>;
+                Gate-ref: <path>#<rule-id> -- <note>; Verified: <how it was confirmed live>
+  [Harden — pointer only] Existing gate: <path>#<rule-id>; no new artifact written
+  [Harden — failed] Gate type: <...>; Artifact: <path>; FAILED VERIFICATION: <reason>;
+                    entry left active, not demoted
+  [Un-graduated] Gate <path>#<rule-id> no longer live (<what was missing>); mark-fresh applied
 ```
 
 For **Keep** outcomes, group under a "Reviewed without edits" subsection so the result is visible without git churn.
+
+Hardened entries carried over from earlier runs whose gate is still live are listed under a "Still hardened" subsection — one line each (`<entry_id> → <gate-ref> (gate live)`), no evidence block, since they were not re-investigated.
 
 Then per-glossary-term detail (only for stale + alias-creep cases — Keep is silent):
 
@@ -679,6 +809,8 @@ In autofix mode, split actions into:
 - **Recommended** — actions that could not be written (e.g. permission denied, schema validation failed). Same detail as Applied; framed for a human to apply manually.
 
 If all writes succeed, Recommended is empty. If no writes succeed (read-only invocation), all actions land under Recommended — the report becomes a maintenance plan.
+
+**Harden always lands under Recommended in autofix**, never under Applied — not because a write failed, but because autofix never attempts one. Each candidate carries the same detail a human needs to act: gate type, the draft artifact, the recurrence evidence, and the `--gate-ref` that would be recorded. Un-graduation proposals (a hardened entry whose gate is gone) are likewise Recommended-only. The `Hardened:` count is therefore `0` in autofix; the candidates show as `Harden candidates (recommended): <N>`.
 
 ### 5.3 — Detect git context
 
@@ -876,13 +1008,14 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 
 - Phase 0 walks `.flow/memory/`, lists per-cluster counts, reports legacy skip count if `pitfalls.md` etc. exist. Decision entries (`knowledge/decisions/`) are picked up automatically once the schema extension lands (fn-38 task 1).
 - Phase 0.5 walks every `GLOSSARY.md` on the ancestor chain via `flowctl glossary list --json`, greps tracked code per-term + per-`_Avoid_` alias, marks zero-hit terms stale via Edit tool with `<!-- stale: ... -->`, surfaces alias-creep, advises on husks.
+- Phase 0.75 pre-scans recurrence artifacts BEFORE auto-Keep, so a recurrence-qualified entry with an unchanged module still reaches Phase 1; hardened entries get the gate-liveness check only.
 - Phase 1 produces evidence per entry. For 3+ entries, parallel investigation subagents run.
-- Phase 2 classifies; Replace candidates with insufficient evidence reclassify as mark-stale. Decision entries use the calibrated judging question and the supersede shape for Replace.
-- Phase 3 (interactive) groups Keeps / Updates for batched confirmation; presents Consolidate / Replace / Delete and glossary alias-creep individually via blocking-question tool.
-- Phase 4 executes via Write / `flowctl memory mark-stale` / `git rm`. Decision Replace = supersede (write new + edit old's `decision_status` + `superseded_by`; never `git rm`). Glossary stale = Edit comment after term heading.
-- Phase 5 prints the report (memory section + glossary section + husk advisories); offers commit options based on git context.
+- Phase 2 classifies; Replace candidates with insufficient evidence reclassify as mark-stale. Decision entries use the calibrated judging question and the supersede shape for Replace. Precedence: correctness > Consolidate > Harden.
+- Phase 3 (interactive) groups Keeps / Updates for batched confirmation; presents Consolidate / Replace / Delete, Harden candidates (gate type + draft artifact + evidence + accept / different-gate-type / decline), and glossary alias-creep individually via blocking-question tool.
+- Phase 4 executes via Write / `flowctl memory mark-stale` / `git rm`. Decision Replace = supersede (write new + edit old's `decision_status` + `superseded_by`; never `git rm`). Harden writes the artifact, verifies the gate fires, then `flowctl memory mark-hardened <id> --gate-ref "..."` — verification failure leaves the entry `active`; never `git rm`. Glossary stale = Edit comment after term heading.
+- Phase 5 prints the report (memory section incl. `Hardened: N` with gate type / artifact path / gate-ref, glossary section + husk advisories); offers commit options based on git context.
 - Phase 6 checks CLAUDE.md / AGENTS.md for `.flow/memory/` mention; offers minimal addition if missing.
 
-In autofix mode (`/flow-next:audit mode:autofix`), Phase 3 is skipped, ambiguous entries are marked stale, glossary alias-creep surfaces as a recommendation only, and the report is the sole deliverable.
+In autofix mode (`/flow-next:audit mode:autofix`), Phase 3 is skipped, ambiguous entries are marked stale, glossary alias-creep surfaces as a recommendation only, Harden candidates and un-graduation proposals appear under Recommended without any artifact write or demotion, and the report is the sole deliverable.
 
 If Phase 0 produces nothing (no categorized entries, only legacy) AND Phase 0.5 produces nothing (no glossary files), the skill exits cleanly with the legacy-skip count.
