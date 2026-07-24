@@ -25,9 +25,8 @@ python3 scripts/run_tests_parallel.py
 ```
 
 ## Done summary
-TBD
-
+Retained authenticated B1/candidate Prime evidence, real-backend Plan Review corpus verdicts, and paired Plan emissions with independent scoring; added fail-closed harness regressions and updated closure ledgers.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 89af4a78
+- Tests: python3 -m unittest -q test_fn130_evidence_harnesses test_prime_eval test_reached_path_harness test_review_prompt_template_parity, python3 scripts/run_tests_parallel.py (2291 run, 3 skipped, 0 failures/errors), bash /Users/gordon/work/flow-next/plugins/flow-next/scripts/smoke_test.sh from /tmp (136 passed, 0 failed), scripts/sync-codex.sh twice (28 skills, 22 agents, idempotent)
 - PRs:
