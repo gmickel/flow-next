@@ -298,5 +298,42 @@ class TestMarkFreshRoundTrip(unittest.TestCase):
             self.assertEqual(fm["last_audited"], _today())
 
 
+class TestMarkFreshUnHardens(unittest.TestCase):
+    """hardened -> active (fn-122 R14): drops `hardened_into` + stale family."""
+
+    def test_hardened_then_fresh_drops_gate_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            mem = _init_repo(Path(tmp))
+            path = _seed_active_entry(mem)
+            _run(
+                Path(tmp),
+                "memory",
+                "mark-hardened",
+                "fresh-rule-2026-04-01",
+                "--gate-ref",
+                "CLAUDE.md#timestamps-utc -- stamp UTC",
+                "--json",
+            )
+            fm = flowctl.parse_memory_frontmatter(path)
+            self.assertEqual(fm["status"], "hardened")
+            self.assertEqual(
+                fm["hardened_into"], "CLAUDE.md#timestamps-utc -- stamp UTC"
+            )
+
+            _run(
+                Path(tmp),
+                "memory",
+                "mark-fresh",
+                "fresh-rule-2026-04-01",
+                "--json",
+            )
+            fm = flowctl.parse_memory_frontmatter(path)
+            self.assertNotIn("status", fm)
+            self.assertNotIn("hardened_into", fm)
+            self.assertNotIn("stale_reason", fm)
+            self.assertNotIn("stale_date", fm)
+            self.assertEqual(fm["last_audited"], _today())
+
+
 if __name__ == "__main__":
     unittest.main()

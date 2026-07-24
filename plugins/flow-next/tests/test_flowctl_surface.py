@@ -100,6 +100,7 @@ memory init
 memory list
 memory list-legacy
 memory mark-fresh
+memory mark-hardened
 memory mark-stale
 memory migrate
 memory read

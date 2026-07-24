@@ -317,5 +317,40 @@ class TestMarkStaleIdempotent(unittest.TestCase):
             )
 
 
+class TestMarkStaleDropsHardenedPointer(unittest.TestCase):
+    """hardened -> stale (fn-122 R14): `hardened_into` must not survive."""
+
+    def test_hardened_then_stale_clears_gate_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            mem = _init_repo(Path(tmp))
+            path = _seed_entry(mem)
+            _run(
+                Path(tmp),
+                "memory",
+                "mark-hardened",
+                "bug/runtime-errors/null-deref-in-auth-2026-05-01",
+                "--gate-ref",
+                "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes",
+                "--json",
+            )
+            fm = flowctl.parse_memory_frontmatter(path)
+            self.assertEqual(fm["status"], "hardened")
+            self.assertIn("hardened_into", fm)
+
+            _run(
+                Path(tmp),
+                "memory",
+                "mark-stale",
+                "bug/runtime-errors/null-deref-in-auth-2026-05-01",
+                "--reason",
+                "the lint rule was reverted",
+                "--json",
+            )
+            fm = flowctl.parse_memory_frontmatter(path)
+            self.assertEqual(fm["status"], "stale")
+            self.assertNotIn("hardened_into", fm)
+            self.assertEqual(fm["audit_notes"], "the lint rule was reverted")
+
+
 if __name__ == "__main__":
     unittest.main()
