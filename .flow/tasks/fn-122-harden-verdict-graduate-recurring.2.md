@@ -84,9 +84,10 @@ Verification failure means the entry stays `active`, `mark-hardened` is NOT call
 
 
 ## Done summary
-TBD
+Added Harden as the sixth `/flow-next:audit` outcome across the skill's three prose files: phases.md gains the outcome row, a full `## Harden` section (recalibrated recurrence thresholds with calibration evidence, mechanizability as a separate AND condition, gate targets a/b/c with no scaffolding, duplication guard, gate verification before demotion, `--gate-ref` format, gate-liveness check on later runs), the precedence rule (correctness > Consolidate > Harden) and the extended decision tree; workflow.md gathers recurrence artifacts BEFORE the Phase 0.75 auto-Keep so recurrence-qualified entries and clusters bypass it, adds the hardened-entry liveness path, Phase 2 classification, per-candidate Phase 3 asks, Phase 4.7 execute (write -> verify -> `flowctl memory mark-hardened`, never `git rm`) and the Phase 5 Hardened bucket; SKILL.md lists six outcomes, names the shipped `memory mark-hardened` plumbing, and forbids autofix application, unverified demotion, `git rm`, and scaffolding.
 
+Codex mirror regenerated via sync-codex.sh (twice, idempotent, guards green), including a widened flow-next-audit catalog description so Codex discovery surfaces the graduation trigger.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: da2911c15955d022d935a0e320de1043e27b451d, a8b413a8cb8235f4d9f4bec874994eef574db1ee, 6b8b90a3cd061978403f46ea930ee5cc95b9e710
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_memory_mark_stale test_memory_mark_fresh test_memory_mark_hardened test_flowctl_surface test_startup_bootstrap -q (67 tests, OK; baseline green pre-edit), ./scripts/sync-codex.sh (run twice, idempotent, all validation guards green), codex impl-review SHIP after 1 fix round (receipt /tmp/impl-review-receipt-fn-122-harden-verdict-graduate-recurring.2.json, gpt-5.6-sol, 0 unaddressed R-IDs)
 - PRs:
