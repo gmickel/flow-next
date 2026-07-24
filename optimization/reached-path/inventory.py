@@ -12,6 +12,8 @@ from typing import Any
 
 BASELINE_COMMIT = "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b"
 B1_COMMIT = "8ed71a73ccc593a8a018dcdb805a86f396dcf76f"
+BASELINE_TAG = "fn130-b0-baseline"
+B1_TAG = "fn130-b1-baseline"
 
 # Canonical skill roots (repo-relative).
 S = {

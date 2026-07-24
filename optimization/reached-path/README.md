@@ -35,9 +35,13 @@ deterministic character count only.
 
 | Stage | Owner | Rule |
 |---|---|---|
-| **B0** | task 130.1 (this harness) | Immutable original-main evidence at commit `1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b`. |
-| **V1/B1** | task 130.2 | Fleet version mutation only; hash-addressed structural baseline. |
+| **B0** | task 130.1 (this harness) | Immutable original-main evidence at commit `1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b`, retained by tag `fn130-b0-baseline`. |
+| **V1/B1** | task 130.2 | Fleet version mutation only at commit `8ed71a73ccc593a8a018dcdb805a86f396dcf76f`, retained by tag `fn130-b1-baseline`; hash-addressed structural baseline. |
 | **candidate** | tasks 130.3–130.9, 130.11, 130.12 | Compare **only** to `B1`. Fail closed on input hash mismatch. Never compare a structural candidate directly to `B0`. |
+
+The baseline tags are durable provenance anchors, not release tags. CI checks out
+full history so `git show <recorded-commit>:<path>` remains reproducible after
+feature-branch rebases and deletion.
 
 ## Manifest contract
 

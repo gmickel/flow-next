@@ -13,6 +13,7 @@ import datetime as _dt
 import importlib.util
 import json
 import shutil
+import subprocess
 import tempfile
 import unittest
 from contextlib import ExitStack
@@ -61,6 +62,18 @@ class TestReachedPathHarness(unittest.TestCase):
             checkout_block,
             "the full test matrix needs B0/B1 source commits for git-show validation",
         )
+        for tag, commit in (
+            (self.inventory.BASELINE_TAG, self.inventory.BASELINE_COMMIT),
+            (self.inventory.B1_TAG, self.inventory.B1_COMMIT),
+        ):
+            resolved = subprocess.run(
+                ["git", "rev-parse", f"{tag}^{{commit}}"],
+                cwd=REPO,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            self.assertEqual(resolved, commit, f"{tag} must retain {commit}")
 
     def test_self_test_passes(self) -> None:
         rc = self.run_eval.self_test()
