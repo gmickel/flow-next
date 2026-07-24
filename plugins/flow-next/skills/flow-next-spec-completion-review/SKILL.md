@@ -106,7 +106,10 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 
 **For all backends:**
 - If `REVIEW_RECEIPT_PATH` set: write receipt after SHIP verdict (RP writes manually after fix loop; codex writes automatically via `--receipt`)
-- Any failure → output `<promise>RETRY</promise>` and stop
+- Any failure → output `<promise>RETRY</promise>` and stop. No-verdict
+  transport failures are recorded and their reserved round refunded; never
+  manually reset the review counter. Exit 5 / `TRANSPORT_UNHEALTHY` stops
+  automatic retries until the backend is repaired.
 
 **FORBIDDEN**:
 - Self-declaring SHIP without actual backend verdict
@@ -158,7 +161,13 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 **CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use AskUserQuestion in this loop.**
 
-**MAX ITERATIONS (backend-agnostic — applies to ALL backends: rp, codex, copilot, cursor, host):** keep an iteration counter in agent context, starting at 0. Each fix+re-review cycle increments it. When the counter reaches **${MAX_REVIEW_ITERATIONS:-4}** (default 4; env-overridable, configurable in Ralph's config.env) and the verdict is still NEEDS_WORK, BREAK the loop and escalate: surface the surviving gaps to the caller and stop (in Ralph mode output `<promise>RETRY</promise>` so the next iteration starts fresh). Never loop unbounded. The per-backend workflow files defer to this cap.
+**MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
+flowctl reserves a round before dispatch. Verdict-bearing attempts consume it;
+no-verdict transport failures are recorded and refunded. At
+`${MAX_REVIEW_ITERATIONS:-4}` verdict rounds, stop with `ESCALATE:` + exit 4.
+More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive transport failures
+stop separately with `TRANSPORT_UNHEALTHY` + exit 5; never reset the verdict
+counter for transport health.
 
 If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 

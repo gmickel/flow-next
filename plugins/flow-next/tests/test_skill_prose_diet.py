@@ -46,17 +46,16 @@ FOREGROUND_RULE_BULLET = (
     "context)"
 )
 CAP_SENTENCE = (
-    "**The cap is now ALSO enforced deterministically by flowctl (fn-90 R5): "
-    "each `flowctl <backend> plan-review` dispatch increments a cumulative "
-    "spec-scoped counter (`plan_review_rounds`) and REFUSES at "
-    "`${MAX_REVIEW_ITERATIONS:-4}` with an `ESCALATE:` marker + exit 4 — "
-    "the flowctl counter survives across fresh `/flow-next:plan-review` "
-    "invocations, so a caller-side \"re-invoke until SHIP\" outer loop can no "
-    "longer reset the cap by re-entering. This loop is INTERNAL — the "
-    "caller (e.g. `/flow-next:plan`, pilot) invokes plan-review ONCE and acts "
-    "on the terminal verdict; the flowctl counter resets ONLY on a SHIP "
-    "verdict or an explicit re-plan (`flowctl spec reset-review-rounds "
-    "<spec-id>`), never on a fresh invocation or a spec edit.**"
+    "**The cap is enforced deterministically by flowctl:** every dispatch "
+    "reserves a\nspec-scoped round before launch. SHIP / NEEDS_WORK / "
+    "MAJOR_RETHINK consume it;\na no-verdict transport failure is durably "
+    "recorded and refunded. At\n`${MAX_REVIEW_ITERATIONS:-4}` verdict rounds, "
+    "flowctl refuses with `ESCALATE:`\nand exit 4. More than "
+    "`${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive\nno-verdict failures "
+    "stop separately with `TRANSPORT_UNHEALTHY` + exit 5.\nCallers invoke "
+    "plan-review once and act on its terminal result. The verdict\ncounter "
+    "resets only on SHIP or an explicit re-plan, never on an edit, fresh\n"
+    "invocation, or transport failure.**"
 )
 
 

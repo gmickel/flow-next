@@ -1,4 +1,4 @@
-"""Convergence-ratchet + deterministic-cap tests (fn-90 R4 + R5).
+"""Convergence-ratchet + verdict-aware deterministic-cap tests.
 
 R4 (convergence ratchet): ``build_rereview_preamble`` injects the prior round's
 findings and flips the re-review contract to shrink-only (verify prior fixed;
@@ -10,6 +10,9 @@ R5 (deterministic cap): a flowctl-owned cumulative round counter on spec state,
 enforced at ``MAX_REVIEW_ITERATIONS`` (default 4), surviving FRESH invocations,
 reset only on SHIP / re-plan. At the cap the review refuses with an ESCALATE
 marker (exit REVIEW_CAP_EXIT_CODE), never a retryable error.
+
+fn-131: pre-dispatch reservations are finalized by outcome. Verdicts consume;
+no-verdict transport failures refund and enter a separate bounded audit trail.
 
 Run:
     python3 -m unittest discover -s plugins/flow-next/tests
@@ -196,6 +199,11 @@ class TestDeterministicCap(unittest.TestCase):
         )
         return int(data.get("plan_review_rounds", 0) or 0)
 
+    def _spec_data(self) -> dict:
+        return json.loads(
+            (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
+        )
+
     def test_default_cap_is_four(self):
         self.assertEqual(flowctl.get_max_review_iterations(), 4)
 
@@ -339,6 +347,258 @@ class TestDeterministicCap(unittest.TestCase):
             flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 1
         )
 
+    def test_no_verdict_refunds_and_writes_auditable_attempt(self):
+        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        result = flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="codex",
+            output="review text without terminal tag",
+            failure_class="missing_verdict",
+            review_type="plan",
+        )
+        self.assertEqual(self._rounds(), 0)
+        self.assertEqual(result["outcome"], "transport_failure")
+        self.assertEqual(result["refunded_attempts"], 1)
+        row = self._spec_data()["review_attempts"][-1]
+        self.assertFalse(row["round_consumed"])
+        self.assertEqual(row["failure_class"], "missing_verdict")
+        self.assertEqual(len(row["output_sha256"]), 64)
+
+    def test_needs_work_consumes_exactly_one_round(self):
+        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        result = flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="codex",
+            output="<verdict>NEEDS_WORK</verdict>",
+            verdict="NEEDS_WORK",
+            review_type="plan",
+        )
+        self.assertEqual(self._rounds(), 1)
+        self.assertEqual(result["verdict_attempts"], 1)
+        self.assertEqual(result["refunded_attempts"], 0)
+        self.assertTrue(self._spec_data()["review_attempts"][-1]["round_consumed"])
+
+    def test_refund_requires_a_live_pre_dispatch_reservation(self):
+        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="codex",
+            output="<verdict>NEEDS_WORK</verdict>",
+            verdict="NEEDS_WORK",
+            review_type="plan",
+        )
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as ctx:
+                flowctl.record_review_attempt(
+                    self.spec_id,
+                    "plan",
+                    backend="codex",
+                    output="crafted output without tag",
+                    failure_class="missing_verdict",
+                    review_type="plan",
+                )
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(self._rounds(), 1)
+        self.assertEqual(len(self._spec_data()["review_attempts"]), 1)
+
+    def test_verdict_resets_consecutive_transport_failures(self):
+        for _ in range(2):
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+            flowctl.record_review_attempt(
+                self.spec_id,
+                "plan",
+                backend="cursor",
+                output="",
+                failure_class="empty_output",
+                review_type="completion",
+            )
+        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        result = flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="cursor",
+            output="<verdict>SHIP</verdict>",
+            verdict="SHIP",
+            review_type="completion",
+        )
+        self.assertEqual(result["consecutive_transport_failures"], 0)
+        self.assertEqual(result["refunded_attempts"], 2)
+
+    def test_transport_budget_is_distinct_from_review_cap(self):
+        last = {}
+        for _ in range(flowctl.get_max_review_transport_failures() + 1):
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+            last = flowctl.record_review_attempt(
+                self.spec_id,
+                "plan",
+                backend="copilot",
+                output="",
+                failure_class="timeout",
+                review_type="plan",
+            )
+        self.assertTrue(last["transport_unhealthy"])
+        self.assertEqual(self._rounds(), 0)
+        self.assertNotEqual(
+            flowctl.REVIEW_TRANSPORT_EXIT_CODE, flowctl.REVIEW_CAP_EXIT_CODE
+        )
+
+    def test_shared_backend_finalizer_refunds_all_backends_and_review_kinds(self):
+        args = mock.Mock(json=False)
+        reg = {
+            "has_sandbox": False,
+            "cli_label": "review-cli",
+            "no_verdict_label": "Reviewer",
+        }
+        cases = [
+            ("codex", "plan", "plan", None),
+            ("copilot", "plan", "completion", None),
+            ("cursor", "impl", "impl", f"{self.spec_id}.1"),
+        ]
+        failure_cases = [
+            ("", "", 0, "empty_output"),
+            ("review prose without tag", "", 0, "missing_verdict"),
+            ("", "review timed out", 2, "timeout"),
+            ("", "cli crashed", 7, "nonzero_exit"),
+        ]
+        for backend, counter_kind, review_type, task_id in cases:
+            for output, stderr, exit_code, failure_class in failure_cases:
+                with self.subTest(
+                    backend=backend,
+                    review_type=review_type,
+                    failure_class=failure_class,
+                ):
+                    (
+                        self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+                    ).write_text(
+                        json.dumps(
+                            {
+                                "id": self.spec_id,
+                                "title": "Demo",
+                                "status": "in_progress",
+                            }
+                        )
+                    )
+                    flowctl.enforce_and_increment_review_cap(
+                        self.spec_id, counter_kind, task_id=task_id
+                    )
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        with self.assertRaises(SystemExit) as ctx:
+                            flowctl._finish_backend_exec(
+                                backend=backend,
+                                reg=reg,
+                                args=args,
+                                receipt_path=None,
+                                output=output,
+                                stderr=stderr,
+                                exit_code=exit_code,
+                                spec_id=self.spec_id,
+                                review_kind=counter_kind,
+                                review_type=review_type,
+                                task_id=task_id,
+                            )
+                    self.assertEqual(ctx.exception.code, 2)
+                    data = self._spec_data()
+                    self.assertEqual(
+                        flowctl._read_review_rounds(
+                            data, counter_kind, task_id
+                        ),
+                        0,
+                    )
+                    self.assertEqual(
+                        data["review_attempts"][-1]["backend"], backend
+                    )
+                    self.assertEqual(
+                        data["review_attempts"][-1]["failure_class"],
+                        failure_class,
+                    )
+
+            # The normal verdict path for every backend/review-kind pair keeps
+            # exactly one reservation and clears transport failure streaks.
+            (
+                self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+            ).write_text(
+                json.dumps(
+                    {
+                        "id": self.spec_id,
+                        "title": "Demo",
+                        "status": "in_progress",
+                    }
+                )
+            )
+            flowctl.enforce_and_increment_review_cap(
+                self.spec_id, counter_kind, task_id=task_id
+            )
+            verdict = flowctl._finish_backend_exec(
+                backend=backend,
+                reg=reg,
+                args=args,
+                receipt_path=None,
+                output="<verdict>NEEDS_WORK</verdict>",
+                stderr="",
+                exit_code=0,
+                spec_id=self.spec_id,
+                review_kind=counter_kind,
+                review_type=review_type,
+                task_id=task_id,
+            )
+            self.assertEqual(verdict, "NEEDS_WORK")
+            data = self._spec_data()
+            self.assertEqual(
+                flowctl._read_review_rounds(data, counter_kind, task_id), 1
+            )
+
+    def test_nonzero_process_with_delivered_verdict_is_not_refunded(self):
+        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        verdict = flowctl._finish_backend_exec(
+            backend="codex",
+            reg={
+                "has_sandbox": False,
+                "cli_label": "codex exec",
+                "no_verdict_label": "Codex",
+            },
+            args=mock.Mock(json=False),
+            receipt_path=None,
+            output="<verdict>NEEDS_WORK</verdict>",
+            stderr="process reported a late nonzero",
+            exit_code=2,
+            spec_id=self.spec_id,
+            review_kind="plan",
+            review_type="plan",
+        )
+        self.assertEqual(verdict, "NEEDS_WORK")
+        self.assertEqual(self._rounds(), 1)
+
+    def test_dispatch_exception_before_result_is_refunded(self):
+        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+
+        def crash(*_args, **_kwargs):
+            raise OSError("cannot spawn reviewer")
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as ctx:
+                flowctl._dispatch_backend_review(
+                    backend="cursor",
+                    reg={"run_exec": crash, "cli_label": "cursor"},
+                    args=mock.Mock(json=False),
+                    prompt="review",
+                    session_id=None,
+                    repo_root=self.root,
+                    resolved_spec=mock.Mock(),
+                    resolution_out={},
+                    receipt_path=None,
+                    spec_id=self.spec_id,
+                    review_kind="plan",
+                    review_type="completion",
+                )
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertEqual(self._rounds(), 0)
+        row = self._spec_data()["review_attempts"][-1]
+        self.assertEqual(row["failure_class"], "dispatch_exception")
+        self.assertFalse(row["round_consumed"])
+
 
 class TestReviewRoundsCLI(unittest.TestCase):
     """fn-90 R5, rp surface: `flowctl review-rounds increment|reset`.
@@ -439,6 +699,77 @@ class TestReviewRoundsCLI(unittest.TestCase):
         data = self._spec_json()
         self.assertEqual(data["impl_review_rounds"][t1], 0)
         self.assertEqual(data["impl_review_rounds"][t2], 1)
+
+    def test_record_and_attempts_round_trip(self):
+        code, _, _ = self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        self.assertEqual(code, 0)
+        output_path = self.root / "review.txt"
+        output_path.write_text("response without a verdict")
+        code, out, _ = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "completion",
+            "--backend", "rp", "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["outcome"], "transport_failure")
+        self.assertEqual(self._spec_json()["plan_review_rounds"], 0)
+
+        code, out, _ = self._run(
+            "review-rounds", "attempts", self.spec_id,
+            "--kind", "plan", "--review-type", "completion", "--json",
+        )
+        self.assertEqual(code, 0)
+        payload = json.loads(out)
+        self.assertEqual(payload["verdict_attempts"], 0)
+        self.assertEqual(payload["refunded_attempts"], 1)
+        self.assertEqual(payload["attempts"][0]["backend"], "rp")
+
+    def test_record_real_verdict_does_not_refund(self):
+        self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        output_path = self.root / "review.txt"
+        output_path.write_text("<verdict>NEEDS_WORK</verdict>")
+        code, out, _ = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["verdict"], "NEEDS_WORK")
+        self.assertEqual(self._spec_json()["plan_review_rounds"], 1)
+
+    def test_third_consecutive_transport_failure_exits_five(self):
+        output_path = self.root / "empty.txt"
+        output_path.write_text("")
+        for expected in (1, 2):
+            self._run(
+                "review-rounds", "increment", self.spec_id,
+                "--kind", "plan", "--json",
+            )
+            code, out, _ = self._run(
+                "review-rounds", "record", self.spec_id,
+                "--kind", "plan", "--review-type", "plan",
+                "--output-file", str(output_path), "--json",
+            )
+            self.assertEqual(code, 0)
+            self.assertEqual(
+                json.loads(out)["consecutive_transport_failures"], expected
+            )
+        self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        code, out, _ = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, flowctl.REVIEW_TRANSPORT_EXIT_CODE)
+        self.assertIn("TRANSPORT_UNHEALTHY", out)
+        self.assertNotIn("ESCALATE:", out)
+        self.assertEqual(self._spec_json()["plan_review_rounds"], 0)
 
     def test_impl_kind_requires_task(self):
         for verb in ("increment", "reset"):

@@ -336,12 +336,17 @@ PROMPT_FILE="${TMPDIR:-/tmp}/flow-completion-review-prompt-<spec-id>-<suffix>.md
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"  # literal path
 
 $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Spec Completion Review: $SPEC_ID" > "$RESPONSE_FILE"
+RP_EXIT=$?
 
 # Extract verdict tag from the response file
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
   | grep -oE '<verdict>(SHIP|NEEDS_WORK)</verdict>' \
   | tail -n 1 \
   | sed -E 's#</?verdict>##g')"
+
+$FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+  --review-type completion --backend rp --output-file "$RESPONSE_FILE" \
+  --exit-code "$RP_EXIT" --json
 
 if [[ -z "$VERDICT" ]]; then
   echo "No verdict tag found in response"
@@ -353,6 +358,11 @@ echo "VERDICT=$VERDICT"
 ```
 
 **WAIT** for response. Takes 1-5+ minutes.
+
+The `record` call refunds no-verdict reservations and logs the failure. After
+more than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive failures it exits
+5 / `TRANSPORT_UNHEALTHY`: stop for backend repair, never reset the review
+counter.
 
 **Single-entry rule:** after this block, Read the response file ONCE (Read tool, literal path). That render IS the gaps context — it feeds parsing and the fix loop. Do NOT `echo`/`cat` the response; verdict and receipt tallies grep the file directly.
 
@@ -537,7 +547,10 @@ If verdict is NEEDS_WORK:
    $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.md" > "${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
    ```
 
-   Re-extract the verdict from the response file (same grep as Phase 3), then Read the file once for the next round's gaps.
+   Re-extract the verdict from the response file (same grep as Phase 3), call
+   the same `review-rounds record ... --review-type completion` command with
+   the captured `rp chat-send` exit code, then Read the file once for the next
+   round's gaps.
 7. **Repeat** until SHIP
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.

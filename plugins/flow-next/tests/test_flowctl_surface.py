@@ -114,7 +114,9 @@ ready
 repo-map list
 review-backend
 review-deep-auto
+review-rounds attempts
 review-rounds increment
+review-rounds record
 review-rounds reset
 review-walkthrough-defer
 review-walkthrough-record

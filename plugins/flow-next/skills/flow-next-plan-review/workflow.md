@@ -99,7 +99,9 @@ the same `ASK`/error behavior; never guess a backend.
 - `MAJOR_RETHINK` → latest status/receipt says needs_work; return immediately
   for typed design-conflict escalation.
 - Backend unavailable/transport/no verdict → `<promise>RETRY</promise>` and
-  stop. Never mix or fall back to another backend.
+  stop. Flowctl records and refunds the reserved round; never manually reset
+  the verdict counter. Exit 5 / `TRANSPORT_UNHEALTHY` stops automatic retries.
+  Never mix or fall back to another backend.
 
 ## Anti-patterns
 

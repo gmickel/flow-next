@@ -141,13 +141,19 @@ foreground call:
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-plan-review-prompt-<spec-id>-<suffix>.md"
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md"
 $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Plan Review: <SPEC_ID>" > "$RESPONSE_FILE"
+RP_EXIT=$?
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
   | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
   | tail -n 1 | sed -E 's#</?verdict>##g')"
+$FLOWCTL review-rounds record "$SPEC_ID" --kind plan --review-type plan \
+  --backend rp --output-file "$RESPONSE_FILE" --exit-code "$RP_EXIT" --json
 ```
 
-If no verdict exists, output `<promise>RETRY</promise>` and stop. Read the
-response file once for findings; do not echo/cat it.
+If no verdict exists, the `record` call refunds the reservation and durably
+records the transport failure; output `<promise>RETRY</promise>` and stop.
+After more than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive failures it
+exits 5 / `TRANSPORT_UNHEALTHY`: stop for backend repair, never reset the review
+counter. Read the response file once for findings; do not echo/cat it.
 
 ## Phase 4: Receipt and Status
 
@@ -177,7 +183,9 @@ Only after the current spec and affected task specs are updated:
 3. Increment the deterministic round counter before dispatch.
 4. Send `Issues addressed. Please re-review.` in the SAME chat, without
    `--new-chat`; require the same verdict grammar.
-5. Overwrite then read the same response file once, parse verdict, and update
+5. Overwrite the same response file, parse the verdict, call the same
+   `review-rounds record ... --review-type plan` command with the captured
+   `rp chat-send` exit code, then read the response once and update
    receipt/status.
 
 ## Anti-patterns

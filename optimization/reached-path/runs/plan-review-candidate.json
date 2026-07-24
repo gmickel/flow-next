@@ -23,9 +23,9 @@
         "workflow-host.md",
         "workflow-rp.md"
       ],
-      "candidate_chars": 10080,
-      "reduction_chars": 38406,
-      "reduction_percent": 79.21
+      "candidate_chars": 10347,
+      "reduction_chars": 38139,
+      "reduction_percent": 78.66
     },
     {
       "route": "export",
@@ -41,9 +41,9 @@
         "workflow-host.md",
         "workflow-rp.md"
       ],
-      "candidate_chars": 10080,
-      "reduction_chars": 38406,
-      "reduction_percent": 79.21
+      "candidate_chars": 10347,
+      "reduction_chars": 38139,
+      "reduction_percent": 78.66
     },
     {
       "route": "host",
@@ -59,9 +59,9 @@
         "workflow-cursor.md",
         "workflow-rp.md"
       ],
-      "candidate_chars": 12986,
-      "reduction_chars": 35500,
-      "reduction_percent": 73.22
+      "candidate_chars": 13253,
+      "reduction_chars": 35233,
+      "reduction_percent": 72.67
     },
     {
       "route": "codex",
@@ -77,9 +77,9 @@
         "workflow-host.md",
         "workflow-rp.md"
       ],
-      "candidate_chars": 11893,
-      "reduction_chars": 36593,
-      "reduction_percent": 75.47
+      "candidate_chars": 12160,
+      "reduction_chars": 36326,
+      "reduction_percent": 74.92
     },
     {
       "route": "copilot",
@@ -95,9 +95,9 @@
         "workflow-host.md",
         "workflow-rp.md"
       ],
-      "candidate_chars": 11873,
-      "reduction_chars": 36613,
-      "reduction_percent": 75.51
+      "candidate_chars": 12140,
+      "reduction_chars": 36346,
+      "reduction_percent": 74.96
     },
     {
       "route": "cursor",
@@ -113,9 +113,9 @@
         "workflow-host.md",
         "workflow-rp.md"
       ],
-      "candidate_chars": 11915,
-      "reduction_chars": 36571,
-      "reduction_percent": 75.43
+      "candidate_chars": 12182,
+      "reduction_chars": 36304,
+      "reduction_percent": 74.88
     },
     {
       "route": "rp",
@@ -131,9 +131,9 @@
         "workflow-cursor.md",
         "workflow-host.md"
       ],
-      "candidate_chars": 17550,
-      "reduction_chars": 30936,
-      "reduction_percent": 63.8
+      "candidate_chars": 18366,
+      "reduction_chars": 30120,
+      "reduction_percent": 62.12
     },
     {
       "route": "configured-but-unavailable",
@@ -149,9 +149,9 @@
         "workflow-host.md",
         "workflow-rp.md"
       ],
-      "candidate_chars": 11893,
-      "reduction_chars": 36593,
-      "reduction_percent": 75.47,
+      "candidate_chars": 12160,
+      "reduction_chars": 36326,
+      "reduction_percent": 74.92,
       "terminal": "<promise>RETRY</promise>; no backend fallback"
     }
   ],

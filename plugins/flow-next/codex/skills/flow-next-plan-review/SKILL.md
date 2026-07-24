@@ -61,7 +61,10 @@ mode, never a configured backend.
 - If `REVIEW_RECEIPT_PATH` is set, every review verdict writes a receipt.
 - Any backend/transport failure outputs `<promise>RETRY</promise>` and stops;
  never silently fall back to a different backend. Autonomous/Ralph callers
- receive the same retry terminal and decide whether to re-enter.
+ receive the same retry terminal and decide whether to re-enter. A no-verdict
+ dispatch is refunded and recorded by flowctl; never manually reset the review
+ counter for a transport failure. Exit 5 / `TRANSPORT_UNHEALTHY` means stop
+ automatic retries and repair the backend.
 - `none` skips only when selected explicitly or resolved from configuration.
 - `export` emits the existing external-review artifact and terminal output,
  then returns; it never loads configured-backend guidance, writes a review
@@ -98,7 +101,15 @@ Fix+re-review cycles are bounded at `${MAX_REVIEW_ITERATIONS:-4}`. The counter
 is flowctl-owned; never keep an agent-side counter. On cap exhaustion, surface
 surviving findings and stop (Ralph: `<promise>RETRY</promise>`).
 
-**The cap is now ALSO enforced deterministically by flowctl (fn-90 R5): each `flowctl <backend> plan-review` dispatch increments a cumulative spec-scoped counter (`plan_review_rounds`) and REFUSES at `${MAX_REVIEW_ITERATIONS:-4}` with an `ESCALATE:` marker + exit 4 — the flowctl counter survives across fresh `/flow-next:plan-review` invocations, so a caller-side "re-invoke until SHIP" outer loop can no longer reset the cap by re-entering. This loop is INTERNAL — the caller (e.g. `/flow-next:plan`, pilot) invokes plan-review ONCE and acts on the terminal verdict; the flowctl counter resets ONLY on a SHIP verdict or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>`), never on a fresh invocation or a spec edit.**
+**The cap is enforced deterministically by flowctl:** every dispatch reserves a
+spec-scoped round before launch. SHIP / NEEDS_WORK / MAJOR_RETHINK consume it;
+a no-verdict transport failure is durably recorded and refunded. At
+`${MAX_REVIEW_ITERATIONS:-4}` verdict rounds, flowctl refuses with `ESCALATE:`
+and exit 4. More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive
+no-verdict failures stop separately with `TRANSPORT_UNHEALTHY` + exit 5.
+Callers invoke plan-review once and act on its terminal result. The verdict
+counter resets only on SHIP or an explicit re-plan, never on an edit, fresh
+invocation, or transport failure.**
 
 When the verdict is `NEEDS_WORK`:
 

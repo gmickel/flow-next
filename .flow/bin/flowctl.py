@@ -6727,7 +6727,7 @@ def build_review_prompt(
 def get_max_review_iterations() -> int:
     """Resolve the cumulative review-round cap (``MAX_REVIEW_ITERATIONS``, default 4).
 
-    A non-positive or non-integer env value falls back to the default 3 — the
+    A non-positive or non-integer env value falls back to the default 4 — the
     cap can never be disabled or made zero (that would reopen the runaway).
     """
     raw = os.environ.get("MAX_REVIEW_ITERATIONS")
@@ -6745,6 +6745,23 @@ def get_max_review_iterations() -> int:
 # from transport/backend failure codes (2 = exec failure, 3 = sandbox) so hosts
 # and Ralph can't misread the refusal as a retryable error.
 REVIEW_CAP_EXIT_CODE = 4
+# Repeated no-verdict transport failures are not review non-convergence. Keep
+# their stop signal separate so callers never surface a false ESCALATE.
+REVIEW_TRANSPORT_EXIT_CODE = 5
+DEFAULT_MAX_REVIEW_TRANSPORT_FAILURES = 2
+
+
+def get_max_review_transport_failures() -> int:
+    """Resolve the consecutive no-verdict failure budget (default 2)."""
+    raw = os.environ.get("MAX_REVIEW_TRANSPORT_FAILURES")
+    if raw:
+        try:
+            value = int(raw)
+            if value >= 1:
+                return value
+        except ValueError:
+            pass
+    return DEFAULT_MAX_REVIEW_TRANSPORT_FAILURES
 
 
 def _read_review_rounds(spec_data: dict, review_kind: str, task_id: Optional[str]) -> int:
@@ -6770,6 +6787,174 @@ def _write_review_rounds(
             spec_data["impl_review_rounds"] = rounds
         if task_id:
             rounds[task_id] = value
+
+
+def _review_attempt_scope(
+    review_kind: str, task_id: Optional[str], review_type: Optional[str] = None
+) -> str:
+    """Stable key for consecutive transport failures and attempt filtering."""
+    kind = review_type or review_kind
+    return f"{kind}:{task_id}" if task_id else kind
+
+
+def _review_counter_scope(review_kind: str, task_id: Optional[str]) -> str:
+    """Stable key for a pre-dispatch reservation on the shared counter."""
+    return f"impl:{task_id}" if review_kind == "impl" and task_id else "plan"
+
+
+def _review_attempt_summary(
+    spec_data: dict,
+    review_kind: str,
+    task_id: Optional[str],
+    *,
+    review_type: Optional[str] = None,
+) -> dict:
+    """Return durable real/refunded counts for one review scope."""
+    scope = _review_attempt_scope(review_kind, task_id, review_type)
+    attempts = spec_data.get("review_attempts")
+    if not isinstance(attempts, list):
+        attempts = []
+    if review_type is not None:
+        scoped = [
+            row
+            for row in attempts
+            if isinstance(row, dict) and row.get("scope") == scope
+        ]
+    else:
+        # Cap messages aggregate every workflow that shares the same counter:
+        # plan + completion for the spec counter, one impl task for task scope.
+        scoped = [
+            row
+            for row in attempts
+            if (
+                isinstance(row, dict)
+                and row.get("counter_kind") == review_kind
+                and row.get("task") == task_id
+            )
+        ]
+    return {
+        "scope": scope,
+        "verdict_attempts": sum(
+            1 for row in scoped if row.get("outcome") == "verdict"
+        ),
+        "refunded_attempts": sum(
+            1 for row in scoped if row.get("outcome") == "transport_failure"
+        ),
+        "attempts": scoped,
+    }
+
+
+def record_review_attempt(
+    spec_id: str,
+    review_kind: str,
+    *,
+    backend: str,
+    output: str,
+    verdict: Optional[str] = None,
+    failure_class: Optional[str] = None,
+    task_id: Optional[str] = None,
+    review_type: Optional[str] = None,
+    use_json: bool = False,
+) -> dict:
+    """Finalize one pre-dispatch reservation and persist its outcome.
+
+    Verdict-bearing attempts keep the reserved round and reset the consecutive
+    transport-failure count. A no-verdict attempt refunds exactly one reserved
+    round, increments the separate transport-failure count, and remains
+    auditable in ``review_attempts`` on the spec sidecar.
+    """
+    flow_dir = get_flow_dir()
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.exists():
+        return {
+            "recorded": False,
+            "outcome": "verdict" if verdict else "transport_failure",
+        }
+
+    spec_data = normalize_epic(
+        load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
+    )
+    scope = _review_attempt_scope(review_kind, task_id, review_type)
+    counter_scope = _review_counter_scope(review_kind, task_id)
+    pending = spec_data.get("review_pending_rounds")
+    if not isinstance(pending, dict):
+        pending = {}
+        spec_data["review_pending_rounds"] = pending
+    pending_count = int(pending.get(counter_scope, 0) or 0)
+    if pending_count < 1:
+        error_exit(
+            f"No reserved {review_kind}-review round exists for "
+            f"{task_id or spec_id}; refusing to finalize or refund.",
+            use_json=use_json,
+            code=2,
+        )
+    if pending_count == 1:
+        pending.pop(counter_scope, None)
+    else:
+        pending[counter_scope] = pending_count - 1
+
+    failures = spec_data.get("review_transport_failures")
+    if not isinstance(failures, dict):
+        failures = {}
+        spec_data["review_transport_failures"] = failures
+
+    outcome = "verdict" if verdict else "transport_failure"
+    refunded = outcome == "transport_failure"
+    if refunded:
+        current = _read_review_rounds(spec_data, review_kind, task_id)
+        _write_review_rounds(
+            spec_data, review_kind, task_id, max(0, current - 1)
+        )
+        consecutive = int(failures.get(scope, 0) or 0) + 1
+        failures[scope] = consecutive
+    else:
+        consecutive = 0
+        failures[scope] = 0
+
+    row = {
+        "timestamp": now_iso(),
+        "scope": scope,
+        "backend": backend,
+        "kind": review_type or review_kind,
+        "counter_kind": review_kind,
+        "task": task_id,
+        "outcome": outcome,
+        "verdict": verdict,
+        "failure_class": failure_class if refunded else None,
+        "output_sha256": hashlib.sha256(
+            (output or "").encode("utf-8", errors="replace")
+        ).hexdigest(),
+        "round_consumed": not refunded,
+    }
+    attempts = spec_data.get("review_attempts")
+    if not isinstance(attempts, list):
+        attempts = []
+        spec_data["review_attempts"] = attempts
+    attempts.append(row)
+    spec_data["updated_at"] = now_iso()
+    atomic_write_json(spec_json_path, spec_data)
+
+    summary = _review_attempt_summary(
+        spec_data, review_kind, task_id, review_type=review_type
+    )
+    summary.update(
+        {
+            "recorded": True,
+            "outcome": outcome,
+            "verdict": verdict,
+            "failure_class": failure_class if refunded else None,
+            "consecutive_transport_failures": consecutive,
+            "transport_failure_cap": get_max_review_transport_failures(),
+            "transport_unhealthy": (
+                refunded
+                and consecutive > get_max_review_transport_failures()
+            ),
+            "review_rounds": _read_review_rounds(
+                spec_data, review_kind, task_id
+            ),
+        }
+    )
+    return summary
 
 
 def enforce_and_increment_review_cap(
@@ -6812,9 +6997,14 @@ def enforce_and_increment_review_cap(
     current = _read_review_rounds(spec_data, review_kind, task_id)
     scope = task_id if (review_kind == "impl" and task_id) else spec_id
     if current >= cap:
+        attempts = _review_attempt_summary(
+            spec_data, review_kind, task_id
+        )
         marker = (
             f"ESCALATE: {review_kind}-review round cap reached "
-            f"({current}/{cap}) for {scope}. The reviewer and implementer have "
+            f"({current}/{cap} verdict rounds; "
+            f"{attempts['refunded_attempts']} refunded transport attempts) "
+            f"for {scope}. The reviewer and implementer have "
             f"not converged within MAX_REVIEW_ITERATIONS={cap}. This is NOT a "
             f"retryable error — escalate to a human (or, under an autonomous "
             f"loop, surface NEEDS_HUMAN). The counter resets only on a SHIP "
@@ -6831,6 +7021,8 @@ def enforce_and_increment_review_cap(
                     "task": task_id,
                     "rounds": current,
                     "cap": cap,
+                    "verdict_attempts": attempts["verdict_attempts"],
+                    "refunded_attempts": attempts["refunded_attempts"],
                 },
                 success=False,
             )
@@ -6839,6 +7031,12 @@ def enforce_and_increment_review_cap(
         sys.exit(REVIEW_CAP_EXIT_CODE)
     new_val = current + 1
     _write_review_rounds(spec_data, review_kind, task_id, new_val)
+    pending = spec_data.get("review_pending_rounds")
+    if not isinstance(pending, dict):
+        pending = {}
+        spec_data["review_pending_rounds"] = pending
+    counter_scope = _review_counter_scope(review_kind, task_id)
+    pending[counter_scope] = int(pending.get(counter_scope, 0) or 0) + 1
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
     return new_val
@@ -6861,6 +7059,9 @@ def reset_review_cap(
             load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=True)
         )
         _write_review_rounds(spec_data, review_kind, task_id, 0)
+        pending = spec_data.get("review_pending_rounds")
+        if isinstance(pending, dict):
+            pending.pop(_review_counter_scope(review_kind, task_id), None)
         spec_data["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, spec_data)
     except SystemExit:
@@ -15155,6 +15356,13 @@ def cmd_spec_reset_review_rounds(args: argparse.Namespace) -> None:
     also_impl = getattr(args, "impl", False)
     if also_impl:
         spec_data["impl_review_rounds"] = {}
+    pending = spec_data.get("review_pending_rounds")
+    if isinstance(pending, dict):
+        pending.pop("plan", None)
+        if also_impl:
+            for key in list(pending):
+                if key.startswith("impl:"):
+                    pending.pop(key, None)
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
 
@@ -15249,6 +15457,116 @@ def cmd_review_rounds_reset(args: argparse.Namespace) -> None:
         )
     else:
         print(f"{args.kind}-review round counter reset for {scope}")
+
+
+def cmd_review_rounds_record(args: argparse.Namespace) -> None:
+    """Record an RP response and refund its reservation when no verdict exists."""
+    spec_id, task_id = _resolve_review_rounds_args(args)
+    try:
+        output = Path(args.output_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        error_exit(
+            f"Unable to read review output file {args.output_file}: {exc}",
+            use_json=args.json,
+            code=2,
+        )
+
+    verdict = parse_codex_verdict(output)
+    failure_class: Optional[str] = None
+    if not verdict:
+        if args.failure_class:
+            failure_class = args.failure_class
+        elif args.exit_code != 0:
+            failure_class = "nonzero_exit"
+        elif not output.strip():
+            failure_class = "empty_output"
+        else:
+            failure_class = "missing_verdict"
+
+    result = record_review_attempt(
+        spec_id,
+        args.kind,
+        backend=args.backend,
+        output=output,
+        verdict=verdict,
+        failure_class=failure_class,
+        task_id=task_id,
+        review_type=args.review_type,
+        use_json=args.json,
+    )
+    if result.get("transport_unhealthy"):
+        error_exit(
+            f"TRANSPORT_UNHEALTHY: {args.backend} {args.review_type} review "
+            f"produced no verdict {result['consecutive_transport_failures']} "
+            f"consecutive times (budget {result['transport_failure_cap']}). "
+            f"The reserved review round was refunded; repair the "
+            f"backend/environment before retrying. This is not review "
+            f"non-convergence and does not require review-rounds reset.",
+            use_json=args.json,
+            code=REVIEW_TRANSPORT_EXIT_CODE,
+        )
+    if args.json:
+        json_output(result)
+    else:
+        if verdict:
+            print(
+                f"{args.review_type}-review verdict {verdict} recorded; "
+                f"round consumed"
+            )
+        else:
+            print(
+                f"{args.review_type}-review transport failure "
+                f"({failure_class}) recorded; round refunded"
+            )
+
+
+def cmd_review_rounds_attempts(args: argparse.Namespace) -> None:
+    """Show durable verdict/refund attempts for one review scope."""
+    spec_id, task_id = _resolve_review_rounds_args(args)
+    flow_dir = get_flow_dir()
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    spec_data = normalize_epic(
+        load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=args.json)
+    )
+    result = _review_attempt_summary(
+        spec_data,
+        args.kind,
+        task_id,
+        review_type=args.review_type,
+    )
+    result.update(
+        {
+            "id": spec_id,
+            "kind": args.review_type,
+            "task": task_id,
+            "review_rounds": _read_review_rounds(
+                spec_data, args.kind, task_id
+            ),
+            "review_rounds_cap": get_max_review_iterations(),
+            "consecutive_transport_failures": int(
+                (
+                    spec_data.get("review_transport_failures")
+                    if isinstance(
+                        spec_data.get("review_transport_failures"), dict
+                    )
+                    else {}
+                ).get(result["scope"], 0)
+                or 0
+            ),
+            "transport_failure_cap": get_max_review_transport_failures(),
+        }
+    )
+    if args.json:
+        json_output(result)
+    else:
+        print(
+            f"{result['scope']}: {result['review_rounds']}/"
+            f"{result['review_rounds_cap']} live verdict rounds; "
+            f"{result['verdict_attempts']} verdict attempts; "
+            f"{result['refunded_attempts']} refunded transport attempts; "
+            f"{result['consecutive_transport_failures']}/"
+            f"{result['transport_failure_cap']} consecutive transport failures"
+        )
 
 
 def _cmd_spec_set_ready(args: argparse.Namespace, *, target: bool) -> None:
@@ -23296,6 +23614,92 @@ def cmd_backend_review(
         )
 
 
+def _dispatch_backend_review(
+    *,
+    backend: str,
+    reg: dict,
+    args: argparse.Namespace,
+    prompt: str,
+    session_id: Optional[str],
+    repo_root: Path,
+    resolved_spec: "BackendSpec",
+    resolution_out: dict,
+    receipt_path: Optional[str],
+    spec_id: Optional[str],
+    review_kind: Optional[str],
+    review_type: str,
+    task_id: Optional[str] = None,
+) -> tuple[str, Optional[str], int, str]:
+    """Run a backend and refund if dispatch itself terminates before a result."""
+    try:
+        return reg["run_exec"](
+            prompt,
+            session_id=session_id,
+            repo_root=repo_root,
+            spec=resolved_spec,
+            resolution_out=resolution_out,
+            args=args,
+        )
+    except SystemExit:
+        attempt: dict = {}
+        if spec_id and review_kind:
+            attempt = record_review_attempt(
+                spec_id,
+                review_kind,
+                backend=backend,
+                output="backend dispatch terminated before returning output",
+                failure_class="dispatch_error",
+                task_id=task_id,
+                review_type=review_type,
+                use_json=args.json,
+            )
+        _clear_stale_review_receipt(receipt_path)
+        if attempt.get("transport_unhealthy"):
+            error_exit(
+                f"TRANSPORT_UNHEALTHY: {backend} {review_type} review failed "
+                f"before returning output "
+                f"{attempt['consecutive_transport_failures']} consecutive "
+                f"times (budget {attempt['transport_failure_cap']}). The "
+                f"reserved review round was refunded; repair the backend.",
+                use_json=args.json,
+                code=REVIEW_TRANSPORT_EXIT_CODE,
+            )
+        raise
+    except Exception as exc:
+        attempt = {}
+        detail = f"{type(exc).__name__}: {exc}"
+        if spec_id and review_kind:
+            attempt = record_review_attempt(
+                spec_id,
+                review_kind,
+                backend=backend,
+                output=detail,
+                failure_class="dispatch_exception",
+                task_id=task_id,
+                review_type=review_type,
+                use_json=args.json,
+            )
+        _clear_stale_review_receipt(receipt_path)
+        if attempt.get("transport_unhealthy"):
+            error_exit(
+                f"TRANSPORT_UNHEALTHY: {backend} {review_type} review failed "
+                f"before returning output "
+                f"{attempt['consecutive_transport_failures']} consecutive "
+                f"times (budget {attempt['transport_failure_cap']}). The "
+                f"reserved review round was refunded; repair the backend.",
+                use_json=args.json,
+                code=REVIEW_TRANSPORT_EXIT_CODE,
+            )
+        error_exit(
+            f"{reg['cli_label']} dispatch failed before returning output: "
+            f"{detail}. The reserved review round was refunded and the "
+            f"transport attempt recorded.",
+            use_json=args.json,
+            code=2,
+        )
+        raise AssertionError("error_exit must terminate")
+
+
 
 def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     """Shared impl-review pipeline; per-backend variance via registry hooks."""
@@ -23400,13 +23804,20 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         )
 
     _resolution: dict = {}
-    output, returned_session_id, exit_code, stderr = reg["run_exec"](
-        prompt,
+    output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
+        backend=backend,
+        reg=reg,
+        args=args,
+        prompt=prompt,
         session_id=session_id,
         repo_root=repo_root,
-        spec=resolved_spec,
+        resolved_spec=resolved_spec,
         resolution_out=_resolution,
-        args=args,
+        receipt_path=receipt_path,
+        spec_id=None if standalone else spec_id_from_task(task_id),
+        review_kind=None if standalone else "impl",
+        review_type="impl",
+        task_id=None if standalone else task_id,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -23417,6 +23828,10 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     verdict = _finish_backend_exec(
         backend=backend, reg=reg, args=args, receipt_path=receipt_path,
         output=output, stderr=stderr, exit_code=exit_code,
+        spec_id=None if standalone else spec_id_from_task(task_id),
+        review_kind=None if standalone else "impl",
+        review_type="impl",
+        task_id=None if standalone else task_id,
     )
 
     if verdict == "SHIP" and not standalone:
@@ -23510,13 +23925,74 @@ def _finish_backend_exec(
     output: str,
     stderr: str,
     exit_code: int,
+    spec_id: Optional[str] = None,
+    review_kind: Optional[str] = None,
+    review_type: Optional[str] = None,
+    task_id: Optional[str] = None,
 ) -> str:
-    """Shared post-exec gates: sandbox / nonzero / missing-verdict cleanup.
+    """Shared post-exec gates and verdict-aware round finalization.
 
-    Returns the parsed verdict string. Byte-compatible error messages and
-    exit codes with the pre-migration handlers.
+    A terminal verdict always consumes the reserved round, even if the process
+    also returned nonzero. Without a verdict, the reservation is refunded and
+    the transport attempt is recorded before the existing error is surfaced.
     """
-    if reg["has_sandbox"] and is_sandbox_failure(exit_code, output, stderr):
+    verdict = parse_codex_verdict(output)
+    if verdict:
+        if spec_id and review_kind:
+            record_review_attempt(
+                spec_id,
+                review_kind,
+                backend=backend,
+                output=output,
+                verdict=verdict,
+                task_id=task_id,
+                review_type=review_type,
+                use_json=args.json,
+            )
+        return verdict
+
+    sandbox_failure = (
+        reg["has_sandbox"] and is_sandbox_failure(exit_code, output, stderr)
+    )
+    combined = f"{stderr}\n{output}".lower()
+    if sandbox_failure:
+        failure_class = "sandbox"
+    elif "timed out" in combined or "timeout" in combined:
+        failure_class = "timeout"
+    elif exit_code != 0:
+        failure_class = "nonzero_exit"
+    elif not (output or "").strip():
+        failure_class = "empty_output"
+    else:
+        failure_class = "missing_verdict"
+
+    attempt: dict = {}
+    if spec_id and review_kind:
+        attempt = record_review_attempt(
+            spec_id,
+            review_kind,
+            backend=backend,
+            output=output,
+            failure_class=failure_class,
+            task_id=task_id,
+            review_type=review_type,
+            use_json=args.json,
+        )
+    if attempt.get("transport_unhealthy"):
+        _clear_stale_review_receipt(receipt_path)
+        count = attempt["consecutive_transport_failures"]
+        cap = attempt["transport_failure_cap"]
+        error_exit(
+            f"TRANSPORT_UNHEALTHY: {backend} {review_type or review_kind} "
+            f"review produced no verdict {count} consecutive times "
+            f"(budget {cap}). The reserved review round was refunded; repair "
+            f"the backend/environment before retrying. This is not review "
+            f"non-convergence and does not require review-rounds reset.",
+            use_json=args.json,
+            code=REVIEW_TRANSPORT_EXIT_CODE,
+        )
+
+    if sandbox_failure:
         _clear_stale_review_receipt(receipt_path)
         msg = (
             "Codex sandbox blocked operations. "
@@ -23530,17 +24006,16 @@ def _finish_backend_exec(
         msg = (stderr or output or f"{reg['cli_label']} failed").strip()
         error_exit(f"{reg['cli_label']} failed: {msg}", use_json=args.json, code=2)
 
-    verdict = parse_codex_verdict(output)
-    if not verdict:
-        _clear_stale_review_receipt(receipt_path)
-        error_exit(
-            f"{reg['no_verdict_label']} review completed but no verdict found "
-            f"in output. Expected <verdict>SHIP</verdict> or "
-            f"<verdict>NEEDS_WORK</verdict>",
-            use_json=args.json,
-            code=2,
-        )
-    return verdict
+    _clear_stale_review_receipt(receipt_path)
+    error_exit(
+        f"{reg['no_verdict_label']} review completed but no verdict found "
+        f"in output. Expected <verdict>SHIP</verdict> or "
+        f"<verdict>NEEDS_WORK</verdict>. The reserved review round was "
+        f"refunded and the transport attempt recorded.",
+        use_json=args.json,
+        code=2,
+    )
+    raise AssertionError("error_exit must terminate")
 
 
 def _bind_receipt_model_effort(
@@ -23633,13 +24108,19 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
     enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
 
     _resolution: dict = {}
-    output, returned_session_id, exit_code, stderr = reg["run_exec"](
-        prompt,
+    output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
+        backend=backend,
+        reg=reg,
+        args=args,
+        prompt=prompt,
         session_id=session_id,
         repo_root=repo_root,
-        spec=resolved_spec,
+        resolved_spec=resolved_spec,
         resolution_out=_resolution,
-        args=args,
+        receipt_path=receipt_path,
+        spec_id=epic_id,
+        review_kind="plan",
+        review_type="plan",
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -23650,6 +24131,9 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
     verdict = _finish_backend_exec(
         backend=backend, reg=reg, args=args, receipt_path=receipt_path,
         output=output, stderr=stderr, exit_code=exit_code,
+        spec_id=epic_id,
+        review_kind="plan",
+        review_type="plan",
     )
 
     if verdict == "SHIP":
@@ -23788,13 +24272,19 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
 
     _resolution: dict = {}
-    output, returned_session_id, exit_code, stderr = reg["run_exec"](
-        prompt,
+    output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
+        backend=backend,
+        reg=reg,
+        args=args,
+        prompt=prompt,
         session_id=session_id,
         repo_root=repo_root,
-        spec=resolved_spec,
+        resolved_spec=resolved_spec,
         resolution_out=_resolution,
-        args=args,
+        receipt_path=receipt_path,
+        spec_id=epic_id,
+        review_kind="plan",
+        review_type="completion",
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -23805,6 +24295,9 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     verdict = _finish_backend_exec(
         backend=backend, reg=reg, args=args, receipt_path=receipt_path,
         output=output, stderr=stderr, exit_code=exit_code,
+        spec_id=epic_id,
+        review_kind="plan",
+        review_type="completion",
     )
 
     if verdict == "SHIP":
@@ -29601,6 +30094,69 @@ def main() -> None:
     )
     p_rr_reset.add_argument("--json", action="store_true", help="JSON output")
     p_rr_reset.set_defaults(func=cmd_review_rounds_reset)
+
+    p_rr_record = review_rounds_sub.add_parser(
+        "record",
+        help="Record an RP response; refund the reserved round when no verdict exists",
+    )
+    p_rr_record.add_argument("id", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
+    p_rr_record.add_argument(
+        "--kind",
+        required=True,
+        choices=["plan", "impl"],
+        help="Counter kind (completion reviews use plan)",
+    )
+    p_rr_record.add_argument(
+        "--review-type",
+        required=True,
+        choices=["plan", "impl", "completion"],
+        help="Actual review workflow (completion shares the plan counter)",
+    )
+    p_rr_record.add_argument(
+        "--task", help="Task ID (required with --kind impl; counter is per-task)"
+    )
+    p_rr_record.add_argument("--backend", default="rp", help="Review backend")
+    p_rr_record.add_argument(
+        "--output-file", required=True, help="File containing reviewer output"
+    )
+    p_rr_record.add_argument(
+        "--exit-code", type=int, default=0, help="Transport process exit code"
+    )
+    p_rr_record.add_argument(
+        "--failure-class",
+        choices=[
+            "sandbox",
+            "timeout",
+            "nonzero_exit",
+            "empty_output",
+            "missing_verdict",
+        ],
+        help="Explicit no-verdict failure class",
+    )
+    p_rr_record.add_argument("--json", action="store_true", help="JSON output")
+    p_rr_record.set_defaults(func=cmd_review_rounds_record)
+
+    p_rr_attempts = review_rounds_sub.add_parser(
+        "attempts", help="Show verdict-bearing and refunded review attempts"
+    )
+    p_rr_attempts.add_argument("id", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
+    p_rr_attempts.add_argument(
+        "--kind",
+        required=True,
+        choices=["plan", "impl"],
+        help="Counter kind (completion reviews use plan)",
+    )
+    p_rr_attempts.add_argument(
+        "--review-type",
+        required=True,
+        choices=["plan", "impl", "completion"],
+        help="Actual review workflow to report",
+    )
+    p_rr_attempts.add_argument(
+        "--task", help="Task ID (required with --kind impl; counter is per-task)"
+    )
+    p_rr_attempts.add_argument("--json", action="store_true", help="JSON output")
+    p_rr_attempts.set_defaults(func=cmd_review_rounds_attempts)
 
     # memory
     p_memory = subparsers.add_parser("memory", help="Memory commands")
