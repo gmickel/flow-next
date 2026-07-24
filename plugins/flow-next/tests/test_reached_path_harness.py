@@ -49,6 +49,19 @@ class TestReachedPathHarness(unittest.TestCase):
         self.assertTrue((HARNESS / "README.md").is_file())
         self.assertTrue((HARNESS / "deferrals.md").is_file())
 
+    def test_ci_checkout_retains_frozen_baseline_history(self) -> None:
+        workflow = (REPO / ".github" / "workflows" / "test-flow-next.yml").read_text(
+            encoding="utf-8"
+        )
+        matrix_checkout = workflow.index("      - uses: actions/checkout@v4")
+        setup_python = workflow.index("      - name: Setup Python", matrix_checkout)
+        checkout_block = workflow[matrix_checkout:setup_python]
+        self.assertIn(
+            "fetch-depth: 0",
+            checkout_block,
+            "the full test matrix needs B0/B1 source commits for git-show validation",
+        )
+
     def test_self_test_passes(self) -> None:
         rc = self.run_eval.self_test()
         self.assertEqual(rc, 0, "reached-path --self-test failed")
