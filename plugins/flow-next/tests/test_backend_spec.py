@@ -75,7 +75,7 @@ class TestRegistryShape(unittest.TestCase):
         self.assertNotIn("default_effort", BACKEND_REGISTRY["cursor"])
 
     def test_cursor_model_catalog(self) -> None:
-        # Source of truth: ``cursor-agent --list-models`` (v2026.06). Keep synced
+        # Source of truth: ``cursor-agent --list-models`` (v2026.07). Keep synced
         # — Cursor ships new rows + auto-updates the CLI without changelog.
         # fn-76: ``models`` is an ORDERED quality ranking (strongest first), a
         # list — not a set. ``default_model`` MUST equal ``models[0]``.
@@ -89,6 +89,7 @@ class TestRegistryShape(unittest.TestCase):
                 "gpt-5.6-sol-low",
                 "gpt-5.6-terra-high",
                 "gpt-5.6-luna-high",
+                "claude-opus-5-thinking-high",
                 "claude-opus-4-8-thinking-high",
                 "claude-opus-4-7-thinking-high",
                 "gpt-5.5-high",

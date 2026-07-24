@@ -4512,7 +4512,9 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # down on that signature. Verified via live probe against copilot CLI
         # 1.0.65 — asked the CLI itself for the exact ``--model`` strings it
         # accepts. Keep synced with ``copilot -p "/model"``; GitHub ships new
-        # rows without changelog. (1.0.65 dropped ``gpt-5.2`` / ``gpt-5.2-codex``
+        # rows without changelog. 1.0.74 (probed 2026-07-24) still rejects
+        # ``claude-opus-4.8`` and ``claude-opus-5``; the Claude ceiling stays
+        # ``claude-opus-4.7``. (1.0.65 dropped ``gpt-5.2`` / ``gpt-5.2-codex``
         # — they 400 "Model not available".)
         "models": [
             "gpt-5.5",
@@ -4543,7 +4545,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``default_model`` == ``models[0]``. Cursor's fallback (run_cursor_exec)
         # consults ``cursor-agent --list-models`` on failure and dispatches the
         # best ``list ∩ ranking`` entry. Model strings are verbatim from
-        # ``cursor-agent --list-models`` (v2026.06); keep synced.
+        # ``cursor-agent --list-models`` (v2026.07); keep synced.
         "models": [
             "gpt-5.6-sol-high",
             "gpt-5.6-sol-xhigh",
@@ -4552,6 +4554,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
             "gpt-5.6-sol-low",
             "gpt-5.6-terra-high",
             "gpt-5.6-luna-high",
+            "claude-opus-5-thinking-high",  # probed live 2026-07-24 (launch-day slug)
             "claude-opus-4-8-thinking-high",
             "claude-opus-4-7-thinking-high",
             "gpt-5.5-high",
