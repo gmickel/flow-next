@@ -112,6 +112,8 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `trace.py` | Parse stream-json Read activations |
 | `inventory.py` | Declarative B0 fixture inventory + frozen B1 source commit |
 | `run_eval.py` | CLI: self-test / B0+B1 freeze/validate/input checks / production-path smoke |
+| `run_claude_fleet_smoke.py` | Actual `/flow-next:*` B1/candidate fleet through Claude Code `--plugin-dir`; isolated inline-plugin, side-effect, and workflow contracts |
+| `claude_fleet_oracles.py` | Process helpers, transcript parsing, privacy scrub, and per-workflow behavioral oracles for the Claude fleet smoke |
 | `plan_review_candidate.py` | fn-130.6 selected-backend route traces + production plan-prompt corpus checks |
 | `fixtures/b0/` | Sanitized frozen manifests + `INDEX.json` |
 | `fixtures/b1/` | Post-version V1/B1 manifests + structural input hashes |
@@ -119,6 +121,7 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `runs/b0-production-path-smoke.json` | Write-once tracked B0 Claude proof (immutable) |
 | `runs/plan-review-candidate.json` | fn-130.6 B1→candidate route/corpus ratchet evidence |
 | `evidence/fn130/plan-review-real-backend.json` | fn-130 completion repair: B1/candidate risky, clean, and user-edited Plan Review corpus through Codex `gpt-5.6-sol` high, with reviews, verdicts, usage, and production-prompt hashes |
+| `evidence/fn130/claude-plugin-fleet-smoke.json` | Actual Claude Code canonical-plugin fleet: nine B1 and nine candidate slash-command runs; candidate 9/9, B1 7/9 with both baseline misses retained |
 | `runs/candidates/` | Ignored timestamped candidate smoke evidence (ordinary runs) |
 | `deferrals.md` | Non-target skills + open-spec overlaps |
 | `fleet-results.md` | fn-130 closure: per-cluster metrics, host smokes, final gates, and rollback |
@@ -146,6 +149,10 @@ python3 optimization/reached-path/run_eval.py --check-b1-input plan
 # runs/candidates/<UTC µs>-production-path-smoke-<status>.json (never touches
 # the tracked B0 proof, including on auth/leak/backend failure).
 python3 optimization/reached-path/run_eval.py --production-path-smoke
+
+# Actual canonical-plugin behavior for every optimized user workflow. This is
+# authenticated, slow, and intentionally separate from the deterministic suite.
+python3 optimization/reached-path/run_claude_fleet_smoke.py --all
 
 # One-time initial tracked proof (exclusive create; refuse if already present).
 # Pass → runs/b0-production-path-smoke.json; failure → candidate only.

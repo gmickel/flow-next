@@ -60,6 +60,11 @@ class PrecheckModeContractTest(unittest.TestCase):
         self.assertEqual(text.count(REFRESH), 1)
         self.assertEqual(text.count(CONTINUE), 1)
         self.assertIn("AskUserQuestion", text)
+        self.assertIn("Before Step 0, read `.flow/meta.json`", text)
+        self.assertIn(
+            "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json",
+            text,
+        )
         self.assertIn("In copy mode only", text)
         self.assertIn("run `/flow-next:setup`, then rerun Plan", text)
         self.assertIn("never invoke Setup or resume this Plan invocation", text)

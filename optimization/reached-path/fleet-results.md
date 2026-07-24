@@ -72,6 +72,35 @@ Temporary Grok and Droid installations/marketplace registrations were removed
 after the run. The pre-existing released Droid user plugin and pre-existing
 inactive skill-only probe records were not changed.
 
+## Canonical Claude fleet smoke
+
+Run 2026-07-24 through Claude Code `2.1.218`, Sonnet, using the actual
+`/flow-next:*` commands and `--plugin-dir`. Each disposable repository loaded
+exactly one inline Flow-Next plugin, used nonzero model tokens, allowed no MCP
+servers, and constrained Flow-Next reads to the expected immutable B1 or current
+candidate root. Tracker Sync had no live transport; Make PR used `--dry-run`;
+Plan Review exported beneath its fixture instead of opening Desktop.
+
+| Workflow | B1 | Candidate | Observable contract |
+|---|---:|---:|---|
+| Setup | PASS | PASS | initialized Flow and reached or completed configuration |
+| Tracker Sync | PASS | PASS | inactive bridge exited without tracker receipt |
+| Prime | PASS | PASS | classify-only emitted terminal classification |
+| Plan | **MISS** | PASS | task created; candidate additionally read both manifests and surfaced autonomous copy-version drift before planning |
+| Plan Review | **MISS** | PASS | B1 returned while export work remained in the background; candidate completed the export terminally without a review subprocess |
+| Work | PASS | PASS | exact marker written, task completed, implementation committed |
+| Strategy | PASS | PASS | foreign strategy preserved; user choice surfaced |
+| Make PR | PASS | PASS | complete dry-run body rendered; no `gh pr create` |
+| Pilot | PASS | PASS | terminal dry-run verdict; repository unchanged |
+
+Candidate result: **9/9 PASS**. B1 result: **7/9 PASS**. Every B1 pass remains
+a candidate pass; the two visible baseline misses are retained rather than
+normalized away. The Plan miss caused one proximity repair: the concise
+copy-mode contract now explicitly tells Plan to read `.flow/meta.json` and the
+plugin manifest before Step 0. Full sanitized transcripts, tool calls, usage,
+plugin hashes, repository state, and per-check verdicts:
+[`claude-plugin-fleet-smoke.json`](evidence/fn130/claude-plugin-fleet-smoke.json).
+
 ## Final gates
 
 - `./scripts/sync-codex.sh` twice: 28 skills, 22 agents; second run idempotent.
@@ -90,6 +119,8 @@ inactive skill-only probe records were not changed.
   Codex `gpt-5.6-sol` high: both risky variants caught 10/10 planted gaps,
   both clean variants shipped, and both user-edited variants preserved 37
   without restoring 50.
+- Actual canonical Claude plugin fleet: candidate 9/9; B1 7/9; no candidate
+  regression and two observed baseline misses repaired.
 - flow-next.dev: Astro check 0 errors/warnings/hints; 74 pages built. Existing
   highlighter/chunk-size warnings are non-blocking.
 - `git diff --check`, changed-reference existence, B0/B1 validation, fixture
