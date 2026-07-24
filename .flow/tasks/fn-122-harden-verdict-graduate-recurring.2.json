@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-24T21:58:56.844789Z",
+  "depends_on": [
+    "fn-122-harden-verdict-graduate-recurring.1"
+  ],
+  "id": "fn-122-harden-verdict-graduate-recurring.2",
+  "priority": null,
+  "spec": "fn-122-harden-verdict-graduate-recurring",
+  "spec_path": ".flow/tasks/fn-122-harden-verdict-graduate-recurring.2.md",
+  "status": "todo",
+  "title": "Audit skill: Harden outcome (phases, workflow, SKILL)",
+  "updated_at": "2026-07-24T22:15:38.413962Z"
+}

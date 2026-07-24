@@ -38,8 +38,22 @@ Standard flow-next split (CLAUDE.md "SKILL + thin flowctl plumbing"): the skill 
 **Data model (flowctl):**
 
 - `MEMORY_STATUS` extends from `("active", "stale")` to `("active", "stale", "hardened")`.
-- New optional frontmatter field `hardened_into: <gate-ref>` (free-text: file path + one-line description of the gate). Permitted on both tracks.
+- New optional frontmatter field `hardened_into: <gate-ref>`. **Not free text** -- a later audit has to re-find the gate to check it is still live (R13), and a prose description gives it nothing to look at. The value is a single conventionally formatted string with two required parts: a repo-relative artifact path, then a stable rule/check identifier, then an optional human note. Format: `<path>#<rule-id> -- <note>`. Per gate type:
+  - lint: `pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes`
+  - CI: `.github/workflows/ci.yml#jobs.lint.steps[name=ruff] -- runs the DTZ gate`
+  - instruction file: `CLAUDE.md#timestamps-utc -- always stamp UTC ISO-8601`
+  The `<rule-id>` must be something a grep can find in the named file. Permitted on both tracks.
 - Demotion preserves the file: status flips to `hardened`, `hardened_into` + `last_audited` set, body untouched (provenance survives; the entry becomes a pointer). Never `git rm` on Harden.
+- **Field invariants per status** (each mutation enforces the whole set, not just its own field -- otherwise a status flip strands a contradictory field from the previous state):
+
+  | status | `hardened_into` | `stale_reason` / `stale_date` |
+  |---|---|---|
+  | `active` | absent | absent |
+  | `stale` | absent | present |
+  | `hardened` | present | absent |
+
+  So `mark-hardened` clears the stale-only fields; `mark-stale` clears `hardened_into`; `mark-fresh` clears both families. This is a change to the EXISTING `mark-stale` and `mark-fresh` handlers, not only new code.
+- `last_audited` precision is a **UTC date** (`YYYY-MM-DD`), matching the existing `mark-stale` / `mark-fresh` handlers (`flowctl.py:11893`, `:11947`) and `_MEMORY_QUOTED_STRING_FIELDS` (`:9516`). Harden introduces no new timestamp precision. "Re-stamping" is therefore a no-op within the same UTC day, and idempotency must be asserted on `hardened_into` replacement, not on an observable timestamp change.
 - Default `memory list` / `memory search` exclude `hardened` (same treatment as `stale`); `--status hardened` / `--status all` include it. memory-scout therefore stops re-injecting the entry -- the gate has replaced the context injection.
 
 **Recurrence detection inputs (audit Phase 1, per entry):**
@@ -52,7 +66,24 @@ git log --oneline -- <entry-file> | wc -l   # write history
 
 Plus LLM judgment: entries in the same `related_to` cluster count toward one candidate (the cluster, not each member, is the Harden unit -- consolidate first if needed).
 
-**Proposal thresholds (DECIDED 2026-07-22, documented in phases.md, overridable by judgment in either direction with evidence stated):** an entry (or cluster) becomes a Harden CANDIDATE when ANY of: (i) >= 2 `## Update` headings; (ii) `related_to` cluster of >= 3 entries; (iii) >= 4 commits touching the entry file. Thresholds gate PROPOSING only; the human gates APPLYING. Mechanizability is a separate AND condition and is always LLM-judged.
+**Proposal thresholds (recalibrated at plan time 2026-07-24 per Decision 3's standing instruction; documented in phases.md, overridable by judgment in either direction with evidence stated).** An entry (or cluster) becomes a Harden CANDIDATE when ANY of the two primary signals fires:
+
+- (i) >= 2 `## Update` headings on the entry;
+- (iii) >= 4 commits touching the entry file.
+
+`related_to` cluster size is **demoted from a standalone trigger to a corroborating signal**: a cluster of >= 3 entries raises a candidate ONLY when it co-occurs with at least one `## Update` heading somewhere in the cluster (or with signal (iii) on any member). On its own it proposes nothing.
+
+Thresholds gate PROPOSING only; the human gates APPLYING. Mechanizability is a separate AND condition and is always LLM-judged.
+
+**Calibration evidence (this repo's store, 71 entries, measured 2026-07-24):**
+
+| Signal | Entries matching | Share |
+|---|---|---|
+| (i) >= 2 `## Update` headings | 3 | 4% |
+| (iii) >= 4 commits on the entry file | ~1 in 20 sampled | ~5% |
+| `related_to` >= 3 (as a standalone trigger) | 20 | **28%** |
+
+`related_to` is auto-populated by overlap scoring on every `memory add`, so a large cluster reflects tag/topic collision, not a re-taught lesson. Left standalone it would flag more than a quarter of the store on the first post-ship audit run — noise that would train the user to decline Harden reflexively. Signals (i) and (iii) are selective and match the "recurring pain" intuition, so they stay as-is. The structure Decision 3 fixed (any-of, propose-only, judgment-overridable) is preserved; only `related_to`'s standing changed.
 
 ### Worked example (normative for shape, illustrative values)
 
@@ -61,16 +92,17 @@ Assume a Python repo with ruff configured. Entry `.flow/memory/conventions/times
 1. Phase 1 evidence: `grep -c '^## Update '` -> 2; `git log --oneline -- <file> | wc -l` -> 4; `related_to: []`. Candidate (threshold (i) met). Mechanizable: yes -- naive-datetime use is grep/lint-detectable.
 2. Duplication guard: grep ruff config for `DTZ` -> absent. Proceed.
 3. Ask step shows: gate type (a) lint rule; draft artifact = add `DTZ` to the ruff `select` list in `pyproject.toml`; evidence bullets from step 1; options accept / different gate type / decline.
-4. On accept: edit `pyproject.toml`; then `flowctl memory mark-hardened conventions/timestamps-utc --gate-ref "pyproject.toml [tool.ruff] DTZ rules -- bans naive datetimes" --audited-by "/flow-next:audit"`.
-5. Entry frontmatter after (body untouched):
+4. On accept: edit `pyproject.toml`. **Then verify the gate actually fires before retiring the lesson** -- run `ruff check` and confirm the `DTZ` rule is active in the resolved config (not merely present as text in a file that ruff does not read, and not disabled by a later `ignore` entry). Verification failing means the entry stays `active` and the graduation is reported as failed; nothing is demoted.
+5. Only after verification passes: `flowctl memory mark-hardened conventions/timestamps-utc --gate-ref "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes" --audited-by "/flow-next:audit"`.
+6. Entry frontmatter after (body untouched):
 
 ```yaml
 status: hardened            # was: active
-hardened_into: "pyproject.toml [tool.ruff] DTZ rules -- bans naive datetimes"
-last_audited: 2026-07-22T09:00:00Z
+hardened_into: "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes"
+last_audited: '2026-07-22'
 ```
 
-6. Report: `Hardened: 1` with detail line `conventions/timestamps-utc -> lint (pyproject.toml ruff DTZ)`. `memory list` no longer shows the entry; `memory list --status hardened` does; memory-scout stops injecting it.
+7. Report: `Hardened: 1` with detail line `conventions/timestamps-utc -> lint (pyproject.toml ruff DTZ)`. `memory list` no longer shows the entry; `memory list --status hardened` does; memory-scout stops injecting it.
 
 ## API Contracts
 <!-- scope: technical -->
@@ -78,13 +110,15 @@ last_audited: 2026-07-22T09:00:00Z
 New thin plumbing, mirroring `mark-stale` / `mark-fresh`:
 
 ```bash
-flowctl memory mark-hardened <id> --gate-ref "<path or description>" [--json]
+flowctl memory mark-hardened <id> --gate-ref "<path>#<rule-id> -- <note>" [--json]
 flowctl memory mark-hardened <id> --gate-ref "..." --audited-by "/flow-next:audit"
 ```
 
-- Sets `status: hardened`, `hardened_into: <gate-ref>`, stamps `last_audited` (UTC), records optional `audit_notes`. Body never modified. Idempotent -- re-marking replaces `hardened_into` and re-stamps.
-- Errors: unknown id (exit nonzero, message names the id); missing `--gate-ref` (usage error). Legacy flat-file ids rejected with the migrate-first message (same as mark-stale).
-- `flowctl memory mark-fresh <id>` also clears `hardened` back to `active` and drops `hardened_into` (un-graduation escape hatch, e.g. gate later removed).
+- Sets `status: hardened`, `hardened_into: <gate-ref>`, **clears `stale_reason` / `stale_date`** (field invariants, see Architecture), stamps `last_audited` (UTC date, `YYYY-MM-DD`), records optional `audit_notes`. Body never modified. Idempotent -- re-marking replaces `hardened_into`; `last_audited` is a date, so a same-day re-mark is observably a no-op on that field and tests must assert on `hardened_into`, not on the stamp.
+- `--gate-ref` is stored verbatim; flowctl does NOT parse or validate the `<path>#<rule-id>` convention. The format is a skill-side contract (the audit skill composes it; a later audit greps it) -- validating it in flowctl would be judgment leaking into plumbing. Only non-emptiness is enforced.
+- Errors: unknown id (exit nonzero, message names the id); missing/empty `--gate-ref` (usage error). Legacy flat-file ids rejected with the migrate-first message (same as mark-stale).
+- `flowctl memory mark-fresh <id>` clears BOTH families: `hardened` -> `active` dropping `hardened_into`, and the existing stale-field clearing (un-graduation escape hatch, e.g. gate later removed).
+- `flowctl memory mark-stale <id>` (existing command, changed here) additionally drops `hardened_into`, so a hardened entry marked stale cannot keep a pointer to a gate it no longer claims.
 - `memory list` / `search` / `read` JSON output includes `hardened_into` when present.
 - No other flowctl surface changes. Artifact generation (lint rule text, CI step YAML, instruction-file line) is skill-side prose written via Edit/Write -- no `flowctl gate` subcommand (would violate the agentic-vs-deterministic rule: judging what the gate should say is intelligence).
 
@@ -96,25 +130,77 @@ flowctl memory mark-hardened <id> --gate-ref "..." --audited-by "/flow-next:audi
 - **Decision-track entries** (`knowledge/decisions/`): supersede-not-delete semantics are untouched. Harden on a decision entry demotes via `mark-hardened` (file stays on disk, consistent with "decision history stays on disk"); most decisions are judgment records, not mechanizable checks -- expect Harden to be rare here, and the calibrated judging question stays primary.
 - **Repos without linter or CI** (or non-code repos like an Obsidian vault): targets (a)/(b) unavailable; (c) instruction-file rule is the universal floor. The skill must not scaffold a linter or CI pipeline to satisfy a Harden -- gate lands in what exists.
 - **Legacy flat files**: skipped, as today (migrate first).
+- **First post-ship audit run gets no special treatment.** Recurrence signals are derived retroactively, so the first ordinary audit after this lands may surface several Harden candidates at once. That is intended, not a bug, and there is no first-run suppression or rate limit — the recalibrated thresholds (Architecture) are what keeps the volume sane. This is distinct from the deliberately out-of-scope *retro-hardening sweep* (Boundaries): candidates surface through the normal audit ritual, not a one-off campaign.
 - **Artifact staging, not blind writes**: generated lint/CI edits are shown as a draft in the Ask step (interactive) before Edit/Write executes; instruction-file edits stay minimal (1-2 lines) and never restructure the file. Existing "auto-committing without user awareness" rule covers the commit.
 - **Cross-platform** (CLAUDE.md checklist): canonical prose uses `AskUserQuestion`/`Task`; run `./scripts/sync-codex.sh` twice and commit the mirror diff. Cursor/Droid get no rewrite pass -- new prose needs no Claude-only phrases beyond what the audit skill already carries.
 - **Version discipline**: land code + docs + `## Unreleased` CHANGELOG entry; no version bump (batched releases).
 - **Retroactivity constraint**: recurrence detection must work from existing artifacts (Update headings, related_to, git log) so pre-existing entries are eligible. Any new counter (if adopted, see Decision Context) only helps future entries.
 
+## Quick commands
+
+Focused suites for this feature's files. The FULL suite (`python3 scripts/run_tests_parallel.py`) runs ONCE at the final gate, not per task.
+
+```bash
+# Memory command + CLI-surface + bootstrap-pin suites (the blast radius of a flowctl.py edit)
+cd plugins/flow-next/tests && python3 -m unittest \
+  test_memory_mark_stale test_memory_mark_fresh test_memory_mark_hardened \
+  test_flowctl_surface test_startup_bootstrap -q
+
+# Smoke the new command end-to-end against the dogfood store
+.flow/bin/flowctl memory list --json | jq '.entries | length'
+.flow/bin/flowctl memory list --status hardened --json
+.flow/bin/flowctl memory list --status all --json | jq '.entries | length'
+
+# Codex mirror must be idempotent and its validation guards green
+./scripts/sync-codex.sh && ./scripts/sync-codex.sh && git status --porcelain plugins/flow-next/codex/
+```
+
 ## Acceptance Criteria
 <!-- scope: both -->
 
 - **R1:** `phases.md` documents Harden as a sixth outcome with explicit decision criteria: recurrence signal (named artifacts: `## Update` heading count, `related_to` cluster size, git-log write count) AND mechanizability; the quick-reference decision tree includes the Harden branch.
-- **R2:** Audit Phase 1 gathers the recurrence artifacts per entry; the spec of thresholds states plainly that no read-side usage telemetry exists and detection is write-side + LLM judgment.
+- **R2:** Audit Phase 1 gathers the recurrence artifacts per entry; the spec of thresholds states plainly that no read-side usage telemetry exists and detection is write-side + LLM judgment. **Recurrence signals are gathered BEFORE the Phase 0.75 auto-Keep decision, and a recurrence-qualified entry (or cluster) bypasses auto-Keep and enters Harden investigation even when its module is unchanged.** Today Phase 0.75 auto-Keeps unchanged-module entries and excludes them from Phase 1 entirely -- leaving that order intact would make the most-hardenable entries (old, stable, repeatedly re-taught, module long since settled) exactly the ones never considered, defeating retroactivity.
 - **R3:** Interactive mode presents each Harden candidate individually with: proposed gate type ((a)/(b)/(c)), draft artifact content, evidence bullets, and accept / pick-different-gate-type / decline options via the blocking-question tool.
-- **R4:** On acceptance, the graduation artifact is written to the chosen surface and the entry is demoted via `flowctl memory mark-hardened <id> --gate-ref "..."`; the entry file remains on disk with body intact and `hardened_into` pointing at the gate.
+- **R4:** On acceptance, the graduation artifact is written to the chosen surface, **the gate is verified live (R16)**, and only then is the entry demoted via `flowctl memory mark-hardened <id> --gate-ref "..."`; the entry file remains on disk with body intact and `hardened_into` pointing at the gate in the `<path>#<rule-id>` form.
 - **R5:** In `mode:autofix`, Harden candidates appear ONLY under Recommended in the report; no gate artifact is written and no entry is demoted.
 - **R6:** `flowctl memory mark-hardened` exists with the contract in API Contracts (status flip, `hardened_into`, `last_audited`, idempotent, `--json`); `mark-fresh` reverts a hardened entry to active and drops `hardened_into`; unit tests cover round-trip, idempotency, unknown id, legacy rejection.
 - **R7:** Default `memory list` / `memory search` exclude `hardened`; `--status hardened` and `--status all` include; memory-scout consequently no longer surfaces hardened entries (verified via the existing status-filter path, no scout change needed).
-- **R8:** Duplication guard: when the class is already enforced by an existing gate, the audit proposes pointer-demotion citing that gate instead of generating a duplicate artifact.
+- **R8:** Duplication guard: when the class is already enforced by an existing gate, the audit proposes pointer-demotion citing that gate instead of generating a duplicate artifact. A textual match is not sufficient evidence -- the guard must confirm the matched rule is ACTIVE (not commented out, not in an `ignore` list, not in a config the tool does not actually read, not a disabled CI step) before treating it as enforcement. An inactive match is not a duplicate; it is a broken gate, and the entry stays active.
 - **R9:** Audit report gains a `Hardened: N` count plus per-entry detail (gate type, artifact path, gate-ref); autofix report shows Harden under Recommended.
 - **R10:** Decision-track entries are never `git rm`'d by Harden; supersession fields are preserved alongside `hardened` status.
-- **R11:** Docs updated in the same workstream: `docs/memory-schema.md` (audit lifecycle + status values + `hardened_into`), `docs/flowctl.md` (mark-hardened), audit `SKILL.md`/`workflow.md`/`phases.md`; `scripts/sync-codex.sh` run twice with mirror diff committed; CHANGELOG entry under `## Unreleased`.
+- **R11:** Docs updated in the same workstream: `docs/memory-schema.md` (audit lifecycle + status values + `hardened_into`), `docs/flowctl.md` (mark-hardened), audit `SKILL.md`/`workflow.md`/`phases.md`; `scripts/sync-codex.sh` run twice with mirror diff committed; CHANGELOG entry under `## Unreleased`. The full doc sweep list is in References.
+- **R12:** `phases.md` states an explicit outcome-precedence rule for an entry qualifying for several outcomes at once, and the decision tree encodes it: **correctness first** (Replace / Delete win — a wrong lesson is never graduated into a gate), **then Consolidate** (a `related_to` cluster is consolidated before the merged entry is considered for Harden, per the "the cluster, not each member, is the Harden unit" rule), **then Harden**. Keep/Update are unaffected.
+- **R13:** Hardened entries have defined behavior on subsequent audit runs: Phase 0.75/Phase 1 do NOT drop them silently. Each hardened entry gets a lightweight gate-liveness check — does the surface named by `hardened_into` still exist and still carry the rule? Gate gone → the audit proposes `flowctl memory mark-fresh <id>` (un-graduation, entry returns to `active`) with the evidence; gate present → the entry is reported as still-hardened and NOT re-investigated in full. A gate upgrade (e.g. instruction-file rule promoted to a lint rule) is a re-`mark-hardened`, which is idempotent and replaces `hardened_into`.
+- **R14:** The status-transition matrix is complete and every mutation enforces the per-status field invariants from Architecture -- not just its own field. `active -> hardened` and `stale -> hardened` both succeed and clear `stale_reason` / `stale_date`; `hardened -> stale` clears `hardened_into`; `hardened -> active` via `mark-fresh` clears `hardened_into` and the stale family. This modifies the EXISTING `mark-stale` and `mark-fresh` handlers, not only the new command. Unit tests cover every transition in the matrix and assert no field from the prior status survives.
+- **R15:** Cross-version behavior is documented **honestly**, matching what the code actually does. `validate_memory_frontmatter` runs only inside `write_memory_entry` (`flowctl.py:9607`), so an older flowctl does NOT fail loudly on read: it silently reads a `hardened` entry, and because its default filter excludes only `stale`, it will *surface* the entry in default `memory list` / `search` / memory-scout results. The loud failure happens on the next WRITE: any older-flowctl rewrite of that entry fails validation on the unknown status value and the unknown `hardened_into` field, so there is no silent corruption. `docs/memory-schema.md` states exactly this -- read-through, write-refusal -- alongside the existing lockstep dual-copy invariant (`plugins/flow-next/scripts/flowctl.py` and `.flow/bin/flowctl.py` must be updated together), and does not claim a read-side guarantee the enum extension cannot provide. No compatibility shim is added; lockstep upgrade is the mitigation.
+- **R16:** A gate is verified live before the lesson is retired. On acceptance the audit runs a gate-type-appropriate check -- lint: run the linter and confirm the new rule is active in the RESOLVED config (not merely present as text, not overridden by a later ignore); CI: confirm the step parses and sits in a workflow/job that actually runs, not a disabled or unreferenced one; instruction file: confirm the rule landed in the substantive file the agents actually read, not an `@`-including stub. Verification failure means the entry stays `active`, `mark-hardened` is NOT called, and the report shows the graduation as failed with the reason. A gate that does not fire is worse than no gate: it retires the only working copy of the lesson while enforcing nothing.
+
+## Early proof point
+
+Task `fn-122-harden-verdict-graduate-recurring.1` (flowctl plumbing) validates the core architectural bet: Decision 4's claim that extending `MEMORY_STATUS` with `hardened` gives list/search/memory-scout exclusion **for free** through the existing status-filter path, with no scout change (R7). It also pays the known flowctl.py tax up front — dual copies, `SOURCE_SHA256`/`HELP_SHA256` re-pin, regenerated `flowctl-help.txt`, CLI-surface snapshot.
+
+If it fails — if exclusion needs scout-side changes, or the status enum turns out to be load-bearing somewhere that makes `hardened` unsafe — stop and re-evaluate Decision 4 (status value vs a separate `hardened_into`-only field on an otherwise-active entry) **before** writing any audit-skill prose in `.2`, since every skill sentence names the shipped CLI surface.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1  | phases.md documents Harden as sixth outcome + decision tree branch | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R2  | Phase 1 gathers recurrence artifacts; honest "no read-side telemetry" statement | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R3  | Interactive per-candidate Ask with gate type, draft artifact, evidence, 3 options | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R4  | On accept: artifact written + entry demoted via mark-hardened, body intact | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R5  | autofix reports Harden under Recommended only; never writes or demotes | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R6  | `flowctl memory mark-hardened` contract + mark-fresh revert + unit tests | fn-122-harden-verdict-graduate-recurring.1 | — |
+| R7  | Default list/search exclude hardened; `--status hardened`/`all` include | fn-122-harden-verdict-graduate-recurring.1 | — |
+| R8  | Duplication guard proposes pointer-demotion citing the existing gate | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R9  | Report gains `Hardened: N` + per-entry detail; autofix Recommended bucket | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R10 | Decision-track entries never `git rm`'d; supersession fields preserved | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R11 | Docs sweep + sync-codex twice + CHANGELOG Unreleased | fn-122-harden-verdict-graduate-recurring.3 | — |
+| R12 | Outcome-precedence rule (correctness > Consolidate > Harden) in the tree | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R13 | Hardened entries on later runs: gate-liveness check, un-harden proposal | fn-122-harden-verdict-graduate-recurring.2 | — |
+| R14 | Complete transition matrix + per-status field invariants across all three mutations | fn-122-harden-verdict-graduate-recurring.1 | — |
+| R15 | Honest cross-version contract: silent read-through, write refusal; documented | fn-122-harden-verdict-graduate-recurring.3 | documentation-only; `.1` adds no read-side mechanism because none is possible via the enum |
+| R16 | Gate verified live before demotion; failure keeps the entry active | fn-122-harden-verdict-graduate-recurring.2 | — |
 
 ## Boundaries
 <!-- scope: business -->
@@ -127,7 +213,60 @@ Out of scope:
 - **Scaffolding missing infrastructure.** Never creates a linter setup or CI pipeline to have somewhere to put a gate.
 - **Retro-hardening sweep of this repo's own store** as part of the feature work (running the new verdict over flow-next's ~40 entries is a follow-up, not acceptance).
 - **Docs-site (flow-next.dev) changes** are the maintainer's downstream pass, tracked outside this spec.
-- **Task breakdown** -- this spec is scope definition only; `/flow-next:plan` runs separately.
+- **A first-class review-checklist artifact** wired to `/flow-next:impl-review` (gate type (d)) -- follow-up spec material, see Architecture.
+
+## Strategy Alignment
+
+Active tracks served by this plan:
+
+- **Self-improving through normal work** — the track states "Audit is the garbage collector, not the growth mechanism." Harden adds the missing *graduation* path: a lesson that keeps being re-learned stops riding the context window and becomes a gate. It lands inside the existing audit ritual, so it needs no new ceremony and no extra command to remember, which is the track's stated bar for improvement that actually happens.
+- **Ralph autonomous mode** — reinforces "same gates interactive or autonomous" and the surface-don't-force reflex. A graduated gate fires in lint/CI regardless of which harness wrote the code, while Harden itself stays propose-and-confirm (R5: autofix reports, never applies), consistent with the track's rule that shared repo infrastructure is not mutated unattended.
+
+Design-principle check — **"flowctl grows only under burden of proof"**: `memory mark-hardened` is pure persistence (status flip + one field + timestamp), a direct sibling of the existing `mark-stale`/`mark-fresh`, and carries zero judgment. All judgment (is this recurring? is it mechanizable? which gate surface? what should the rule say?) stays in the skill. The spec explicitly refuses a `flowctl gate` subcommand for exactly this reason. No drift.
+
+## References
+
+Anchors gathered at plan time (verified against the tree at plan time — re-verify line numbers before editing):
+
+**flowctl (task .1)**
+- `plugins/flow-next/scripts/flowctl.py:9252` — `MEMORY_STATUS: tuple[str, ...] = ("active", "stale")`
+- `plugins/flow-next/scripts/flowctl.py:9210-9222` — `MEMORY_OPTIONAL_FIELDS` frozenset
+- `plugins/flow-next/scripts/flowctl.py:9259-9280` — `MEMORY_FIELD_ORDER` (deterministic write order)
+- `plugins/flow-next/scripts/flowctl.py:9601` — `write_memory_entry` (atomic writer; calls the frontmatter validator)
+- `plugins/flow-next/scripts/flowctl.py:11826-11859` — `_memory_resolve_categorized_entry` (id resolution + legacy rejection; reuse, do not reimplement)
+- `plugins/flow-next/scripts/flowctl.py:11862-11924` — `cmd_memory_mark_stale` (the clone template)
+- `plugins/flow-next/scripts/flowctl.py:11926+` — `cmd_memory_mark_fresh` (gains the hardened revert)
+- `plugins/flow-next/scripts/flowctl.py:11445` / `:11479-11485` — `cmd_memory_list` + its status filter
+- `plugins/flow-next/scripts/flowctl.py:11638` / `:11700-11705` — `cmd_memory_search` + its status filter (must change in lockstep with list)
+- `plugins/flow-next/scripts/flowctl.py:30171-30410` — argparse wiring; two `--status choices=["active","stale","all"]` sites; `:30338-30383` is the mark-stale subparser template
+- `plugins/flow-next/scripts/flowctl_bootstrap.py:19-21` — `SOURCE_SHA256` / `HELP_SHA256` pins
+- `plugins/flow-next/tests/test_startup_bootstrap.py:305-320` — the pin assertions + `test_dogfood_bootstrap_is_byte_identical`
+- `plugins/flow-next/tests/test_flowctl_surface.py:98-106` — literal CLI surface snapshot listing every `memory <subcmd>`
+- `plugins/flow-next/tests/test_memory_mark_stale.py`, `test_memory_mark_fresh.py` — the test shape to mirror
+
+**Audit skill (task .2)**
+- `plugins/flow-next/skills/flow-next-audit/phases.md:5-11` — outcome table; `:15` — the "5 outcomes" sentence; `:232-276` — decision-entry calibration; `:336-360` — decision tree
+- `plugins/flow-next/skills/flow-next-audit/workflow.md:283-303` — Phase 0.75 change-detection pre-filter; `:307` — Phase 1 Investigate; `:445-455` — Phase 2 Classify outcome list; `:478` — Phase 3 Ask; `:534-607` — Phase 4 Execute per-outcome subsections; `:615` — Phase 5 Report + Commit
+- `plugins/flow-next/skills/flow-next-audit/SKILL.md:1-12` — frontmatter description + outcome list; autofix-mode rules around `:60`
+
+**Docs sweep (task .3)**
+- `plugins/flow-next/docs/memory-schema.md` — status values, optional frontmatter fields, audit-lifecycle prose (~`:110-150`)
+- `plugins/flow-next/docs/flowctl.md:860` (status enum), `:893-894` (`--status` choices on list/search), `:900` (default-excludes prose), `:913-918` (`mark-fresh`) — plus a new `#### memory mark-hardened` subsection
+- `plugins/flow-next/docs/self-improving.md:11`, `:18` — five-outcome enumerations
+- `README.md:368` — `/flow-next:audit` feature-table row enumerating the outcomes
+- `plugins/flow-next/agents/memory-scout.md:45` — documents the `--status` filter behavior
+- `CHANGELOG.md` — `## [Unreleased]` (stage the entry; no version bump, per CLAUDE.md batched-release rule)
+- `scripts/sync-codex.sh:1510,1577,1627` — audit-skill references in the mirror generation
+
+**Relevant memory entries** (read before starting the matching task):
+- `flowctl-edit-sha-pin-checklist` — any flowctl.py edit needs dual copies + `SOURCE_SHA256`/`HELP_SHA256` re-pin + regenerated help snapshot + sync-codex
+- `skill-prose-must-match-real-flowctl-2026-06-10` — skill prose must name the SHIPPED CLI surface, not a plan draft (this is why `.2` follows `.1`)
+- `adding-a-review-backend-sweep-all-2026-06-29` — adding a status value / subcommand means sweeping EVERY enumeration site
+- `adding-a-tracker-to-tracker-sync-sweep-2026-06-28` — named-file doc sweeps miss secondary surfaces; sweep by grep, not by memory
+- `audit-sync-codexsh-during-planning-for-2026-04-30` and `sync-codexsh-tool-substitution-needs-2026-05-18` — audit `sync-codex.sh` transforms when adding tool-referencing prose
+- `test-production-path-not-parallel-construction-2026-05-21` — test the real argparse routing, not a mock-patched parallel construction
+
+**Downstream (out of this spec, maintainer's pass):** flow-next.dev docs site, AI x SDLC guide, Obsidian vault notes — tracked per the maintainer's private walk requirement, not an acceptance criterion here.
 
 ## Decision Context
 <!-- scope: both — conditionally substructured -->
@@ -146,5 +285,22 @@ Boris Cherny's Jul 2026 framing: re-fixing the same issue class every run is the
 2. **Gate type (d) review-checklist: dropped from v1, degrades to (c).** No canonical checklist artifact exists and a consumed-by-nothing file is banned; a checklist home wired to impl-review is follow-up-spec material.
 3. **Threshold values: fixed defaults** -- >=2 `## Update` headings OR >=3-entry `related_to` cluster OR >=4 write commits (see Architecture). Sanity-check against this repo's real store during planning; if the store shows the defaults are badly calibrated, adjust the numbers in phases.md and note it in the plan, keeping the same structure (any-of, propose-only, judgment-overridable).
 4. **Status vs separate field.** Chose extending `MEMORY_STATUS` with `hardened` over a boolean `hardened: true` on stale entries: hardened is not stale (the lesson is MORE alive, just relocated), and the existing status-filter plumbing gives list/search/scout exclusion for free.
+
+**Plan-time decisions (2026-07-24, `/flow-next:plan`; these execute Decision 3's standing instruction and close gaps the scope pass left open):**
+
+5. **`related_to` demoted to a corroborating signal** (Architecture). The store measurement showed a standalone `>= 3` cluster trigger would flag 28% of entries; `related_to` is auto-populated by overlap scoring, so cluster size measures topic collision, not re-teaching. Signals (i) and (iii) keep their values. Structure (any-of, propose-only, judgment-overridable) unchanged, as Decision 3 required.
+6. **Outcome precedence: correctness > Consolidate > Harden** (R12). A wrong lesson must never be graduated into a gate, so Replace/Delete win outright; a `related_to` cluster is consolidated before the merged entry is considered, which follows directly from the existing "the cluster, not each member, is the Harden unit" rule.
+7. **Hardened entries stay visible to the audit, at low cost** (R13). Default `memory list`/`search` exclude them (R7 — that is what stops re-injection), but the audit's own walk keeps a cheap gate-liveness check so a removed gate can propose un-graduation via the existing `mark-fresh` escape hatch. Without this, a reverted lint rule would strand the lesson permanently outside the context window with no path back. Full re-investigation of hardened entries is NOT re-run — liveness only.
+8. **`stale` -> `hardened` is a legal transition** (R14). A lesson can be stale as written and still name a real, mechanizable class; forcing a `mark-fresh` round trip first would be ceremony without value.
+9. **Cross-version reads fail loudly** (R15). The repo already requires the two flowctl copies to move in lockstep, so an old-flowctl read of a `hardened` entry is a validation error, documented as such rather than defended against with a compatibility shim.
+
+**Plan-review round 1 corrections (2026-07-24, codex/gpt-5.6-sol; all six findings accepted, three of them after verifying the claim against the code):**
+
+10. **R15 was factually wrong and is rewritten.** It claimed an older flowctl would fail loudly when reading a `hardened` entry. `validate_memory_frontmatter` is called only from `write_memory_entry` (`flowctl.py:9607`) -- reads never validate. Worse, the default status filter excludes only `stale`, so an old flowctl would *surface* hardened entries rather than reject them. The honest contract is read-through / write-refusal, and lockstep upgrade is the mitigation. A compatibility shim was considered and rejected: an enum extension cannot retroactively teach old readers anything, and inventing a second signalling mechanism for a repo that already requires lockstep copies is cost without benefit.
+11. **Gate verification before demotion is now first-class (R16).** The original flow wrote an artifact and immediately retired the memory entry, trusting that writing config equals enforcing a rule. A malformed lint config, a rule shadowed by a later `ignore`, a CI step in a job that never runs, or a duplication-guard grep matching a commented-out rule would all retire the lesson while enforcing nothing -- strictly worse than not hardening. Verification failure keeps the entry active and reports a failed graduation.
+12. **`hardened_into` gains a format** (`<path>#<rule-id> -- <note>`). R13's gate-liveness check needs something to look at; free-text prose gives it nothing. flowctl still stores it verbatim and validates only non-emptiness -- parsing the convention in flowctl would be judgment leaking into plumbing.
+13. **Ordering fix: recurrence signals are gathered before Phase 0.75's auto-Keep** (R2). Auto-Keep excludes unchanged-module entries from Phase 1 investigation; since recurrence evidence was to be gathered in Phase 1, the entries most likely to deserve hardening -- old, settled, repeatedly re-taught -- were exactly the ones that would never be seen.
+14. **Field invariants are per status, enforced by every mutation** (R14). The original matrix only described the new command's own field, which would have let `mark-stale` strand a `hardened_into` and `stale -> hardened` strand a `stale_reason`. `mark-stale` and `mark-fresh` are therefore in scope for task `.1`.
+15. **`last_audited` stays a UTC date** (`YYYY-MM-DD`), matching the existing handlers; the worked example's full timestamp was wrong. Idempotency is asserted on `hardened_into` replacement, since a same-day re-stamp is unobservable.
 
 **Rejected alternatives:** a standalone `/flow-next:harden` skill (audit already walks every entry with evidence in hand; a second sweep duplicates Phase 0-2); deleting graduated entries (loses provenance -- the pointer answers "why does this lint rule exist" forever); auto-applying under pilot with a strike system (gate surfaces are shared repo infrastructure; wrong lint rules block every future run -- the failure mode is much worse than a wrong stale-mark).

@@ -1,7 +1,9 @@
 {
   "branch_name": "fn-132-opus-5-conductor-dogfood-post-hoc-trace",
   "created_at": "2026-07-24T21:43:49.500353Z",
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-122-harden-verdict-graduate-recurring"
+  ],
   "id": "fn-132-opus-5-conductor-dogfood-post-hoc-trace",
   "next_task": 1,
   "plan_review_status": "unknown",
@@ -20,5 +22,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-24T21:44:52.908099Z"
+  "updated_at": "2026-07-24T21:56:53.514864Z"
 }
