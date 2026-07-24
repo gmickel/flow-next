@@ -135,19 +135,23 @@ Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hi
 
 Every entry carries an implicit `status`. The field is optional in frontmatter — its absence means `active`, so a plain entry never writes it.
 
-| Status | Meaning | Required fields | Forbidden fields |
-|--------|---------|-----------------|------------------|
-| `active` (default) | The lesson is live and re-injected as context | — | `stale_reason`, `stale_date`, `hardened_into` |
-| `stale` | Audit flagged the advice as no longer accurate | `stale_reason`, `stale_date` | `hardened_into` |
-| `hardened` (fn-122) | The lesson graduated into an enforced gate — lint rule, CI step, or instruction-file rule | `hardened_into` | `stale_reason`, `stale_date` |
+| Status | Meaning | Set by | Companion fields written | Companion fields cleared |
+|--------|---------|--------|--------------------------|--------------------------|
+| `active` (default) | The lesson is live and re-injected as context | `mark-fresh` (drops the `status` key entirely) | `last_audited`; `audit_notes` only with `--audited-by` | `stale_reason`, `stale_date`, `hardened_into`, `audit_notes` |
+| `stale` | Audit flagged the advice as no longer accurate | `mark-stale` | `last_audited`, `audit_notes` (from `--reason`) | `hardened_into` |
+| `hardened` (fn-122) | The lesson graduated into an enforced gate — lint rule, CI step, or instruction-file rule | `mark-hardened` | `hardened_into` (from `--gate-ref`), `last_audited`; `audit_notes` only with `--audited-by` | `stale_reason`, `stale_date` |
+
+**Validation is enum-only.** `validate_memory_frontmatter` checks that `status` is one of `active | stale | hardened` and that unknown keys are rejected; it does **not** require any companion field for a given status. The column above describes what the `mark-*` handlers write and clear, which is the contract that matters in practice — a hand-edited entry carrying `status: stale` with no `stale_reason` still validates.
+
+`stale_reason` / `stale_date` are legal optional fields that flowctl's own `mark-stale` does not currently populate (it records the reason in `audit_notes` instead); they exist for hand-written and older entries, and the handlers clear them on any transition out of `stale`.
 
 `hardened` is **not** a weaker `stale`: the lesson is more alive than before, just relocated out of the context window and into something that fires on its own. The entry file stays on disk with its body intact so provenance survives — "why does this lint rule exist?" stays answerable.
 
 Optional frontmatter fields that carry status: `status`, `stale_reason`, `stale_date`, `hardened_into`, `last_audited`, `audit_notes`.
 
-`hardened_into` is stored **verbatim**; flowctl validates only that it is non-empty. The skill-side convention is `<path>#<rule-id> -- <note>`, e.g. `pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes`. Parsing that convention is judgment and stays in `/flow-next:audit`, not in flowctl.
+`hardened_into` is stored **verbatim**; flowctl validates only that `--gate-ref` is non-empty at the CLI boundary. The skill-side convention is `<path>#<rule-id> -- <note>`, e.g. `pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes`. Parsing that convention is judgment and stays in `/flow-next:audit`, not in flowctl.
 
-Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) enforces the **whole** invariant set, not just its own field — no field from the prior status survives a transition. `stale → hardened` and `hardened → stale` are both legal and both clear the other status's fields; `mark-fresh` returns any status to `active` and drops both families.
+Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) clears the **other** statuses' companion fields, not just its own — no field from the prior status survives a transition. `stale → hardened` and `hardened → stale` are both legal; `mark-fresh` returns any status to `active` and drops both families.
 
 ### Cross-version behavior (honest contract)
 
