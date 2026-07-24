@@ -101,6 +101,15 @@ plugin manifest before Step 0. Full sanitized transcripts, tool calls, usage,
 plugin hashes, repository state, and per-check verdicts:
 [`claude-plugin-fleet-smoke.json`](evidence/fn130/claude-plugin-fleet-smoke.json).
 
+The subsequent completion review found that the first Codex transform targeted
+`$HOME/.codex/.codex-plugin/plugin.json` while the official installer flattens
+that manifest to `$HOME/.codex/plugin.json`. The generator was fixed and pinned
+against the installer target. A temporary official install plus actual
+`$flow-next-plan` invocation then read the installed manifest, emitted
+`Local Flow-Next copy v0.0.1 differs from plugin v3.4.1`, completed planning,
+and exited zero. Evidence:
+[`codex-copy-drift-smoke.json`](evidence/fn130/codex-copy-drift-smoke.json).
+
 ## Final gates
 
 - `./scripts/sync-codex.sh` twice: 28 skills, 22 agents; second run idempotent.
@@ -121,6 +130,8 @@ plugin hashes, repository state, and per-check verdicts:
   without restoring 50.
 - Actual canonical Claude plugin fleet: candidate 9/9; B1 7/9; no candidate
   regression and two observed baseline misses repaired.
+- Actual installed Codex copy-mode mismatch: manifest read, exact `0.0.1 →
+  3.4.1` warning, plan completed, exit zero.
 - flow-next.dev: Astro check 0 errors/warnings/hints; 74 pages built. Existing
   highlighter/chunk-size warnings are non-blocking.
 - `git diff --check`, changed-reference existence, B0/B1 validation, fixture

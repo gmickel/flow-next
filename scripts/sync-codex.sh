@@ -327,9 +327,10 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   # destinations (ralph-init templates, worktree-kit scripts) are rewritten
   # first and therefore win. $HOME (not ~) so the path expands inside quotes.
 
-  # plugin.json path: primary → .codex-plugin, fallback → .claude-plugin
+  # The Codex installer flattens `.codex-plugin/plugin.json` to
+  # `$HOME/.codex/plugin.json`; mirror prose must target that installed path.
   sed -i.bak \
-    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/\.claude-plugin/plugin\.json|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json|g' \
+    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/\.claude-plugin/plugin\.json|$HOME/.codex/plugin.json|g' \
     -e 's|\.factory-plugin/plugin\.json|.claude-plugin/plugin.json|g' \
     "$f"
 
@@ -1875,6 +1876,16 @@ if [ "$skills_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No unrewritten plugin-root /skills/ path refs"
+fi
+
+# Plan's copy-mode version check must read the flattened installer target.
+plan_skill="$CODEX_DIR/skills/flow-next-plan/SKILL.md"
+if grep -Fq '$HOME/.codex/plugin.json' "$plan_skill" 2>/dev/null \
+  && ! grep -Fq '.codex/.codex-plugin/plugin.json' "$plan_skill" 2>/dev/null; then
+  echo -e "  ${GREEN}✓${NC} Codex Plan manifest path matches install-codex.sh"
+else
+  echo -e "  ${RED}✗${NC} Codex Plan manifest path must be \$HOME/.codex/plugin.json"
+  errors=$((errors + 1))
 fi
 
 # Check no "Task flow-next:" in codex skills

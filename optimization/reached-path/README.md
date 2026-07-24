@@ -122,6 +122,7 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `runs/plan-review-candidate.json` | fn-130.6 B1→candidate route/corpus ratchet evidence |
 | `evidence/fn130/plan-review-real-backend.json` | fn-130 completion repair: B1/candidate risky, clean, and user-edited Plan Review corpus through Codex `gpt-5.6-sol` high, with reviews, verdicts, usage, and production-prompt hashes |
 | `evidence/fn130/claude-plugin-fleet-smoke.json` | Actual Claude Code canonical-plugin fleet: nine B1 and nine candidate slash-command runs; candidate 9/9, B1 7/9 with both baseline misses retained |
+| `evidence/fn130/codex-copy-drift-smoke.json` | Official temporary Codex install plus actual `$flow-next-plan`: installed manifest read, `0.0.1 → 3.4.1` warning, completed autonomous plan |
 | `runs/candidates/` | Ignored timestamped candidate smoke evidence (ordinary runs) |
 | `deferrals.md` | Non-target skills + open-spec overlaps |
 | `fleet-results.md` | fn-130 closure: per-cluster metrics, host smokes, final gates, and rollback |

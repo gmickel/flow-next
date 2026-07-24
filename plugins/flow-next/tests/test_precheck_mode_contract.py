@@ -6,8 +6,10 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = ROOT.parents[1]
 SKILLS = ROOT / "skills"
 CODEX_SKILLS = ROOT / "codex" / "skills"
+CODEX_INSTALLER = REPO_ROOT / "scripts" / "install-codex.sh"
 PLUGIN_TEMPLATE = (
     SKILLS / "flow-next-setup" / "templates" / "claude-md-snippet-plugin.md"
 )
@@ -106,6 +108,13 @@ class PrecheckModeContractTest(unittest.TestCase):
         self.assertEqual(text.count(CONTINUE), 1)
         self.assertIn("plain-text numbered prompt", text)
         self.assertNotIn("AskUserQuestion", text)
+        self.assertIn("`$HOME/.codex/plugin.json`", text)
+        self.assertNotIn(".codex/.codex-plugin/plugin.json", text)
+        installer = CODEX_INSTALLER.read_text(encoding="utf-8")
+        self.assertIn(
+            'cp "$PLUGIN_DIR/.codex-plugin/plugin.json" "$CODEX_DIR/plugin.json"',
+            installer,
+        )
         for name in REMOVED_CARRIERS:
             with self.subTest(skill=name):
                 mirror = _skill(CODEX_SKILLS, name)
