@@ -9369,11 +9369,7 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
             q = value[0]
             value = value[1:-1]
             if q == '"':
-                value = (
-                    value.replace("\\\\", "\x00")
-                    .replace('\\"', '"')
-                    .replace("\x00", "\\")
-                )
+                value = _unquote_yaml_double(value)
             result[key] = value
             continue
         # Inline list: [a, b, c]
@@ -9394,11 +9390,7 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                         q = item[0]
                         item = item[1:-1]
                         if q == '"':
-                            item = (
-                                item.replace("\\\\", "\x00")
-                                .replace('\\"', '"')
-                                .replace("\x00", "\\")
-                            )
+                            item = _unquote_yaml_double(item)
                     cleaned.append(item)
                 result[key] = cleaned
             continue
@@ -9558,6 +9550,10 @@ def _yaml_scalar_needs_quoting(text: str) -> bool:
     # Leading/trailing whitespace is lost or mis-parsed if left unquoted.
     if text != text.strip():
         return True
+    # Line breaks and other control characters would terminate the scalar
+    # mid-value and produce malformed frontmatter. Quoted form escapes them.
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text):
+        return True
     # Block-sequence / mapping-key indicators: bare `-`/`?` or followed by space.
     if text.startswith(("- ", "? ")) or text in {"-", "?"}:
         return True
@@ -9568,10 +9564,59 @@ def _yaml_scalar_needs_quoting(text: str) -> bool:
     return False
 
 
+_YAML_ESCAPES: tuple[tuple[str, str], ...] = (
+    ("\n", "\\n"),
+    ("\r", "\\r"),
+    ("\t", "\\t"),
+)
+
+
 def _quote_yaml_scalar(text: str) -> str:
-    """Double-quote a scalar with embedded quotes escaped."""
+    """Double-quote a scalar, escaping quotes and control characters.
+
+    Line breaks and other C0/DEL characters must be escaped, not emitted
+    raw: an unescaped newline splits the scalar across lines and produces
+    frontmatter that reads back as `{}` (silent data loss on the next read).
+    """
     escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    for raw, repl in _YAML_ESCAPES:
+        escaped = escaped.replace(raw, repl)
+    escaped = "".join(
+        ch if ord(ch) >= 0x20 and ord(ch) != 0x7F else f"\\x{ord(ch):02x}"
+        for ch in escaped
+    )
     return f'"{escaped}"'
+
+
+def _unquote_yaml_double(value: str) -> str:
+    """Reverse `_quote_yaml_scalar` for the no-PyYAML inline parser."""
+    out: list[str] = []
+    i = 0
+    while i < len(value):
+        ch = value[i]
+        if ch != "\\" or i + 1 >= len(value):
+            out.append(ch)
+            i += 1
+            continue
+        nxt = value[i + 1]
+        if nxt == "n":
+            out.append("\n")
+        elif nxt == "r":
+            out.append("\r")
+        elif nxt == "t":
+            out.append("\t")
+        elif nxt == "x" and i + 3 < len(value):
+            try:
+                out.append(chr(int(value[i + 2 : i + 4], 16)))
+            except ValueError:
+                out.append(nxt)
+            else:
+                i += 4
+                continue
+        else:
+            out.append(nxt)
+        i += 2
+    return "".join(out)
 
 
 def _format_yaml_list_item(item: Any) -> str:
@@ -9607,11 +9652,23 @@ def _frontmatter_sort_key(field: str) -> tuple[int, str]:
         return (len(MEMORY_FIELD_ORDER), field)
 
 
-def write_memory_entry(path: Path, frontmatter: dict[str, Any], body: str) -> None:
+def write_memory_entry(
+    path: Path,
+    frontmatter: dict[str, Any],
+    body: str,
+    *,
+    raw_body: Optional[str] = None,
+) -> None:
     """Write a memory entry with deterministic field order.
 
     Validates required fields before writing. Raises ValueError on invalid
     frontmatter so callers can surface a clean error.
+
+    `raw_body` is the verbatim post-frontmatter segment (everything after the
+    closing `---`, its newline included) as read off disk. When given it is
+    emitted byte for byte and `body` is ignored — frontmatter-only mutations
+    (the audit `mark-*` handlers) must not reflow a body they never edited.
+    Omit it for new entries and let the normalizing path run.
     """
     errors = validate_memory_frontmatter(frontmatter)
     if errors:
@@ -9622,6 +9679,10 @@ def write_memory_entry(path: Path, frontmatter: dict[str, Any], body: str) -> No
         rendered = _format_yaml_value(frontmatter[key], key)
         lines.append(f"{key}: {rendered}")
     lines.append("---")
+    if raw_body is not None:
+        content = "\n".join(lines) + raw_body
+        atomic_write(path, content)
+        return
     lines.append("")
     # Body gets a trailing newline to keep round-trip clean.
     body_text = body.rstrip("\n") + "\n" if body else ""
@@ -11888,6 +11949,16 @@ def _memory_resolve_categorized_entry(
     return resolved["entry"]
 
 
+def _memory_raw_body(data: dict[str, Any]) -> Optional[str]:
+    """Verbatim post-frontmatter segment for a frontmatter-only rewrite.
+
+    Returns None when the file has no complete envelope, so the caller falls
+    back to `write_memory_entry`'s normalizing path.
+    """
+    envelope = _frontmatter_envelope(data.get("raw", "") or "")
+    return envelope.body if envelope.complete else None
+
+
 def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
     """Flag a memory entry as stale.
 
@@ -11920,6 +11991,7 @@ def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
     data = _memory_read_entry(path)
     fm = dict(data["frontmatter"])
     body = data["body"]
+    raw_body = _memory_raw_body(data)
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -11935,7 +12007,7 @@ def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
     fm.pop("hardened_into", None)
 
     try:
-        write_memory_entry(path, fm, body)
+        write_memory_entry(path, fm, body, raw_body=raw_body)
     except ValueError as exc:
         error_exit(f"failed to write entry: {exc}", use_json=args.json)
 
@@ -11979,6 +12051,7 @@ def cmd_memory_mark_fresh(args: argparse.Namespace) -> None:
     data = _memory_read_entry(path)
     fm = dict(data["frontmatter"])
     body = data["body"]
+    raw_body = _memory_raw_body(data)
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -12001,7 +12074,7 @@ def cmd_memory_mark_fresh(args: argparse.Namespace) -> None:
     fm["last_audited"] = today
 
     try:
-        write_memory_entry(path, fm, body)
+        write_memory_entry(path, fm, body, raw_body=raw_body)
     except ValueError as exc:
         error_exit(f"failed to write entry: {exc}", use_json=args.json)
 
@@ -12069,6 +12142,7 @@ def cmd_memory_mark_hardened(args: argparse.Namespace) -> None:
     data = _memory_read_entry(path)
     fm = dict(data["frontmatter"])
     body = data["body"]
+    raw_body = _memory_raw_body(data)
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -12088,7 +12162,7 @@ def cmd_memory_mark_hardened(args: argparse.Namespace) -> None:
         fm.pop("audit_notes", None)
 
     try:
-        write_memory_entry(path, fm, body)
+        write_memory_entry(path, fm, body, raw_body=raw_body)
     except ValueError as exc:
         error_exit(f"failed to write entry: {exc}", use_json=args.json)
 

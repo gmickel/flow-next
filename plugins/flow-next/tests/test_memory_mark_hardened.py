@@ -208,6 +208,37 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
             fm = flowctl.parse_memory_frontmatter(path)
             self.assertEqual(fm["hardened_into"], padded)
 
+    def test_multiline_gate_ref_round_trips(self) -> None:
+        """A newline in the value must not shred the frontmatter."""
+        multiline = "pyproject.toml#DTZ -- bans\nnaive datetimes\ttab"
+        with tempfile.TemporaryDirectory() as tmp:
+            mem = _init_repo(Path(tmp))
+            path = _seed_entry(mem)
+            result = _run(
+                Path(tmp),
+                "memory",
+                "mark-hardened",
+                ENTRY_ID,
+                "--gate-ref",
+                multiline,
+                "--json",
+            )
+            self.assertEqual(result["hardened_into"], multiline)
+
+            fm = flowctl.parse_memory_frontmatter(path)
+            self.assertEqual(fm["hardened_into"], multiline)
+            # Frontmatter still parses (a raw newline would yield `{}`) and
+            # the entry stays visible to the status filter.
+            self.assertEqual(fm["status"], "hardened")
+            self.assertEqual(fm["title"], "Null deref in auth middleware")
+
+            # The no-PyYAML fallback parser must agree with PyYAML.
+            envelope = flowctl._frontmatter_envelope(
+                path.read_text(encoding="utf-8")
+            )
+            inline = flowctl._parse_inline_yaml(envelope.frontmatter)
+            self.assertEqual(inline["hardened_into"], multiline)
+
     def test_body_segment_byte_identical(self) -> None:
         """The raw body segment after `---` is unchanged, byte for byte."""
         rich_body = (
@@ -243,13 +274,12 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
             after_segment = path.read_text(encoding="utf-8").split("---\n", 2)[2]
             self.assertEqual(before_segment, after_segment)
 
-    def test_body_edge_blank_lines_follow_shared_writer_contract(self) -> None:
-        """Edge blank-line normalization is the SHARED writer's behavior.
+    def test_noncanonical_body_preserved_byte_for_byte(self) -> None:
+        """A hand-written body keeps its leading/trailing blank lines.
 
-        `_memory_read_entry` drops leading newlines and `write_memory_entry`
-        collapses trailing ones — pre-existing for every memory write path.
-        Asserted here against `mark-stale` so any future divergence between
-        the sibling handlers fails loudly.
+        Frontmatter-only mutations must not reflow a body they never edited.
+        Asserted against `mark-stale` too, so the sibling handlers cannot
+        drift apart.
         """
         padded = "---\n{fm}---\n\n\n\nPadded body.\n\n\n"
         fm_lines = (
@@ -292,9 +322,9 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
                 "---\n", 2
             )[2]
             stale_segment = stale_path.read_text(encoding="utf-8").split("---\n", 2)[2]
-            # Same normalization from both handlers — nothing introduced here.
-            self.assertEqual(hardened_segment, stale_segment)
-            self.assertEqual(hardened_segment, "\nPadded body.\n")
+            original_segment = padded.format(fm=fm_lines).split("---\n", 2)[2]
+            self.assertEqual(hardened_segment, original_segment)
+            self.assertEqual(stale_segment, original_segment)
 
     def test_audited_by_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
