@@ -18,12 +18,15 @@ All notable changes to the flow-next.
   escalation rung for frontier-hard plans and gates. `agents/*.md` family
   aliases (`opus`) resolve to the new generation automatically - no
   frontmatter changes.
-- **Cursor review-backend registry gains a `claude-opus-5-thinking-high`
-  rung** (ranked above the Opus 4.8 slug; default stays `gpt-5.6-sol-high` -
-  the cross-family top is deliberate). CLI probes 2026-07-24: cursor carries
-  the Opus 5 slug live; copilot 1.0.74 still rejects `claude-opus-5` (and
-  `claude-opus-4.8` - its Claude ceiling remains `claude-opus-4.7`), so the
-  copilot ranking is unchanged with the probe result recorded inline.
+- **Cursor and Copilot review-backend registries gain Claude Opus 5 rungs.**
+  Cursor: `claude-opus-5-thinking-high` (verified live via
+  `cursor-agent --list-models` 2026-07-24). Copilot: `claude-opus-5` and
+  `claude-opus-4.8` per the GitHub supported-models docs - the docs are now
+  the recorded source of truth for the copilot ranking, since Copilot model
+  availability is org-policy managed and a restricted install rejecting an
+  id proves nothing about CLI support. Both registry tops stay GPT
+  (`gpt-5.6-sol-high` / `gpt-5.5`) - the cross-family default is deliberate;
+  the fallback ladder heals per-org gaps.
 
 ## [flow-next 3.4.3] - 2026-07-24
 

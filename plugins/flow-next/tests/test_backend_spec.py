@@ -145,15 +145,19 @@ class TestRegistryShape(unittest.TestCase):
         self.assertEqual(BACKEND_REGISTRY["copilot"]["default_effort"], "high")
 
     def test_copilot_model_catalog(self) -> None:
-        # Source of truth: `copilot -p "/model"` against CLI 1.0.65. Keep in
-        # sync when GitHub activates new rows; older rows stay listed until
-        # copilot itself rejects them. fn-76: ORDERED quality ranking (strongest
-        # first), a list — ``default_model`` MUST equal ``models[0]``.
+        # Source of truth: the GitHub Copilot supported-models DOCS, not a
+        # local `--model` probe — Copilot availability is org-policy managed,
+        # so a restricted install rejecting an id proves nothing (2026-07-24
+        # lesson). Older rows stay listed until the docs drop them. fn-76:
+        # ORDERED quality ranking (strongest first), a list — ``default_model``
+        # MUST equal ``models[0]``.
         self.assertEqual(
             BACKEND_REGISTRY["copilot"]["models"],
             [
                 "gpt-5.5",
                 "gpt-5.4",
+                "claude-opus-5",
+                "claude-opus-4.8",
                 "claude-opus-4.7",
                 "claude-opus-4.6",
                 "claude-opus-4.5",
