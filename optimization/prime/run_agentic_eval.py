@@ -64,6 +64,10 @@ REPO_ROOT = HERE.parent.parent
 CLASSIFICATION_MD = (
     REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-prime" / "classification.md"
 )
+REACHED_PATH_DIR = HERE.parent / "reached-path"
+sys.path.insert(0, str(REACHED_PATH_DIR))
+import isolation as reached_path_isolation  # noqa: E402
+import privacy as reached_path_privacy  # noqa: E402
 
 DEFAULT_TIMEOUT = int(os.environ.get("PRIME_EVAL_TIMEOUT", "180"))
 RETRIES = 1  # one retry after the first attempt
@@ -126,8 +130,13 @@ OUTPUT_SCHEMA: dict[str, Any] = {
 # ── prompt assembly ───────────────────────────────────────────────────────────
 
 
-def _build_prompt(emitter: dict, file_listing: list) -> str:
-    rules = CLASSIFICATION_MD.read_text(encoding="utf-8")
+def _build_prompt(
+    emitter: dict,
+    file_listing: list,
+    *,
+    rules: Optional[str] = None,
+) -> str:
+    rules = rules if rules is not None else CLASSIFICATION_MD.read_text(encoding="utf-8")
     schema_str = json.dumps(OUTPUT_SCHEMA, indent=2)
     listing_str = "\n".join(f"  - {p}" for p in file_listing) or "  (empty)"
     return f"""You are the judgment layer of `/flow-next:prime` Phase 0.5. The deterministic \
@@ -142,6 +151,14 @@ unless the evidence contradicts them; DO resolve the delivery shape, the final \
 confidence, the would-ask list, and the playbook. Respect the workspace-parent \
 dampener, the tier a/b/c constellation tiers, the worktree-exclusion edge case, \
 and the greenfield report shape.
+
+The emitter's `constellation_member.value` is the CONFIRMED membership bit, not \
+the Phase-0.6 question decision. Independently apply the raw constellation \
+signals to `would_ask`: a remaining sibling git dir or prefix-family signal is \
+LIKELY evidence that asks for clarification unless stronger evidence confirms \
+the topology. A worktree already excluded by the emitter leaves \
+`sibling_git_dirs=0` and must not create that question. Under the workspace-parent \
+dampener, a prefix-family signal still asks but never auto-confirms.
 
 === JUDGMENT RULES (classification.md) ===
 {rules}
@@ -185,6 +202,7 @@ def _backend_cmd(backend: str, model: str, schema_path: Path) -> list[str]:
             "claude", "-p",
             "--output-format", "json",
             "--model", model,
+            *reached_path_isolation.CLAUDE_ISOLATION_FLAGS,
             "--permission-mode", "plan",       # read-only planning mode
             "--allowedTools", "",              # no tools: prompt is self-contained
             "--disallowedTools", "Bash", "Edit", "Write", "Read", "WebFetch", "WebSearch",
@@ -248,7 +266,12 @@ def _fs_snapshot(root: Path) -> dict:
 
 
 def _run_backend(
-    cmd: list[str], prompt: str, arena: Path, timeout: int, protect_dir: Optional[Path] = None
+    cmd: list[str],
+    prompt: str,
+    arena: Path,
+    timeout: int,
+    protect_dir: Optional[Path] = None,
+    env: Optional[dict[str, str]] = None,
 ) -> tuple[int, str, str, bool, bool]:
     """Run `cmd` with prompt on stdin, cwd=arena, minimal env, in its own process
     group, optionally OS-hardened to fence off `protect_dir`. Returns
@@ -259,7 +282,7 @@ def _run_backend(
     proc = subprocess.Popen(
         cmd,
         cwd=str(arena),
-        env=_minimal_env(),
+        env=env if env is not None else _minimal_env(),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -294,9 +317,11 @@ def _extract_json(text: str) -> Optional[dict]:
     try:
         env = json.loads(text)
         if isinstance(env, dict) and "result" in env and isinstance(env["result"], str):
-            inner = _first_json_object(env["result"])
-            if inner is not None:
-                return inner
+            # A Claude JSON envelope is transport, never the judgment object.
+            # In particular, a zero-token auth error has a JSON envelope whose
+            # `result` is an error string; falling through and parsing the outer
+            # object used to score that transport failure as a model answer.
+            return _first_json_object(env["result"])
         if isinstance(env, dict) and "assessment_scope" in env:
             return env
     except json.JSONDecodeError:
@@ -503,17 +528,36 @@ def _isolation_breached(iso: dict) -> bool:
 # ── one fixture run ──────────────────────────────────────────────────────────────
 
 
-def run_fixture(family: str, backend: str, model: str, expectations: dict, timeout: int) -> dict:
+def _transport_usage(text: str) -> Optional[dict[str, Any]]:
+    """Extract backend usage without confusing the transport envelope for judgment."""
+    try:
+        envelope = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    usage = envelope.get("usage") if isinstance(envelope, dict) else None
+    return usage if isinstance(usage, dict) else None
+
+
+def run_fixture(
+    family: str,
+    backend: str,
+    model: str,
+    expectations: dict,
+    timeout: int,
+    *,
+    rules: Optional[str] = None,
+) -> dict:
     fx_path = FIXTURES_DIR / f"{family}.json"
     projection = json.loads(fx_path.read_text(encoding="utf-8"))
     emitter = projection["emitter"]
     listing = projection.get("file_listing", [])
-    prompt = _build_prompt(emitter, listing)
+    prompt = _build_prompt(emitter, listing, rules=rules)
     expect = expectations["rows"][family]
 
     attempt_records: list[dict] = []
     parsed: Optional[dict] = None
     isolation: Optional[dict] = None
+    usage: Optional[dict[str, Any]] = None
     breached_any = False
 
     for attempt in range(RETRIES + 1):
@@ -527,8 +571,11 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
             proj_hash = _projection_hash(arena)
 
             cmd = _backend_cmd(backend, model, schema_path)
+            run_kwargs: dict[str, Any] = {"protect_dir": sentinel.parent}
+            if backend == "claude":
+                run_kwargs["env"] = reached_path_isolation.claude_env()
             rc, out, err, timed_out, sandboxed = _run_backend(
-                cmd, prompt, arena, timeout, protect_dir=sentinel.parent
+                cmd, prompt, arena, timeout, **run_kwargs
             )
             isolation = _isolation_report(
                 arena, pre, sentinel, token, sig, out, projection_hash=proj_hash,
@@ -538,6 +585,7 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
             breached = _isolation_breached(isolation)
             isolation["breached"] = breached
             attempt_parsed = _extract_json(out)
+            attempt_usage = _transport_usage(out)
             # Redact BEFORE slicing the tail so a token spanning the slice
             # boundary can never survive partially; a leaked token is never
             # persisted verbatim in the saved result artifact.
@@ -546,6 +594,7 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
                 "returncode": rc,
                 "timed_out": timed_out,
                 "parsed_ok": attempt_parsed is not None,
+                "usage": attempt_usage,
                 "isolation_breached": breached,
                 "stderr_tail": _redact_token(err or "", token)[-400:],
                 "isolation": isolation,
@@ -564,6 +613,7 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
                 parsed = None
                 continue
             parsed = attempt_parsed
+            usage = attempt_usage
             if parsed is not None:
                 break
 
@@ -574,6 +624,7 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
             "attempts": attempt_records,
             "isolation": isolation,
             "score": None,
+            "usage": usage,
         }
 
     score = _score(family, expect, parsed)
@@ -583,6 +634,7 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
         "attempts": attempt_records,
         "model_output": parsed,
         "score": score,
+        "usage": usage,
         "isolation": isolation,
     }
 
@@ -819,6 +871,39 @@ def _threshold(results: list[dict]) -> dict:
     }
 
 
+def _claude_preflight(model: str, timeout: int) -> dict[str, Any]:
+    """Prove OAuth + instruction isolation before any judgment is scored."""
+    auth = reached_path_isolation.auth_probe(
+        model=model,
+        timeout=min(60, timeout),
+    )
+    if auth.get("invalid") or not auth.get("ok"):
+        return {
+            "status": "invalid_auth",
+            "valid": False,
+            "auth_probe": reached_path_privacy.scrub_obj(auth),
+            "leak_probe": None,
+        }
+
+    leak = reached_path_isolation.instruction_leak_probe(
+        model=model,
+        timeout=min(90, timeout),
+    )
+    if not leak.get("ok"):
+        return {
+            "status": "invalid_instruction_leak_probe",
+            "valid": False,
+            "auth_probe": reached_path_privacy.scrub_obj(auth),
+            "leak_probe": reached_path_privacy.scrub_obj(leak),
+        }
+    return {
+        "status": "pass",
+        "valid": True,
+        "auth_probe": reached_path_privacy.scrub_obj(auth),
+        "leak_probe": reached_path_privacy.scrub_obj(leak),
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--all", action="store_true", help="run every fixture family")
@@ -826,11 +911,46 @@ def main() -> int:
     ap.add_argument("--backend", default="auto", choices=["auto", "claude", "codex"])
     ap.add_argument("--model", default=os.environ.get("PRIME_EVAL_MODEL", "sonnet"))
     ap.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
+    ap.add_argument(
+        "--rules-ref",
+        help="read classification.md from this git ref for a hash-pinned baseline",
+    )
+    ap.add_argument(
+        "--label",
+        help="artifact label such as b1 or candidate; required with --rules-ref",
+    )
+    ap.add_argument(
+        "--output-dir",
+        type=Path,
+        default=RESULTS_DIR,
+        help="result directory (default: ignored optimization/prime/results)",
+    )
     ap.add_argument("--self-test", action="store_true", help="offline isolation proof, no model")
     args = ap.parse_args()
 
     if args.self_test:
         return self_test()
+    if args.rules_ref and not args.label:
+        ap.error("--rules-ref requires --label")
+
+    source_path = CLASSIFICATION_MD.relative_to(REPO_ROOT).as_posix()
+    if args.rules_ref:
+        read = subprocess.run(
+            ["git", "show", f"{args.rules_ref}:{source_path}"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if read.returncode != 0:
+            ap.error(
+                f"cannot read {source_path} at {args.rules_ref}: {read.stderr.strip()}"
+            )
+        rules = read.stdout
+        rules_source = f"{args.rules_ref}:{source_path}"
+    else:
+        rules = CLASSIFICATION_MD.read_text(encoding="utf-8")
+        rules_source = source_path
+    rules_sha256 = hashlib.sha256(rules.encode("utf-8")).hexdigest()
 
     expectations = json.loads(EXPECTATIONS.read_text(encoding="utf-8"))
     all_families = sorted(p.stem for p in FIXTURES_DIR.glob("*.json"))
@@ -854,7 +974,38 @@ def main() -> int:
 
     version = _backend_version(backend)
     date = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d")
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir = args.output_dir
+    if not output_dir.is_absolute():
+        output_dir = REPO_ROOT / output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    label_part = f"-{args.label}" if args.label else ""
+
+    if backend == "claude":
+        preflight = _claude_preflight(args.model, args.timeout)
+        preflight["provenance"] = {
+            "backend": backend,
+            "model": args.model,
+            "backend_version": version,
+            "date_utc": date,
+            "rules_source": rules_source,
+            "rules_sha256": rules_sha256,
+        }
+        preflight_path = output_dir / f"preflight{label_part}-{args.model}-{date}.json"
+        preflight_path.write_text(
+            json.dumps(preflight, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        if not preflight["valid"]:
+            print(
+                f"INVALID/SKIP: Claude preflight {preflight['status']}; "
+                "authentication/isolation failure is not a model judgment.",
+                file=sys.stderr,
+            )
+            print(
+                f"preflight evidence -> {preflight_path.relative_to(REPO_ROOT)}",
+                file=sys.stderr,
+            )
+            return 0
 
     results = []
     for fam in families:
@@ -862,7 +1013,14 @@ def main() -> int:
             print(f"skip {fam}: no expectation row", file=sys.stderr)
             continue
         print(f"running {fam} on {backend} ({args.model}) ...", file=sys.stderr)
-        res = run_fixture(fam, backend, args.model, expectations, args.timeout)
+        res = run_fixture(
+            fam,
+            backend,
+            args.model,
+            expectations,
+            args.timeout,
+            rules=rules,
+        )
         res["provenance"] = {
             "backend": backend,
             "model": args.model,
@@ -870,8 +1028,10 @@ def main() -> int:
             "date_utc": date,
             "timeout_s": args.timeout,
             "retries": RETRIES,
+            "rules_source": rules_source,
+            "rules_sha256": rules_sha256,
         }
-        out_path = RESULTS_DIR / f"{fam}-{args.model}-{date}.json"
+        out_path = output_dir / f"{fam}{label_part}-{args.model}-{date}.json"
         out_path.write_text(json.dumps(res, indent=2) + "\n", encoding="utf-8")
         status = res["status"]
         verdict = "-"

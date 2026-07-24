@@ -228,12 +228,30 @@ Reset the deterministic review-round counter for a spec (fn-90) — the **re-pla
 flowctl spec reset-review-rounds fn-1 [--impl] [--json]
 ```
 
-### review-rounds increment / reset
+### review-rounds increment / record / attempts / reset
 
-Prose-facing surface of the deterministic review-round cap (fn-90) for the **rp backend**, whose reviews are dispatched from skill prose via `flowctl rp chat-send` rather than through a `flowctl <backend> *-review` handler. `increment` enforces + increments the same cumulative counter the codex/copilot/cursor handlers wire internally — call it before EVERY rp review dispatch (including the first); at `${MAX_REVIEW_ITERATIONS:-4}` it refuses with an `ESCALATE:` marker + exit `4` (not retryable). `reset` zeroes the counter on a `SHIP` verdict (convergence); for a re-plan use `spec reset-review-rounds` instead. Completion reviews pass `--kind plan` (shared spec-scoped counter); impl reviews require `--task` (per-task counter).
+Prose-facing surface of the deterministic review-round cap for the **rp
+backend**, whose reviews run through `flowctl rp chat-send` rather than a
+`flowctl <backend> *-review` wrapper. `increment` reserves a round before every
+dispatch. `record` reads the response file: a terminal verdict consumes the
+reservation; no verdict refunds it and appends a durable attempt (backend,
+failure class, timestamp, output digest) to the spec sidecar. `attempts` reports
+verdict-bearing versus refunded attempts for one review scope. `reset` zeroes
+the live counter only after SHIP; explicit re-plans use
+`spec reset-review-rounds`. Completion passes `--kind plan --review-type
+completion`; impl requires `--task`.
+
+More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive no-verdict attempts
+exits `5` with `TRANSPORT_UNHEALTHY`, distinct from review non-convergence
+(`ESCALATE`, exit `4`). Repair the backend and retry; never manually reset the
+verdict counter for transport failures.
 
 ```bash
 flowctl review-rounds increment fn-1 --kind plan|impl [--task fn-1.2] [--json]
+flowctl review-rounds record fn-1 --kind plan|impl --review-type plan|impl|completion \
+  --output-file /tmp/review.md [--task fn-1.2] [--backend rp] [--json]
+flowctl review-rounds attempts fn-1 --kind plan|impl --review-type plan|impl|completion \
+  [--task fn-1.2] [--json]
 flowctl review-rounds reset fn-1 --kind plan|impl [--task fn-1.2] [--json]
 ```
 
@@ -1294,9 +1312,22 @@ Completion review receipt:
 The fix→re-review loop is bounded by a **flowctl-owned cumulative round counter on spec state**, not just the host LLM's in-agent iteration counter (which resets on every fresh `/flow-next:*-review` invocation — the loop-runaway root cause). It applies to every backend and every review kind:
 
 - **Counter surfaces:** plan reviews increment a spec-scoped `plan_review_rounds`; impl reviews increment a per-task `impl_review_rounds[<task-id>]`. **Completion reviews reuse the spec-scoped `plan_review_rounds` counter** (they are spec-scoped, no task in context) — a plan review and a completion review on the same spec spend the *same* cap, so neither can independently re-open the runaway. Both surface in `flowctl show --json`.
-- **Enforcement:** each backend dispatch calls the cap check BEFORE running the reviewer (codex/copilot/cursor inside their `flowctl <backend> *-review` handlers; rp — dispatched from skill prose via `rp chat-send` — through an explicit `flowctl review-rounds increment` call in the workflow, see [review-rounds increment / reset](#review-rounds-increment--reset)). At `${MAX_REVIEW_ITERATIONS:-4}` (default 4, env-overridable) it **refuses to dispatch**, prints an `ESCALATE:` marker, and exits with a **dedicated exit code `4`** — distinct from transport/backend-failure codes (`2` = exec failure, `3` = sandbox), so a host or Ralph loop cannot misread the cap refusal as a retryable error. Under Ralph/autonomous the refusal must surface as **NEEDS_HUMAN**, never a retry (a retry loop on the cap re-creates the runaway one level up). The refusal is idempotent — repeated calls at the cap keep refusing without further increment.
-- **Round-counting semantics (deliberate anti-runaway bias):** a "round" is **every dispatch ATTEMPT, including a failed/malformed exec** — NOT only SHIP/NEEDS_WORK-resolved rounds. A reviewer run that produces no parseable verdict still consumes the cap. Worst case is *early* human escalation, which is the safe direction; the alternative (only counting resolved rounds) would let malformed-verdict retries loop unbounded.
-- **Reset semantics:** the counter resets to 0 **only** on a `SHIP` verdict (from the receipt-write path) or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>` — see [spec reset-review-rounds](#spec-reset-review-rounds)). It does **NOT** reset on a spec/code edit (fix rounds legitimately edit the artifact; resetting there reopens the runaway through the back door) nor on a fresh invocation.
+- **Enforcement:** each backend reserves a round BEFORE running the reviewer
+  (codex/copilot/cursor inside their wrapper; rp via `review-rounds increment`).
+  At `${MAX_REVIEW_ITERATIONS:-4}` delivered-verdict rounds it refuses before
+  dispatch, prints `ESCALATE:`, and exits `4`. The message includes live verdict
+  rounds and refunded transport attempts.
+- **Round-counting:** a round is consumed only when reviewer output contains
+  SHIP, NEEDS_WORK, or MAJOR_RETHINK. Empty output, missing tags, timeout,
+  sandbox denial, and other no-verdict exits refund the pre-dispatch reservation
+  and append an auditable attempt row to the spec sidecar. A delivered verdict
+  is never refundable, even if the process also reports nonzero.
+- **Transport bound:** consecutive no-verdict failures are tracked separately
+  per review scope. More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` exits `5`
+  with `TRANSPORT_UNHEALTHY`; it never emits the cap's `ESCALATE`.
+- **Reset semantics:** SHIP and explicit re-plan remain the only verdict-counter
+  resets. A transport refund is automatic accounting, not a reset ceremony;
+  never run `review-rounds reset` to recover from a flake.
 
 **Receipt convergence-ratchet fields (fn-90, back-compatible):**
 

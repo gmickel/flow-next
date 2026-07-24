@@ -50,7 +50,11 @@ apples-to-apples (the ratchet needs constancy, not a specific tier). Recorded in
 
 `test-inputs.md` (3 frozen fixtures) · `evals.md` (5 binary: E1–E4 accuracy, E5 the quality-lever
 scoring eval, all finalized before baseline) · `results.tsv` (extended schema) · `changelog.md`
-(per-experiment log — resume from here) · `baseline/{SKILL,steps,examples}.md` (pre-mutation prose).
+(per-experiment log — resume from here) · `baseline/{SKILL,steps,examples}.md` (pre-mutation prose) ·
+`holdout/{input,oracle,README}.md` (task-130.7 sealed P5; input and answer key are separated) ·
+`task-130-7-results.tsv` (independent routing/examples keep ledger and reached-path pairs) ·
+`run_fn130_agentic_eval.py` + `evidence/fn130/paired-emissions.json` (paired B1/candidate
+P1–P5 emissions, scorer-only oracle, cross-family scoring, source/fixture hashes, and usage).
 
 ## Resume
 
@@ -63,6 +67,7 @@ mutation, dispatch the 4 fixtures at `sonnet`, score against `evals.md`, append 
 - **N / majority-vote.** N=1 per fixture, EXCEPT P4 (the borderline judgment cell) at **N=2** — baseline P4 E3=FAIL and exp1 P4 E3=PASS were BOTH confirmed on two runs, so the 15→16 gain is not N=1 noise. `results.tsv.runs` stays a clean integer (1); the per-fixture N is in each row's description.
 - **`discard-HOLD` status** (results.tsv row 2) = *considered + deferred on a verifiability principle*, NOT run-and-reverted (which would be `discard-REVERT`). An extension of the `baseline|keep|discard-REVERT` set; noted here for fn-84.9's mechanical audit.
 - **E3 contamination — next iteration needs a fresh sizing fixture.** The kept cue's ❌ example now verbatim-encodes P4's baseline over-split (docs+CI as two tasks), so P4-E3 is memorized for future runs. A future E3 experiment must use a NEW sizing fixture or a sealed holdout.
+- **Task-130.7 sealed holdout.** P5 was frozen before its prompt candidate. It adds independent no-code, research-consumption, R-ID, cohesion/dependency, Mermaid, and optional-route cells. The subject sees only `holdout/input.md`; `holdout/oracle.md` stays scorer-only.
 - **Frozen grammars are outside the emission surface.** The emission run-trick exercises only the authoring-judgment surface (Steps 2–5); plan's frozen grammars (`Spec dependencies set:`, AskUserQuestion option strings, autonomous markers) are NOT reachable by these runs, so R5's "grammar unchanged" is guarded at **diff review**, not by an eval. Only E1's R-ID grammar is eval-asserted.
 - **Keep-rule (for fn-84.9's cross-suite audit).** This suite uses the corrected hill-climb: accuracy_score is the floor (never drops); keep iff accuracy_score ≥ baseline AND at least one of {accuracy↑, tokens↓, quality↑}. This admits an accuracy-up-at-token-cost keep (matches the spec's own fn-74 exemplar: +74 tok for 8.0→9.3). fn-84.9 must adopt ONE canonical keep-rule across suites.
 - **Worktree-isolation mechanic DEFERRED.** fn-84.1 (as proof point) used output-only emission, NOT the throwaway-worktree write mechanic (Major-1/C). The worktree mechanic therefore stays **unproven** — the first write-happy suite to exercise it (**fn-84.3 interview** or **fn-84.5 audit**) must prove it before relying on it.

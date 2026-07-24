@@ -30,7 +30,11 @@ MIRROR_WORKFLOW = PLUGIN / "codex" / "skills" / "flow-next-setup" / "workflow.md
 
 
 def _read(path: pathlib.Path) -> str:
-    return path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
+    ref = path.parent / "references" / "model-pins.md"
+    if ref.is_file():
+        text += "\n" + ref.read_text(encoding="utf-8")
+    return text
 
 
 class ModelPinCeremonyProseContract(unittest.TestCase):

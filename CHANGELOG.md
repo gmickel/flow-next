@@ -4,6 +4,21 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Changed
+
+- **Review caps now count verdicts, not transport flakes (fn-131).** Codex,
+  Copilot, Cursor, and RepoPrompt still reserve a round before dispatch, but an
+  empty/malformed/no-verdict response, timeout, sandbox denial, or failed
+  transport now records an auditable attempt and refunds that reservation.
+  Delivered SHIP / NEEDS_WORK / MAJOR_RETHINK verdicts always consume exactly
+  one round. Consecutive transport failures have a separate default budget of
+  two and stop with `TRANSPORT_UNHEALTHY` + exit 5, never the convergence cap's
+  `ESCALATE` + exit 4. `review-rounds record|attempts` exposes the RP finalizer
+  and real-versus-refunded history; manual counter resets are no longer needed
+  for transport failures.
+- **Copy-mode drift detection is now Plan-only (fn-130).** Copy-mode projects still need `/flow-next:setup` after plugin updates, but the duplicated version/snippet ceremony is gone from the lifecycle fleet. When both versions are known and differ, interactive Plan offers a refresh or a one-run continuation; autonomous, Ralph, and receipt-driven Plan invocations warn once and continue. Setup remains the sole owner of setup-mode transitions, snippet integrity, and setup-version stamping. Direct invocation of other skills performs no version preflight.
+- **Large skills now load only the branch they execute (fn-130).** Setup, Tracker Sync, Prime, Plan Review, Plan, Work, Strategy, Make PR, and Pilot route mutually exclusive host/provider/backend/optional machinery through one-level references selected by existing state. A frozen `B0 → V1/B1 → candidate` harness kept every behavior and safety contract under zero-loss ratchets; default-path reductions range from 3.17% to 79.21% across the measured clusters. Deterministic source characters remain separate from backend telemetry, and structurally mature non-target skills were explicitly left alone.
+
 ## [flow-next 3.4.2] - 2026-07-23
 
 ### Fixed

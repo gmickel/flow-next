@@ -14,7 +14,9 @@ environment actually has — interactive desktop (MCP), headless / CI / Ralph
 assume; never crash when both are absent.
 
 This file is the rung router and the seam that makes reconcile transport-blind.
-The per-rung command detail lives in the rung references:
+The per-rung command detail lives in the rung references. **Read exactly the
+first reached rung after probing**; do not read both rung files up front. A
+cross-link or parity table is not permission to load the unreached rung.
 
 | Rung | Transport | Use when | Reference |
 |------|-----------|----------|-----------|

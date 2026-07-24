@@ -1,0 +1,10 @@
+# Raw stream-json / unsanitized traces and ordinary smoke candidates stay local.
+# Tracked write-once B0 proof (immutable after --freeze-b0-smoke):
+#   b0-production-path-smoke.json
+# Ordinary --production-path-smoke / --all --backend claude always write under
+#   candidates/<UTC µs>-production-path-smoke-<status>.json  (ignored by *).
+# Never force-add candidates/; only the tracked B0 proof is un-ignored.
+*
+!.gitignore
+!b0-production-path-smoke.json
+!plan-review-candidate.json

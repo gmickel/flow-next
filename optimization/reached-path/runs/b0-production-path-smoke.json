@@ -1,0 +1,155 @@
+{
+  "auth_probe": {
+    "flags": [
+      "--setting-sources",
+      "project,local",
+      "--no-session-persistence"
+    ],
+    "invalid": false,
+    "is_error": false,
+    "ok": true,
+    "rc": 0,
+    "reason": "ok",
+    "result": "OK",
+    "stdout_scrubbed": "OK",
+    "subtype": "success",
+    "usage_totals": {
+      "backend": {
+        "cache_creation_input_tokens": 10196,
+        "cache_read_input_tokens": 19420,
+        "input_tokens": 2,
+        "output_tokens": 4
+      },
+      "backend_total": 29622,
+      "model_total": 30153,
+      "total": 29622
+    },
+    "used_bare": false,
+    "used_fresh_config_dir": false
+  },
+  "baseline": "B0",
+  "baseline_commit": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+  "failed_reads": [],
+  "fixture": "synthetic.production-path-smoke",
+  "forbidden_read_absent": true,
+  "isolation": {
+    "arena_changed": false,
+    "arena_diff": {
+      "created": [],
+      "modified": [],
+      "removed": []
+    },
+    "breached": false,
+    "clean": true,
+    "no_live_tracker": true,
+    "sentinel_deleted": false,
+    "sentinel_modified": false,
+    "sentinel_token_leaked": false,
+    "sentinel_token_leaked_stderr": false
+  },
+  "leak_probe": {
+    "global_leaks": [],
+    "identity_residual": [],
+    "marker_present": true,
+    "ok": true,
+    "rc": 0,
+    "residual_note": "OAuth account email may appear as session identity; it carries no guidance content.",
+    "stdout_scrubbed": "The project instructions contain one marker:\n\n```\nUNIQUE_MARKER=[REDACTED-MARKER]\n```\n\nThat's the only marker present in the CLAUDE.md project instructions shown to me.",
+    "timed_out": false
+  },
+  "metrics": {
+    "backend_telemetry": {
+      "cache_creation_input_tokens": 8283,
+      "cache_read_input_tokens": 51681,
+      "duration_api_ms": 11188,
+      "duration_ms": 9901,
+      "input_tokens": 26,
+      "model_usage": {
+        "claude-haiku-4-5-20251001": {
+          "cacheCreationInputTokens": 8283,
+          "cacheReadInputTokens": 51681,
+          "canonicalModel": "claude-haiku-4-5",
+          "contextWindow": 200000,
+          "costUSD": 0.024876099999999998,
+          "inputTokens": 617,
+          "maxOutputTokens": 32000,
+          "outputTokens": 505,
+          "provider": "firstParty",
+          "webSearchRequests": 0
+        }
+      },
+      "note": "Backend cache counters are telemetry, not interchangeable with source bytes or billed input tokens.",
+      "output_tokens": 490,
+      "total_cost_usd": 0.024876099999999998
+    },
+    "reached_path_chars": 1016,
+    "reached_path_chars_div_4": 254.0,
+    "reached_path_files": [
+      {
+        "chars_lf": 931,
+        "content_hash": "a47285998181480cc135f4858e82feb97c33fab991e0d32393859c30cd3ff95b",
+        "path": "fixtures/synthetic/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 85,
+        "content_hash": "31b900f41c430a89ce0e86ba60baf1a51bc0308262d311a86763521f53b30057",
+        "path": "fixtures/synthetic/references/active.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "no_live_tracker": true,
+  "provenance": {
+    "capture_kind": "backend_run",
+    "capture_reason": "authenticated claude production-path smoke",
+    "cli_version": "2.1.218 (Claude Code)",
+    "date_utc": "2026-07-23",
+    "flags": [
+      "--setting-sources",
+      "project,local",
+      "--no-session-persistence"
+    ],
+    "host": "claude",
+    "loader_trace_precise": true,
+    "model": "haiku",
+    "rc": 0,
+    "timed_out": false,
+    "used_bare": false,
+    "used_fresh_config_dir": false
+  },
+  "raw_trace_spans": [
+    {
+      "limit": null,
+      "offset": null,
+      "path": "SKILL.md",
+      "path_was_absolute": true,
+      "tool_use_id": "toolu_01F1CBJanN4LC3amBvUm2yGY"
+    },
+    {
+      "limit": null,
+      "offset": null,
+      "path": "references/active.md",
+      "path_was_absolute": true,
+      "tool_use_id": "toolu_01GJrHo7iGYPgYYrzf2AmDex"
+    }
+  ],
+  "required_read_ok": true,
+  "result_text_scrubbed": "ACTIVE=ACTIVE_OK_SYNTH",
+  "route": "alpha",
+  "scorer_oracles": {
+    "forbidden_reads": [
+      "references/cold.md"
+    ],
+    "note": "oracles are scorer-side only; not present in subject SKILL.md",
+    "required_reads": [
+      "references/active.md"
+    ]
+  },
+  "status": "pass",
+  "stderr_tail_scrubbed": "",
+  "successful_reads_rel": [
+    "SKILL.md",
+    "references/active.md"
+  ]
+}

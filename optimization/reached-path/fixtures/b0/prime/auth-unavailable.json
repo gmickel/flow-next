@@ -1,0 +1,97 @@
+{
+  "activation": {
+    "args": [],
+    "form": "slash",
+    "skill": "flow-next-prime"
+  },
+  "baseline": "B0",
+  "baseline_commit": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+  "branch_inputs": {
+    "auth": "unavailable"
+  },
+  "cluster": "prime",
+  "fixture_hash": "aca7bf031b010babca166a6374dec3afeb982387b8b4b1923496ddc6ccf183ff",
+  "fixture_id": "prime.auth-unavailable",
+  "forbidden_reads": [],
+  "host": "claude",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": null,
+    "candidate": null,
+    "rule": "immutable B0; task 130.2 freezes V1/B1; later tasks compare to B1 only"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "reached_path_chars": 79428,
+    "reached_path_chars_div_4": 19857.0,
+    "reached_path_files": [
+      {
+        "chars_lf": 17267,
+        "content_hash": "908d3eaacea3c8d2f54431f0a87cef8ff25f7f7f19ed8df291eb3573cf6778dd",
+        "path": "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 62161,
+        "content_hash": "7ebedcdac3d003bdbcf27c1e9014063ae83fd6561d4861a0c6b6c0dc0af3c377",
+        "path": "plugins/flow-next/skills/flow-next-prime/workflow.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "mirror_skill": null,
+  "mutation_targets": {},
+  "notes": "",
+  "oracles": {
+    "output": [
+      {
+        "kind": "auth_unavailable_surface"
+      }
+    ],
+    "receipts": [],
+    "tools": [],
+    "writes": []
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "prompt_files": [
+    "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+    "plugins/flow-next/skills/flow-next-prime/workflow.md"
+  ],
+  "prompt_hashes": {
+    "plugins/flow-next/skills/flow-next-prime/SKILL.md": "908d3eaacea3c8d2f54431f0a87cef8ff25f7f7f19ed8df291eb3573cf6778dd",
+    "plugins/flow-next/skills/flow-next-prime/workflow.md": "7ebedcdac3d003bdbcf27c1e9014063ae83fd6561d4861a0c6b6c0dc0af3c377"
+  },
+  "provenance": {
+    "capture_kind": "deterministic_freeze",
+    "capture_reason": "route_manifest_inventory_hash_only; not a backend execution (model/cli_version intentionally null)",
+    "cli_version": null,
+    "date_utc": "2026-07-23",
+    "fixture_hash": "aca7bf031b010babca166a6374dec3afeb982387b8b4b1923496ddc6ccf183ff",
+    "host": "claude",
+    "model": null
+  },
+  "ratchet": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "subjective_majority_n": [
+      3,
+      5
+    ],
+    "verdict": "baseline"
+  },
+  "required_reads": [
+    "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+    "plugins/flow-next/skills/flow-next-prime/workflow.md"
+  ],
+  "resume": {
+    "borderline": false,
+    "parent": null,
+    "sealed_holdout": false,
+    "subjective": false
+  }
+}

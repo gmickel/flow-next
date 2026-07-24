@@ -242,6 +242,30 @@ Eval-guarded the two accuracy-critical mutations (make-pr fold, capture dedupe) 
 full score. Fleet-wide fn-82 harvested **~10.7k always-loaded tokens** across 11 skills with zero quality
 loss — savings that multiply across every autonomous tick.
 
+**Where the big wins live NEXT — reached-path loading (fn-130).** Progressive-disclosure gating proved
+the lever; the remaining material gain is measuring and reducing the instruction text a host **actually
+activates** on the branch a user executes (not directory size, not cache counters). Shared harness:
+[`optimization/reached-path/`](../optimization/reached-path/README.md). Frozen rules:
+
+- **Character algorithm:** LF-normalize; count complete root `SKILL.md` once; count each successfully
+  reached direct reference's complete content once (path + content-hash dedupe); range/subset reads
+  activate the full file; exclude failed/repeated reads, catalog metadata, tool output, host-injected
+  text; Codex fixtures count regenerated mirror files; raw trace spans stay separate from the
+  deterministic character calculation. Report `reached_path_chars` and `chars/4` separately from
+  backend token/cache/time telemetry.
+- **Baselines:** immutable original-main `B0` → fleet version mutation freezes `V1/B1` → later structural
+  candidates compare **only** to hash-verified `B1` (fail closed on mismatch; never compare a structural
+  candidate directly to `B0`).
+- **Ratchet:** keep only on zero accuracy/coverage/negative-control loss **and** a predeclared
+  efficiency or quality improvement. Flat or noisy ⇒ discard. Borderline cells: paired N≥2. Subjective
+  cells: majority N=3–5. Sealed holdout when judgment/examples can overfit. Log every keep **and** discard.
+- **Isolation:** disposable arena + filesystem diff + out-of-arena sentinel; privacy scrubs; instruction-leak
+  + auth probes; zero-token auth ⇒ **invalid run**; no live tracker. Claude OAuth: default config +
+  `--setting-sources project,local` + `--no-session-persistence` — never fresh `CLAUDE_CONFIG_DIR` or
+  `--bare`.
+- **Hosts:** Claude stream-json Read traces are the primary loader proof; Cursor lacks a precise loader
+  contract today — smoke only, surface unavailable gates, never silent pass.
+
 **Feature-preservation rule for any free-form-output budget (load-bearing):** trim **per-item
 verbosity, never the item COUNT**. For a gap-analyst that means every gap still surfaced; for a
 reviewer, every finding still flagged. The **coverage eval IS the no-feature-loss guarantee** — bake
@@ -255,9 +279,9 @@ longer rather than drop coverage (flow-gap-analyst exp1-vs-exp3).
 ## Promoting a kept mutation to ship
 
 The `opt/*` branch stays experimental. When a mutation is confirmed: apply it to the canonical
-file → `scripts/sync-codex.sh` (agent/skill change mirrors to Codex) → **version bump**
-(`scripts/bump.sh`) → `CHANGELOG.md` + flow-next.dev → tag + release. Only then does it reach users.
-Full step list (incl. the **re-sync local Cursor/Codex installs** step, which editing an agent does
-NOT do automatically) lives in [`agent_docs/releasing.md`](releasing.md) — to *dogfood* an optimized
-agent before release, re-run `./scripts/install-cursor.sh` / `install-codex.sh` (idempotent; snapshots
-the current working tree).
+file → `scripts/sync-codex.sh` (agent/skill change mirrors to Codex) → record it under
+`CHANGELOG.md` **Unreleased** and update flow-next.dev only when behavior or public guidance changes.
+Do not bump manifests or release per mutation; versioning is batched later. The release operator then
+follows [`agent_docs/releasing.md`](releasing.md), including the local Cursor/Codex re-sync step.
+To *dogfood* an optimized agent before release, re-run `./scripts/install-cursor.sh` /
+`install-codex.sh` (idempotent; snapshots the current working tree).

@@ -27,10 +27,18 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 PLUGIN = HERE.parent.parent
 WORKFLOW = PLUGIN / "skills" / "flow-next-setup" / "workflow.md"
+CURSOR_REFS = (
+    PLUGIN / "skills" / "flow-next-setup" / "references" / "model-routing-question-cursor.md",
+    PLUGIN / "skills" / "flow-next-setup" / "references" / "model-routing-cursor.md",
+    PLUGIN / "skills" / "flow-next-setup" / "references" / "ralph-question.md",
+)
 
 
 def _read() -> str:
-    return WORKFLOW.read_text(encoding="utf-8")
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (WORKFLOW, *CURSOR_REFS)
+    )
 
 
 class TestCursorPositiveDetection(unittest.TestCase):

@@ -21,60 +21,9 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-## Pre-check: Local setup version
+## Copy-mode version drift
 
-Compare `.flow/meta.json` `setup_version` to the plugin version; on mismatch, escalate once per plugin version. Fail-open throughout: a missing `jq`, `.flow/meta.json`, or plugin manifest silently continues.
-
-```bash
-SETUP_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
-SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
-PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
-if [[ "$SETUP_MODE" == "plugin" ]]; then
-  # fn-121 plugin mode: no local copies exist to go stale - the version compare is
-  # moot. Check only the CLAUDE.md snippet contract (sentinel vs the plugin's
-  # expected v1; keep the literal in sync with SNIPPET_SCHEMA_VERSION in flowctl.py).
-  SNIP_ACK=$(jq -r '.snippet_ack // empty' .flow/meta.json 2>/dev/null)
-  SNIP_VER=$(grep -m1 -o 'flow-next:snippet:v[0-9]*' CLAUDE.md 2>/dev/null | grep -o '[0-9]*$')
-  if [[ "${SNIP_VER:-missing}" != "1" ]]; then
-    if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
-          || "$SNIP_ACK" == "1" ]]; then
-      echo "CLAUDE.md flow-next snippet contract v${SNIP_VER:-missing} != plugin v1. Refresh via /flow-next:setup or the interactive ask." >&2
-    else
-      echo "FLOW_SNIPPET_ASK ${SNIP_VER:-missing} 1"
-    fi
-  fi
-elif [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
-  if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-        || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
-        || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
-    echo "Local setup v${SETUP_VER} differs from plugin v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts." >&2
-  else
-    echo "FLOW_SETUP_ASK ${SETUP_VER} ${PLUGIN_VER}"
-  fi
-fi
-```
-
-If the block printed a `FLOW_SNIPPET_ASK` line (plugin mode only; suppressed to the stderr note under the autonomy markers above), before proceeding ask the user with AskUserQuestion (the CLAUDE.md flow-next snippet block is on an older contract than this plugin version; refresh the marker block?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: run `"${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl" setup-block apply --file CLAUDE.md --template "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" --json`; if it returns `action: ask`, re-run as `setup-block resolve` with the same `--file`/`--template` plus `--choice overwrite --json` - this question WAS the consent. Marker-bounded: content outside the block is never touched.
-- **Remind me next version**: record the acknowledgement so this contract version is not re-asked (fail-open: on any error, continue anyway):
-  ```bash
-  rm -f .flow/meta.json.tmp && jq '.snippet_ack = "1"' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user with AskUserQuestion (local setup differs from the plugin; refresh now?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: pause and have the user run `/flow-next:setup` in this session (do not run setup yourself), then continue once it finishes.
-- **Remind me next version**: record the acknowledgement so this version is not re-asked (only a later plugin version re-arms it), then continue. Run this self-contained write (fail-open: on any error, continue anyway):
-  ```bash
-  PJ="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-  PV=$(jq -r '.version' "$PJ" 2>/dev/null)
-  [[ -n "$PV" && "$PV" != "null" ]] && rm -f .flow/meta.json.tmp && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-Any other output (the one-line differs notice, or nothing) is non-blocking: continue.
+Before Step 0, read `.flow/meta.json` and `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json` once to perform this check. In copy mode only, when both `.flow/meta.json` `setup_version` and the installed plugin manifest version are available and differ, ask exactly `Local Flow-Next copy v<X> differs from plugin v<Y>. Refresh before planning?` via AskUserQuestion. Offer exactly **Refresh now (Recommended)** and **Continue this run**. Refresh stops cleanly, tells the user to run `/flow-next:setup`, then rerun Plan; never invoke Setup or resume this Plan invocation. Continue warns once and proceeds. Under autonomous, Ralph, or receipt-driven execution, warn once and proceed without asking. Version match, plugin mode, or unavailable comparison evidence is silent. Never read or write legacy `version_ack` / `snippet_ack`; Setup alone owns setup-mode and snippet integrity.
 
 **Role**: product-minded planner with strong repo awareness.
 **Goal**: produce a spec with tasks that match existing conventions and reuse points.
@@ -246,13 +195,11 @@ Read [steps.md](steps.md) and follow each step in order.
 
 **Step 1 readiness soft-check (fn-58)**: existing-spec inputs get an adoption-gated readiness check BEFORE the scout fan-out — warn-not-block, default proceed; repos that never adopted readiness see nothing. Details in steps.md Step 1.
 
-**Step 8.5 HTML render lens (opt-in)**: when `artifacts.html.enabled` is true, planning regenerates `.flow/artifacts/<spec-id>/spec.html` with the plan layer (task DAG + R-ID coverage) per the shared disclosure reference ([`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md)) — generated only after the Step 8 refinement loop exits, link line replaced in place in the spec md. With the mode off/unset there is zero artifact-related behavior or output. Details in steps.md Step 8.5.
+**Optional paths**: `steps.md` gates tracker projection, selected review, and the
+HTML render lens after their existing config/choice signals. Their references
+stay cold when off; Step 0 remains the only config snapshot.
 
 **CRITICAL — Step 1 (Research)**: You MUST launch ALL scouts in the **depth-appropriate set** (steps.md tier table — the full set at STANDARD/DEEP; the full set MINUS the three web-research scouts at SHORT) in ONE parallel Task call. Do NOT skip scouts within that set or run them sequentially. Each scout in the set provides unique signal.
-
-If user chose review:
-- Option 2a: run `/flow-next:plan-review` after Step 4, fix issues until it passes
-- Option 2b: run `/flow-next:plan-review` with export mode after Step 4
 
 ## Output
 

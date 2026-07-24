@@ -12,7 +12,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 CLAWPATCH_DIR="$REPO_ROOT/.clawpatch"
 ```
 
-`jq` is required only for the `setup_version` pre-check; the rest of the skill uses pure POSIX shell + `clawpatch` invocations.
+The skill uses pure POSIX shell plus `clawpatch` invocations.
 
 ---
 

@@ -1,0 +1,133 @@
+{
+  "cluster": "make-pr",
+  "task": "fn-130-reached-path-skill-prompt-optimization.11",
+  "lineage": {
+    "baseline": "V1/B1",
+    "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "input_check": "python3 optimization/reached-path/run_eval.py --check-b1-input make-pr",
+    "input_check_result": "pass",
+    "comparison_rule": "candidate compared only to hash-verified B1; never B0"
+  },
+  "candidate_prompt_hashes": {
+    "plugins/flow-next/references/html-artifacts.md": "9c2cd74ef1149979d2771b295fac72d47fe77c53036c66d72f1e03e23501c82e",
+    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "5130d4129574121f2f09c81a7ba7ecbaf8540e23802d6cfe69fe8df201f8c51f",
+    "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md": "4b7aebfd7391d377f15340ca566d88d4b3d07ce15585592d88a2c310473306aa",
+    "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "804ebc2d31cc89f09b51333a0b5ed84987994c3b616d120116db2a2e32b625f1",
+    "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md": "bf7c72d18be2764733a1d211145ff996a711b3c72994e9cd18897dbfa8acb2f0",
+    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "031f8eeffd8847b986244eb2cf7c196f8936d7c34ef04a0049b64a6eacba9fbd"
+  },
+  "b1_unchanged_workflow_slices": {
+    "before_phase_1_5_sha256": "01e2f2cc79062068ccc23d4dc44ffeef31dd1ea72a441ca860d0ef38e51d67c9",
+    "after_phase_1_5_sha256": "cda777e3288add90329b1748631c8d76b8c67b8c7908d3a8c7c74d11a7ee5af4",
+    "meaning": "Phase 0/1 and Phase 2 onward are byte-identical to B1; only the Phase 1.5 HTML router surface changed."
+  },
+  "kept_candidate": {
+    "id": "html-enabled-path-reference",
+    "verdict": "keep",
+    "reason": "zero loss and predeclared default-off reached-path improvement",
+    "mutation": "Keep the config/dry-run gate in workflow.md; load html-lens.md and the shared disclosure reference only when HTML_LENS=true.",
+    "accuracy": {
+      "dry_run_no_writes": true,
+      "ordinary_body_rendering": true,
+      "create_finalize": true,
+      "existing_pr": true,
+      "push_retry": true,
+      "push_failure": true,
+      "autonomous_incomplete_spec_refusal": true,
+      "payload_rich": true,
+      "payload_risky": true,
+      "payload_sparse": true
+    },
+    "route_metrics": {
+      "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+      "dry-run": {
+        "b1_chars": 145723,
+        "candidate_chars": 138461,
+        "delta_chars": -7262
+      },
+      "html-off": {
+        "b1_chars": 191058,
+        "candidate_chars": 183796,
+        "delta_chars": -7262
+      },
+      "html-on": {
+        "b1_chars": 210653,
+        "candidate_chars": 211103,
+        "delta_chars": 450,
+        "note": "Selected HTML path pays the direct-reference router overhead; no wall-time claim."
+      },
+      "create": {
+        "b1_chars": 191058,
+        "candidate_chars": 183796,
+        "delta_chars": -7262
+      },
+      "finalize": {
+        "b1_chars": 179412,
+        "candidate_chars": 172150,
+        "delta_chars": -7262
+      },
+      "existing-pr": {
+        "b1_chars": 179412,
+        "candidate_chars": 172150,
+        "delta_chars": -7262
+      },
+      "push-retry": {
+        "b1_chars": 179412,
+        "candidate_chars": 172150,
+        "delta_chars": -7262
+      }
+    },
+    "required_reads": {
+      "html-off": [
+        "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
+        "plugins/flow-next/skills/flow-next-make-pr/workflow.md"
+      ],
+      "html-on": [
+        "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
+        "plugins/flow-next/skills/flow-next-make-pr/workflow.md",
+        "plugins/flow-next/skills/flow-next-make-pr/html-lens.md",
+        "plugins/flow-next/references/html-artifacts.md"
+      ]
+    },
+    "forbidden_reads": {
+      "dry-run": [
+        "plugins/flow-next/skills/flow-next-make-pr/html-lens.md",
+        "plugins/flow-next/references/html-artifacts.md",
+        "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md"
+      ],
+      "html-off": [
+        "plugins/flow-next/skills/flow-next-make-pr/html-lens.md",
+        "plugins/flow-next/references/html-artifacts.md"
+      ]
+    },
+    "wall_time_claim": null
+  },
+  "discarded_candidates": [
+    {
+      "id": "leave-html-inline",
+      "verdict": "discard",
+      "reason": "flat_no_predeclared_improvement"
+    },
+    {
+      "id": "move-render-lens-body-line-out-of-phase-2",
+      "verdict": "discard",
+      "reason": "Body-link safety and omission rules belong at their consuming render phase; moving them would weaken action-site context."
+    },
+    {
+      "id": "combine-html-and-create-finalize-routing",
+      "verdict": "discard",
+      "reason": "Would entangle independent HTML and creation branches and overlap dormant fn-73 forge semantics."
+    }
+  ],
+  "frozen_corpora": {
+    "optimization/make-pr/fixtures/payload-rich.json": "7331c3bbc19f6887dccfab7f9888bb13bdba6bd7d364aebf383803c1ccf3fc97",
+    "optimization/make-pr/fixtures/payload-risky.json": "a5e6b6204ce2c24702d3749f0260b3c74f8de2dffdce92718211a00639d150dc",
+    "optimization/make-pr/fixtures/payload-sparse.json": "d421557cbef223570c3ce50f12780761d3c8531001cecb70fdba019c1e002dfd"
+  },
+  "overlap_recheck": {
+    "spec": "fn-73-glab-git-ops-make-prresolve-prland-over",
+    "status": "open",
+    "shape": "stub; no tasks",
+    "result": "No forge, gh/glab, PR/MR, push, retry, or finalization semantics changed."
+  }
+}

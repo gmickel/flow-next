@@ -21,61 +21,6 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-## Pre-check: Local setup version
-
-Compare `.flow/meta.json` `setup_version` to the plugin version; on mismatch, escalate once per plugin version. Fail-open throughout: a missing `jq`, `.flow/meta.json`, or plugin manifest silently continues.
-
-```bash
-SETUP_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
-SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
-PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
-if [[ "$SETUP_MODE" == "plugin" ]]; then
-  # fn-121 plugin mode: no local copies exist to go stale - the version compare is
-  # moot. Check only the CLAUDE.md snippet contract (sentinel vs the plugin's
-  # expected v1; keep the literal in sync with SNIPPET_SCHEMA_VERSION in flowctl.py).
-  SNIP_ACK=$(jq -r '.snippet_ack // empty' .flow/meta.json 2>/dev/null)
-  SNIP_VER=$(grep -m1 -o 'flow-next:snippet:v[0-9]*' CLAUDE.md 2>/dev/null | grep -o '[0-9]*$')
-  if [[ "${SNIP_VER:-missing}" != "1" ]]; then
-    if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
-          || "$SNIP_ACK" == "1" ]]; then
-      echo "CLAUDE.md flow-next snippet contract v${SNIP_VER:-missing} != plugin v1. Refresh via /flow-next:setup or the interactive ask." >&2
-    else
-      echo "FLOW_SNIPPET_ASK ${SNIP_VER:-missing} 1"
-    fi
-  fi
-elif [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
-  if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-        || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
-        || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
-    echo "Local setup v${SETUP_VER} differs from plugin v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts." >&2
-  else
-    echo "FLOW_SETUP_ASK ${SETUP_VER} ${PLUGIN_VER}"
-  fi
-fi
-```
-
-If the block printed a `FLOW_SNIPPET_ASK` line (plugin mode only; suppressed to the stderr note under the autonomy markers above), before proceeding ask the user with AskUserQuestion (the CLAUDE.md flow-next snippet block is on an older contract than this plugin version; refresh the marker block?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: run `"${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl" setup-block apply --file CLAUDE.md --template "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" --json`; if it returns `action: ask`, re-run as `setup-block resolve` with the same `--file`/`--template` plus `--choice overwrite --json` - this question WAS the consent. Marker-bounded: content outside the block is never touched.
-- **Remind me next version**: record the acknowledgement so this contract version is not re-asked (fail-open: on any error, continue anyway):
-  ```bash
-  rm -f .flow/meta.json.tmp && jq '.snippet_ack = "1"' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user with AskUserQuestion (local setup differs from the plugin; refresh now?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: pause and have the user run `/flow-next:setup` in this session (do not run setup yourself), then continue once it finishes.
-- **Remind me next version**: record the acknowledgement so this version is not re-asked (only a later plugin version re-arms it), then continue. Run this self-contained write (fail-open: on any error, continue anyway):
-  ```bash
-  PJ="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-  PV=$(jq -r '.version' "$PJ" 2>/dev/null)
-  [[ -n "$PV" && "$PV" != "null" ]] && rm -f .flow/meta.json.tmp && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-Any other output (the one-line differs notice, or nothing) is non-blocking: continue.
-
 **Hard requirements (non-negotiable):**
 - You MUST run `flowctl done` for each completed task and verify the task status is `done`.
 - You MUST stage with `git add -A` (never list files). This ensures `.flow/` and `scripts/ralph/` (if present) are included.
@@ -217,10 +162,12 @@ If user chose review, pass the review mode to the worker. The worker invokes `/f
 ## Codex implementation-delegation (opt-in, off by default)
 
 **The in-session path is the documented default and is behaviorally unchanged.**
-With delegation off — the default — the work flow adds exactly ONE cheap
-value-check and nothing else; `/flow-next:work` stays byte-identical to today.
-All delegation mechanics live in [references/codex-delegation.md](references/codex-delegation.md),
-read **only when delegation is active** (progressive disclosure, R3).
+With delegation off — the default — Work performs one cheap request check and
+loads no delegation reference. A requested path reads
+[references/codex-delegation-selection.md](references/codex-delegation-selection.md)
+for the exact host/config/input/consent selection. Only a passing selection
+loads the active machinery in
+[references/codex-delegation.md](references/codex-delegation.md).
 
 **Activation is disambiguated from the review backend.** `/flow-next:work`
 already maps the generic fuzzy "use codex" to the **review backend** (Review-mode
@@ -230,24 +177,21 @@ parsing above). Delegation activates ONLY via the explicit arg token
 "delegate implementation to codex" — **never** bare "use codex".
 
 **Resolution chain (precedence):** arg token (`delegate:codex` / `delegate:local`)
-> flow config `work.delegate` > hard default OFF. The single value-check
-computes `delegation_active` ONCE, before the per-task loop:
+> flow config `work.delegate` > hard default OFF. Phase 0 combines that value
+with the cheap Claude-Code host check to compute `delegation_requested`.
+Phase 1.5 resolves the remaining host/input/availability/consent/clean-tree
+selection reference; only a passing selection sets `delegation_active=true`:
 
 ```text
-delegation_active = host_is_claude_code && (arg delegate:codex | work.delegate == "codex") && not arg delegate:local
+delegation_requested = host_is_claude_code && (arg delegate:codex | work.delegate == "codex") && not arg delegate:local
+delegation_active = delegation_requested && Phase 1.5 selection passed
 ```
 
-The executable value-check — the cheap `host_is_claude_code &&` short-circuit
-(on a non-Claude host the ~45k reference is never read) plus the
-`.flow`-missing guard — lives at its consumption site, [phases.md](phases.md)
-Phase 0, with the host pre-flight gates + one-time consent in Phase 1.5.
-
-When `delegation_active`, the host (NOT the worker subagent) reads
-[references/codex-delegation.md](references/codex-delegation.md) and runs its
-pre-flight gates + one-time consent once, then passes the resolved flags into
-each spawned worker. Any gate failure (non-Claude-Code platform, inside a Codex
-sandbox, `codex` missing, no consent, bare-prompt input, dirty tree) → standard
-mode for the rest of the run; delegation never blocks the worker.
+The executable request check and fail-open selection stay beside their
+consuming phases in [phases.md](phases.md). Any selection failure runs the
+standard path and leaves the active reference cold. Once selected, the host
+(NOT the worker) reads the active reference once and follows its complete
+path-handoff, safety, worker-signal, and circuit-breaker contract.
 
 ## Guardrails
 

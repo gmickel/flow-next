@@ -1,6 +1,7 @@
 # Flow Prime Workflow
 
-Execute these phases in order. Reference [pillars.md](pillars.md) for scoring criteria and [remediation.md](remediation.md) for fix templates.
+Execute these phases in order. Load each reference only when its consuming
+phase says to read it; never pre-read remediation templates.
 
 **Model guidance**: This skill uses sonnet for synthesis and report generation. Scouts run per their agent frontmatter: 7 haiku fast scanners (tooling, env, testing, build, observability, security, workflow); claude-md-scout and docs-gap-scout on sonnet for judgment quality.
 

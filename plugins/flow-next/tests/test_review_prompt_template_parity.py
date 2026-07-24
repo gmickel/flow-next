@@ -155,6 +155,17 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
             flowctl.build_completion_review_prompt(_SPEC, "", _DSUM, _DDIFF),
         )
 
+    def test_completion_review_prompt_starts_with_terminal_reviewer_override(self) -> None:
+        """All subprocess backends share this builder: Codex, Copilot, Cursor."""
+        prompt = flowctl.build_completion_review_prompt(
+            _SPEC, _TASKS, _DSUM, _DDIFF
+        )
+        self.assertTrue(prompt.startswith("## TERMINAL REVIEWER ROLE"))
+        self.assertIn("not a workflow coordinator", prompt)
+        self.assertIn("Do not invoke Flow-Next skills", prompt)
+        self.assertIn("`flowctl *-review`", prompt)
+        self.assertIn("launch another reviewer", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

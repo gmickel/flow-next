@@ -9,12 +9,52 @@ allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 
 The `.flow/specs/<id>.md` spec is the source of truth and the quality layer; the tracker (Linear, GitHub, GitLab, or Jira) is a **co-editable mirror** for teams that must live in it. This skill is **projection, not coordination** — the tracker mirrors the spec (body, status, comments all sync two-way) but never drives flow state or spawns agents (see the decision record at `.flow/memory/.../tracker-sync-is-projection-not-*`).
 
-This skill is the **spine**: the discovery ceremony, the spec↔issue grain, the identity/naming alias, and a **transport-blind** push/pull/reconcile orchestration skeleton. It does NOT contain transport code or merge logic — those plug in via the interface defined here:
+This skill is the **spine**: the discovery ceremony, the spec↔issue grain, the identity/naming alias, and a **transport-blind** push/pull/reconcile orchestration skeleton. It does NOT contain transport code or merge logic — those plug in via the normalized interface.
 
-- **Transports** (`fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` / `setStatus`) are implemented by the Linear, GitHub, GitLab, and Jira adapters. This skill calls them through the normalized interface; it never sees a wire shape. The **Linear adapter is a detect-best-available transport ladder** (MCP → GraphQL → no-op) — see [`references/linear-ladder.md`](references/linear-ladder.md); the **GitHub adapter** is the headless-robust `gh` transport (single rung + no-op, reduced-fidelity status) — see [`references/github.md`](references/github.md); the **GitLab adapter** is the headless-robust `glab` transport (`glab` CLI → raw-REST token fallback → no-op, reduced-fidelity status) — see [`references/gitlab.md`](references/gitlab.md); the **Jira adapter** is the REST transport (Cloud `/rest/api/3` + ADF → DC/Server `/rest/api/2` → no-op, workflow-aware status via the transitions API, NO MCP) — see [`references/jira.md`](references/jira.md).
+- **Transports** implement `fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` / `setStatus` plus the relation and enumeration methods. This skill calls the one selected adapter through the normalized interface; reconciliation never sees a wire shape.
 - **Reconcile** operates only on the **normalized payload structs** (`issue` / `comment` / `status`) the adapters exchange. The agentic 3-way **body merge** + format translation + scoped conflict is in [`references/body-merge.md`](references/body-merge.md); the per-field **status who-wins** is [`references/status-sync.md`](references/status-sync.md) and **comments/evidence append + dedup** is [`references/comments-sync.md`](references/comments-sync.md). The interface is defined in `references/adapter-interface.md`.
 
-**Read [steps.md](steps.md) for the full phase-by-phase execution.** Read [`references/adapter-interface.md`](references/adapter-interface.md) for the transport interface + normalized payload contract, [`references/body-merge.md`](references/body-merge.md) for the agentic 3-way body merge / format translation / scoped conflict, [`references/status-sync.md`](references/status-sync.md) for the per-field status who-wins + deadlock fallback, [`references/comments-sync.md`](references/comments-sync.md) for comments/evidence two-way append + dedup, [`references/identity.md`](references/identity.md) for the hybrid id model (tracker-first canonical vs flow-first alias), [`references/linear-ladder.md`](references/linear-ladder.md) (→ [`linear-mcp.md`](references/linear-mcp.md), [`linear-graphql.md`](references/linear-graphql.md)) for the Linear transport ladder, [`references/github.md`](references/github.md) for the GitHub adapter (`gh` transport, reduced-fidelity status), [`references/gitlab.md`](references/gitlab.md) for the GitLab adapter (`glab` CLI → raw-REST token fallback, reduced-fidelity status), and [`references/jira.md`](references/jira.md) for the Jira adapter (REST `/rest/api/{3,2}` token transport, ADF body translation, workflow-aware status via the transitions API).
+## Reached-path loading — common rules + one selected adapter
+
+Read the common reconciliation path on every active/configuration run:
+
+- [steps.md](steps.md) — phase-by-phase orchestration
+- [references/adapter-interface.md](references/adapter-interface.md) — normalized payload and nine-method boundary
+- [references/body-merge.md](references/body-merge.md) — semantic three-way body merge
+- [references/status-sync.md](references/status-sync.md) — status/readiness who-wins
+- [references/comments-sync.md](references/comments-sync.md) — comment/evidence append and dedup
+- [references/identity.md](references/identity.md) — hybrid id model
+
+Then resolve the configured tracker and read **exactly one** adapter path. Do not read an unselected adapter merely because common prose cross-links it:
+
+| Resolved state | Adapter reference to read | Forbidden cold reads |
+|---|---|---|
+| inactive / no config | none | every adapter |
+| `linear` | [references/linear-ladder.md](references/linear-ladder.md), then only the reached MCP **or** GraphQL rung | GitHub, GitLab, Jira, and the unreached Linear rung |
+| `github` | [references/github.md](references/github.md) | Linear, GitLab, Jira |
+| `gitlab` | [references/gitlab.md](references/gitlab.md) | Linear, GitHub, Jira |
+| `jira` | [references/jira.md](references/jira.md) | Linear, GitHub, GitLab |
+| malformed / unknown | none; keep the common safety rules, surface the invalid state, and make no remote call | every adapter |
+
+After defining `$FLOWCTL` in the Preamble below, resolve fail-closed before any transport call:
+
+```bash
+ROUTE_STATE=unknown
+ACTIVE_RAW=$($FLOWCTL sync active --json 2>/dev/null) && \
+  ACTIVE=$(printf '%s' "$ACTIVE_RAW" | jq -r '.active' 2>/dev/null) || ACTIVE=parse-error
+if [ "$ACTIVE" = "false" ]; then
+  ROUTE_STATE=inactive
+elif [ "$ACTIVE" = "true" ]; then
+  TYPE_RAW=$($FLOWCTL config get tracker.type --json 2>/dev/null) && \
+    TRACKER_TYPE=$(printf '%s' "$TYPE_RAW" | jq -r '.value // empty' 2>/dev/null | tr '[:upper:]' '[:lower:]') || TRACKER_TYPE=
+  case "$TRACKER_TYPE" in
+    linear|github|gitlab|jira) ROUTE_STATE="$TRACKER_TYPE" ;;
+    *) ROUTE_STATE=unknown ;;
+  esac
+fi
+```
+
+`inactive` may enter the common discovery ceremony; load an adapter only after the user confirms a provider. `unknown` is a safe stop for transport work: explain the invalid/unreadable `tracker.type`, do not guess a provider, do not call any tracker, do not mutate sync state, and emit a `noop`/`errored` receipt only when a valid spec id is available. Once selected, every command and payload comes from that adapter reference; never improvise a parallel wire form.
 
 > Sync engine shape (discovery ceremony, per-item `lastSyncedAt`, surface-diffs-never-overwrite) adapted from Ray Fernando's `running-bug-review-board` `issue-trackers.md` (Apache-2.0) — see CHANGELOG.
 
@@ -27,63 +67,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-## Pre-check: Local setup version
-
-Compare `.flow/meta.json` `setup_version` to the plugin version; on mismatch, escalate once per plugin version. Fail-open throughout: a missing `jq`, `.flow/meta.json`, or plugin manifest silently continues.
-
-```bash
-SETUP_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
-SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
-PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
-if [[ "$SETUP_MODE" == "plugin" ]]; then
-  # fn-121 plugin mode: no local copies exist to go stale - the version compare is
-  # moot. Check only the CLAUDE.md snippet contract (sentinel vs the plugin's
-  # expected v1; keep the literal in sync with SNIPPET_SCHEMA_VERSION in flowctl.py).
-  SNIP_ACK=$(jq -r '.snippet_ack // empty' .flow/meta.json 2>/dev/null)
-  SNIP_VER=$(grep -m1 -o 'flow-next:snippet:v[0-9]*' CLAUDE.md 2>/dev/null | grep -o '[0-9]*$')
-  if [[ "${SNIP_VER:-missing}" != "1" ]]; then
-    if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* || "${DISPATCH:-}" == "forked" \
-          || "$SNIP_ACK" == "1" ]]; then
-      echo "CLAUDE.md flow-next snippet contract v${SNIP_VER:-missing} != plugin v1. Refresh via /flow-next:setup or the interactive ask." >&2
-    else
-      echo "FLOW_SNIPPET_ASK ${SNIP_VER:-missing} 1"
-    fi
-  fi
-elif [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
-  if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-        || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
-        || "${DISPATCH:-}" == "forked" \
-        || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
-    echo "Local setup v${SETUP_VER} differs from plugin v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts." >&2
-  else
-    echo "FLOW_SETUP_ASK ${SETUP_VER} ${PLUGIN_VER}"
-  fi
-fi
-```
-
-If the block printed a `FLOW_SNIPPET_ASK` line (plugin mode only; suppressed to the stderr note under the autonomy markers above), before proceeding ask the user with AskUserQuestion (the CLAUDE.md flow-next snippet block is on an older contract than this plugin version; refresh the marker block?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: run `"${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl" setup-block apply --file CLAUDE.md --template "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" --json`; if it returns `action: ask`, re-run as `setup-block resolve` with the same `--file`/`--template` plus `--choice overwrite --json` - this question WAS the consent. Marker-bounded: content outside the block is never touched.
-- **Remind me next version**: record the acknowledgement so this contract version is not re-asked (fail-open: on any error, continue anyway):
-  ```bash
-  rm -f .flow/meta.json.tmp && jq '.snippet_ack = "1"' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user with AskUserQuestion (local setup differs from the plugin; refresh now?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: pause and have the user run `/flow-next:setup` in this session (do not run setup yourself), then continue once it finishes.
-- **Remind me next version**: record the acknowledgement so this version is not re-asked (only a later plugin version re-arms it), then continue. Run this self-contained write (fail-open: on any error, continue anyway):
-  ```bash
-  PJ="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-  PV=$(jq -r '.version' "$PJ" 2>/dev/null)
-  [[ -n "$PV" && "$PV" != "null" ]] && rm -f .flow/meta.json.tmp && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-Any other output (the one-line differs notice, or nothing) is non-blocking: continue.
-
-**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). The discovery ceremony (Phase 1) and genuine-conflict surfacing (body-merge / comments-sync) both require user choice in interactive mode. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.) This inline requirement covers the ceremonies and interactive conflict resolution only — a background `tracker-runner` dispatch (fn-89) legitimately runs this skill in a fork with `DISPATCH=forked`, which folds into the setup pre-check above and the Phase 0 RALPH gate (steps.md), so in a fork every would-be prompt resolves to queue (`sync defer`) and no interactive prompt is ever reachable there.
+**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). The discovery ceremony (Phase 1) and genuine-conflict surfacing (body-merge / comments-sync) both require user choice in interactive mode. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.) This inline requirement covers the ceremonies and interactive conflict resolution only — a background `tracker-runner` dispatch legitimately runs this skill in a fork with `DISPATCH=forked`, which folds into the Phase 0 RALPH gate (steps.md), so in a fork every would-be prompt resolves to queue (`sync defer`) and no interactive prompt is ever reachable there.
 
 ## flowctl owns plumbing; the skill owns judgment
 

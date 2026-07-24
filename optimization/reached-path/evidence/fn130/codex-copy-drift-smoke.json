@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-07-24T08:05:56Z",
+  "codex_version": "codex-cli 0.145.0",
+  "model": "gpt-5.6-terra",
+  "fixture": {
+    "setup_mode": "copy",
+    "setup_version": "0.0.1",
+    "plugin_version": "3.4.1",
+    "installed_manifest": "$HOME/.codex/plugin.json"
+  },
+  "invocation": "temporary HOME and CODEX_HOME; official install-codex.sh; codex exec; explicit $flow-next-plan; autonomous; review none",
+  "checks": {
+    "official_installer_used": true,
+    "installed_manifest_read": true,
+    "copy_mode_versions_compared": true,
+    "warning_emitted_before_planning": true,
+    "plan_completed": true,
+    "codex_exit_zero": true
+  },
+  "warning": "Local Flow-Next copy v0.0.1 differs from plugin v3.4.1. Continuing this autonomous planning run.",
+  "raw_jsonl_sha256": "b862eaa55ac33cbfa7b24ab1d76b9cdb4de3d34f10733118e293649d9627bfa1",
+  "plan_skill_sha256": "82d75989997fc7814df595e6ec08040678c3f4853dda217d16170ff735425d6b",
+  "plugin_manifest_sha256": "b99ce3f8b746acce8b9aecfda427a6c903befa902e006e3a1b4c3748b920b8bd",
+  "sanitization": {
+    "raw_jsonl_retained": false,
+    "temporary_home_trashed": true,
+    "live_user_install_modified": false
+  }
+}

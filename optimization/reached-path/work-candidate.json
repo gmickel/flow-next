@@ -1,0 +1,84 @@
+{
+  "cluster": "work",
+  "lineage": {
+    "baseline": "B1",
+    "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "candidate": "fn-130-reached-path-skill-prompt-optimization.8",
+    "rule": "structural candidate compares to hash-verified B1 only; never B0"
+  },
+  "input_check": {
+    "command": "python3 optimization/reached-path/run_eval.py --check-b1-input work",
+    "result": "OK: work inputs match B1 (4 files)"
+  },
+  "prompt_hashes": {
+    "plugins/flow-next/skills/flow-next-work/SKILL.md": "e85b0a2730467f1a556825577eb05f53c865daaf62db118b498b42630cd26bc8",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "97be04a4de617d9447190f77c362e9645e5c6c0d2c6a751c3abb4e83d06c0bab",
+    "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "80a8a31e025b6bacbb45023f33b2f1184a7ae06265364acc1598cb49fe1efb4f",
+    "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "26d5ff37bfb9805e8f5c90a62f66425f2e2fd78ae9ab1614b0e8b1a7a01c4955",
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "657e0f2a5a6dd1f25e28317c0df61d836c2d78abe63e53ab5d94fe5b93d678ac"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "default_path": {
+      "baseline_reached_path_chars": 54358,
+      "candidate_reached_path_chars": 50628,
+      "reduction_chars": 3730,
+      "reduction_percent": 6.86
+    },
+    "delegation_active_path": {
+      "baseline_reached_path_chars": 100851,
+      "candidate_reached_path_chars": 100424,
+      "reduction_chars": 427,
+      "reduction_percent": 0.42
+    }
+  },
+  "trace_arms": {
+    "baseline": "optimization/reached-path/fixtures/b1/work/*.json",
+    "candidate": "route_traces below",
+    "observable_behavior_delta": []
+  },
+  "route_traces": [
+    {"id": "serial", "delegation_reference": false, "tracker_reference": false},
+    {"id": "parallel-eligible", "delegation_reference": false, "tracker_reference": false},
+    {"id": "shared-file-conflict", "delegation_reference": false, "tracker_reference": false},
+    {"id": "worker-failure", "delegation_reference": false, "tracker_reference": false},
+    {"id": "host-deferred-handover", "delegation_reference": false, "tracker_reference": false},
+    {"id": "delegation-off", "delegation_reference": false, "tracker_reference": false},
+    {"id": "delegation-declined", "delegation_reference": false, "tracker_reference": false},
+    {"id": "delegation-cli-unavailable", "delegation_reference": false, "tracker_reference": false},
+    {"id": "delegation-on-consented", "delegation_reference": true, "tracker_reference": false},
+    {"id": "delegation-implementation-failure", "delegation_reference": true, "tracker_reference": false},
+    {"id": "delegation-circuit-breaker", "delegation_reference": true, "tracker_reference": false},
+    {"id": "tracker-inactive", "delegation_reference": false, "tracker_reference": false},
+    {"id": "tracker-active", "delegation_reference": false, "tracker_reference": true},
+    {"id": "tracker-probe-error", "delegation_reference": false, "tracker_reference": true},
+    {"id": "review-pass", "delegation_reference": false, "tracker_reference": false},
+    {"id": "review-fail", "delegation_reference": false, "tracker_reference": false},
+    {"id": "plan-sync-no-op", "delegation_reference": false, "tracker_reference": false},
+    {"id": "plan-sync-update", "delegation_reference": false, "tracker_reference": false},
+    {"id": "autonomous-consent-missing", "delegation_reference": false, "tracker_reference": false},
+    {"id": "autonomous-consent-granted", "delegation_reference": true, "tracker_reference": false}
+  ],
+  "oracles": {
+    "common_wave_lifecycle_preserved": true,
+    "host_git_ownership_preserved": true,
+    "host_deferred_handover_preserved": true,
+    "tracker_fail_open_sentinels_preserved": true,
+    "review_before_done_preserved": true,
+    "plan_sync_after_resolved_wave_preserved": true,
+    "path_handoff_preserved": true,
+    "composed_brief_absent": true,
+    "deterministic_plan_sync_skip_gate_absent": true
+  },
+  "ratchet": {
+    "verdict": "keep",
+    "reason": "All frozen Work contracts remain covered; the default and active reached paths shrink, while requested-but-declined paths load only the exact selection contract.",
+    "discarded_mutations": [
+      "Rejected a circular summary-first consent router; selection now loads an exact, dedicated contract before active-only machinery."
+    ]
+  },
+  "manual_gates": [
+    "Codex mirror regeneration and mirror route assertions deferred to the parallel-wave conductor.",
+    "Live Claude/Cursor/Droid/Grok host traces remain closure-task gates."
+  ]
+}

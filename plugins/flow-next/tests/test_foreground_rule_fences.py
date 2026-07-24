@@ -34,10 +34,10 @@ CANONICAL_FILES = [
     "skills/flow-next-impl-review/workflow-copilot.md",
     "skills/flow-next-impl-review/workflow-cursor.md",
     "skills/flow-next-impl-review/workflow-common.md",
-    # plan-review/SKILL.md intentionally absent: fn-110.2 single-sourced the
-    # per-backend execution blocks into plan-review/workflow.md; SKILL.md keeps
-    # the prose Foreground-rule bullet but no review-invoking fences.
-    "skills/flow-next-plan-review/workflow.md",
+    # plan-review root/common contain no review dispatch; selected workflows do.
+    "skills/flow-next-plan-review/workflow-codex.md",
+    "skills/flow-next-plan-review/workflow-copilot.md",
+    "skills/flow-next-plan-review/workflow-cursor.md",
     "skills/flow-next-spec-completion-review/workflow-codex.md",
     "skills/flow-next-spec-completion-review/workflow-copilot.md",
     "skills/flow-next-spec-completion-review/workflow-cursor.md",
@@ -88,6 +88,7 @@ class ForegroundRuleFenceTestCase(unittest.TestCase):
     def test_rp_workflow_untouched(self):
         for rel in [
             "skills/flow-next-impl-review/workflow-rp.md",
+            "skills/flow-next-plan-review/workflow-rp.md",
             "skills/flow-next-spec-completion-review/workflow-rp.md",
         ]:
             path = PLUGIN / rel

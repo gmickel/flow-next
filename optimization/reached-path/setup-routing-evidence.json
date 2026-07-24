@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "task_id": "fn-130-reached-path-skill-prompt-optimization.3",
+  "candidate": "setup-one-level-direct-reference-router",
+  "baseline": {
+    "name": "V1/B1",
+    "index_sha256": "d7cddc89b0ce53f7ce2859c82313053145296af4262d8e86c76c6b81f3c6ac27",
+    "input_check": "python3 optimization/reached-path/run_eval.py --check-b1-input setup",
+    "input_check_result": "OK: setup inputs match B1 (6 files)",
+    "reached_path_chars": 103688
+  },
+  "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+  "candidate_files": [
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/SKILL.md",
+      "chars_lf": 1282,
+      "content_hash": "7d63e9294b4513eb3e5d73b765a9781343d842d0f99e92bb42fd458156493bcd"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
+      "chars_lf": 68309,
+      "content_hash": "11d8de0cbde3784283a041a07a119690b85c8ac7c4627fdb79403c7f3ba72e64"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/model-pins.md",
+      "chars_lf": 5229,
+      "content_hash": "f8374fd3ffee32e7a0947d9b8d9645fe82bf4c120fb25b8791cec202d80fcd23"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-bridge.md",
+      "chars_lf": 3974,
+      "content_hash": "f55cbe68992b00b77cbd0b753f0732334d7f239348ee604b1d2134a9950f13f5"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-cursor.md",
+      "chars_lf": 3458,
+      "content_hash": "2596d3008173b19cc4ae6436969c605a6f2cea9c33dd24429f637997522b2fb5"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-grok.md",
+      "chars_lf": 3725,
+      "content_hash": "140a85b2e1a56029aabb2d97d6e56360b9d7fbe41ff8738389fef40eaf608944"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-question-bridge.md",
+      "chars_lf": 1289,
+      "content_hash": "39ffd39f621ccb8f487b353088ef1e4b6070e92dde32fefdc461daa2dda932e1"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-question-cursor.md",
+      "chars_lf": 1175,
+      "content_hash": "facb5ac06207380c133947bab874c45e0e3aee6b986a8fe1525cf448533d847e"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-question-grok.md",
+      "chars_lf": 1258,
+      "content_hash": "f8e4b4435d24c8b0995da4c8151dd6836fc17908fad41508bbe7dffe3845ff53"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/ralph-disable.md",
+      "chars_lf": 864,
+      "content_hash": "89d81c3413f69df8b08d92244e2868e5b6c8928def49daa34215ba9ce3ef9546"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/ralph-enable.md",
+      "chars_lf": 611,
+      "content_hash": "21193e7631418481af598fa6ac705a9de18e787ec5b33937f0eaf9bbaf989e5f"
+    },
+    {
+      "path": "plugins/flow-next/skills/flow-next-setup/references/ralph-question.md",
+      "chars_lf": 1438,
+      "content_hash": "1ac1657979d2e24833ea5aec0099bf462f61b9ea4fadc2af0bf3581e73d840b7"
+    }
+  ],
+  "fixture_results": [
+    {"fixture_id": "setup.autonomous", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
+    {"fixture_id": "setup.copy-first-install", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
+    {"fixture_id": "setup.copy-refresh", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
+    {"fixture_id": "setup.customized-snippet-keep", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
+    {"fixture_id": "setup.customized-snippet-overwrite", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
+    {"fixture_id": "setup.host-claude", "reads": ["model-routing-question-bridge.md", "model-routing-bridge.md"], "candidate_chars": 74854, "reduction_chars": 28834, "reduction_percent": 27.81},
+    {"fixture_id": "setup.host-codex", "reads": ["model-routing-question-bridge.md", "model-routing-bridge.md"], "candidate_chars": 74854, "reduction_chars": 28834, "reduction_percent": 27.81},
+    {"fixture_id": "setup.host-cursor", "reads": ["model-routing-question-cursor.md", "model-routing-cursor.md"], "candidate_chars": 74224, "reduction_chars": 29464, "reduction_percent": 28.42},
+    {"fixture_id": "setup.host-droid", "reads": ["model-routing-question-bridge.md", "model-routing-bridge.md"], "candidate_chars": 74854, "reduction_chars": 28834, "reduction_percent": 27.81},
+    {"fixture_id": "setup.host-grok", "reads": ["model-routing-question-grok.md", "model-routing-grok.md"], "candidate_chars": 74574, "reduction_chars": 29114, "reduction_percent": 28.08},
+    {"fixture_id": "setup.malformed-metadata", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
+    {"fixture_id": "setup.model-routing-accepted", "reads": ["model-routing-question-bridge.md", "model-routing-bridge.md"], "candidate_chars": 74854, "reduction_chars": 28834, "reduction_percent": 27.81},
+    {"fixture_id": "setup.model-routing-skipped", "reads": ["model-routing-question-bridge.md"], "candidate_chars": 70880, "reduction_chars": 32808, "reduction_percent": 31.64},
+    {"fixture_id": "setup.plugin-mode", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
+    {"fixture_id": "setup.ralph-available", "reads": ["ralph-question.md", "ralph-enable.md"], "candidate_chars": 71640, "reduction_chars": 32048, "reduction_percent": 30.91},
+    {"fixture_id": "setup.ralph-unsupported", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88}
+  ],
+  "supplementary_branch_results": [
+    {"branch": "model-pin-write-or-stamp", "reads": ["model-pins.md"], "candidate_chars": 74820, "reduction_chars": 28868, "reduction_percent": 27.84},
+    {"branch": "model-pin-autonomous-skip", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
+    {"branch": "ralph-disable", "reads": ["ralph-question.md", "ralph-disable.md"], "candidate_chars": 71893, "reduction_chars": 31795, "reduction_percent": 30.66}
+  ],
+  "trace_boundary": "Deterministic candidate read sets derived from the explicit router gates; B1 manifests are the pre-mutation trace baseline. No backend telemetry is claimed.",
+  "ratchet": {
+    "decision": "keep",
+    "minimum_fixture_reduction_chars": 28834,
+    "minimum_fixture_reduction_percent": 27.81,
+    "zero_loss_proof": [
+      "existing Setup/model-routing/template contract suites",
+      "new direct-reference route-read assertions",
+      "B1 input and manifest validation"
+    ]
+  }
+}

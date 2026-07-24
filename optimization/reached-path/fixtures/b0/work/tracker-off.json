@@ -1,0 +1,99 @@
+{
+  "activation": {
+    "args": [],
+    "form": "slash",
+    "skill": "flow-next-work"
+  },
+  "baseline": "B0",
+  "baseline_commit": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+  "branch_inputs": {
+    "tracker": false
+  },
+  "cluster": "work",
+  "fixture_hash": "8a37b36961be5aaa2206ec182f32382f0471c791925789d2ebeefe9975ae6dcb",
+  "fixture_id": "work.tracker-off",
+  "forbidden_reads": [
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md"
+  ],
+  "host": "claude",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": null,
+    "candidate": null,
+    "rule": "immutable B0; task 130.2 freezes V1/B1; later tasks compare to B1 only"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "reached_path_chars": 58831,
+    "reached_path_chars_div_4": 14707.75,
+    "reached_path_files": [
+      {
+        "chars_lf": 16983,
+        "content_hash": "b4b95c7359a19e384541b80ed6cd92c92f4a35d0fb14d255eb186536a07a2a53",
+        "path": "plugins/flow-next/skills/flow-next-work/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 41848,
+        "content_hash": "a15139a27796b7712c644229b195e52a21fc7740f303f6d55d59651a660da0e5",
+        "path": "plugins/flow-next/skills/flow-next-work/phases.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "mirror_skill": null,
+  "mutation_targets": {},
+  "notes": "Delegation-only + tracker-touchpoints stay cold when inactive (already gated; B0 proves).",
+  "oracles": {
+    "output": [],
+    "receipts": [],
+    "tools": [],
+    "writes": []
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "prompt_files": [
+    "plugins/flow-next/skills/flow-next-work/SKILL.md",
+    "plugins/flow-next/skills/flow-next-work/phases.md",
+    "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md",
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md"
+  ],
+  "prompt_hashes": {
+    "plugins/flow-next/skills/flow-next-work/SKILL.md": "b4b95c7359a19e384541b80ed6cd92c92f4a35d0fb14d255eb186536a07a2a53",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "a15139a27796b7712c644229b195e52a21fc7740f303f6d55d59651a660da0e5",
+    "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "d23d4bd6c91a0db30b2c59dff792b29435e6c8e687517ec11ec4d64b4b5d2a5f",
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "657e0f2a5a6dd1f25e28317c0df61d836c2d78abe63e53ab5d94fe5b93d678ac"
+  },
+  "provenance": {
+    "capture_kind": "deterministic_freeze",
+    "capture_reason": "route_manifest_inventory_hash_only; not a backend execution (model/cli_version intentionally null)",
+    "cli_version": null,
+    "date_utc": "2026-07-23",
+    "fixture_hash": "8a37b36961be5aaa2206ec182f32382f0471c791925789d2ebeefe9975ae6dcb",
+    "host": "claude",
+    "model": null
+  },
+  "ratchet": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "subjective_majority_n": [
+      3,
+      5
+    ],
+    "verdict": "baseline"
+  },
+  "required_reads": [
+    "plugins/flow-next/skills/flow-next-work/SKILL.md",
+    "plugins/flow-next/skills/flow-next-work/phases.md"
+  ],
+  "resume": {
+    "borderline": false,
+    "parent": null,
+    "sealed_holdout": false,
+    "subjective": false
+  }
+}

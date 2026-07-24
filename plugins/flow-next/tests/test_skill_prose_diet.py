@@ -13,10 +13,10 @@ Pins the round-trip diet so future edits cannot silently regress it:
     (and references/qa-stage.md) carry ZERO flowctl config calls (R5).
   * make-pr workflow Phase 0: exactly THREE bash fences (R6).
   * impl-review SKILL.md: exactly ONE `for arg in $ARGUMENTS` fence (R6).
-  * plan-review: per-backend execution blocks single-sourced in workflow.md
-    (SKILL.md has zero backend plan-review invocations); the Foreground rule
-    and the fn-90 deterministic-cap sentence are byte-exact; no agent-side
-    iteration counting is (re)introduced (R6).
+  * plan-review: common orchestration + exactly one selected backend workflow;
+    none/export stay backend-cold; the Foreground rule and the fn-90
+    deterministic-cap sentence are byte-exact; no agent-side iteration
+    counting is (re)introduced (R6).
 
 All assertions run against the canonical files AND (where the invariant is
 count-shaped and survives the sync rewrite) the codex mirror copies.
@@ -46,17 +46,16 @@ FOREGROUND_RULE_BULLET = (
     "context)"
 )
 CAP_SENTENCE = (
-    "**The cap is now ALSO enforced deterministically by flowctl (fn-90 R5): "
-    "each `flowctl <backend> plan-review` dispatch increments a cumulative "
-    "spec-scoped counter (`plan_review_rounds`) and REFUSES at "
-    "`${MAX_REVIEW_ITERATIONS:-4}` with an `ESCALATE:` marker + exit 4 — "
-    "the flowctl counter survives across fresh `/flow-next:plan-review` "
-    "invocations, so a caller-side \"re-invoke until SHIP\" outer loop can no "
-    "longer reset the cap by re-entering. This loop is INTERNAL — the "
-    "caller (e.g. `/flow-next:plan`, pilot) invokes plan-review ONCE and acts "
-    "on the terminal verdict; the flowctl counter resets ONLY on a SHIP "
-    "verdict or an explicit re-plan (`flowctl spec reset-review-rounds "
-    "<spec-id>`), never on a fresh invocation or a spec edit.**"
+    "**The cap is enforced deterministically by flowctl:** every dispatch "
+    "reserves a\nspec-scoped round before launch. SHIP / NEEDS_WORK / "
+    "MAJOR_RETHINK consume it;\na no-verdict transport failure is durably "
+    "recorded and refunded. At\n`${MAX_REVIEW_ITERATIONS:-4}` verdict rounds, "
+    "flowctl refuses with `ESCALATE:`\nand exit 4. More than "
+    "`${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive\nno-verdict failures "
+    "stop separately with `TRANSPORT_UNHEALTHY` + exit 5.\nCallers invoke "
+    "plan-review once and act on its terminal result. The verdict\ncounter "
+    "resets only on SHIP or an explicit re-plan, never on an edit, fresh\n"
+    "invocation, or transport failure.**"
 )
 
 
@@ -151,6 +150,65 @@ class PlanDietTestCase(unittest.TestCase):
             (before - after) * 100, 40 * before,
             f"plan fixture reduction below 40% ({before} -> {after})",
         )
+
+    def test_plan_optional_routes_load_one_level_references_after_gates(self):
+        steps = read(SKILLS / "flow-next-plan/steps.md")
+        cases = (
+            ("## Step 6.5", "## Step 7", "tracker.perEvent.plan",
+             "references/tracker-projection.md"),
+            ("## Step 7", "## Step 8", "review mode is `none`",
+             "references/selected-review.md"),
+            ("## Step 8.5", None, "artifacts.html.enabled",
+             "references/html-render-lens.md"),
+        )
+        for start, end, gate, reference in cases:
+            body = section(steps, start, end) if end else steps[steps.index(start):]
+            self.assertIn(gate, body)
+            self.assertIn(reference, body)
+            self.assertLess(body.index(gate), body.index(reference),
+                            f"{reference}: reference must follow its route gate")
+            root = SKILLS / "flow-next-plan"
+            path = root / reference
+            self.assertTrue(path.is_file(), f"missing routed reference: {path}")
+            # References remain exactly one directory level under the skill root.
+            self.assertEqual(len(path.relative_to(root).parts), 2)
+
+    def test_plan_optional_details_are_cold_in_steps(self):
+        steps = read(SKILLS / "flow-next-plan/steps.md")
+        for detail in (
+            "Never create one tracker issue per task",
+            "lavish-axi \"$(pwd)/.flow/artifacts",
+            "Repeat until review returns `Ship`",
+        ):
+            self.assertNotIn(detail, steps)
+        for rel, detail in (
+            ("references/tracker-projection.md", "Never create one tracker issue per task"),
+            ("references/html-render-lens.md", "lavish-axi \"$(pwd)/.flow/artifacts"),
+            ("references/selected-review.md", "Repeat until review returns `Ship`"),
+        ):
+            self.assertIn(detail, read(SKILLS / "flow-next-plan" / rel))
+
+    def test_plan_bad_examples_are_short_anti_pattern_anchors(self):
+        examples = read(SKILLS / "flow-next-plan/examples.md")
+        epic_bad = section(examples, "### ❌ BAD: Epic", "### ✅ GOOD: Epic")
+        task_bad = section(examples, "### ❌ BAD: Task", "### ✅ GOOD: Task")
+        for name, bad in (("epic", epic_bad), ("task", task_bad)):
+            code_lines = [
+                line for line in bad.splitlines()
+                if line and not line.startswith(("###", "```", "\\`\\`\\`", "**", "- "))
+            ]
+            self.assertLessEqual(len(code_lines), 12,
+                                 f"{name} BAD anchor regrew into an implementation dump")
+        self.assertNotIn("Bun.spawn", task_bad)
+        self.assertNotIn("process.kill", task_bad)
+
+    def test_plan_holdout_keeps_subject_and_answer_key_separate(self):
+        holdout = REPO / "optimization" / "plan" / "holdout"
+        subject = read(holdout / "input.md")
+        oracle = read(holdout / "oracle.md")
+        self.assertIn("no-code permit-intake architecture", subject)
+        self.assertIn("H10 — review route", oracle)
+        self.assertNotIn("H1 — no implementation leakage", subject)
 
 
 class PilotSnapshotTestCase(unittest.TestCase):
@@ -247,17 +305,44 @@ class ImplReviewArgFenceTestCase(unittest.TestCase):
 
 class PlanReviewSingleSourceTestCase(unittest.TestCase):
     INVOKE = re.compile(r"^\$FLOWCTL (codex|copilot|cursor) plan-review", re.M)
+    BACKENDS = ("codex", "copilot", "cursor", "host", "rp")
 
-    def test_backend_blocks_live_only_in_workflow_md(self):
-        for skill_md in both_copies("flow-next-plan-review/SKILL.md"):
+    def test_backend_blocks_live_only_in_selected_workflows(self):
+        skill_dir = SKILLS / "flow-next-plan-review"
+        self.assertEqual(self.INVOKE.findall(read(skill_dir / "SKILL.md")), [])
+        self.assertEqual(self.INVOKE.findall(read(skill_dir / "workflow.md")), [])
+        for backend in ("codex", "copilot", "cursor"):
+            path = skill_dir / f"workflow-{backend}.md"
             self.assertEqual(
-                len(self.INVOKE.findall(read(skill_md))), 0,
-                f"{skill_md}: backend execution blocks must be single-sourced in workflow.md",
+                self.INVOKE.findall(read(path)),
+                [backend],
+                f"{path}: must contain exactly its selected backend dispatch",
             )
-        for workflow_md in both_copies("flow-next-plan-review/workflow.md"):
-            backends = set(self.INVOKE.findall(read(workflow_md)))
-            self.assertEqual(backends, {"codex", "copilot", "cursor"},
-                             f"{workflow_md}: canonical backend blocks incomplete")
+
+    def test_router_lists_every_backend_once_and_keeps_none_export_cold(self):
+        skill = read(SKILLS / "flow-next-plan-review/SKILL.md")
+        for backend in self.BACKENDS:
+            link = f"[workflow-{backend}.md](workflow-{backend}.md)"
+            self.assertEqual(skill.count(link), 1, f"router drift for {backend}")
+        self.assertIn("`BACKEND=none` and explicit\n`--review=export`", skill)
+        common = read(SKILLS / "flow-next-plan-review/workflow.md")
+        self.assertIn("Load no backend file", common)
+        self.assertIn("Do not resolve or load any configured\nbackend", common)
+
+    def test_codex_mirror_is_b1_or_regenerated_split(self):
+        """Parallel workers defer mirror regen; integrated tree must be split."""
+        mirror = MIRROR_SKILLS / "flow-next-plan-review"
+        if (mirror / "workflow-codex.md").exists():
+            for backend in self.BACKENDS:
+                self.assertTrue((mirror / f"workflow-{backend}.md").is_file())
+            self.assertEqual(self.INVOKE.findall(read(mirror / "workflow.md")), [])
+        else:
+            # The conductor owns the combined sync. Before that sync, the
+            # isolated worker must leave the known B1 monolith untouched.
+            self.assertEqual(
+                set(self.INVOKE.findall(read(mirror / "workflow.md"))),
+                {"codex", "copilot", "cursor"},
+            )
 
     def test_protected_prose_byte_exact(self):
         text = read(SKILLS / "flow-next-plan-review/SKILL.md")
@@ -266,25 +351,17 @@ class PlanReviewSingleSourceTestCase(unittest.TestCase):
         self.assertIn(CAP_SENTENCE, text,
                       "fn-90 deterministic-cap sentence drifted (must stay byte-exact)")
 
-    def test_status_fences_redeclare_spec_id(self):
-        # Vars die across tool calls: every set-plan-review-status fence must
-        # re-declare SPEC_ID or the mutation targets an empty id.
-        for path in both_copies("flow-next-plan-review/workflow.md"):
+    def test_subprocess_fences_redeclare_spec_id(self):
+        for backend in ("codex", "copilot", "cursor"):
+            path = SKILLS / "flow-next-plan-review" / f"workflow-{backend}.md"
             text = read(path)
-            status_calls = text.count('set-plan-review-status "$SPEC_ID" --status ship')
-            self.assertEqual(status_calls, 3, f"{path}: expected one status fence per backend")
-            # Substring tolerant of the sync rewrite (spacing + "tool calls" →
-            # "prompt turns" in the codex mirror).
-            redeclares = len(re.findall(
-                r'SPEC_ID="\$\{1:-\}"\s+# re-declare in THIS fence too', text))
-            self.assertEqual(redeclares, 3,
-                             f"{path}: every status fence must re-declare SPEC_ID")
+            self.assertIn('SPEC_ID="${1:-}"', text)
+            self.assertIn(f"$FLOWCTL {backend} plan-review", text)
 
     def test_no_agent_side_iteration_counting(self):
-        for rel in ("flow-next-plan-review/SKILL.md", "flow-next-plan-review/workflow.md"):
-            for path in both_copies(rel):
-                self.assertNotIn("iteration counter in agent context", read(path),
-                                 f"{path}: agent-side review counting reintroduced (fn-90)")
+        for path in (SKILLS / "flow-next-plan-review").glob("*.md"):
+            self.assertNotIn("iteration counter in agent context", read(path),
+                             f"{path}: agent-side review counting reintroduced (fn-90)")
 
 
 if __name__ == "__main__":

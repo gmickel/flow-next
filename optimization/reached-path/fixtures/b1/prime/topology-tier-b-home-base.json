@@ -1,0 +1,108 @@
+{
+  "activation": {
+    "args": [],
+    "form": "slash",
+    "skill": "flow-next-prime"
+  },
+  "baseline": "B1",
+  "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+  "branch_inputs": {
+    "topology_fixture": "tier-b-home-base"
+  },
+  "cluster": "prime",
+  "fixture_hash": "e3e7c898fd39bf3158172fa1c10a151c92c43aee0d9a0fcff52f2a3381dcb034",
+  "fixture_id": "prime.topology-tier-b-home-base",
+  "forbidden_reads": [],
+  "host": "claude",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "candidate": null,
+    "rule": "structural candidates compare to hash-verified B1 only"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "reached_path_chars": 96190,
+    "reached_path_chars_div_4": 24047.5,
+    "reached_path_files": [
+      {
+        "chars_lf": 12794,
+        "content_hash": "e4b6e8f1fa4d0a3889f367051f0499b72ef03a8b1edaea6d8691cb8e53fdc54a",
+        "path": "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 62161,
+        "content_hash": "7ebedcdac3d003bdbcf27c1e9014063ae83fd6561d4861a0c6b6c0dc0af3c377",
+        "path": "plugins/flow-next/skills/flow-next-prime/workflow.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 21235,
+        "content_hash": "df3fa766e9a1cc87ff1fc789f2a3720bdfc615846caec7aa5bb653adeaec5c4f",
+        "path": "plugins/flow-next/skills/flow-next-prime/classification.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "mirror_skill": null,
+  "mutation_targets": {},
+  "notes": "Maps to optimization/prime/fixtures/tier-b-home-base.json judgment cell.",
+  "oracles": {
+    "output": [],
+    "receipts": [],
+    "tools": [],
+    "writes": []
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "prompt_files": [
+    "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+    "plugins/flow-next/skills/flow-next-prime/workflow.md",
+    "plugins/flow-next/skills/flow-next-prime/classification.md",
+    "plugins/flow-next/skills/flow-next-prime/pillars.md",
+    "plugins/flow-next/skills/flow-next-prime/playbooks.md",
+    "plugins/flow-next/skills/flow-next-prime/stacks.md"
+  ],
+  "prompt_hashes": {
+    "plugins/flow-next/skills/flow-next-prime/SKILL.md": "e4b6e8f1fa4d0a3889f367051f0499b72ef03a8b1edaea6d8691cb8e53fdc54a",
+    "plugins/flow-next/skills/flow-next-prime/classification.md": "df3fa766e9a1cc87ff1fc789f2a3720bdfc615846caec7aa5bb653adeaec5c4f",
+    "plugins/flow-next/skills/flow-next-prime/pillars.md": "5967fddabf54d9d3629312a8dd2636266f32f02bbd366d12182995523cb8f013",
+    "plugins/flow-next/skills/flow-next-prime/playbooks.md": "7084a4e75d1fc5639caa7a53b81629ea2871764fb335c7903ddb0e284e18a0e9",
+    "plugins/flow-next/skills/flow-next-prime/stacks.md": "d77518119670b76156f0118a71690aecd518113c3ac6b6bd6ecb1e015d927a6c",
+    "plugins/flow-next/skills/flow-next-prime/workflow.md": "7ebedcdac3d003bdbcf27c1e9014063ae83fd6561d4861a0c6b6c0dc0af3c377"
+  },
+  "provenance": {
+    "capture_kind": "deterministic_freeze",
+    "capture_reason": "route_manifest_inventory_hash_only; not a backend execution (model/cli_version intentionally null)",
+    "cli_version": null,
+    "date_utc": "2026-07-23",
+    "fixture_hash": "e3e7c898fd39bf3158172fa1c10a151c92c43aee0d9a0fcff52f2a3381dcb034",
+    "host": "claude",
+    "model": null
+  },
+  "ratchet": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "subjective_majority_n": [
+      3,
+      5
+    ],
+    "verdict": "baseline"
+  },
+  "required_reads": [
+    "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+    "plugins/flow-next/skills/flow-next-prime/workflow.md",
+    "plugins/flow-next/skills/flow-next-prime/classification.md"
+  ],
+  "resume": {
+    "borderline": false,
+    "parent": null,
+    "sealed_holdout": false,
+    "subjective": false
+  }
+}

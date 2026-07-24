@@ -42,61 +42,6 @@ Interpret any argument as an optional focus: a section name to revisit (`metrics
 4. **Durable across runs.** This skill is rerunnable. On a second run it updates in place, preserves what is working, and only challenges sections that look stale or weak.
 5. **Survives `.flow/` wipe.** `STRATEGY.md` lives at repo root, never under `.flow/`. The project's strategy belongs to the project, not flow-next (R18 invariant from the 0.39.0 glossary epic).
 
-## Pre-check: Local setup version
-
-Compare `.flow/meta.json` `setup_version` to the plugin version; on mismatch, escalate once per plugin version. Fail-open throughout: a missing `jq`, `.flow/meta.json`, or plugin manifest silently continues.
-
-```bash
-SETUP_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
-SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
-PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
-if [[ "$SETUP_MODE" == "plugin" ]]; then
-  # fn-121 plugin mode: no local copies exist to go stale - the version compare is
-  # moot. Check only the CLAUDE.md snippet contract (sentinel vs the plugin's
-  # expected v1; keep the literal in sync with SNIPPET_SCHEMA_VERSION in flowctl.py).
-  SNIP_ACK=$(jq -r '.snippet_ack // empty' .flow/meta.json 2>/dev/null)
-  SNIP_VER=$(grep -m1 -o 'flow-next:snippet:v[0-9]*' CLAUDE.md 2>/dev/null | grep -o '[0-9]*$')
-  if [[ "${SNIP_VER:-missing}" != "1" ]]; then
-    if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
-          || "$SNIP_ACK" == "1" ]]; then
-      echo "CLAUDE.md flow-next snippet contract v${SNIP_VER:-missing} != plugin v1. Refresh via /flow-next:setup or the interactive ask." >&2
-    else
-      echo "FLOW_SNIPPET_ASK ${SNIP_VER:-missing} 1"
-    fi
-  fi
-elif [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
-  if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-        || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
-        || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
-    echo "Local setup v${SETUP_VER} differs from plugin v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts." >&2
-  else
-    echo "FLOW_SETUP_ASK ${SETUP_VER} ${PLUGIN_VER}"
-  fi
-fi
-```
-
-If the block printed a `FLOW_SNIPPET_ASK` line (plugin mode only; suppressed to the stderr note under the autonomy markers above), before proceeding ask the user with AskUserQuestion (the CLAUDE.md flow-next snippet block is on an older contract than this plugin version; refresh the marker block?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: run `"${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl" setup-block apply --file CLAUDE.md --template "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" --json`; if it returns `action: ask`, re-run as `setup-block resolve` with the same `--file`/`--template` plus `--choice overwrite --json` - this question WAS the consent. Marker-bounded: content outside the block is never touched.
-- **Remind me next version**: record the acknowledgement so this contract version is not re-asked (fail-open: on any error, continue anyway):
-  ```bash
-  rm -f .flow/meta.json.tmp && jq '.snippet_ack = "1"' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user with AskUserQuestion (local setup differs from the plugin; refresh now?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: pause and have the user run `/flow-next:setup` in this session (do not run setup yourself), then continue once it finishes.
-- **Remind me next version**: record the acknowledgement so this version is not re-asked (only a later plugin version re-arms it), then continue. Run this self-contained write (fail-open: on any error, continue anyway):
-  ```bash
-  PJ="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-  PV=$(jq -r '.version' "$PJ" 2>/dev/null)
-  [[ -n "$PV" && "$PV" != "null" ]] && rm -f .flow/meta.json.tmp && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-Any other output (the one-line differs notice, or nothing) is non-blocking: continue.
-
 ## Execution Flow
 
 ### Phase 0: Route by file state
@@ -117,7 +62,32 @@ No env-var opt-in. Ralph never decides direction.
 **0.2 — Read file state**
 
 ```bash
-STATUS_JSON=$("$FLOWCTL" strategy status --json)
+STATUS_JSON=$("$FLOWCTL" strategy status --json 2>/dev/null) || STATUS_JSON=
+if ! printf '%s' "$STATUS_JSON" | jq -e '
+  type == "object"
+  and (.exists | type == "boolean")
+  and (.husk | type == "boolean")
+  and (.sections_filled as $n
+    | ($n | type) == "number"
+    and ($n | floor) == $n
+    and $n >= 0
+    and $n <= 7)
+  and (.total_sections as $n
+    | ($n | type) == "number"
+    and ($n | floor) == $n
+    and $n >= 5
+    and $n <= 7)
+  and (.sections_filled <= .total_sections)
+  and (.last_updated == null or (.last_updated | type == "string"))
+  and (.file_path == null or (.file_path | type == "string"))
+  and (.generator == null or (.generator | type == "string"))
+  and (.generator_match | type == "boolean")
+  and (.husk == ((.exists == true) and (.sections_filled == 0)))
+  and (.generator_match == (.generator == "flow-next-strategy"))
+' >/dev/null 2>&1; then
+  echo "[STRATEGY: unable to classify STRATEGY.md safely — leaving it unchanged]" >&2
+  exit 0
+fi
 EXISTS=$(printf '%s' "$STATUS_JSON" | jq -r '.exists')
 HUSK=$(printf '%s' "$STATUS_JSON" | jq -r '.husk')
 SECTIONS_FILLED=$(printf '%s' "$STATUS_JSON" | jq -r '.sections_filled')
@@ -129,8 +99,8 @@ JSON fields (frozen by Task 1):
 
 - `exists` (bool) — file present
 - `husk` (bool) — `exists: true` AND `sections_filled == 0`
-- `sections_filled` (int) — populated required-section count (0-5)
-- `total_sections` (int) — always 5 (the 5 required)
+- `sections_filled` (int) — populated required + included optional-section count (0-7)
+- `total_sections` (int) — 5 required + populated optional sections (5-7)
 - `last_updated` (str|null) — ISO date from frontmatter
 - `file_path` (str|null) — absolute path of resolved STRATEGY.md
 - `generator` (str|null) — frontmatter `generator` value
@@ -170,117 +140,16 @@ After Ralph block, walk-up surfacing, and foreign-file resolution:
 | `exists: true` AND `husk: true` AND `generator_match: true` | Phase 1 (first-run; husk was probably an aborted run) |
 | `exists: true` AND `husk: false` AND `generator_match: true` | Phase 2 (section-revisit update) |
 
-Announce path in one line: `Strategy doc not found — let's write it.` or `Found existing strategy — let's review and update.`
+Announce the selected path, then load exactly one direct workflow reference:
 
-### Phase 1: First-run interview
+- First-run: say `Strategy doc not found — let's write it.`, then read and follow `references/first-run.md`.
+- Update: say `Found existing strategy — let's review and update.`, then read and follow `references/update.md`.
 
-**1.1 — Load interview rules (non-optional)**
-
-```text
-Read `references/interview.md`.
-```
-
-This load is non-optional. The pushback rules, anti-pattern examples, and quality bar for each section live there. Improvising from memory produces a passive transcription instead of a strategy doc.
-
-**1.2 — Run the interview in section order**
-
-For each of the 5 required sections (in order: `Target problem` → `Our approach` → `Who it's for` → `Key metrics` → `Tracks`), follow the per-section rule in `references/interview.md`:
-
-- Ask the **opening question** verbatim from the references file.
-- Evaluate the answer against the **strong-answer signature**.
-- If the answer falls into a named anti-pattern, push back with the **sharper follow-up** — quoting the user's words back at them, NOT paraphrasing. Anti-pattern label names (`vanity`, `fluff`, `feature-list`, etc.) are internal-only — never appear in question bodies.
-- **2 rounds maximum.** After round 2, capture the user's words verbatim and append the HTML comment `<!-- worth revisiting -->` to the section body. Do not let the interview spiral.
-- Use **free-form responses** — no menu options, no recommendation in the question body.
-
-**1.3 — Per-section atomic writes**
-
-After each section is captured, build the partial draft and write to `STRATEGY.md` via `Write` tool **before the next question fires**. `last_updated` bumps on every save. No draft state file. Mid-flow abandonment leaves a partially-populated file readable on disk; resume is via Phase 0 → Phase 2 routing.
-
-The partial-draft shape: frontmatter + H1 + the captured section(s) + placeholder bodies (`_Not yet captured._`) for unfilled required sections. Optional sections are absent until Phase 1.4.
-
-**1.4 — Optional sections (gated by routing question)**
-
-After all 5 required sections land, ask once per optional section whether to include it. **Routing question** with lead-with-recommendation:
-
-For `Milestones`:
-
-- `body`: "Do you want a `Milestones` section? It's only worth adding if there are externally visible dated anchors — launches, fundraises, conferences, renewals. Recommended: `skip` — internal schedules don't belong here. Confidence: [your-call]."
-- `options`: `include`, `skip`.
-
-For `Not working on`:
-
-- `body`: "Do you want a `Not working on` section? Only useful for things the team keeps being tempted by — a clarity tool, not a backlog. Recommended: `skip` — most repos don't need it. Confidence: [your-call]."
-- `options`: `include`, `skip`.
-
-A `Marketing` section is **deliberately not offered** — over-rotated for OSS-tools repos.
-
-If `include`, run the per-section interview from `references/interview.md` (same 2-round-cap rule), then atomic-write that section. If `skip`, omit the section entirely from the file (do not leave an empty header).
-
-**1.5 — Mandatory read-back before final commit**
-
-After all sections captured (required + any included optional), run:
-
-```bash
-"$FLOWCTL" strategy read --json
-```
-
-Show the final draft body in chat. Offer one round of edits via `AskUserQuestion`:
-
-- `body`: "Draft complete. <N>-section strategy doc, <last_updated>. Recommended: `commit` — the draft reflects the captured answers verbatim. Confidence: [judgment-call]."
-- `options`: `commit`, `edit-section`, `abandon`.
-
-On `edit-section`, ask which section via single-select (5 required + included optional names), re-run the per-section interview, atomic-write, return to read-back.
-
-On `commit`, the file is already on disk (per-section atomic writes) — this is a confirmation step, not a new write. Acknowledge with one stdout line: `Strategy doc written to <file_path>. last_updated: <date>.`
-
-On `abandon`, leave the file as-is (partially populated is fine), exit 0.
-
-### Phase 2: Update run (file exists, generator matches)
-
-**2.1 — Summarize current state**
-
-Read the existing `STRATEGY.md` via `"$FLOWCTL" strategy read --json` and summarize current state in 3-5 lines so the user sees what's on file. Surface section names + 1-line excerpts.
-
-If the focus-hint argument names a specific section, jump to that section. Otherwise, run the evidence scan (2.1b) then fire the routing question.
-
-**2.1b — Evidence scan (ground drift against the repo, not vibes)**
-
-The revisit routing otherwise ranks sections by `<!-- worth revisiting -->` markers + "looks weak" — pure vibes. But real drift is *measurable*: which declared tracks are actually shipping, and whether recent work maps to the stated direction. A maintenance run's job is to surface drift the user didn't notice — not just ask "which section feels stale?". (Ironic asymmetry otherwise: `/flow-next:prospect` does full repo grounding to generate ideas against this doc, while the doc itself is validated by feel.) Scan before asking:
-
-```bash
-LAST_UPDATED="$("$FLOWCTL" strategy read --json 2>/dev/null | jq -r '.last_updated // ""')"
-RECENT_SPECS="$("$FLOWCTL" specs --json 2>/dev/null | jq -r '.specs[]? | "\(.id)\t\(.status)\t\(.title // "")"' 2>/dev/null)"
-```
-
-With the current `## Tracks` (from 2.1), the `## Not working on` list, and `RECENT_SPECS`, the host agent JUDGES the mapping (spec subject → track name — the same host-agent judgment prospect uses to ground candidates, NOT a keyword scorer) and surfaces drift signals:
-
-- **Dormant track** — a declared track with **zero** specs mapping to it since `last_updated`: "Track *X* has had 0 specs since the strategy was last updated (<last_updated>)."
-- **Undeclared work** — shipped/open specs whose subject maps to **no** declared track: "<K> of the recent specs map to no declared track: <ids>."
-- **Contradicted boundary** — a spec whose subject matches a `## Not working on` item: "Spec <id> looks like work listed under *Not working on*."
-
-No specs / empty repo → skip silently (nothing to ground against). Feed the findings into 2.2.
-
-**2.2 — Section-revisit routing question (lead-with-recommendation)**
-
-Build the option list dynamically:
-
-- For each of the 5 required sections + included optional sections, check the body for `<!-- worth revisiting -->` markers (priority candidates).
-- Sections with no marker but visibly weak content (≤1 short sentence, or contains placeholder-shaped text) join the priority list.
-- **Any section the 2.1b evidence scan flagged** (dormant/undeclared → the `Tracks` section; a contradicted boundary → `Not working on`) — these are **data-grounded** priorities; list them at the top and cite the specific finding in the question body so the user revisits what the repo shows drifting, not only what feels stale.
-- Sections that look strong (no marker, not weak, no evidence flag) fall to the bottom.
-
-`AskUserQuestion`:
-
-- `body`: "Which section to revisit? <priority sections listed first>. Recommended: `<top priority section>` — it carries a `<!-- worth revisiting -->` marker from a previous run [if applicable]. Confidence: [judgment-call] — your judgment on what feels stale."
-- `options`: section names + `done` (no further changes).
-
-**2.3 — Per-section re-interview**
-
-For the chosen section, re-run the per-section interview from `references/interview.md` — full pushback, NOT a rubber-stamp. After capture, atomic-write that section's new body. Untouched sections preserved byte-identical (verified by `git diff --unified=0` if questioned). `last_updated` bumps to today's ISO date.
-
-**2.4 — Loop or exit**
-
-After a section is updated, return to the routing question — user can revisit another section or pick `done`. On `done`, run the read-back step (Phase 1.5 logic) once for confirmation, then exit.
+Do not read the unselected workflow. A foreign file stays entirely in Phase 0.4
+unless the user confirms `rewrite`; confirmed rewrite selects the first-run
+workflow. Any state not matched by the table is unsafe to classify: leave the
+file unchanged and exit 0 with the same safe-classification stderr line from
+Phase 0.2.
 
 ### Phase 3: Downstream handoff
 

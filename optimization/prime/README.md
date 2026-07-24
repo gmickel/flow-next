@@ -50,7 +50,10 @@ Backend order under `--backend auto`: `claude`, then `codex`.
 
 **Backend unavailable = SKIP, never fail.** If neither `claude` nor `codex` is on
 `PATH` (or a chosen backend is missing), the runner prints a SKIP note and exits
-0. It never fails a gate on a missing/unauthenticated credential - it is NON-CI.
+0. Before any Claude fixture is scored, the runner executes an OAuth auth
+preflight and an instruction-leak probe. An unavailable/expired credential,
+zero-token response, or failed leak probe is recorded as `INVALID/SKIP` and exits
+0 — it is never scored as model judgment.
 
 Pure stdlib. No third-party deps.
 
@@ -153,6 +156,11 @@ The result filename `<fixture>-<model>-<date>.json` also carries model + date.
 Result files are run artifacts, not source: `results/` is gitignored except its
 `.gitkeep`.
 
+fn-130 completion evidence is the deliberate exception: authenticated B1 and
+candidate artifacts are retained under
+[`evidence/fn130/`](evidence/fn130/README.md), including scrubbed preflights,
+source hashes, nonzero usage, per-fixture outcomes, and isolation reports.
+
 ## Enforced isolation (not merely asserted)
 
 A same-user subprocess with no OS sandbox can, in principle, write anywhere it can
@@ -164,24 +172,50 @@ name - the harness does **not** pretend otherwise. Its guarantees are layered:
    JSON inline), so the model never needs to read a file to answer.
 2. **Throwaway arena.** The backend runs with `cwd` = a fresh temp dir containing
    only the copied projection - never a live checkout path.
-3. **Minimal rebuilt env.** Only `PATH`, `HOME`, `TERM`, `LANG` (+ the backend's
-   own auth vars if present) - nothing inherited, no live-repo path.
+3. **OAuth-preserving Claude isolation.** Claude keeps the authenticated default
+   config and process environment so keychain refresh works, explicitly removes
+   `CLAUDE_CONFIG_DIR`, and limits instruction sources with
+   `--setting-sources project,local --no-session-persistence`. A fresh config dir
+   and `--bare` are forbidden because both break OAuth. Codex and offline mock
+   runs keep the minimal rebuilt environment.
 4. **Non-disclosure.** The out-of-arena sentinel's path is never placed in the
    prompt or the env.
 5. **Timeout + process-group kill.** Explicit timeout; on expiry the whole process
    group is `SIGTERM`/`SIGKILL`ed (never bare `timeout(1)`, absent on stock macOS).
 6. **Detection tripwire.** After every run: a filesystem-diff over the arena, plus
-   an out-of-arena sentinel (size+mtime) and an output token-scan. Any breach sets
+   an out-of-arena sentinel (content hash) and an output token-scan. Any breach sets
    `isolation.clean = false` so a breached run is never trusted.
 7. **macOS hard containment.** Where `sandbox-exec` is available, the invocation is
    wrapped in a `deny file-read*/file-write*` rule scoped to the sentinel tree,
    giving OS-enforced containment on top of the tripwire. Degrades gracefully to
    tripwire + native flag elsewhere.
 
-`--self-test` proves all of this offline, with no model: it uses a hostile mock
+`--self-test` proves the offline isolation layers, with no model: it uses a hostile mock
 backend to show (a) the tripwire detects a real breach, (b) macOS `sandbox-exec`
 hard-blocks the same breach, (c) the filesystem-diff actually fires on an in-arena
-write, and (d) neither the env nor the prompt carries a live-repo path.
+write, and (d) neither the mock env nor the prompt carries a live-repo path. The
+live Claude auth/leak probes separately prove the default-config isolation path.
+
+## Reached-path routing ratchet (fn-130.5)
+
+The version-adjusted Prime B1 input was verified before mutation:
+
+```text
+OK: prime inputs match B1 (8 files)
+```
+
+[`fixtures/routes/modes.json`](fixtures/routes/modes.json) records the four
+candidate routes with separate required/forbidden reads and deterministic
+LF/full-file/once-per-path-hash measurements. `--classify-only` now routes from
+the root directly to `classification.md`, avoiding the full workflow and reducing
+the reached path from 96,190 to 32,759 characters (65.94%). Report-only remains
+no-write and never reaches remediation templates. Full/no-fix and full/fix retain
+their consuming references and are also smaller than B1 because redundant root
+phase summaries were removed.
+
+The structural candidate was evaluated only after the repaired current-main
+baseline passed all seven judgment fixtures, including the worktree-sibling
+negative control (6/6 synthetic, threshold requires at least 5/6).
 
 ## Method
 

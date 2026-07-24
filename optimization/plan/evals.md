@@ -18,6 +18,12 @@ quality-up only" wording would have wrongly reverted it.) Every axis audits dire
 All evals are yes/no, scored by host judgment against the explicit pass condition, per input.
 "Emitted spec" = the spec + tasks the run-subagent outputs (it writes nothing; README § run-trick).
 
+Task 130.7 adds the sealed P5 matrix in `holdout/`. Its H1–H10 cells are
+pre-authored before the examples/routing candidate and are scored separately
+from E1–E5; the subject receives `holdout/input.md`, never the scorer-only
+`holdout/oracle.md`. Adding P5 therefore establishes a fresh B1-based baseline
+for that candidate rather than retroactively rescoring experiment 0.
+
 ---
 
 EVAL 1: R-ID coverage on acceptance criteria  [ACCURACY]

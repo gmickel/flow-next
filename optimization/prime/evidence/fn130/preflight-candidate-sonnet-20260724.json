@@ -1,0 +1,50 @@
+{
+  "status": "pass",
+  "valid": true,
+  "auth_probe": {
+    "flags": [
+      "--setting-sources",
+      "project,local",
+      "--no-session-persistence"
+    ],
+    "used_bare": false,
+    "used_fresh_config_dir": false,
+    "ok": true,
+    "invalid": false,
+    "reason": "ok",
+    "usage_totals": {
+      "backend": {
+        "input_tokens": 2,
+        "output_tokens": 4,
+        "cache_creation_input_tokens": 10192,
+        "cache_read_input_tokens": 19420
+      },
+      "backend_total": 29618,
+      "model_total": 30151,
+      "total": 29618
+    },
+    "result": "OK",
+    "is_error": false,
+    "subtype": "success",
+    "rc": 0,
+    "stdout_scrubbed": "OK"
+  },
+  "leak_probe": {
+    "ok": true,
+    "marker_present": true,
+    "global_leaks": [],
+    "identity_residual": [],
+    "rc": 0,
+    "timed_out": false,
+    "stdout_scrubbed": "The project instructions in CLAUDE.md contain one marker:\n\n`UNIQUE_MARKER=[REDACTED-MARKER]`\n\nNo other project instruction markers are present.",
+    "residual_note": "OAuth account email may appear as session identity; it carries no guidance content."
+  },
+  "provenance": {
+    "backend": "claude",
+    "model": "sonnet",
+    "backend_version": "2.1.218 (Claude Code)",
+    "date_utc": "20260724",
+    "rules_source": "plugins/flow-next/skills/flow-next-prime/classification.md",
+    "rules_sha256": "df3fa766e9a1cc87ff1fc789f2a3720bdfc615846caec7aa5bb653adeaec5c4f"
+  }
+}

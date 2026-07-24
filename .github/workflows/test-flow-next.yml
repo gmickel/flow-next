@@ -68,7 +68,12 @@ jobs:
         # changes heredoc bytes that smokes compare byte-identically against
         # flowctl output. Force LF on all OSes for consistent fixtures.
 
+      # Reached-path B0/B1 validation reads immutable prompt sources from their
+      # recorded commits. A shallow checkout makes valid frozen evidence look
+      # corrupt because those commits are absent.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5

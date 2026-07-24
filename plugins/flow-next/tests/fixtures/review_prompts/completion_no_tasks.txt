@@ -1,3 +1,10 @@
+## TERMINAL REVIEWER ROLE — execute this review directly
+
+You are the terminal reviewer, not a workflow coordinator. Review the supplied
+spec and implementation yourself. Do not invoke Flow-Next skills, run any
+`flowctl *-review` command, delegate the review, or launch another reviewer.
+Follow only the review contract below and end with exactly one verdict tag.
+
 <spec>
 SPEC_BODY_LINE1
 SPEC_BODY_LINE2

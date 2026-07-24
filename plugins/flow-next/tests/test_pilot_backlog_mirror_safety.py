@@ -44,6 +44,8 @@ Run:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import pathlib
 import re
 import unittest
@@ -57,6 +59,8 @@ PILOT = PLUGIN / "skills" / "flow-next-pilot"
 PILOT_SKILL = PILOT / "SKILL.md"
 PILOT_WORKFLOW = PILOT / "workflow.md"
 PILOT_BACKLOG = PILOT / "references" / "backlog-mode.md"
+PILOT_QA = PILOT / "references" / "qa-stage.md"
+PILOT_LEDGER = REPO_ROOT / "optimization" / "reached-path" / "pilot-candidates.json"
 
 # Canonical tracker-sync (carries the R14 Phase-0 fix from fn-68.2).
 TS_STEPS = PLUGIN / "skills" / "flow-next-tracker-sync" / "steps.md"
@@ -88,6 +92,8 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             PILOT_SKILL,
             PILOT_WORKFLOW,
             PILOT_BACKLOG,
+            PILOT_QA,
+            PILOT_LEDGER,
             TS_STEPS,
             MIRROR_SKILL,
             MIRROR_WORKFLOW,
@@ -99,6 +105,8 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         cls.pilot_skill = _read(PILOT_SKILL)
         cls.pilot_workflow = _read(PILOT_WORKFLOW)
         cls.pilot_backlog = _read(PILOT_BACKLOG)
+        cls.pilot_qa = _read(PILOT_QA)
+        cls.pilot_ledger = json.loads(_read(PILOT_LEDGER))
         cls.ts_steps = _read(TS_STEPS)
         cls.m_skill = _read(MIRROR_SKILL)
         cls.m_workflow = _read(MIRROR_WORKFLOW)
@@ -118,12 +126,13 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
 
     def test_mirror_carries_triage_and_ask_stages(self) -> None:
         """The new leftward stages survive the rewrite in the pilot mirror."""
-        self.assertIn("triage", self.m_skill.lower())
-        self.assertIn("ask", self.m_skill.lower())
+        mirror_route = self.m_skill + "\n" + self.m_backlog
+        self.assertIn("triage", mirror_route.lower())
+        self.assertIn("ask", mirror_route.lower())
         # The stage values line names triage/ask as backlog-only stages.
         self.assertRegex(
-            self.m_skill,
-            r"`triage`\s*/\s*`ask`.*backlog mode only",
+            mirror_route,
+            r"(?:`triage`\s*/\s*`ask`.*backlog mode only|Stage values add `triage` / `ask`)",
             "the mirror must document triage/ask as backlog-only stages",
         )
         # The async-question valve phase survives in the mirror workflow.
@@ -136,11 +145,81 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
 
     def test_mirror_carries_asked_verdict_and_grammar(self) -> None:
         """The ASKED durable-park verdict survives in the mirror grammar."""
-        self.assertIn("ASKED", self.m_skill)
+        mirror_route = self.m_skill + "\n" + self.m_backlog
+        self.assertIn("ASKED", mirror_route)
         self.assertRegex(
-            self.m_skill,
+            mirror_route,
             r"`ASKED <id> \(<n>\)`.*durable park",
             "the mirror must document ASKED as a durable park",
+        )
+
+    def test_canonical_routes_backlog_grammar_behind_mode_gate(self) -> None:
+        """Ready mode carries only common grammar; selected backlog mode loads
+        the direct reference containing the extended grammar."""
+        self.assertNotIn(
+            "### Backlog-mode verdict grammar",
+            self.pilot_skill,
+            "backlog-only grammar must not stay always-loaded in SKILL.md",
+        )
+        self.assertIn(
+            "STOP and read [references/backlog-mode.md]",
+            self.pilot_skill,
+            "the selected backlog route must require the direct reference",
+        )
+        self.assertIn(
+            "PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN>",
+            self.pilot_skill,
+            "the ready root must retain the complete common terminal grammar",
+        )
+        self.assertNotIn(
+            "PILOT_VERDICT=<ADVANCED|ASKED|",
+            self.pilot_skill,
+            "ASKED is backlog-only and belongs in the gated reference",
+        )
+        self.assertIn(
+            "PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN>",
+            self.pilot_backlog,
+            "the selected reference must retain the full live backlog grammar",
+        )
+        self.assertRegex(
+            self.pilot_backlog,
+            r"`TRIAGED <id> <class>` is DIAGNOSTIC / dry-run ONLY",
+            "the selected reference must retain the diagnostic-only split",
+        )
+
+    def test_pilot_candidate_ledger_matches_live_routed_files(self) -> None:
+        """The independent Pilot ledger is hash-addressed and its reached-path
+        improvement is reproducible from the canonical routed files."""
+        ledger = self.pilot_ledger
+        self.assertEqual("pilot", ledger["cluster"])
+        self.assertEqual("B1", ledger["lineage"]["baseline"])
+        self.assertEqual([], ledger["discards"])
+        candidate = ledger["candidates"][0]
+        self.assertEqual("keep", candidate["verdict"])
+
+        def normalized(text: str) -> str:
+            return text.replace("\r\n", "\n").replace("\r", "\n")
+
+        def digest(text: str) -> str:
+            return hashlib.sha256(normalized(text).encode("utf-8")).hexdigest()
+
+        measured = candidate["candidate"]
+        self.assertEqual(len(normalized(self.pilot_skill)), measured["skill_chars"])
+        self.assertEqual(digest(self.pilot_skill), measured["skill_hash"])
+        self.assertEqual(
+            digest(self.pilot_backlog), measured["backlog_reference_hash"]
+        )
+        self.assertEqual(digest(self.pilot_workflow), measured["workflow_hash"])
+        self.assertEqual(digest(self.pilot_qa), measured["qa_reference_hash"])
+
+        ready_chars = len(normalized(self.pilot_skill)) + len(
+            normalized(self.pilot_workflow)
+        )
+        backlog_chars = ready_chars + len(normalized(self.pilot_backlog))
+        self.assertEqual(ready_chars, measured["ready_reached_path_chars"])
+        self.assertEqual(backlog_chars, measured["backlog_reached_path_chars"])
+        self.assertLess(
+            ready_chars, candidate["baseline"]["ready_reached_path_chars"]
         )
 
     def test_mirror_carries_tracker_sync_r14_phase0_fix(self) -> None:
@@ -313,7 +392,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         """The single terminal PILOT_VERDICT grammar line (the one /goal reads)
         survives the rewrite with the full live verb set, ASKED included."""
         self.assertRegex(
-            self.m_skill,
+            self.m_skill + "\n" + self.m_backlog,
             r"PILOT_VERDICT=<ADVANCED\|ASKED\|NO_WORK\|DEFERRED_TO_LAND\|BLOCKED\|NEEDS_HUMAN>",
             "the mirror must carry the full live PILOT_VERDICT grammar line",
         )
@@ -322,20 +401,21 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         """TRIAGED is documented diagnostic / dry-run-only — never a live
         terminal — so a live tick always lands on a state-changing verdict and an
         item can never re-select forever (R10). The mirror must preserve this."""
+        mirror_route = self.m_skill + "\n" + self.m_backlog
         self.assertRegex(
-            self.m_skill,
+            mirror_route,
             r"`TRIAGED <id> <class>` is DIAGNOSTIC / dry-run ONLY",
             "the mirror must keep TRIAGED diagnostic/dry-run-only",
         )
         # The live grammar line must NOT include TRIAGED as a terminal verb.
         live_line = next(
             ln
-            for ln in self.m_skill.splitlines()
+            for ln in mirror_route.splitlines()
             if "Live backlog grammar" in ln
         )
         self.assertNotIn("TRIAGED", live_line.split("`ADVANCED")[0] + "ADVANCED")
         self.assertRegex(
-            live_line,
+            mirror_route,
             r"`TRIAGED` is NOT a live terminal",
             "the live grammar must explicitly exclude TRIAGED as a terminal",
         )

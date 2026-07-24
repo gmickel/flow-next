@@ -660,14 +660,18 @@ class ProseContractTestCase(unittest.TestCase):
         self.assertIn("REVIEW_MODE", self.worker)
 
     def test_phases_host_owned_circuit_breaker(self) -> None:
-        self.assertIn("consecutive_failures", self.phases)
-        self.assertIn("rollback_and_disable", self.phases)
-        self.assertIn("delegation_active = false", self.phases)
+        self.assertIn("host-owned", self.phases)
+        self.assertIn("already-loaded delegation reference", self.phases)
+        self.assertIn("consecutive_failures", self.reference)
+        self.assertIn("rollback_and_disable", self.reference)
+        self.assertIn("delegation_active = false", self.reference)
 
     def test_phases_three_strikes_then_reset(self) -> None:
-        # 3 strikes disables; success resets to 0.
-        self.assertIn("consecutive_failures >= 3", self.phases)
-        self.assertIn("consecutive_failures = 0", self.phases)
+        # Common phases keep only the action-site router; the selected reference
+        # owns the exact 3-strike/reset machinery.
+        self.assertIn("three\nconsecutive task misses", self.phases)
+        self.assertIn("consecutive_failures >= 3", self.reference)
+        self.assertIn("consecutive_failures = 0", self.reference)
 
 
 if __name__ == "__main__":

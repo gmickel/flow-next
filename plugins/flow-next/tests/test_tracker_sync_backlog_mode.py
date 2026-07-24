@@ -167,18 +167,16 @@ class TrackerSyncBacklogModeProseContract(unittest.TestCase):
             "DISPATCH=forked must be in the single RALPH=1 gate condition (fn-89)",
         )
 
-    def test_setup_precheck_suppresses_prompt_on_forked_dispatch(self) -> None:
-        """fn-89: the SKILL.md setup-version pre-check runs BEFORE Phase 0, so
-        its ask-suppression gate must ALSO recognize DISPATCH=forked - otherwise
-        a forked runner could hit FLOW_SETUP_ASK and stall on a prompt no
-        subagent can answer."""
-        self.assertIn("FLOW_SETUP_ASK", self.skill)
-        precheck_window = self.skill.split("FLOW_SETUP_ASK", 1)[0][-1200:]
-        self.assertIn(
-            '"${DISPATCH:-}" == "forked"',
-            precheck_window,
-            "SKILL.md setup pre-check suppression must recognize DISPATCH=forked (fn-89)",
-        )
+    def test_tracker_skill_has_no_legacy_setup_precheck(self) -> None:
+        """The Plan-only version contract removed lifecycle prechecks.
+
+        Fork safety now has one owner: the Phase-0 RALPH gate asserted above.
+        A stale FLOW_SETUP_ASK ceremony here would reload dead instructions and
+        reintroduce a prompt before that gate.
+        """
+        self.assertNotIn("FLOW_SETUP_ASK", self.skill)
+        self.assertNotIn("setup_version", self.skill)
+        self.assertNotIn("snippet_ack", self.skill)
 
     # ---- listOpenIssues: the 9th adapter method ------------------------
 

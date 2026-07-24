@@ -1,0 +1,108 @@
+{
+  "activation": {
+    "args": [],
+    "form": "slash",
+    "skill": "flow-next-make-pr"
+  },
+  "baseline": "B1",
+  "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+  "branch_inputs": {
+    "push": "retry"
+  },
+  "cluster": "make-pr",
+  "fixture_hash": "12115732a9ae5f4cce35fa5b8efb584634907a0170faf0ad20d2bdb1e53e2fdd",
+  "fixture_id": "make-pr.push-retry",
+  "forbidden_reads": [],
+  "host": "claude",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "candidate": null,
+    "rule": "structural candidates compare to hash-verified B1 only"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "reached_path_chars": 179412,
+    "reached_path_chars_div_4": 44853.0,
+    "reached_path_files": [
+      {
+        "chars_lf": 15290,
+        "content_hash": "a477bdcc550327a5efcc31188696a5090ed1b221d479572ce29d61b8976347b3",
+        "path": "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 118787,
+        "content_hash": "f1738f94c2e5aa8aef3255154f4674712f684e429279346ea83018eb0c29b137",
+        "path": "plugins/flow-next/skills/flow-next-make-pr/workflow.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 45335,
+        "content_hash": "4b7aebfd7391d377f15340ca566d88d4b3d07ce15585592d88a2c310473306aa",
+        "path": "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "mirror_skill": null,
+  "mutation_targets": {},
+  "notes": "create-and-finalize.md cold on --dry-run (already gated in SKILL.md).",
+  "oracles": {
+    "output": [],
+    "receipts": [],
+    "tools": [],
+    "writes": []
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "prompt_files": [
+    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
+    "plugins/flow-next/skills/flow-next-make-pr/workflow.md",
+    "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md",
+    "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md",
+    "plugins/flow-next/skills/flow-next-make-pr/phases.md",
+    "plugins/flow-next/references/html-artifacts.md"
+  ],
+  "prompt_hashes": {
+    "plugins/flow-next/references/html-artifacts.md": "9c2cd74ef1149979d2771b295fac72d47fe77c53036c66d72f1e03e23501c82e",
+    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "a477bdcc550327a5efcc31188696a5090ed1b221d479572ce29d61b8976347b3",
+    "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md": "4b7aebfd7391d377f15340ca566d88d4b3d07ce15585592d88a2c310473306aa",
+    "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md": "bf7c72d18be2764733a1d211145ff996a711b3c72994e9cd18897dbfa8acb2f0",
+    "plugins/flow-next/skills/flow-next-make-pr/phases.md": "9b13dc84b240dc8ab905a1908cdf31fceb9e3a1f56832c2c1a176981a2588800",
+    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "f1738f94c2e5aa8aef3255154f4674712f684e429279346ea83018eb0c29b137"
+  },
+  "provenance": {
+    "capture_kind": "deterministic_freeze",
+    "capture_reason": "route_manifest_inventory_hash_only; not a backend execution (model/cli_version intentionally null)",
+    "cli_version": null,
+    "date_utc": "2026-07-23",
+    "fixture_hash": "12115732a9ae5f4cce35fa5b8efb584634907a0170faf0ad20d2bdb1e53e2fdd",
+    "host": "claude",
+    "model": null
+  },
+  "ratchet": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "subjective_majority_n": [
+      3,
+      5
+    ],
+    "verdict": "baseline"
+  },
+  "required_reads": [
+    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
+    "plugins/flow-next/skills/flow-next-make-pr/workflow.md",
+    "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md"
+  ],
+  "resume": {
+    "borderline": false,
+    "parent": null,
+    "sealed_holdout": false,
+    "subjective": false
+  }
+}

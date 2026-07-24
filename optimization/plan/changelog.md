@@ -78,6 +78,51 @@ Zero accuracy loss. The kept mutation is live in `plugins/flow-next/skills/flow-
 
 ---
 
+## Task 130.7 pre-candidate freeze — V1/B1 + sealed P5
+
+Before mutating `examples.md` or optional routing prose:
+
+- `python3 optimization/reached-path/run_eval.py --validate-b1` passed for all
+  117 manifests.
+- `python3 optimization/reached-path/run_eval.py --check-b1-input plan` passed
+  for all four Plan prompt files.
+- P5 was frozen under `holdout/`: a non-flow-next no-code architecture request,
+  a fixed research bundle, R1–R6, a Mermaid condition, and tracker/HTML/review
+  on/off inputs. Its H1–H10 scorer lives in a separate file not visible to the
+  subject.
+- B1 deterministic router evidence is 50,243 reached-path characters. Backend
+  telemetry is explicitly unavailable in this Codex-session-only worker run
+  and is not inferred from source bytes or wall time.
+
+This freeze is the new baseline for the previously held examples trim. P4 is
+still contaminated and cannot make the keep decision by itself.
+
+## Task 130.7 candidate — KEEP routing and examples independently
+
+Two independent mutations were compared only to hash-verified V1/B1:
+
+1. **Optional routing — KEEP.** Step 6.5 retains the existing tracker
+   active+leaf probe; Step 7 uses the already selected review mode; Step 8.5
+   retains the existing HTML value from the single Step 0 snapshot. Only after
+   a signal is on does Plan load its one-level direct reference. Default
+   authoring falls 6,149 characters (10.01%); selected paths also improve:
+   tracker 10.72%, review 10.59%, HTML 4.58%.
+2. **Examples trim — KEEP.** The two BAD full implementation dumps became
+   short anti-pattern anchors. The Golden Rule, forbidden/allowed lists, both
+   GOOD examples, research/investigation, sizing/cohesion/dependency, R-ID, and
+   Mermaid guidance remain. Independently saves 957 characters (1.56%) on the
+   authoring path.
+
+The combined default authoring path is 61,420 → 54,314 characters (-7,106,
+11.57%). Deterministic pairs were repeated N=2 and matched exactly.
+`test_skill_prose_diet` pins gate-before-read ordering, cold details, one-level
+references, short BAD anchors, and holdout answer-key separation. The H1–H10
+contract audit is zero-loss; backend/model telemetry is `null` because this
+worker was constrained to the current Codex session. No token, cache, quality,
+or wall-time claim is inferred from deterministic characters.
+
+---
+
 ## Review pass (fable, our review rules) — verdict SHIP; rigor fixes applied
 
 Fable-model adversarial review confirmed the ratchet is honest (the a-priori E5 lever was invalidated
@@ -97,3 +142,29 @@ Applied its actionable findings:
 Deviations from the task's literal approach, disclosed: fixtures P1/P4 are invented-realistic (not verbatim
 "drawn from real spec Goal sections") — privacy-friendlier, same eval value; P3's synthetic id `fn-88` may
 cosmetically collide with a future real fn-88 (harmless — it's a frozen fixture, never written to `.flow/`).
+
+---
+
+## fn-130 completion-review repair — paired emitted plans
+
+The first terminal completion review correctly rejected deterministic routing
+checks as insufficient proof for the Plan output contract. The repair ran
+paired B1/candidate Plan emissions with Claude `sonnet`, then scored the
+retained artifacts independently with Codex `gpt-5.6-sol` at high effort:
+
+- P1–P4: `N=2` per variant.
+- Subjective sealed P5: `N=3` per variant. One candidate run selected an ERD
+  rather than the required service flowchart, so majority scoring was used
+  instead of hiding the variance.
+- Final ratchet: B1 58 passing checks → candidate 59; zero regressions.
+- All 22 subject emissions and scorer usage are nonzero and retained.
+- Fixture/source hashes and lineage identify the exact B1 and candidate.
+- The sealed H1–H10 oracle was supplied only to the scorer and is absent from
+  every subject prompt.
+
+An initial harness attempt let the subject follow Plan's normal write workflow
+and stop on a denied `Write` call. Those outputs were discarded. The repaired
+harness appends an explicit evaluation-only, output-only override after the
+fixture and skill instructions; its ordering and ratchet logic have offline
+regression tests. Durable artifact:
+[`evidence/fn130/paired-emissions.json`](evidence/fn130/paired-emissions.json).

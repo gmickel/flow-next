@@ -1,0 +1,194 @@
+{
+  "activation": {
+    "args": [],
+    "form": "slash",
+    "skill": "flow-next-tracker-sync"
+  },
+  "baseline": "B1",
+  "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+  "branch_inputs": {
+    "conflict": "body",
+    "live_tracker": false,
+    "transport": "fake"
+  },
+  "cluster": "tracker",
+  "fixture_hash": "a3c0b60a3993d6fe384deebd5767d80e109250f0b7ef3f050d3ef21a08784aca",
+  "fixture_id": "tracker.conflict-body",
+  "forbidden_reads": [],
+  "host": "claude",
+  "lineage": {
+    "B0": "1e8d3a95cf12cf1f33fa5c6c7ee50e0998e04e4b",
+    "V1_B1": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
+    "candidate": null,
+    "rule": "structural candidates compare to hash-verified B1 only"
+  },
+  "metrics": {
+    "algorithm": "lf-full-file-on-activation-once-per-path-hash",
+    "backend_telemetry": null,
+    "reached_path_chars": 452552,
+    "reached_path_chars_div_4": 113138.0,
+    "reached_path_files": [
+      {
+        "chars_lf": 22100,
+        "content_hash": "73f8909d90fe86b40f9f1a23c927be0a4cfa41b90d2eccbf2884b6e5b3da441c",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md",
+        "role": "root_skill"
+      },
+      {
+        "chars_lf": 73324,
+        "content_hash": "4439b286208d0d0d000703f431d9d4d8060dfb8fa683ddf02d2936d2df2407b9",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/steps.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 28669,
+        "content_hash": "f8e2ea85b78fbd4208242c3e071276e93dd9c96495ca3f313443e727aacece50",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 32493,
+        "content_hash": "1f88bb4d634dd10ebdfc6581a9b9ae2499a13068a9c628ddf28272f02ecb3b86",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/body-merge.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 43177,
+        "content_hash": "f985f94de5ea5c1dae5e7f61419ebfb9e834ceab36798aaf7c60178e59512014",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 25693,
+        "content_hash": "53abd12de62e31d6eeedcf2ff9c14da63ac64820b5e2dc1f8dde0bb2a4e4ace2",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/comments-sync.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 4120,
+        "content_hash": "6ecfc7b4d99cf8951a6d4e2311965a5beac5964c46a5c4f1515971bf55f2cff8",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/identity.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 39604,
+        "content_hash": "fe843d6bcde300d47f9e34626fa36bf8f56d12615694963fd67e763f46d1aee5",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/github.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 60681,
+        "content_hash": "2ac556573647db20ed7e3b367a78c943f6d9d0cdc4082518b7045182d11add43",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/gitlab.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 73895,
+        "content_hash": "b78775d2a5abb1b577ffe20e3c4f3812bafb58c27379a90c6e53516700b9d41d",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/jira.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 19068,
+        "content_hash": "4e8d85837395961be82c3cd8bbe2ce304c084d11e234221b7d25a1b6eea473d7",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 15184,
+        "content_hash": "f591cba13e48f255ee2fc8551ab97f8263ae15c39f9a6d56f5a734025cc686fa",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
+        "role": "direct_reference"
+      },
+      {
+        "chars_lf": 14544,
+        "content_hash": "caf1b315c35a7a47af41b1734512068d57cfd9e5c82bd407bfb70706c61ae3a5",
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md",
+        "role": "direct_reference"
+      }
+    ]
+  },
+  "mirror_skill": null,
+  "mutation_targets": {},
+  "notes": "",
+  "oracles": {
+    "output": [],
+    "receipts": [],
+    "tools": [],
+    "writes": []
+  },
+  "privacy": {
+    "answer_key_separated": true,
+    "no_live_tracker": true,
+    "scrubbed": true
+  },
+  "prompt_files": [
+    "plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/steps.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/body-merge.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/comments-sync.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/identity.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/github.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/gitlab.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/jira.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
+  ],
+  "prompt_hashes": {
+    "plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md": "73f8909d90fe86b40f9f1a23c927be0a4cfa41b90d2eccbf2884b6e5b3da441c",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md": "f8e2ea85b78fbd4208242c3e071276e93dd9c96495ca3f313443e727aacece50",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/body-merge.md": "1f88bb4d634dd10ebdfc6581a9b9ae2499a13068a9c628ddf28272f02ecb3b86",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/comments-sync.md": "53abd12de62e31d6eeedcf2ff9c14da63ac64820b5e2dc1f8dde0bb2a4e4ace2",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/github.md": "fe843d6bcde300d47f9e34626fa36bf8f56d12615694963fd67e763f46d1aee5",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/gitlab.md": "2ac556573647db20ed7e3b367a78c943f6d9d0cdc4082518b7045182d11add43",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/identity.md": "6ecfc7b4d99cf8951a6d4e2311965a5beac5964c46a5c4f1515971bf55f2cff8",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/jira.md": "b78775d2a5abb1b577ffe20e3c4f3812bafb58c27379a90c6e53516700b9d41d",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md": "4e8d85837395961be82c3cd8bbe2ce304c084d11e234221b7d25a1b6eea473d7",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "f591cba13e48f255ee2fc8551ab97f8263ae15c39f9a6d56f5a734025cc686fa",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "caf1b315c35a7a47af41b1734512068d57cfd9e5c82bd407bfb70706c61ae3a5",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "f985f94de5ea5c1dae5e7f61419ebfb9e834ceab36798aaf7c60178e59512014",
+    "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "4439b286208d0d0d000703f431d9d4d8060dfb8fa683ddf02d2936d2df2407b9"
+  },
+  "provenance": {
+    "capture_kind": "deterministic_freeze",
+    "capture_reason": "route_manifest_inventory_hash_only; not a backend execution (model/cli_version intentionally null)",
+    "cli_version": null,
+    "date_utc": "2026-07-23",
+    "fixture_hash": "a3c0b60a3993d6fe384deebd5767d80e109250f0b7ef3f050d3ef21a08784aca",
+    "host": "claude",
+    "model": null
+  },
+  "ratchet": {
+    "borderline_paired_n_min": 2,
+    "flat_or_noisy": "discard",
+    "subjective_majority_n": [
+      3,
+      5
+    ],
+    "verdict": "baseline"
+  },
+  "required_reads": [
+    "plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/steps.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/body-merge.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/comments-sync.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/identity.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/github.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/gitlab.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/jira.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
+  ],
+  "resume": {
+    "borderline": false,
+    "parent": null,
+    "sealed_holdout": false,
+    "subjective": false
+  }
+}

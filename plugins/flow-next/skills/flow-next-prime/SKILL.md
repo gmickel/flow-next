@@ -13,61 +13,6 @@ Comprehensive codebase assessment inspired by [Factory.ai's Agent Readiness fram
 
 ## Two-Tier Assessment
 
-## Pre-check: Local setup version
-
-Compare `.flow/meta.json` `setup_version` to the plugin version; on mismatch, escalate once per plugin version. Fail-open throughout: a missing `jq`, `.flow/meta.json`, or plugin manifest silently continues.
-
-```bash
-SETUP_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
-SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
-PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
-if [[ "$SETUP_MODE" == "plugin" ]]; then
-  # fn-121 plugin mode: no local copies exist to go stale - the version compare is
-  # moot. Check only the CLAUDE.md snippet contract (sentinel vs the plugin's
-  # expected v1; keep the literal in sync with SNIPPET_SCHEMA_VERSION in flowctl.py).
-  SNIP_ACK=$(jq -r '.snippet_ack // empty' .flow/meta.json 2>/dev/null)
-  SNIP_VER=$(grep -m1 -o 'flow-next:snippet:v[0-9]*' CLAUDE.md 2>/dev/null | grep -o '[0-9]*$')
-  if [[ "${SNIP_VER:-missing}" != "1" ]]; then
-    if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
-          || "$SNIP_ACK" == "1" ]]; then
-      echo "CLAUDE.md flow-next snippet contract v${SNIP_VER:-missing} != plugin v1. Refresh via /flow-next:setup or the interactive ask." >&2
-    else
-      echo "FLOW_SNIPPET_ASK ${SNIP_VER:-missing} 1"
-    fi
-  fi
-elif [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
-  if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-        || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
-        || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
-    echo "Local setup v${SETUP_VER} differs from plugin v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts." >&2
-  else
-    echo "FLOW_SETUP_ASK ${SETUP_VER} ${PLUGIN_VER}"
-  fi
-fi
-```
-
-If the block printed a `FLOW_SNIPPET_ASK` line (plugin mode only; suppressed to the stderr note under the autonomy markers above), before proceeding ask the user with AskUserQuestion (the CLAUDE.md flow-next snippet block is on an older contract than this plugin version; refresh the marker block?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: run `"${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl" setup-block apply --file CLAUDE.md --template "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" --json`; if it returns `action: ask`, re-run as `setup-block resolve` with the same `--file`/`--template` plus `--choice overwrite --json` - this question WAS the consent. Marker-bounded: content outside the block is never touched.
-- **Remind me next version**: record the acknowledgement so this contract version is not re-asked (fail-open: on any error, continue anyway):
-  ```bash
-  rm -f .flow/meta.json.tmp && jq '.snippet_ack = "1"' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user with AskUserQuestion (local setup differs from the plugin; refresh now?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
-- **Refresh now**: pause and have the user run `/flow-next:setup` in this session (do not run setup yourself), then continue once it finishes.
-- **Remind me next version**: record the acknowledgement so this version is not re-asked (only a later plugin version re-arms it), then continue. Run this self-contained write (fail-open: on any error, continue anyway):
-  ```bash
-  PJ="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-  PV=$(jq -r '.version' "$PJ" 2>/dev/null)
-  [[ -n "$PV" && "$PV" != "null" ]] && rm -f .flow/meta.json.tmp && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
-  ```
-- **Skip this run**: continue without writing anything; the next invocation asks again.
-
-Any other output (the one-line differs notice, or nothing) is non-blocking: continue.
-
 | Category | Pillars | What Happens |
 |----------|---------|--------------|
 | **Agent Readiness** | 1-5 | Scored, maturity level calculated, fixes offered |
@@ -97,7 +42,7 @@ Accepts:
 - No arguments (scans current repo)
 - `--report-only` or `report only` (skip remediation, just show report)
 - `--fix-all` or `fix all` (apply all agent readiness fixes without asking)
-- `--classify-only` or `classify only` (print the Phase 0.5 classification block and EXIT - the cheap portfolio-triage sweep over many repos; see Phase 0.5 in workflow.md)
+- `--classify-only` or `classify only` (print the Phase 0.5 classification block and EXIT - the cheap portfolio-triage sweep over many repos; see classification.md)
 - A path to a different repo root (first non-flag argument)
 
 Examples:
@@ -114,9 +59,21 @@ every scout dispatch prompt in Phase 1 starts "Assess the repo at `ROOT`" (scout
 - without this they'd scan the wrong repo and the report would be confidently wrong end-to-end). If
 threading `ROOT` isn't feasible, error rather than silently scan cwd.
 
-`--classify-only` is the fast path: it runs Phase 0.5 (emitter + the skill's judgment layer), prints
-the classification block, and exits - it NEVER asks (Phase 0.6 is skipped), NEVER dispatches scouts,
-and NEVER remediates. It must stay cheap (<~10s even on a multi-M-LOC repo).
+## Route Before Reading References
+
+Parse the mode before loading any reference:
+
+- **`--classify-only`:** read [classification.md](classification.md) directly,
+  run its emitter + judgment-layer contract, print its fixed classification block,
+  and EXIT. Do **not** read `workflow.md`, `pillars.md`, `playbooks.md`, or
+  `remediation.md`; never ask, dispatch scouts, verify, report, or remediate.
+- **All other modes:** read [workflow.md](workflow.md) and execute it. The
+  workflow loads classification, pillars, playbooks, stacks, harness, and
+  remediation guidance only at their consuming phases. `--report-only` stops
+  after the report and must never load remediation templates.
+
+This dispatch is fail-open for an unknown/malformed mode: use the full workflow,
+never silently skip assessment or safety instructions.
 
 ## The Eight Pillars
 
@@ -140,19 +97,8 @@ and NEVER remediates. It must stay cheap (<~10s even on a multi-M-LOC repo).
 
 ## Workflow
 
-Read [workflow.md](workflow.md) and execute each phase in order.
-
-**Key phases:**
-0.5. **Classify** - host-inline five-axis classification (lifecycle / topology / size / stack / shape) via the `flowctl prime classify` emitter + the skill's judgment layer, per [classification.md](classification.md). Parameterizes everything downstream (scout dispatch, N/A denominators, report shape, playbook selection). `--classify-only` prints this block and exits.
-0.6. **Targeted clarification** - the bounded R15 ask protocol: at most one question call for low-confidence or uninferable facts that change a playbook or verdict; confirmed answers offered for durable recording in the agent file. Suppressed under `--classify-only` / `--report-only` / autonomous.
-1. **Parallel Assessment** - 9 scouts run in parallel (7 haiku fast scanners; claude-md-scout + docs-gap-scout on sonnet for judgment), each consuming the Phase 0.5 classification (~15-20 seconds)
-2. **Verification** — Verify test commands actually work
-3. **Score, Synthesize & Assemble the Verdict** - Calculate pillar scores + maturity level (includes the deterministic DC8 glossary signal - `flowctl glossary list --json`, gated on `total_terms == 0`, never file presence); evaluate the host-inline AO/DR/TO/HP groups as level-excluded pass-count lines; derive the DR-core QA-readiness line + feedback-latency + gh-CLI host lines; assemble the verdict headline inputs
-4. **Present Report** — Full report with all 8 pillars
-5. **Interactive Remediation** — `AskUserQuestion` for agent readiness fixes only
-5.5. **Glossary Bootstrap** — when the glossary has zero terms (absent or husk), propose evidence-backed terms from the repo and seed `GLOSSARY.md` via `flowctl glossary add` after read-back approval; a populated glossary gets a coverage line, never a rewrite
-6. **Apply Fixes** — Create/modify files based on selections
-7. **Summary** — Show what was changed
+The mode router above selects the entry reference. Do not pre-read references
+for branches that will not execute.
 
 ## Maturity Levels (Agent Readiness)
 
