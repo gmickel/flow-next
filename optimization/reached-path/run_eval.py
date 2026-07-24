@@ -373,7 +373,7 @@ def freeze_b0(output_dir: Optional[Path] = None) -> int:
         shown_out = out.relative_to(REPO_ROOT)
     except ValueError:
         shown_out = out
-    print(f"froze {len(items)} B0 fixtures → {shown_out}")
+    print(f"froze {len(items)} B0 fixtures -> {shown_out}")
     print(f"clusters: {index['clusters']}")
     return 0
 
@@ -493,7 +493,7 @@ def freeze_b1(output_dir: Optional[Path] = None) -> int:
             index["clusters"].get(filled["cluster"], 0) + 1
         )
     (out / "INDEX.json").write_text(_stable_json(index), encoding="utf-8")
-    print(f"froze {len(items)} V1/B1 fixtures → {out.relative_to(REPO_ROOT)}")
+    print(f"froze {len(items)} V1/B1 fixtures -> {out.relative_to(REPO_ROOT)}")
     return 0
 
 
@@ -928,7 +928,7 @@ def self_test() -> int:
         and subj_ok["verdict"] == "keep"
     )
     ok &= c4
-    print(f"[{'PASS' if c4 else 'FAIL'}] borderline N>=2 + subjective majority N=3–5")
+    print(f"[{'PASS' if c4 else 'FAIL'}] borderline N>=2 + subjective majority N=3-5")
 
     # (5) Privacy scrub.
     scrubbed = privacy.scrub_text("mail me at gordon@mickel.tech path=/Users/gordon/x token=sk-abcdefghijklmnop")
@@ -1380,7 +1380,7 @@ def production_path_smoke(
             shown = path.relative_to(REPO_ROOT)
         except ValueError:
             shown = path
-        print(f"wrote {kind} evidence → {shown}")
+        print(f"wrote {kind} evidence -> {shown}")
         return path
 
     if not shutil.which("claude"):

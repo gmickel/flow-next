@@ -97,7 +97,7 @@ class StrategyReachedPathTests(unittest.TestCase):
 
     def test_candidate_hashes_and_reached_path_metrics_are_exact(self) -> None:
         paths = {
-            str(path.relative_to(REPO)): path
+            path.relative_to(REPO).as_posix(): path
             for path in (SKILL, FIRST_RUN, UPDATE, INTERVIEW, TEMPLATE)
         }
         self.assertEqual(
@@ -106,11 +106,11 @@ class StrategyReachedPathTests(unittest.TestCase):
         )
 
         chars = {name: len(_text(path)) for name, path in paths.items()}
-        root = str(SKILL.relative_to(REPO))
-        first = str(FIRST_RUN.relative_to(REPO))
-        update = str(UPDATE.relative_to(REPO))
-        interview = str(INTERVIEW.relative_to(REPO))
-        template = str(TEMPLATE.relative_to(REPO))
+        root = SKILL.relative_to(REPO).as_posix()
+        first = FIRST_RUN.relative_to(REPO).as_posix()
+        update = UPDATE.relative_to(REPO).as_posix()
+        interview = INTERVIEW.relative_to(REPO).as_posix()
+        template = TEMPLATE.relative_to(REPO).as_posix()
         expected = {
             "strategy.absent": chars[root] + chars[first] + chars[interview] + chars[template],
             "strategy.husk": chars[root] + chars[first] + chars[interview],
