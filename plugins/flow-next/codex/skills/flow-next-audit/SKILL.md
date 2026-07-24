@@ -1,6 +1,6 @@
 ---
 name: flow-next-audit
-description: Audit .flow/memory/ entries against current code and keep, update, consolidate, or delete each. Use when asked to audit or refresh memory.
+description: Audit .flow/memory/ entries against current code and keep, update, consolidate, replace, delete, or harden each. Use when asked to audit memory or graduate a recurring lesson into a gate.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---

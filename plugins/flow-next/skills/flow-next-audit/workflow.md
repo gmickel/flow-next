@@ -292,15 +292,33 @@ Capture the per-term outcomes into a glossary section of the report (see §5.1 b
 
 ```bash
 # per entry: $entry_file (path from §0.1), $entry_id
-UPDATE_HEADINGS=$(grep -c '^## Update ' "$entry_file" 2>/dev/null || echo 0)
+# `grep -c` PRINTS 0 and EXITS 1 on zero matches — a `|| echo 0` fallback would append a
+# SECOND zero and break the later numeric comparison. Swallow the exit status instead.
+UPDATE_HEADINGS=$(grep -c '^## Update ' "$entry_file" 2>/dev/null || true)
+UPDATE_HEADINGS=${UPDATE_HEADINGS:-0}
 ENTRY_COMMITS=$(git -C "$REPO_ROOT" log --oneline -- "$entry_file" 2>/dev/null | wc -l | tr -d ' ')
+ENTRY_COMMITS=${ENTRY_COMMITS:-0}
 # plus, from the frontmatter already parsed in §0.1: related_to length, last_updated
 ```
 
-An entry is **recurrence-qualified** when `UPDATE_HEADINGS >= 2` OR `ENTRY_COMMITS >= 4`. A `related_to` cluster of `>= 3` corroborates but never qualifies on its own — see [phases.md](phases.md) §Harden for the thresholds and the calibration evidence behind them.
+An entry is **recurrence-qualified** when `UPDATE_HEADINGS >= 2` OR `ENTRY_COMMITS >= 4`.
 
-- **Recurrence-qualified → bypass auto-Keep.** The entry (or, for a cluster, the cluster) enters the Phase-1 investigation set for Harden consideration even when its module is unchanged. Record why: `recurrence bypass — 2 Update headings, module unchanged`.
+A `related_to` **cluster** qualifies only as a corroborated whole, never on size alone: a cluster of `>= 3` entries qualifies when **any member** has at least one `## Update` heading, or **any member** meets the commit signal. Cluster aggregates must therefore be computed here too, before anything is auto-Kept — a cluster whose members all have unchanged modules would otherwise be auto-Kept entry-by-entry and never seen:
+
+```bash
+# per related_to cluster: sum/max the per-entry values gathered above
+CLUSTER_SIZE=<number of entries in the related_to cluster>
+CLUSTER_MAX_UPDATES=<max UPDATE_HEADINGS across members>
+CLUSTER_MAX_COMMITS=<max ENTRY_COMMITS across members>
+# qualified when: CLUSTER_SIZE >= 3 AND (CLUSTER_MAX_UPDATES >= 1 OR CLUSTER_MAX_COMMITS >= 4)
+```
+
+A bare `related_to >= 3` with no `## Update` anywhere and no member meeting the commit signal **proposes nothing** — see [phases.md](phases.md) §Harden for the thresholds and the calibration evidence behind them.
+
+- **Recurrence-qualified → bypass auto-Keep.** The entry — or, for a qualified cluster, **every member of that cluster** — enters the Phase-1 investigation set for Harden consideration even when its module is unchanged. Record why: `recurrence bypass — 2 Update headings, module unchanged`, or `recurrence bypass — cluster of 4, 1 Update heading on <member-id>`.
 - Not qualified → fall through to the normal auto-Keep decision below.
+
+A qualified cluster is evaluated as **one** Harden unit (Consolidate first, per the precedence rule) — the whole cluster is investigated so the merge can happen, but it never yields one gate per member.
 
 Recurrence is inferred from these **write-side artifacts plus LLM judgment**. There is no read-side usage telemetry anywhere in flow-next: `memory-scout` retrieval and worker re-anchor reads leave no trace on the entry, and nothing records that an entry fired during a run. Do not claim a usage count in evidence bullets — cite the artifacts.
 
