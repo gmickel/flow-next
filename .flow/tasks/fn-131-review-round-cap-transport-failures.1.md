@@ -34,9 +34,8 @@ git diff --exit-code -- plugins/flow-next/codex
 ```
 
 ## Done summary
-TBD
-
+Implemented verdict-aware review accounting: pre-dispatch reservations now finalize exactly once, no-verdict transport failures refund and persist auditable attempts, delivered verdicts consume rounds, repeated transport failures stop separately at exit 5, RP records outcomes, and canonical/Codex/docs surfaces agree.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: bf6943e7
+- Tests: python3 -m unittest plugins.flow-next.tests.test_review_convergence_cap plugins.flow-next.tests.test_backend_spec -q, python3 -m unittest plugins.flow-next.tests.test_review_convergence_cap plugins.flow-next.tests.test_flowctl_surface plugins.flow-next.tests.test_skill_prose_diet plugins.flow-next.tests.test_codex_delegation_classify -q, python3 scripts/run_tests_parallel.py, ./scripts/sync-codex.sh (twice; byte-identical tree)
 - PRs:
