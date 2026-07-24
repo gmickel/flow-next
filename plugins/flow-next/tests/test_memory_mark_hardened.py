@@ -189,11 +189,47 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
             fm = flowctl.parse_memory_frontmatter(path)
             self.assertEqual(fm["hardened_into"], weird)
 
-    def test_body_preserved(self) -> None:
+    def test_surrounding_whitespace_preserved_verbatim(self) -> None:
+        """Only the emptiness check strips — storage is the raw value."""
+        padded = f"  {GATE_REF}\t"
         with tempfile.TemporaryDirectory() as tmp:
             mem = _init_repo(Path(tmp))
             path = _seed_entry(mem)
-            before = flowctl._memory_read_entry(path)["body"]
+            result = _run(
+                Path(tmp),
+                "memory",
+                "mark-hardened",
+                ENTRY_ID,
+                "--gate-ref",
+                padded,
+                "--json",
+            )
+            self.assertEqual(result["hardened_into"], padded)
+            fm = flowctl.parse_memory_frontmatter(path)
+            self.assertEqual(fm["hardened_into"], padded)
+
+    def test_body_segment_byte_identical(self) -> None:
+        """The raw body segment after `---` is unchanged, byte for byte."""
+        rich_body = (
+            "Body: user.role propagation issue.\n"
+            "\n"
+            "## Update 2026-05-10\n"
+            "\n"
+            "Re-learned in fn-97.\n"
+            "\n"
+            "  indented line with trailing spaces   \n"
+            "\n"
+            "Final line.\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            mem = _init_repo(Path(tmp))
+            path = _seed_entry(mem)
+            data = flowctl._memory_read_entry(path)
+            flowctl.write_memory_entry(path, data["frontmatter"], rich_body)
+
+            before_raw = path.read_text(encoding="utf-8")
+            before_segment = before_raw.split("---\n", 2)[2]
+
             _run(
                 Path(tmp),
                 "memory",
@@ -203,12 +239,62 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
                 GATE_REF,
                 "--json",
             )
-            after = flowctl._memory_read_entry(path)["body"]
-            self.assertEqual(before, after)
-            self.assertIn(
-                "user.role propagation issue; fix added a guard.",
-                path.read_text(encoding="utf-8"),
+
+            after_segment = path.read_text(encoding="utf-8").split("---\n", 2)[2]
+            self.assertEqual(before_segment, after_segment)
+
+    def test_body_edge_blank_lines_follow_shared_writer_contract(self) -> None:
+        """Edge blank-line normalization is the SHARED writer's behavior.
+
+        `_memory_read_entry` drops leading newlines and `write_memory_entry`
+        collapses trailing ones — pre-existing for every memory write path.
+        Asserted here against `mark-stale` so any future divergence between
+        the sibling handlers fails loudly.
+        """
+        padded = "---\n{fm}---\n\n\n\nPadded body.\n\n\n"
+        fm_lines = (
+            "title: T\n"
+            "date: \"2026-01-01\"\n"
+            "track: knowledge\n"
+            "category: conventions\n"
+            "applies_when: always\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            mem = _init_repo(Path(tmp))
+            entry_dir = mem / "knowledge" / "conventions"
+            entry_dir.mkdir(parents=True, exist_ok=True)
+
+            hardened_path = entry_dir / "padded-hardened-2026-01-01.md"
+            hardened_path.write_text(padded.format(fm=fm_lines), encoding="utf-8")
+            stale_path = entry_dir / "padded-stale-2026-01-01.md"
+            stale_path.write_text(padded.format(fm=fm_lines), encoding="utf-8")
+
+            _run(
+                Path(tmp),
+                "memory",
+                "mark-hardened",
+                "padded-hardened-2026-01-01",
+                "--gate-ref",
+                GATE_REF,
+                "--json",
             )
+            _run(
+                Path(tmp),
+                "memory",
+                "mark-stale",
+                "padded-stale-2026-01-01",
+                "--reason",
+                "x",
+                "--json",
+            )
+
+            hardened_segment = hardened_path.read_text(encoding="utf-8").split(
+                "---\n", 2
+            )[2]
+            stale_segment = stale_path.read_text(encoding="utf-8").split("---\n", 2)[2]
+            # Same normalization from both handlers — nothing introduced here.
+            self.assertEqual(hardened_segment, stale_segment)
+            self.assertEqual(hardened_segment, "\nPadded body.\n")
 
     def test_audited_by_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

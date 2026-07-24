@@ -12032,8 +12032,14 @@ def cmd_memory_mark_hardened(args: argparse.Namespace) -> None:
     `<path>#<rule-id> -- <note>` convention, only non-emptiness), stamps
     `last_audited` (today, UTC date), records optional `audit_notes` from
     `--audited-by`, and clears the stale-only fields so the frontmatter is
-    consistent with exactly one status. Body preserved; atomic via
-    `write_memory_entry`.
+    consistent with exactly one status. Atomic via `write_memory_entry`.
+
+    Body: never modified — the exact body segment is read and written back.
+    The shared read/write pair normalizes blank lines at the body EDGES
+    (`_memory_read_entry` drops leading newlines, `write_memory_entry`
+    collapses trailing ones to a single `\\n`); that is the pre-existing
+    round-trip contract of every memory writer, identical for `mark-stale` /
+    `mark-fresh`, and a no-op on any entry flowctl itself wrote.
 
     Idempotent: re-marking a hardened entry replaces `hardened_into`
     (`last_audited` is date precision, so a same-day re-mark is a no-op on
@@ -12042,8 +12048,11 @@ def cmd_memory_mark_hardened(args: argparse.Namespace) -> None:
     memory_dir = require_memory_enabled(args)
 
     entry_id = args.id
-    gate_ref = (getattr(args, "gate_ref", None) or "").strip()
-    if not gate_ref:
+    # Verbatim storage: the raw value is what lands in `hardened_into`; the
+    # stripped copy exists ONLY for the non-emptiness check. (The YAML writer
+    # quotes edge-whitespace scalars, so a padded value round-trips intact.)
+    gate_ref = getattr(args, "gate_ref", None) or ""
+    if not gate_ref.strip():
         error_exit(
             "--gate-ref is required (the gate this lesson graduated into, "
             'e.g. "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes")',
