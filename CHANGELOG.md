@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+## [flow-next 3.4.4] - 2026-07-24
+
 ### Changed
 
 - **Default model routing now leads with Claude Opus 5.** Opus 5 (launched
