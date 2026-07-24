@@ -156,6 +156,11 @@ The result filename `<fixture>-<model>-<date>.json` also carries model + date.
 Result files are run artifacts, not source: `results/` is gitignored except its
 `.gitkeep`.
 
+fn-130 completion evidence is the deliberate exception: authenticated B1 and
+candidate artifacts are retained under
+[`evidence/fn130/`](evidence/fn130/README.md), including scrubbed preflights,
+source hashes, nonzero usage, per-fixture outcomes, and isolation reports.
+
 ## Enforced isolation (not merely asserted)
 
 A same-user subprocess with no OS sandbox can, in principle, write anywhere it can

@@ -9,3 +9,4 @@ review-off	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H10 pass	50243	44094	-6149	1
 review-on	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H10 pass	50243	44920	-5323	10.59	2	null	keep	Exactly selected-review.md activated after selected mode, including export passthrough.
 html-off	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H9 pass	50243	44094	-6149	12.24	2	null	keep	HTML route and shared disclosure references cold.
 html-on	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H9 pass	69838	66643	-3195	4.58	2	null	keep	html-render-lens.md then shared disclosure reference activated after snapshot gate.
+paired-agentic-emissions	8ed71a73ccc593a8a018dcdb805a86f396dcf76f	H1-H10 scorer-only oracle	61420	54314	-7106	11.57	P1-P4 N=2; P5 N=3	Claude sonnet subjects + Codex gpt-5.6-sol high scorer; nonzero usage	keep	22 retained B1/candidate emissions; independent scorer 58→59 passing checks, zero regressions; oracle absent from subject prompts. Evidence: evidence/fn130/paired-emissions.json.

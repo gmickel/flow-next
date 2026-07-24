@@ -52,7 +52,9 @@ apples-to-apples (the ratchet needs constancy, not a specific tier). Recorded in
 scoring eval, all finalized before baseline) · `results.tsv` (extended schema) · `changelog.md`
 (per-experiment log — resume from here) · `baseline/{SKILL,steps,examples}.md` (pre-mutation prose) ·
 `holdout/{input,oracle,README}.md` (task-130.7 sealed P5; input and answer key are separated) ·
-`task-130-7-results.tsv` (independent routing/examples keep ledger and reached-path pairs).
+`task-130-7-results.tsv` (independent routing/examples keep ledger and reached-path pairs) ·
+`run_fn130_agentic_eval.py` + `evidence/fn130/paired-emissions.json` (paired B1/candidate
+P1–P5 emissions, scorer-only oracle, cross-family scoring, source/fixture hashes, and usage).
 
 ## Resume
 

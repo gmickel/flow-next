@@ -24,9 +24,9 @@ focused tests fail closed on a prompt-input mismatch.
 | Version contract | `B0 53,931 → B1 50,243` on all 10 version fixtures: `−3,688` (`−6.84%`) | deterministic 10-state contract matrix; canonical + Codex question/warning parity; no backend telemetry claim | **kept:** Plan-only copy-mode check. Removed fleet ceremony. No hook/helper/ack write. |
 | Setup | `B1 103,688 → 69,591–74,854` across 16 routes: `−27.81%` to `−32.88%` | 16 route fixtures plus 72 Setup/model/template checks; host branches for Claude, Codex, Cursor, Droid, Grok; deterministic only | **kept:** one-level host/model/Ralph routing. No discarded Setup mutation. |
 | Tracker Sync | `B1 452,552 → 228,459–302,354`: `−33.2%` to `−49.5%` | 15/15 frozen fixtures; fake Linear MCP/GraphQL, GitHub, GitLab, Jira transports; zero external writes; deterministic only | **kept:** common spine + exactly one adapter. No-transport/malformed remain cold and safe. |
-| Prime | classify-only `96,190 → 32,759` (`−65.94%`); report/full routes `−0.68%` to `−1.09%` | authenticated Claude baseline and candidate both 7/7; 6/6 synthetic plus negative control; backend usage retained separately in dated result JSON | **kept:** classify-only direct route and remediation gating. |
-| Plan Review | `B1 48,486 → 10,080–17,550`: `−63.80%` to `−79.21%` | risky, clean, and user-edited production prompt corpora; reviewer prompt byte-identical to B1; inherited real-engine cells remain applicable | **kept:** common router + selected backend. No backend split discarded. |
-| Plan | default `61,420 → 54,314` (`−11.57%`); optional routes `−4.58%` to `−12.24%` | deterministic pairs `N=2`; P1–P4 plus sealed no-code/research/Mermaid holdout; no backend telemetry | **kept:** optional-route gating and independent examples trim. Prior unguarded examples trim remains superseded by the sealed holdout. |
+| Prime | classify-only `96,190 → 32,759` (`−65.94%`); report/full routes `−0.68%` to `−1.09%` | tracked authenticated Claude `sonnet` B1 and candidate: 7/7 each; 6/6 synthetic plus negative control; nonzero usage and clean isolation in [`optimization/prime/evidence/fn130/`](../prime/evidence/fn130/README.md) | **kept:** classify-only direct route and remediation gating. |
+| Plan Review | `B1 48,486 → 10,080–17,550`: `−63.80%` to `−79.21%` | Codex `gpt-5.6-sol` high B1/candidate real-backend corpus: risky 10/10 + NEEDS_WORK, clean SHIP, user-edited 37 grounded, nonzero usage; production reviewer prompt byte-identical | **kept:** common router + selected backend. No backend split discarded. Evidence: [`plan-review-real-backend.json`](evidence/fn130/plan-review-real-backend.json). |
+| Plan | default `61,420 → 54,314` (`−11.57%`); optional routes `−4.58%` to `−12.24%` | paired Claude `sonnet` B1/candidate emissions: P1–P4 `N=2`, subjective P5 `N=3`; independent Codex `gpt-5.6-sol` high scorer; 58→59 checks, zero regressions, nonzero usage; scorer-only oracle excluded from subject prompts | **kept:** optional-route gating and independent examples trim. Prior unguarded examples trim remains superseded by the sealed holdout. Evidence: [`paired-emissions.json`](../plan/evidence/fn130/paired-emissions.json). |
 | Work | default `54,358 → 50,628` (`−6.86%`); delegation-active `100,851 → 100,424` (`−0.42%`) | 20 route contracts; serial/parallel/conflict/failure/review/tracker/plan-sync/delegation rails; deterministic only | **kept:** exact selection contract + active machinery gating. **discarded:** circular summary-first consent router. |
 | Strategy | absent/generated `33,798 → 31,898`; husk `30,029 → 28,129`; update `30,029 → 28,567`; foreign `17,772 → 11,657` | 6/6 frozen route/safety checks; non-clobber/read-back preserved; deterministic only | **kept:** first-run/update split. **discarded:** moving foreign confirmation and nested shared read-back. |
 | Make PR | HTML-off/create/finalize routes `−7,262`; HTML-on `+450` selected-route overhead | frozen dry-run/body/create/finalize/existing/push corpora and B1 unchanged slices; deterministic only | **kept:** cold HTML lens because the predeclared default route improves with zero loss. **discarded:** flat inline HTML, moving action-site safety, combining HTML with forge routing. |
@@ -81,7 +81,15 @@ inactive skill-only probe records were not changed.
 - Plugin smoke from outside the repository: 136 passed, 0 failed, including
   live Codex Plan/implementation-review and Copilot paths.
 - Prime authenticated Claude baseline and candidate: 7/7 each; 6/6 synthetic
-  plus negative control.
+  plus negative control; all 14 retained fixture runs report nonzero usage.
+- Plan paired Claude `sonnet` B1/candidate emissions: P1–P4 `N=2`, subjective
+  P5 `N=3`; independent Codex `gpt-5.6-sol` high scoring produced 58→59
+  passing checks with zero regressions. The sealed scorer oracle was absent
+  from all subject prompts.
+- Plan Review B1/candidate risky, clean, and user-edited corpora ran through
+  Codex `gpt-5.6-sol` high: both risky variants caught 10/10 planted gaps,
+  both clean variants shipped, and both user-edited variants preserved 37
+  without restoring 50.
 - flow-next.dev: Astro check 0 errors/warnings/hints; 74 pages built. Existing
   highlighter/chunk-size warnings are non-blocking.
 - `git diff --check`, changed-reference existence, B0/B1 validation, fixture

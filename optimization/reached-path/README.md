@@ -118,6 +118,7 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `fixtures/synthetic/` | Subject skill for the Claude production-path smoke |
 | `runs/b0-production-path-smoke.json` | Write-once tracked B0 Claude proof (immutable) |
 | `runs/plan-review-candidate.json` | fn-130.6 B1→candidate route/corpus ratchet evidence |
+| `evidence/fn130/plan-review-real-backend.json` | fn-130 completion repair: B1/candidate risky, clean, and user-edited Plan Review corpus through Codex `gpt-5.6-sol` high, with reviews, verdicts, usage, and production-prompt hashes |
 | `runs/candidates/` | Ignored timestamped candidate smoke evidence (ordinary runs) |
 | `deferrals.md` | Non-target skills + open-spec overlaps |
 | `fleet-results.md` | fn-130 closure: per-cluster metrics, host smokes, final gates, and rollback |

@@ -1,0 +1,174 @@
+{
+  "family": "workspace-parent",
+  "status": "scored",
+  "attempts": [
+    {
+      "attempt": 1,
+      "returncode": 0,
+      "timed_out": false,
+      "parsed_ok": true,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 24321,
+        "cache_read_input_tokens": 19420,
+        "output_tokens": 7016,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 24321,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 7016,
+            "cache_read_input_tokens": 19420,
+            "cache_creation_input_tokens": 24321,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 24321
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "isolation_breached": false,
+      "stderr_tail": "",
+      "isolation": {
+        "arena_changed_beyond_projection": false,
+        "arena_diff": {
+          "created": [],
+          "removed": [],
+          "modified": []
+        },
+        "projection_tampered": false,
+        "sentinel_modified": false,
+        "sentinel_deleted": false,
+        "sentinel_token_leaked": false,
+        "sentinel_token_leaked_stderr": false,
+        "clean": true,
+        "os_sandboxed": true,
+        "breached": false
+      }
+    }
+  ],
+  "model_output": {
+    "assessment_scope": "repository",
+    "axes": {
+      "lifecycle": "greenfield",
+      "topology": {
+        "monorepo": false,
+        "constellation_member": false
+      },
+      "size_band": "small",
+      "stacks": [],
+      "delivery_shape": [
+        "web service/app"
+      ]
+    },
+    "confidence": {
+      "lifecycle": "medium",
+      "topology": "high",
+      "size": "high",
+      "stacks": "high",
+      "shape": "low"
+    },
+    "would_ask": [
+      "Is this repo part of a larger product family/constellation alongside sibling repos sharing the \"acme-web\" naming prefix in this workspace? (workspace-parent dampener active: 26 sibling git dirs makes shared-org/prefix signals alone insufficient to auto-confirm; prefix-family match still requires confirmation per policy)"
+    ],
+    "playbook": "greenfield"
+  },
+  "score": {
+    "family": "workspace-parent",
+    "negative_control": false,
+    "checks": [
+      {
+        "check": "assessment_scope",
+        "pass": true,
+        "detail": "got='repository' want='repository'"
+      },
+      {
+        "check": "lifecycle",
+        "pass": true,
+        "detail": "got='greenfield' want='greenfield'"
+      },
+      {
+        "check": "constellation_member",
+        "pass": true,
+        "detail": "got=False want=False"
+      },
+      {
+        "check": "would_ask_constellation",
+        "pass": true,
+        "detail": "present=True want=True would_ask='Is this repo part of a larger product family/constellation alongside sibling repos sharing the \"acme-web\" naming prefix in this workspace? (workspace-parent dampener active: 26 sibling git dirs makes shared-org/prefix signals alone insufficient to auto-confirm; prefix-family match still requires confirmation per policy)'"
+      },
+      {
+        "check": "playbook",
+        "pass": true,
+        "detail": "got='greenfield' want in ['greenfield', 'standard-single']"
+      }
+    ],
+    "passed": true
+  },
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 24321,
+    "cache_read_input_tokens": 19420,
+    "output_tokens": 7016,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 24321,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 7016,
+        "cache_read_input_tokens": 19420,
+        "cache_creation_input_tokens": 24321,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 24321
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "isolation": {
+    "arena_changed_beyond_projection": false,
+    "arena_diff": {
+      "created": [],
+      "removed": [],
+      "modified": []
+    },
+    "projection_tampered": false,
+    "sentinel_modified": false,
+    "sentinel_deleted": false,
+    "sentinel_token_leaked": false,
+    "sentinel_token_leaked_stderr": false,
+    "clean": true,
+    "os_sandboxed": true,
+    "breached": false
+  },
+  "provenance": {
+    "backend": "claude",
+    "model": "sonnet",
+    "backend_version": "2.1.218 (Claude Code)",
+    "date_utc": "20260724",
+    "timeout_s": 180,
+    "retries": 1,
+    "rules_source": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f:plugins/flow-next/skills/flow-next-prime/classification.md",
+    "rules_sha256": "df3fa766e9a1cc87ff1fc789f2a3720bdfc615846caec7aa5bb653adeaec5c4f"
+  }
+}

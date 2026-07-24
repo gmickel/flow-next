@@ -142,3 +142,29 @@ Applied its actionable findings:
 Deviations from the task's literal approach, disclosed: fixtures P1/P4 are invented-realistic (not verbatim
 "drawn from real spec Goal sections") — privacy-friendlier, same eval value; P3's synthetic id `fn-88` may
 cosmetically collide with a future real fn-88 (harmless — it's a frozen fixture, never written to `.flow/`).
+
+---
+
+## fn-130 completion-review repair — paired emitted plans
+
+The first terminal completion review correctly rejected deterministic routing
+checks as insufficient proof for the Plan output contract. The repair ran
+paired B1/candidate Plan emissions with Claude `sonnet`, then scored the
+retained artifacts independently with Codex `gpt-5.6-sol` at high effort:
+
+- P1–P4: `N=2` per variant.
+- Subjective sealed P5: `N=3` per variant. One candidate run selected an ERD
+  rather than the required service flowchart, so majority scoring was used
+  instead of hiding the variance.
+- Final ratchet: B1 58 passing checks → candidate 59; zero regressions.
+- All 22 subject emissions and scorer usage are nonzero and retained.
+- Fixture/source hashes and lineage identify the exact B1 and candidate.
+- The sealed H1–H10 oracle was supplied only to the scorer and is absent from
+  every subject prompt.
+
+An initial harness attempt let the subject follow Plan's normal write workflow
+and stop on a denied `Write` call. Those outputs were discarded. The repaired
+harness appends an explicit evaluation-only, output-only override after the
+fixture and skill instructions; its ordering and ratchet logic have offline
+regression tests. Durable artifact:
+[`evidence/fn130/paired-emissions.json`](evidence/fn130/paired-emissions.json).
