@@ -4509,14 +4509,22 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # fn-76: ORDERED quality ranking (strongest first); ``default_model`` ==
         # ``models[0]``. copilot 1.0.65 rejects gpt-5.6-sol (``--model flag is
         # not available``), so the ranking top stays gpt-5.5; the ladder steps
-        # down on that signature. Verified via live probe against copilot CLI
-        # 1.0.65 — asked the CLI itself for the exact ``--model`` strings it
-        # accepts. Keep synced with ``copilot -p "/model"``; GitHub ships new
-        # rows without changelog. (1.0.65 dropped ``gpt-5.2`` / ``gpt-5.2-codex``
+        # down on that signature. (1.0.65 dropped ``gpt-5.2`` / ``gpt-5.2-codex``
         # — they 400 "Model not available".)
+        # SOURCE OF TRUTH for this list: the GitHub Copilot supported-models
+        # docs (docs.github.com/copilot/reference/ai-models/supported-models),
+        # NOT a local ``--model`` probe — Copilot availability is org-policy
+        # managed, so a policy-restricted install rejecting an id proves
+        # nothing about CLI support (observed 2026-07-24: an org-managed
+        # 1.0.74 rejected ``claude-opus-5``/``claude-opus-4.8`` while the docs
+        # list both GA in the CLI). Unknown-model is warn-and-accept and the
+        # ladder heals per-install gaps, so docs-listed rungs are safe even
+        # where a given org disallows them.
         "models": [
             "gpt-5.5",
             "gpt-5.4",
+            "claude-opus-5",  # GA per docs 2026-07-24 (1M ctx + reasoning levels in CLI)
+            "claude-opus-4.8",
             "claude-opus-4.7",
             "claude-opus-4.6",
             "claude-opus-4.5",
@@ -4543,7 +4551,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``default_model`` == ``models[0]``. Cursor's fallback (run_cursor_exec)
         # consults ``cursor-agent --list-models`` on failure and dispatches the
         # best ``list ∩ ranking`` entry. Model strings are verbatim from
-        # ``cursor-agent --list-models`` (v2026.06); keep synced.
+        # ``cursor-agent --list-models`` (v2026.07); keep synced.
         "models": [
             "gpt-5.6-sol-high",
             "gpt-5.6-sol-xhigh",
@@ -4552,6 +4560,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
             "gpt-5.6-sol-low",
             "gpt-5.6-terra-high",
             "gpt-5.6-luna-high",
+            "claude-opus-5-thinking-high",  # probed live 2026-07-24 (launch-day slug)
             "claude-opus-4-8-thinking-high",
             "claude-opus-4-7-thinking-high",
             "gpt-5.5-high",

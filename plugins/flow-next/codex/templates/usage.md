@@ -77,7 +77,7 @@ Harness-relative: every direction works — from Claude Code the bridges are `co
 
 **Cursor host** — agent-frontmatter tiering is ignored on Cursor; orchestration lives in AGENTS.md + caller-side pins (setup scaffolds both). Distinct from the headless `cursor` CLI backend below.
 
-- **Pin grammar:** Cursor slugs (e.g. `claude-opus-4-8-thinking-high`, `gpt-5.6-sol-high`); bracket params where the host accepts them. Slugs are volatile — enumerate via host catalog or `cursor-agent --list-models`; re-run `$flow-next-setup` to refresh.
+- **Pin grammar:** Cursor slugs (e.g. `claude-opus-5-thinking-high`, `gpt-5.6-sol-high`); bracket params where the host accepts them. Slugs are volatile — enumerate via host catalog or `cursor-agent --list-models`; re-run `$flow-next-setup` to refresh.
 - **Tier degrade:** `agents/*.md` family aliases (`haiku`/`sonnet`/`opus`) resolve to **inherit** (session model) on Cursor; no alias-to-slug rewrite exists or is planned. Caller-side pins are the escape hatch.
 - **`review.backend host`:** bare only (`host:<model>` rejected). Pins live in the AGENTS.md model-routing section — **not** on the backend string. Host-native fresh-context subagent; preferred from inside Cursor.
 - **≠ `cursor` CLI backend:** `review.backend cursor:…` / `cursor-agent` is a separate headless subprocess path (multi-family reach from outside Cursor; circular from inside).

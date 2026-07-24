@@ -75,7 +75,7 @@ class TestRegistryShape(unittest.TestCase):
         self.assertNotIn("default_effort", BACKEND_REGISTRY["cursor"])
 
     def test_cursor_model_catalog(self) -> None:
-        # Source of truth: ``cursor-agent --list-models`` (v2026.06). Keep synced
+        # Source of truth: ``cursor-agent --list-models`` (v2026.07). Keep synced
         # — Cursor ships new rows + auto-updates the CLI without changelog.
         # fn-76: ``models`` is an ORDERED quality ranking (strongest first), a
         # list — not a set. ``default_model`` MUST equal ``models[0]``.
@@ -89,6 +89,7 @@ class TestRegistryShape(unittest.TestCase):
                 "gpt-5.6-sol-low",
                 "gpt-5.6-terra-high",
                 "gpt-5.6-luna-high",
+                "claude-opus-5-thinking-high",
                 "claude-opus-4-8-thinking-high",
                 "claude-opus-4-7-thinking-high",
                 "gpt-5.5-high",
@@ -144,15 +145,19 @@ class TestRegistryShape(unittest.TestCase):
         self.assertEqual(BACKEND_REGISTRY["copilot"]["default_effort"], "high")
 
     def test_copilot_model_catalog(self) -> None:
-        # Source of truth: `copilot -p "/model"` against CLI 1.0.65. Keep in
-        # sync when GitHub activates new rows; older rows stay listed until
-        # copilot itself rejects them. fn-76: ORDERED quality ranking (strongest
-        # first), a list — ``default_model`` MUST equal ``models[0]``.
+        # Source of truth: the GitHub Copilot supported-models DOCS, not a
+        # local `--model` probe — Copilot availability is org-policy managed,
+        # so a restricted install rejecting an id proves nothing (2026-07-24
+        # lesson). Older rows stay listed until the docs drop them. fn-76:
+        # ORDERED quality ranking (strongest first), a list — ``default_model``
+        # MUST equal ``models[0]``.
         self.assertEqual(
             BACKEND_REGISTRY["copilot"]["models"],
             [
                 "gpt-5.5",
                 "gpt-5.4",
+                "claude-opus-5",
+                "claude-opus-4.8",
                 "claude-opus-4.7",
                 "claude-opus-4.6",
                 "claude-opus-4.5",

@@ -4,6 +4,30 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Changed
+
+- **Default model routing now leads with Claude Opus 5.** Opus 5 (launched
+  2026-07-23: near-Fable intelligence at half the price, same $5/$25 as
+  Opus 4.8) replaces Fable 5 as the recommended session/planner tier and
+  Opus 4.8 as the native quality-implementation and same-family-heavy-review
+  tier. Updated: the setup model-routing scaffold (table row + default
+  pipeline), orchestration docs (dated generation note; the 2026-07-14 eval
+  rows stay attributed to the models actually measured), and cursor reviewer
+  slug lists (`claude-opus-5-thinking-high`, verified live via
+  `cursor-agent --list-models`). Fable 5 stays in the table as the
+  escalation rung for frontier-hard plans and gates. `agents/*.md` family
+  aliases (`opus`) resolve to the new generation automatically - no
+  frontmatter changes.
+- **Cursor and Copilot review-backend registries gain Claude Opus 5 rungs.**
+  Cursor: `claude-opus-5-thinking-high` (verified live via
+  `cursor-agent --list-models` 2026-07-24). Copilot: `claude-opus-5` and
+  `claude-opus-4.8` per the GitHub supported-models docs - the docs are now
+  the recorded source of truth for the copilot ranking, since Copilot model
+  availability is org-policy managed and a restricted install rejecting an
+  id proves nothing about CLI support. Both registry tops stay GPT
+  (`gpt-5.6-sol-high` / `gpt-5.5`) - the cross-family default is deliberate;
+  the fallback ladder heals per-org gaps.
+
 ## [flow-next 3.4.3] - 2026-07-24
 
 ### Changed
