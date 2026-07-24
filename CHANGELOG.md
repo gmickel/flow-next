@@ -4,6 +4,52 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Added
+
+- **`Harden` — a sixth `/flow-next:audit` outcome that graduates a recurring
+  lesson into an enforced gate (fn-122).** Memory entries that keep getting
+  re-taught are the ones that should stop riding the context window: when an
+  entry is correct, recurring, and mechanizable, the audit now proposes turning
+  it into a lint rule, a CI step, or a rule in the substantive
+  `CLAUDE.md` / `AGENTS.md`. Recurrence is measured from the artifacts that
+  actually exist - `## Update` heading count and entry-file commit count
+  (there is no read-side usage telemetry, and the docs say so). The gate is
+  **verified live** before the lesson is retired: a resolved lint config, a job
+  that actually runs, the instruction file agents really read. Verification
+  failure leaves the entry `active` and reports a failed graduation - a gate
+  that does not fire is worse than no gate. Harden never auto-applies in
+  `mode:autofix`; candidates are reported under Recommended only, because gate
+  surfaces are shared repo infrastructure.
+- **`flowctl memory mark-hardened <id> --gate-ref "<path>#<rule-id> -- <note>"`.**
+  Sets `status: hardened` and `hardened_into` (stored verbatim - flowctl
+  validates non-emptiness only; parsing the convention is skill judgment),
+  stamps `last_audited`, and clears the stale-only fields. The entry file is
+  never removed, on any track, so "why does this lint rule exist?" stays
+  answerable. Idempotent - re-marking replaces `hardened_into`.
+- **`memory mark-fresh` is now also the un-graduation path.** It drops
+  `hardened_into` along with the stale family, returning a hardened entry to
+  `active` so the lesson re-enters the context window. Later audit runs
+  gate-liveness-check every hardened entry against the surface named by
+  `hardened_into` and propose `mark-fresh` when the gate is gone or inactive.
+
+### Changed
+
+- **`memory` status enum gains `hardened`; default retrieval excludes it.**
+  `--status` on `memory list` / `memory search` accepts
+  `active|stale|hardened|all`, and the default `active` now excludes **both**
+  stale and hardened entries - so `memory-scout` stops surfacing lessons that
+  a gate already enforces, with no scout change. Status field invariants are
+  exclusive and enforced by every mutation: `mark-stale` drops
+  `hardened_into`, `mark-hardened` clears `stale_reason` / `stale_date`, and
+  `mark-fresh` drops both families.
+- **Cross-version contract documented honestly in `docs/memory-schema.md`.**
+  Frontmatter validation runs only on write, so an older flowctl **reads** a
+  `hardened` entry silently - and, because its default filter excludes only
+  `stale`, will surface it. The loud failure is write-side: any older-flowctl
+  rewrite of that entry fails validation on the unknown status and field, so
+  there is no silent corruption. Lockstep upgrade of the two flowctl copies is
+  the mitigation; no compatibility shim is added or implied.
+
 ## [flow-next 3.4.4] - 2026-07-24
 
 ### Changed

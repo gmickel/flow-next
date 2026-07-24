@@ -857,7 +857,7 @@ Explicit pins anywhere in the precedence chain (`--spec` > per-task/per-spec `re
 
 Manage persistent learnings under `.flow/memory/`.
 
-**Schema (v0.33.0+):** Categorized YAML — one entry per file under `bug/<category>/*.md` or `knowledge/<category>/*.md`. Frontmatter: `title`, `date`, `track`, `category`, `module`, `tags`, plus track-specific fields (`problem_type` / `root_cause` / `resolution_type` for `bug`; `applies_when` for `knowledge`). Optional `status: active|stale`, `last_audited`, `audit_notes`.
+**Schema (v0.33.0+):** Categorized YAML — one entry per file under `bug/<category>/*.md` or `knowledge/<category>/*.md`. Frontmatter: `title`, `date`, `track`, `category`, `module`, `tags`, plus track-specific fields (`problem_type` / `root_cause` / `resolution_type` for `bug`; `applies_when` for `knowledge`). Optional `status: active|stale|hardened`, `stale_reason` / `stale_date` (stale only), `hardened_into` (hardened only), `last_audited`, `audit_notes`. Status field invariants are exclusive — every mutation clears the other status's fields; see [memory-schema.md](memory-schema.md#entry-status) for the full matrix and the cross-version contract.
 
 **Knowledge categories:** `architecture-patterns`, `conventions`, `tooling-decisions`, `workflow`, `best-practices`, `decisions` (the last shipped in 0.39.0 for load-bearing architectural choices). Decision entries may add three optional fields: `decision_status` (enum: `proposed | accepted | superseded`), `superseded_by` (id reference), `alternatives_considered` (free-form prose). Body convention: 1–3 sentence floor describing trade-offs, irreversibility, and surprise factor.
 
@@ -890,14 +890,14 @@ flowctl memory add --track knowledge --category conventions \
   --body-file body.md [--json]
 
 # Query
-flowctl memory list [--track bug] [--category runtime-errors] [--status active|stale|all] [--json]
-flowctl memory search "windows subprocess" [--track bug] [--module flowctl.py] [--tags "unicode"] [--limit 10] [--status active|stale|all] [--json]
+flowctl memory list [--track bug] [--category runtime-errors] [--status active|stale|hardened|all] [--json]
+flowctl memory search "windows subprocess" [--track bug] [--module flowctl.py] [--tags "unicode"] [--limit 10] [--status active|stale|hardened|all] [--json]
 flowctl memory read <id> [--json]
 ```
 
 `memory read` accepts: full id (`bug/runtime-errors/slug-YYYY-MM-DD`), `slug+date`, `slug` (latest date wins), or legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`).
 
-`--status` defaults to `active`. Stale entries are excluded from default `search` results so audit-flagged advice stops polluting `memory-scout` output.
+`--status` defaults to `active`, which excludes **both** stale and hardened entries from default `list` / `search` results — audit-flagged advice stops polluting `memory-scout` output, and a hardened lesson now lives in an enforced gate, so re-injecting it as context is waste. Pass `--status stale`, `--status hardened`, or `--status all` to include them.
 
 #### memory mark-stale
 
@@ -908,17 +908,31 @@ flowctl memory mark-stale <id> --reason "no longer accurate after fn-37 refactor
   [--audited-by "audit-2026-04"] [--json]
 ```
 
-Idempotent — re-marking replaces `audit_notes` and re-stamps `last_audited`. Body untouched. Used by `/flow-next:audit`; also callable directly.
+Idempotent — re-marking replaces `audit_notes` and re-stamps `last_audited`. Also drops `hardened_into` (a stale entry never keeps pointing at a gate). Body untouched. Used by `/flow-next:audit`; also callable directly.
+
+#### memory mark-hardened
+
+Graduate a recurring lesson into an enforced gate and demote the entry to a pointer at it (sets `status: hardened` and `hardened_into`, stamps `last_audited`, clears the stale-only fields).
+
+```bash
+flowctl memory mark-hardened <id> \
+  --gate-ref "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes" \
+  [--audited-by "/flow-next:audit"] [--json]
+```
+
+`--gate-ref` is required and stored **verbatim** — flowctl checks non-emptiness only. The `<path>#<rule-id> -- <note>` shape is a skill-side convention that `/flow-next:audit` parses for its gate-liveness check; flowctl does not interpret it.
+
+The entry file always stays on disk with its body intact, so the provenance of the gate survives. Idempotent — re-marking replaces `hardened_into` (`last_audited` is date precision, so a same-day re-mark is unobservable there). Used by `/flow-next:audit` only after the gate is verified live; also callable directly.
 
 #### memory mark-fresh
 
-Clear the stale flag (drops `status` and `audit_notes`, stamps `last_audited`).
+Return an entry to `active` (drops `status`, `stale_reason`, `stale_date`, `hardened_into`, and `audit_notes`; stamps `last_audited`).
 
 ```bash
 flowctl memory mark-fresh <id> [--audited-by "audit-2026-04"] [--json]
 ```
 
-Idempotent on already-active entries.
+Both the un-stale and the **un-graduation** path: when a hardened entry's gate is later removed, `mark-fresh` drops `hardened_into` and the lesson re-enters the context window. Idempotent on already-active entries.
 
 #### memory migrate (deprecated path)
 

@@ -110,11 +110,13 @@ flowctl memory add \
 flowctl memory list                                # default: active only
 flowctl memory list --track bug                    # filter by track
 flowctl memory list --category runtime-errors      # filter by category
-flowctl memory list --status all                   # include stale entries
+flowctl memory list --status hardened              # only graduated entries
+flowctl memory list --status all                   # include stale + hardened entries
 
 flowctl memory search "sqlite locked"              # default: --status active
-flowctl memory search "sqlite locked" --status stale  # only stale entries
-flowctl memory search "sqlite locked" --status all    # active + stale
+flowctl memory search "sqlite locked" --status stale     # only stale entries
+flowctl memory search "sqlite locked" --status hardened  # only hardened entries
+flowctl memory search "sqlite locked" --status all       # active + stale + hardened
 flowctl memory search "rp wrappers" \
   --module scripts/ralph \
   --tags "rp,ralph" \
@@ -127,15 +129,46 @@ flowctl memory read legacy/pitfalls.md                             # legacy flat
 flowctl memory read legacy/pitfalls#3                              # legacy entry (1-based)
 ```
 
-Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hits surface as synthetic entries with `track: "legacy"`. Default `--status active` excludes stale entries (audit-flagged advice stops polluting `memory-scout` output); pass `--status stale` or `--status all` to include them.
+Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hits surface as synthetic entries with `track: "legacy"`. Default `--status active` excludes **both** stale and hardened entries (audit-flagged advice stops polluting `memory-scout` output; a hardened lesson now lives in a gate, so re-injecting it as context is waste); pass `--status stale`, `--status hardened`, or `--status all` to include them.
+
+## Entry status
+
+Every entry carries an implicit `status`. The field is optional in frontmatter — its absence means `active`, so a plain entry never writes it.
+
+| Status | Meaning | Required fields | Forbidden fields |
+|--------|---------|-----------------|------------------|
+| `active` (default) | The lesson is live and re-injected as context | — | `stale_reason`, `stale_date`, `hardened_into` |
+| `stale` | Audit flagged the advice as no longer accurate | `stale_reason`, `stale_date` | `hardened_into` |
+| `hardened` (fn-122) | The lesson graduated into an enforced gate — lint rule, CI step, or instruction-file rule | `hardened_into` | `stale_reason`, `stale_date` |
+
+`hardened` is **not** a weaker `stale`: the lesson is more alive than before, just relocated out of the context window and into something that fires on its own. The entry file stays on disk with its body intact so provenance survives — "why does this lint rule exist?" stays answerable.
+
+Optional frontmatter fields that carry status: `status`, `stale_reason`, `stale_date`, `hardened_into`, `last_audited`, `audit_notes`.
+
+`hardened_into` is stored **verbatim**; flowctl validates only that it is non-empty. The skill-side convention is `<path>#<rule-id> -- <note>`, e.g. `pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes`. Parsing that convention is judgment and stays in `/flow-next:audit`, not in flowctl.
+
+Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) enforces the **whole** invariant set, not just its own field — no field from the prior status survives a transition. `stale → hardened` and `hardened → stale` are both legal and both clear the other status's fields; `mark-fresh` returns any status to `active` and drops both families.
+
+### Cross-version behavior (honest contract)
+
+`validate_memory_frontmatter` runs **only inside `write_memory_entry`** (`flowctl.py`, the single call site). Reads never validate. So against an older flowctl that predates `hardened`:
+
+- **Reads pass through silently.** The old binary parses a `hardened` entry without complaint, and because its default status filter excludes only `stale`, it will **surface** that entry in default `memory list` / `memory search` / `memory-scout` results — the opposite of the intended exclusion. The failure mode is misclassification, not rejection.
+- **Writes are refused, loudly.** Any attempt by that older flowctl to rewrite the entry (`mark-stale`, `mark-fresh`, `memory add --update`) fails validation on the unknown `hardened` status value and the unknown `hardened_into` field. The write aborts with an error; nothing is silently corrupted on disk.
+
+**Mitigation is lockstep upgrade, not a shim.** The repo already requires the two flowctl copies — `plugins/flow-next/scripts/flowctl.py` and `.flow/bin/flowctl.py` — to move together; keep them in sync and no version straddles the enum. No compatibility shim exists or is planned: an enum extension cannot retroactively teach an old reader anything, and a second signalling mechanism would be cost without benefit in a repo that already mandates lockstep copies.
 
 ## Audit lifecycle (v0.37.0+)
 
-`/flow-next:audit [mode:autofix] [scope hint]` walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete**. Interactive mode (default) asks via the platform's blocking-question tool; autofix mode applies unambiguous actions and marks ambiguous entries as stale. The skill is agent-native — host agent reads the workflow markdown and executes it directly using its own Read/Grep/Glob tools (no Python audit engine, no codex/copilot subprocess dispatch). Legacy flat files are skipped with a warning.
+`/flow-next:audit [mode:autofix] [scope hint]` walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete / Harden**. Interactive mode (default) asks via the platform's blocking-question tool; autofix mode applies unambiguous actions and marks ambiguous entries as stale. The skill is agent-native — host agent reads the workflow markdown and executes it directly using its own Read/Grep/Glob tools (no Python audit engine, no codex/copilot subprocess dispatch). Legacy flat files are skipped with a warning.
 
 **Audit extensions (v0.39.0+):** Phase 0.5 (new) reads every `GLOSSARY.md` on the ancestor chain and audits each term against the current code (any references intact? renamed? gone?). Phase 0.1 (extended) auto-walks `knowledge/decisions/` alongside other categories. **Replace outcomes for decision entries are supersede-not-delete** — the audit writes a new entry with `decision_status: accepted` and sets the old entry's `decision_status: superseded` + `superseded_by: <new-id>`, preserving the historical trail. Other categories keep the existing Replace semantics.
 
-Two flowctl helpers back the audit lifecycle (also callable directly):
+**Harden (fn-122):** the sixth outcome. When an entry is correct **and** recurring (re-taught across runs — measured from `## Update` heading count and entry-file commit count, since no read-side usage telemetry exists) **and** mechanizable, the audit proposes graduating it into an enforced gate: a lint rule, a CI step, or a rule in the substantive `CLAUDE.md` / `AGENTS.md`. The gate is **verified live** before the lesson is retired (resolved lint config, a job that actually runs, the instruction file agents really read); verification failure leaves the entry `active` and reports a failed graduation. Only on success is the entry demoted via `flowctl memory mark-hardened`, keeping the file on disk as a pointer at the gate. Harden never auto-applies in `mode:autofix` — candidates are reported under Recommended only, because gate surfaces are shared repo infrastructure. Precedence when an entry qualifies for several outcomes: **correctness (Replace / Delete) > Consolidate > Harden** — a wrong lesson is never graduated, and a `related_to` cluster is merged first, since the cluster (not each member) is the Harden unit.
+
+**Un-graduation:** on later audit runs, each hardened entry gets a gate-liveness check against the surface named by `hardened_into`. Gate still present → the entry is reported as still-hardened and not re-investigated in full. Gate gone or inactive → the audit proposes `flowctl memory mark-fresh <id>`, which returns the entry to `active` and drops `hardened_into` so the lesson re-enters the context window. A gate upgrade (instruction-file rule promoted to a lint rule) is just another `mark-hardened` — idempotent, replaces `hardened_into`.
+
+Three flowctl helpers back the audit lifecycle (also callable directly):
 
 ```bash
 # Mark an entry stale (used by /flow-next:audit, also callable directly)
@@ -143,11 +176,20 @@ flowctl memory mark-stale <id> --reason "module renamed in PR #123"
 flowctl memory mark-stale <id> --reason "..." --audited-by "/flow-next:audit"
 flowctl memory mark-stale <id> --reason "..." --json
 
-# Clear stale flag
+# Graduate a recurring lesson into a gate (fn-122) — demote the entry to a pointer
+flowctl memory mark-hardened <id> \
+  --gate-ref "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes" \
+  [--audited-by "/flow-next:audit"] [--json]
+
+# Clear the stale flag OR un-graduate a hardened entry (both return it to active)
 flowctl memory mark-fresh <id>
 ```
 
-`mark-stale` sets `status: stale`, stamps `last_audited` (UTC), records `audit_notes` from `--reason`. Body is never modified. Idempotent — re-marking replaces `audit_notes` and re-stamps the date. `mark-fresh` drops the stale fields and stamps `last_audited`.
+`mark-stale` sets `status: stale`, stamps `last_audited` (UTC date), records `audit_notes` from `--reason`, and drops any `hardened_into`. Body is never modified. Idempotent — re-marking replaces `audit_notes` and re-stamps the date.
+
+`mark-hardened` sets `status: hardened` and `hardened_into` (from the required `--gate-ref`, stored verbatim), stamps `last_audited`, clears the stale-only fields, and records `audit_notes` when `--audited-by` is given. Body untouched; the file is never removed, on any track — including `knowledge/decisions/`, where supersession fields (`decision_status`, `superseded_by`, `alternatives_considered`) are preserved alongside the new status. Idempotent: re-marking replaces `hardened_into` (`last_audited` is date precision, so a same-day re-mark is unobservable on that field).
+
+`mark-fresh` returns the entry to `active` — it drops `status`, `stale_reason`, `stale_date`, `hardened_into`, and `audit_notes`, then stamps `last_audited`. It is both the un-stale and the un-graduation escape hatch.
 
 ## Migrate legacy → categorized (v0.37.0+)
 

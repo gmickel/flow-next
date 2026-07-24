@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Audit `.flow/memory/` entries against the current codebase — Keep / Update / Consolidate / Replace / Delete per entry
+description: Audit `.flow/memory/` entries against the current codebase — Keep / Update / Consolidate / Replace / Delete / Harden per entry
 argument-hint: "[mode:autofix] [scope hint — concept, category, module, or path]"
 ---
 

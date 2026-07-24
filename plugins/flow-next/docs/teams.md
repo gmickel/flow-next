@@ -97,7 +97,7 @@ The artefact chain is the conversation that did not happen. Pre-agentic Agile re
 | **Tech lead / Senior eng** | `/flow-next:interview --scope=technical` (optionally `--strategy --docs` for doc-aware mode), `/flow-next:plan` | Tasks under `.flow/tasks/`; review-backend choice (`flowctl review-backend`) | Owns the technical layer of the spec, the plan, and which review backend gates `/work`. |
 | **Implementing eng (human or agent)** | `/flow-next:work`, `/flow-next:impl-review` | Per-task `done_summary` + evidence | Re-anchors before each task (re-reads spec + git state). Worker subagent gets fresh context per task. |
 | **Reviewer** | `/flow-next:resolve-pr` (after PR review threads land) | PR body produced by `/flow-next:make-pr`, the diff itself | Reads the cognitive-aid body first; uses R-ID coverage + Critical Changes + Where to Look as the reading order. |
-| **Maintainer / on-call** | `/flow-next:audit`, `/flow-next:memory-migrate` | `.flow/memory/` entries | Periodic review of stale memory; Keep / Update / Consolidate / Replace / Delete per entry. |
+| **Maintainer / on-call** | `/flow-next:audit`, `/flow-next:memory-migrate` | `.flow/memory/` entries | Periodic review of stale memory; Keep / Update / Consolidate / Replace / Delete / Harden per entry. |
 
 In a *one-pizza pod* (3–5 people), one human can carry several roles simultaneously — PO drafts and is also the reviewer. The role table above tells you *which command corresponds to which hat*, not how many humans you need.
 
@@ -233,7 +233,7 @@ When review threads land, run `/flow-next:resolve-pr <PR#>`. The skill fetches t
 
 ### Maintenance — `/flow-next:audit`
 
-After merge, the new code creates new memory entries (decisions, patterns, bugs). Old memory drifts. `/flow-next:audit` walks `.flow/memory/`, reviews each entry against current code, and decides Keep / Update / Consolidate / Replace / Delete per entry.
+After merge, the new code creates new memory entries (decisions, patterns, bugs). Old memory drifts. `/flow-next:audit` walks `.flow/memory/`, reviews each entry against current code, and decides Keep / Update / Consolidate / Replace / Delete / Harden per entry.
 
 Memory garbage collection is itself a handover object — between *current* and *future* you. See [`docs/memory-schema.md`](memory-schema.md) for the categorized memory tree, frontmatter schemas, and audit lifecycle.
 
