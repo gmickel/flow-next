@@ -83,9 +83,8 @@ Skipping any of these fails `test_startup_bootstrap` / `test_dogfood_bootstrap_i
 
 
 ## Done summary
-TBD
-
+Added the `hardened` memory status plus `flowctl memory mark-hardened <id> --gate-ref` (verbatim gate pointer, UTC date stamp, idempotent), enforced per-status field invariants across mark-stale/mark-fresh/mark-hardened, and made default `memory list`/`search` exclude hardened entries so memory-scout stops re-injecting a lesson that now lives in a gate. Review round-2 fixes hardened the shared memory writer: YAML scalars now escape control characters (an unescaped newline previously made the whole entry read back as `{}`), and frontmatter-only writes preserve the body byte-for-byte.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 99803eb6b07afd42fe2b4668be6cda0a3e9aca0c, 42a0281ab2ec7996ebbdc7b78035ae0b8e4d65be, c5d6cf06973ed90506c3f9c3ade276cd323aefd2, 32ca4528e064f985ab139182a0dffc076b818be2
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_memory_mark_stale test_memory_mark_fresh test_memory_mark_hardened test_flowctl_surface test_startup_bootstrap -q (66 tests OK), python3 scripts/run_tests_parallel.py (files=129 ran=2340 failures=0 errors=0), baseline: green (focused suite green pre-edit, 44 tests), impl-review codex/gpt-5.6-sol: SHIP after 2 fix rounds
 - PRs:
