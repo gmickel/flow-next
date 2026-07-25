@@ -325,5 +325,65 @@ class RecoveryWriteReconcilesGitignore(unittest.TestCase):
         )
 
 
+class RecoveryRecordCarriesTheMintedSpecId(unittest.TestCase):
+    """The record stores specId so resume never reconstructs the id (PR #241 wave 10).
+
+    Rebuilding `<key>-<number>-<slug>` is impossible when the title slugifies to
+    empty - a CJK- or emoji-only issue title gets a random suffix from
+    `spec create` - so the id has to be recorded, not derived.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        _run(self.repo, "init")
+        self.key = flowctl.compute_create_first_key("github", "T", "")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _put(self, *extra: str) -> subprocess.CompletedProcess:
+        return _run(self.repo, "sync", "create-first-put", "--key", self.key,
+                    "--id", "I_1", "--identifier", "#1", "--url", "u",
+                    "--title", "T", "--transport", "gh", *extra)
+
+    def test_spec_id_is_optional_and_absent_before_mint(self) -> None:
+        self.assertEqual(self._put().returncode, 0)
+        rec = json.loads(
+            _run(self.repo, "sync", "create-first-get", "--key", self.key, "--json").stdout
+        )
+        self.assertNotIn("specId", rec, "no specId until the mint succeeds")
+
+    def test_post_mint_put_records_the_spec_id(self) -> None:
+        self._put()
+        self.assertEqual(self._put("--spec-id", "gh-1-t").returncode, 0)
+        rec = json.loads(
+            _run(self.repo, "sync", "create-first-get", "--key", self.key, "--json").stdout
+        )
+        self.assertEqual(rec["specId"], "gh-1-t")
+
+    def test_a_later_put_does_not_drop_an_established_spec_id(self) -> None:
+        self._put("--spec-id", "gh-1-t")
+        self.assertEqual(self._put().returncode, 0)   # e.g. re-recording transport
+        rec = json.loads(
+            _run(self.repo, "sync", "create-first-get", "--key", self.key, "--json").stdout
+        )
+        self.assertEqual(
+            rec.get("specId"), "gh-1-t",
+            "losing specId would make the mint-to-attach window unresumable again",
+        )
+
+    def test_a_slugless_title_still_yields_a_recorded_id(self) -> None:
+        """The case that makes reconstruction impossible."""
+        r = _run(self.repo, "spec", "create", "--title", "日本語のみ", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        spec_id = json.loads(r.stdout)["id"]
+        self._put("--spec-id", spec_id)
+        rec = json.loads(
+            _run(self.repo, "sync", "create-first-get", "--key", self.key, "--json").stdout
+        )
+        self.assertEqual(rec["specId"], spec_id)
+
+
 if __name__ == "__main__":
     unittest.main()

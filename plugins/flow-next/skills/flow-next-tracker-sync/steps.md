@@ -368,7 +368,7 @@ This op never mints a spec id and never invents a synthetic key. GitHub/GitLab s
    .flow/create-first/<retryKey>.json
    ```
 
-   Shape: `{ "retryKey", "id", "identifier", "url", "title", "createdAt", "transport" }`. This is the durable recovery surface - **not** a `sync receipt`.
+   Shape: `{ "retryKey", "id", "identifier", "url", "title", "createdAt", "transport", "specId"? }` (`specId` appears once the mint succeeds). This is the durable recovery surface - **not** a `sync receipt`.
 
    **`create-first/` is gitignored and MUST stay local** (flowctl's auto-managed `.flow/.gitignore` block, same runtime-artifact class as `sync-runs/`). This is a correctness requirement, not hygiene: the retry key is a hash of tracker type + title + body, so a committed recovery file would let a teammate who computes the same key "resume" by linking to **someone else's** issue instead of creating their own. On any failure after remote create (mint fails, process dies, attach errors), leave the file in place and surface `identifier` + `url` + `retryKey` in the report so the run resumes by linking.
 
@@ -387,13 +387,18 @@ This op never mints a spec id and never invents a synthetic key. GitHub/GitLab s
    # Resume order: recover the issue, THEN look for a spec already minted from it.
    # `sync get-state` reports the tracker block; an existing spec with no tracker.id
    # is this record's half-finished mint, so skip creation and go straight to attach.
-   # A spec at this id is NOT automatically this record's half-finished mint.
-   # Preflight may have left the record precisely BECAUSE that canonical id
-   # already belongs to a DIFFERENT tracker issue. Resuming on a bare `show`
-   # hit would relink that spec and overwrite its tracker state, so require
-   # BOTH: no durable tracker.id yet, AND (when an identifier is present) the
-   # same identifier this record carries.
-   EXISTING=$($FLOWCTL show "<key>-<number>-<slug>" --json 2>/dev/null | jq -r '.id // empty')
+   # The record itself carries the minted id (`specId`, written by the post-mint
+   # put below) - do NOT reconstruct `<key>-<number>-<slug>`, which is not
+   # reconstructible when the title slugifies to empty (a CJK- or emoji-only
+   # title gets a random suffix from `spec create`).
+   #
+   # A spec at that id is still NOT automatically this record's half-finished
+   # mint: preflight may have left the record precisely BECAUSE the canonical id
+   # already belongs to a DIFFERENT tracker issue. Resuming on a bare `show` hit
+   # would relink that spec and overwrite its tracker state, so require BOTH:
+   # no durable tracker.id yet, AND (when an identifier is present) the same
+   # identifier this record carries.
+   EXISTING=$(printf '%s' "$REC" | jq -r '.specId // empty')
    RESUMABLE=""
    if [ -n "$EXISTING" ]; then
      STATE=$($FLOWCTL sync get-state "$EXISTING" --json 2>/dev/null)
@@ -466,8 +471,20 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 # 1. create-first already returned ISSUE_ID / IDENTIFIER / URL (or loaded them from recovery).
 # 2. mint from IDENTIFIER (native KEY-N or synthetic gh-N / gl-N - flowctl owns synthesis)
-CREATE_OUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json)
-SPEC_ID=$(printf '%s' "$CREATE_OUT" | jq -r '.id // .spec_id // empty')
+# 2a. RESUME FIRST: if this record already carries a specId, a prior run minted
+#     and died before attaching. Re-running `spec create` there would be refused
+#     by preflight and strand the retry, so reuse it (step 6 of the retry
+#     contract above defines the full unlinked/identifier check).
+SPEC_ID=$($FLOWCTL sync create-first-get --key "$RETRY_KEY" --json 2>/dev/null | jq -r '.specId // empty')
+if [ -z "$SPEC_ID" ]; then
+  CREATE_OUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json)
+  SPEC_ID=$(printf '%s' "$CREATE_OUT" | jq -r '.id // .spec_id // empty')
+  # 2b. Record the minted id IMMEDIATELY, before attach can fail - this is what
+  #     makes the window between mint and attach resumable.
+  $FLOWCTL sync create-first-put --key "$RETRY_KEY" --id "$ISSUE_ID" \
+    --identifier "$IDENTIFIER" --url "$ISSUE_URL" --title "$TITLE" \
+    --transport "$TRANSPORT" --spec-id "$SPEC_ID"
+fi
 # 3. attach (id, identifier, url - all three)
 $FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_ID" --identifier "$IDENTIFIER" --url "$ISSUE_URL"
 # 4. seed merge base (BOTH halves - paired-snapshot invariant; body-merge.md first-link)
@@ -488,8 +505,7 @@ $FLOWCTL sync receipt "$SPEC_ID" --status updated --tracker-id "$ISSUE_ID" --tra
 #    issue, and only then hits mint preflight - leaving the original issue
 #    without its back-reference and a duplicate leaked. The record is the only
 #    thing that makes that step resumable, so it is released last.
-RETRY_KEY=$($FLOWCTL sync create-first-key --type "$TRACKER_TYPE" --title "$TITLE" --body-file "$BODY_FILE")
-$FLOWCTL sync create-first-clear --key "$RETRY_KEY"
+$FLOWCTL sync create-first-clear --key "$RETRY_KEY"   # computed at step 1
 ```
 
 **Back-reference:** create-first cannot write `flow:<spec-id>` (the id does not exist yet). The caller adds it after attach, same as Phase 2a.

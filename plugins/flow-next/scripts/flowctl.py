@@ -23692,6 +23692,13 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
             "createdAt": now_iso(),
             "transport": args.transport,
         }
+        # Recorded only once the mint succeeds. A resumed run reads this instead
+        # of rebuilding `<key>-<number>-<slug>`, which is not reconstructible
+        # when the title slugifies to empty (CJK- or emoji-only titles get a
+        # random suffix from `spec create`).
+        spec_id = getattr(args, "spec_id", None)
+        if spec_id:
+            record["specId"] = spec_id
         existing = None
         if path.exists():
             try:
@@ -23702,6 +23709,10 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
             # Idempotent: a second put keeps the ORIGINAL creation time so the
             # record still describes when the remote issue was actually made.
             record["createdAt"] = existing["createdAt"]
+        if existing and existing.get("specId") and not record.get("specId"):
+            # A later put (e.g. re-recording transport) must not drop a specId
+            # an earlier post-mint put already established.
+            record["specId"] = existing["specId"]
         # Reconcile the ignore block AT WRITE TIME, not on some future `init`.
         # A project whose auto-managed .flow/.gitignore predates this release
         # would otherwise get an untracked-but-unignored recovery record, and a
@@ -30982,6 +30993,12 @@ def main() -> None:
     ):
         p_cfp.add_argument(_flag, required=True, help=_hlp)
     p_cfp.add_argument("--key", required=True, help="Retry lookup key")
+    p_cfp.add_argument(
+        "--spec-id",
+        default=None,
+        help="Minted spec id, recorded after a successful mint so a resumed run "
+        "finds it instead of reconstructing it from key/number/slug",
+    )
     p_cfp.add_argument("--json", action="store_true", help="JSON output")
     p_cfp.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="put")
 
