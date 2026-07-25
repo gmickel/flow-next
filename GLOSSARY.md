@@ -4,6 +4,22 @@
 
 The central artefact of flow-next: a specification at `.flow/specs/<id>.md` (markdown body) plus `.flow/specs/<id>.json` (metadata sidecar, post-1.0). Reviewable on its own; cross-model-reviewed; verifiable against prior handovers; frozen at handover. Replaces the term *epic* from the 0.x line.
 
+## Ratchet, not a gate
+
+The doctrine governing what a spec is *for*. A gate decides what you are allowed to do next; a ratchet only stops you sliding back. No spec is required before reading code, prototyping, spiking, or researching — the spec exists so that what the exploration established cannot be silently lost by the next stage, the next person, or the next agent. Distinguishes flow-next from waterfall, which has three properties flow-next lacks: irreversible phases, a plan frozen at minimum knowledge, and lossy handovers. Spec-first asks for more *thought* earlier than a loose ticket does; it does not ask for more *commitment* earlier.
+
+## Prototype-driven capture
+
+Building a deliberately throwaway artefact to answer a design question, then capturing a spec **from** it (`"capture a spec from this prototype — ignore the code quality, I want the intent and the requirements it demonstrates"`). Inverts the assumption that the spec precedes the building. The prototype's *code* fate is a separate decision made at the plan stage against architecture and standards: throwaway evidence, reusable presentation layer, or implementation seed. Scales to variant generation — three radically different takes, react to all three, converge on a fourth — where the rejected options are recorded as evidence rather than discarded.
+
+## Fidelity
+
+How concrete an artefact must be before a question can actually be answered, and therefore the decision rule for when to prototype. Low-fidelity questions ("should the modal have cancel and confirm?") resolve in discussion. High-fidelity questions ("how should this look?", "how should this behave?", "does this state model survive the awkward cases?") resolve only against something running. Fidelity costs tokens, so buy it where being wrong is expensive. A *logic* prototype — a small interactive harness pushing a state machine through hard cases — is the high-fidelity form for backend work; prototyping is not a front-end-only tool.
+
+## Briefing package
+
+A half-formed markdown artefact produced by a cross-functional session (product, BA, engineering, quality) carrying domain knowledge, product intent, and early technical thinking without being fully worked out. A valid capture input, and the pattern that preserves human cross-functional refinement in front of the pipeline: the group builds the briefing together, then the interview stage challenges it for missing edge cases and unstated decisions instead of the group trying to be exhaustive in a meeting.
+
 ## Ready
 
 A human-owned boolean on the spec record (default `false`, toggled via `flowctl spec ready` / `spec unready`) marking a spec complete enough to hand to an agent — the entry gate autonomous loops consume. Orthogonal to `status` (`open|done`): a ready spec stays `open` through planning and work. Human-owned or tracker-projected (`tracker.readyState` pulls the configured tracker state onto the local flag, one-way), never agent-inferred. Opt-in and invisible until adopted: the flag is written lazily, non-adopters see no badge, prompts, or warnings anywhere.
