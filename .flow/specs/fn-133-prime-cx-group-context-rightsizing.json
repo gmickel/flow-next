@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-133-prime-cx-group-context-rightsizing",
+  "created_at": "2026-07-25T08:17:14.164999Z",
+  "depends_on_epics": [],
+  "id": "fn-133-prime-cx-group-context-rightsizing",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-133-prime-cx-group-context-rightsizing.md",
+  "status": "open",
+  "title": "Prime CX group: context-rightsizing checks for agent instruction files",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-25T08:18:55.142837Z"
+}
