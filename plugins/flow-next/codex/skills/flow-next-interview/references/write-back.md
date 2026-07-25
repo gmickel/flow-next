@@ -55,7 +55,10 @@ fi
 # branch above. On a create-first noop / unreachable transport SPEC_OUTPUT is
 # unset INSIDE the tracker arm, where an `else` can never run, so the
 # fall-through has to be an unconditional post-check.
-if [ -z "$SPEC_OUTPUT" ]; then
+# GUARD: degrade ONLY when nothing was created remotely - a failed mint AFTER
+# create-first made an issue must surface identifier + url + retryKey and stop,
+# never silently create an fn-N spec that leaves the issue orphaned.
+if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
  SPEC_OUTPUT=$($FLOWCTL spec create --title "..." --json)
 fi
 

@@ -324,7 +324,11 @@ Default to standard unless complexity demands more or less.
  # leaves SPEC_OUTPUT unset INSIDE the tracker arm, and an `else` can never run
  # in that case, so the fall-through has to be an unconditional post-check.
  # Bridge inactive / no transport / create-first noop / config flow / override:
- if [ -z "$SPEC_OUTPUT" ]; then
+ # GUARD: degrade ONLY when nothing was created remotely. If create-first
+ # already made and recorded an issue and the MINT then failed, falling back
+ # to flow-first would strand that issue as an orphan - surface
+ # identifier + url + retryKey and STOP instead (the record makes it resumable).
+ if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
  SPEC_OUTPUT=$($FLOWCTL spec create --title "<Short title>" --json)
  fi
  ```

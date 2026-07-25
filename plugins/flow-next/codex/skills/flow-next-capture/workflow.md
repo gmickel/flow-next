@@ -775,12 +775,19 @@ if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
  :
 fi
 
-# SILENT degrade - this is the ONLY flow-first creation site, and it is
-# deliberately OUTSIDE the branch above. A create-first noop / unreachable
-# transport / failed mint leaves SPEC_OUTPUT unset inside the tracker branch,
-# and an `else` arm can never run in that case, so the promised fall-through
-# has to be an unconditional post-check.
-if [ -z "$SPEC_OUTPUT" ]; then
+# SILENT degrade - the ONLY flow-first creation site, deliberately OUTSIDE
+# the branch above. A create-first noop / unreachable transport / failed mint
+# leaves SPEC_OUTPUT unset inside the tracker branch, and an `else` arm can
+# never run in that case, so the promised fall-through has to be an
+# unconditional post-check.
+#
+# GUARD: degrade ONLY when nothing was created remotely. If create-first
+# already made and recorded an issue and the tracker-keyed MINT then failed
+# (e.g. preflight found a mixed-history collision), falling back to flow-first
+# would strand that issue as an orphan with no local spec pointing at it.
+# In that case surface identifier + url + retryKey and STOP - the recovery
+# record makes the run resumable, a silent fn-N spec does not.
+if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
  SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --json)
 fi
 SPEC_ID=$(printf '%s' "$SPEC_OUTPUT" | jq -r '.id')

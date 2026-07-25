@@ -32,7 +32,10 @@ if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
   :
 fi
 
-if [ -z "$SPEC_OUTPUT" ]; then
+# GUARD: degrade ONLY when nothing was created remotely - a failed mint AFTER
+# create-first made an issue must surface identifier + url + retryKey and stop,
+# never silently create an fn-N spec that leaves the issue orphaned.
+if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
   SPEC_OUTPUT=$($FLOWCTL spec create --title "<title>" --json)   # silent flow-first degrade
 fi
 ```
