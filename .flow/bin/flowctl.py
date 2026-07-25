@@ -3072,8 +3072,14 @@ def preflight_tracker_mint(
     alias_targets = {
         bare.lower(),
         f"{key.upper()}-{number}".lower(),
-        f"#{number}",
     }
+    # The `#N` display form belongs ONLY to a synthetic gh/gl mint, where
+    # `gh-123` and `#123` genuinely name the same issue. Adding it for a native
+    # key would make an old flow-first spec stored as `#123` block a perfectly
+    # valid, unrelated `WOR-123` mint after a repo re-points from GitHub to
+    # Linear or Jira.
+    if key.lower() in set(_SYNTHETIC_TRACKER_KEYS.values()):
+        alias_targets.add(f"#{number}")
     for spec_file in iter_spec_json_files(flow_dir):
         ident_lc, _ = _spec_tracker_fields(spec_file)
         if ident_lc and ident_lc in alias_targets:
@@ -18755,8 +18761,15 @@ def _task_h1_title(content: str, task_id: str) -> Optional[str]:
 
     Returns None when no H1 is present or the H1 does not start with the
     task id. Title is the remainder after `# <id>` (may be empty).
+
+    Fence-aware: a task body often opens with a shell block containing a
+    comment like `# <task-id> example`. Treating that as the H1 would sync the
+    JSON title from an example while leaving the real H1 untouched - exactly
+    the JSON/markdown divergence this command exists to prevent.
     """
-    for line in content.splitlines():
+    for line, in_fence in _iter_fence_aware(content.split("\n")):
+        if in_fence:
+            continue
         stripped = line.strip()
         if not stripped.startswith("# "):
             continue
@@ -18771,10 +18784,18 @@ def _task_h1_title(content: str, task_id: str) -> Optional[str]:
 
 
 def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
-    """Rewrite (or insert) the task markdown H1 to `# <id> <title>`."""
+    """Rewrite (or insert) the task markdown H1 to `# <id> <title>`.
+
+    Fence-aware for the same reason as `_task_h1_title` - and here the cost of
+    getting it wrong is higher: rewriting a `# ...` line inside a fenced block
+    would corrupt an example the task body is documenting.
+    """
     lines = content.splitlines(keepends=True)
     new_h1 = f"# {task_id} {title}\n"
+    fenced = [f for _, f in _iter_fence_aware(content.split("\n"))]
     for i, line in enumerate(lines):
+        if i < len(fenced) and fenced[i]:
+            continue
         if line.lstrip().startswith("# "):
             newline = "\n" if line.endswith("\n") else ""
             lines[i] = f"# {task_id} {title}{newline}"
@@ -23526,6 +23547,9 @@ def _read_optional_arg_or_file(file_arg: Optional[str], inline_arg: Optional[str
 CREATE_FIRST_DIR = "create-first"
 
 
+CREATE_FIRST_KEY_RE = re.compile(r"[0-9a-f]{16}")
+
+
 def _create_first_dir(flow_dir: Path) -> Path:
     return flow_dir / CREATE_FIRST_DIR
 
@@ -23574,6 +23598,17 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
         else:
             print(key)
         return
+
+    # The key is interpolated into a filesystem path, so it must be validated
+    # BEFORE the join, not trusted because callers normally pass
+    # `create-first-key` output. An unvalidated `--key ../config` resolves to
+    # `.flow/config.json`: `put` would overwrite it and `clear` would delete it.
+    if not CREATE_FIRST_KEY_RE.fullmatch(args.key or ""):
+        error_exit(
+            f"Invalid --key {args.key!r}: expected 16 lowercase hex characters "
+            "(the output of `flowctl sync create-first-key`).",
+            use_json=use_json,
+        )
 
     path = _create_first_dir(flow_dir) / f"{args.key}.json"
 

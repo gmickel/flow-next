@@ -229,5 +229,64 @@ class CreateFirstProseUsesTheHelperExclusively(unittest.TestCase):
             self.assertIn(leaf, self.section, f"prose never invokes `sync {leaf}`")
 
 
+class CreateFirstKeyIsValidatedBeforePathUse(unittest.TestCase):
+    """The --key argument is interpolated into a path, so it must be validated.
+
+    Found by PR review on #241, missed by every test here: `--key ../config`
+    resolved to `.flow/config.json`, so `put` overwrote the repo's flow config
+    and `clear` would have deleted it. Callers normally pass
+    `create-first-key` output, but "normally" is not a guarantee.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        _run(self.repo, "init")
+        self.config = self.repo / ".flow" / "config.json"
+        self.baseline = self.config.read_bytes()
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    HOSTILE = ("../config", "../../etc/passwd", "a/b", "..", ".", "", "/abs")
+
+    def test_put_rejects_traversal_and_leaves_config_untouched(self) -> None:
+        for key in self.HOSTILE:
+            r = _run(self.repo, "sync", "create-first-put", "--key", key,
+                     "--id", "X", "--identifier", "#1", "--url", "u",
+                     "--title", "t", "--transport", "gh")
+            self.assertNotEqual(r.returncode, 0, f"{key!r} must be rejected")
+            self.assertNotIn("Traceback", r.stderr)
+        self.assertEqual(
+            self.config.read_bytes(), self.baseline,
+            "a rejected key must never have touched .flow/config.json",
+        )
+
+    def test_clear_rejects_traversal_and_deletes_nothing(self) -> None:
+        for key in self.HOSTILE:
+            r = _run(self.repo, "sync", "create-first-clear", "--key", key)
+            self.assertNotEqual(r.returncode, 0, f"{key!r} must be rejected")
+        self.assertTrue(self.config.exists(), "config.json must still exist")
+
+    def test_get_rejects_traversal(self) -> None:
+        for key in self.HOSTILE:
+            r = _run(self.repo, "sync", "create-first-get", "--key", key)
+            self.assertNotEqual(r.returncode, 0, f"{key!r} must be rejected")
+
+    def test_wrong_shape_hex_is_rejected(self) -> None:
+        for key in ("ABCDEF0123456789", "0123456789abcde", "0123456789abcdef0", "zzzzzzzzzzzzzzzz"):
+            r = _run(self.repo, "sync", "create-first-put", "--key", key,
+                     "--id", "X", "--identifier", "#1", "--url", "u",
+                     "--title", "t", "--transport", "gh")
+            self.assertNotEqual(r.returncode, 0, f"{key!r} is not 16 lowercase hex")
+
+    def test_a_real_key_still_works(self) -> None:
+        key = flowctl.compute_create_first_key("github", "Fix login", "")
+        r = _run(self.repo, "sync", "create-first-put", "--key", key,
+                 "--id", "X", "--identifier", "#1", "--url", "u",
+                 "--title", "t", "--transport", "gh")
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -178,5 +178,47 @@ class TestTaskSetTitle(unittest.TestCase):
         self.assertIn("non-empty", out + err)
 
 
+class TaskH1LookupIsFenceAware(unittest.TestCase):
+    """A `# <task-id> ...` line inside a fenced block is not the H1.
+
+    Found by PR review on #241. Task bodies routinely open with a shell block
+    whose comments start with `#`. Treating one as the H1 syncs the JSON title
+    from an example and leaves the real heading alone - reintroducing exactly
+    the JSON/markdown divergence `task set-title` exists to prevent.
+    """
+
+    TASK_ID = "fn-9-demo.1"
+
+    def _body(self, real_title: str) -> str:
+        return (
+            "```bash\n"
+            f"# {self.TASK_ID} example invocation from the docs\n"
+            "flowctl show " + self.TASK_ID + "\n"
+            "```\n"
+            "\n"
+            f"# {self.TASK_ID} {real_title}\n"
+            "\n"
+            "Body text.\n"
+        )
+
+    def test_title_comes_from_the_real_h1_not_the_fenced_comment(self) -> None:
+        got = flowctl._task_h1_title(self._body("The real title"), self.TASK_ID)
+        self.assertEqual(got, "The real title")
+
+    def test_rewrite_targets_the_real_h1_and_preserves_the_fence(self) -> None:
+        out = flowctl._task_rewrite_h1(self._body("Old title"), self.TASK_ID, "New title")
+        self.assertIn(f"# {self.TASK_ID} New title", out)
+        self.assertIn(
+            f"# {self.TASK_ID} example invocation from the docs", out,
+            "the fenced example must not be rewritten",
+        )
+        self.assertNotIn("Old title", out)
+        self.assertEqual(out.count(f"# {self.TASK_ID} New title"), 1)
+
+    def test_unfenced_h1_still_works(self) -> None:
+        plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
+        self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")
+
+
 if __name__ == "__main__":
     unittest.main()

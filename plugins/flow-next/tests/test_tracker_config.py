@@ -456,6 +456,46 @@ class SyntheticTrackerMintTestCase(unittest.TestCase):
         self.assertIn("Refusing to mint", msg)
         self.assertIn("gh-123-old-linear", msg)
 
+    def test_hash_n_alias_does_not_block_an_unrelated_native_mint(self) -> None:
+        """A stored `#123` must not collide with a native `WOR-123` mint.
+
+        Found by PR review on #241. The `#N` display form belongs only to a
+        synthetic gh/gl mint, where `gh-123` and `#123` name the same issue.
+        A repo that used GitHub flow-first and later re-pointed to Linear has
+        old specs stored as `#123`; those must not block an unrelated
+        `WOR-123`, which is a different tracker issue entirely.
+        """
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        # Flow-first spec linked to GitHub issue 123 (display-only identifier).
+        self.flowctl.set_config("tracker.type", "github")
+        flow_first = self._create("Old github linked")
+        self.flowctl.cmd_sync_set_tracker_id(
+            argparse.Namespace(
+                id=flow_first["id"], tracker_id="I_1", identifier="#123",
+                url="https://example/123", json=True,
+            )
+        )
+
+        # Re-point to Linear and mint the unrelated WOR-123.
+        self.flowctl.set_config("tracker.type", "linear")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.flowctl.cmd_spec_create(
+                argparse.Namespace(
+                    title="Unrelated linear issue", branch=None,
+                    tracker_first=True, tracker_identifier="WOR-123", json=True,
+                )
+            )
+        payload = json.loads(buf.getvalue())
+        self.assertTrue(
+            payload.get("success"),
+            f"WOR-123 must not be blocked by an unrelated stored #123: {payload}",
+        )
+        self.assertEqual(payload["id"], "wor-123-unrelated-linear-issue")
+
     def test_parse_issue_ref_for_mint_shapes(self) -> None:
         self.assertEqual(
             self.flowctl.parse_issue_ref_for_mint("#123"), (123, "#123")
