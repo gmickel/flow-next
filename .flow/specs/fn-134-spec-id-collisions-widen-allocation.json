@@ -10,7 +10,7 @@
   "id": "fn-134-spec-id-collisions-widen-allocation",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 0,
+  "plan_review_rounds": 1,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-07-25T09:20:44.206356Z",
   "ready": true,
@@ -81,7 +81,9 @@
       "verdict": "SHIP"
     }
   ],
-  "review_pending_rounds": {},
+  "review_pending_rounds": {
+    "plan": 1
+  },
   "review_transport_failures": {
     "plan": 0
   },
@@ -99,5 +101,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-25T09:25:04.501391Z"
+  "updated_at": "2026-07-25T11:58:16.859582Z"
 }
