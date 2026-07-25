@@ -7762,8 +7762,17 @@ def _scan_max_fn_from_worktrees(repo_root: Path, current_flow_dir: Path) -> int:
 def _scan_max_fn_from_refs(repo_root: Path) -> int:
     """Max native fn-N ever *added* under .flow/specs or .flow/epics on any ref.
 
-    Single `git log --all --diff-filter=A` process. Added-then-deleted numbers
-    still appear, so allocation is monotonic over retired ids.
+    Single `git log --all --full-history --diff-filter=A` process.
+    Added-then-deleted numbers still appear, so allocation is monotonic over
+    retired ids.
+
+    `--full-history` is load-bearing, not decoration. With a pathspec, git's
+    default history simplification can prune a merged side branch that added
+    and then deleted a spec - measured on this repo, the flag is the difference
+    between 285 and 287 observed adds. Without it the allocator can REUSE a
+    retired number, which is exactly the monotonicity guarantee this function
+    exists to provide. It costs nothing measurable (both forms run well inside
+    the R3 budget).
     """
     pathspecs = [f"{FLOW_DIR}/{SPECS_DIR}", f"{FLOW_DIR}/{EPICS_DIR}"]
     rc, out, _err = _spec_alloc_git(
@@ -7771,6 +7780,7 @@ def _scan_max_fn_from_refs(repo_root: Path) -> int:
         [
             "log",
             "--all",
+            "--full-history",
             "--diff-filter=A",
             "--format=",
             "--name-only",
@@ -7806,7 +7816,8 @@ def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
     Three sources, take the maximum (fn-134):
       1. Current working tree `.flow/epics/` + `.flow/specs/` (always).
       2. Every registered git worktree's `.flow/` (in-process scandir).
-      3. Every ref via one `git log --all --diff-filter=A` over the specs dirs.
+      3. Every ref via one `git log --all --full-history --diff-filter=A` over
+         the specs dirs (`--full-history` keeps pruned side branches visible).
 
     Handles legacy (fn-N.json), short suffix (fn-N-xxx.json), and slug
     (fn-N-slug.json) formats. Returns 0 if none exist.

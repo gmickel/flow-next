@@ -365,6 +365,47 @@ class TestSpecIdAllocation(unittest.TestCase):
                 id_a.split("-")[1], id_b.split("-")[1], "the two worktrees collided"
             )
 
+    def test_retired_id_on_a_pruned_side_branch_is_still_seen(self) -> None:
+        """Monotonicity must survive git's pathspec history simplification.
+
+        PR #241 wave 8: a side branch that ADDS then DELETES a spec, is merged,
+        and has its ref removed gets simplified away by a path-limited
+        `git log` unless `--full-history` is passed - so the allocator would
+        REUSE the retired number. Reproduced live on the flow-next checkout
+        (285 observed adds without the flag, 287 with).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            main = Path(tmp) / "repo"
+            _init_repo(main)
+            flow = main / ".flow"
+            _write_spec(flow, "fn-1-base")
+            _git(main, "add", "-A")
+            _git(main, "commit", "-q", "-m", "base")
+            base = _git(main, "rev-parse", "HEAD").stdout.strip()
+
+            # Side branch: add fn-100, then delete it, then merge and drop the ref.
+            _git(main, "checkout", "-q", "-b", "side")
+            _write_spec(flow, "fn-100-retired")
+            _git(main, "add", "-A")
+            _git(main, "commit", "-q", "-m", "add fn-100")
+            (flow / "specs" / "fn-100-retired.json").unlink()
+            _git(main, "add", "-A")
+            _git(main, "commit", "-q", "-m", "delete fn-100")
+
+            _git(main, "checkout", "-q", "-")
+            _git(main, "merge", "-q", "--no-ff", "side", "-m", "merge side")
+            _git(main, "branch", "-q", "-D", "side")
+
+            self.assertFalse((flow / "specs" / "fn-100-retired.json").exists())
+            self.assertEqual(
+                flowctl.scan_max_native_fn_spec_id(flow), 100,
+                "a retired fn-100 on a pruned side branch must still bound allocation - "
+                "reusing it would resurrect an ambiguous reference in prose and history",
+            )
+            self.assertNotEqual(
+                _git(main, "rev-parse", "HEAD").stdout.strip(), base
+            )
+
     def test_hot_paths_do_not_scan_worktrees_or_refs(self) -> None:
         """R4: list/status/show/ready/next must not call allocation git probes."""
         for name in ("cmd_list", "cmd_status", "cmd_show", "cmd_ready", "cmd_next"):
