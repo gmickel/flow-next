@@ -7313,6 +7313,13 @@ def reset_review_cap(
 
     Best-effort: a missing spec / unreadable state is silently ignored so a
     reset never breaks the review-write path.
+
+    fn-134.7 / R22: does NOT clear ``review_pending_rounds``. Pending is the
+    attempt-lifecycle reservation owned solely by reserve (enforce/increment)
+    and finalize/refund (``record_review_attempt``). Clearing it here raced
+    finalize: a SHIP path that reset before (or while) finalize ran left
+    ``pending_count == 0`` and made a successful convergence exit non-zero.
+    Re-plan abandon still clears pending via ``cmd_spec_reset_review_rounds``.
     """
     try:
         flow_dir = get_flow_dir()
@@ -7323,9 +7330,7 @@ def reset_review_cap(
             load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=True)
         )
         _write_review_rounds(spec_data, review_kind, task_id, 0)
-        pending = spec_data.get("review_pending_rounds")
-        if isinstance(pending, dict):
-            pending.pop(_review_counter_scope(review_kind, task_id), None)
+        # Intentionally leave review_pending_rounds alone — see docstring.
         spec_data["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, spec_data)
     except SystemExit:
@@ -18742,6 +18747,112 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
         print(f"Task {task_id} backend specs updated: {', '.join(updated)}")
 
 
+def _task_h1_title(content: str, task_id: str) -> Optional[str]:
+    """Extract the title from a task markdown H1 (`# <id> <title>`).
+
+    Returns None when no H1 is present or the H1 does not start with the
+    task id. Title is the remainder after `# <id>` (may be empty).
+    """
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("# "):
+            continue
+        body = stripped[2:].strip()
+        if body == task_id:
+            return ""
+        prefix = f"{task_id} "
+        if body.startswith(prefix):
+            return body[len(prefix) :].strip()
+        return None
+    return None
+
+
+def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
+    """Rewrite (or insert) the task markdown H1 to `# <id> <title>`."""
+    lines = content.splitlines(keepends=True)
+    new_h1 = f"# {task_id} {title}\n"
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith("# "):
+            newline = "\n" if line.endswith("\n") else ""
+            lines[i] = f"# {task_id} {title}{newline}"
+            return "".join(lines)
+    # No H1 — insert after optional YAML frontmatter, else at the top.
+    if content.startswith("---"):
+        parts = content.splitlines(keepends=True)
+        close_idx = None
+        for i in range(1, len(parts)):
+            if parts[i].strip() == "---":
+                close_idx = i
+                break
+        if close_idx is not None:
+            insert_at = close_idx + 1
+            # Skip a single blank line after the closing --- so we don't
+            # stack empties; always leave exactly one blank if the body
+            # already had separation.
+            while insert_at < len(parts) and parts[insert_at].strip() == "":
+                insert_at += 1
+            return "".join(parts[: close_idx + 1] + ["\n", new_h1] + parts[insert_at:])
+    if content and not content.endswith("\n"):
+        return new_h1 + content + "\n"
+    return new_h1 + content
+
+
+def cmd_task_set_title(args: argparse.Namespace) -> None:
+    """Rename a task: update JSON ``title`` and markdown H1 together (R21).
+
+    Title lives in exactly two places — the task JSON and the markdown H1.
+    This command writes both so they cannot disagree. Task ids are permanent
+    (unlike unlinked ``fn-*`` specs); only the display title changes.
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    task_id = casefold_handle(args.id)
+    if not is_task_id(task_id):
+        error_exit(
+            f"Invalid task ID: {task_id}. Expected format: fn-N.M or fn-N-slug.M "
+            f"(e.g., fn-1.2, fn-1-add-auth.2)",
+            use_json=args.json,
+        )
+
+    flow_dir = get_flow_dir()
+    task_id = resolve_task_arg(flow_dir, task_id, use_json=args.json)
+    task_json_path = flow_dir / TASKS_DIR / f"{task_id}.json"
+    task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+
+    if not task_json_path.exists():
+        error_exit(f"Task {task_id} not found", use_json=args.json)
+
+    title = (args.title or "").strip()
+    if not title:
+        error_exit("Title must be non-empty", use_json=args.json)
+
+    task_data = load_json_or_exit(task_json_path, f"Task {task_id}", use_json=args.json)
+    task_data["title"] = title
+    task_data["updated_at"] = now_iso()
+    canonicalize_task_for_write(task_data)
+
+    if task_spec_path.exists():
+        current = read_text_or_exit(
+            task_spec_path, f"Task {task_id} spec", use_json=args.json
+        )
+        atomic_write(task_spec_path, _task_rewrite_h1(current, task_id, title))
+    atomic_write_json(task_json_path, task_data)
+
+    if args.json:
+        json_output(
+            {
+                "id": task_id,
+                "title": title,
+                "message": f"Task {task_id} title updated",
+            }
+        )
+    else:
+        print(f"Task {task_id} title updated: {title}")
+
+
 def cmd_task_set_description(args: argparse.Namespace) -> None:
     """Set task description section."""
     _task_set_section(args.id, "## Description", args.file, args.json)
@@ -18757,6 +18868,10 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
 
     Full replacement mode: --file replaces entire spec content (like epic set-plan).
     Section patch mode: --description and/or --acceptance update specific sections.
+
+    fn-134.7 / R21: on ``--file``, the markdown H1 title is synced into the
+    JSON ``title`` field so the two representations cannot disagree. A missing
+    or malformed H1 is rejected rather than leaving JSON stale.
     """
     if not ensure_flow_exists():
         error_exit(
@@ -18815,13 +18930,43 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
             }
             content = content.rstrip("\n") + "\n\n" + "\n".join(
                 _stubs[h] for h in _missing)
+        # R21: keep JSON title and markdown H1 agreed after --file replace.
+        # Prefer the H1 when present and well-formed; otherwise pin the H1 to
+        # the current JSON title (refuse to leave the two out of sync). Empty
+        # H1 titles are rejected.
+        h1_title = _task_h1_title(content, task_id)
+        if h1_title is not None and not h1_title:
+            error_exit(
+                f"Task {task_id} H1 title must be non-empty "
+                f"(`# {task_id} <title>`)",
+                use_json=args.json,
+            )
+        if h1_title:
+            task_data["title"] = h1_title
+        else:
+            # Missing/malformed H1 — rewrite from JSON so dual-rep agrees.
+            existing_title = (task_data.get("title") or "").strip()
+            if not existing_title:
+                error_exit(
+                    f"Task {task_id} --file content needs H1 "
+                    f"`# {task_id} <title>` (JSON title is empty)",
+                    use_json=args.json,
+                )
+            content = _task_rewrite_h1(content, task_id, existing_title)
+            h1_title = existing_title
         atomic_write(task_spec_path, content)
         task_data["updated_at"] = now_iso()
         canonicalize_task_for_write(task_data)
         atomic_write_json(task_json_path, task_data)
 
         if args.json:
-            json_output({"id": task_id, "message": f"Task {task_id} spec replaced"})
+            json_output(
+                {
+                    "id": task_id,
+                    "title": h1_title,
+                    "message": f"Task {task_id} spec replaced",
+                }
+            )
         else:
             print(f"Task {task_id} spec replaced")
         return
@@ -31700,6 +31845,14 @@ def main() -> None:
     )
     p_task_create.add_argument("--json", action="store_true", help="JSON output")
     p_task_create.set_defaults(func=cmd_task_create)
+
+    p_task_title = task_sub.add_parser(
+        "set-title", help="Set task title (JSON + markdown H1)"
+    )
+    p_task_title.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
+    p_task_title.add_argument("--title", required=True, help="New task title")
+    p_task_title.add_argument("--json", action="store_true", help="JSON output")
+    p_task_title.set_defaults(func=cmd_task_set_title)
 
     p_task_desc = task_sub.add_parser("set-description", help="Set task description")
     p_task_desc.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")

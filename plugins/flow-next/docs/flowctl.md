@@ -362,6 +362,16 @@ Output:
 {"success": true, "id": "fn-1.4", "spec": "fn-1", "title": "Task title", "depends_on": ["fn-1.2", "fn-1.3"]}
 ```
 
+### task set-title
+
+Set task title. Updates both the JSON `title` field and the markdown H1 together so they cannot disagree (a task title lives in exactly those two places).
+
+```bash
+flowctl task set-title fn-1.2 --title "New title" [--json]
+```
+
+Task ids are permanent — only the display title changes (no file rename).
+
 ### task set-description
 
 Set task description section.
@@ -380,13 +390,14 @@ flowctl task set-acceptance fn-1.2 --file accept.md [--json]
 
 ### task set-spec
 
-Set description and acceptance in one call (fewer writes).
+Set description and acceptance in one call (fewer writes), or replace the full task markdown with `--file`.
 
 ```bash
 flowctl task set-spec fn-1.2 --description desc.md --acceptance accept.md [--json]
+flowctl task set-spec fn-1.2 --file full.md [--json]
 ```
 
-Both `--description` and `--acceptance` are optional; supply one or both.
+Both `--description` and `--acceptance` are optional; supply one or both. With `--file`, the markdown H1 (`# <task-id> <title>`) is required and is synced into the JSON `title` field so the dual representation stays agreed (see `task set-title`).
 
 ### task reset
 

@@ -1,0 +1,182 @@
+"""fn-134.7 / R21: ``task set-title`` + dual-rep title sync with set-spec --file.
+
+A task title lives in exactly two places — JSON ``title`` and the markdown H1.
+``task set-title`` writes both; ``task set-spec --file`` syncs JSON from the H1
+so the two cannot disagree. Routes through production argparse (two-token
+``task set-title`` form).
+"""
+
+from __future__ import annotations
+
+import contextlib
+import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from typing import Any
+from unittest import mock
+
+
+HERE = Path(__file__).resolve()
+FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
+
+
+def _load_flowctl() -> Any:
+    spec = importlib.util.spec_from_file_location(
+        "flowctl_task_set_title_under_test", FLOWCTL_PY
+    )
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+flowctl = _load_flowctl()
+
+
+class TestTaskSetTitle(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        subprocess.run(
+            ["git", "init", "-q"], cwd=self.root, check=True, capture_output=True
+        )
+        # Minimal flow + one task via production commands.
+        code, out, err = self._run("init", "--json")
+        self.assertEqual(code, 0, err or out)
+        code, out, err = self._run(
+            "spec", "create", "--title", "Title dual-rep fixture", "--json"
+        )
+        self.assertEqual(code, 0, err or out)
+        self.spec_id = json.loads(out)["id"]
+        code, out, err = self._run(
+            "task",
+            "create",
+            "--spec",
+            self.spec_id,
+            "--title",
+            "Original title",
+            "--json",
+        )
+        self.assertEqual(code, 0, err or out)
+        self.task_id = json.loads(out)["id"]
+
+    def tearDown(self) -> None:
+        os.chdir(self._cwd)
+        self._tmp.cleanup()
+
+    def _run(self, *argv: str) -> "tuple[int, str, str]":
+        """Invoke production argparse routing; return (code, stdout, stderr)."""
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        with mock.patch.object(sys, "argv", ["flowctl", *argv]):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                try:
+                    flowctl.main()
+                except SystemExit as e:
+                    code = int(e.code or 0)
+        return code, out.getvalue(), err.getvalue()
+
+    def _task_json(self) -> dict:
+        return json.loads(
+            (self.root / ".flow" / "tasks" / f"{self.task_id}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+    def _task_md(self) -> str:
+        return (self.root / ".flow" / "tasks" / f"{self.task_id}.md").read_text(
+            encoding="utf-8"
+        )
+
+    def _h1_title(self) -> str:
+        for line in self._task_md().splitlines():
+            if line.startswith("# "):
+                body = line[2:].strip()
+                prefix = f"{self.task_id} "
+                self.assertTrue(body.startswith(prefix), body)
+                return body[len(prefix) :]
+        self.fail("no H1 in task markdown")
+        return ""
+
+    def test_set_title_updates_json_and_markdown_h1(self) -> None:
+        """Production two-token form updates both representations."""
+        code, out, err = self._run(
+            "task",
+            "set-title",
+            self.task_id,
+            "--title",
+            "Renamed mid-review",
+            "--json",
+        )
+        self.assertEqual(code, 0, err or out)
+        payload = json.loads(out)
+        self.assertEqual(payload["id"], self.task_id)
+        self.assertEqual(payload["title"], "Renamed mid-review")
+        self.assertEqual(self._task_json()["title"], "Renamed mid-review")
+        self.assertEqual(self._h1_title(), "Renamed mid-review")
+
+    def test_set_spec_file_syncs_json_title_from_h1(self) -> None:
+        """``set-spec --file`` must not leave JSON title and H1 disagreeing."""
+        new_body = (
+            f"# {self.task_id} Title from full file replace\n\n"
+            "## Description\nReplaced body\n\n"
+            "## Acceptance\n- [ ] one\n\n"
+            "## Done summary\nTBD\n\n"
+            "## Evidence\n- Commits:\n- Tests:\n- PRs:\n"
+        )
+        path = self.root / "replacement.md"
+        path.write_text(new_body, encoding="utf-8")
+        code, out, err = self._run(
+            "task", "set-spec", self.task_id, "--file", str(path), "--json"
+        )
+        self.assertEqual(code, 0, err or out)
+        self.assertEqual(self._task_json()["title"], "Title from full file replace")
+        self.assertEqual(self._h1_title(), "Title from full file replace")
+        # After a subsequent set-title both still agree.
+        code, out, err = self._run(
+            "task",
+            "set-title",
+            self.task_id,
+            "--title",
+            "After set-spec",
+            "--json",
+        )
+        self.assertEqual(code, 0, err or out)
+        self.assertEqual(self._task_json()["title"], "After set-spec")
+        self.assertEqual(self._h1_title(), "After set-spec")
+
+    def test_set_spec_file_missing_h1_pins_from_json(self) -> None:
+        """Missing H1: rewrite from JSON title so dual-rep stays agreed."""
+        path = self.root / "no-h1.md"
+        path.write_text(
+            "## Description\nno h1\n\n## Acceptance\n- [ ] x\n\n"
+            "## Done summary\nTBD\n\n## Evidence\n- Commits:\n",
+            encoding="utf-8",
+        )
+        before = self._task_json()["title"]
+        code, out, err = self._run(
+            "task", "set-spec", self.task_id, "--file", str(path), "--json"
+        )
+        self.assertEqual(code, 0, err or out)
+        self.assertEqual(self._task_json()["title"], before)
+        self.assertEqual(self._h1_title(), before)
+
+    def test_set_title_empty_rejected(self) -> None:
+        code, out, err = self._run(
+            "task", "set-title", self.task_id, "--title", "   ", "--json"
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn("non-empty", out + err)
+
+
+if __name__ == "__main__":
+    unittest.main()

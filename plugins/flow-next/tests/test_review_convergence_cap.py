@@ -781,6 +781,144 @@ class TestReviewRoundsCLI(unittest.TestCase):
         # No counter was touched.
         self.assertNotIn("impl_review_rounds", self._spec_json())
 
+    # --- fn-134.7 / R22: SHIP finalize exit code + reservation invariant -----
+
+    def test_ship_end_to_end_exits_zero_and_resets_counter(self):
+        """SHIP path: reserve → record verdict → reset. Exit 0, counter 0.
+
+        The live bug was: reset cleared the pending reservation, then finalize
+        saw pending==0 and exited non-zero even though the verdict and status
+        had already been written. Resolution (B): reset stops clearing pending;
+        only reserve/finalize own the reservation lifecycle.
+        """
+        code, _, err = self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        self.assertEqual(code, 0, err)
+        output_path = self.root / "ship.txt"
+        output_path.write_text("<verdict>SHIP</verdict>\n")
+        code, out, err = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--backend", "codex", "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 0, err or out)
+        payload = json.loads(out)
+        self.assertEqual(payload["verdict"], "SHIP")
+        self.assertEqual(payload["outcome"], "verdict")
+        # Status write (RP Phase 4 twin) + convergence reset.
+        code, out, err = self._run(
+            "spec", "set-plan-review-status", self.spec_id,
+            "--status", "ship", "--json",
+        )
+        self.assertEqual(code, 0, err or out)
+        code, out, err = self._run(
+            "review-rounds", "reset", self.spec_id, "--kind", "plan", "--json"
+        )
+        self.assertEqual(code, 0, err or out)
+        data = self._spec_json()
+        self.assertEqual(data["plan_review_rounds"], 0)
+        self.assertEqual(data["plan_review_status"], "ship")
+        # Reservation consumed by record; not left dangling, not double-spent.
+        pending = data.get("review_pending_rounds") or {}
+        self.assertEqual(int(pending.get("plan", 0) or 0), 0)
+        attempts = data.get("review_attempts") or []
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(attempts[0]["verdict"], "SHIP")
+        self.assertTrue(attempts[0]["round_consumed"])
+
+    def test_ship_survives_reset_before_record(self):
+        """Even if reset runs before record (the live race order), SHIP exits 0.
+
+        Under resolution (B) reset does not pop the reservation, so finalize
+        still has something to consume. The zero-pending-tolerance anti-pattern
+        is NOT used — see the negative tests below.
+        """
+        self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        code, _, err = self._run(
+            "review-rounds", "reset", self.spec_id, "--kind", "plan", "--json"
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self._spec_json()["plan_review_rounds"], 0)
+        # Pending must still be live so record can finalize.
+        pending = self._spec_json().get("review_pending_rounds") or {}
+        self.assertGreaterEqual(int(pending.get("plan", 0) or 0), 1)
+        output_path = self.root / "ship-after-reset.txt"
+        output_path.write_text("<verdict>SHIP</verdict>\n")
+        code, out, err = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 0, err or out)
+        self.assertEqual(json.loads(out)["verdict"], "SHIP")
+        self.assertEqual(self._spec_json()["plan_review_rounds"], 0)
+
+    def test_no_verdict_transport_failure_still_refunds_one_round(self):
+        """Transport-failure refund path unchanged — the round cap depends on it."""
+        code, _, _ = self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(self._spec_json()["plan_review_rounds"], 1)
+        output_path = self.root / "no-verdict.txt"
+        output_path.write_text("review prose without a terminal tag\n")
+        code, out, err = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--backend", "codex", "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 0, err or out)
+        payload = json.loads(out)
+        self.assertEqual(payload["outcome"], "transport_failure")
+        self.assertEqual(payload["consecutive_transport_failures"], 1)
+        self.assertEqual(self._spec_json()["plan_review_rounds"], 0)
+        row = self._spec_json()["review_attempts"][-1]
+        self.assertFalse(row["round_consumed"])
+        self.assertEqual(row["failure_class"], "missing_verdict")
+
+    def test_unreserved_verdict_rejected_no_second_attempt(self):
+        """Negative: verdict with no live reservation fails; no attempt row."""
+        output_path = self.root / "unreserved.txt"
+        output_path.write_text("<verdict>SHIP</verdict>\n")
+        code, out, err = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("No reserved", out + err)
+        data = self._spec_json()
+        self.assertEqual(data.get("review_attempts") or [], [])
+        self.assertEqual(int(data.get("plan_review_rounds", 0) or 0), 0)
+
+    def test_duplicate_finalize_rejected_no_second_attempt(self):
+        """Negative: second finalize on the same reservation fails cleanly."""
+        self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        output_path = self.root / "first.txt"
+        output_path.write_text("<verdict>NEEDS_WORK</verdict>\n")
+        code, out, err = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 0, err or out)
+        self.assertEqual(len(self._spec_json()["review_attempts"]), 1)
+        # Duplicate — no new reservation.
+        code, out, err = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("No reserved", out + err)
+        self.assertEqual(len(self._spec_json()["review_attempts"]), 1)
+        self.assertEqual(self._spec_json()["plan_review_rounds"], 1)
+
 
 class TestReviewRoundsCliAliasCanonicalization(unittest.TestCase):
     """PR #202 round 2: `review-rounds increment --task` must canonicalize the

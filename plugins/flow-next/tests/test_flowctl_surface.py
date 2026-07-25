@@ -175,6 +175,7 @@ task set-acceptance
 task set-backend
 task set-description
 task set-spec
+task set-title
 tasks
 triage-skip
 usage
