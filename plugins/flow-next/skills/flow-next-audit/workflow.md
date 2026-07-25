@@ -301,7 +301,15 @@ UPDATE_HEADINGS=${UPDATE_HEADINGS:-0}
 # in a repo that commits its audits three routine sweeps alone would clear the >= 4 threshold
 # and permanently bypass auto-Keep. One git call per entry; awk drops commits whose diff on
 # this file touches ONLY frontmatter bookkeeping fields.
-ENTRY_COMMITS=$(git -C "$REPO_ROOT" log --format='COMMIT %H' --patch --unified=0 \
+# `--follow` is REQUIRED: memory entries get moved (`flowctl memory migrate` relocates legacy
+# flat files into categorized paths; consolidation renames entries), and a path-limited log
+# stops dead at the rename — the pre-rename history vanishes and the entry silently falls
+# below the threshold, suppressing a Harden candidate. `--follow` takes exactly ONE pathspec
+# (`fatal: --follow requires exactly one pathspec` otherwise) — this scan is single-file, so
+# never add a second path here. A PURE rename emits `similarity index` / `rename from` /
+# `rename to` lines and no `+`/`-` content, so awk correctly does not count a `git mv` as a
+# re-teaching; a rename carrying real edits still counts once, as it should.
+ENTRY_COMMITS=$(git -C "$REPO_ROOT" log --follow --format='COMMIT %H' --patch --unified=0 \
   -- "$entry_file" 2>/dev/null | awk '
   /^COMMIT /        { substantive = 0; next }        # new commit — reset the per-commit flag
   /^(--- |\+\+\+ )/ { next }                         # skip file headers, not content
@@ -317,7 +325,7 @@ ENTRY_COMMITS=${ENTRY_COMMITS:-0}
 
 An entry is **recurrence-qualified** when `UPDATE_HEADINGS >= 2` OR `ENTRY_COMMITS >= 4`.
 
-`ENTRY_COMMITS` counts only commits that changed the lesson itself — the entry-creation commit and every later body/reference edit. Audit-stamp commits are not evidence the lesson was re-taught, and counting them would make the store's recurrence signal grow with audit diligence rather than with recurring pain, collapsing the O(changed) pre-filter over time.
+`ENTRY_COMMITS` counts only commits that changed the lesson itself — the entry-creation commit and every later body/reference edit, **across renames** (`--follow`). Audit-stamp commits are not evidence the lesson was re-taught, and counting them would make the store's recurrence signal grow with audit diligence rather than with recurring pain, collapsing the O(changed) pre-filter over time. A `git mv` is not a re-teaching either — it neither counts as a substantive commit nor truncates the history behind it.
 
 A `related_to` **cluster** qualifies only as a corroborated whole, never on size alone: a cluster of `>= 3` entries qualifies when **any member** has at least one `## Update` heading, or **any member** meets the commit signal. Cluster aggregates must therefore be computed here too, before anything is auto-Kept — a cluster whose members all have unchanged modules would otherwise be auto-Kept entry-by-entry and never seen:
 
