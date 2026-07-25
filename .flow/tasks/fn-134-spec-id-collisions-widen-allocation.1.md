@@ -52,9 +52,14 @@ Widen spec-id allocation so parallel spec creation stops colliding. `scan_max_na
 
 
 ## Done summary
-TBD
+Widened `scan_max_native_fn_spec_id` from a single working-tree scan into the max across three sources: the current working tree, every registered git worktree (in-process `os.scandir`, no subprocess per worktree), and every ref (one `git log --all --diff-filter=A`). This closes the created-but-uncommitted window that produced the live fn-122 duplicate. Fail-open on every git failure mode; monotonic over retired ids via the ref source. Aliases and the native-fn-only constraint preserved; hot paths pinned scan-free by test.
 
+Implemented by grok-4.5 via the grok CLI bridge; reviewed in-host (opus-5). Two review outcomes worth recording:
+
+1. grok found that this git rejects global `--no-color` with exit 129 and used `-c color.ui=never` instead. Verified true. Had it used `--no-color`, every git probe would have failed and silently degraded to the working-tree source only, defeating the feature while still passing a naive test.
+
+2. grok's reported performance number (83.2ms) was wrong: that is the ref scan alone, not the total. Independent measurement gave 152.8ms best / 160.2ms median, over the 150ms budget. Per-source: working tree 0.2ms, worktrees 47.2ms, refs 85.0ms. The early proof point fired as designed; budget raised to 250ms on maintainer decision rather than dropping the ref source, because dropping it would trade the committed-on-another-branch window and monotonicity for time nobody perceives on a cold path. The 150ms bound also sat exactly on the measured total and was a latent flake.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: bcb28d30
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_spec_id_allocation test_flowctl_surface test_startup_bootstrap -q (44 tests OK), python3 scripts/run_tests_parallel.py (files=131 ran=2359 failures=0 errors=0), independent perf: working tree 0.2ms / worktrees 47.2ms / refs 85.0ms / total 152.8ms best, 160.2ms median on 327 refs + 16 worktrees + 1723 commits, verified git --no-color exits 129 on this git; -c color.ui=never exits 0, dual-copy byte-identical + SOURCE_SHA256 matches sha256 of flowctl.py
 - PRs:
