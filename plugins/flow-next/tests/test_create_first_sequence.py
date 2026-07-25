@@ -19,9 +19,12 @@ two halves with very different testability:
      prose-contract tests in `test_spec_id_routing_prose.py` instead.
 
 Only the network boundary is faked. `_CountedTransport` stands in for the
-adapter's `writeIssue` and counts calls, so the load-bearing promise - a retry
-after a partial failure LINKS and never creates a second issue - is asserted
-against a real count rather than a prose reading.
+adapter's `writeIssue` / `postComment` and counts both, so the load-bearing
+promise - a retry after a partial failure LINKS, and a later lifecycle
+touchpoint comments rather than creating a second issue - is asserted against
+real counts rather than a prose reading. The touchpoint takes its
+create-vs-comment branch from real flowctl state, and a companion test drives
+the same touchpoint on an unlinked spec to prove the create branch is live.
 """
 
 from __future__ import annotations
@@ -57,6 +60,7 @@ class _CountedTransport:
 
     def __init__(self) -> None:
         self.creates = 0
+        self.comments = 0
         self.issues: dict[str, dict[str, str]] = {}
 
     def write_issue(self, title: str) -> dict[str, str]:
@@ -65,6 +69,9 @@ class _CountedTransport:
         rec = {"id": f"I_{n}", "identifier": f"#{n}", "url": f"https://example/{n}", "title": title}
         self.issues[rec["identifier"]] = rec
         return rec
+
+    def post_comment(self, identifier: str, body: str) -> None:
+        self.comments += 1
 
 
 class CreateFirstSequence(unittest.TestCase):
@@ -101,6 +108,29 @@ class CreateFirstSequence(unittest.TestCase):
         )
         self.assertEqual(put.returncode, 0, put.stderr)
         return rec
+
+    def _lifecycle_comment(self, spec_id: str) -> str | None:
+        """A later lifecycle touchpoint, routed on REAL flowctl state.
+
+        steps.md:11 - a `comment` op on an UNLINKED spec runs create-if-unlinked
+        first (create + attach), then comments; on a LINKED spec it only
+        comments. The branch is taken from `sync get-state`, so if the earlier
+        attach had failed to persist, this fires the create branch and the
+        create count moves. That is what keeps the final assertion honest.
+        """
+        state = _fc(self.repo, "sync", "get-state", spec_id, "--json")
+        linked = (
+            json.loads(state.stdout)["tracker"].get("identifier")
+            if state.returncode == 0
+            else None
+        )
+        if not linked:                                    # create-if-unlinked branch
+            rec = self.tp.write_issue(self.TITLE)
+            _fc(self.repo, "sync", "set-tracker-id", spec_id, rec["id"],
+                "--identifier", rec["identifier"], "--url", rec["url"], "--json")
+            linked = rec["identifier"]
+        self.tp.post_comment(linked, "work.done")
+        return linked
 
     def test_full_sequence_creates_exactly_one_issue_across_a_failed_mint_and_retry(self) -> None:
         key = self._key()
@@ -144,16 +174,24 @@ class CreateFirstSequence(unittest.TestCase):
             "recovery record must not outlive a completed sequence",
         )
 
-        # A LATER lifecycle touchpoint on the now-linked spec must not re-create.
-        state = _fc(self.repo, "sync", "get-state", spec_id, "--json")
-        self.assertEqual(state.returncode, 0, state.stderr)
-        self.assertEqual(
-            json.loads(state.stdout)["tracker"].get("identifier"), second["identifier"]
-        )
+        # A LATER lifecycle touchpoint fires through the transport. Because the
+        # spec is now linked it must take the comment-only branch.
+        self.assertEqual(self._lifecycle_comment(spec_id), second["identifier"])
+        self.assertEqual(self.tp.comments, 1, "the touchpoint must actually have fired")
         self.assertEqual(
             self.tp.creates, 1,
             "exactly one remote creation across create + retry + mint + attach + later touchpoint",
         )
+
+    def test_the_later_touchpoint_would_create_on_an_unlinked_spec(self) -> None:
+        """Proves the touchpoint's create branch is live, so the linked-spec
+        assertion above is a real routing result and not a tautology."""
+        mint = _fc(self.repo, "spec", "create", "--title", "Never linked", "--json")
+        spec_id = json.loads(mint.stdout)["id"]
+        self.assertEqual(self.tp.creates, 0)
+        self._lifecycle_comment(spec_id)
+        self.assertEqual(self.tp.creates, 1, "an unlinked spec must hit create-if-unlinked")
+        self.assertEqual(self.tp.comments, 1)
 
     def test_a_genuinely_different_intent_does_create_a_second_issue(self) -> None:
         """The guard must not over-link: a different title is a different issue."""
