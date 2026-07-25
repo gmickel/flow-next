@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-25T08:54:47.897551Z",
+  "depends_on": [
+    "fn-134-spec-id-collisions-widen-allocation.4"
+  ],
+  "id": "fn-134-spec-id-collisions-widen-allocation.5",
+  "priority": null,
+  "spec": "fn-134-spec-id-collisions-widen-allocation",
+  "spec_path": ".flow/tasks/fn-134-spec-id-collisions-widen-allocation.5.md",
+  "status": "todo",
+  "title": "flow-next.dev: config, teams, troubleshooting, FAQ, Notable updates",
+  "updated_at": "2026-07-25T08:54:47.897551Z"
+}

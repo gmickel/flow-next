@@ -92,7 +92,9 @@ flowctl config get tracker.specIds --json
 
 The question states the collision rationale rather than offering a bare preference, and defaults to `tracker` for tracker-configured repos.
 
-That still leaves people who never re-run setup. For them, the spec-creating skills emit **one advisory line** when a tracker is active, `tracker.specIds` is unset, and they are about to mint a flow-first id: name the collision risk and the one-line fix. Constraints, so this does not become nagging: advisory only (never a prompt, never blocking), **interactive mode only** (suppressed under `mode:autonomous` / Ralph, where nobody can act on it), and it disappears permanently the moment the key is set either way. No new state is tracked to achieve this; the unset key *is* the state.
+That still leaves people who never re-run setup, and the tempting fix is a runtime advisory at spec-creation time. **Rejected.** A conditional living in five skill files whose only purpose is to nag is scaffolding built around a discoverability gap, and it rots: it has to be suppressed under autonomy, kept from repeating, and swept every time a new spec-creating site appears. It also fails the repo's own bitter-lesson principle.
+
+The durable answer is a **notable-updates surface** that serves every release rather than this one feature: a short "Notable updates" section on the docs home (repo `plugins/flow-next/docs/README.md`, which is the GitHub docs entry point) and on the flow-next.dev landing page, carrying behavior-affecting changes and new opt-in defaults with a one-line "how to turn it on". This spec seeds it with the `tracker.specIds` entry and establishes the format; later releases append. Discoverability becomes a documented, linkable place people can check, not a message they have to be interrupted by.
 
 ## Edge Cases & Constraints
 <!-- scope: technical -->
@@ -118,13 +120,15 @@ That still leaves people who never re-run setup. For them, the spec-creating ski
 - **R7:** Every spec-creating skill (capture, plan, work, qa, interview) routes on `tracker.specIds` using the existing config snapshot, adding no new config read, and each degrades to flow-first when the bridge is inactive or no transport is reachable.
 - **R8:** With `tracker.specIds=tracker` and an active bridge, a spec created from a fresh idea produces a `KEY-N-slug` id, having created the tracker issue first. Net tracker network calls for the run are unchanged versus flow-first, because the existing push touchpoint is reordered rather than duplicated.
 - **R9:** `/flow-next:setup` asks the id-scheme question when a tracker is configured **AND `tracker.specIds` is unset**, states the collision rationale, and defaults to `tracker`. Once the key is set to either value it never asks again. A test covers the existing-repo path: tracker configured, key absent, question asked.
-- **R10:** Spec-creating skills emit a single advisory line when a tracker is active, `tracker.specIds` is unset, and a flow-first id is about to be minted. It is advisory only (never a prompt, never blocking), suppressed under `mode:autonomous` and Ralph, and disappears once the key is set either way. No new persisted state.
+- **R10:** *(withdrawn during planning — a runtime advisory in the spec-creating skills was rejected as scaffolding around a docs gap; superseded by R17.)*
 - **R11:** Tracker-first is discoverable from where specs are actually created: `plan`, `work`, and `capture` prose name it as the recommended team default, not only the tracker-sync skill's own files.
 - **R12:** Bare `fn-N` resolution disambiguates rather than guessing when the ordinal is duplicated, listing candidates and requiring the full id.
 - **R13:** `validate` reports a duplicate ordinal whose full ids are distinct as a **warning**, not a root error. A test covers the current live `fn-122` pair.
 - **R14:** Synthetic-key minting works for `github` (`gh-<issue>`) and `gitlab` (`gl-<iid>`), uses the project-scoped `iid` for GitLab, and is applied only when `tracker.type` matches. A test covers a Linear/Jira repo whose native key is `GH`, asserting no synthesis and no collision.
 - **R15:** Repo docs updated in the same workstream: `docs/tracker-sync.md` (hybrid id model, synthetic keys, the new default), `docs/teams.md` (team recommendation and why), `docs/flowctl.md` (`tracker.specIds`), `docs/architecture.md` (spec-id scheme), plus the sync-codex mirror and a CHANGELOG entry under `## Unreleased`.
 - **R16:** flow-next.dev updated in the same workstream: `teams/tracker-sync.mdx` and `teams/collaboration.mdx` (the option exists and is the team default), `flowctl/configuration.mdx` (`tracker.specIds` alongside the other `tracker.*` keys), `specs/schema.mdx` (id scheme), `reference/troubleshooting.mdx` (what to do about a duplicate ordinal), and a new `proof/faq.mdx` entry in the existing question voice covering "two of us created specs and both got the same number". Site build gate passes.
+- **R17:** A **Notable updates** surface exists and is seeded, on both the repo docs home (`plugins/flow-next/docs/README.md`) and the flow-next.dev landing page: a short, append-only list of behavior-affecting changes and new opt-in defaults, each one line plus how to enable it. Its first entry is `tracker.specIds`. The section documents its own format so later releases append consistently, and `agent_docs/releasing.md` names updating it as a release step so it does not decay.
+- **R18:** Every statement that GitHub or GitLab cannot use tracker-first is corrected, since synthetic keys make it false. Known sites: `docs/tracker-sync.md:47`, `skills/flow-next-tracker-sync/SKILL.md:142`, `skills/flow-next-tracker-sync/steps.md:277-290`, `skills/flow-next-tracker-sync/references/gitlab.md:365-378`, and the equivalent in `references/github.md` if present. A grep sweep proves none remain.
 
 ## Boundaries
 <!-- scope: business -->
@@ -137,6 +141,19 @@ Out of scope:
 - **Per-contributor number ranges** (`FLOW_SPEC_RANGE`-style). Considered and rejected: it degrades the moment ephemeral agents create specs, and it is a workaround wearing a design's clothes.
 - **Closing the separate-clone case.** Move A cannot see an unfetched clone. That is what move B is for, and the limitation is documented rather than papered over.
 - **Retro-minting tracker ids for existing `fn-N` specs.** Ids never change. A repo that switches to `tracker` gets tracker-keyed ids for *new* specs only, and the mixed store is permanent and expected.
+
+## Plan-time findings (repo-scout, 2026-07-25) — these shrink the work
+
+Verified against the tree; they change what needs building versus what needs proving:
+
+- **`scan_max_native_fn_spec_id` (flowctl.py:7362-7404) has exactly ONE call site**, `cmd_spec_create:14783`. R4's "hot paths must not scan" is therefore already true today. The task is a pinning test that keeps it true, not a change to `list`/`status`/`show`/`ready`/`next`. Keep the `scan_max_spec_id` / `scan_max_epic_id` aliases at :7407-7408 working.
+- **The tracker key grammar already accepts `gh` and `gl`.** `parse_any_id` (:2584-2617) matches `^[a-z][a-z0-9]{0,9}-…`, and only `fn` is globally reserved (`RESERVED_TRACKER_KEY`, :2573). `id_sort_key`, `is_spec_id`, `is_task_id`, `spec_id_from_task` all route through `parse_any_id`, so **no grammar layer changes are needed**. B2 is confined to the minting path.
+- **But minting needs a new parse helper.** `validate_tracker_identifier`'s `allow_reference` mode (:2724-2801) is link-time only and returns `("", n, display)` with an EMPTY key, which is the wrong shape for minting a resolvable id. Do not reuse it; add a mint-side parse for `#123` / `<project>#456`.
+- **Ambiguity disambiguation may already exist.** `expand_bare_spec_id` (:7498-7581) already errors with "Spec id … is ambiguous. Matches: … Use the full slug to disambiguate." for the native-`fn` branch, tested in `test_expand_bare_spec_id.py:69,84`. **Verify against the live `fn-122` pair before writing any resolver code** — R12 may reduce to a regression test.
+- **The validate downgrade is a retarget, not new logic.** `cmd_validate:26363-26386` appends to `root_errors`; the "full ids are distinct" condition is structurally guaranteed because ids come from unique file stems. Existing assertions in `test_validate_all_diagnostics.py:93-146` expect `root_errors` and must move to warnings.
+- **Reuse the existing git subprocess shape.** `_prime_git` (:26681-26706) uses `git -C`, `capture_output`, `text`, `check=False`, an explicit `timeout`, and catches `TimeoutExpired` / `OSError` / `SubprocessError` without raising. Match it. There is no existing `git worktree list --porcelain` parser or `git log --all` caller; both are new. `_prime_sibling_git_dirs` (:26975) has reusable logic for tolerating gitdir-pointer worktrees.
+- **Config leaf placement.** `tracker.*` defaults live in `get_default_tracker_config()` (:1069-1080); strict-enum precedent is `pipeline.qa` (:1322) and `pilot.autonomy` (:1339). There is no central enum registry, so write-time validation follows the ad hoc `cmd_config_set` pattern (:9032+, e.g. `review.backend` at :9043). **Open item for the implementer:** R9 needs `tracker.specIds` to be *unset-detectable*, so decide deliberately whether it materializes at `init` (like `pipeline`) or stays unmaterialized (`_INIT_UNMATERIALIZED_BLOCKS`, :1358) — a materialized default of `flow` would make "unset" indistinguishable and silently break the setup question.
+- **Git colour hazard.** Forced ANSI colour breaks regex post-filters on git output (memory `forced-color-git-grep-output-defeats-2026-07-19`). Pass `--no-color` or neutralize config in the scan.
 
 ## Decision Context
 <!-- scope: both -->
@@ -158,3 +175,53 @@ The first version of this analysis proposed scanning refs only. Measurement fals
 ### Why tracker-first is the team answer
 
 A tracker is a real distributed allocator that a team already coordinates on, and collaborative settings are exactly the ones that have one. The machinery is shipped and first-class today. The reason it is unused is that it costs two flags per invocation and is documented only where people are not looking. That makes this a defaults and discoverability problem, and the fix belongs in skill prose and setup rather than in new engineering.
+
+## Quick commands
+
+Focused suites for this feature. The FULL suite runs ONCE at the final gate, not per task.
+
+```bash
+# Allocation, resolution, validate, config leaves
+cd plugins/flow-next/tests && python3 -m unittest \
+  test_expand_bare_spec_id test_validate_all_diagnostics test_tracker_config \
+  test_flowctl_surface test_startup_bootstrap -q
+
+# Spec-id allocation smoke against the real store
+.flow/bin/flowctl validate --all --json | jq '{total_errors, root_errors, warnings: (.warnings // [] | length)}'
+.flow/bin/flowctl show fn-122 --json 2>&1 | head -3   # ambiguity path
+
+# Skill prose changed -> mirror must regenerate idempotently
+./scripts/sync-codex.sh && ./scripts/sync-codex.sh && git status --porcelain plugins/flow-next/codex/
+
+# Site gate (task .5 only)
+cd ~/work/flow-next.dev && pnpm build
+```
+
+## Early proof point
+
+Task `.1` validates the core bet of move A: that a union scan over the working tree, all registered worktrees, and all refs stays inside the 150ms budget on a repo of this shape (325 refs, 16 worktrees) while actually catching the two-worktree collision.
+
+If it cannot hit the budget, stop and re-scope before `.2`: the fallback is to drop the ref scan (the cheaper, lower-value source) and keep worktree scanning, which measurement shows covers the dominant created-but-uncommitted window. Do not silently ship a slow allocator.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1 | Union allocation across worktree + worktrees + refs, monotonic | .1 | — |
+| R2 | Every source degrades independently and silently | .1 | — |
+| R3 | Under 150ms on a 300-ref / 15-worktree fixture, in-process | .1 | — |
+| R4 | Hot-path commands pinned as scan-free | .1 | — |
+| R5 | Two-worktree collision regression test | .1 | — |
+| R6 | `tracker.specIds` strict enum, default `flow` | .2 | — |
+| R7 | Spec-creating skills route on the config, no new config read | .3 | — |
+| R8 | Tracker-first mints `KEY-N-slug`; no net new network calls | .3 | — |
+| R9 | Setup asks when tracker configured AND key unset; never re-asks | .3 | — |
+| R10 | *(withdrawn during planning)* | — | Superseded by R17 |
+| R11 | Tracker-first named in plan / work / capture prose | .3 | — |
+| R12 | Bare `fn-N` disambiguates on duplicate ordinal | .2 | May already hold; task verifies before building |
+| R13 | Duplicate ordinal is a warning, not a root error | .2 | — |
+| R14 | Synthetic `gh-` / `gl-` keys, type-gated, `iid`-scoped | .2 | — |
+| R15 | Repo docs + CHANGELOG + mirror | .4 | — |
+| R16 | flow-next.dev pages + FAQ + build gate | .5 | — |
+| R17 | Notable-updates surface, seeded, format documented, release step | .4, .5 | repo home in .4, landing page in .5 |
+| R18 | Every GitHub/GitLab "flow-first only" statement corrected | .4 | — |

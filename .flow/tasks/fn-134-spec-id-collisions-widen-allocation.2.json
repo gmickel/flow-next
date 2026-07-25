@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-25T08:54:46.865931Z",
+  "depends_on": [
+    "fn-134-spec-id-collisions-widen-allocation.1"
+  ],
+  "id": "fn-134-spec-id-collisions-widen-allocation.2",
+  "priority": null,
+  "spec": "fn-134-spec-id-collisions-widen-allocation",
+  "spec_path": ".flow/tasks/fn-134-spec-id-collisions-widen-allocation.2.md",
+  "status": "todo",
+  "title": "flowctl: tracker.specIds, synthetic gh/gl keys, validate + resolver ergonomics",
+  "updated_at": "2026-07-25T08:54:46.865931Z"
+}
