@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-25T12:01:34.404685Z",
+  "depends_on": [
+    "fn-138-published-json-schema-for-flow-config.1"
+  ],
+  "id": "fn-138-published-json-schema-for-flow-config.2",
+  "priority": null,
+  "spec": "fn-138-published-json-schema-for-flow-config",
+  "spec_path": ".flow/tasks/fn-138-published-json-schema-for-flow-config.2.md",
+  "status": "todo",
+  "title": "Reader-schema drift test + fixture validation",
+  "updated_at": "2026-07-25T12:01:36.132403Z"
+}

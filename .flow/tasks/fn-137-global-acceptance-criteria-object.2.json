@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-25T12:01:30.185762Z",
+  "depends_on": [
+    "fn-137-global-acceptance-criteria-object.1"
+  ],
+  "id": "fn-137-global-acceptance-criteria-object.2",
+  "priority": null,
+  "spec": "fn-137-global-acceptance-criteria-object",
+  "spec_path": ".flow/tasks/fn-137-global-acceptance-criteria-object.2.md",
+  "status": "todo",
+  "title": "Completion-review integration + compliance in receipts",
+  "updated_at": "2026-07-25T12:01:32.668271Z"
+}

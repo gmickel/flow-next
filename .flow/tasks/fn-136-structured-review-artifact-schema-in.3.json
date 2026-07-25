@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-25T12:00:41.291654Z",
+  "depends_on": [
+    "fn-136-structured-review-artifact-schema-in.2"
+  ],
+  "id": "fn-136-structured-review-artifact-schema-in.3",
+  "priority": null,
+  "spec": "fn-136-structured-review-artifact-schema-in",
+  "spec_path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.3.md",
+  "status": "todo",
+  "title": "Receipt-write integration across backends",
+  "updated_at": "2026-07-25T12:00:44.294280Z"
+}
