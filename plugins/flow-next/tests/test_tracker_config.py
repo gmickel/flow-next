@@ -600,6 +600,42 @@ class SyntheticTrackerMintTestCase(unittest.TestCase):
             f"GitHub #12 must not be blocked by a stored GitLab group/project#12: {payload}",
         )
 
+    def test_tracker_type_casing_still_counts_as_synthetic(self) -> None:
+        """`GitHub` / ` github ` must preflight as synthetic (PR #241 wave 4).
+
+        Synthesis normalizes via `_tracker_type_for_synthesis`; preflight read
+        the raw value, so an oddly-cased type minted `gh-N` while skipping the
+        stored-`#N` collision check and duplicated the spec locally.
+        """
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        self.flowctl.set_config("tracker.type", "github")
+        linked = self._create("Already linked")
+        self.flowctl.cmd_sync_set_tracker_id(
+            argparse.Namespace(
+                id=linked["id"], tracker_id="I_9", identifier="#9",
+                url="https://example/9", json=True,
+            )
+        )
+
+        for odd in ("GitHub", " github ", "GITHUB"):
+            with self.subTest(tracker_type=odd):
+                self.flowctl.set_config("tracker.type", odd)
+                buf = io.StringIO()
+                with self.assertRaises(SystemExit):
+                    with redirect_stdout(buf):
+                        self.flowctl.cmd_spec_create(
+                            argparse.Namespace(
+                                title="Duplicate nine", branch=None,
+                                tracker_first=True, tracker_identifier="#9",
+                                json=True,
+                            )
+                        )
+                payload = json.loads(buf.getvalue())
+                self.assertIn("Refusing to mint", payload.get("error", ""))
+
     def test_parse_issue_ref_for_mint_shapes(self) -> None:
         self.assertEqual(
             self.flowctl.parse_issue_ref_for_mint("#123"), (123, "#123")

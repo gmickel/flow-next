@@ -773,8 +773,14 @@ if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
  # bridge-active repo can have every lifecycle event disabled), tracker-first adds an
  # EARLIER remote write that flow-first would not have made.
  :
-else
- # Bridge inactive / no transport / create-first noop / config flow / override → SILENT degrade:
+fi
+
+# SILENT degrade - this is the ONLY flow-first creation site, and it is
+# deliberately OUTSIDE the branch above. A create-first noop / unreachable
+# transport / failed mint leaves SPEC_OUTPUT unset inside the tracker branch,
+# and an `else` arm can never run in that case, so the promised fall-through
+# has to be an unconditional post-check.
+if [ -z "$SPEC_OUTPUT" ]; then
  SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --json)
 fi
 SPEC_ID=$(printf '%s' "$SPEC_OUTPUT" | jq -r '.id')

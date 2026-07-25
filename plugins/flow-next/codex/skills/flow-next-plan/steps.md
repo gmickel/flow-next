@@ -317,6 +317,9 @@ Default to standard unless complexity demands more or less.
  # EARLIER remote write that flow-first would not have made.
  :
  else
+ # NOTE: flow-first creation must sit OUTSIDE this branch as an unconditional
+ # `if [ -z "$SPEC_OUTPUT" ]` post-check - a create-first noop leaves the
+ # variable unset INSIDE the tracker branch, where an `else` can never run.
  # Bridge inactive / no transport / create-first noop / config flow / override → SILENT degrade:
  $FLOWCTL spec create --title "<Short title>" --json
  fi

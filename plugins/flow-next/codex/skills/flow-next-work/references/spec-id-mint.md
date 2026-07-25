@@ -20,10 +20,14 @@ BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // fals
 if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
  # Named issue -> mint from its key. Fresh idea -> tracker-sync `create-first`
  # (tracker-sync steps.md Phase 2d) for {id,identifier,url}, then mint + attach + seed.
- # A noop / no-transport create-first falls through SILENTLY to flow-first.
- # $FLOWCTL spec create --tracker-first --tracker-identifier "<key>" --title "<title>" --json
+ # A noop / no-transport create-first falls through SILENTLY to flow-first -
+ # via the unconditional post-check below, NOT an `else` arm (on a noop
+ # SPEC_OUTPUT is unset inside THIS branch, which no `else` can reach).
+ # SPEC_OUTPUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "<key>" --title "<title>" --json)
  :
-else
- $FLOWCTL spec create --title "<title>" --json # silent flow-first degrade
+fi
+
+if [ -z "$SPEC_OUTPUT" ]; then
+ SPEC_OUTPUT=$($FLOWCTL spec create --title "<title>" --json) # silent flow-first degrade
 fi
 ```

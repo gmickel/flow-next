@@ -3080,7 +3080,10 @@ def preflight_tracker_mint(
     # legitimately keyed `GH` would mint `gh-123` natively and then be blocked
     # by an unrelated historical `#123`. Confirm `tracker.type` is the
     # GitHub/GitLab source this key is synthesized from.
-    synthetic_key = _SYNTHETIC_TRACKER_KEYS.get(get_config("tracker.type") or "")
+    # Same normalization as synthesis (`_tracker_type_for_synthesis`). Reading
+    # the raw config value would decide `GitHub` / " github " is not synthetic
+    # while `resolve_tracker_first_mint` happily synthesizes `gh-N` from it.
+    synthetic_key = _SYNTHETIC_TRACKER_KEYS.get(_tracker_type_for_synthesis())
     is_synthetic_mint = bool(synthetic_key) and key.lower() == synthetic_key
     if is_synthetic_mint:
         # Match the ACTUAL incoming reference, not a bare issue number. A
@@ -23688,6 +23691,12 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
             # Idempotent: a second put keeps the ORIGINAL creation time so the
             # record still describes when the remote issue was actually made.
             record["createdAt"] = existing["createdAt"]
+        # Reconcile the ignore block AT WRITE TIME, not on some future `init`.
+        # A project whose auto-managed .flow/.gitignore predates this release
+        # would otherwise get an untracked-but-unignored recovery record, and a
+        # `git add -A` would commit it - letting another checkout computing the
+        # same retry key resume onto the first developer's issue.
+        _ensure_flow_gitignore(flow_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(path, record)
         if use_json:

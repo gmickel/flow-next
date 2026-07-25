@@ -288,5 +288,42 @@ class CreateFirstKeyIsValidatedBeforePathUse(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
 
 
+class RecoveryWriteReconcilesGitignore(unittest.TestCase):
+    """Writing a record must ensure the ignore entry (PR #241 wave 4).
+
+    A project whose auto-managed .flow/.gitignore predates this release would
+    otherwise get an unignored recovery record, and `git add -A` would commit
+    it - letting another checkout with the same retry key resume onto the first
+    developer's issue. That is the correctness failure the gitignore exists to
+    prevent, so it cannot wait for a future `init`.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        _run(self.repo, "init")
+        self.gi = self.repo / ".flow" / ".gitignore"
+        # Simulate a pre-release ignore block with the pattern absent.
+        self.gi.write_text(
+            self.gi.read_text(encoding="utf-8").replace("create-first/\n", ""),
+            encoding="utf-8",
+        )
+        self.assertNotIn("create-first/", self.gi.read_text(encoding="utf-8"))
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_put_reconciles_the_ignore_block(self) -> None:
+        key = flowctl.compute_create_first_key("github", "Fix login", "")
+        r = _run(self.repo, "sync", "create-first-put", "--key", key,
+                 "--id", "X", "--identifier", "#1", "--url", "u",
+                 "--title", "t", "--transport", "gh")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(
+            "create-first/", self.gi.read_text(encoding="utf-8"),
+            "writing a record must ensure it is ignored, not rely on a later init",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

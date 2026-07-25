@@ -381,6 +381,24 @@ This op never mints a spec id and never invents a synthetic key. GitHub/GitLab s
 
 5. **Failure after remote create, before mint completes:** surface `identifier` + `url` + `retryKey`; keep the recovery file. A later `create-first` with the same title+body finds the file and returns the existing issue - **never** creates a duplicate.
 
+6. **Failure after the local mint, before attach completes.** The record alone is not enough here: the resumed run recovers the issue and re-runs `spec create --tracker-first`, which `preflight_tracker_mint` correctly refuses because the canonical spec already exists - leaving the retry unable to finish. So on resume, **before minting**, check whether the spec this record would mint already exists and is unlinked:
+
+   ```bash
+   # Resume order: recover the issue, THEN look for a spec already minted from it.
+   # `sync get-state` reports the tracker block; an existing spec with no tracker.id
+   # is this record's half-finished mint, so skip creation and go straight to attach.
+   EXISTING=$($FLOWCTL show "<key>-<number>-<slug>" --json 2>/dev/null | jq -r '.id // empty')
+   if [ -n "$EXISTING" ]; then
+     SPEC_ID="$EXISTING"          # resume: do NOT re-run spec create
+   else
+     SPEC_ID=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json | jq -r '.id')
+   fi
+   # Attach + seed + clear proceed identically from here.
+   ```
+
+   Attach is idempotent (`set-tracker-id` writes the same triple), so a resume that
+   reaches attach twice is safe; a resume that re-mints is not.
+
 #### Flow
 
 ```
