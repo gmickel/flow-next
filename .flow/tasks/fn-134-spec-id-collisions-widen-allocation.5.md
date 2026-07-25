@@ -1,70 +1,75 @@
 ---
-satisfies: [R16, R17]
+satisfies: [R15, R17, R18]
 ---
-# fn-134-spec-id-collisions-widen-allocation.5 flow-next.dev: config, teams, troubleshooting, FAQ, Notable updates
+# fn-134-spec-id-collisions-widen-allocation.5 Repo docs: correct GitHub/GitLab claims, Notable updates surface, CHANGELOG
 
 ## Description
-flow-next.dev pass: surface that tracker-keyed spec ids exist and are the team default, document the config, answer the collision question in the FAQ, and add the Notable updates section to the landing page.
 
-This is a **separate repo** (`~/work/flow-next.dev`) and commits there separately from the flow-next repo.
+Repo documentation pass, including the correction of every statement that GitHub and GitLab cannot use tracker-first, and the new **Notable updates** surface on the docs home.
 
 **Size:** M
-**Files (in `~/work/flow-next.dev`):**
-- `src/content/docs/teams/tracker-sync.mdx`
-- `src/content/docs/teams/collaboration.mdx`
-- `src/content/docs/flowctl/configuration.mdx`
-- `src/content/docs/specs/schema.mdx`
-- `src/content/docs/reference/troubleshooting.mdx`
-- `src/content/docs/proof/faq.mdx`
-- the landing page (Notable updates section)
+**Files:**
+- `plugins/flow-next/docs/{tracker-sync.md,teams.md,flowctl.md,architecture.md,README.md}`
+- `plugins/flow-next/skills/flow-next-tracker-sync/{SKILL.md,steps.md,references/gitlab.md,references/identity.md,references/github.md}`
+- `GLOSSARY.md`, `CHANGELOG.md`
+- `.flow/usage.md` + `plugins/flow-next/templates/usage.md` (dual copy, keep identical)
+- `agent_docs/releasing.md`
+- `plugins/flow-next/codex/**` (regenerated)
 
-### Approach
+## Approach
 
-- `teams/collaboration.mdx` is the page a team actually reads when they hit this, so it carries the recommendation: tracker-keyed ids avoid the collision entirely, here is the one-line config.
-- `teams/tracker-sync.mdx` - the hybrid id model, synthetic `gh-` / `gl-` keys, and that all four trackers now support tracker-first.
-- `flowctl/configuration.mdx:123-131` - add `tracker.specIds` alongside the other `tracker.*` keys, matching the existing row format and the strict-enum note.
-- `specs/schema.mdx` - the id scheme, both forms coexisting.
-- `reference/troubleshooting.mdx` - what to do when two people got the same ordinal: it is a warning not a break, ids never change, do not renumber, and here is how to avoid it next time.
-- `proof/faq.mdx` - one new question in the page's existing voice and heading shape (`## <question>`), covering "two of us created specs and both got fn-122". Match the register of the existing entries: direct, non-defensive, names the real limitation.
-- **Notable updates on the landing page** - the customer-facing half of R17, mirroring the repo docs-home section. Short, scannable, one line per change plus how to enable.
+**Correct the false statements first (R18).** These currently say GitHub/GitLab are flow-first only, which synthetic keys make untrue:
+- `docs/tracker-sync.md:47`
+- `skills/flow-next-tracker-sync/SKILL.md:142`
+- `skills/flow-next-tracker-sync/steps.md:277-290` (the "GitLab grabs go FLOW-FIRST" block)
+- `skills/flow-next-tracker-sync/references/gitlab.md:365-378`
+- `references/github.md` if an equivalent exists
+Keep the accurate part (these are not literal `KEY-N` identifiers); drop the "therefore flow-first only" conclusion and document the synthetic mint.
 
-Register rules for this site are strict and non-optional: lead with the reader's problem rather than the mechanism, plain hyphens and never em dashes, numbers as outcomes rather than inventory, and honest bounds kept rather than trimmed.
+**Substance updates:**
+- `docs/tracker-sync.md` - hybrid id model gains the synthetic-key table, the `tracker.specIds` gate, the GitLab `iid`-vs-global-id re-point hazard, and a short duplicate-ordinal / disambiguation note.
+- `docs/teams.md:425-429` - tracker-keyed ids are the recommended team default, and why (collision avoidance).
+- `docs/flowctl.md` - `tracker.specIds` row alongside the other `tracker.*` keys; note that skills route to `--tracker-first` automatically. **The `validate` JSON example at `:693-698` shows the collision as a `root_error` and goes stale** - update it to the warning behavior.
+- `docs/architecture.md:82-89` - id scheme, synthetic keys, and one line on the widened allocation.
+- `GLOSSARY.md:133-135` - the tracker-key handle entry currently implies only Linear/Jira mint; extend for synthetic keys and note that `fn` remains the only globally reserved prefix.
+- `.flow/usage.md` + template - one line that tracker-keyed ids coexist and resolve. Keep both copies identical; this file is deliberately terse.
 
-### Investigation targets
+**Notable updates surface (R17).** Add a short, append-only section to `plugins/flow-next/docs/README.md` (the GitHub docs entry point): behavior-affecting changes and new opt-in defaults, one line each plus how to enable. Seed it with `tracker.specIds`. Document its own format inline so later releases append consistently, and add updating it as a step in `agent_docs/releasing.md` so it does not decay.
+
+**CHANGELOG** entry under `## [Unreleased]`. No version bump.
+
+## Investigation targets
 
 **Required** (read before coding):
-- `~/work/flow-next.dev/src/content/docs/proof/faq.mdx` - question voice and heading shape
-- `~/work/flow-next.dev/src/content/docs/flowctl/configuration.mdx:118-135` - the `tracker.*` config block and row format
-- `~/work/flow-next.dev/src/content/docs/teams/collaboration.mdx` - where the recommendation belongs
-- `~/work/flow-next.dev/CLAUDE.md` - navigation rules (a new page needs BOTH navbars; this task adds sections, not pages, so verify no nav change is needed)
+- `plugins/flow-next/docs/tracker-sync.md:40-70` - hybrid id model
+- `plugins/flow-next/docs/flowctl.md:690-700` and the `tracker.*` config table
+- `plugins/flow-next/docs/README.md` - where a Notable updates section belongs
+- `agent_docs/releasing.md` - the release step list
 
 **Optional** (reference as needed):
-- `~/work/flow-next.dev/src/content/docs/reference/troubleshooting.mdx`
-- the flow-next repo's `plugins/flow-next/docs/README.md` Notable updates section from task `.4`, to keep the two consistent
+- `GLOSSARY.md:130-140`
+- `plugins/flow-next/docs/architecture.md:80-95`
 
-### Key context
+## Key context
 
-Document what shipped, not what was planned. Read the landed repo docs from task `.4` and keep the two consistent without copy-pasting: the site is customer-facing prose, the repo docs are reference.
+Document the behavior that actually shipped in tasks `.1`-`.3`. Read the landed config and CLI surface rather than copying this task file.
 
-No version bump or changelog entry here unless a release is being cut; this is a docs-only pass on an already-released capability.
+Sweep by grep, not by memory: the named-file list above came from scouting, but this repo has repeatedly hit secondary surfaces that a named sweep missed.
+
+The codex mirror is generated. Never hand-edit; run `sync-codex.sh` twice and commit the diff.
+
 
 ## Acceptance
 
-- [ ] `teams/tracker-sync.mdx` and `teams/collaboration.mdx` state that tracker-keyed spec ids exist, are the recommended team default, and why (R16).
-- [ ] `flowctl/configuration.mdx` documents `tracker.specIds` alongside the other `tracker.*` keys in the existing row format (R16).
-- [ ] `specs/schema.mdx` covers the id scheme with both forms coexisting (R16).
-- [ ] `reference/troubleshooting.mdx` explains the duplicate-ordinal case: warning not break, ids never change, do not renumber, how to avoid it (R16).
-- [ ] `proof/faq.mdx` gains one question in the existing voice and heading shape covering the collision (R16).
-- [ ] The landing page carries a **Notable updates** section consistent with the repo docs-home version, seeded with `tracker.specIds` (R17).
-- [ ] No em dashes in new prose; register rules followed.
-- [ ] Site build gate passes: `cd ~/work/flow-next.dev && pnpm build`.
-- [ ] Committed and pushed in the flow-next.dev repo, separately from the flow-next repo.
-
+- [ ] Every GitHub/GitLab "cannot do tracker-first" statement is corrected; a grep sweep proves none remain, and the sweep command and output are recorded in the task evidence (R18).
+- [ ] `docs/tracker-sync.md`, `docs/teams.md`, `docs/flowctl.md`, `docs/architecture.md`, `GLOSSARY.md`, and both `usage.md` copies reflect `tracker.specIds`, synthetic keys, and the widened allocation (R15).
+- [ ] The stale `validate` root-error example in `docs/flowctl.md:693-698` shows the new warning behavior.
+- [ ] A **Notable updates** section exists on `plugins/flow-next/docs/README.md`, is seeded with `tracker.specIds`, documents its own append format, and is named as a step in `agent_docs/releasing.md` (R17).
+- [ ] Both `usage.md` copies remain byte-identical.
+- [ ] `CHANGELOG.md` has an entry under `## [Unreleased]`; no version bump, no manifest touched.
+- [ ] `./scripts/sync-codex.sh` run twice: idempotent, guards green, mirror diff committed.
+- [ ] Full gate green: `python3 scripts/run_tests_parallel.py`.
 
 ## Done summary
-TBD
 
 ## Evidence
-- Commits:
-- Tests:
-- PRs:

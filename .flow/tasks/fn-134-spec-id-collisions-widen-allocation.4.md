@@ -1,78 +1,69 @@
 ---
-satisfies: [R15, R17, R18]
+satisfies: [R7, R8, R9, R11, R20]
 ---
-# fn-134-spec-id-collisions-widen-allocation.4 Repo docs: correct GitHub/GitLab claims, Notable updates surface, CHANGELOG
+# fn-134-spec-id-collisions-widen-allocation.4 Skills: route on tracker.specIds, setup question, discoverability
 
 ## Description
-Repo documentation pass, including the correction of every statement that GitHub and GitLab cannot use tracker-first, and the new **Notable updates** surface on the docs home.
+
+Wire the skills: spec-creating skills route on `tracker.specIds`, `/flow-next:setup` asks the id-scheme question, and tracker-first becomes discoverable from where specs are actually born rather than only from the tracker-sync skill's own files.
 
 **Size:** M
 **Files:**
-- `plugins/flow-next/docs/{tracker-sync.md,teams.md,flowctl.md,architecture.md,README.md}`
-- `plugins/flow-next/skills/flow-next-tracker-sync/{SKILL.md,steps.md,references/gitlab.md,references/identity.md,references/github.md}`
-- `GLOSSARY.md`, `CHANGELOG.md`
-- `.flow/usage.md` + `plugins/flow-next/templates/usage.md` (dual copy, keep identical)
-- `agent_docs/releasing.md`
-- `plugins/flow-next/codex/**` (regenerated)
+- `plugins/flow-next/skills/flow-next-capture/workflow.md`
+- `plugins/flow-next/skills/flow-next-plan/steps.md`
+- `plugins/flow-next/skills/flow-next-work/phases.md`
+- `plugins/flow-next/skills/flow-next-qa/references/bug-filing.md`
+- `plugins/flow-next/skills/flow-next-interview/references/write-back.md`
+- `plugins/flow-next/skills/flow-next-setup/workflow.md` (+ `SKILL.md` if it enumerates questions)
+- `plugins/flow-next/codex/**` (regenerated, never hand-edited)
 
-### Approach
+## Approach
 
-**Correct the false statements first (R18).** These currently say GitHub/GitLab are flow-first only, which synthetic keys make untrue:
-- `docs/tracker-sync.md:47`
-- `skills/flow-next-tracker-sync/SKILL.md:142`
-- `skills/flow-next-tracker-sync/steps.md:277-290` (the "GitLab grabs go FLOW-FIRST" block)
-- `skills/flow-next-tracker-sync/references/gitlab.md:365-378`
-- `references/github.md` if an equivalent exists
-Keep the accurate part (these are not literal `KEY-N` identifiers); drop the "therefore flow-first only" conclusion and document the synthetic mint.
+**Routing gate.** Each spec-creating site reads `tracker.specIds` from the config snapshot the skill ALREADY holds (fn-110 root snapshot). No new `config get` call. When the value is `tracker` and the bridge is active: mint from a named issue if the request has one, otherwise create the tracker issue first via tracker-sync, then `spec create --tracker-first --tracker-identifier <key>`. Degrade silently to flow-first when the bridge is inactive or no transport is reachable; an explicit user override always wins.
 
-**Substance updates:**
-- `docs/tracker-sync.md` - hybrid id model gains the synthetic-key table, the `tracker.specIds` gate, the GitLab `iid`-vs-global-id re-point hazard, and a short duplicate-ordinal / disambiguation note.
-- `docs/teams.md:425-429` - tracker-keyed ids are the recommended team default, and why (collision avoidance).
-- `docs/flowctl.md` - `tracker.specIds` row alongside the other `tracker.*` keys; note that skills route to `--tracker-first` automatically. **The `validate` JSON example at `:693-698` shows the collision as a `root_error` and goes stale** - update it to the warning behavior.
-- `docs/architecture.md:82-89` - id scheme, synthetic keys, and one line on the widened allocation.
-- `GLOSSARY.md:133-135` - the tracker-key handle entry currently implies only Linear/Jira mint; extend for synthetic keys and note that `fn` remains the only globally reserved prefix.
-- `.flow/usage.md` + template - one line that tracker-keyed ids coexist and resolve. Keep both copies identical; this file is deliberately terse.
+Known mint call sites, confirmed by scouting: `plan/steps.md:291-297` (Route B, the brand-new-idea mint), `work/phases.md:110,117` (spec-less and markdown-file starts), `qa/references/bug-filing.md:127`, `interview/references/write-back.md:31`, and capture's touchpoint around `capture/workflow.md:826`. A site that genuinely inherits the gate from another skill may say so instead of repeating it, but it must say which.
 
-**Notable updates surface (R17).** Add a short, append-only section to `plugins/flow-next/docs/README.md` (the GitHub docs entry point): behavior-affecting changes and new opt-in defaults, one line each plus how to enable. Seed it with `tracker.specIds`. Document its own format inline so later releases append consistently, and add updating it as a step in `agent_docs/releasing.md` so it does not decay.
+**Setup question.** Follow the existing question pattern in `setup/workflow.md` (the GitHub Scout question around `:429-441` is the closest shape, gated on "include if config unset"). Gate on **tracker configured AND `tracker.specIds` unset**, default to `tracker`, and state the collision rationale rather than offering a bare preference. Add it to the Step 6d question list (~`:386`) and wire it into the Step 7 write-back. Never re-ask once the key is set to either value.
 
-**CHANGELOG** entry under `## [Unreleased]`. No version bump.
+**Discoverability.** `plan` and `work` prose currently never mention tracker-first at all. Name it as the recommended team default, briefly, where a spec is minted - not a mechanical flag description.
 
-### Investigation targets
+**No runtime advisory.** A nag line at spec-creation time was considered and explicitly rejected during planning (see the spec's Setup section and withdrawn R10). Do not add one. Discoverability is handled by the setup question plus the notable-updates surface in tasks `.4` / `.5`.
+
+## Investigation targets
 
 **Required** (read before coding):
-- `plugins/flow-next/docs/tracker-sync.md:40-70` - hybrid id model
-- `plugins/flow-next/docs/flowctl.md:690-700` and the `tracker.*` config table
-- `plugins/flow-next/docs/README.md` - where a Notable updates section belongs
-- `agent_docs/releasing.md` - the release step list
+- `plugins/flow-next/skills/flow-next-plan/steps.md:285-300` - Route B mint call
+- `plugins/flow-next/skills/flow-next-work/phases.md:105-120` - both spec-less mint paths
+- `plugins/flow-next/skills/flow-next-setup/workflow.md:380-450` - question list and an existing config-gated question
+- `plugins/flow-next/docs/tracker-sync.md:40-62` - the flow-first vs tracker-first flows the prose must match
 
 **Optional** (reference as needed):
-- `GLOSSARY.md:130-140`
-- `plugins/flow-next/docs/architecture.md:80-95`
+- `plugins/flow-next/skills/flow-next-capture/workflow.md:810-840`
+- `plugins/flow-next/skills/flow-next-qa/references/bug-filing.md:120-135`
 
-### Key context
+## Key context
 
-Document the behavior that actually shipped in tasks `.1`-`.3`. Read the landed config and CLI surface rather than copying this task file.
+**Skill prose must name the CLI surface that task `.2` actually shipped**, not this task file's description of it. Read the real `--help` and the landed config behavior before writing. This is a repeat offender in this repo and is now enforced by a CI gate.
 
-Sweep by grep, not by memory: the named-file list above came from scouting, but this repo has repeatedly hit secondary surfaces that a named sweep missed.
+**Bash blocks in skill prose re-declare their own variables.** Vars do not survive across tool calls, so every block that needs `$FLOWCTL` or a path declares it literally.
 
-The codex mirror is generated. Never hand-edit; run `sync-codex.sh` twice and commit the diff.
+Cross-platform: canonical prose changes require `./scripts/sync-codex.sh` run TWICE with the mirror diff committed. Audit the sync script if any new tool-name or dispatch phrasing is introduced.
+
 
 ## Acceptance
 
-- [ ] Every GitHub/GitLab "cannot do tracker-first" statement is corrected; a grep sweep proves none remain, and the sweep command and output are recorded in the task evidence (R18).
-- [ ] `docs/tracker-sync.md`, `docs/teams.md`, `docs/flowctl.md`, `docs/architecture.md`, `GLOSSARY.md`, and both `usage.md` copies reflect `tracker.specIds`, synthetic keys, and the widened allocation (R15).
-- [ ] The stale `validate` root-error example in `docs/flowctl.md:693-698` shows the new warning behavior.
-- [ ] A **Notable updates** section exists on `plugins/flow-next/docs/README.md`, is seeded with `tracker.specIds`, documents its own append format, and is named as a step in `agent_docs/releasing.md` (R17).
-- [ ] Both `usage.md` copies remain byte-identical.
-- [ ] `CHANGELOG.md` has an entry under `## [Unreleased]`; no version bump, no manifest touched.
-- [ ] `./scripts/sync-codex.sh` run twice: idempotent, guards green, mirror diff committed.
-- [ ] Full gate green: `python3 scripts/run_tests_parallel.py`.
-
+- [ ] Every spec-creating skill (capture, plan, work, qa, interview) routes on `tracker.specIds` using the existing config snapshot and adds **no new config read**; each degrades to flow-first when the bridge is inactive or no transport is reachable (R7).
+- [ ] A site that inherits the gate rather than implementing it says so explicitly and names the owning skill.
+- [ ] With `tracker.specIds=tracker` and an active bridge, a fresh idea produces a `KEY-N-slug` id, having created the tracker issue first (R8).
+- [ ] Network cost is stated **conditionally and accurately**, matching epic R8: no net new call when the matching `tracker.perEvent.*` touchpoint is already active; **one earlier remote write when it is off**, because those leaves default to `off` and a bridge-active repo can legitimately have every lifecycle event disabled. The blanket "no net cost" claim is not repeated anywhere (R8).
+- [ ] `/flow-next:setup` asks the id-scheme question when a tracker is configured AND `tracker.specIds` is unset, states the collision rationale, **discloses that choosing `tracker` makes spec creation contact the tracker immediately** (creating an issue before the spec exists), and defaults to `tracker`. It never asks again once the key is set to either value, including an explicit `flow` (R9).
+- [ ] `plan`, `work`, and `capture` prose name tracker-first as the recommended team default (R11).
+- [ ] No runtime advisory or nag was added at any mint site (withdrawn R10).
+- [ ] `./scripts/sync-codex.sh` run twice: idempotent, validation guards green, mirror diff committed.
+- [ ] **Contract tests, not prose assertions** (R20): every one of the five mint sites routes correctly; issue-first linking happens; degradation to flow-first when no transport is reachable; explicit-override precedence beats the config; and a fake-adapter integration test proving create -> mint -> attach -> a later touchpoint fires **without** creating a second issue. Reuse the existing fake-transport routing harness.
+- [ ] Setup raw-unset gating is tested: tracker configured + key absent asks; key set to either value does not.
+- [ ] Focused suite green: `cd plugins/flow-next/tests && python3 -m unittest test_flowctl_surface test_startup_bootstrap -q` plus the new routing and setup tests.
 
 ## Done summary
-TBD
 
 ## Evidence
-- Commits:
-- Tests:
-- PRs:

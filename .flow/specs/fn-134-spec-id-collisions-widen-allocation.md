@@ -41,10 +41,22 @@ The routing is **agentic, in skill prose**, consistent with the repo's split rul
 
 When `tracker.specIds == "tracker"` AND the bridge is active:
 
-- The request already names an issue → mint from that key.
-- No issue yet → create the tracker issue first via tracker-sync, then `spec create --tracker-first --tracker-identifier <key>`.
+- The request already names an issue → mint from that key. **This path works today** ("grab issue X and spec it").
+- No issue yet → **this path does not exist yet and must be built.** See below.
 
-**This adds no net network cost.** Flow-first already pushes to the tracker at the capture/plan touchpoint (`tracker.perEvent.capture` / `.plan`). Tracker-first reorders that same call earlier in the same run rather than adding one.
+### The fresh-idea path needs a new tracker-sync operation
+
+Every current tracker-sync operation takes a **local spec id**: create-if-unlinked renders an existing spec and then writes the issue. There is no operation that creates an issue and returns its key *before* a spec exists. So "create the tracker issue first, then mint" cannot be expressed with today's surface, and a plan that simply instructs five skills to do it would not be executable.
+
+This spec therefore requires a **create-first operation** on tracker-sync that, given a title and body, creates the issue and returns `{id, identifier, url}` with no local spec. The full sequence becomes: create issue → mint `KEY-N-slug` → attach (`sync set-tracker-id` with id, identifier, url) → seed the merge base so the first reconcile is not a spurious conflict.
+
+**Failure recovery is part of the contract, not an afterthought.** Remote creation succeeding while local minting fails would strand an orphan issue and risk creating a second one on retry. The operation must surface the created issue's identifier and url on failure so the run can be resumed by linking rather than re-creating, and a retry must never create a duplicate.
+
+### Network cost: the honest version
+
+An earlier draft claimed tracker-first "adds no net network cost" because flow-first already pushes at the capture/plan touchpoint. **That claim is false in the general case and is withdrawn.** Bridge-active does not imply the relevant `tracker.perEvent.*` leaf is enabled; those leaves default to `off`, and a repo can legitimately run with the bridge active and every lifecycle event off. In that configuration flow-first performs no remote write at all, and tracker-first adds one.
+
+The accurate statement: **when the matching lifecycle touchpoint is already active, tracker-first reorders an existing call rather than adding one; when it is off, tracker-first introduces an earlier remote write that flow-first would not have made.** The setup question must disclose this, because choosing `tracker` means spec creation starts talking to the tracker immediately.
 
 Degradation, in order, each silent-and-continue rather than blocking:
 - Bridge inactive or no transport reachable → flow-first `fn-N`.
@@ -63,7 +75,21 @@ Linear and Jira ship a native `KEY-N` identifier (`WOR-17`, `PROJ-123`) that min
 | `github` | `#123` | `gh-123-slug` (synthetic `gh`) |
 | `gitlab` | `<project>#456` | `gl-456-slug` (synthetic `gl`) |
 
-The synthetic key is used **only** when `tracker.type` matches, so it cannot collide with a real tracker key: a Linear team literally keyed `GH` still mints `gh-…` from its own native key, because type is `linear` and no synthesis happens. One repo, one type, no overlap. Bare `gh-123` / `gl-456` resolve as aliases exactly like `wor-17` does, and ids never change.
+**Type-gating alone does NOT make this safe, and an earlier draft was wrong to claim it did.** "One repo, one type, no overlap" ignores that ids are permanent while configuration is not. Two concrete collisions survive type-gating:
+
+1. A repo runs Linear with team key `GH` and accumulates `gh-123-slug` specs. It is later re-pointed to GitHub. Synthetic minting now produces `gh-123-slug` for issue 123, colliding with a historical native id.
+2. A GitHub-configured repo is handed an explicit native `GH-123` identifier at link time, which is still a legal tracker key.
+
+Bare `gh-123` can therefore become ambiguous even when the slugs differ, which is the same failure this spec is trying to remove.
+
+So synthesis needs **contextual reservation plus a preflight**, not just a type check:
+
+- While `tracker.type` is `github` / `gitlab`, the matching prefix (`gh` / `gl`) is reserved for synthesis in that repo: an explicit native identifier using that key is rejected at link and create time with a message naming the conflict.
+- Before minting, **preflight the existing store** for a canonical id or resolvable alias that would collide, and refuse with an actionable message rather than creating the duplicate.
+- Native `GH` behavior is preserved unchanged while the type remains `linear` / `jira`.
+- **Re-pointing `tracker.type`** is a documented hazard on the same footing as re-pointing a GitLab project: previously minted ids keep their meaning, and the preflight is what stops a new mint from colliding with them.
+
+Bare `gh-123` / `gl-456` otherwise resolve as aliases exactly like `wor-17` does, and ids never change.
 
 ### Sites to sweep
 
@@ -79,7 +105,10 @@ flowctl config set tracker.specIds tracker    # or "flow" (default)
 flowctl config get tracker.specIds --json
 ```
 
-- Strict string enum. Only the literal `tracker` activates; any other value, including a coerced bool or a typo, resolves to `flow`. Matches the existing strict-enum convention used by `pipeline.qa` and `pilot.autonomy`.
+- Strict string enum with **two distinct contracts**, because "reject invalid" and "fail closed" are different guarantees and conflating them was ambiguous in an earlier draft:
+  - **Write side:** `flowctl config set tracker.specIds <anything-but-flow-or-tracker>` is **rejected** with a usage error, following the ad hoc `cmd_config_set` validation pattern used by `review.backend`.
+  - **Read side:** a malformed value that reached the file by hand-editing, a merge, or an older version **fails closed to `flow`**. Only the literal `tracker` activates; a coerced bool or a typo never does.
+  - Both contracts are tested.
 - No change to `spec create`'s existing flags. `--tracker-first --tracker-identifier` keep working exactly as today; the config only changes what the skills *choose* by default.
 - No new flowctl subcommand. Selecting a scheme is configuration; deciding when it applies is skill judgment.
 
@@ -116,15 +145,17 @@ The durable answer is a **notable-updates surface** that serves every release ra
 - **R3:** Allocation completes under 150ms on a fixture comparable to this repo (300+ refs, 15+ worktrees), with the worktree scan performed in-process rather than one subprocess per worktree.
 - **R4:** A test pins that the hot-path commands (`list`, `status`, `show`, `ready`, `next`) issue no worktree or ref scan, so the fn-109 latency work cannot regress.
 - **R5:** A regression test reproduces the two-worktree collision: create a spec in worktree A without committing, then create one in worktree B, and assert the second gets `max+2` rather than a duplicate.
-- **R6:** `tracker.specIds` exists as a strict string enum defaulting to `flow`; only the literal `tracker` activates it.
+- **R6:** `tracker.specIds` exists as a strict string enum defaulting to `flow`, with both contracts tested: an invalid value is **rejected** by `config set`, and an invalid value already on disk **fails closed** to `flow` on read. Only the literal `tracker` activates it.
 - **R7:** Every spec-creating skill (capture, plan, work, qa, interview) routes on `tracker.specIds` using the existing config snapshot, adding no new config read, and each degrades to flow-first when the bridge is inactive or no transport is reachable.
-- **R8:** With `tracker.specIds=tracker` and an active bridge, a spec created from a fresh idea produces a `KEY-N-slug` id, having created the tracker issue first. Net tracker network calls for the run are unchanged versus flow-first, because the existing push touchpoint is reordered rather than duplicated.
+- **R8:** With `tracker.specIds=tracker` and an active bridge, a spec created from a fresh idea produces a `KEY-N-slug` id via the full sequence: create issue → mint → attach → seed merge base. Network cost is stated accurately, not as a blanket zero-cost claim: **no net new call when the matching `tracker.perEvent.*` touchpoint is already active; one earlier remote write when it is off.** The setup question discloses that choosing `tracker` makes spec creation contact the tracker immediately.
+- **R19:** A tracker-sync **create-first** operation exists that creates an issue from a title and body with no local spec and returns `{id, identifier, url}`. On a failure after remote creation it surfaces the created issue's identifier and url so the run resumes by linking, and a retry never creates a duplicate issue. Covered by a fake-adapter test.
+- **R20:** Contract tests cover the routing behavior rather than asserting it in prose: every one of the five mint sites, issue-first linking, graceful degradation when no transport is reachable, explicit-override precedence, and a fake-adapter integration test proving create → mint → attach → a later touchpoint fires **without** creating a second issue.
 - **R9:** `/flow-next:setup` asks the id-scheme question when a tracker is configured **AND `tracker.specIds` is unset**, states the collision rationale, and defaults to `tracker`. Once the key is set to either value it never asks again. A test covers the existing-repo path: tracker configured, key absent, question asked.
 - **R10:** *(withdrawn during planning — a runtime advisory in the spec-creating skills was rejected as scaffolding around a docs gap; superseded by R17.)*
 - **R11:** Tracker-first is discoverable from where specs are actually created: `plan`, `work`, and `capture` prose name it as the recommended team default, not only the tracker-sync skill's own files.
 - **R12:** Bare `fn-N` resolution disambiguates rather than guessing when the ordinal is duplicated, listing candidates and requiring the full id.
-- **R13:** `validate` reports a duplicate ordinal whose full ids are distinct as a **warning**, not a root error. A test covers the current live `fn-122` pair.
-- **R14:** Synthetic-key minting works for `github` (`gh-<issue>`) and `gitlab` (`gl-<iid>`), uses the project-scoped `iid` for GitLab, and is applied only when `tracker.type` matches. A test covers a Linear/Jira repo whose native key is `GH`, asserting no synthesis and no collision.
+- **R13:** `validate` reports a duplicate ordinal whose full ids are distinct as a **warning**, not a root error, and the warning is machine-readable. `validate --all --json` currently exposes `root_errors`, per-spec `warnings`, and `total_warnings` but **no top-level root-warning collection**, so moving the message into the existing warning count would print and count it while dropping its text from JSON. This requires a new top-level field (`root_warnings`), `total_warnings` updated to include it, and text output, docs, and the spec's Quick commands kept consistent. A test covers the live `fn-122` pair in both renderers.
+- **R14:** Synthetic-key minting works for `github` (`gh-<issue>`) and `gitlab` (`gl-<iid>`), uses the project-scoped `iid` for GitLab, and is guarded by **contextual reservation plus a preflight**, not type-gating alone: while the type is `github`/`gitlab` the matching prefix is reserved and an explicit native identifier using it is rejected; before minting, the existing store is preflighted for a colliding canonical id or resolvable alias and refuses with an actionable message. Tests cover a Linear/Jira repo natively keyed `GH` (no synthesis, unchanged behavior) and a **mixed historical store** where a `gh-123` spec predates a re-point to GitHub.
 - **R15:** Repo docs updated in the same workstream: `docs/tracker-sync.md` (hybrid id model, synthetic keys, the new default), `docs/teams.md` (team recommendation and why), `docs/flowctl.md` (`tracker.specIds`), `docs/architecture.md` (spec-id scheme), plus the sync-codex mirror and a CHANGELOG entry under `## Unreleased`.
 - **R16:** flow-next.dev updated in the same workstream: `teams/tracker-sync.mdx` and `teams/collaboration.mdx` (the option exists and is the team default), `flowctl/configuration.mdx` (`tracker.specIds` alongside the other `tracker.*` keys), `specs/schema.mdx` (id scheme), `reference/troubleshooting.mdx` (what to do about a duplicate ordinal), and a new `proof/faq.mdx` entry in the existing question voice covering "two of us created specs and both got the same number". Site build gate passes.
 - **R17:** A **Notable updates** surface exists and is seeded, on both the repo docs home (`plugins/flow-next/docs/README.md`) and the flow-next.dev landing page: a short, append-only list of behavior-affecting changes and new opt-in defaults, each one line plus how to enable it. Its first entry is `tracker.specIds`. The section documents its own format so later releases append consistently, and `agent_docs/releasing.md` names updating it as a release step so it does not decay.
@@ -187,7 +218,7 @@ cd plugins/flow-next/tests && python3 -m unittest \
   test_flowctl_surface test_startup_bootstrap -q
 
 # Spec-id allocation smoke against the real store
-.flow/bin/flowctl validate --all --json | jq '{total_errors, root_errors, warnings: (.warnings // [] | length)}'
+.flow/bin/flowctl validate --all --json | jq '{total_errors, total_warnings, root_errors, root_warnings}'
 .flow/bin/flowctl show fn-122 --json 2>&1 | head -3   # ambiguity path
 
 # Skill prose changed -> mirror must regenerate idempotently
@@ -213,15 +244,17 @@ If it cannot hit the budget, stop and re-scope before `.2`: the fallback is to d
 | R4 | Hot-path commands pinned as scan-free | .1 | — |
 | R5 | Two-worktree collision regression test | .1 | — |
 | R6 | `tracker.specIds` strict enum, default `flow` | .2 | — |
-| R7 | Spec-creating skills route on the config, no new config read | .3 | — |
-| R8 | Tracker-first mints `KEY-N-slug`; no net new network calls | .3 | — |
-| R9 | Setup asks when tracker configured AND key unset; never re-asks | .3 | — |
+| R7 | Spec-creating skills route on the config, no new config read | .4 | — |
+| R8 | Full create->mint->attach->seed sequence; honest conditional network-cost statement | .4 | — |
+| R9 | Setup asks when tracker configured AND key unset; never re-asks; discloses the remote write | .4 | — |
 | R10 | *(withdrawn during planning)* | — | Superseded by R17 |
-| R11 | Tracker-first named in plan / work / capture prose | .3 | — |
+| R11 | Tracker-first named in plan / work / capture prose | .4 | — |
 | R12 | Bare `fn-N` disambiguates on duplicate ordinal | .2 | May already hold; task verifies before building |
-| R13 | Duplicate ordinal is a warning, not a root error | .2 | — |
-| R14 | Synthetic `gh-` / `gl-` keys, type-gated, `iid`-scoped | .2 | — |
-| R15 | Repo docs + CHANGELOG + mirror | .4 | — |
-| R16 | flow-next.dev pages + FAQ + build gate | .5 | — |
-| R17 | Notable-updates surface, seeded, format documented, release step | .4, .5 | repo home in .4, landing page in .5 |
-| R18 | Every GitHub/GitLab "flow-first only" statement corrected | .4 | — |
+| R13 | Duplicate ordinal is a machine-readable warning via a new `root_warnings` field | .2 | — |
+| R14 | Synthetic keys with contextual reservation + preflight; mixed-history test | .2 | — |
+| R15 | Repo docs + CHANGELOG + mirror | .5 | — |
+| R16 | flow-next.dev pages + FAQ + build gate | .6 | — |
+| R17 | Notable-updates surface, seeded, format documented, release step | .5, .6 | repo home in .5, landing page in .6 |
+| R18 | Every GitHub/GitLab "flow-first only" statement corrected | .5 | — |
+| R19 | tracker-sync create-first operation + failure recovery, no duplicate on retry | .3 | — |
+| R20 | Contract tests for all five mint sites, degradation, override, no second issue | .3, .4 | op tests in .3, routing tests in .4 |

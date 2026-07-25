@@ -1,11 +1,63 @@
 {
   "branch_name": "fn-134-spec-id-collisions-widen-allocation",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-07-25T08:35:07.343327Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-134-spec-id-collisions-widen-allocation",
+  "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_rounds": 0,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-07-25T09:11:19.650856Z",
+  "review_attempts": [
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "c53eb80222b6e0e47875b4bbc41fcd14444bbd3566eb7dc048b23b4802f10e67",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-07-25T09:01:02.993514Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "260f352ba96ead533ebcbb05996dd93dd9accec13f26e165bb38425ba36253cf",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-07-25T09:08:26.018305Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "16b70abc8e0e8ff19a60b3ef51b84f4d51a55098a539cfbfcdf1226610c62cd9",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-07-25T09:11:19.649989Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_pending_rounds": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-134-spec-id-collisions-widen-allocation.md",
   "status": "open",
   "title": "Spec-id collisions: widen allocation visibility, make tracker-keyed ids the team default",
@@ -20,5 +72,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-25T08:52:20.091256Z"
+  "updated_at": "2026-07-25T09:11:19.650856Z"
 }

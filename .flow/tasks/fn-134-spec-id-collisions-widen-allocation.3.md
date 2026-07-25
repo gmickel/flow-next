@@ -1,70 +1,59 @@
 ---
-satisfies: [R7, R8, R9, R11]
+satisfies: [R19, R20]
 ---
-# fn-134-spec-id-collisions-widen-allocation.3 Skills: route on tracker.specIds, setup question, discoverability
+# fn-134-spec-id-collisions-widen-allocation.3 tracker-sync: create-first operation for the fresh-idea path
 
 ## Description
-Wire the skills: spec-creating skills route on `tracker.specIds`, `/flow-next:setup` asks the id-scheme question, and tracker-first becomes discoverable from where specs are actually born rather than only from the tracker-sync skill's own files.
+
+Build the tracker-sync **create-first** operation that the fresh-idea tracker-first path depends on. Today every tracker-sync operation takes a local spec id, and create-if-unlinked renders an existing spec before writing the issue. There is no way to create an issue and learn its key *before* a spec exists, so "create the issue first, then mint" is currently inexpressible. This task makes it expressible.
+
+Plan-review found this gap: without it, task `.4` would be instructing five skills to call something that does not exist.
 
 **Size:** M
 **Files:**
-- `plugins/flow-next/skills/flow-next-capture/workflow.md`
-- `plugins/flow-next/skills/flow-next-plan/steps.md`
-- `plugins/flow-next/skills/flow-next-work/phases.md`
-- `plugins/flow-next/skills/flow-next-qa/references/bug-filing.md`
-- `plugins/flow-next/skills/flow-next-interview/references/write-back.md`
-- `plugins/flow-next/skills/flow-next-setup/workflow.md` (+ `SKILL.md` if it enumerates questions)
-- `plugins/flow-next/codex/**` (regenerated, never hand-edited)
+- `plugins/flow-next/skills/flow-next-tracker-sync/` (the operation: SKILL.md op list, steps.md, and the adapter references it touches)
+- `plugins/flow-next/scripts/flowctl.py` only if a thin helper is genuinely needed (prefer not; this is skill-orchestrated)
+- tests: a fake-adapter test for the create → attach → merge-base sequence
 
-### Approach
+## Approach
 
-**Routing gate.** Each spec-creating site reads `tracker.specIds` from the config snapshot the skill ALREADY holds (fn-110 root snapshot). No new `config get` call. When the value is `tracker` and the bridge is active: mint from a named issue if the request has one, otherwise create the tracker issue first via tracker-sync, then `spec create --tracker-first --tracker-identifier <key>`. Degrade silently to flow-first when the bridge is inactive or no transport is reachable; an explicit user override always wins.
+- The operation takes a **title and body**, creates the issue, and returns `{id, identifier, url}` with **no local spec id as input**. That is the whole point: the caller has not minted yet.
+- The caller sequence it enables: create issue → mint `KEY-N-slug` → attach via `sync set-tracker-id` (id, identifier, url) → seed the merge base so the first reconcile is not a spurious whole-body conflict.
+- **Failure recovery is part of the contract.** If remote creation succeeds and local minting then fails, the run must not strand an orphan issue or create a second one on retry. Surface the created identifier and url on the failure path so the run can resume by linking. A retry after partial failure links, never re-creates.
+- Works across all four adapters. GitHub and GitLab return `#N` / `<project>#<iid>` rather than a `KEY-N` string; the operation returns what the adapter gives and leaves synthetic-key minting to the caller (task `.2` owns that).
+- **Receipts are a chicken-and-egg problem here and must be designed, not assumed.** Every other tracker-sync op writes a receipt via `sync receipt`, which requires and resolves a **local spec id** - and at create-first time no spec exists yet. Do not simply assert "writes its own receipt". Pick one and state it: (a) emit durable pre-spec recovery output (identifier + url + a stable retry lookup key) and write the normal receipt **after** minting, or (b) add a thin opaque pre-spec receipt helper keyed by something that exists before the spec does. Either way, define the **retry lookup key** so a resumed run finds the already-created issue instead of making a second one.
+- Follow the existing best-effort discipline otherwise: a tracker failure never blocks the lifecycle.
 
-Known mint call sites, confirmed by scouting: `plan/steps.md:291-297` (Route B, the brand-new-idea mint), `work/phases.md:110,117` (spec-less and markdown-file starts), `qa/references/bug-filing.md:127`, `interview/references/write-back.md:31`, and capture's touchpoint around `capture/workflow.md:826`. A site that genuinely inherits the gate from another skill may say so instead of repeating it, but it must say which.
-
-**Setup question.** Follow the existing question pattern in `setup/workflow.md` (the GitHub Scout question around `:429-441` is the closest shape, gated on "include if config unset"). Gate on **tracker configured AND `tracker.specIds` unset**, default to `tracker`, and state the collision rationale rather than offering a bare preference. Add it to the Step 6d question list (~`:386`) and wire it into the Step 7 write-back. Never re-ask once the key is set to either value.
-
-**Discoverability.** `plan` and `work` prose currently never mention tracker-first at all. Name it as the recommended team default, briefly, where a spec is minted - not a mechanical flag description.
-
-**No runtime advisory.** A nag line at spec-creation time was considered and explicitly rejected during planning (see the spec's Setup section and withdrawn R10). Do not add one. Discoverability is handled by the setup question plus the notable-updates surface in tasks `.4` / `.5`.
-
-### Investigation targets
+## Investigation targets
 
 **Required** (read before coding):
-- `plugins/flow-next/skills/flow-next-plan/steps.md:285-300` - Route B mint call
-- `plugins/flow-next/skills/flow-next-work/phases.md:105-120` - both spec-less mint paths
-- `plugins/flow-next/skills/flow-next-setup/workflow.md:380-450` - question list and an existing config-gated question
-- `plugins/flow-next/docs/tracker-sync.md:40-62` - the flow-first vs tracker-first flows the prose must match
+- `plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md` - the operation list and where a new op is declared
+- `plugins/flow-next/skills/flow-next-tracker-sync/steps.md` - the create-if-unlinked flow this diverges from, and the receipt convention
+- `plugins/flow-next/skills/flow-next-tracker-sync/references/identity.md` - the hybrid id model and `set-tracker-id` attach semantics
+- `plugins/flow-next/docs/tracker-sync.md:40-70` - flow-first vs tracker-first as documented today
 
 **Optional** (reference as needed):
-- `plugins/flow-next/skills/flow-next-capture/workflow.md:810-840`
-- `plugins/flow-next/skills/flow-next-qa/references/bug-filing.md:120-135`
+- `plugins/flow-next/skills/flow-next-tracker-sync/references/{gitlab,jira,github}.md` - per-adapter create semantics
+- `plugins/flow-next/references/tracker-dispatch.md` - background runner dispatch, if the op is dispatched that way
 
-### Key context
+## Key context
 
-**Skill prose must name the CLI surface that task `.2` actually shipped**, not this task file's description of it. Read the real `--help` and the landed config behavior before writing. This is a repeat offender in this repo and is now enforced by a CI gate.
+This is skill-orchestrated, not a new flowctl subcommand: creating an issue and deciding what to do with the result is judgment, and the repo's split rule keeps that in the skill. Only add flowctl plumbing if something genuinely atomic is missing.
 
-**Bash blocks in skill prose re-declare their own variables.** Vars do not survive across tool calls, so every block that needs `$FLOWCTL` or a path declares it literally.
+Canonical prose changes require `./scripts/sync-codex.sh` twice with the mirror diff committed.
 
-Cross-platform: canonical prose changes require `./scripts/sync-codex.sh` run TWICE with the mirror diff committed. Audit the sync script if any new tool-name or dispatch phrasing is introduced.
 
 ## Acceptance
 
-- [ ] Every spec-creating skill (capture, plan, work, qa, interview) routes on `tracker.specIds` using the existing config snapshot and adds **no new config read**; each degrades to flow-first when the bridge is inactive or no transport is reachable (R7).
-- [ ] A site that inherits the gate rather than implementing it says so explicitly and names the owning skill.
-- [ ] With `tracker.specIds=tracker` and an active bridge, a fresh idea produces a `KEY-N-slug` id, having created the tracker issue first (R8).
-- [ ] Net tracker network calls for a run are unchanged versus flow-first: the existing push touchpoint is reordered, not duplicated. Stated in the prose so a reader can verify the claim (R8).
-- [ ] `/flow-next:setup` asks the id-scheme question when a tracker is configured AND `tracker.specIds` is unset, states the collision rationale, and defaults to `tracker`. It never asks again once the key is set to either value, including an explicit `flow` (R9).
-- [ ] `plan`, `work`, and `capture` prose name tracker-first as the recommended team default (R11).
-- [ ] No runtime advisory or nag was added at any mint site (withdrawn R10).
-- [ ] `./scripts/sync-codex.sh` run twice: idempotent, validation guards green, mirror diff committed.
-- [ ] Focused suite green plus any setup-question test: `cd plugins/flow-next/tests && python3 -m unittest test_flowctl_surface test_startup_bootstrap -q`
-
+- [ ] A create-first operation exists that takes a title and body, creates the issue with no local spec, and returns `{id, identifier, url}` (R19).
+- [ ] The enabled sequence is documented end to end: create → mint → attach → seed merge base, with the merge base seeded so the first reconcile is not a spurious conflict (R19).
+- [ ] Failure after remote creation surfaces the created issue's identifier and url so the run resumes by linking; a retry links rather than creating a second issue. Covered by a fake-adapter test (R19).
+- [ ] Works for all four adapters; GitHub/GitLab return their native reference and synthetic minting is left to the caller.
+- [ ] The receipt/recovery path is explicitly designed for the pre-spec case, since `sync receipt` resolves a local spec id that does not exist yet: either durable pre-spec recovery output plus a normal receipt after minting, or a thin pre-spec receipt helper. The chosen approach and the **retry lookup key** are stated, and a test proves a resumed run links the existing issue rather than creating a second one (R19).
+- [ ] The operation is best-effort like its siblings: a tracker failure never blocks the lifecycle.
+- [ ] `./scripts/sync-codex.sh` run twice: idempotent, guards green, mirror diff committed.
+- [ ] Focused suite green plus the new fake-adapter test.
 
 ## Done summary
-TBD
 
 ## Evidence
-- Commits:
-- Tests:
-- PRs:

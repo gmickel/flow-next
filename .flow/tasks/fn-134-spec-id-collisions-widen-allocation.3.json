@@ -11,6 +11,6 @@
   "spec": "fn-134-spec-id-collisions-widen-allocation",
   "spec_path": ".flow/tasks/fn-134-spec-id-collisions-widen-allocation.3.md",
   "status": "todo",
-  "title": "Skills: route on tracker.specIds, setup question, discoverability",
-  "updated_at": "2026-07-25T08:54:47.206612Z"
+  "title": "tracker-sync: create-first operation for the fresh-idea path",
+  "updated_at": "2026-07-25T09:09:28.957193Z"
 }

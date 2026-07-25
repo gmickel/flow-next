@@ -12,5 +12,5 @@
   "spec_path": ".flow/tasks/fn-134-spec-id-collisions-widen-allocation.2.md",
   "status": "todo",
   "title": "flowctl: tracker.specIds, synthetic gh/gl keys, validate + resolver ergonomics",
-  "updated_at": "2026-07-25T08:54:46.865931Z"
+  "updated_at": "2026-07-25T09:09:28.663190Z"
 }
