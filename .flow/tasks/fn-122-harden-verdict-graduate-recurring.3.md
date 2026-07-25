@@ -76,9 +76,8 @@ Check `GLOSSARY.md` — it currently defines neither memory statuses nor audit o
 
 
 ## Done summary
-TBD
-
+Swept every doc surface enumerating memory statuses and audit outcomes for the shipped `hardened` status and `Harden` audit outcome: `memory-schema.md` gained an Entry status section (per-status field matrix honest about enum-only validation, `hardened_into` verbatim storage, the six-outcome lifecycle, live gate verification, and un-graduation via `mark-fresh`) plus an accurate cross-version contract (old flowctl reads through silently and even surfaces hardened entries; the next write is refused; lockstep upgrade is the mitigation, no shim). `flowctl.md` gained a `memory mark-hardened` subsection and updated enums/defaults; README, self-improving.md, skills.md, teams.md, and commands/audit.md moved from five outcomes to six; memory-scout.md documents the default exclusion; GLOSSARY.md gained the `Harden (audit outcome)` term; CHANGELOG entry staged under `## [Unreleased]` with no version bump. Codex mirror regenerated (twice, guards green, idempotent).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3937006c40186abd12981fab8a9b36d5bcfe4284, 5e6c0351d7298be0564d3c6100ca60fc6b637e8d, 71cf6f64c25f909ecdd4f69a46816b7c8968bed8
+- Tests: GATE_SKIPPED:unittest:green-receipt a8b413a8 - baseline reused from prior post-gate pass, python3 scripts/run_tests_parallel.py (files=129 ran=2340 failures=0 errors=0 skipped=3, OK), ./scripts/sync-codex.sh x2 - guards green, idempotent (diff sha identical across runs), grep -rn "Consolidate / Replace / Delete\|Consolidate/Replace/Delete" --include=*.md . - no stale hits outside codex/ mirror, frozen optimization/ eval baselines, historical CHANGELOG entries, and .flow/ spec-task records, grep -rn "active|stale" --include=*.md plugins/ README.md GLOSSARY.md - only updated enum lines + historical CHANGELOG entries remain
 - PRs:
