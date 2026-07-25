@@ -9680,7 +9680,12 @@ def write_memory_entry(
         lines.append(f"{key}: {rendered}")
     lines.append("---")
     if raw_body is not None:
-        content = "\n".join(lines) + raw_body
+        # `raw_body` starts with the closing `---` line's own terminator, so
+        # it also tells us which line ending the file uses. Emit the rewritten
+        # frontmatter with the same one — a CRLF-authored entry must not come
+        # back with an LF frontmatter block (whole-header diff on Windows).
+        newline = "\r\n" if raw_body.startswith("\r\n") else "\n"
+        content = newline.join(lines) + raw_body
         atomic_write(path, content)
         return
     lines.append("")
@@ -10444,19 +10449,28 @@ def _memory_read_entry(
 ) -> dict[str, Any]:
     """Read a memory entry file once into {frontmatter, body, raw}.
 
+    `raw` is byte-verbatim: the file is opened with newline translation
+    disabled so a CRLF-authored entry keeps its CRLF line endings. That is
+    what `_memory_raw_body` hands to `write_memory_entry(raw_body=...)`, so
+    frontmatter-only rewrites cannot silently reflow a Windows body to LF.
+    `frontmatter`/`body` are derived from a universal-newline view — the
+    parsers and every body consumer expect LF.
+
     Returns {"frontmatter": {}, "body": ""} on any failure so callers can
     continue the overlap scan past a malformed entry.
     """
     try:
-        text = path.read_text(encoding="utf-8")
+        with path.open(encoding="utf-8", newline="") as handle:
+            raw = handle.read()
     except OSError:
         if raise_errors:
             raise
         return {"frontmatter": {}, "body": "", "raw": ""}
+    text = raw.replace("\r\n", "\n").replace("\r", "\n")
     envelope = _frontmatter_envelope(text)
     fm = _parse_memory_frontmatter_text(text)
     body = envelope.body.lstrip("\n") if envelope.complete else text
-    return {"frontmatter": fm, "body": body, "raw": text}
+    return {"frontmatter": fm, "body": body, "raw": raw}
 
 
 def _memory_score_overlap(

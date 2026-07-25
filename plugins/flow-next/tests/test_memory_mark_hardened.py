@@ -326,6 +326,51 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
             self.assertEqual(hardened_segment, original_segment)
             self.assertEqual(stale_segment, original_segment)
 
+    def test_crlf_body_preserved_byte_for_byte(self) -> None:
+        """A CRLF-authored entry keeps its CRLF line endings.
+
+        `Path.read_text` performs universal-newline translation, so the read
+        path has to disable it or every frontmatter-only rewrite silently
+        converts a Windows-authored body to LF (whole-file diff). Asserted on
+        bytes, and across `mark-hardened` / `mark-stale` / `mark-fresh` so the
+        sibling handlers cannot drift apart.
+        """
+        fm_lines = (
+            "title: T\r\n"
+            'date: "2026-01-01"\r\n'
+            "track: knowledge\r\n"
+            "category: conventions\r\n"
+            "applies_when: always\r\n"
+        )
+        crlf = f"---\r\n{fm_lines}---\r\n\r\nCRLF body line one.\r\n\r\nAnd two.\r\n"
+        original_segment = crlf.encode().split(b"---\r\n", 2)[2]
+
+        cases = (
+            ("hardened", ("--gate-ref", GATE_REF)),
+            ("stale", ("--reason", "x")),
+            ("fresh", ()),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            mem = _init_repo(Path(tmp))
+            entry_dir = mem / "knowledge" / "conventions"
+            entry_dir.mkdir(parents=True, exist_ok=True)
+
+            for suffix, extra in cases:
+                slug = f"crlf-{suffix}-2026-01-01"
+                path = entry_dir / f"{slug}.md"
+                path.write_bytes(crlf.encode())
+
+                _run(Path(tmp), "memory", f"mark-{suffix}", slug, *extra, "--json")
+
+                after = path.read_bytes()
+                self.assertEqual(
+                    after.split(b"---\r\n", 2)[2],
+                    original_segment,
+                    f"mark-{suffix} rewrote the CRLF body",
+                )
+                # The rewritten frontmatter keeps CRLF too — no stray LF.
+                self.assertNotIn(b"\n", after.replace(b"\r\n", b""))
+
     def test_audited_by_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             mem = _init_repo(Path(tmp))
