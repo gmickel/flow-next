@@ -61,5 +61,20 @@ Test the production argparse routing, not a mock-patched helper: the two-token `
 - [ ] Focused suite green: `cd plugins/flow-next/tests && python3 -m unittest test_flowctl_surface test_startup_bootstrap -q` plus the two new tests.
 
 ## Done summary
+Two incidental flowctl fixes found while planning this spec.
 
+`flowctl task set-title <id> --title "..."` closes a real gap: restructuring a plan mid-review had no CLI path, forcing a hand-edit of `.flow/tasks/<id>.json` against the file header's own rule. It writes the JSON `title` and the markdown H1 together, and `set-spec --file` now syncs them as well, so the two representations can no longer silently disagree. Verified live: renaming task .7 through the real CLI updated both.
+
+The converged-review exit-code bug: on a SHIP verdict the reset-on-convergence helper popped the pending reservation, then finalize found `pending_count == 0` and called `error_exit(code=2)`. The verdict was persisted and the counter reset correctly, yet the command exited non-zero. In an autonomous pilot or land tick that reads a non-zero review exit as a transport failure, that becomes a spurious retry or escalation of a review that had already converged - the runaway class the deterministic round cap exists to prevent. This was observed live on this very spec's round 3.
+
+Implemented by grok-4.5 via the grok CLI bridge; reviewed in-host (opus-5). Grok chose resolution (B), reset stops clearing pending reservations, and reasoned it correctly: pending is the attempt lifecycle owned by reserve and finalize, so clearing it elsewhere races. It also correctly kept the explicit re-plan-abandon path clearing pending, since that is a deliberate abandon rather than a convergence. It did NOT take the tempting third option of tolerating a zero-pending verdict, which the task forbade because finalize cannot distinguish a self-cleared reset from an unreserved, duplicated, or stale verdict.
+
+Both negative tests I required are present and passing: an unreserved verdict and a duplicate finalize are each rejected without recording a second attempt, so the fix cannot quietly weaken the reservation invariant.
+
+Note on the task brief: it required regenerating `flowctl-help.txt` and re-pinning `HELP_SHA256` on the assumption that adding a subcommand changes the root help. It does not - the root help never enumerates `task` subcommands, so there was no diff and the existing pin stayed valid. The brief's assumption was wrong, not the implementation.
+
+The wrapper subagent backgrounded the bridge instead of running it in the foreground, against the standing rule, so its report was lost. The work itself had completed; state was recovered from the working tree and reviewed from ground truth rather than from a summary.
 ## Evidence
+- Commits: f62dd772
+- Tests: python3 scripts/run_tests_parallel.py (files=133 ran=2398 failures=0 errors=0 skipped=4), test_task_set_title.py: 4 tests (both-representations sync, set-spec H1 sync, missing-H1 pin, empty rejected), test_review_convergence_cap.py: ship_end_to_end_exits_zero, ship_survives_reset_before_record, no_verdict_transport_failure_still_refunds_one_round, unreserved_verdict_rejected_no_second_attempt, duplicate_finalize_rejected_no_second_attempt, live: flowctl task set-title updated JSON title and markdown H1 together, dual-copy byte-identical, SOURCE_SHA256 matches, HELP_SHA256 still valid (root help does not enumerate task subcommands, so no regen was needed)
+- PRs:
