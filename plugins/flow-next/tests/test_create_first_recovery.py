@@ -453,6 +453,22 @@ class RecoveryWritesAreContainedInFlow(unittest.TestCase):
             "an out-of-tree file was overwritten through a symlinked .gitignore",
         )
 
+
+    def test_in_tree_symlinked_gitignore_is_refused(self) -> None:
+        """Containment alone was insufficient (PR #241 wave 12).
+
+        `.flow/.gitignore` -> `.flow/config.json` stays INSIDE .flow and still
+        clobbered the config (reproduced: 1682 -> 1973 bytes of ignore rules).
+        flowctl's own managed artifacts are never legitimately symlinks.
+        """
+        cfg = self.repo / ".flow" / "config.json"
+        before = cfg.read_bytes()
+        gi = self.repo / ".flow" / ".gitignore"
+        gi.unlink()
+        gi.symlink_to("config.json")
+        self._put()
+        self.assertEqual(cfg.read_bytes(), before, "in-tree symlink clobbered config.json")
+
     def test_a_legitimately_symlinked_flow_dir_still_works(self) -> None:
         """`.flow` itself being a symlink is supported and common."""
         with tempfile.TemporaryDirectory() as host, tempfile.TemporaryDirectory() as data:

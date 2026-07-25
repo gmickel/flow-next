@@ -296,6 +296,17 @@ class TaskTitleRejectsMultiline(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
+
+    def test_task_create_also_rejects_multiline(self) -> None:
+        """Guarding only set-title left the bad state reachable one command earlier."""
+        r = subprocess.run(
+            [sys.executable, str(FLOWCTL_PY), "task", "create",
+             "--spec", self.task_id.rsplit(".", 1)[0], "--title", "New\nInjected"],
+            cwd=str(self.repo), capture_output=True, text=True, check=False,
+        )
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("single line", (r.stdout + r.stderr).lower())
+
     def test_embedded_newline_is_rejected(self) -> None:
         r = subprocess.run(
             [sys.executable, str(FLOWCTL_PY), "task", "set-title", self.task_id,

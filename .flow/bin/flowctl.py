@@ -8832,8 +8832,9 @@ def _ensure_flow_gitignore(flow_dir: Path) -> bool:
     Preserves any user-added patterns below the auto-managed footer.
     """
     gi_path = flow_dir / ".gitignore"
-    if not _flow_path_is_contained(flow_dir, gi_path):
-        # Untrusted checkout shipped .flow/.gitignore as a symlink out of tree.
+    if not _flow_leaf_is_safe(flow_dir, gi_path):
+        # Untrusted checkout shipped .flow/.gitignore as a symlink (out of tree,
+        # or in-tree at another managed file such as config.json).
         # Never write through it; the caller's own work is unaffected.
         return False
     auto_block = "\n".join(
@@ -15385,6 +15386,10 @@ def cmd_task_create(args: argparse.Namespace) -> None:
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
 
+    # Reject here too, not only in `set-title`: otherwise the bad state is
+    # simply reachable one command earlier.
+    _reject_multiline_title(getattr(args, "title", ""), use_json=args.json)
+
     spec_id = resolve_spec_arg(args, get_flow_dir())
     if not spec_id or not is_spec_id(spec_id):
         error_exit(
@@ -18876,6 +18881,23 @@ def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
     return new_h1 + content
 
 
+def _reject_multiline_title(title: str, *, use_json: bool = False) -> None:
+    """A task title must be one line, at EVERY entry point that sets one.
+
+    The H1 can only carry the first line while the JSON keeps the whole string,
+    so a newline splits the two representations apart and a later
+    `task set-spec --file` silently truncates the JSON title to that first
+    line. `set-title` guarded this first; `task create` did not, which left the
+    same bad state reachable one command earlier (PR #241).
+    """
+    if any(c in (title or "") for c in "\r\n"):
+        error_exit(
+            "Title must be a single line (no CR/LF) - the markdown H1 cannot "
+            "represent a multiline title, so the JSON and H1 would disagree.",
+            use_json=use_json,
+        )
+
+
 def cmd_task_set_title(args: argparse.Namespace) -> None:
     """Rename a task: update JSON ``title`` and markdown H1 together (R21).
 
@@ -18907,16 +18929,7 @@ def cmd_task_set_title(args: argparse.Namespace) -> None:
     title = (args.title or "").strip()
     if not title:
         error_exit("Title must be non-empty", use_json=args.json)
-    # A newline would split the two representations this command exists to keep
-    # together: the H1 gets only the first line while the JSON keeps the whole
-    # string, so they disagree immediately and a later `task set-spec --file`
-    # can silently truncate the JSON title to that first line.
-    if any(c in title for c in "\r\n"):
-        error_exit(
-            "Title must be a single line (no CR/LF) - the markdown H1 cannot "
-            "represent a multiline title, so the JSON and H1 would disagree.",
-            use_json=args.json,
-        )
+    _reject_multiline_title(title, use_json=args.json)
 
     task_data = load_json_or_exit(task_json_path, f"Task {task_id}", use_json=args.json)
     task_data["title"] = title
@@ -23636,6 +23649,19 @@ def _flow_path_is_contained(flow_dir: Path, target: Path) -> bool:
         return False
 
 
+def _flow_leaf_is_safe(flow_dir: Path, target: Path) -> bool:
+    """Containment PLUS: the leaf itself must not be a symlink.
+
+    Containment alone is insufficient. `.flow/.gitignore` symlinked to
+    `.flow/config.json` stays inside `.flow` and still clobbers the config
+    (reproduced: 1682 -> 1973 bytes of ignore rules). flowctl's own managed
+    runtime artifacts are never legitimately symlinks, so refuse the leaf
+    outright - `.flow` itself may still be a symlink, which is what
+    `_flow_path_is_contained` allows.
+    """
+    return _flow_path_is_contained(flow_dir, target) and not target.is_symlink()
+
+
 CREATE_FIRST_KEY_RE = re.compile(r"[0-9a-f]{16}")
 
 
@@ -23706,7 +23732,7 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
         )
 
     path = _create_first_dir(flow_dir) / f"{args.key}.json"
-    if not _flow_path_is_contained(flow_dir, path):
+    if not _flow_leaf_is_safe(flow_dir, path):
         error_exit(
             "Refusing to touch a create-first record outside .flow/ - "
             f"{path} resolves out of the workspace (symlinked component). "

@@ -476,7 +476,21 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 #     by preflight and strand the retry, so reuse it (step 6 of the retry
 #     contract above defines the full unlinked/identifier check).
 SPEC_ID=$($FLOWCTL sync create-first-get --key "$RETRY_KEY" --json 2>/dev/null | jq -r '.specId // empty')
-if [ -z "$SPEC_ID" ]; then
+if [ -n "$SPEC_ID" ]; then
+  # RE-VALIDATE at use time, not just at record time: between the interrupted
+  # run and this retry, an intervening lifecycle touchpoint may have linked
+  # this spec (create-if-unlinked runs on any opted-in event). Re-attaching
+  # would overwrite that link. Only proceed when it is STILL unlinked, or
+  # already linked to THIS issue (idempotent re-attach).
+  LINKED=$($FLOWCTL sync get-state "$SPEC_ID" --json 2>/dev/null | jq -r '.tracker.id // empty')
+  if [ -n "$LINKED" ] && [ "$LINKED" != "$ISSUE_ID" ]; then
+    # Linked to a DIFFERENT issue - never overwrite. Surface identifier + url +
+    # retryKey and stop; a human decides.
+    SPEC_ID=""
+    CONFLICT=1
+  fi
+fi
+if [ -z "$SPEC_ID" ] && [ -z "${CONFLICT:-}" ]; then
   CREATE_OUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json)
   SPEC_ID=$(printf '%s' "$CREATE_OUT" | jq -r '.id // .spec_id // empty')
   # 2b. Record the minted id IMMEDIATELY, before attach can fail - this is what
