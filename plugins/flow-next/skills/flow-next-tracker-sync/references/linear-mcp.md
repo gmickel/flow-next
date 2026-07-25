@@ -105,6 +105,13 @@ Write the flow back-reference on create/first-link: a `flow:<id>` label and/or a
 `[<id>]` title prefix (Phase 2a/2b of [steps.md](../steps.md)) so the issue
 points back at the spec.
 
+**create-first (fn-134.3 / R19)** - issue before any local spec (steps.md Phase 2d).
+Create with title + body only; return `{id, identifier, url}` (identifier is the
+native `KEY-N`; durable UUID still requires the GraphQL rung per Gotchas below).
+Omit `flow:<spec-id>` until after mint + attach. No `sync receipt` pre-spec —
+recovery file `.flow/create-first/<retryKey>.json` (retry lookup key in steps.md
+Phase 2d); retry links, never re-creates.
+
 ### `setStatus(trackerId, status)` → ok | errored
 
 ```

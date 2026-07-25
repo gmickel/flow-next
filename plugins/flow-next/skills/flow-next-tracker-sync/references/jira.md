@@ -392,6 +392,18 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   `/rest/api/2` it is wiki/plain text. The splice algorithm (markdown ↔ ADF,
   unknown-node preservation) is § ADF translation below.
 
+**create-first (fn-134.3 / R19)** - issue before any local spec (steps.md Phase 2d). Call
+`writeIssue` with **no** `issue.id` and **title + body only**. Return
+`{ id (immutable), identifier (key e.g. PROJ-123), url }` exactly as above — a native
+`KEY-N`, so the caller mints via `spec create --tracker-first --tracker-identifier
+PROJ-123` (no synthesis). **Omit the `flow:<spec-id>` label** on create (no spec id
+yet; and when `LABELS_SETTABLE=0` the label is already omitted); the caller writes the
+back-reference after mint + `set-tracker-id`. Do not call `sync receipt` from this path
+(no local spec id) — recovery is the pre-spec file
+`.flow/create-first/<retryKey>.json` keyed by
+`sha256(tracker.type + "\0" + title + "\0" + body)[:16]`; a retry that finds the file
+**links** and never creates a second issue.
+
 ### `listComments(trackerId)` → normalized `comment[]`
 
 ```bash

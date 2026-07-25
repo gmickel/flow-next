@@ -8775,6 +8775,12 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # ladder result, a runtime artifact keyed on the local CLI version — never
     # durable repo state.
     ".cache/",
+    # fn-134 tracker-sync create-first pre-spec recovery files. MUST stay local:
+    # the retry key is a hash of tracker type + title + body, so a committed
+    # recovery file would let a teammate computing the same key resume by
+    # linking to SOMEONE ELSE'S issue instead of creating their own. Runtime
+    # artifact, same class as sync-runs/.
+    "create-first/",
 ]
 
 

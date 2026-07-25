@@ -483,6 +483,18 @@ printf '%s' "$BODY_WITH_DEPS" | glab api --method PUT "projects/$ENC/issues/$IID
   — the GitLab analog of github.md's `--body-file -`. Never inline a markdown body
   as a shell argument.
 
+**create-first (fn-134.3 / R19)** - issue before any local spec (steps.md Phase 2d). Call
+`writeIssue` with **no** `issue.id` and **title + body only**. Return
+`{ id (global id), identifier ("<project>#"+iid), url }` exactly as above — **never**
+invent a `KEY-N` or a synthetic `gl-N` here; the caller mints `gl-<iid>-slug` via
+`spec create --tracker-first` after this returns (uses the project-scoped `iid`, never
+the global id). **Omit the `flow:<spec-id>` label** on create (no spec id yet); the
+caller writes it after mint + `set-tracker-id`. Do not call `sync receipt` from this
+path (no local spec id) — recovery is the pre-spec file
+`.flow/create-first/<retryKey>.json` keyed by
+`sha256(tracker.type + "\0" + title + "\0" + body)[:16]`; a retry that finds the file
+**links** and never creates a second issue.
+
 ### `setStatus(trackerId, status)` → ok | errored
 
 Apply the write-mapping table above:

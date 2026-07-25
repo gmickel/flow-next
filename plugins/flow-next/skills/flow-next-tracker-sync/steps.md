@@ -6,7 +6,7 @@ This file is the transport-blind orchestration **spine**: discovery ceremony, li
 
 ## Phase 0 — Mode + Ralph/autonomous awareness
 
-Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `comment` / `list-open` / `list-relations` / `question` / `link` / `unlink` / `discover`) and an optional spec id (or, for `question` / `list-relations`, a `<spec-id | tracker-id>`). With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
+Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `comment` / `list-open` / `list-relations` / `question` / `link` / `unlink` / `discover` / `create-first`) and an optional spec id (or, for `question` / `list-relations`, a `<spec-id | tracker-id>`; for `create-first`, a title + body - no spec id). With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
 
 `comment <spec-id>` is the lifecycle-event op the host skills invoke for opted-in touchpoints (`work.done` / `resolvePr` / `completionReview` / `qa` set to `comment` — see SKILL.md's perEvent table). It routes to the **comments-sync hook** (`postLifecycleComment` → `postComment` **[→ ref: comments-sync.md]**): append the structured lifecycle comment + evidence, dedup, receipt — it does NOT touch the body or status. Like `push` / `reconcile`, a `comment` op on an unlinked spec triggers the **Phase 3 create-if-unlinked** flow-first link first (create + attach), then posts the comment on the now-linked spec.
 
@@ -312,6 +312,132 @@ $FLOWCTL sync check-collisions --json   # flags any UUID shared by >1 spec
 ```
 
 If `set-tracker-id` reports a collision, ask the user (interactive) or queue (`sync defer`, Ralph) — never `--force` silently.
+
+### 2d - Create-first (issue before any local spec) - R19
+
+**When:** a caller needs a tracker issue *before* a local spec exists (fresh-idea path when `tracker.specIds=tracker`). Distinct from **create-if-unlinked** (Phase 3), which requires an existing local spec and renders it first. Skill-level + transport-blind - not a new flowctl subcommand.
+
+**Inputs:** title + body. **No local spec id.**
+
+**Output:** `{id, identifier, url}` from the selected adapter's `writeIssue` create path (no `issue.id` on input). Return what the adapter gives - do not rewrite:
+
+| Adapter | `identifier` returned | Who mints the spec id |
+|---|---|---|
+| Linear | `WOR-17` | caller: `--tracker-first --tracker-identifier WOR-17` |
+| Jira | `PROJ-123` | caller: `--tracker-first --tracker-identifier PROJ-123` |
+| GitHub | `#123` | caller: synthetic `gh-123` via `--tracker-first` (flowctl mint, task .2) |
+| GitLab | `<project>#<iid>` | caller: synthetic `gl-<iid>` via `--tracker-first` (flowctl mint, task .2) |
+
+This op never mints a spec id and never invents a synthetic key. GitHub/GitLab stay native `#N` / `<project>#<iid>` on the wire; synthesis is the caller's job after return.
+
+#### Receipt / retry contract (pre-spec chicken-and-egg)
+
+`sync receipt` requires and resolves a **local spec id**. At create-first time none exists yet - do not call `sync receipt` here and do not invent a flowctl pre-spec helper.
+
+**Chosen approach (a):** durable pre-spec recovery output + normal `sync receipt` **after** mint/attach.
+
+1. **Retry lookup key** (stable; computable *before* create and on every retry):
+
+   ```
+   retryKey = first 16 hex chars of sha256( tracker.type + "\0" + title + "\0" + body )
+   ```
+
+   Same type + title + body always yields the same key. A rephrased *new* idea gets a new key (a new create is correct). A resumed run of the *same* intent recomputes the same key and finds the recovery file.
+
+2. **Pre-spec recovery file** (written **immediately** after remote create succeeds, before returning to the caller):
+
+   ```
+   .flow/create-first/<retryKey>.json
+   ```
+
+   Shape: `{ "retryKey", "id", "identifier", "url", "title", "createdAt", "transport" }`. This is the durable recovery surface - **not** a `sync receipt`.
+
+   **`create-first/` is gitignored and MUST stay local** (flowctl's auto-managed `.flow/.gitignore` block, same runtime-artifact class as `sync-runs/`). This is a correctness requirement, not hygiene: the retry key is a hash of tracker type + title + body, so a committed recovery file would let a teammate who computes the same key "resume" by linking to **someone else's** issue instead of creating their own. On any failure after remote create (mint fails, process dies, attach errors), leave the file in place and surface `identifier` + `url` + `retryKey` in the report so the run resumes by linking.
+
+3. **On entry, always check recovery first** - this is what makes retry safe:
+
+   - File exists → load `{id, identifier, url}` and return it. **Never create a second issue.** Resume is link-only.
+   - File missing → create via `writeIssue({title, body})` (no id), write the recovery file immediately, return the triple.
+
+4. **After the caller mints + attaches** (`spec create --tracker-first` → `sync set-tracker-id` → seed merge base): write the normal `sync receipt <spec-id> …`, then **remove** the recovery file (consumed). From that point the audit trail is the normal spec-keyed receipt stream under `.flow/sync-runs/`.
+
+5. **Failure after remote create, before mint completes:** surface `identifier` + `url` + `retryKey`; keep the recovery file. A later `create-first` with the same title+body finds the file and returns the existing issue - **never** creates a duplicate.
+
+#### Flow
+
+```
+create-first(title, body):
+  if bridge inactive OR TRANSPORT=none:
+     return noop (best-effort - never block the caller's lifecycle; caller degrades to flow-first fn-N)
+  retryKey = sha256(tracker.type + "\0" + title + "\0" + body)[:16]
+  recoveryPath = .flow/create-first/<retryKey>.json
+  if recoveryPath exists:
+     return recovery.{id, identifier, url}     # LINK path - never re-create
+  result = writeIssue({ title, body })         # no issue.id ⇒ CREATE [→ selected adapter]
+     # omit flow:<spec-id> label - no spec yet; caller writes the back-reference after attach
+  write recoveryPath immediately (id, identifier, url, title, createdAt, transport, retryKey)
+  return result                                # {id, identifier, url}
+```
+
+Compute the retry key and recovery path in the same bash block that needs them (variables do not survive across tool calls):
+
+```bash
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+# TITLE / BODY / TRACKER_TYPE come from the invocation and the reached-path router.
+RETRY_KEY=$(printf '%s\0%s\0%s' "$TRACKER_TYPE" "$TITLE" "$BODY" | shasum -a 256 | cut -c1-16)
+RECOVERY_DIR=".flow/create-first"
+RECOVERY_PATH="$RECOVERY_DIR/$RETRY_KEY.json"
+mkdir -p "$RECOVERY_DIR"
+if [ -f "$RECOVERY_PATH" ]; then
+  # Resume: return the already-created issue - never writeIssue create again.
+  jq -c '{id, identifier, url, retryKey}' "$RECOVERY_PATH"
+  # Caller proceeds to mint → attach → seed merge base (below).
+else
+  # CREATE via writeIssue (no issue.id) [→ selected adapter]; capture {id, identifier, url}.
+  # Immediately persist recovery BEFORE any local mint attempt:
+  #   jq -n --arg k "$RETRY_KEY" --arg id "$ISSUE_ID" --arg ident "$IDENTIFIER" \
+  #     --arg url "$ISSUE_URL" --arg title "$TITLE" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  #     --arg tr "$TRANSPORT" \
+  #     '{retryKey:$k, id:$id, identifier:$ident, url:$url, title:$title, createdAt:$ts, transport:$tr}' \
+  #     > "$RECOVERY_PATH"
+  # Surface identifier + url + retryKey on any subsequent failure so the run links, not re-creates.
+fi
+```
+
+#### Enabled caller sequence (end-to-end)
+
+Create issue → mint → attach → seed merge base so the first reconcile is not a spurious whole-body conflict:
+
+```bash
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+# 1. create-first already returned ISSUE_ID / IDENTIFIER / URL (or loaded them from recovery).
+# 2. mint from IDENTIFIER (native KEY-N or synthetic gh-N / gl-N - flowctl owns synthesis)
+CREATE_OUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json)
+SPEC_ID=$(printf '%s' "$CREATE_OUT" | jq -r '.id // .spec_id // empty')
+# 3. attach (id, identifier, url - all three)
+$FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_ID" --identifier "$IDENTIFIER" --url "$ISSUE_URL"
+# 4. seed merge base (BOTH halves - paired-snapshot invariant; body-merge.md first-link)
+#    Tracker half = the issue body just created (fetch-back after writeIssue, body-merge.md Step 5).
+$FLOWCTL sync set-merge-base "$SPEC_ID" \
+  --flow-file ".flow/specs/${SPEC_ID}.md" \
+  --tracker-file "${TMPDIR:-/tmp}/flow-base-tracker-${SPEC_ID}-$$.txt"
+$FLOWCTL sync set-last-synced "$SPEC_ID"
+# 5. normal receipt now that a local spec id exists; consume the pre-spec recovery file
+$FLOWCTL sync receipt "$SPEC_ID" --status updated --tracker-id "$ISSUE_ID" --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
+  --note "operation: create-first, event: ${EVENT:-manual} - issue $IDENTIFIER created then linked; recovery consumed"
+# RETRY_KEY recomputed the same way as on create (type + title + body):
+RETRY_KEY=$(printf '%s\0%s\0%s' "$TRACKER_TYPE" "$TITLE" "$BODY" | shasum -a 256 | cut -c1-16)
+rm -f ".flow/create-first/${RETRY_KEY}.json"
+# 6. write flow:<spec-id> back-reference label on the issue [→ selected adapter] (same as Phase 2a)
+```
+
+**Back-reference:** create-first cannot write `flow:<spec-id>` (the id does not exist yet). The caller adds it after attach, same as Phase 2a.
+
+**Best-effort:** a tracker failure never blocks the lifecycle. No transport / create error ⇒ `noop` or surface the error; the caller degrades to flow-first `fn-N`. Partial success (remote create ok, local mint fail) leaves the recovery file and surfaces the triple so the next run links.
+
+**Collision:** if `set-tracker-id` later reports the UUID already attached to another spec, handle as Phase 2c (ask / `sync defer`) - never `--force` silently.
 
 ## Phase 3 — Orchestration skeleton (transport-blind)
 
@@ -643,4 +769,5 @@ list-relations(trackerId):
 - Receipts on every run — event-tagged on lifecycle runs (`${EVENT:+--event "$EVENT"}`, Phase 0); conflicts queue (`sync defer`), never block (R11).
 - **Autonomy parity (R14):** the Phase-0 `RALPH` gate recognizes the full marker family (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH` / `FLOW_AUTONOMOUS` / `mode:autonomous`); under it NO path reaches `AskUserQuestion` — every "ask the human" resolves to `sync defer`.
 - **Backlog-mode ops (Phase 7):** `list-open` + `list-relations` + `question` are skill-level + transport-blind (never flowctl transport). `list-open` / `list-relations` are READ-only (no tracker write); `list-open` no-ops with a note when `tracker.readyState` is unset; `list-relations` no-ops when no transport / no relations; a tracker-only `question` is exempt from the spec-id sync receipt and parks in the tracker.
+- **Create-first (Phase 2d):** title + body only, no local spec. Pre-spec recovery via `.flow/create-first/<retryKey>.json` (retryKey = `sha256(type+"\0"+title+"\0"+body)[:16]`); normal `sync receipt` only after mint + attach. Retry after partial failure links, never re-creates. Best-effort: tracker failure never blocks the lifecycle.
 - Codex mirror is regenerated in **fn-68.5** (a SEPARATE task) — keep this file Claude-native (`AskUserQuestion`, `Task`); do NOT regenerate the mirror here.
