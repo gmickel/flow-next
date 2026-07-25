@@ -45,13 +45,16 @@ if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
   #   touchpoint create a SECOND remote issue instead of linking the named one.
   # Fresh idea → skill: flow-next-tracker-sync (operation: create-first, title, body)
   #   then mint + attach + seed (tracker-sync steps.md Phase 2d "Enabled caller sequence")
-  # create-first noop / no transport → SILENT fall-through to flow-first. That
-  # fall-through must be an unconditional `if [ -z "$SPEC_OUTPUT" ]` post-check
-  # AFTER this block: on a noop the variable is unset inside THIS branch, so an
-  # `else` arm can never be reached to supply it.
+  # Assign SPEC_OUTPUT on every path that succeeds here.
   :
-else
-  $FLOWCTL spec create --title "..." --json
+fi
+
+# SILENT degrade - the ONLY flow-first creation site, deliberately OUTSIDE the
+# branch above. On a create-first noop / unreachable transport SPEC_OUTPUT is
+# unset INSIDE the tracker arm, where an `else` can never run, so the
+# fall-through has to be an unconditional post-check.
+if [ -z "$SPEC_OUTPUT" ]; then
+  SPEC_OUTPUT=$($FLOWCTL spec create --title "..." --json)
 fi
 
 # Build the spec body in-memory:

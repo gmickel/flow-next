@@ -313,13 +313,17 @@ Default to standard unless complexity demands more or less.
      # tracker-first REORDERS that existing remote write; when the leaf is off (default — a
      # bridge-active repo can have every lifecycle event disabled), tracker-first adds an
      # EARLIER remote write that flow-first would not have made.
+     # Assign the result to SPEC_OUTPUT on every path that succeeds here.
      :
-   else
-     # NOTE: flow-first creation must sit OUTSIDE this branch as an unconditional
-     # `if [ -z "$SPEC_OUTPUT" ]` post-check - a create-first noop leaves the
-     # variable unset INSIDE the tracker branch, where an `else` can never run.
-     # Bridge inactive / no transport / create-first noop / config flow / override → SILENT degrade:
-     $FLOWCTL spec create --title "<Short title>" --json
+   fi
+
+   # SILENT degrade - the ONLY flow-first creation site, deliberately OUTSIDE
+   # the branch above. A create-first noop / unreachable transport / failed mint
+   # leaves SPEC_OUTPUT unset INSIDE the tracker arm, and an `else` can never run
+   # in that case, so the fall-through has to be an unconditional post-check.
+   # Bridge inactive / no transport / create-first noop / config flow / override:
+   if [ -z "$SPEC_OUTPUT" ]; then
+     SPEC_OUTPUT=$($FLOWCTL spec create --title "<Short title>" --json)
    fi
    ```
    This returns the spec ID (e.g., `wor-17-slug` under tracker-first, or `fn-1-add-oauth` under flow-first). `branch_name` defaults to the spec ID at create time — no follow-up `spec set-branch` call on the create path. Only when the user specified a custom branch, pass it at create: `$FLOWCTL spec create --title "<Short title>" --branch "<custom-branch>" --json` (`spec set-branch` remains the tool for renaming an existing spec's branch later). Do **not** add a runtime advisory/nag about the id scheme at this mint site (withdrawn R10) — setup owns the one-time question.

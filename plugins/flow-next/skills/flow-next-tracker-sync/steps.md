@@ -387,9 +387,28 @@ This op never mints a spec id and never invents a synthetic key. GitHub/GitLab s
    # Resume order: recover the issue, THEN look for a spec already minted from it.
    # `sync get-state` reports the tracker block; an existing spec with no tracker.id
    # is this record's half-finished mint, so skip creation and go straight to attach.
+   # A spec at this id is NOT automatically this record's half-finished mint.
+   # Preflight may have left the record precisely BECAUSE that canonical id
+   # already belongs to a DIFFERENT tracker issue. Resuming on a bare `show`
+   # hit would relink that spec and overwrite its tracker state, so require
+   # BOTH: no durable tracker.id yet, AND (when an identifier is present) the
+   # same identifier this record carries.
    EXISTING=$($FLOWCTL show "<key>-<number>-<slug>" --json 2>/dev/null | jq -r '.id // empty')
+   RESUMABLE=""
    if [ -n "$EXISTING" ]; then
-     SPEC_ID="$EXISTING"          # resume: do NOT re-run spec create
+     STATE=$($FLOWCTL sync get-state "$EXISTING" --json 2>/dev/null)
+     EXIST_ID=$(printf '%s' "$STATE" | jq -r '.tracker.id // empty')
+     EXIST_IDENT=$(printf '%s' "$STATE" | jq -r '.tracker.identifier // empty')
+     if [ -z "$EXIST_ID" ] && { [ -z "$EXIST_IDENT" ] || [ "$EXIST_IDENT" = "$IDENTIFIER" ]; }; then
+       RESUMABLE="$EXISTING"
+     fi
+   fi
+   if [ -n "$RESUMABLE" ]; then
+     SPEC_ID="$RESUMABLE"         # resume: do NOT re-run spec create
+   elif [ -n "$EXISTING" ]; then
+     # Already linked to a DIFFERENT issue - never relink. Surface the conflict
+     # (identifier + url + retryKey) and stop; a human decides.
+     :
    else
      SPEC_ID=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json | jq -r '.id')
    fi
@@ -457,10 +476,12 @@ $FLOWCTL sync set-merge-base "$SPEC_ID" \
   --flow-file ".flow/specs/${SPEC_ID}.md" \
   --tracker-file "${TMPDIR:-/tmp}/flow-base-tracker-${SPEC_ID}-$$.txt"
 $FLOWCTL sync set-last-synced "$SPEC_ID"
-# 5. normal receipt now that a local spec id exists; consume the pre-spec recovery file
+# 5. write flow:<spec-id> back-reference label on the issue [→ selected adapter] (same as Phase 2a)
+# 6. ONLY NOW the receipt. Writing it earlier records an `updated` receipt whose
+#    note claims recovery was consumed while the sequence is still incomplete -
+#    a durable audit trail reporting success for a partial run.
 $FLOWCTL sync receipt "$SPEC_ID" --status updated --tracker-id "$ISSUE_ID" --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
   --note "operation: create-first, event: ${EVENT:-manual} - issue $IDENTIFIER created then linked; recovery consumed"
-# 6. write flow:<spec-id> back-reference label on the issue [→ selected adapter] (same as Phase 2a)
 # 7. ONLY NOW consume the recovery record. Clearing before the back-reference
 #    write is unsafe: if that final tracker write fails or the process exits,
 #    the next identical create-first finds no record, creates ANOTHER remote
