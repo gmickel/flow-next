@@ -331,12 +331,11 @@ CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.h
 # tracker configured AND this key unset so existing repos get asked on their next
 # setup run without re-prompting once either value is written.
 CURRENT_SPEC_IDS=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.specIds --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-CURRENT_TRACKER_ENABLED=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-CURRENT_TRACKER_TYPE=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.type --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-TRACKER_CONFIGURED=0
-if [[ "$CURRENT_TRACKER_ENABLED" == "true" || -n "$CURRENT_TRACKER_TYPE" ]]; then
-  TRACKER_CONFIGURED=1
-fi
+# Call the canonical predicate; never re-derive it. A bare `-n "$TYPE"` counted
+# an inactive value ("null", a typo) as configured, so setup persisted
+# specIds=tracker while every mint gate saw the bridge as inactive.
+TRACKER_CONFIGURED=$("${PLUGIN_ROOT}/scripts/flowctl" sync active --json 2>/dev/null | jq -r 'if .active == true then 1 else 0 end')
+[[ -n "$TRACKER_CONFIGURED" ]] || TRACKER_CONFIGURED=0
 
 # Optional model-routing scaffold ceremony (Step 6d question + Step 7 processing)
 # is offered ONLY in an interactive setup. On non-host-native hosts also require a

@@ -18,8 +18,8 @@
     },
     {
       "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
-      "chars_lf": 71541,
-      "content_hash": "5ed9582fa25402bdab8b22c147f77755d43b724632bfba60cce6cd451b1467df"
+      "chars_lf": 71471,
+      "content_hash": "b720e36a936473f306c89dbd0a27977bbab77d597937852f3d93b9301a693cb0"
     },
     {
       "path": "plugins/flow-next/skills/flow-next-setup/references/model-pins.md",
@@ -76,42 +76,42 @@
     {
       "fixture_id": "setup.autonomous",
       "reads": [],
-      "candidate_chars": 72823,
-      "reduction_chars": 30865,
-      "reduction_percent": 29.77,
-      "candidate_reached_path_chars": 72823
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
     },
     {
       "fixture_id": "setup.copy-first-install",
       "reads": [],
-      "candidate_chars": 72823,
-      "reduction_chars": 30865,
-      "reduction_percent": 29.77,
-      "candidate_reached_path_chars": 72823
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
     },
     {
       "fixture_id": "setup.copy-refresh",
       "reads": [],
-      "candidate_chars": 72823,
-      "reduction_chars": 30865,
-      "reduction_percent": 29.77,
-      "candidate_reached_path_chars": 72823
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
     },
     {
       "fixture_id": "setup.customized-snippet-keep",
       "reads": [],
-      "candidate_chars": 72823,
-      "reduction_chars": 30865,
-      "reduction_percent": 29.77,
-      "candidate_reached_path_chars": 72823
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
     },
     {
       "fixture_id": "setup.customized-snippet-overwrite",
       "reads": [],
-      "candidate_chars": 72823,
-      "reduction_chars": 30865,
-      "reduction_percent": 29.77,
-      "candidate_reached_path_chars": 72823
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
     },
     {
       "fixture_id": "setup.host-claude",
@@ -119,10 +119,10 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78086,
-      "reduction_chars": 25602,
-      "reduction_percent": 24.69,
-      "candidate_reached_path_chars": 78086
+      "candidate_chars": 78016,
+      "reduction_chars": 25672,
+      "reduction_percent": 24.76,
+      "candidate_reached_path_chars": 78016
     },
     {
       "fixture_id": "setup.host-codex",
@@ -130,10 +130,10 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78086,
-      "reduction_chars": 25602,
-      "reduction_percent": 24.69,
-      "candidate_reached_path_chars": 78086
+      "candidate_chars": 78016,
+      "reduction_chars": 25672,
+      "reduction_percent": 24.76,
+      "candidate_reached_path_chars": 78016
     },
     {
       "fixture_id": "setup.host-cursor",
@@ -141,10 +141,10 @@
         "model-routing-question-cursor.md",
         "model-routing-cursor.md"
       ],
-      "candidate_chars": 77456,
-      "reduction_chars": 26232,
-      "reduction_percent": 25.3,
-      "candidate_reached_path_chars": 77456
+      "candidate_chars": 77386,
+      "reduction_chars": 26302,
+      "reduction_percent": 25.37,
+      "candidate_reached_path_chars": 77386
     },
     {
       "fixture_id": "setup.host-droid",
@@ -152,10 +152,10 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78086,
-      "reduction_chars": 25602,
-      "reduction_percent": 24.69,
-      "candidate_reached_path_chars": 78086
+      "candidate_chars": 78016,
+      "reduction_chars": 25672,
+      "reduction_percent": 24.76,
+      "candidate_reached_path_chars": 78016
     },
     {
       "fixture_id": "setup.host-grok",
@@ -163,18 +163,18 @@
         "model-routing-question-grok.md",
         "model-routing-grok.md"
       ],
-      "candidate_chars": 77806,
-      "reduction_chars": 25882,
-      "reduction_percent": 24.96,
-      "candidate_reached_path_chars": 77806
+      "candidate_chars": 77736,
+      "reduction_chars": 25952,
+      "reduction_percent": 25.03,
+      "candidate_reached_path_chars": 77736
     },
     {
       "fixture_id": "setup.malformed-metadata",
       "reads": [],
-      "candidate_chars": 72823,
-      "reduction_chars": 30865,
-      "reduction_percent": 29.77,
-      "candidate_reached_path_chars": 72823
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
     },
     {
       "fixture_id": "setup.model-routing-accepted",
@@ -182,28 +182,28 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78086,
-      "reduction_chars": 25602,
-      "reduction_percent": 24.69,
-      "candidate_reached_path_chars": 78086
+      "candidate_chars": 78016,
+      "reduction_chars": 25672,
+      "reduction_percent": 24.76,
+      "candidate_reached_path_chars": 78016
     },
     {
       "fixture_id": "setup.model-routing-skipped",
       "reads": [
         "model-routing-question-bridge.md"
       ],
-      "candidate_chars": 74112,
-      "reduction_chars": 29576,
-      "reduction_percent": 28.52,
-      "candidate_reached_path_chars": 74112
+      "candidate_chars": 74042,
+      "reduction_chars": 29646,
+      "reduction_percent": 28.59,
+      "candidate_reached_path_chars": 74042
     },
     {
       "fixture_id": "setup.plugin-mode",
       "reads": [],
-      "candidate_chars": 72823,
-      "reduction_chars": 30865,
-      "reduction_percent": 29.77,
-      "candidate_reached_path_chars": 72823
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
     },
     {
       "fixture_id": "setup.ralph-available",
@@ -211,18 +211,18 @@
         "ralph-question.md",
         "ralph-enable.md"
       ],
-      "candidate_chars": 74872,
-      "reduction_chars": 28816,
-      "reduction_percent": 27.79,
-      "candidate_reached_path_chars": 74872
+      "candidate_chars": 74802,
+      "reduction_chars": 28886,
+      "reduction_percent": 27.86,
+      "candidate_reached_path_chars": 74802
     },
     {
       "fixture_id": "setup.ralph-unsupported",
       "reads": [],
-      "candidate_chars": 72823,
-      "reduction_chars": 30865,
-      "reduction_percent": 29.77,
-      "candidate_reached_path_chars": 72823
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
     }
   ],
   "supplementary_branch_results": [
@@ -231,18 +231,18 @@
       "reads": [
         "model-pins.md"
       ],
-      "candidate_chars": 78052,
-      "reduction_chars": 25636,
-      "reduction_percent": 24.72,
-      "candidate_reached_path_chars": 78052
+      "candidate_chars": 77982,
+      "reduction_chars": 25706,
+      "reduction_percent": 24.79,
+      "candidate_reached_path_chars": 77982
     },
     {
       "branch": "model-pin-autonomous-skip",
       "reads": [],
-      "candidate_chars": 72823,
-      "reduction_chars": 30865,
-      "reduction_percent": 29.77,
-      "candidate_reached_path_chars": 72823
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
     },
     {
       "branch": "ralph-disable",
@@ -250,10 +250,10 @@
         "ralph-question.md",
         "ralph-disable.md"
       ],
-      "candidate_chars": 75125,
-      "reduction_chars": 28563,
-      "reduction_percent": 27.55,
-      "candidate_reached_path_chars": 75125
+      "candidate_chars": 75055,
+      "reduction_chars": 28633,
+      "reduction_percent": 27.61,
+      "candidate_reached_path_chars": 75055
     }
   ],
   "trace_boundary": "Deterministic candidate read sets derived from the explicit router gates; B1 manifests are the pre-mutation trace baseline. No backend telemetry is claimed.",

@@ -385,5 +385,28 @@ class RecoveryRecordCarriesTheMintedSpecId(unittest.TestCase):
         self.assertEqual(rec["specId"], spec_id)
 
 
+class RetryKeyNormalizesTrackerType(unittest.TestCase):
+    """Accepted spellings must yield the same key (PR #241 wave 11).
+
+    An interrupted run that started from `GitHub` or ` github ` has to recompute
+    the identical key after the config is normalized, or `create-first-get`
+    misses the record and the workflow creates a second remote issue.
+    """
+
+    def test_casing_and_whitespace_collapse_to_one_key(self) -> None:
+        base = flowctl.compute_create_first_key("github", "T", "b")
+        for spelling in ("GitHub", " github ", "GITHUB", "\tgithub\n"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(
+                    flowctl.compute_create_first_key(spelling, "T", "b"), base
+                )
+
+    def test_distinct_providers_still_differ(self) -> None:
+        self.assertNotEqual(
+            flowctl.compute_create_first_key("github", "T", "b"),
+            flowctl.compute_create_first_key("gitlab", "T", "b"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

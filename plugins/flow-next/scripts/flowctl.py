@@ -18903,6 +18903,16 @@ def cmd_task_set_title(args: argparse.Namespace) -> None:
     title = (args.title or "").strip()
     if not title:
         error_exit("Title must be non-empty", use_json=args.json)
+    # A newline would split the two representations this command exists to keep
+    # together: the H1 gets only the first line while the JSON keeps the whole
+    # string, so they disagree immediately and a later `task set-spec --file`
+    # can silently truncate the JSON title to that first line.
+    if any(c in title for c in "\r\n"):
+        error_exit(
+            "Title must be a single line (no CR/LF) - the markdown H1 cannot "
+            "represent a multiline title, so the JSON and H1 would disagree.",
+            use_json=args.json,
+        )
 
     task_data = load_json_or_exit(task_json_path, f"Task {task_id}", use_json=args.json)
     task_data["title"] = title
@@ -23613,7 +23623,13 @@ def compute_create_first_key(tracker_type: str, title: str, body: str) -> str:
     interrupted one and LINKS instead of creating a second issue. Must stay
     identical to the definition in the tracker-sync skill's steps.md Phase 2d.
     """
-    payload = "\0".join([tracker_type or "", title or "", body or ""])
+    # Normalize the tracker type with the SAME strip/lower semantics as
+    # `_tracker_type_for_synthesis`. An interrupted run that started from an
+    # accepted spelling (`GitHub`, ` github `) must recompute the identical key
+    # after the config is normalized, or `create-first-get` misses the record
+    # and the workflow creates a second remote issue.
+    normalized_type = (tracker_type or "").strip().lower()
+    payload = "\0".join([normalized_type, title or "", body or ""])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 

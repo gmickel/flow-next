@@ -274,5 +274,38 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")
 
 
+class TaskTitleRejectsMultiline(unittest.TestCase):
+    """A newline splits the two representations set-title exists to keep together.
+
+    PR #241 wave 11: `New\\nInjected` wrote `New` into the H1 while the JSON kept
+    the whole string, so they disagreed immediately.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        run = lambda *a: subprocess.run(
+            [sys.executable, str(FLOWCTL_PY), *a],
+            cwd=str(self.repo), capture_output=True, text=True, check=False)
+        run("init")
+        spec_id = json.loads(run("spec", "create", "--title", "S", "--json").stdout)["id"]
+        self.task_id = json.loads(
+            run("task", "create", "--spec", spec_id, "--title", "T", "--json").stdout
+        )["id"]
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_embedded_newline_is_rejected(self) -> None:
+        r = subprocess.run(
+            [sys.executable, str(FLOWCTL_PY), "task", "set-title", self.task_id,
+             "--title", "New\nInjected"],
+            cwd=str(self.repo), capture_output=True, text=True, check=False,
+        )
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("single line", (r.stdout + r.stderr).lower())
+        self.assertNotIn("Traceback", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
