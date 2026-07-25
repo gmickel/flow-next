@@ -284,6 +284,17 @@ CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github
 # so this raw probe reads null until the user explicitly decides — here in 6e
 # or via `flowctl config set`. Merged reads still return the seeded default.
 CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.html.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+# tracker.specIds is UNMATERIALIZED at init (fn-134 / R9) — raw null means "never
+# asked", distinct from an explicit `flow` answer. Gate the Spec ids question on
+# tracker configured AND this key unset so existing repos get asked on their next
+# setup run without re-prompting once either value is written.
+CURRENT_SPEC_IDS=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.specIds --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+CURRENT_TRACKER_ENABLED=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+CURRENT_TRACKER_TYPE=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.type --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+TRACKER_CONFIGURED=0
+if [[ "$CURRENT_TRACKER_ENABLED" == "true" || -n "$CURRENT_TRACKER_TYPE" ]]; then
+ TRACKER_CONFIGURED=1
+fi
 
 # Optional model-routing scaffold ceremony (Step 6d question + Step 7 processing)
 # is offered ONLY in an interactive setup. On non-host-native hosts also require a
@@ -330,9 +341,10 @@ Current configuration:
 - Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|none OR spec form like codex:gpt-5.4:xhigh or cursor:gpt-5.5-high>)
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 - HTML artifacts: <enabled|disabled> (change with: flowctl config set artifacts.html.enabled <true|false>)
+- Spec ids: <flow|tracker> (change with: flowctl config set tracker.specIds <flow|tracker>)
 ```
 
-Only include lines for config values that are set. If no config is set, skip this notice.
+Only include lines for config values that are set. If no config is set, skip this notice. (Spec ids line only when `CURRENT_SPEC_IDS` is non-empty — an unset key is not "set".)
 
 ### 6d: Build questions list
 
@@ -391,6 +403,19 @@ Available questions (include only if corresponding config is unset):
  "options": [
  {"label": "No (Recommended)", "description": "Skip cross-repo search. Faster plans, no gh CLI needed."},
  {"label": "Yes", "description": "Search GitHub repos for patterns/examples during /flow-next:plan"}
+ ],
+ "multiSelect": false
+}
+```
+
+**Spec ids question** (include if `TRACKER_CONFIGURED=1` AND `CURRENT_SPEC_IDS` is empty — both conditions; skip entirely when no tracker is configured, and never re-ask once the key is set to either `flow` or `tracker`):
+```json
+{
+ "header": "Spec ids",
+ "question": "How should new specs get their ids? Parallel agents and branches both scanning only local .flow/specs/ collide on fn-N — that is structural, not unlucky. With a tracker configured, tracker-first keys each new spec to the issue (Linear/Jira WOR-17 → wor-17-slug; GitHub #123 → gh-123-slug; GitLab iid → gl-N-slug) so the tracker is the distributed allocator. Recommended: tracker. Choosing tracker means every new-spec creation contacts the tracker immediately — it creates the issue BEFORE the local spec exists. When the matching lifecycle touchpoint (tracker.perEvent.capture/plan/...) is already on, that is a reorder of an existing remote write; when those leaves are off (their default, and a bridge-active repo can have every lifecycle event disabled), it is an earlier remote write that flow-first would not make.",
+ "options": [
+ {"label": "Tracker (Recommended)", "description": "Mint KEY-N-slug / gh-N / gl-N from the issue; create the tracker issue first on a fresh idea. Stops parallel fn-N collisions."},
+ {"label": "Flow", "description": "Keep sequential fn-N allocation (today's default). Safer offline; collisions remain possible across parallel worktrees/clones. An explicit Flow answer is remembered — setup will not ask again."}
  ],
  "multiSelect": false
 }
@@ -627,6 +652,11 @@ Only process answers for questions that were asked (config values that were unse
 - If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set scouts.github true --json`
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set scouts.github false --json`
 
+**Spec ids** (if question was asked — only when tracker was configured and the key was unset):
+- If "Tracker" / label starts with `Tracker`: `"${PLUGIN_ROOT}/scripts/flowctl" config set tracker.specIds tracker --json`
+- If "Flow": `"${PLUGIN_ROOT}/scripts/flowctl" config set tracker.specIds flow --json`
+- Writing either value ends the ask-once contract: the next setup run sees a non-empty raw key and skips this question.
+
 **HTML Artifacts** (if question was asked):
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set artifacts.html.enabled false --json`
 - If "Yes":
@@ -813,6 +843,7 @@ Configuration (use flowctl config set to change):
 - Plan-Sync cross-spec: <enabled|disabled>
 - GitHub scout: <enabled|disabled>
 - HTML artifacts: <enabled|disabled>
+- Spec ids: <flow|tracker|unset> # only meaningful when a tracker is configured; tracker is the team default
 - Review backend: <host|codex|rp|copilot|cursor|none>
 
 Documentation updated:

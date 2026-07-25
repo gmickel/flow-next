@@ -17,6 +17,13 @@ TODAY="$(date -u +%Y-%m-%d)"
 
 If `.flow/` does not exist, print `No .flow/ directory — run \`$FLOWCTL init\` first.` and exit cleanly. Capture has nothing to write into.
 
+**ONE root config snapshot for the whole capture run (fn-110)** — take it once after `.flow/` is confirmed, then derive every later leaf (including the Phase 5.2 mint gate) via `jq` from that file. No further root `config get` on the capture path for values already in the snapshot. Path-persistence: compose a literal path with an agent-chosen 4-char suffix and type it verbatim:
+
+```bash
+CAPTURE_CFG="${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" # literal path
+"$FLOWCTL" config get --json > "$CAPTURE_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$CAPTURE_CFG"
+```
+
 The Ralph-block (SKILL.md) runs before this preamble. Phase 0 starts after the Ralph-block and the preamble.
 
 ---
@@ -736,11 +743,34 @@ The frontmatter top of the spec is whatever `flowctl spec create` writes (it gen
 
 ### 5.2 — New-spec branch
 
+**Tracker-first is the recommended team default** when a tracker is configured (`tracker.specIds=tracker`): the tracker is the distributed allocator, so parallel captures stop colliding on `fn-N`. Route from the preamble root config snapshot (fn-110) — **no new `config get`**. Explicit user override in the invocation always wins. Do **not** nag about the id scheme at this mint site (withdrawn R10).
+
 ```bash
+FLOWCTL="$HOME/.codex/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 SPEC_TITLE="<chosen title from Phase 3 or Phase 1.3>"
 
-# Create the spec — captures the JSON to extract the allocated id.
-SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --json)
+# From the preamble root snapshot (literal path; no new config get).
+SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null)
+BRIDGE_ACTIVE=$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // false')
+
+if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
+ # Named existing issue in the request → mint from that key:
+ # SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "<KEY|#N|project#iid>" --title "$SPEC_TITLE" --json)
+ # Fresh idea → create-first first (tracker-sync steps.md Phase 2d), then mint + attach + seed:
+ # skill: flow-next-tracker-sync (operation: create-first, title: "$SPEC_TITLE", body: "<draft seed>")
+ # → {id, identifier, url}; on noop / no transport → SILENT fall-through to flow-first below
+ # SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$SPEC_TITLE" --json)
+ # then attach + seed merge base per tracker-sync steps.md Phase 2d "Enabled caller sequence"
+ # Network cost (honest, conditional): when tracker.perEvent.capture is already active,
+ # tracker-first REORDERS that existing remote write; when the leaf is off (default — a
+ # bridge-active repo can have every lifecycle event disabled), tracker-first adds an
+ # EARLIER remote write that flow-first would not have made.
+ :
+else
+ # Bridge inactive / no transport / create-first noop / config flow / override → SILENT degrade:
+ SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --json)
+fi
 SPEC_ID=$(printf '%s' "$SPEC_OUTPUT" | jq -r '.id')
 
 if [[ -z "$SPEC_ID" || "$SPEC_ID" == "null" ]]; then

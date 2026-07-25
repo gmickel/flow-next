@@ -27,8 +27,26 @@ Create spec with interview output. **DO NOT create tasks** — that's `/flow-nex
 
 The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). `flowctl spec skeleton` is **NOT** the seed here — it returns a 1.0.2-shape skeleton (`Overview` / `Scope` / `Approach` / `Quick commands` / `Acceptance` / `References`) for R22 byte-for-byte backward-compat with the pre-1.1.0 `flowctl spec create` output, which uses different section names than the new canonical template. Reading from `flowctl spec skeleton` here would seed sections the scope-aware write-policy doesn't recognize. Read the template file directly. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
 
+**Spec-id scheme.** When minting a brand-new spec here, route on `tracker.specIds` from ONE root config snapshot taken for this write-back (fn-110) — **no per-leaf `config get tracker.specIds`**. Tracker-first is the team default when the bridge is active (`tracker.specIds=tracker`): create-first then mint. Explicit user override always wins; bridge inactive / no transport degrades **silently** to flow-first. No runtime nag (withdrawn R10). Network cost is conditional: when `tracker.perEvent.interview` is already active, tracker-first reorders that write; when the leaf is off (default), it adds an earlier remote write.
+
 ```bash
-$FLOWCTL spec create --title "..." --json
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+# ONE root snapshot for this mint (fn-110). Literal path.
+INTERVIEW_CFG="${TMPDIR:-/tmp}/flow-interview-config-<suffix>.json"
+$FLOWCTL config get --json > "$INTERVIEW_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$INTERVIEW_CFG"
+SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "$INTERVIEW_CFG" 2>/dev/null)
+BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // false')
+
+if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
+  # Named existing issue → $FLOWCTL spec create --tracker-first --tracker-identifier "<key>" --title "..." --json
+  # Fresh idea → skill: flow-next-tracker-sync (operation: create-first, title, body)
+  #   then mint + attach + seed (tracker-sync steps.md Phase 2d "Enabled caller sequence")
+  # create-first noop / no transport → SILENT fall-through to flow-first below
+  :
+else
+  $FLOWCTL spec create --title "..." --json
+fi
 
 # Build the spec body in-memory:
 #   1. Seed from the canonical template FILE (not `flowctl spec skeleton` —

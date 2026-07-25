@@ -189,6 +189,10 @@ Wait for response. Parse naturally — user may reply terse ("1a 2b") or ramble 
 - Research = `grep` (repo-scout)
 - Review = configured backend if set, else `none`
 
+## Spec-id scheme (team default)
+
+When Route B mints a brand-new spec, **tracker-first is the recommended team default** if `tracker.specIds=tracker` and the bridge is active — the tracker is the distributed allocator (`KEY-N-slug` / synthetic `gh-N` / `gl-N`). Gate lives in steps.md Route B (create-first then `--tracker-first`; silent flow-first degrade; explicit override wins). Setup owns the one-time question; no runtime nag.
+
 ## Workflow
 
 Read [steps.md](steps.md) and follow each step in order.

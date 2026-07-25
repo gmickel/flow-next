@@ -1,0 +1,29 @@
+# Spec-id mint gate (tracker-first vs flow-first)
+
+Read this ONLY when actually minting a brand-new spec (the spec-file and spec-less starts in phases.md Phase 1). Work on an existing spec id never mints, so this stays off the default reached path.
+
+**Tracker-first is the recommended team default** when a tracker is configured (`tracker.specIds=tracker`): the tracker is the distributed allocator, so parallel agents and worktrees stop colliding on `fn-N`.
+
+Network cost is conditional: when the matching `tracker.perEvent.*` touchpoint is already active, tracker-first REORDERS an existing remote write; when it is off (the default, and a bridge-active repo can have every lifecycle event disabled) it adds an EARLIER remote write that flow-first would not make.
+
+Explicit user override in the invocation always wins. No runtime nag here - setup owns the one-time question (withdrawn R10).
+
+```bash
+FLOWCTL="$HOME/.codex/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+# ONE root snapshot for this mint (fn-110). Literal path; re-type it in this block.
+WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
+$FLOWCTL config get --json > "$WORK_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$WORK_CFG"
+SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "$WORK_CFG" 2>/dev/null)
+BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // false')
+
+if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
+ # Named issue -> mint from its key. Fresh idea -> tracker-sync `create-first`
+ # (tracker-sync steps.md Phase 2d) for {id,identifier,url}, then mint + attach + seed.
+ # A noop / no-transport create-first falls through SILENTLY to flow-first.
+ # $FLOWCTL spec create --tracker-first --tracker-identifier "<key>" --title "<title>" --json
+ :
+else
+ $FLOWCTL spec create --title "<title>" --json # silent flow-first degrade
+fi
+```

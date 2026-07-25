@@ -11,8 +11,8 @@
     "result": "OK: work inputs match B1 (4 files)"
   },
   "prompt_hashes": {
-    "plugins/flow-next/skills/flow-next-work/SKILL.md": "e85b0a2730467f1a556825577eb05f53c865daaf62db118b498b42630cd26bc8",
-    "plugins/flow-next/skills/flow-next-work/phases.md": "97be04a4de617d9447190f77c362e9645e5c6c0d2c6a751c3abb4e83d06c0bab",
+    "plugins/flow-next/skills/flow-next-work/SKILL.md": "72c2ff6ad06711c12190599e9b3d3d3776212c8546a5dcbf65f7e3ada5b5fa53",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "86d9599169cafc6820e9d5f2da99e0fd8b2add5128262d8089d400d10d01bf16",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "80a8a31e025b6bacbb45023f33b2f1184a7ae06265364acc1598cb49fe1efb4f",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "26d5ff37bfb9805e8f5c90a62f66425f2e2fd78ae9ab1614b0e8b1a7a01c4955",
     "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "657e0f2a5a6dd1f25e28317c0df61d836c2d78abe63e53ab5d94fe5b93d678ac"
@@ -21,16 +21,35 @@
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
       "baseline_reached_path_chars": 54358,
-      "candidate_reached_path_chars": 50628,
+      "candidate_reached_path_chars": 51000,
       "reduction_chars": 3730,
       "reduction_percent": 6.86
     },
     "delegation_active_path": {
       "baseline_reached_path_chars": 100851,
-      "candidate_reached_path_chars": 100424,
+      "candidate_reached_path_chars": 100796,
       "reduction_chars": 427,
       "reduction_percent": 0.42
-    }
+    },
+    "revisions": [
+      {
+        "spec": "fn-134",
+        "date": "2026-07-25",
+        "reason": "tracker.specIds mint-routing gate added to the spec-creating branch of work (R7/R11). This GROWS the reached path that fn-130 shrank; recorded rather than hidden.",
+        "default_path_chars": {
+          "before": 50628,
+          "after": 51000,
+          "delta": 372
+        },
+        "delegation_active_path_chars": {
+          "before": 100424,
+          "after": 100796,
+          "delta": 372
+        },
+        "review_note": "Implementer inlined the full ~25-line gate TWICE plus verbose comments (+3654 chars on the always-loaded default path). Review collapsed the duplicate, tightened the block, then moved the gate entirely into references/spec-id-mint.md when the shrink assertion caught the delegation-active path exceeding the fn-130 baseline (102627 vs 100851). Work on an EXISTING spec id never mints, so the gate does not belong on the default path. Final: +372 default (from +3654, a 90% reduction), active back BELOW baseline. The shrink gate was honoured, not relaxed.",
+        "baseline_note": "B0/B1 lineage untouched; this revises the CANDIDATE measurement only."
+      }
+    ]
   },
   "trace_arms": {
     "baseline": "optimization/reached-path/fixtures/b1/work/*.json",
@@ -38,26 +57,106 @@
     "observable_behavior_delta": []
   },
   "route_traces": [
-    {"id": "serial", "delegation_reference": false, "tracker_reference": false},
-    {"id": "parallel-eligible", "delegation_reference": false, "tracker_reference": false},
-    {"id": "shared-file-conflict", "delegation_reference": false, "tracker_reference": false},
-    {"id": "worker-failure", "delegation_reference": false, "tracker_reference": false},
-    {"id": "host-deferred-handover", "delegation_reference": false, "tracker_reference": false},
-    {"id": "delegation-off", "delegation_reference": false, "tracker_reference": false},
-    {"id": "delegation-declined", "delegation_reference": false, "tracker_reference": false},
-    {"id": "delegation-cli-unavailable", "delegation_reference": false, "tracker_reference": false},
-    {"id": "delegation-on-consented", "delegation_reference": true, "tracker_reference": false},
-    {"id": "delegation-implementation-failure", "delegation_reference": true, "tracker_reference": false},
-    {"id": "delegation-circuit-breaker", "delegation_reference": true, "tracker_reference": false},
-    {"id": "tracker-inactive", "delegation_reference": false, "tracker_reference": false},
-    {"id": "tracker-active", "delegation_reference": false, "tracker_reference": true},
-    {"id": "tracker-probe-error", "delegation_reference": false, "tracker_reference": true},
-    {"id": "review-pass", "delegation_reference": false, "tracker_reference": false},
-    {"id": "review-fail", "delegation_reference": false, "tracker_reference": false},
-    {"id": "plan-sync-no-op", "delegation_reference": false, "tracker_reference": false},
-    {"id": "plan-sync-update", "delegation_reference": false, "tracker_reference": false},
-    {"id": "autonomous-consent-missing", "delegation_reference": false, "tracker_reference": false},
-    {"id": "autonomous-consent-granted", "delegation_reference": true, "tracker_reference": false}
+    {
+      "id": "serial",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "parallel-eligible",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "shared-file-conflict",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "worker-failure",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "host-deferred-handover",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "delegation-off",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "delegation-declined",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "delegation-cli-unavailable",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "delegation-on-consented",
+      "delegation_reference": true,
+      "tracker_reference": false
+    },
+    {
+      "id": "delegation-implementation-failure",
+      "delegation_reference": true,
+      "tracker_reference": false
+    },
+    {
+      "id": "delegation-circuit-breaker",
+      "delegation_reference": true,
+      "tracker_reference": false
+    },
+    {
+      "id": "tracker-inactive",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "tracker-active",
+      "delegation_reference": false,
+      "tracker_reference": true
+    },
+    {
+      "id": "tracker-probe-error",
+      "delegation_reference": false,
+      "tracker_reference": true
+    },
+    {
+      "id": "review-pass",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "review-fail",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "plan-sync-no-op",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "plan-sync-update",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "autonomous-consent-missing",
+      "delegation_reference": false,
+      "tracker_reference": false
+    },
+    {
+      "id": "autonomous-consent-granted",
+      "delegation_reference": true,
+      "tracker_reference": false
+    }
   ],
   "oracles": {
     "common_wave_lifecycle_preserved": true,

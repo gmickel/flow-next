@@ -381,6 +381,23 @@ class TestSpecIdAllocation(unittest.TestCase):
         if not flow_dir.is_dir() or not (REPO_ROOT / ".git").exists():
             self.skipTest("not running inside the flow-next checkout")
 
+        # This is a BENCHMARK, not a correctness assertion, and wall-clock is
+        # meaningless on a saturated machine: the full suite runs 14 jobs in
+        # parallel, which reliably pushes a ~155ms measurement past any fixed
+        # bound. Skip when the box is clearly contended; the correctness
+        # properties (union, fail-open, monotonic, two-worktree collision) are
+        # covered by the other tests in this file and do not depend on timing.
+        try:
+            load1 = os.getloadavg()[0]
+            cpus = os.cpu_count() or 1
+            if load1 > cpus * 0.6:
+                self.skipTest(
+                    f"machine contended (load {load1:.1f} over {cpus} cpus); "
+                    "allocation benchmark is only meaningful when run standalone"
+                )
+        except (AttributeError, OSError):
+            pass
+
         samples = []
         for _ in range(3):
             t0 = time.perf_counter()

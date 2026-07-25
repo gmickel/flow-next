@@ -290,11 +290,32 @@ Default to standard unless complexity demands more or less.
 
 **Route B - Input was text (new idea)**:
 
-1. Create spec:
+1. Create spec — **tracker-first is the recommended team default** when a tracker is configured (`tracker.specIds=tracker`): the tracker is the distributed allocator, so parallel agents stop colliding on `fn-N`. Route from the Step 0 root config snapshot (fn-110) — **no new `config get`**. Explicit user override in the invocation always wins.
+
    ```bash
-   $FLOWCTL spec create --title "<Short title>" --json
+   # From the Step 0 root snapshot (literal path; no new config get).
+   SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)
+   BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // false')
+
+   if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
+     # Named existing issue in the request → mint from that key:
+     #   $FLOWCTL spec create --tracker-first --tracker-identifier "<KEY|#N|project#iid>" --title "<Short title>" --json
+     # Fresh idea → create-first first (tracker-sync steps.md Phase 2d), then mint + attach + seed:
+     #   skill: flow-next-tracker-sync (operation: create-first, title: "<Short title>", body: "<seed body>")
+     #   → {id, identifier, url}; on noop / no transport → SILENT fall-through to flow-first below
+     #   $FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "<Short title>" --json
+     #   then attach + seed merge base per tracker-sync steps.md Phase 2d "Enabled caller sequence"
+     # Network cost (honest, conditional): when tracker.perEvent.plan is already active,
+     # tracker-first REORDERS that existing remote write; when the leaf is off (default — a
+     # bridge-active repo can have every lifecycle event disabled), tracker-first adds an
+     # EARLIER remote write that flow-first would not have made.
+     :
+   else
+     # Bridge inactive / no transport / create-first noop / config flow / override → SILENT degrade:
+     $FLOWCTL spec create --title "<Short title>" --json
+   fi
    ```
-   This returns the spec ID (e.g., fn-1-add-oauth). `branch_name` defaults to the spec ID at create time — no follow-up `spec set-branch` call on the create path. Only when the user specified a custom branch, pass it at create: `$FLOWCTL spec create --title "<Short title>" --branch "<custom-branch>" --json` (`spec set-branch` remains the tool for renaming an existing spec's branch later).
+   This returns the spec ID (e.g., `wor-17-slug` under tracker-first, or `fn-1-add-oauth` under flow-first). `branch_name` defaults to the spec ID at create time — no follow-up `spec set-branch` call on the create path. Only when the user specified a custom branch, pass it at create: `$FLOWCTL spec create --title "<Short title>" --branch "<custom-branch>" --json` (`spec set-branch` remains the tool for renaming an existing spec's branch later). Do **not** add a runtime advisory/nag about the id scheme at this mint site (withdrawn R10) — setup owns the one-time question.
 
 2. Write spec (use stdin heredoc):
 
