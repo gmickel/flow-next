@@ -288,6 +288,20 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
         out = flowctl._task_rewrite_h1(body, self.TASK_ID, "Renamed")
         self.assertIn("# " + self.TASK_ID + " Renamed", out)
 
+
+    def test_indented_delimiter_does_not_close_frontmatter(self) -> None:
+        """An indented `---` in a block scalar is content (PR #241 wave 14)."""
+        body = (
+            "---\n"
+            "note: |\n"
+            "    ---\n"
+            "    # " + self.TASK_ID + " decoy inside the scalar\n"
+            "---\n"
+            "\n"
+            "# " + self.TASK_ID + " The real title\n"
+        )
+        self.assertEqual(flowctl._task_h1_title(body, self.TASK_ID), "The real title")
+
     def test_unfenced_h1_still_works(self) -> None:
         plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")

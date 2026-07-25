@@ -18810,9 +18810,11 @@ def _iter_task_h1_candidates(content: str):
     """
     lines = content.split("\n")
     start = 0
-    if lines and lines[0].strip() == "---":
+    # Column zero for BOTH delimiters: an indented `---` inside a block scalar
+    # is scalar content, not the closing delimiter.
+    if lines and lines[0] == "---":
         for i in range(1, len(lines)):
-            if lines[i].strip() == "---":
+            if lines[i] == "---":
                 start = i + 1
                 break
     # Track fences over the BODY ONLY. Frontmatter is YAML, not markdown, so a

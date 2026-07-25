@@ -485,12 +485,17 @@ if [ -n "$SPEC_ID" ]; then
   LINKED=$($FLOWCTL sync get-state "$SPEC_ID" --json 2>/dev/null | jq -r '.tracker.id // empty')
   if [ -n "$LINKED" ] && [ "$LINKED" != "$ISSUE_ID" ]; then
     # Linked to a DIFFERENT issue - never overwrite. Surface identifier + url +
-    # retryKey and stop; a human decides.
-    SPEC_ID=""
-    CONFLICT=1
+    # retryKey and STOP the whole sequence here. Do not fall through: the steps
+    # below attach, seed, write the back-reference and CLEAR the record, and
+    # running any of them with no valid SPEC_ID would destroy the recovery
+    # state that makes this resumable at all.
+    echo "create-first CONFLICT: spec $SPEC_ID is linked to $LINKED, not $ISSUE_ID." >&2
+    echo "  issue: $IDENTIFIER  url: $ISSUE_URL  retryKey: $RETRY_KEY" >&2
+    echo "  Recovery record KEPT. A human decides; re-running will not re-create." >&2
+    return 1 2>/dev/null || exit 1
   fi
 fi
-if [ -z "$SPEC_ID" ] && [ -z "${CONFLICT:-}" ]; then
+if [ -z "$SPEC_ID" ]; then
   CREATE_OUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json)
   SPEC_ID=$(printf '%s' "$CREATE_OUT" | jq -r '.id // .spec_id // empty')
   # 2b. Record the minted id IMMEDIATELY, before attach can fail - this is what
