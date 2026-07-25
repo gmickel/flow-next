@@ -565,6 +565,41 @@ class SyntheticTrackerMintTestCase(unittest.TestCase):
         self.assertFalse(payload.get("success", True))
         self.assertIn("Refusing to mint", payload.get("error", ""))
 
+    def test_qualified_ref_does_not_block_a_bare_mint_on_another_provider(self) -> None:
+        """`group/project#12` must not block `#12` after a provider change.
+
+        PR #241 wave 3: matching on the issue number alone made any stored
+        `...#12` collide with any synthetic `*-12` mint, so moving a repo from
+        GitLab to GitHub blocked unrelated issue 12.
+        """
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        self.flowctl.set_config("tracker.type", "gitlab")
+        gl = self._create("Old gitlab linked")
+        self.flowctl.cmd_sync_set_tracker_id(
+            argparse.Namespace(
+                id=gl["id"], tracker_id="I_gl", identifier="group/project#12",
+                url="https://example/12", json=True,
+            )
+        )
+
+        self.flowctl.set_config("tracker.type", "github")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.flowctl.cmd_spec_create(
+                argparse.Namespace(
+                    title="Unrelated github twelve", branch=None,
+                    tracker_first=True, tracker_identifier="#12", json=True,
+                )
+            )
+        payload = json.loads(buf.getvalue())
+        self.assertTrue(
+            payload.get("success"),
+            f"GitHub #12 must not be blocked by a stored GitLab group/project#12: {payload}",
+        )
+
     def test_parse_issue_ref_for_mint_shapes(self) -> None:
         self.assertEqual(
             self.flowctl.parse_issue_ref_for_mint("#123"), (123, "#123")

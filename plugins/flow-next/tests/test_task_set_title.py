@@ -233,6 +233,42 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
         self.assertIn("    # " + self.TASK_ID + " example from an indented block", out)
         self.assertIn("# " + self.TASK_ID + " Renamed", out)
 
+
+    def test_yaml_frontmatter_comment_is_not_the_h1(self) -> None:
+        """Frontmatter is the third H1 look-alike (PR #241 wave 3)."""
+        body = (
+            "---\n"
+            "satisfies: [R1]\n"
+            "# " + self.TASK_ID + " metadata example\n"
+            "---\n"
+            "\n"
+            "# " + self.TASK_ID + " The real title\n"
+        )
+        self.assertEqual(flowctl._task_h1_title(body, self.TASK_ID), "The real title")
+        out = flowctl._task_rewrite_h1(body, self.TASK_ID, "Renamed")
+        self.assertIn("# " + self.TASK_ID + " metadata example", out)
+        self.assertIn("# " + self.TASK_ID + " Renamed", out)
+        self.assertNotIn("The real title", out)
+
+    def test_all_three_lookalikes_together(self) -> None:
+        """Frontmatter + fenced + indented in one body, real H1 last."""
+        body = (
+            "---\n"
+            "# " + self.TASK_ID + " frontmatter\n"
+            "---\n"
+            "```bash\n"
+            "# " + self.TASK_ID + " fenced\n"
+            "```\n"
+            "    # " + self.TASK_ID + " indented\n"
+            "\n"
+            "# " + self.TASK_ID + " Actual heading\n"
+        )
+        self.assertEqual(flowctl._task_h1_title(body, self.TASK_ID), "Actual heading")
+        out = flowctl._task_rewrite_h1(body, self.TASK_ID, "Final")
+        for survivor in ("frontmatter", "fenced", "indented"):
+            self.assertIn("# " + self.TASK_ID + " " + survivor, out)
+        self.assertEqual(out.count("# " + self.TASK_ID + " Final"), 1)
+
     def test_unfenced_h1_still_works(self) -> None:
         plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")

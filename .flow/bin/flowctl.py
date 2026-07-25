@@ -3037,6 +3037,7 @@ def preflight_tracker_mint(
     number: int,
     suffix: str,
     *,
+    display: Optional[str] = None,
     use_json: bool = False,
 ) -> None:
     """Refuse a tracker-first mint that would collide with the existing store.
@@ -3082,21 +3083,20 @@ def preflight_tracker_mint(
     synthetic_key = _SYNTHETIC_TRACKER_KEYS.get(get_config("tracker.type") or "")
     is_synthetic_mint = bool(synthetic_key) and key.lower() == synthetic_key
     if is_synthetic_mint:
-        alias_targets.add(f"#{number}")
+        # Match the ACTUAL incoming reference, not a bare issue number. A
+        # project-qualified `group/project#12` and a bare `#12` are different
+        # issues, and so are `#12` on GitHub and `#12` on GitLab after a repo
+        # changes provider - matching on the number alone would let a stored
+        # reference block an unrelated mint. The bare `#N` form is added only
+        # when the incoming identifier is itself bare.
+        if display:
+            alias_targets.add(display.strip().lower())
+        if not display or "/" not in display:
+            alias_targets.add(f"#{number}")
     for spec_file in iter_spec_json_files(flow_dir):
         ident_lc, _ = _spec_tracker_fields(spec_file)
-        if not ident_lc:
-            continue
-        if ident_lc in alias_targets:
+        if ident_lc and ident_lc in alias_targets:
             collisions.add(spec_file.stem)
-            continue
-        # A GitLab spec stores the project-qualified `group/project#12`, which
-        # never equals a bare alias. Compare on the parsed issue number so a
-        # `gl-12` mint still collides with the spec already linked to that iid.
-        if is_synthetic_mint and "#" in ident_lc:
-            stored_num = ident_lc.rsplit("#", 1)[-1]
-            if stored_num.isdigit() and int(stored_num) == number:
-                collisions.add(spec_file.stem)
 
     if not collisions:
         return
@@ -15236,7 +15236,8 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
             tracker_identifier, use_json=args.json
         )
         preflight_tracker_mint(
-            flow_dir, key, number, suffix, use_json=args.json
+            flow_dir, key, number, suffix,
+            display=tracker_identifier, use_json=args.json,
         )
         spec_id = f"{key}-{number}-{suffix}"
     else:
@@ -18769,25 +18770,48 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
         print(f"Task {task_id} backend specs updated: {', '.join(updated)}")
 
 
+def _iter_task_h1_candidates(content: str):
+    """Yield (index, line) for lines eligible to be the task markdown H1.
+
+    A task body's `# ` lines are not all headings. Three places produce
+    look-alikes, and each one was found in production separately (PR #241),
+    so they are handled by ONE rule rather than three patches:
+
+      * YAML frontmatter - `# fn-1.1 metadata example` inside the opening
+        `---` block
+      * fenced code - a bash block whose comments start with `#`
+      * indented code - a four-space block, which is markdown code too
+
+    Eligible means: outside the opening frontmatter block, outside any fence,
+    and starting at column zero.
+    """
+    lines = content.split("\n")
+    fenced = [f for _, f in _iter_fence_aware(lines)]
+    start = 0
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                start = i + 1
+                break
+    for i in range(start, len(lines)):
+        if i < len(fenced) and fenced[i]:
+            continue
+        if lines[i].startswith("# "):
+            yield i, lines[i]
+
+
 def _task_h1_title(content: str, task_id: str) -> Optional[str]:
     """Extract the title from a task markdown H1 (`# <id> <title>`).
 
     Returns None when no H1 is present or the H1 does not start with the
     task id. Title is the remainder after `# <id>` (may be empty).
 
-    Fence-aware: a task body often opens with a shell block containing a
-    comment like `# <task-id> example`. Treating that as the H1 would sync the
-    JSON title from an example while leaving the real H1 untouched - exactly
-    the JSON/markdown divergence this command exists to prevent.
+    Candidate lines come from `_iter_task_h1_candidates`, which skips YAML
+    frontmatter, fenced code, and indented code. Reading a look-alike as the
+    H1 would sync the JSON title from an example while leaving the real
+    heading untouched - exactly the divergence this command exists to prevent.
     """
-    for line, in_fence in _iter_fence_aware(content.split("\n")):
-        if in_fence:
-            continue
-        # Column zero required: an INDENTED code block (`    # id example`)
-        # is markdown code too, and stripping leading whitespace would make
-        # its comment look like the heading.
-        if not line.startswith("# "):
-            continue
+    for _, line in _iter_task_h1_candidates(content):
         body = line[2:].strip()
         if body == task_id:
             return ""
@@ -18801,17 +18825,15 @@ def _task_h1_title(content: str, task_id: str) -> Optional[str]:
 def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
     """Rewrite (or insert) the task markdown H1 to `# <id> <title>`.
 
-    Fence-aware for the same reason as `_task_h1_title` - and here the cost of
-    getting it wrong is higher: rewriting a `# ...` line inside a fenced block
-    would corrupt an example the task body is documenting.
+    Uses the same candidate rule as `_task_h1_title`, and here the cost of
+    getting it wrong is higher: rewriting a `# ...` line inside frontmatter or
+    a code block would corrupt content the task body is documenting.
     """
     lines = content.splitlines(keepends=True)
     new_h1 = f"# {task_id} {title}\n"
-    fenced = [f for _, f in _iter_fence_aware(content.split("\n"))]
-    for i, line in enumerate(lines):
-        if i < len(fenced) and fenced[i]:
-            continue
-        if line.startswith("# "):   # column zero only - see _task_h1_title
+    for i, _ in _iter_task_h1_candidates(content):
+        if i < len(lines):
+            line = lines[i]
             newline = "\n" if line.endswith("\n") else ""
             lines[i] = f"# {task_id} {title}{newline}"
             return "".join(lines)
