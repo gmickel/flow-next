@@ -9,7 +9,11 @@ problem_type: build-error
 symptoms: "Codex impl-review NEEDS_WORK cycles: injection inside tables/code-blocks, contradictions with auto-fix mandates, structured-tool prose surviving token rewrite, anti-patterns inverted on Codex"
 root_cause: "Token-only AskUserQuestion → plain-text-prompt rewrite leaves Claude-specific structured-tool prose (multiSelect, blocking-question, JSON questions array, deferred-tool schema-loader) intact, and 'first non-negative occurrence' injection lands inside tables, code blocks, and deterministic Ralph branches"
 resolution_type: fix
+status: hardened
+hardened_into: scripts/sync-codex.sh#Explore-dispatch transform (fn-100 R12) should have rewritten these -- hard-fail guard family for unrewritten Claude-only phrases; CLAUDE.md checklist mandates sync x2 on every canonical edit
 last_updated: "2026-07-18"
+last_audited: "2026-07-25"
+audit_notes: "hardened into scripts/sync-codex.sh#Explore-dispatch transform (fn-100 R12) should have rewritten these -- hard-fail guard family for unrewritten Claude-only phrases; CLAUDE.md checklist mandates sync x2 on every canonical edit (audited-by: /flow-next:audit)"
 ---
 
 ## Problem

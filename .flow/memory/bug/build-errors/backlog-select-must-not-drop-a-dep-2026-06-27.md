@@ -9,7 +9,9 @@ problem_type: build-error
 symptoms: "A backlog tick with only ready-but-dep-blocked work wrongly terminates NO_WORK instead of BLOCKED, losing the dep-wait signal"
 root_cause: "SELECT (Phase 1f) excluded dep-blocked items from selection, but TRIAGE (Phase 2) resolves dep-unsatisfied to a state-changing BLOCKED terminal; the SELECT exclusion set was wider than it should be"
 resolution_type: fix
-related_to: [bug/build-errors/codex-mirror-audit-must-verify-r2-block-2026-06-05, bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/embedded-self-check-greps-in-reference-2026-06-12, bug/build-errors/lavish-interactive-only-gate-must-check-2026-06-12, bug/build-errors/mirror-regen-exposes-latent-canonical-2026-06-11, bug/build-errors/optional-side-effect-snippets-need-2026-06-12, bug/build-errors/r2-ask-block-must-never-anchor-in-2026-06-10, bug/build-errors/skill-prose-must-match-real-flowctl-2026-06-10, bug/build-errors/skill-workflow-snippets-must-enforce-2026-06-11, bug/build-errors/status-policy-map-needs-a-matching-2026-06-18, bug/build-errors/template-rewrite-env-var-cascade-2026-05-09]
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
+related_to: [bug/build-errors/r2-ask-block-mis-injected-into-negation-2026-06-27, bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/embedded-self-check-greps-in-reference-2026-06-12, bug/build-errors/lavish-interactive-only-gate-must-check-2026-06-12, bug/build-errors/mirror-regen-exposes-latent-canonical-2026-06-11, bug/build-errors/optional-side-effect-snippets-need-2026-06-12, bug/build-errors/skill-prose-must-match-real-flowctl-2026-06-10, bug/build-errors/skill-workflow-snippets-must-enforce-2026-06-11, bug/build-errors/status-policy-map-needs-a-matching-2026-06-18, bug/build-errors/template-rewrite-env-var-cascade-2026-05-09]
 ---
 
 ## Problem

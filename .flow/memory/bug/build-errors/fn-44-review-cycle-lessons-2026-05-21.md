@@ -64,5 +64,5 @@ The fn-44 (symmetric `--scope=business|technical|both` interview) implementation
 
 - `[[template-rewrite-env-var-cascade]]` — env-var cascade discipline + config.env knob alignment
 - `[[test-production-path-not-parallel-construction]]` — test-discipline lessons from the same era (json output via cmd_*, argparse wire form)
-- `scripts/sync-codex.sh` lines 1466+ — R21 drift guard (still active)
+- `scripts/sync-codex.sh` — R21 spec-template duplication scan now at ~:2105-2158, R17 forbidden-vocabulary mirror scan at ~:2059-2068 (both still active as of 2026-07-25; line numbers drift — grep for the guard names)
 - `plugins/flow-next/templates/spec.md` — canonical scaffold; never re-embed its section list inline (R17)

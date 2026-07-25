@@ -9,6 +9,8 @@ problem_type: build-error
 symptoms: numeric comparison fails with an arithmetic syntax error on the zero-match path
 root_cause: "grep -c emits the count then exits 1 on no match, so a || echo 0 fallback appends a second zero"
 resolution_type: fix
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 related_to: [bug/build-errors/embedded-self-check-greps-in-reference-2026-06-12, bug/build-errors/skill-prose-must-match-real-flowctl-2026-06-10]
 ---
 

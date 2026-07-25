@@ -9,7 +9,8 @@ problem_type: build-error
 symptoms: "RP impl-review NEEDS_WORK: the R2 'Ask the user via plain text' instruction block injected into pilot's Forbidden/Phase-3.5 negation prose AND before tracker-sync's Phase-0 autonomy invariant (contradicts R14 never-prompt)"
 root_cause: is_negative_context() in sync-codex.sh did not catch the negation shapes of autonomous-only prose (forbidden/never-reached); the first fix was case-sensitive lowercase and missed the uppercase 'NO code path may reach' invariant
 resolution_type: fix
-related_to: [bug/build-errors/backlog-select-must-not-drop-a-dep-2026-06-27, bug/build-errors/codex-mirror-audit-must-verify-r2-block-2026-06-05, bug/build-errors/codex-mirror-smoke-docs-miss-composed-2026-05-18, bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/embedded-self-check-greps-in-reference-2026-06-12, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21, bug/build-errors/id-grammar-widening-must-cover-the-full-2026-06-03, bug/build-errors/lavish-interactive-only-gate-must-check-2026-06-12, bug/build-errors/mirror-regen-exposes-latent-canonical-2026-06-11, bug/build-errors/optional-side-effect-snippets-need-2026-06-12, bug/build-errors/policy-claim-inversion-sweep-all-2026-06-18, bug/build-errors/r2-ask-block-must-never-anchor-in-2026-06-10, bug/build-errors/skill-adding-version-bump-leaves-stale-2026-06-05, bug/build-errors/skill-prose-must-match-real-flowctl-2026-06-10, bug/build-errors/skill-workflow-snippets-must-enforce-2026-06-11, bug/build-errors/status-policy-map-needs-a-matching-2026-06-18, bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18, bug/build-errors/template-rewrite-env-var-cascade-2026-05-09]
+audit_consolidates: [bug/build-errors/r2-ask-block-must-never-anchor-in-2026-06-10, bug/build-errors/codex-mirror-audit-must-verify-r2-block-2026-06-05]
+related_to: [bug/build-errors/backlog-select-must-not-drop-a-dep-2026-06-27, bug/build-errors/codex-mirror-smoke-docs-miss-composed-2026-05-18, bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/embedded-self-check-greps-in-reference-2026-06-12, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21, bug/build-errors/id-grammar-widening-must-cover-the-full-2026-06-03, bug/build-errors/lavish-interactive-only-gate-must-check-2026-06-12, bug/build-errors/mirror-regen-exposes-latent-canonical-2026-06-11, bug/build-errors/optional-side-effect-snippets-need-2026-06-12, bug/build-errors/policy-claim-inversion-sweep-all-2026-06-18, bug/build-errors/skill-adding-version-bump-leaves-stale-2026-06-05, bug/build-errors/skill-prose-must-match-real-flowctl-2026-06-10, bug/build-errors/skill-workflow-snippets-must-enforce-2026-06-11, bug/build-errors/status-policy-map-needs-a-matching-2026-06-18, bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18, bug/build-errors/template-rewrite-env-var-cascade-2026-05-09]
 ---
 
 ## Problem
@@ -61,3 +62,25 @@ Both contradict R14 (under FLOW_AUTONOMOUS/mode:autonomous the path NEVER prompt
 - Lock it with a contract test (R2 block absent from negation-only files; never
   precedes the Phase-0 invariant). A token-scan validator is NOT enough — assert
   STRUCTURAL placement.
+- Never NAME the ask tool inside a bullet describing an autonomous/Ralph/
+  hard-error branch — even parenthetically. The injector anchors on the LINE; a
+  positive "via <tool>" in refuse-to-ask prose flips the mirror's meaning.
+  Describe interactive behavior without the tool name, or move it to the
+  interactive section. *(absorbed from r2-ask-block-must-never-anchor-in-2026-06-10)*
+- Keep every canonical live-ask ("ask the user via `AskUserQuestion`") on ONE
+  physical line — the injector inserts before the anchor LINE, not the sentence.
+  And avoid the article "an `AskUserQuestion`" (rewrites to the ungrammatical
+  "an `plain-text numbered prompt`"). *(absorbed from codex-mirror-audit-must-verify-r2-block-2026-06-05)*
+- Unrelated to R2 but preserved from the 06-10 entry: when a skill gains a
+  second no-questions mode (e.g. AUTONOMOUS alongside RALPH), grep ALL its files
+  for the old mode name (`grep -n "Ralph" phases.md workflow.md`) —
+  checklist/Done-when lines drift independently of the implementing code blocks.
+
+## Update 2026-07-25
+
+Consolidated (audit): absorbed `r2-ask-block-must-never-anchor-in-2026-06-10`
+and `codex-mirror-audit-must-verify-r2-block-2026-06-05` — same defect class
+(R2 injector anchoring in refuse-to-ask prose, token-scan validators
+structurally blind), same function (`is_negative_context` /
+`scripts/sync-codex.sh` anchor loop). Their unique prevention rules are the
+bullets marked *absorbed* above; both files removed (git history preserves them).

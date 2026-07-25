@@ -9,6 +9,8 @@ problem_type: build-error
 symptoms: Mechanical <=6-turns -> <=6-rounds swap made fuzzy-term sharpening unreachable (full interview = 3-5 rounds)
 root_cause: "Threshold sites renamed like throttle sites; threshold magnitude not re-derived for the new, coarser unit"
 resolution_type: fix
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 related_to: [bug/build-errors/fn-44-review-cycle-lessons-2026-05-21, bug/build-errors/id-grammar-widening-must-cover-the-full-2026-06-03]
 ---
 

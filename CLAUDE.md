@@ -170,6 +170,8 @@ Then `/flow-next:plan <spec-id>`.
 
 **Spec Quick commands (this repo):** list FOCUSED suites for the feature's files (e.g. `cd plugins/flow-next/tests && python3 -m unittest test_config_snapshot test_task_create_files -q`). That is what workers baseline and verify per task. The FULL suite runs ONCE at the final gate (work Phase 4 / completion review): `python3 scripts/run_tests_parallel.py` (serial fallback `--serial`). Do not put the full discover/parallel command on every task's Quick commands.
 
+`.flow/memory/` - categorized learnings from past work (`bug/<category>/`, `knowledge/<category>/`; YAML frontmatter: track, category, module, tags, status). Search via `.flow/bin/flowctl memory search <q>` - relevant when implementing or debugging in modules with documented prior art.
+
 **More:** `.flow/bin/flowctl --help` or `.flow/usage.md`
 <!-- END FLOW-NEXT -->
 

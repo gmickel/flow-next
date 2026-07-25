@@ -9,6 +9,8 @@ problem_type: build-error
 symptoms: Smoke docs claim N options where post-transform mirror has N+1 (final Other - type your own answer added by sync transform)
 root_cause: Authored invariants from spec acceptance alone without grepping post-sync mirror to verify composed transform output
 resolution_type: fix
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 related_to: [bug/build-errors/abort-option-copy-must-reflect-pre-2026-05-18, bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18]
 ---
 

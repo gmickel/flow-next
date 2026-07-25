@@ -9,7 +9,11 @@ problem_type: build-error
 symptoms: "RP impl-review 2x NEEDS_WORK: assignee read from listing that lacks it, phantom flowctl whoami, ready/open vs todo status enum, var used before assignment"
 root_cause: "Workflow bash written from spec vocabulary without verifying flowctl JSON emitters, status enums, and subcommand existence"
 resolution_type: fix
+status: hardened
+hardened_into: "plugins/flow-next/tests/test_skill_prose_flowctl_surface.py#test_skill_prose_references_real_flowctl_subcommands -- CI prose-vs-CLI drift gate; covers subcommand existence, fields/enums stay judgment"
 last_updated: "2026-07-24"
+last_audited: "2026-07-25"
+audit_notes: "hardened into plugins/flow-next/tests/test_skill_prose_flowctl_surface.py#test_skill_prose_references_real_flowctl_subcommands -- CI prose-vs-CLI drift gate; covers subcommand existence, fields/enums stay judgment (audited-by: /flow-next:audit)"
 ---
 
 ## Problem
