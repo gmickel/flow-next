@@ -45,10 +45,9 @@ host_is_claude_code() {
 # absent .flow/. Treat missing .flow/ as delegation OFF — a bare-idea input is
 # never delegation-eligible anyway (delegation requires a plan/spec/task input).
 if [ -d .flow ]; then
- # fn-134: ONE root snapshot for the whole run (fn-110), not a leaf read. Both
- # work.delegate here and tracker.specIds at the Phase 1 mint derive from THIS
- # file, so the run performs one config read total (down from two).
- WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json" # literal path; re-type it where you read it
+ # ONE root snapshot (fn-110) serving work.delegate here AND the Phase 1 mint's
+ # tracker.specIds: one config read per run, not two. Re-type the literal path.
+ WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
  $FLOWCTL config get --json > "$WORK_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$WORK_CFG"
  DELEGATE_CFG=$(jq -r '.value.work.delegate // false' "$WORK_CFG" 2>/dev/null)
 else

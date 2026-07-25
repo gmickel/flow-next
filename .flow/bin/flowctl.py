@@ -2823,8 +2823,11 @@ def validate_tracker_identifier(
     / ``#01`` are rejected (fn-69 R4-identity). The bare-``N`` form (fn-64) lets
     ``sync set-tracker-id --identifier 42`` succeed; it is normalized to the
     ``#42`` display form on the way out. Tracker-first canonical-id generation
-    does NOT pass this flag, so a GitHub/GitLab ref can never become a canonical
-    spec id.
+    does NOT pass this flag: a GitHub/GitLab ref never becomes a canonical spec
+    id *through this function*. Since fn-134 such a ref CAN still mint one, but
+    only via ``resolve_tracker_first_mint``, which derives a synthetic
+    ``gh-<n>`` / ``gl-<iid>`` key from ``tracker.type`` rather than storing the
+    raw ref as the id. The raw ``#123`` form stays display-only either way.
     """
     if not identifier:
         if required:

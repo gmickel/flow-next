@@ -387,38 +387,35 @@ This op never mints a spec id and never invents a synthetic key. GitHub/GitLab s
 create-first(title, body):
   if bridge inactive OR TRANSPORT=none:
      return noop (best-effort - never block the caller's lifecycle; caller degrades to flow-first fn-N)
-  retryKey = sha256(tracker.type + "\0" + title + "\0" + body)[:16]
-  recoveryPath = .flow/create-first/<retryKey>.json
-  if recoveryPath exists:
-     return recovery.{id, identifier, url}     # LINK path - never re-create
-  result = writeIssue({ title, body })         # no issue.id ⇒ CREATE [→ selected adapter]
+  retryKey = sync create-first-key --type <tracker.type> --title <title> --body-file <body>
+  if sync create-first-get --key <retryKey> succeeds:
+     return that record's {id, identifier, url}   # LINK path - never re-create
+  result = writeIssue({ title, body })            # no issue.id ⇒ CREATE [→ selected adapter]
      # omit flow:<spec-id> label - no spec yet; caller writes the back-reference after attach
-  write recoveryPath immediately (id, identifier, url, title, createdAt, transport, retryKey)
-  return result                                # {id, identifier, url}
+  sync create-first-put --key <retryKey> …        # record immediately, before any mint attempt
+  return result                                   # {id, identifier, url}
 ```
 
-Compute the retry key and recovery path in the same bash block that needs them (variables do not survive across tool calls):
+Recompute the key in the same bash block that needs it (variables do not survive
+across tool calls). **Use the helper commands exclusively** - never hand-roll the
+hash with `shasum`, never write the record with a shell redirect, never delete it
+with `rm`. The helper owns the key definition and writes atomically, which is what
+makes retry idempotency mechanical rather than a prose promise:
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-# TITLE / BODY / TRACKER_TYPE come from the invocation and the reached-path router.
-RETRY_KEY=$(printf '%s\0%s\0%s' "$TRACKER_TYPE" "$TITLE" "$BODY" | shasum -a 256 | cut -c1-16)
-RECOVERY_DIR=".flow/create-first"
-RECOVERY_PATH="$RECOVERY_DIR/$RETRY_KEY.json"
-mkdir -p "$RECOVERY_DIR"
-if [ -f "$RECOVERY_PATH" ]; then
+# TITLE / BODY_FILE / TRACKER_TYPE come from the invocation and the reached-path router.
+RETRY_KEY=$("$FLOWCTL" sync create-first-key --type "$TRACKER_TYPE" --title "$TITLE" --body-file "$BODY_FILE")
+if REC=$("$FLOWCTL" sync create-first-get --key "$RETRY_KEY" --json); then
   # Resume: return the already-created issue - never writeIssue create again.
-  jq -c '{id, identifier, url, retryKey}' "$RECOVERY_PATH"
+  printf '%s' "$REC" | jq -c '{id, identifier, url, retryKey}'
   # Caller proceeds to mint → attach → seed merge base (below).
 else
-  # CREATE via writeIssue (no issue.id) [→ selected adapter]; capture {id, identifier, url}.
-  # Immediately persist recovery BEFORE any local mint attempt:
-  #   jq -n --arg k "$RETRY_KEY" --arg id "$ISSUE_ID" --arg ident "$IDENTIFIER" \
-  #     --arg url "$ISSUE_URL" --arg title "$TITLE" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  #     --arg tr "$TRANSPORT" \
-  #     '{retryKey:$k, id:$id, identifier:$ident, url:$url, title:$title, createdAt:$ts, transport:$tr}' \
-  #     > "$RECOVERY_PATH"
+  # CREATE via writeIssue (no issue.id) [→ selected adapter]; capture {id, identifier, url},
+  # then record it IMMEDIATELY, before any local mint attempt:
+  #   "$FLOWCTL" sync create-first-put --key "$RETRY_KEY" --id "$ISSUE_ID" \
+  #     --identifier "$IDENTIFIER" --url "$ISSUE_URL" --title "$TITLE" --transport "$TRANSPORT"
   # Surface identifier + url + retryKey on any subsequent failure so the run links, not re-creates.
 fi
 ```
@@ -445,9 +442,9 @@ $FLOWCTL sync set-last-synced "$SPEC_ID"
 # 5. normal receipt now that a local spec id exists; consume the pre-spec recovery file
 $FLOWCTL sync receipt "$SPEC_ID" --status updated --tracker-id "$ISSUE_ID" --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
   --note "operation: create-first, event: ${EVENT:-manual} - issue $IDENTIFIER created then linked; recovery consumed"
-# RETRY_KEY recomputed the same way as on create (type + title + body):
-RETRY_KEY=$(printf '%s\0%s\0%s' "$TRACKER_TYPE" "$TITLE" "$BODY" | shasum -a 256 | cut -c1-16)
-rm -f ".flow/create-first/${RETRY_KEY}.json"
+# RETRY_KEY recomputed via the helper (same type + title + body), then consumed:
+RETRY_KEY=$($FLOWCTL sync create-first-key --type "$TRACKER_TYPE" --title "$TITLE" --body-file "$BODY_FILE")
+$FLOWCTL sync create-first-clear --key "$RETRY_KEY"
 # 6. write flow:<spec-id> back-reference label on the issue [→ selected adapter] (same as Phase 2a)
 ```
 

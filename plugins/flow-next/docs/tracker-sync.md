@@ -59,7 +59,7 @@ The two id schemes **coexist**; resolution is provided by flowctl's widened reso
 | canonical spec id | `wor-17-slug` / `gh-123-slug` / `gl-456-slug` | `fn-NN-slug` (unchanged) |
 | canonical task ids | `wor-17-slug.M` / `gh-123-slug.M` | `fn-NN-slug.M` |
 | branch | same as canonical id | `fn-NN-slug` |
-| bare aliases | `wor-17` / `gh-123` / `gl-456` (and `.M` task forms) resolve to the full slug id | `WOR-17` / `#123` (stored in `tracker.identifier`) resolves to `fn-NN-slug` |
+| bare aliases | `wor-17` / `gh-123` / `gl-456` (and `.M` task forms) resolve to the full slug id | `WOR-17` (stored in `tracker.identifier`) resolves to `fn-NN-slug`. A GitHub/GitLab ref like `#123` is **display-only** - stored and shown, never a resolvable handle; only the synthetic `gh-123` / `gl-456` form resolves |
 | create / link | `flowctl spec create --tracker-first --tracker-identifier <key-or-ref>` | `flowctl sync set-tracker-id fn-NN-slug <uuid> --identifier <key> --url <url>` |
 
 ### Synthetic keys (GitHub / GitLab)

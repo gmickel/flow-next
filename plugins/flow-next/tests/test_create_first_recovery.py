@@ -180,5 +180,54 @@ class CreateFirstRecoveryRoundTrip(unittest.TestCase):
         self.assertIn("create-first/", ignore)
 
 
+class CreateFirstProseUsesTheHelperExclusively(unittest.TestCase):
+    """The recovery record must only ever be touched through the helper.
+
+    steps.md once carried BOTH the helper invocation and a hand-rolled block
+    that recomputed the hash with `shasum`, wrote the JSON with a shell
+    redirect, and deleted it with `rm`. An agent following the second block
+    bypassed the atomic helper the retry guarantee rests on, so the two could
+    silently drift. These assertions keep the duplicate from coming back.
+    """
+
+    STEPS = ROOT / "skills" / "flow-next-tracker-sync" / "steps.md"
+
+    def setUp(self) -> None:
+        self.text = self.STEPS.read_text(encoding="utf-8")
+        start = self.text.find("#### Receipt / retry contract")
+        end = self.text.find("**Back-reference:**", start)
+        self.section = self.text[start:end]
+        self.assertTrue(start != -1 and end > start, "create-first section not found")
+
+    def test_no_hand_rolled_hash(self) -> None:
+        for tool in ("shasum -a 256", "sha256sum", "openssl dgst"):
+            self.assertNotIn(
+                tool, self.section,
+                f"create-first prose recomputes the retry key with {tool!r}; "
+                "use `sync create-first-key` so prose and code cannot drift",
+            )
+
+    def test_no_raw_recovery_write(self) -> None:
+        self.assertNotIn(
+            '> "$RECOVERY_PATH"', self.section,
+            "recovery record written by shell redirect; use `sync create-first-put`",
+        )
+        self.assertNotIn(
+            "mkdir -p \"$RECOVERY_DIR\"", self.section,
+            "prose creates the recovery dir by hand; the helper owns that",
+        )
+
+    def test_no_raw_recovery_delete(self) -> None:
+        self.assertNotIn(
+            "rm -f \".flow/create-first", self.section,
+            "recovery record deleted with rm; use `sync create-first-clear`",
+        )
+
+    def test_all_four_helper_leaves_are_referenced(self) -> None:
+        for leaf in ("create-first-key", "create-first-get",
+                     "create-first-put", "create-first-clear"):
+            self.assertIn(leaf, self.section, f"prose never invokes `sync {leaf}`")
+
+
 if __name__ == "__main__":
     unittest.main()

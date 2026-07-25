@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import json
 import os
 import shutil
 import subprocess
@@ -27,6 +28,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
+FLOWCTL_PY = ROOT / "scripts" / "flowctl.py"
 
 spec = importlib.util.spec_from_file_location("flowctl", ROOT / "scripts" / "flowctl.py")
 flowctl = importlib.util.module_from_spec(spec)
@@ -318,6 +320,51 @@ class TestSpecIdAllocation(unittest.TestCase):
             # Second create from B's perspective allocates max+1 = 3 = original_max+2.
             self.assertEqual(max_b + 1, 3)
 
+    def test_two_worktree_collision_through_real_spec_create(self) -> None:
+        """R5 end to end: the collision must be gone through `spec create` itself.
+
+        The helper-level test above cannot catch a regression in how
+        `cmd_spec_create` consumes the scan result or composes the final id, so
+        this drives the real CLI in both worktrees and asserts the returned ids.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            main = tmp_path / "main"
+            _init_repo(main)
+            subprocess.run(
+                [sys.executable, str(FLOWCTL_PY), "init"],
+                cwd=str(main), capture_output=True, text=True, check=False,
+            )
+            _git(main, "add", "-A")
+            _git(main, "commit", "-q", "-m", "base")
+
+            wt_a = tmp_path / "wt-a"
+            wt_b = tmp_path / "wt-b"
+            _git(main, "worktree", "add", "-q", str(wt_a), "-b", "branch-a")
+            _git(main, "worktree", "add", "-q", str(wt_b), "-b", "branch-b")
+
+            def create(cwd: Path, title: str) -> str:
+                r = subprocess.run(
+                    [sys.executable, str(FLOWCTL_PY), "spec", "create",
+                     "--title", title, "--json"],
+                    cwd=str(cwd), capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(r.returncode, 0, r.stderr)
+                return json.loads(r.stdout)["id"]
+
+            # A creates first and never commits - the dominant real-world window.
+            id_a = create(wt_a, "From worktree A")
+            id_b = create(wt_b, "From worktree B")
+
+            self.assertTrue(id_a.startswith("fn-1-"), id_a)
+            self.assertTrue(
+                id_b.startswith("fn-2-"),
+                f"B allocated {id_b}; it must see A's uncommitted {id_a} and take the next number",
+            )
+            self.assertNotEqual(
+                id_a.split("-")[1], id_b.split("-")[1], "the two worktrees collided"
+            )
+
     def test_hot_paths_do_not_scan_worktrees_or_refs(self) -> None:
         """R4: list/status/show/ready/next must not call allocation git probes."""
         for name in ("cmd_list", "cmd_status", "cmd_show", "cmd_ready", "cmd_next"):
@@ -398,6 +445,25 @@ class TestSpecIdAllocation(unittest.TestCase):
         except (AttributeError, OSError):
             pass
 
+        # Pin the SHAPE being measured. Without this the budget assertion is
+        # vacuous: a shallow clone with one worktree and a handful of refs
+        # would pass it trivially while proving nothing about the repo shape
+        # R3 actually specifies. Report the real dimensions either way.
+        refs = _git(REPO_ROOT, "for-each-ref", "--format=%(refname)", check=False)
+        n_refs = len(refs.stdout.splitlines()) if refs.returncode == 0 else 0
+        wts = _git(REPO_ROOT, "worktree", "list", "--porcelain", check=False)
+        n_wts = (
+            sum(1 for line in wts.stdout.splitlines() if line.startswith("worktree "))
+            if wts.returncode == 0
+            else 0
+        )
+        if n_refs < 100 or n_wts < 5:
+            self.skipTest(
+                f"checkout shape too small to be a meaningful budget test "
+                f"({n_refs} refs, {n_wts} worktrees; R3 specifies 300+/15+). "
+                "Correctness is covered by the other tests in this file."
+            )
+
         samples = []
         for _ in range(3):
             t0 = time.perf_counter()
@@ -420,8 +486,8 @@ class TestSpecIdAllocation(unittest.TestCase):
         self.assertLess(
             best_ms,
             250.0,
-            f"allocation took {best_ms:.1f}ms (samples_ms={[s*1000 for s in samples]}); "
-            "over 250ms budget — investigate before shipping; fallback is drop ref source",
+            f"allocation took {best_ms:.1f}ms on {n_refs} refs / {n_wts} worktrees "
+            f"(samples_ms={[s*1000 for s in samples]}); over 250ms budget — investigate before shipping; fallback is drop ref source",
         )
 
 
