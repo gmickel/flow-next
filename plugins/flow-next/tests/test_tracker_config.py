@@ -212,6 +212,268 @@ class TrackerConfigTestCase(unittest.TestCase):
                 self.flowctl.tracker_sync_active(), f"type={ttype} should activate"
             )
 
+    # --- tracker.specIds (fn-134.2 / R6 / R9) --------------------------------
+
+    def test_default_spec_ids_is_flow_string_enum(self) -> None:
+        t = self.flowctl.get_default_config()["tracker"]
+        self.assertEqual(t["specIds"], "flow")
+        self.assertIsInstance(t["specIds"], str)
+        self.assertNotIsInstance(t["specIds"], bool)
+
+    def test_merged_read_defaults_to_flow_when_unset(self) -> None:
+        # No on-disk key → merged default "flow".
+        self.assertEqual(self.flowctl.get_config("tracker.specIds"), "flow")
+
+    def test_spec_ids_write_rejects_invalid(self) -> None:
+        """WRITE contract: config set rejects anything outside flow|tracker."""
+        import argparse
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+
+        # Materialize a minimal config so ensure_flow_exists / set path works.
+        self.flowctl.set_config("tracker.enabled", False)
+        for bad in ("yes", "true", "on", "fn", "github", "TRACKER", ""):
+            ns = argparse.Namespace(key="tracker.specIds", value=bad, json=True)
+            buf = io.StringIO()
+            err = io.StringIO()
+            with redirect_stdout(buf), redirect_stderr(err):
+                with self.assertRaises(SystemExit) as ctx:
+                    self.flowctl.cmd_config_set(ns)
+            self.assertNotEqual(ctx.exception.code, 0, bad)
+            out = buf.getvalue() + err.getvalue()
+            self.assertTrue(
+                "Invalid tracker.specIds" in out or "Expected one of" in out,
+                f"bad={bad!r} out={out!r}",
+            )
+
+    def test_spec_ids_write_accepts_flow_and_tracker(self) -> None:
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        self.flowctl.set_config("tracker.enabled", False)
+        for good in ("flow", "tracker"):
+            ns = argparse.Namespace(key="tracker.specIds", value=good, json=True)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                self.flowctl.cmd_config_set(ns)
+            payload = json.loads(buf.getvalue())
+            self.assertEqual(payload["value"], good)
+            on_disk = json.loads(
+                (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(on_disk["tracker"]["specIds"], good)
+
+    def test_spec_ids_read_fail_closed_to_flow(self) -> None:
+        """READ contract: malformed on-disk value fails closed to 'flow'."""
+        for bad in (True, False, "yes", "on", "fn", "TRACKER", 1, None):
+            self._write_config({"tracker": {"specIds": bad}})
+            self.assertEqual(
+                self.flowctl.get_config("tracker.specIds"),
+                "flow",
+                f"malformed {bad!r} must fail closed to flow",
+            )
+        # Only the literal "tracker" activates.
+        self._write_config({"tracker": {"specIds": "tracker"}})
+        self.assertEqual(self.flowctl.get_config("tracker.specIds"), "tracker")
+        self._write_config({"tracker": {"specIds": "flow"}})
+        self.assertEqual(self.flowctl.get_config("tracker.specIds"), "flow")
+
+    def test_spec_ids_unset_detectable_after_init(self) -> None:
+        """R9: init does NOT materialize tracker.specIds — raw probe is null."""
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        # Fresh init via cmd_init.
+        (self.tmpdir / ".flow").mkdir(parents=True, exist_ok=True)
+        ns = argparse.Namespace(json=True)
+        with redirect_stdout(io.StringIO()):
+            self.flowctl.cmd_init(ns)
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn(
+            "specIds",
+            on_disk.get("tracker", {}),
+            "materialized default would break setup unset-detection",
+        )
+        # Raw probe: absent → sentinel / None via --raw path.
+        raw = self.flowctl._get_config_from_file("tracker.specIds")
+        self.assertIs(raw, self.flowctl._CONFIG_RAW_SENTINEL)
+        # Merged read still returns the default.
+        self.assertEqual(self.flowctl.get_config("tracker.specIds"), "flow")
+
+    def test_spec_ids_explicit_flow_survives_as_set(self) -> None:
+        """Answered 'flow' must stay distinguishable from unset (raw non-null)."""
+        self.flowctl.set_config("tracker.specIds", "flow")
+        raw = self.flowctl._get_config_from_file("tracker.specIds")
+        self.assertEqual(raw, "flow")
+        self.assertIsNot(raw, self.flowctl._CONFIG_RAW_SENTINEL)
+
+
+class SyntheticTrackerMintTestCase(unittest.TestCase):
+    """fn-134.2 / R14: synthetic gh/gl minting + reservation + preflight."""
+
+    def setUp(self) -> None:
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.prev_cwd = Path.cwd()
+        os.chdir(self.tmpdir)
+        import subprocess
+
+        subprocess.run(
+            ["git", "init", "-q"], cwd=self.tmpdir, check=True, capture_output=True
+        )
+        self.flowctl = _load_flowctl()
+        self.flow_dir = self.tmpdir / ".flow"
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        with redirect_stdout(io.StringIO()):
+            self.flowctl.cmd_init(argparse.Namespace(json=True))
+
+    def tearDown(self) -> None:
+        os.chdir(self.prev_cwd)
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _call(self, func, **kwargs) -> dict:
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        kwargs.setdefault("json", True)
+        ns = argparse.Namespace(**kwargs)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            func(ns)
+        out = buf.getvalue().strip()
+        return json.loads(out) if out else {}
+
+    def _create(self, title: str, **kw) -> dict:
+        return self._call(
+            self.flowctl.cmd_spec_create,
+            title=title,
+            branch=kw.get("branch"),
+            tracker_first=kw.get("tracker_first", False),
+            tracker_identifier=kw.get("tracker_identifier"),
+        )
+
+    def test_github_mints_gh_slug(self) -> None:
+        self.flowctl.set_config("tracker.type", "github")
+        res = self._create(
+            "Fix login", tracker_first=True, tracker_identifier="#123"
+        )
+        self.assertEqual(res["id"], "gh-123-fix-login")
+        self.assertEqual(res["tracker_identifier"], "#123")
+        # Bare alias resolves like wor-17.
+        expanded = self.flowctl.expand_bare_spec_id(self.flow_dir, "gh-123")
+        self.assertEqual(expanded, "gh-123-fix-login")
+
+    def test_gitlab_mints_gl_slug_from_project_iid(self) -> None:
+        self.flowctl.set_config("tracker.type", "gitlab")
+        res = self._create(
+            "Pipeline fix",
+            tracker_first=True,
+            tracker_identifier="group/subgroup/project#456",
+        )
+        # Project-scoped iid 456 — never an opaque global id.
+        self.assertEqual(res["id"], "gl-456-pipeline-fix")
+        self.assertEqual(res["tracker_identifier"], "group/subgroup/project#456")
+        expanded = self.flowctl.expand_bare_spec_id(self.flow_dir, "gl-456")
+        self.assertEqual(expanded, "gl-456-pipeline-fix")
+
+    def test_linear_native_gh_key_no_synthesis(self) -> None:
+        """Linear team key GH is unchanged — no synthesis, no reservation."""
+        self.flowctl.set_config("tracker.type", "linear")
+        res = self._create(
+            "From linear", tracker_first=True, tracker_identifier="GH-99"
+        )
+        self.assertEqual(res["id"], "gh-99-from-linear")
+        self.assertEqual(res["tracker_identifier"], "GH-99")
+
+    def test_github_reserves_gh_prefix_at_create(self) -> None:
+        import io
+        from contextlib import redirect_stderr
+
+        self.flowctl.set_config("tracker.type", "github")
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(io.StringIO()):
+                self._create(
+                    "Native key",
+                    tracker_first=True,
+                    tracker_identifier="GH-123",
+                )
+
+    def test_github_reserves_gh_prefix_at_link(self) -> None:
+        import io
+        from contextlib import redirect_stderr
+
+        self.flowctl.set_config("tracker.type", "github")
+        # Flow-first spec, then try to link with reserved GH-N.
+        res = self._create("Plain")
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(io.StringIO()):
+                self._call(
+                    self.flowctl.cmd_sync_set_tracker_id,
+                    id=res["id"],
+                    tracker_id="uuid-1",
+                    identifier="GH-55",
+                    url=None,
+                    force=False,
+                )
+
+    def test_mixed_historical_store_preflight_refuses_collision(self) -> None:
+        """gh-123 from Linear predate + re-point to GitHub must not silent-collide."""
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        # Historical Linear-keyed GH mint.
+        self.flowctl.set_config("tracker.type", "linear")
+        historical = self._create(
+            "Old linear", tracker_first=True, tracker_identifier="GH-123"
+        )
+        self.assertEqual(historical["id"], "gh-123-old-linear")
+
+        # Re-point to GitHub and try to mint issue 123.
+        self.flowctl.set_config("tracker.type", "github")
+        buf = io.StringIO()
+        with self.assertRaises(SystemExit):
+            with redirect_stdout(buf):
+                self.flowctl.cmd_spec_create(
+                    argparse.Namespace(
+                        title="New github issue",
+                        branch=None,
+                        tracker_first=True,
+                        tracker_identifier="#123",
+                        json=True,
+                    )
+                )
+        payload = json.loads(buf.getvalue())
+        self.assertFalse(payload.get("success", True))
+        msg = payload.get("error", "")
+        self.assertIn("Refusing to mint", msg)
+        self.assertIn("gh-123-old-linear", msg)
+
+    def test_parse_issue_ref_for_mint_shapes(self) -> None:
+        self.assertEqual(
+            self.flowctl.parse_issue_ref_for_mint("#123"), (123, "#123")
+        )
+        self.assertEqual(
+            self.flowctl.parse_issue_ref_for_mint("owner/repo#9"),
+            (9, "owner/repo#9"),
+        )
+        self.assertEqual(
+            self.flowctl.parse_issue_ref_for_mint("group/sub/project#456"),
+            (456, "group/sub/project#456"),
+        )
+        self.assertEqual(
+            self.flowctl.parse_issue_ref_for_mint("42"), (42, "#42")
+        )
+        for bad in ("#0", "#01", "WOR-17", "", None, "a//b#1"):
+            self.assertIsNone(self.flowctl.parse_issue_ref_for_mint(bad), bad)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1158,6 +1158,22 @@ def get_default_tracker_config() -> dict:
         # perTracker. None = readiness projection off (the gate stays
         # dormant — R7 invisibility).
         "readyState": None,
+        # fn-134.2 — id scheme for new specs when a tracker bridge is active.
+        # Strict string-enum: "flow" (default, native fn-N) | "tracker"
+        # (tracker-keyed KEY-N-slug / synthetic gh-N / gl-N). Only the literal
+        # "tracker" activates; a coerced bool / typo never does (fail-closed
+        # on read via normalize_tracker_spec_ids). WRITE-side validation in
+        # cmd_config_set rejects anything outside the enum.
+        #
+        # UNSET-DETECTABLE (R9): this leaf is in get_default_tracker_config so
+        # MERGED reads return "flow", but it is NOT materialized at init
+        # (_INIT_UNMATERIALIZED_LEAVES). Setup asks when a tracker is configured
+        # AND `config get tracker.specIds --raw` returns null ("never asked").
+        # A materialized default of "flow" would make "never asked"
+        # indistinguishable from "answered flow" and silently suppress the
+        # question. Decision: DO NOT materialize at init; leave the leaf absent
+        # on disk until the user (or setup) explicitly sets it.
+        "specIds": "flow",
     }
 
 
@@ -1369,17 +1385,71 @@ def get_default_config() -> dict:
 # their materialize-on-init behavior unchanged.
 _INIT_UNMATERIALIZED_BLOCKS = ("artifacts",)
 
+# Leaf keys (dotted paths) that must stay absent from the on-disk file after
+# init so setup can detect "never asked" via `config get <key> --raw` → null.
+# MERGED defaults still apply (see get_default_config / get_default_tracker_config).
+# fn-134.2: tracker.specIds — see get_default_tracker_config comment for the
+# materialization decision (DO NOT materialize; unset must be detectable).
+_INIT_UNMATERIALIZED_LEAVES = ("tracker.specIds",)
+
+# Strict enum for tracker.specIds (fn-134.2). Write-side rejects anything else;
+# read-side fail-closes anything else to "flow".
+TRACKER_SPEC_IDS_VALUES = frozenset({"flow", "tracker"})
+
+
+def normalize_tracker_spec_ids(value) -> str:
+    """Semantic value of ``tracker.specIds``.
+
+    Only the literal string ``"tracker"`` activates tracker-keyed ids. A coerced
+    bool, typo, null, or any other value fail-closes to ``"flow"`` (R6). Never
+    treat a truthy non-string as activating.
+    """
+    if isinstance(value, str) and value == "tracker":
+        return "tracker"
+    return "flow"
+
+
+def _with_tracker_spec_ids_normalized(cfg: dict) -> dict:
+    """Return cfg with ``tracker.specIds`` fail-closed on the merged tree.
+
+    Copy-on-write when normalizing so a shared defaults dict is never mutated.
+    """
+    tracker = cfg.get("tracker")
+    if not isinstance(tracker, dict) or "specIds" not in tracker:
+        return cfg
+    raw_val = tracker["specIds"]
+    norm = normalize_tracker_spec_ids(raw_val)
+    if raw_val == norm:
+        return cfg
+    new_cfg = dict(cfg)
+    new_tracker = dict(tracker)
+    new_tracker["specIds"] = norm
+    new_cfg["tracker"] = new_tracker
+    return new_cfg
+
 
 def _init_persisted_defaults() -> dict:
     """Defaults `cmd_init` writes/merges into config.json.
 
-    Equal to get_default_config() minus _INIT_UNMATERIALIZED_BLOCKS, so the
-    raw-file presence of those keys stays a faithful "explicitly set"
-    provenance signal for the setup ceremony's `--raw` probe.
+    Equal to get_default_config() minus _INIT_UNMATERIALIZED_BLOCKS and
+    _INIT_UNMATERIALIZED_LEAVES, so the raw-file presence of those keys stays
+    a faithful "explicitly set" provenance signal for the setup ceremony's
+    `--raw` probe.
     """
     defaults = get_default_config()
     for block in _INIT_UNMATERIALIZED_BLOCKS:
         defaults.pop(block, None)
+    for leaf in _INIT_UNMATERIALIZED_LEAVES:
+        parts = leaf.split(".")
+        cur = defaults
+        for part in parts[:-1]:
+            nxt = cur.get(part) if isinstance(cur, dict) else None
+            if not isinstance(nxt, dict):
+                cur = None
+                break
+            cur = nxt
+        if isinstance(cur, dict):
+            cur.pop(parts[-1], None)
     return defaults
 
 
@@ -1404,14 +1474,14 @@ def load_flow_config() -> dict:
     config_path = get_flow_dir() / CONFIG_FILE
     defaults = get_default_config()
     if not config_path.exists():
-        return defaults
+        return _with_tracker_spec_ids_normalized(defaults)
     try:
         data = json.loads(config_path.read_text(encoding="utf-8"))
         if isinstance(data, dict):
-            return deep_merge(defaults, data)
-        return defaults
+            return _with_tracker_spec_ids_normalized(deep_merge(defaults, data))
+        return _with_tracker_spec_ids_normalized(defaults)
     except (json.JSONDecodeError, Exception):
-        return defaults
+        return _with_tracker_spec_ids_normalized(defaults)
 
 
 def _walk_config_value(config, key: str, default=None):
@@ -1519,7 +1589,7 @@ def load_config_snapshot() -> ConfigSnapshot:
         merged = defaults
     else:
         merged = deep_merge(defaults, raw)
-    return ConfigSnapshot(raw, merged)
+    return ConfigSnapshot(raw, _with_tracker_spec_ids_normalized(merged))
 
 
 def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
@@ -2831,6 +2901,191 @@ def reject_reserved_tracker_key(
             "tracker key.",
             use_json=use_json,
         )
+
+
+# fn-134.2 — synthetic key prefixes for trackers that lack a native KEY-N
+# identifier. Type-gating alone is NOT enough (ids are permanent; config is
+# not): while tracker.type is github/gitlab the matching prefix is reserved
+# for synthesis in that repo, and minting preflights the store for collisions.
+_SYNTHETIC_TRACKER_KEYS = {
+    "github": "gh",
+    "gitlab": "gl",
+}
+
+
+def parse_issue_ref_for_mint(
+    identifier: Optional[str],
+) -> Optional[tuple[int, str]]:
+    """Mint-side parse for ``#123`` / ``<project>#456`` issue references.
+
+    Returns ``(iid, display)`` where ``iid`` is the project-scoped issue number
+    (GitLab ``iid`` / GitHub issue number) — never an opaque global id. Accepts
+    bare ``123`` (normalized to ``#123`` display) and nested GitLab paths
+    (``group/subgroup/project#12``).
+
+    Separate from ``validate_tracker_identifier(allow_reference=True)``, which
+    is link-time only and returns an empty key ``("", n, display)`` — the wrong
+    shape for minting a resolvable ``gh-N-slug`` / ``gl-N-slug`` id.
+    """
+    if not identifier:
+        return None
+    stripped = identifier.strip()
+    # Optional path + #N (positive integer, no leading zero).
+    ref = re.match(r"^(?:(?:[^/#]+/)+[^/#]+)?#([1-9][0-9]*)$", stripped)
+    if ref:
+        return (int(ref.group(1)), stripped)
+    bare = re.match(r"^([1-9][0-9]*)$", stripped)
+    if bare:
+        return (int(bare.group(1)), f"#{bare.group(1)}")
+    return None
+
+
+def _tracker_type_for_synthesis() -> str:
+    """Lowercased tracker.type from merged config, or empty when unset."""
+    ttype = get_config("tracker.type")
+    if not isinstance(ttype, str):
+        return ""
+    return ttype.strip().lower()
+
+
+def reject_synthetic_prefix_reservation(
+    key: str, display: str, *, use_json: bool = False
+) -> None:
+    """While tracker.type is github/gitlab, reserve gh/gl for synthesis.
+
+    An explicit native identifier using the reserved key (e.g. ``GH-123`` on a
+    GitHub-configured repo) is rejected at link and create time. Linear/Jira
+    repos natively keyed GH are unaffected — type is not github/gitlab, so the
+    reservation does not fire.
+    """
+    ttype = _tracker_type_for_synthesis()
+    reserved = _SYNTHETIC_TRACKER_KEYS.get(ttype)
+    if not reserved or key != reserved:
+        return
+    error_exit(
+        f"Tracker identifier '{display}' uses key '{key}' which is reserved "
+        f"for synthetic minting while tracker.type is {ttype}. Pass a "
+        f"#N-style issue reference (e.g. #123 or group/project#456) instead "
+        f"of a native {reserved.upper()}-N key, or re-point tracker.type.",
+        use_json=use_json,
+    )
+
+
+def resolve_tracker_first_mint(
+    identifier: Optional[str], *, use_json: bool = False
+) -> tuple[str, int, str]:
+    """Resolve a tracker-first identifier into ``(key, number, display)``.
+
+    - Linear/Jira ``KEY-N`` → native key (unchanged).
+    - GitHub ``#123`` / bare ``123`` when ``tracker.type=github`` → ``gh``, 123.
+    - GitLab ``<project>#456`` when ``tracker.type=gitlab`` → ``gl``, 456 (iid).
+    - Explicit ``GH-N`` / ``GL-N`` while type is github/gitlab → rejected
+      (contextual reservation).
+    - ``fn`` reserved key → rejected.
+    """
+    if not identifier or not str(identifier).strip():
+        error_exit(
+            "A tracker identifier is required (e.g., WOR-17, #123, or group/project#456).",
+            use_json=use_json,
+        )
+    stripped = str(identifier).strip()
+
+    # KEY-N path first (Linear/Jira; also catches mistaken GH-N under github).
+    parsed = parse_tracker_identifier(stripped)
+    if parsed is not None:
+        key, number = parsed
+        if key == RESERVED_TRACKER_KEY:
+            error_exit(
+                f"Tracker identifier '{stripped}' uses the reserved key 'fn', "
+                "which collides with flow's native id scheme. Use a different "
+                "tracker key.",
+                use_json=use_json,
+            )
+        reject_synthetic_prefix_reservation(key, stripped, use_json=use_json)
+        return (key, number, stripped)
+
+    # Reference form → synthetic mint only when type is github/gitlab.
+    ref = parse_issue_ref_for_mint(stripped)
+    if ref is not None:
+        number, display = ref
+        ttype = _tracker_type_for_synthesis()
+        synthetic = _SYNTHETIC_TRACKER_KEYS.get(ttype)
+        if synthetic:
+            return (synthetic, number, display)
+        error_exit(
+            f"Issue reference '{stripped}' requires tracker.type github or "
+            f"gitlab for synthetic key minting (got "
+            f"{get_config('tracker.type')!r}). Linear/Jira use KEY-N "
+            f"identifiers (e.g. WOR-17 / PROJ-123).",
+            use_json=use_json,
+        )
+
+    error_exit(
+        f"Invalid tracker identifier '{stripped}'. Expected a bare display "
+        "key like WOR-17 or PROJ-123, or (with tracker.type github/gitlab) an "
+        "issue reference like #123 or group/project#456.",
+        use_json=use_json,
+    )
+
+
+def preflight_tracker_mint(
+    flow_dir: Path,
+    key: str,
+    number: int,
+    suffix: str,
+    *,
+    use_json: bool = False,
+) -> None:
+    """Refuse a tracker-first mint that would collide with the existing store.
+
+    Checks for a colliding canonical id (exact path) or a resolvable alias
+    (prefix ``<key>-<n>-*``, bare ``<key>-<n>``, or stored ``tracker.identifier``
+    matching the handle). Type-gating alone is not enough: a mixed historical
+    store (e.g. a Linear-keyed ``gh-123-*`` that predated a re-point to GitHub)
+    must not be silently collided with.
+    """
+    candidate = f"{key}-{number}-{suffix}"
+    bare = f"{key}-{number}"
+    collisions: set[str] = set()
+
+    for path in (
+        flow_dir / SPECS_JSON_DIR / f"{candidate}.json",
+        flow_dir / EPICS_DIR / f"{candidate}.json",
+        flow_dir / SPECS_DIR / f"{candidate}.md",
+        flow_dir / SPECS_JSON_DIR / f"{bare}.json",
+        flow_dir / EPICS_DIR / f"{bare}.json",
+    ):
+        if path.exists():
+            collisions.add(path.stem)
+
+    for directory in (flow_dir / SPECS_JSON_DIR, flow_dir / EPICS_DIR):
+        if not directory.exists():
+            continue
+        for path in directory.glob(f"{bare}-*.json"):
+            collisions.add(path.stem)
+
+    # Alias index: flow-first or tracker specs whose stored identifier resolves
+    # as this bare handle (case-insensitive KEY-N or #N display forms).
+    alias_targets = {
+        bare.lower(),
+        f"{key.upper()}-{number}".lower(),
+        f"#{number}",
+    }
+    for spec_file in iter_spec_json_files(flow_dir):
+        ident_lc, _ = _spec_tracker_fields(spec_file)
+        if ident_lc and ident_lc in alias_targets:
+            collisions.add(spec_file.stem)
+
+    if not collisions:
+        return
+    listed = ", ".join(sorted(collisions))
+    error_exit(
+        f"Refusing to mint {candidate}: bare handle '{bare}' collides with "
+        f"existing spec(s): {listed}. Ids never change; preflight refuses a "
+        f"duplicate alias. Use the full existing id, pick a different issue, "
+        f"or keep the historical id and link instead of re-minting.",
+        use_json=use_json,
+    )
 
 
 def parse_id(id_str: str) -> tuple[Optional[int], Optional[int]]:
@@ -9211,6 +9466,21 @@ def cmd_config_set(args: argparse.Namespace) -> None:
                 use_json=args.json,
             )
 
+    # fn-134.2 — tracker.specIds is a strict string-enum (flow|tracker). Reject
+    # invalid values at WRITE time so a typo never lands on disk. READ-side
+    # fail-closed (normalize_tracker_spec_ids) is a separate contract for values
+    # that reached the file via hand-edit / merge / older versions.
+    if canonical_key == "tracker.specIds":
+        raw_val = args.value
+        # Pre-coercion check: set_config would turn "true"/"false" into bools.
+        if not isinstance(raw_val, str) or raw_val not in TRACKER_SPEC_IDS_VALUES:
+            error_exit(
+                f"Invalid tracker.specIds value {raw_val!r}. "
+                f"Expected one of: flow, tracker. "
+                f"Use: flowctl config set tracker.specIds flow|tracker",
+                use_json=args.json,
+            )
+
     # fn-115.1 - validate models.roles / verifiedAt before write. Coerce the
     # value the same way set_config will so JSON object pins validate as dicts.
     if canonical_key == "models" or canonical_key.startswith("models."):
@@ -14924,13 +15194,16 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     suffix = slug if slug else generate_epic_suffix()
 
     if tracker_first:
-        # Strict identifier validation: a bare display key (WOR-17) only — a
-        # slugged / suffixed / reserved-`fn` identifier is rejected so the
-        # stored alias is always a resolvable bare handle. Use the STRIPPED
-        # display form returned by the validator (never the raw input) so
-        # surrounding whitespace can't persist an unresolvable alias.
-        key, number, tracker_identifier = validate_tracker_identifier(
-            tracker_identifier, required=True, use_json=args.json
+        # fn-134.2: KEY-N (Linear/Jira) OR synthetic gh/gl from #N / project#N
+        # when tracker.type is github/gitlab. Contextual reservation rejects
+        # an explicit GH-N/GL-N under those types; preflight refuses a mint
+        # that would collide with a canonical id or resolvable alias in the
+        # existing store (mixed historical stores are permanent).
+        key, number, tracker_identifier = resolve_tracker_first_mint(
+            tracker_identifier, use_json=args.json
+        )
+        preflight_tracker_mint(
+            flow_dir, key, number, suffix, use_json=args.json
         )
         spec_id = f"{key}-{number}-{suffix}"
     else:
@@ -22614,6 +22887,14 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
         use_json=args.json,
         allow_reference=True,
     )
+    # fn-134.2: while tracker.type is github/gitlab, an explicit native
+    # GH-N / GL-N key is reserved for synthesis — reject at link time too.
+    if validated_identifier is not None and validated_identifier[0]:
+        reject_synthetic_prefix_reservation(
+            validated_identifier[0],
+            validated_identifier[2],
+            use_json=args.json,
+        )
 
     spec_json_path, spec_data = _resolve_sync_spec(args)
 
@@ -26533,19 +26814,22 @@ def cmd_validate(args: argparse.Namespace) -> None:
             if num is not None:
                 epic_nums.setdefault(num, []).append(spec_id)
 
-        # Spec ID collisions are repository-level errors. Keep them in the
-        # canonical root inventory so JSON and text render the same failures.
+        # fn-134.2 / R13: duplicate ordinal with distinct full ids is untidy,
+        # not broken — a machine-readable WARNING via top-level root_warnings
+        # (not root_errors). validate --all --json previously had no root-warning
+        # collection, so moving the text into the warning count alone would
+        # print/count it while dropping it from JSON.
+        root_warnings: list[str] = []
         for num in sorted(epic_nums):
             ids = epic_nums[num]
             if len(ids) > 1:
-                root_errors.append(
+                root_warnings.append(
                     f"Spec ID collision: fn-{num} used by multiple specs: {', '.join(sorted(ids))}"
                 )
 
         # One combined inventory drives validity, totals, and text rendering.
         all_errors = list(root_errors)
-
-        all_warnings = []
+        all_warnings = list(root_warnings)
 
         # Detect orphaned spec markdown (md exists but no spec JSON)
         specs_dir = flow_dir / SPECS_DIR
@@ -26595,6 +26879,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
                 {
                     "valid": valid,
                     "root_errors": root_errors,
+                    "root_warnings": root_warnings,
                     "specs": epic_results,
                     "total_specs": len(epic_ids),
                     "total_epics": len(epic_ids),
