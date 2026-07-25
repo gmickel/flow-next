@@ -3073,17 +3073,30 @@ def preflight_tracker_mint(
         bare.lower(),
         f"{key.upper()}-{number}".lower(),
     }
-    # The `#N` display form belongs ONLY to a synthetic gh/gl mint, where
-    # `gh-123` and `#123` genuinely name the same issue. Adding it for a native
-    # key would make an old flow-first spec stored as `#123` block a perfectly
-    # valid, unrelated `WOR-123` mint after a repo re-points from GitHub to
-    # Linear or Jira.
-    if key.lower() in set(_SYNTHETIC_TRACKER_KEYS.values()):
+    # The `#N` display form belongs ONLY to a mint that is synthetic FOR THE
+    # ACTIVE TRACKER, where `gh-123` and `#123` genuinely name the same issue.
+    # Gating on the key string alone is not enough: a Linear or Jira project
+    # legitimately keyed `GH` would mint `gh-123` natively and then be blocked
+    # by an unrelated historical `#123`. Confirm `tracker.type` is the
+    # GitHub/GitLab source this key is synthesized from.
+    synthetic_key = _SYNTHETIC_TRACKER_KEYS.get(get_config("tracker.type") or "")
+    is_synthetic_mint = bool(synthetic_key) and key.lower() == synthetic_key
+    if is_synthetic_mint:
         alias_targets.add(f"#{number}")
     for spec_file in iter_spec_json_files(flow_dir):
         ident_lc, _ = _spec_tracker_fields(spec_file)
-        if ident_lc and ident_lc in alias_targets:
+        if not ident_lc:
+            continue
+        if ident_lc in alias_targets:
             collisions.add(spec_file.stem)
+            continue
+        # A GitLab spec stores the project-qualified `group/project#12`, which
+        # never equals a bare alias. Compare on the parsed issue number so a
+        # `gl-12` mint still collides with the spec already linked to that iid.
+        if is_synthetic_mint and "#" in ident_lc:
+            stored_num = ident_lc.rsplit("#", 1)[-1]
+            if stored_num.isdigit() and int(stored_num) == number:
+                collisions.add(spec_file.stem)
 
     if not collisions:
         return
@@ -18770,10 +18783,12 @@ def _task_h1_title(content: str, task_id: str) -> Optional[str]:
     for line, in_fence in _iter_fence_aware(content.split("\n")):
         if in_fence:
             continue
-        stripped = line.strip()
-        if not stripped.startswith("# "):
+        # Column zero required: an INDENTED code block (`    # id example`)
+        # is markdown code too, and stripping leading whitespace would make
+        # its comment look like the heading.
+        if not line.startswith("# "):
             continue
-        body = stripped[2:].strip()
+        body = line[2:].strip()
         if body == task_id:
             return ""
         prefix = f"{task_id} "
@@ -18796,7 +18811,7 @@ def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
     for i, line in enumerate(lines):
         if i < len(fenced) and fenced[i]:
             continue
-        if line.lstrip().startswith("# "):
+        if line.startswith("# "):   # column zero only - see _task_h1_title
             newline = "\n" if line.endswith("\n") else ""
             lines[i] = f"# {task_id} {title}{newline}"
             return "".join(lines)

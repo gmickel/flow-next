@@ -755,8 +755,14 @@ SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "${TMPDIR:-/tmp}/flow-captur
 BRIDGE_ACTIVE=$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // false')
 
 if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
- # Named existing issue in the request → mint from that key:
+ # Named existing issue in the request → mint from that key, THEN attach + seed.
  # SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "<KEY|#N|project#iid>" --title "$SPEC_TITLE" --json)
+ # Minting stores the identifier but NOT the durable tracker.id, so this branch
+ # MUST also run the fetch/attach/seed ceremony (tracker-sync steps.md Phase 2b)
+ # exactly like the fresh-idea branch below. Skipping it leaves the spec
+ # effectively unlinked: a later lifecycle touchpoint sees no tracker.id, takes
+ # the Phase 3 create-if-unlinked path, and creates a SECOND remote issue
+ # instead of linking the one the user named.
  # Fresh idea → create-first first (tracker-sync steps.md Phase 2d), then mint + attach + seed:
  # skill: flow-next-tracker-sync (operation: create-first, title: "$SPEC_TITLE", body: "<draft seed>")
  # → {id, identifier, url}; on noop / no transport → SILENT fall-through to flow-first below

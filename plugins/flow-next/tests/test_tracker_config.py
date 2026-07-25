@@ -496,6 +496,75 @@ class SyntheticTrackerMintTestCase(unittest.TestCase):
         )
         self.assertEqual(payload["id"], "wor-123-unrelated-linear-issue")
 
+    def test_native_gh_keyed_tracker_is_not_treated_as_synthetic(self) -> None:
+        """A Linear project legitimately keyed `GH` mints natively (PR #241).
+
+        The first fix gated on the key string, so `gh-123` looked synthetic even
+        when tracker.type was linear - and an unrelated historical `#123` blocked
+        it. The gate must confirm tracker.type is the GitHub/GitLab source.
+        """
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        self.flowctl.set_config("tracker.type", "github")
+        flow_first = self._create("Old github linked")
+        self.flowctl.cmd_sync_set_tracker_id(
+            argparse.Namespace(
+                id=flow_first["id"], tracker_id="I_1", identifier="#123",
+                url="https://example/123", json=True,
+            )
+        )
+
+        # Linear team whose native key happens to be GH.
+        self.flowctl.set_config("tracker.type", "linear")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.flowctl.cmd_spec_create(
+                argparse.Namespace(
+                    title="Native gh keyed", branch=None, tracker_first=True,
+                    tracker_identifier="GH-123", json=True,
+                )
+            )
+        payload = json.loads(buf.getvalue())
+        self.assertTrue(
+            payload.get("success"),
+            f"native GH-123 must not be blocked by an unrelated stored #123: {payload}",
+        )
+
+    def test_gitlab_project_qualified_ref_collides_with_a_gl_mint(self) -> None:
+        """A stored `group/project#12` must block minting `gl-12` (PR #241).
+
+        The stored reference never equals a bare alias, so preflight missed it
+        and a duplicate local spec was written before the UUID attach noticed.
+        """
+        import argparse
+        import io
+        from contextlib import redirect_stdout
+
+        self.flowctl.set_config("tracker.type", "gitlab")
+        flow_first = self._create("Already linked gitlab")
+        self.flowctl.cmd_sync_set_tracker_id(
+            argparse.Namespace(
+                id=flow_first["id"], tracker_id="I_gl", identifier="group/project#12",
+                url="https://example/12", json=True,
+            )
+        )
+
+        buf = io.StringIO()
+        with self.assertRaises(SystemExit):
+            with redirect_stdout(buf):
+                self.flowctl.cmd_spec_create(
+                    argparse.Namespace(
+                        title="Duplicate gitlab mint", branch=None,
+                        tracker_first=True, tracker_identifier="group/project#12",
+                        json=True,
+                    )
+                )
+        payload = json.loads(buf.getvalue())
+        self.assertFalse(payload.get("success", True))
+        self.assertIn("Refusing to mint", payload.get("error", ""))
+
     def test_parse_issue_ref_for_mint_shapes(self) -> None:
         self.assertEqual(
             self.flowctl.parse_issue_ref_for_mint("#123"), (123, "#123")

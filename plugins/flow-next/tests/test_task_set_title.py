@@ -215,6 +215,24 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
         self.assertNotIn("Old title", out)
         self.assertEqual(out.count(f"# {self.TASK_ID} New title"), 1)
 
+
+    def test_indented_code_comment_is_not_the_h1(self) -> None:
+        """Indented code is markdown code too (PR #241 follow-up).
+
+        The first fence-aware fix still called `line.strip()`, so a 4-space
+        indented `    # <id> example` block was read as the heading. The marker
+        must be at column zero.
+        """
+        body = (
+            "    # " + self.TASK_ID + " example from an indented block\n"
+            "\n"
+            "# " + self.TASK_ID + " The real title\n"
+        )
+        self.assertEqual(flowctl._task_h1_title(body, self.TASK_ID), "The real title")
+        out = flowctl._task_rewrite_h1(body, self.TASK_ID, "Renamed")
+        self.assertIn("    # " + self.TASK_ID + " example from an indented block", out)
+        self.assertIn("# " + self.TASK_ID + " Renamed", out)
+
     def test_unfenced_h1_still_works(self) -> None:
         plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")

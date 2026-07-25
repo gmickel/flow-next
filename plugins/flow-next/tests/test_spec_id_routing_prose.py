@@ -308,5 +308,44 @@ class SpecIdSetupQuestion(unittest.TestCase):
         )
 
 
+class NamedIssueMintMustAttach(unittest.TestCase):
+    """Every named-issue mint branch must also attach + seed (PR #241 P1).
+
+    `spec create --tracker-first` stores the display identifier but NOT the
+    durable `tracker.id`. Three mint sites minted from a user-named key and
+    stopped there, so the spec was effectively unlinked: the next lifecycle
+    touchpoint took the create-if-unlinked path and opened a SECOND remote
+    issue instead of linking the one the user actually named. Duplicate remote
+    issues are not locally reversible, which is why this is pinned in prose.
+    """
+
+    SITES = {
+        "capture": SKILLS / "flow-next-capture" / "workflow.md",
+        "plan": SKILLS / "flow-next-plan" / "steps.md",
+        "interview": SKILLS / "flow-next-interview" / "references" / "write-back.md",
+    }
+
+    def test_each_named_issue_branch_requires_attach(self) -> None:
+        for name, path in self.SITES.items():
+            with self.subTest(site=name):
+                text = path.read_text(encoding="utf-8")
+                i = text.find("Named existing issue")
+                self.assertNotEqual(i, -1, f"{name}: named-issue branch not found")
+                # The attach obligation must appear in the branch itself, before
+                # the fresh-idea branch that already carries its own attach step.
+                branch = text[i : i + 1200]
+                self.assertIn(
+                    "attach", branch,
+                    f"{name}: named-issue branch mints without attaching - a later "
+                    "touchpoint would create a second remote issue",
+                )
+                self.assertIn(
+                    "tracker.id", branch,
+                    f"{name}: branch does not say WHY attach is required "
+                    "(the durable tracker.id is what is missing)",
+                )
+
+
+
 if __name__ == "__main__":
     unittest.main()
