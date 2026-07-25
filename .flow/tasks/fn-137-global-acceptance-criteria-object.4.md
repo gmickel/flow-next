@@ -9,7 +9,7 @@ Documentation + convergence.
 **Size:** S
 
 ### Approach
-- Docs: G-ID grammar documented beside the R-ID grammar (GLOSSARY + the spec-template/docs pages that define R-IDs), memory-schema/receipts compliance field, teams.md standing-criteria note, setup docs.
+- Docs: G-ID grammar documented beside the R-ID grammar (GLOSSARY + the spec-template/docs pages that define R-IDs), memory-schema/receipts compliance field, teams.md standing-criteria note, setup docs; GLOSSARY 'global criteria (G-ID)' entry references the downstream-consumers strategy note from fn-136.
 - Unreleased CHANGELOG (repo + docs-site walk note); no version bump.
 - Full suite + smoke where touched.
 
