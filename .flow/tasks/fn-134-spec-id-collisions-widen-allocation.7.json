@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-25T09:16:22.553932Z",
+  "depends_on": [
+    "fn-134-spec-id-collisions-widen-allocation.2",
+    "fn-134-spec-id-collisions-widen-allocation.3"
+  ],
+  "id": "fn-134-spec-id-collisions-widen-allocation.7",
+  "priority": null,
+  "spec": "fn-134-spec-id-collisions-widen-allocation",
+  "spec_path": ".flow/tasks/fn-134-spec-id-collisions-widen-allocation.7.md",
+  "status": "todo",
+  "title": "flowctl papercuts: task set-title, converged-review exit code",
+  "updated_at": "2026-07-25T09:19:35.740406Z"
+}
