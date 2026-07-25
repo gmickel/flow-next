@@ -62,9 +62,16 @@ No version bump or changelog entry here unless a release is being cut; this is a
 
 
 ## Done summary
-TBD
+flow-next.dev pass. Six content pages plus the landing page now surface tracker-keyed spec ids as the team default, document the config, and answer the collision question in the reader's own words.
 
+Implemented by grok-4.5 via the grok CLI bridge, in the flow-next.dev repo; reviewed in-host (opus-5). Committed and pushed separately from flow-next as 7f7089f.
+
+`collaboration.mdx` carries the recommendation because it is the page a team actually reads when they hit this. `troubleshooting.mdx` says the thing that matters operationally: a duplicate ordinal is a warning rather than a break, ids never change, and you do NOT renumber. The FAQ entry is phrased as the reader would ask it ("Two of us created specs and both got fn-122 - is the repo broken?") and sits before the page's closing question, matching its voice and heading shape.
+
+REVIEW FINDING: grok self-flagged a page it had not been given - `strategy/core-concepts.mdx` still stated that GitHub `#N` and GitLab `<project>#<iid>` are not `KEY-N` and therefore can only be grabbed flow-first. Synthetic keys make that false, and it is a page a reader may well land on first. Fixed it to describe synthetic minting, the one-tracker-per-repo reasoning that makes it unambiguous, and the collision guard, plus a pointer to the config and to collaboration.mdx. Worth noting the bridge surfaced this itself rather than quietly leaving a stale claim behind.
+
+Verified: no em dashes in any added prose (house style), the CSS added is 81 lines scoped entirely to the new `.notable-*` landing classes with no deletions, and no navbar changes were needed since this adds sections to existing pages rather than new pages. Build gate green: 75 pages, 0 errors.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 7f7089f (flow-next.dev repo)
+- Tests: cd ~/work/flow-next.dev && pnpm build - 75 pages built, 0 errors, 0 warnings, verified no em dashes in added prose across all changed .mdx files, verified CSS diff is +81 lines scoped to .notable-* classes, no deletions, verified no navbar/sidebar changes needed (sections added to existing pages), fixed strategy/core-concepts.mdx false claim that GitHub/GitLab are flow-first-only
 - PRs:
