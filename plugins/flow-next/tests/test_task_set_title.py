@@ -302,6 +302,20 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
         )
         self.assertEqual(flowctl._task_h1_title(body, self.TASK_ID), "The real title")
 
+
+    def test_insert_path_respects_column_zero_delimiters(self) -> None:
+        """The INSERT branch had its own delimiter check (PR #241 wave 15).
+
+        An indented `---` in a block scalar must not be read as the close, or
+        the heading is inserted INTO the frontmatter.
+        """
+        body = "---\nnote: |\n    ---\n    still scalar\n---\n\nBody text.\n"
+        out = flowctl._task_rewrite_h1(body, self.TASK_ID, "Inserted")
+        head, _, tail = out.partition("# " + self.TASK_ID + " Inserted")
+        self.assertEqual(head.count("\n---\n"), 1, "heading landed inside the frontmatter")
+        self.assertIn("still scalar", head)
+        self.assertIn("Body text.", tail)
+
     def test_unfenced_h1_still_works(self) -> None:
         plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")

@@ -498,6 +498,21 @@ fi
 if [ -z "$SPEC_ID" ]; then
   CREATE_OUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json)
   SPEC_ID=$(printf '%s' "$CREATE_OUT" | jq -r '.id // .spec_id // empty')
+  if [ -z "$SPEC_ID" ]; then
+    # NOT every identifier is mintable. A Jira DC/Server project with a custom
+    # key returns `MY_PROJECT-7` (underscore, or >10 chars), which is
+    # DISPLAY-ONLY by design and `--tracker-first` rejects it. The issue is
+    # already created at this point, so retrying re-reads the record and repeats
+    # the same rejected mint forever, never attaching anything.
+    #
+    # Degrade to flow-first AND ATTACH. This does not contradict the orphan
+    # guard at the calling mint sites: that guard forbids creating an fn-N spec
+    # and walking away, whereas here the already-created issue IS linked, which
+    # is exactly the documented display-only behaviour for such keys.
+    SPEC_ID=$($FLOWCTL spec create --title "$TITLE" --json | jq -r '.id // empty')
+    [ -n "$SPEC_ID" ] || { echo "create-first: mint AND flow-first both failed; issue $IDENTIFIER ($ISSUE_URL) is unlinked, retryKey $RETRY_KEY kept" >&2; return 1 2>/dev/null || exit 1; }
+    echo "create-first: '$IDENTIFIER' is display-only (custom Jira key) - minted flow-first $SPEC_ID and linking the existing issue." >&2
+  fi
   # 2b. Record the minted id IMMEDIATELY, before attach can fail - this is what
   #     makes the window between mint and attach resumable.
   $FLOWCTL sync create-first-put --key "$RETRY_KEY" --id "$ISSUE_ID" \

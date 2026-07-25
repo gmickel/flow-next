@@ -18867,11 +18867,16 @@ def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
             lines[i] = f"# {task_id} {title}{newline}"
             return "".join(lines)
     # No H1 — insert after optional YAML frontmatter, else at the top.
+    # Delimiters must be column-zero here for the SAME reason as in
+    # `_iter_task_h1_candidates`: an indented `---` inside a block scalar is
+    # scalar content, and treating it as the close inserts the heading INTO the
+    # frontmatter. (The two paths were fixed separately, which is how this one
+    # kept its own strip-based check - hence the explicit note.)
     if content.startswith("---"):
         parts = content.splitlines(keepends=True)
         close_idx = None
         for i in range(1, len(parts)):
-            if parts[i].strip() == "---":
+            if parts[i].rstrip("\r\n") == "---":
                 close_idx = i
                 break
         if close_idx is not None:
