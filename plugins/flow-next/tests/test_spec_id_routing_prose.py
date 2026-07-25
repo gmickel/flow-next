@@ -323,13 +323,16 @@ class NamedIssueMintMustAttach(unittest.TestCase):
         "capture": SKILLS / "flow-next-capture" / "workflow.md",
         "plan": SKILLS / "flow-next-plan" / "steps.md",
         "interview": SKILLS / "flow-next-interview" / "references" / "write-back.md",
+        # work was omitted from this list originally, which is exactly how the
+        # attach requirement went missing there for a whole review wave.
+        "work": SKILLS / "flow-next-work" / "references" / "spec-id-mint.md",
     }
 
     def test_each_named_issue_branch_requires_attach(self) -> None:
         for name, path in self.SITES.items():
             with self.subTest(site=name):
                 text = path.read_text(encoding="utf-8")
-                i = text.find("Named existing issue")
+                i = min([x for x in (text.find("Named existing issue"), text.find("Named issue")) if x != -1], default=-1)
                 self.assertNotEqual(i, -1, f"{name}: named-issue branch not found")
                 # The attach obligation must appear in the branch itself, before
                 # the fresh-idea branch that already carries its own attach step.
