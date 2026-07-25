@@ -4,6 +4,21 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+## [flow-next 3.4.5] - 2026-07-25
+
+### Changed
+
+- **Opus 5 routing guidance pinned to medium effort - measured, not hedged.**
+  The model-routing scaffold, this repo's CLAUDE.md block, and the
+  orchestration docs now say `opus-5 @ med`: the Opus 5 model card's own
+  FrontierCode figures peak at medium and degrade through high/xhigh
+  (Fig 8.4.A/B, Cognition-scored), and a complete opus-5@medium-conducted
+  pilot-to-land run on this repo (fn-122 -> PR #239) chained plan,
+  plan-review, work, make-pr, and land cleanly with every verdict line
+  artifact-verified. Community reports of Opus 5 stopping early in
+  skill-chained workflows did not reproduce against flow-next's verdict-line
+  and receipt contracts.
+
 ### Added
 
 - **`Harden` — a sixth `/flow-next:audit` outcome that graduates a recurring

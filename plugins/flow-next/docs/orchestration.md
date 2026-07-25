@@ -165,7 +165,7 @@ One controlled pipeline eval (2026-07-14: a hidden 39-check oracle suite for the
 
 The roles are **model-per-role, not host-relative**: the bridges run in both directions (`codex exec` reaches GPT from a Claude host, `claude -p` reaches Claude from a Codex host), so the recommended model for each role is the same everywhere - only the *reach mechanism* differs by host.
 
-Model-generation note (2026-07-24): Claude Opus 5 shipped after this eval - near-Fable intelligence at half the price, same $5/$25 pricing as Opus 4.8. On Claude-family hosts it is now the recommended tier for the "session frontier model" rows below (Plan, final gate), with Fable 5 as the escalation rung rather than the default. The eval numbers stay attributed to the models actually measured.
+Model-generation note (2026-07-24, effort pin added 2026-07-25): Claude Opus 5 shipped after this eval - near-Fable intelligence at half the price, same $5/$25 pricing as Opus 4.8. On Claude-family hosts it is now the recommended tier for the "session frontier model" rows below (Plan, final gate), with Fable 5 as the escalation rung rather than the default. Run Opus 5 at MEDIUM effort: its own model card's FrontierCode curve peaks at medium and degrades through high/xhigh (Fig 8.4.A/B), and a full opus-5@medium-conducted pilot-to-land run on this repo (fn-122, 2026-07-25) chained cleanly end to end. The eval numbers stay attributed to the models actually measured.
 
 | Role | Model | Why | Reach from a Claude Code host | Reach from a Codex host |
 |------|-------|-----|-------------------------------|-------------------------|

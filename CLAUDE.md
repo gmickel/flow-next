@@ -182,7 +182,7 @@ Rankings, higher = better. **cost** = how lightly it rides your subscription quo
 
 | model         | cost | speed | intelligence | taste |
 |---------------|------|-------|--------------|-------|
-| opus-5        | 5    | 4     | 9            | 9     |
+| opus-5 @ med  | 5    | 4     | 9            | 9     |
 | fable-5       | 2    | 2     | 10           | 9     |
 | opus-4.8      | 4    | 3     | 7            | 8     |
 | gpt-5.6-sol   | 8    | 5     | 9            | 6     |
@@ -194,7 +194,7 @@ Rankings, higher = better. **cost** = how lightly it rides your subscription quo
 
 How to apply — defaults, not limits. Unless prompted otherwise, route work across these models as you judge best — no permission needed; an explicit user instruction always overrides this table. Standing permission to escalate: if a cheaper model misses the bar, rerun on a smarter one without asking. Judge the output, not the price tag.
 - For anything that ships, intelligence > taste > cost; cost is a tie-breaker only.
-- Orchestration, planning, review verdicts, anything ambiguous → the session model (whichever row you are running as the conductor). Never delegate judgment. Default conductor/planner in this repo: opus-5 (near-Fable judgment at half the burn, launched 2026-07-23); escalate to fable-5 only when a problem is genuinely frontier-hard.
+- Orchestration, planning, review verdicts, anything ambiguous → the session model (whichever row you are running as the conductor). Never delegate judgment. Default conductor/planner in this repo: opus-5 at MEDIUM effort - measured, not vibes: the model card's own FrontierCode curve peaks at medium and degrades through high/xhigh (Fig 8.4.A/B), and a full opus-5@medium-conducted pilot-to-land run on this repo (fn-122, 2026-07-25) chained cleanly with every verdict artifact-verified. Do not raise opus-5 above medium for conducting or implementation; escalate to fable-5 instead when a problem is genuinely frontier-hard.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7 → keep on the session model even if it looks mechanical.
 - Reviews prefer a different family than the writer — uncorrelated blind spots.
 - Graceful degrade: a routed CLI that is missing, unauthenticated, or errors → report it unavailable and fall back to the session model. Never block.

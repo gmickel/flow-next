@@ -7,7 +7,7 @@ Rankings, higher = better. **cost** = how lightly it rides your subscription quo
 
 | model         | cost | speed | intelligence | taste |
 |---------------|------|-------|--------------|-------|
-| opus-5        | 5    | 4     | 9            | 9     |
+| opus-5 @ med  | 5    | 4     | 9            | 9     |
 | fable-5       | 2    | 2     | 10           | 9     |
 | opus-4.8      | 4    | 3     | 7            | 8     |
 | gpt-5.6-sol   | 8    | 5     | 9            | 6     |
@@ -24,7 +24,7 @@ How to apply — defaults, not limits. Unless prompted otherwise, route work acr
 - Reviews prefer a different family than the writer — uncorrelated blind spots.
 - Graceful degrade: a routed CLI that is missing, unauthenticated, or errors → report it unavailable and fall back to the session model. Never block.
 
-Recommended default pipeline (swap any row to taste): the SESSION model authors specs — capture, interview, plan; that is where plan quality is made (on Claude-family hosts, opus-5 is the recommended session tier: near-Fable judgment at roughly half the burn; fable-5 is the escalation rung for frontier-hard plans, not the default) — then gpt-5.6-terra @ medium implements via the implementation routes below (packaged delegation on Claude Code; the same-family self-bridge on a Codex host until MAv2 role pins are reliable), then reviews go to the strongest reviewer from a DIFFERENT family than the writer (single-subscription fallback: the strongest same-family model that did not write the diff). On Claude Code this resolves to opus-5 → terra → sol; on a Codex host to sol → terra → opus-5 when a Claude CLI is installed, else sol.
+Recommended default pipeline (swap any row to taste): the SESSION model authors specs — capture, interview, plan; that is where plan quality is made (on Claude-family hosts, opus-5 at MEDIUM effort is the recommended session tier: near-Fable judgment at roughly half the burn, and medium is measured as its peak - the model card's FrontierCode curve tops out at medium and degrades through high/xhigh, so do not raise opus-5's effort; fable-5 is the escalation rung for frontier-hard plans, not the default) — then gpt-5.6-terra @ medium implements via the implementation routes below (packaged delegation on Claude Code; the same-family self-bridge on a Codex host until MAv2 role pins are reliable), then reviews go to the strongest reviewer from a DIFFERENT family than the writer (single-subscription fallback: the strongest same-family model that did not write the diff). On Claude Code this resolves to opus-5 → terra → sol; on a Codex host to sol → terra → opus-5 when a Claude CLI is installed, else sol.
 
 flow-next wiring — roles with a MENU, not fixed pairings: pick per task. Claude tiers run natively (spawn subagents with the model parameter); other families ride the headless bridges — recipes: run `flowctl usage` § Orchestration & model steering (copy-mode repos also have it on disk at `.flow/usage.md`). Probe-marked lines are live only if their CLI is installed:
 - Implementation, native: a worker/subagent on opus-5 (quality) or sonnet-5 (speed) via the model parameter.
