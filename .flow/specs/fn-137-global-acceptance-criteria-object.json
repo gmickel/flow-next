@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-137-global-acceptance-criteria-object",
+  "created_at": "2026-07-25T11:56:54.670712Z",
+  "depends_on_epics": [],
+  "id": "fn-137-global-acceptance-criteria-object",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-137-global-acceptance-criteria-object.md",
+  "status": "open",
+  "title": "Global acceptance criteria object",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-25T11:57:07.352948Z"
+}
