@@ -82,7 +82,7 @@ class TestMemorySchemaConstants(unittest.TestCase):
     def test_enums_nonempty(self) -> None:
         self.assertTrue(len(flowctl.MEMORY_PROBLEM_TYPES) > 0)
         self.assertTrue(len(flowctl.MEMORY_RESOLUTION_TYPES) > 0)
-        self.assertEqual(flowctl.MEMORY_STATUS, ("active", "stale"))
+        self.assertEqual(flowctl.MEMORY_STATUS, ("active", "stale", "hardened"))
 
 
 # --- Inline YAML parser ---

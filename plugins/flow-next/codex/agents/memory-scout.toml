@@ -42,7 +42,7 @@ Narrow with flags when context is known:
 | `--category <cat>` | Spec says "this is a performance issue" / "auth change" |
 | `--module <path>` | Task touches a specific file — strongest relevance signal |
 | `--tags "a,b"` | Rough topical filter |
-| `--status active` (default) / `--status stale` / `--status all` | Skip stale entries by default |
+| `--status active` (default) / `--status stale` / `--status hardened` / `--status all` | Skip stale **and hardened** entries by default |
 | `--limit N` (search only) | Cap noisy matches |
 
 Legacy hits in `search` appear with `track: "legacy"`, `category` set from the file map (`pitfall` / `convention` / `decision`), and entry ids like `legacy/pitfalls#3`.
@@ -79,6 +79,7 @@ No relevant entries in project memory.
 ## Rules
 
 - Never read memory files directly — always go through `flowctl memory list|search|read`.
+- **Hardened entries are excluded from default retrieval by the same status filter as stale** (default `--status active` drops both). An entry that used to surface and no longer does may have been hardened by `/flow-next:audit` — the lesson now lives in a lint rule, CI step, or instruction-file rule named by its `hardened_into` field, so the gate enforces it instead of the context window. That disappearance is expected, not a bug; `--status hardened` shows them if you need the provenance.
 - Return at most 5–10 items; prefer specificity over recall.
 - Prefer new-schema (`bug/*`, `knowledge/*`) over `legacy/*` when both cover the same topic.
 - **When two entries conflict or overlap, prefer the newer** (slug date / recency) and note the superseded one only if it's still load-bearing — flowctl's search ranks by token overlap, not recency, so a stale entry can otherwise outrank its own correction.

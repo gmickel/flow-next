@@ -48,6 +48,12 @@ The gate-layer counterpart introduced by fn-102: a per-file JSON record at `.flo
 
 _Relates to_: Triage skip, Receipt
 
+## Harden (audit outcome)
+
+The sixth `/flow-next:audit` outcome (fn-122), alongside Keep / Update / Consolidate / Replace / Delete: graduating a memory entry that is correct, **recurring**, and **mechanizable** into an enforced gate — a lint rule, a CI step, or a rule in the substantive `CLAUDE.md` / `AGENTS.md`. The gate is verified live before the lesson is retired; only then is the entry demoted via `flowctl memory mark-hardened` to `status: hardened` with `hardened_into` pointing at the gate. The file stays on disk as a pointer, so provenance survives, and default `memory list` / `search` / `memory-scout` stop surfacing it — the gate enforces the lesson instead of the context window. `flowctl memory mark-fresh` un-graduates when the gate is later removed. Not security hardening; not a synonym for stale. Precedence: correctness (Replace / Delete) > Consolidate > Harden.
+
+_Relates to_: Receipt, Verdict
+
 ## Worker subagent
 
 A subagent dispatched by `/flow-next:work` to implement a single task with fresh context. Re-anchors on the spec + task + git state (one `flowctl anchor` bundle — same information as the old discrete reads, one call), implements the task, records evidence (commits + tests + done summary), and exits. In a parallel wave, each worker uses an isolated mutable workspace and returns task-unique handover files; the conductor joins and integrates the wave before review, completion, tracker updates, and plan-sync. Fresh context prevents context bleed. Atomic claims prevent duplicate ownership. Neither substitutes for filesystem and Git isolation.

@@ -4,12 +4,12 @@ date: "2026-06-10"
 track: bug
 category: build-errors
 module: plugins/flow-next/skills/flow-next-pilot/workflow.md
-tags: [fn-59, pilot, skill-authoring, flowctl-json, task-status, rp-review, fn-68, backlog-mode, safety-gates, dry-run, review-feedback, fn-82, skill-prose, dedupe, progressive-disclosure]
+tags: [fn-59, pilot, skill-authoring, flowctl-json, task-status, rp-review, fn-68, backlog-mode, safety-gates, dry-run, review-feedback, fn-82, skill-prose, dedupe, progressive-disclosure, fn-122, docs-accuracy, memory-schema, validation]
 problem_type: build-error
 symptoms: "RP impl-review 2x NEEDS_WORK: assignee read from listing that lacks it, phantom flowctl whoami, ready/open vs todo status enum, var used before assignment"
 root_cause: "Workflow bash written from spec vocabulary without verifying flowctl JSON emitters, status enums, and subcommand existence"
 resolution_type: fix
-last_updated: "2026-07-02"
+last_updated: "2026-07-24"
 ---
 
 ## Problem
@@ -64,3 +64,34 @@ Commit 691c9a2d: pointers reduced to bare section references (`(backlog-mode.md 
 
 ## Prevention
 When a spec says "delegate prose with a one-line pointer per phase": the pointer names the owning file+section and NOTHING of the mechanics. Before committing, re-read each pointer and ask "does any clause here restate what the reference says?" — if yes, cut it. Keep only content the reference genuinely does not own (enforcing bash, invariants, verdict grammar, mode-specific rules like dry-run).
+
+## Update 2026-07-24
+
+## Problem
+fn-122.3 (docs sweep for the `hardened` memory status) wrote a status matrix in
+`plugins/flow-next/docs/memory-schema.md` with a "Required fields" column,
+claiming `stale_reason` / `stale_date` are required for `status: stale` and that
+"every mutation enforces the whole invariant set". Codex impl-review caught it
+(Major, confidence 100): neither claim is true.
+
+## What Didn't Work
+Reading the SPEC's field-invariant matrix (R14) and transcribing it as if it
+described enforcement. The spec's matrix describes what the `mark-*` HANDLERS
+write and clear - a behavioral contract - not what the validator requires.
+
+## Solution
+Verified against `validate_memory_frontmatter` (flowctl.py): status validation is
+**enum-only** (`status in MEMORY_STATUS`) plus an unknown-key check. No companion
+field is required for any status, and `cmd_memory_mark_stale` never populates
+`stale_reason` / `stale_date` at all - it records the reason in `audit_notes`.
+Rewrote the table columns as `Set by` / `Companion fields written` /
+`Companion fields cleared`, added an explicit "validation is enum-only" note, and
+said plainly that a hand-edited `status: stale` entry without `stale_reason`
+still validates. Same correction applied to `docs/flowctl.md`.
+
+## Prevention
+When documenting a schema invariant, grep the VALIDATOR for the field before
+writing "required": an invariant the handlers maintain is not an invariant the
+schema enforces, and conflating them makes the canonical doc lie. Read the
+handler body too - a field named in the spec matrix may never be written by any
+shipped code path.

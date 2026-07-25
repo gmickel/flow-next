@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from collections import Counter
+from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
@@ -54,14 +55,41 @@ class TestMemoryReadBudgets(unittest.TestCase):
         self._tmp.cleanup()
 
     def _count_reads(self):
+        """Count content reads regardless of which primitive did the read.
+
+        `_memory_read_entry` reads through `Path.open(newline="")` — newline
+        translation has to stay off so a CRLF body survives a frontmatter-only
+        rewrite — while the metadata path still uses `Path.read_text`.
+        Instrument both, or the budget assertions silently measure nothing.
+        """
         real_read = Path.read_text
+        real_open = Path.open
         counts: Counter[str] = Counter()
+        # `read_text` is implemented on top of `open`; the depth guard keeps a
+        # single logical read from being counted by both wrappers.
+        depth: list[int] = []
 
         def counting_read(path, *args, **kwargs):
             counts[str(path)] += 1
-            return real_read(path, *args, **kwargs)
+            depth.append(1)
+            try:
+                return real_read(path, *args, **kwargs)
+            finally:
+                depth.pop()
 
-        return mock.patch.object(Path, "read_text", counting_read), counts
+        def counting_open(path, *args, **kwargs):
+            mode = kwargs.get("mode", args[0] if args else "r")
+            if not depth and not any(flag in mode for flag in ("w", "a", "x", "+")):
+                counts[str(path)] += 1
+            return real_open(path, *args, **kwargs)
+
+        @contextmanager
+        def patcher():
+            with mock.patch.object(Path, "read_text", counting_read):
+                with mock.patch.object(Path, "open", counting_open):
+                    yield
+
+        return patcher(), counts
 
     def test_metadata_and_search_iterations_read_each_entry_once(self) -> None:
         patcher, counts = self._count_reads()

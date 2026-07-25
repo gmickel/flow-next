@@ -9214,6 +9214,7 @@ MEMORY_OPTIONAL_FIELDS: frozenset[str] = frozenset(
         "status",
         "stale_reason",
         "stale_date",
+        "hardened_into",
         "last_updated",
         "last_audited",
         "audit_notes",
@@ -9249,7 +9250,14 @@ MEMORY_RESOLUTION_TYPES: tuple[str, ...] = (
     "refactor",
 )
 
-MEMORY_STATUS: tuple[str, ...] = ("active", "stale")
+# `hardened` (fn-122): the lesson graduated into an enforced gate (lint rule,
+# CI step, instruction-file rule). Not stale — the lesson is MORE alive, just
+# relocated out of the context window. Field invariants per status:
+#   active   → no `hardened_into`, no `stale_reason`/`stale_date`
+#   stale    → `stale_reason`/`stale_date`, no `hardened_into`
+#   hardened → `hardened_into`, no `stale_reason`/`stale_date`
+# Every mutation enforces the whole set, not just its own field.
+MEMORY_STATUS: tuple[str, ...] = ("active", "stale", "hardened")
 
 # Decision lifecycle for `decisions` category entries (fn-38 task 1).
 MEMORY_DECISION_STATUSES: tuple[str, ...] = ("proposed", "accepted", "superseded")
@@ -9274,6 +9282,7 @@ MEMORY_FIELD_ORDER: tuple[str, ...] = (
     "status",
     "stale_reason",
     "stale_date",
+    "hardened_into",
     "last_updated",
     "last_audited",
     "audit_notes",
@@ -9360,11 +9369,7 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
             q = value[0]
             value = value[1:-1]
             if q == '"':
-                value = (
-                    value.replace("\\\\", "\x00")
-                    .replace('\\"', '"')
-                    .replace("\x00", "\\")
-                )
+                value = _unquote_yaml_double(value)
             result[key] = value
             continue
         # Inline list: [a, b, c]
@@ -9385,11 +9390,7 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                         q = item[0]
                         item = item[1:-1]
                         if q == '"':
-                            item = (
-                                item.replace("\\\\", "\x00")
-                                .replace('\\"', '"')
-                                .replace("\x00", "\\")
-                            )
+                            item = _unquote_yaml_double(item)
                     cleaned.append(item)
                 result[key] = cleaned
             continue
@@ -9549,6 +9550,10 @@ def _yaml_scalar_needs_quoting(text: str) -> bool:
     # Leading/trailing whitespace is lost or mis-parsed if left unquoted.
     if text != text.strip():
         return True
+    # Line breaks and other control characters would terminate the scalar
+    # mid-value and produce malformed frontmatter. Quoted form escapes them.
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text):
+        return True
     # Block-sequence / mapping-key indicators: bare `-`/`?` or followed by space.
     if text.startswith(("- ", "? ")) or text in {"-", "?"}:
         return True
@@ -9559,10 +9564,59 @@ def _yaml_scalar_needs_quoting(text: str) -> bool:
     return False
 
 
+_YAML_ESCAPES: tuple[tuple[str, str], ...] = (
+    ("\n", "\\n"),
+    ("\r", "\\r"),
+    ("\t", "\\t"),
+)
+
+
 def _quote_yaml_scalar(text: str) -> str:
-    """Double-quote a scalar with embedded quotes escaped."""
+    """Double-quote a scalar, escaping quotes and control characters.
+
+    Line breaks and other C0/DEL characters must be escaped, not emitted
+    raw: an unescaped newline splits the scalar across lines and produces
+    frontmatter that reads back as `{}` (silent data loss on the next read).
+    """
     escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    for raw, repl in _YAML_ESCAPES:
+        escaped = escaped.replace(raw, repl)
+    escaped = "".join(
+        ch if ord(ch) >= 0x20 and ord(ch) != 0x7F else f"\\x{ord(ch):02x}"
+        for ch in escaped
+    )
     return f'"{escaped}"'
+
+
+def _unquote_yaml_double(value: str) -> str:
+    """Reverse `_quote_yaml_scalar` for the no-PyYAML inline parser."""
+    out: list[str] = []
+    i = 0
+    while i < len(value):
+        ch = value[i]
+        if ch != "\\" or i + 1 >= len(value):
+            out.append(ch)
+            i += 1
+            continue
+        nxt = value[i + 1]
+        if nxt == "n":
+            out.append("\n")
+        elif nxt == "r":
+            out.append("\r")
+        elif nxt == "t":
+            out.append("\t")
+        elif nxt == "x" and i + 3 < len(value):
+            try:
+                out.append(chr(int(value[i + 2 : i + 4], 16)))
+            except ValueError:
+                out.append(nxt)
+            else:
+                i += 4
+                continue
+        else:
+            out.append(nxt)
+        i += 2
+    return "".join(out)
 
 
 def _format_yaml_list_item(item: Any) -> str:
@@ -9598,11 +9652,23 @@ def _frontmatter_sort_key(field: str) -> tuple[int, str]:
         return (len(MEMORY_FIELD_ORDER), field)
 
 
-def write_memory_entry(path: Path, frontmatter: dict[str, Any], body: str) -> None:
+def write_memory_entry(
+    path: Path,
+    frontmatter: dict[str, Any],
+    body: str,
+    *,
+    raw_body: Optional[str] = None,
+) -> None:
     """Write a memory entry with deterministic field order.
 
     Validates required fields before writing. Raises ValueError on invalid
     frontmatter so callers can surface a clean error.
+
+    `raw_body` is the verbatim post-frontmatter segment (everything after the
+    closing `---`, its newline included) as read off disk. When given it is
+    emitted byte for byte and `body` is ignored — frontmatter-only mutations
+    (the audit `mark-*` handlers) must not reflow a body they never edited.
+    Omit it for new entries and let the normalizing path run.
     """
     errors = validate_memory_frontmatter(frontmatter)
     if errors:
@@ -9613,6 +9679,15 @@ def write_memory_entry(path: Path, frontmatter: dict[str, Any], body: str) -> No
         rendered = _format_yaml_value(frontmatter[key], key)
         lines.append(f"{key}: {rendered}")
     lines.append("---")
+    if raw_body is not None:
+        # `raw_body` starts with the closing `---` line's own terminator, so
+        # it also tells us which line ending the file uses. Emit the rewritten
+        # frontmatter with the same one — a CRLF-authored entry must not come
+        # back with an LF frontmatter block (whole-header diff on Windows).
+        newline = "\r\n" if raw_body.startswith("\r\n") else "\n"
+        content = newline.join(lines) + raw_body
+        atomic_write(path, content)
+        return
     lines.append("")
     # Body gets a trailing newline to keep round-trip clean.
     body_text = body.rstrip("\n") + "\n" if body else ""
@@ -10374,19 +10449,28 @@ def _memory_read_entry(
 ) -> dict[str, Any]:
     """Read a memory entry file once into {frontmatter, body, raw}.
 
+    `raw` is byte-verbatim: the file is opened with newline translation
+    disabled so a CRLF-authored entry keeps its CRLF line endings. That is
+    what `_memory_raw_body` hands to `write_memory_entry(raw_body=...)`, so
+    frontmatter-only rewrites cannot silently reflow a Windows body to LF.
+    `frontmatter`/`body` are derived from a universal-newline view — the
+    parsers and every body consumer expect LF.
+
     Returns {"frontmatter": {}, "body": ""} on any failure so callers can
     continue the overlap scan past a malformed entry.
     """
     try:
-        text = path.read_text(encoding="utf-8")
+        with path.open(encoding="utf-8", newline="") as handle:
+            raw = handle.read()
     except OSError:
         if raise_errors:
             raise
         return {"frontmatter": {}, "body": "", "raw": ""}
+    text = raw.replace("\r\n", "\n").replace("\r", "\n")
     envelope = _frontmatter_envelope(text)
     fm = _parse_memory_frontmatter_text(text)
     body = envelope.body.lstrip("\n") if envelope.complete else text
-    return {"frontmatter": fm, "body": body, "raw": text}
+    return {"frontmatter": fm, "body": body, "raw": raw}
 
 
 def _memory_score_overlap(
@@ -11448,7 +11532,7 @@ def cmd_memory_list(args: argparse.Namespace) -> None:
     Filters:
       --track bug|knowledge
       --category <cat>
-      --status active|stale|all   (default: active)
+      --status active|stale|hardened|all   (default: active)
 
     Legacy flat files are reported as synthetic entries when present.
     """
@@ -11457,9 +11541,10 @@ def cmd_memory_list(args: argparse.Namespace) -> None:
     track = getattr(args, "track", None)
     category = getattr(args, "category", None)
     status_filter = getattr(args, "status", "active") or "active"
-    if status_filter not in ("active", "stale", "all"):
+    if status_filter not in ("active", "stale", "hardened", "all"):
         error_exit(
-            f"invalid --status '{status_filter}' (valid: active, stale, all)",
+            f"invalid --status '{status_filter}' "
+            f"(valid: active, stale, hardened, all)",
             use_json=args.json,
         )
 
@@ -11477,11 +11562,13 @@ def cmd_memory_list(args: argparse.Namespace) -> None:
 
     entries = _memory_iter_entries(memory_dir, track=track, category=category)
 
-    # Apply status filter.
+    # Apply status filter. Default `active` excludes BOTH stale and hardened
+    # (a hardened lesson now lives in a gate — re-injecting it as context is
+    # exactly what hardening retires). Keep in lockstep with cmd_memory_search.
     if status_filter == "active":
-        filtered = [e for e in entries if e["status"] != "stale"]
-    elif status_filter == "stale":
-        filtered = [e for e in entries if e["status"] == "stale"]
+        filtered = [e for e in entries if e["status"] not in ("stale", "hardened")]
+    elif status_filter in ("stale", "hardened"):
+        filtered = [e for e in entries if e["status"] == status_filter]
     else:
         filtered = list(entries)
 
@@ -11515,6 +11602,11 @@ def cmd_memory_list(args: argparse.Namespace) -> None:
                 "date": e["date"],
                 "status": e["status"],
                 "path": e["path"],
+                **(
+                    {"hardened_into": str(e["frontmatter"].get("hardened_into"))}
+                    if e["frontmatter"].get("hardened_into")
+                    else {}
+                ),
             }
             for e in filtered
         ]
@@ -11532,7 +11624,9 @@ def cmd_memory_list(args: argparse.Namespace) -> None:
     if not filtered and not legacy_info:
         print("No memory entries.")
         if status_filter == "active":
-            print("  (run with --status all to include stale entries)")
+            print(
+                "  (run with --status all to include stale + hardened entries)"
+            )
         return
 
     from collections import defaultdict
@@ -11550,6 +11644,8 @@ def cmd_memory_list(args: argparse.Namespace) -> None:
                 suffix = f" (module: {e['module']})"
             if e["status"] == "stale":
                 suffix += " [stale]"
+            elif e["status"] == "hardened":
+                suffix += " [hardened]"
             print(
                 f"  {e['slug']}-{e['date']} — \"{title}\"{suffix}"
             )
@@ -11666,9 +11762,10 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
             f"(valid: {', '.join(MEMORY_CATEGORIES[track])})",
             use_json=args.json,
         )
-    if status_filter not in ("active", "stale", "all"):
+    if status_filter not in ("active", "stale", "hardened", "all"):
         error_exit(
-            f"invalid --status '{status_filter}' (valid: active, stale, all)",
+            f"invalid --status '{status_filter}' "
+            f"(valid: active, stale, hardened, all)",
             use_json=args.json,
         )
 
@@ -11693,13 +11790,14 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
             for e in entries
             if tag_filter_set & {t.lower() for t in e["tags"]}
         ]
-    # Status filter — mirrors cmd_memory_list. Default `active` excludes
-    # stale-flagged entries from search results so the audit lifecycle
-    # actually keeps stale advice out of memory-scout / agent context.
+    # Status filter — mirrors cmd_memory_list. Default `active` excludes both
+    # stale-flagged and hardened entries from search results so the audit
+    # lifecycle actually keeps retired advice out of memory-scout / agent
+    # context. Keep in lockstep with cmd_memory_list.
     if status_filter == "active":
-        entries = [e for e in entries if e["status"] != "stale"]
-    elif status_filter == "stale":
-        entries = [e for e in entries if e["status"] == "stale"]
+        entries = [e for e in entries if e["status"] not in ("stale", "hardened")]
+    elif status_filter in ("stale", "hardened"):
+        entries = [e for e in entries if e["status"] == status_filter]
 
     results: list[dict[str, Any]] = []
     for e in entries:
@@ -11733,6 +11831,11 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
                 "score": round(score, 2),
                 "snippet": snippet,
                 "path": e["path"],
+                **(
+                    {"hardened_into": str(fm.get("hardened_into"))}
+                    if fm.get("hardened_into")
+                    else {}
+                ),
             }
         )
 
@@ -11741,14 +11844,15 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
     # Legacy substring search — only when no track/category filter
     # (legacy has no track/category metadata). Legacy entries have no
     # `status` field; treat them as implicitly active. Skip entirely on
-    # --status stale (audit-flag query); include on active (default) + all.
+    # --status stale / hardened (audit-flag queries); include on active
+    # (default) + all.
     legacy_results: list[dict[str, Any]] = []
     if (
         track is None
         and category is None
         and not tag_filter_set
         and not module_filter
-        and status_filter != "stale"
+        and status_filter not in ("stale", "hardened")
     ):
         for filename in MEMORY_LEGACY_FILES:
             path = memory_dir / filename
@@ -11859,12 +11963,24 @@ def _memory_resolve_categorized_entry(
     return resolved["entry"]
 
 
+def _memory_raw_body(data: dict[str, Any]) -> Optional[str]:
+    """Verbatim post-frontmatter segment for a frontmatter-only rewrite.
+
+    Returns None when the file has no complete envelope, so the caller falls
+    back to `write_memory_entry`'s normalizing path.
+    """
+    envelope = _frontmatter_envelope(data.get("raw", "") or "")
+    return envelope.body if envelope.complete else None
+
+
 def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
     """Flag a memory entry as stale.
 
     Sets `status: stale`, stamps `last_audited` (today, UTC), records
     `audit_notes` from `--reason` (and an optional `(audited-by: …)`
-    suffix). Body preserved. Atomic via `write_memory_entry`.
+    suffix), and drops `hardened_into` (per-status field invariant — a
+    stale entry cannot keep pointing at a gate it no longer claims).
+    Body preserved. Atomic via `write_memory_entry`.
 
     Idempotent: re-marking a stale entry updates `last_audited` +
     `audit_notes` (the new reason replaces the old). No error.
@@ -11889,6 +12005,7 @@ def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
     data = _memory_read_entry(path)
     fm = dict(data["frontmatter"])
     body = data["body"]
+    raw_body = _memory_raw_body(data)
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -11899,9 +12016,12 @@ def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
     fm["status"] = "stale"
     fm["last_audited"] = today
     fm["audit_notes"] = audit_notes
+    # Per-status field invariant (fn-122): a stale entry never keeps a pointer
+    # to a gate it no longer claims.
+    fm.pop("hardened_into", None)
 
     try:
-        write_memory_entry(path, fm, body)
+        write_memory_entry(path, fm, body, raw_body=raw_body)
     except ValueError as exc:
         error_exit(f"failed to write entry: {exc}", use_json=args.json)
 
@@ -11924,11 +12044,13 @@ def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
 
 
 def cmd_memory_mark_fresh(args: argparse.Namespace) -> None:
-    """Clear stale flag on a memory entry.
+    """Clear the stale flag / hardened pointer on a memory entry.
 
     Resets `status` to active (default — field is removed from
-    frontmatter), clears `audit_notes`, stamps `last_audited` (today, UTC).
-    Idempotent: marking a non-stale entry just stamps `last_audited`.
+    frontmatter), clears `audit_notes`, drops `hardened_into` (the
+    un-graduation escape hatch when a gate is later removed), stamps
+    `last_audited` (today, UTC). Idempotent: marking an already-active entry
+    just stamps `last_audited`.
     """
     memory_dir = require_memory_enabled(args)
 
@@ -11943,13 +12065,22 @@ def cmd_memory_mark_fresh(args: argparse.Namespace) -> None:
     data = _memory_read_entry(path)
     fm = dict(data["frontmatter"])
     body = data["body"]
+    raw_body = _memory_raw_body(data)
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Reset to active default — drop optional stale fields entirely so the
     # frontmatter stays minimal. `status: active` is the implicit default,
     # so we omit it from the file rather than write it explicitly.
-    for key in ("status", "stale_reason", "stale_date", "audit_notes"):
+    # `hardened_into` is dropped too (fn-122): mark-fresh is the un-graduation
+    # escape hatch, so both the stale family and the hardened pointer go.
+    for key in (
+        "status",
+        "stale_reason",
+        "stale_date",
+        "hardened_into",
+        "audit_notes",
+    ):
         fm.pop(key, None)
     if audited_by:
         # Audited-by on mark-fresh is just a breadcrumb; keep it concise.
@@ -11957,7 +12088,7 @@ def cmd_memory_mark_fresh(args: argparse.Namespace) -> None:
     fm["last_audited"] = today
 
     try:
-        write_memory_entry(path, fm, body)
+        write_memory_entry(path, fm, body, raw_body=raw_body)
     except ValueError as exc:
         error_exit(f"failed to write entry: {exc}", use_json=args.json)
 
@@ -11978,6 +12109,96 @@ def cmd_memory_mark_fresh(args: argparse.Namespace) -> None:
     print(f"  last_audited: {today}")
     if fm.get("audit_notes"):
         print(f"  audit_notes: {fm['audit_notes']}")
+
+
+def cmd_memory_mark_hardened(args: argparse.Namespace) -> None:
+    """Demote a memory entry to a pointer at an enforced gate (fn-122).
+
+    Sets `status: hardened` and `hardened_into` (the `--gate-ref` value,
+    stored VERBATIM — flowctl does not parse or validate the skill-side
+    `<path>#<rule-id> -- <note>` convention, only non-emptiness), stamps
+    `last_audited` (today, UTC date), records optional `audit_notes` from
+    `--audited-by`, and clears the stale-only fields so the frontmatter is
+    consistent with exactly one status. Atomic via `write_memory_entry`.
+
+    Body: never modified — the exact body segment is read and written back.
+    The shared read/write pair normalizes blank lines at the body EDGES
+    (`_memory_read_entry` drops leading newlines, `write_memory_entry`
+    collapses trailing ones to a single `\\n`); that is the pre-existing
+    round-trip contract of every memory writer, identical for `mark-stale` /
+    `mark-fresh`, and a no-op on any entry flowctl itself wrote.
+
+    Idempotent: re-marking a hardened entry replaces `hardened_into`
+    (`last_audited` is date precision, so a same-day re-mark is a no-op on
+    that field).
+    """
+    memory_dir = require_memory_enabled(args)
+
+    entry_id = args.id
+    # Verbatim storage: the raw value is what lands in `hardened_into`; the
+    # stripped copy exists ONLY for the non-emptiness check. (The YAML writer
+    # quotes edge-whitespace scalars, so a padded value round-trips intact.)
+    gate_ref = getattr(args, "gate_ref", None) or ""
+    if not gate_ref.strip():
+        error_exit(
+            "--gate-ref is required (the gate this lesson graduated into, "
+            'e.g. "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes")',
+            code=2,
+            use_json=args.json,
+        )
+    audited_by = (getattr(args, "audited_by", None) or "").strip()
+
+    entry = _memory_resolve_categorized_entry(
+        memory_dir, entry_id, use_json=args.json, command="mark-hardened"
+    )
+
+    path = Path(entry["path"])
+    data = _memory_read_entry(path)
+    fm = dict(data["frontmatter"])
+    body = data["body"]
+    raw_body = _memory_raw_body(data)
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    fm["status"] = "hardened"
+    fm["hardened_into"] = gate_ref
+    fm["last_audited"] = today
+    # Per-status field invariant (fn-122): hardened is not stale, so the
+    # stale-only pair never survives the flip (`stale -> hardened` is legal).
+    fm.pop("stale_reason", None)
+    fm.pop("stale_date", None)
+
+    audit_notes = ""
+    if audited_by:
+        audit_notes = f"hardened into {gate_ref} (audited-by: {audited_by})"
+        fm["audit_notes"] = audit_notes
+    else:
+        fm.pop("audit_notes", None)
+
+    try:
+        write_memory_entry(path, fm, body, raw_body=raw_body)
+    except ValueError as exc:
+        error_exit(f"failed to write entry: {exc}", use_json=args.json)
+
+    if args.json:
+        json_output(
+            {
+                "id": entry["entry_id"],
+                "path": str(path),
+                "status": "hardened",
+                "hardened_into": gate_ref,
+                "last_audited": today,
+                "audit_notes": audit_notes,
+            }
+        )
+        return
+
+    print(f"Hardened: {entry['entry_id']}")
+    print(f"  path: {path}")
+    print(f"  hardened_into: {gate_ref}")
+    print(f"  last_audited: {today}")
+    if audit_notes:
+        print(f"  audit_notes: {audit_notes}")
 
 
 # --- Migration (fn-30 task 4) ---
@@ -30297,9 +30518,9 @@ def main() -> None:
     p_memory_list.add_argument("--category", help="Filter by category")
     p_memory_list.add_argument(
         "--status",
-        choices=["active", "stale", "all"],
+        choices=["active", "stale", "hardened", "all"],
         default="active",
-        help="Filter by status (default: active)",
+        help="Filter by status (default: active — excludes stale + hardened)",
     )
     p_memory_list.add_argument("--json", action="store_true", help="JSON output")
     p_memory_list.set_defaults(func=cmd_memory_list)
@@ -30327,9 +30548,9 @@ def main() -> None:
     )
     p_memory_search.add_argument(
         "--status",
-        choices=["active", "stale", "all"],
+        choices=["active", "stale", "hardened", "all"],
         default="active",
-        help="Filter by status (default: active)",
+        help="Filter by status (default: active — excludes stale + hardened)",
     )
     p_memory_search.add_argument("--json", action="store_true", help="JSON output")
     p_memory_search.set_defaults(func=cmd_memory_search)
@@ -30381,6 +30602,40 @@ def main() -> None:
         "--json", action="store_true", help="JSON output"
     )
     p_memory_mark_fresh.set_defaults(func=cmd_memory_mark_fresh)
+
+    # memory mark-hardened (fn-122 task 1)
+    p_memory_mark_hardened = memory_sub.add_parser(
+        "mark-hardened",
+        help=(
+            "Demote a memory entry to a pointer at an enforced gate "
+            "(sets status: hardened, hardened_into, last_audited)"
+        ),
+    )
+    p_memory_mark_hardened.add_argument(
+        "id",
+        help=(
+            "Entry id — full (track/category/slug-date), slug+date, or slug "
+            "(latest date wins). Legacy ids are not supported."
+        ),
+    )
+    p_memory_mark_hardened.add_argument(
+        "--gate-ref",
+        dest="gate_ref",
+        required=True,
+        help=(
+            "Reference to the gate the lesson graduated into, stored verbatim "
+            '(convention: "<path>#<rule-id> -- <note>")'
+        ),
+    )
+    p_memory_mark_hardened.add_argument(
+        "--audited-by",
+        dest="audited_by",
+        help="Optional auditor identifier recorded in audit_notes",
+    )
+    p_memory_mark_hardened.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_memory_mark_hardened.set_defaults(func=cmd_memory_mark_hardened)
 
     p_memory_migrate = memory_sub.add_parser(
         "migrate",

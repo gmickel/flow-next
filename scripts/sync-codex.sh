@@ -1574,7 +1574,7 @@ DIET = {
     "flow-next-setup": "Install or refresh flowctl and project instructions for flow-next in this repo. Use when asked to set up flow-next.",
     "flow-next-prospect": "Generate ranked candidate ideas grounded in the repo. Use when asked what to build next.",
     "flow-next-strategy": "Create or update repo-root STRATEGY.md (problem, approach, users, metrics, tracks). Use for strategy or roadmap doc requests.",
-    "flow-next-audit": "Audit .flow/memory/ entries against current code and keep, update, consolidate, or delete each. Use when asked to audit or refresh memory.",
+    "flow-next-audit": "Audit .flow/memory/ entries against current code and keep, update, consolidate, replace, delete, or harden each. Use when asked to audit memory or graduate a recurring lesson into a gate.",
     "flow-next-memory-migrate": "Migrate legacy flat .flow/memory files to the categorized YAML schema. One-time ceremony. Use when asked to migrate flow memory.",
     "flow-next-tracker-sync": "Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, Jira) and reconcile two-way. Use when asked to sync to a tracker. NOT plan-sync.",
     "flow-next-qa": "Live-app QA pass derived from the spec. Drives the running app, files P0/P1/P2 findings with evidence, emits a YES or NO qa_verdict receipt.",
