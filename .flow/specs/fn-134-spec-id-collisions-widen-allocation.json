@@ -13,6 +13,7 @@
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-07-25T09:20:44.206356Z",
+  "ready": true,
   "review_attempts": [
     {
       "backend": "codex",
@@ -98,5 +99,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-25T09:20:44.206356Z"
+  "updated_at": "2026-07-25T09:25:04.501391Z"
 }
