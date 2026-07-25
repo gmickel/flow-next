@@ -55,5 +55,16 @@ Canonical prose changes require `./scripts/sync-codex.sh` twice with the mirror 
 - [ ] Focused suite green plus the new fake-adapter test.
 
 ## Done summary
+Added a `create-first` operation to the tracker-sync skill: takes a title and body with no local spec id, returns `{id, identifier, url}`, and enables the sequence create issue -> mint `KEY-N-slug` -> attach via `set-tracker-id` -> seed the merge base. This unblocks the fresh-idea tracker-first path that task `.4` depends on; before it, five skills would have been told to call something that did not exist.
 
+Implemented by grok-4.5 via the grok CLI bridge; reviewed in-host (opus-5).
+
+Grok resolved the pre-spec receipt chicken-and-egg with approach (a): durable recovery file at `.flow/create-first/<retryKey>.json` plus a normal `sync receipt` after mint/attach, rather than growing a flowctl pre-spec receipt helper. Retry key is `sha256(tracker.type + title + body)[:16]`, recomputable before create and on every retry, so a resumed run finds the existing issue and links instead of re-creating.
+
+REVIEW FIX (mine, not grok's): `create-first/` was not gitignored, unlike every sibling transient dir (`receipts/`, `tmp/`, `sync-runs/`, `pilot-runs/`, `locks/`, `.cache/`) which all sit in flowctl's auto-managed `.flow/.gitignore` block. This is a correctness bug rather than repo hygiene: because the retry key is a content hash, a committed recovery file would let a teammate who computes the same key "resume" by linking to someone else's issue instead of creating their own. Added `create-first/` to `FLOW_GITIGNORE_AUTO_PATTERNS` in flowctl so new repos get it, re-ran init to materialize it here, verified with `git check-ignore`, and stated the requirement in the skill prose so it is not silently reintroduced.
+
+Known limitation, accepted: the content-hash retry key means a retry that regenerates the body slightly differently computes a different key and would create a second issue. The prose frames this as "a rephrased new idea gets a new key", which is right for a genuinely new intent but optimistic for a same-intent regeneration. Acceptable for the failure-recovery case it targets; worth revisiting if it bites.
 ## Evidence
+- Commits: d947e987
+- Tests: python3 scripts/run_tests_parallel.py (files=131 ran=2375 failures=0 errors=0), cd plugins/flow-next/tests && python3 -m unittest test_flowctl_surface test_startup_bootstrap -q (29 tests OK), ./scripts/sync-codex.sh run twice - idempotent, all validation guards green, git check-ignore -v .flow/create-first/abc.json -> ignored via .flow/.gitignore:13 (was NOT ignored before the review fix), dual-copy byte-identical + SOURCE_SHA256 re-pinned after the gitignore-pattern edit
+- PRs:
