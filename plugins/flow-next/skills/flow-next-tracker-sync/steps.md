@@ -336,7 +336,7 @@ This op never mints a spec id and never invents a synthetic key. GitHub/GitLab s
 
 #### Receipt / retry contract (pre-spec chicken-and-egg)
 
-`sync receipt` requires and resolves a **local spec id**. At create-first time none exists yet - do not call `sync receipt` here and do not invent a flowctl pre-spec helper.
+`sync receipt` requires and resolves a **local spec id**. At create-first time none exists yet, so `sync receipt` cannot be called here - it comes later, after mint + attach. What IS available, and **required**, is the deterministic pre-spec recovery surface: `sync create-first-key|get|put|clear`. Use those helpers; do not hand-roll an equivalent (see the "use the helper commands exclusively" rule below). Only `sync receipt` is unavailable before a spec exists.
 
 **Chosen approach (a):** durable pre-spec recovery output + normal `sync receipt` **after** mint/attach.
 
@@ -356,7 +356,7 @@ This op never mints a spec id and never invents a synthetic key. GitHub/GitLab s
      : # absent -> create via writeIssue, then immediately record it:
      #   "$FLOWCTL" sync create-first-put --key "$KEY" --id … --identifier … --url … --title … --transport …
    fi
-   # After mint + attach + merge-base seed succeed:
+   # LAST, after mint + attach + merge-base seed AND the back-reference write:
    #   "$FLOWCTL" sync create-first-clear --key "$KEY"
    ```
 
@@ -377,7 +377,7 @@ This op never mints a spec id and never invents a synthetic key. GitHub/GitLab s
    - File exists → load `{id, identifier, url}` and return it. **Never create a second issue.** Resume is link-only.
    - File missing → create via `writeIssue({title, body})` (no id), write the recovery file immediately, return the triple.
 
-4. **After the caller mints + attaches** (`spec create --tracker-first` → `sync set-tracker-id` → seed merge base): write the normal `sync receipt <spec-id> …`, then **remove** the recovery file (consumed). From that point the audit trail is the normal spec-keyed receipt stream under `.flow/sync-runs/`.
+4. **After the caller mints + attaches** (`spec create --tracker-first` → `sync set-tracker-id` → seed merge base → `flow:<spec-id>` back-reference): write the normal `sync receipt <spec-id> …`, then **remove** the recovery file (consumed) - the removal is LAST, after the back-reference write, per the sequence below. From that point the audit trail is the normal spec-keyed receipt stream under `.flow/sync-runs/`.
 
 5. **Failure after remote create, before mint completes:** surface `identifier` + `url` + `retryKey`; keep the recovery file. A later `create-first` with the same title+body finds the file and returns the existing issue - **never** creates a duplicate.
 
@@ -460,10 +460,15 @@ $FLOWCTL sync set-last-synced "$SPEC_ID"
 # 5. normal receipt now that a local spec id exists; consume the pre-spec recovery file
 $FLOWCTL sync receipt "$SPEC_ID" --status updated --tracker-id "$ISSUE_ID" --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
   --note "operation: create-first, event: ${EVENT:-manual} - issue $IDENTIFIER created then linked; recovery consumed"
-# RETRY_KEY recomputed via the helper (same type + title + body), then consumed:
+# 6. write flow:<spec-id> back-reference label on the issue [→ selected adapter] (same as Phase 2a)
+# 7. ONLY NOW consume the recovery record. Clearing before the back-reference
+#    write is unsafe: if that final tracker write fails or the process exits,
+#    the next identical create-first finds no record, creates ANOTHER remote
+#    issue, and only then hits mint preflight - leaving the original issue
+#    without its back-reference and a duplicate leaked. The record is the only
+#    thing that makes that step resumable, so it is released last.
 RETRY_KEY=$($FLOWCTL sync create-first-key --type "$TRACKER_TYPE" --title "$TITLE" --body-file "$BODY_FILE")
 $FLOWCTL sync create-first-clear --key "$RETRY_KEY"
-# 6. write flow:<spec-id> back-reference label on the issue [→ selected adapter] (same as Phase 2a)
 ```
 
 **Back-reference:** create-first cannot write `flow:<spec-id>` (the id does not exist yet). The caller adds it after attach, same as Phase 2a.
