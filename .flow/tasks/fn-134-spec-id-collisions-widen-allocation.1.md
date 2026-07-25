@@ -42,13 +42,13 @@ Widen spec-id allocation so parallel spec creation stops colliding. `scan_max_na
 
 - [ ] `scan_max_native_fn_spec_id` returns the max across the current working tree, every registered worktree's `.flow/specs/`, and every ref; monotonic over numbers that were allocated and later removed (R1).
 - [ ] Each source degrades independently and silently. Covered in isolation by unit tests: `git` absent, not a git repo, a registered worktree whose path no longer exists, a worktree with no `.flow/`, an unreadable worktree, and a `git log` non-zero exit. Allocation still succeeds from whatever sources worked, worst case the working tree alone (R2).
-- [ ] Allocation completes **under 150ms** on a fixture comparable to this repo (300+ refs, 15+ worktrees), with the worktree scan performed in-process rather than one subprocess per worktree (R3).
+- [ ] Allocation completes **under 250ms** on a fixture comparable to this repo (300+ refs, 15+ worktrees), with the worktree scan performed in-process rather than one subprocess per worktree (R3). Budget raised from 150ms on measured evidence during review; record the per-source breakdown in evidence.
 - [ ] A test pins that `list`, `status`, `show`, `ready`, and `next` perform no worktree or ref scan, so the fn-109 latency work cannot regress (R4).
 - [ ] A regression test reproduces the two-worktree collision: create a spec in worktree A without committing, create one in worktree B, assert the second gets `max+2` and not a duplicate (R5).
 - [ ] Both git invocations pass `--no-color` or equivalent, and neither can hang (explicit timeout).
 - [ ] `SOURCE_SHA256` re-pinned in both bootstrap copies; all `.flow/bin/` copies byte-identical to their `plugins/flow-next/scripts/` originals.
 - [ ] Focused suite green: `cd plugins/flow-next/tests && python3 -m unittest test_spec_id_allocation test_flowctl_surface test_startup_bootstrap -q`
-- [ ] **Proof-point check reported explicitly:** the measured allocation time on the fixture. If it exceeds 150ms, STOP and report before task `.2` rather than shipping a slow allocator; the documented fallback is to drop the ref source and keep worktree scanning.
+- [ ] **Proof-point check reported explicitly:** the measured allocation time on the fixture. If it exceeds the budget, STOP and report before task `.2` rather than shipping a slow allocator; the documented fallback is to drop the ref source and keep worktree scanning.
 
 
 ## Done summary

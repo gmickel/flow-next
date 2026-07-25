@@ -7359,8 +7359,158 @@ def get_actor() -> str:
     return "unknown"
 
 
+# Hang-prevention ceiling for allocation git probes. Success path is <<150ms;
+# this only bounds a stuck git process so spec create never hangs.
+_SPEC_ID_ALLOC_GIT_TIMEOUT = 10
+
+# Filename pattern for native fn-N specs (json + md; legacy short suffix + slug).
+_FN_NATIVE_SPEC_NAME_RE = re.compile(
+    r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.(json|md)$"
+)
+
+
+def _scan_max_fn_names_in_dir(directory: Path) -> int:
+    """In-process max native fn-N from one directory via os.scandir. Fail-open."""
+    max_n = 0
+    try:
+        if not directory.is_dir():
+            return 0
+        with os.scandir(directory) as it:
+            for entry in it:
+                name = entry.name
+                if not name.startswith("fn-"):
+                    continue
+                match = _FN_NATIVE_SPEC_NAME_RE.match(name)
+                if match:
+                    n = int(match.group(1))
+                    if n > max_n:
+                        max_n = n
+    except OSError:
+        return max_n
+    return max_n
+
+
+def _scan_max_fn_in_flow_dir(flow_dir: Path) -> int:
+    """In-process max native fn-N across epics/ + specs/ of one .flow/ tree."""
+    max_n = 0
+    for sub in (EPICS_DIR, SPECS_DIR):
+        n = _scan_max_fn_names_in_dir(flow_dir / sub)
+        if n > max_n:
+            max_n = n
+    return max_n
+
+
+def _spec_alloc_git(
+    root: Path,
+    args: list,
+    timeout: float = _SPEC_ID_ALLOC_GIT_TIMEOUT,
+) -> "tuple[int, str, str]":
+    """Run `git -C <root> -c color.ui=never <args>`. Fail-open: never raises.
+
+    Matches the `_prime_git` subprocess convention: git -C, capture_output,
+    text, check=False, explicit timeout, catch TimeoutExpired / OSError /
+    SubprocessError. `-c color.ui=never` neutralizes forced-color configs
+    that have broken regex post-filters in this repo before (portable
+    substitute for global `--no-color`, which older gits reject).
+    """
+    try:
+        # Neutralize color via -c (portable): global --no-color is not accepted
+        # by all git builds, and forced color.ui=always has broken regex filters.
+        result = subprocess.run(
+            ["git", "-C", str(root), "-c", "color.ui=never", *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout,
+        )
+        return (result.returncode, result.stdout or "", result.stderr or "")
+    except subprocess.TimeoutExpired:
+        return (1, "", "timeout")
+    except (OSError, subprocess.SubprocessError) as exc:
+        return (1, "", str(exc))
+
+
+def _scan_max_fn_from_worktrees(repo_root: Path, current_flow_dir: Path) -> int:
+    """Max native fn-N across every registered worktree's .flow/ (in-process).
+
+    Parses `git worktree list --porcelain` once, then os.scandir each path's
+    .flow/specs and .flow/epics. Never spawns a subprocess per worktree.
+    Fail-open on missing paths, unreadable dirs, or absent .flow/.
+    """
+    rc, out, _err = _spec_alloc_git(
+        repo_root, ["worktree", "list", "--porcelain"]
+    )
+    if rc != 0 or not out:
+        return 0
+    max_n = 0
+    current_resolved = None
+    try:
+        current_resolved = current_flow_dir.resolve()
+    except OSError:
+        pass
+    for line in out.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        wt_path = line[len("worktree ") :].strip()
+        if not wt_path:
+            continue
+        try:
+            flow = Path(wt_path) / FLOW_DIR
+            if current_resolved is not None:
+                try:
+                    if flow.resolve() == current_resolved:
+                        continue  # source 1 already covered this tree
+                except OSError:
+                    pass
+            if not flow.is_dir():
+                continue
+            n = _scan_max_fn_in_flow_dir(flow)
+            if n > max_n:
+                max_n = n
+        except OSError:
+            continue
+    return max_n
+
+
+def _scan_max_fn_from_refs(repo_root: Path) -> int:
+    """Max native fn-N ever *added* under .flow/specs or .flow/epics on any ref.
+
+    Single `git log --all --diff-filter=A` process. Added-then-deleted numbers
+    still appear, so allocation is monotonic over retired ids.
+    """
+    pathspecs = [f"{FLOW_DIR}/{SPECS_DIR}", f"{FLOW_DIR}/{EPICS_DIR}"]
+    rc, out, _err = _spec_alloc_git(
+        repo_root,
+        [
+            "log",
+            "--all",
+            "--diff-filter=A",
+            "--format=",
+            "--name-only",
+            "--",
+            *pathspecs,
+        ],
+    )
+    if rc != 0 or not out:
+        return 0
+    max_n = 0
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        base = line.rsplit("/", 1)[-1]
+        match = _FN_NATIVE_SPEC_NAME_RE.match(base)
+        if match:
+            n = int(match.group(1))
+            if n > max_n:
+                max_n = n
+    return max_n
+
+
 def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
-    """Scan .flow/epics/ and .flow/specs/ to find max NATIVE `fn-N` spec number.
+    """Union max of native `fn-N` across working tree, worktrees, and refs.
 
     NATIVE-`fn`-ONLY (fn-52.10): this feeds `fn-N` allocation in
     `cmd_spec_create`, so tracker-key specs (`wor-9999-foo`) must NOT count —
@@ -7368,36 +7518,45 @@ def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
     higher `fn-N`. Tracker-key specs are still visible to enumeration
     (`iter_spec_json_files`); they just don't drive the native allocator.
 
+    Three sources, take the maximum (fn-134):
+      1. Current working tree `.flow/epics/` + `.flow/specs/` (always).
+      2. Every registered git worktree's `.flow/` (in-process scandir).
+      3. Every ref via one `git log --all --diff-filter=A` over the specs dirs.
+
     Handles legacy (fn-N.json), short suffix (fn-N-xxx.json), and slug
-    (fn-N-slug.json) formats. Scans both epics/*.json (legacy) and specs/*.json
-    (canonical post-1.0) plus specs/*.md as a safety net for orphaned specs
-    created without flowctl. Returns 0 if none exist.
+    (fn-N-slug.json) formats. Returns 0 if none exist.
+
+    Fail-open on every git problem (absent git, not a repo, stale worktree
+    path, missing/unreadable `.flow/`, non-zero git exit): degrade to whatever
+    sources worked, worst case source 1 alone. Never blocks spec creation.
+    Monotonic: a number that was allocated and later deleted is never reused
+    because source 3 still sees the historical add.
     """
-    max_n = 0
-    pattern = r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.(json|md)$"
+    # Source 1 — current working tree (always available, never blocked).
+    max_n = _scan_max_fn_in_flow_dir(flow_dir)
 
-    # Scan epics/*.json (legacy 0.x location)
-    epics_dir = flow_dir / EPICS_DIR
-    if epics_dir.exists():
-        for spec_file in epics_dir.glob("fn-*.json"):
-            match = re.match(pattern, spec_file.name)
-            if match:
-                n = int(match.group(1))
-                max_n = max(max_n, n)
+    # Git sources need a repo root. flow_dir is conventionally `<repo>/.flow`.
+    try:
+        repo_root = flow_dir.parent
+    except (AttributeError, TypeError, OSError):
+        return max_n
 
-    # Scan specs/ (canonical post-1.0 location: both .json and .md)
-    specs_dir = flow_dir / SPECS_DIR
-    if specs_dir.exists():
-        for spec_file in specs_dir.glob("fn-*.json"):
-            match = re.match(pattern, spec_file.name)
-            if match:
-                n = int(match.group(1))
-                max_n = max(max_n, n)
-        for spec_file in specs_dir.glob("fn-*.md"):
-            match = re.match(pattern, spec_file.name)
-            if match:
-                n = int(match.group(1))
-                max_n = max(max_n, n)
+    # Source 2 — sibling/registered worktrees (created-but-uncommitted window).
+    try:
+        wt_max = _scan_max_fn_from_worktrees(repo_root, flow_dir)
+        if wt_max > max_n:
+            max_n = wt_max
+    except Exception:
+        # Helpers are already fail-open; this is belt-and-suspenders.
+        pass
+
+    # Source 3 — all refs (committed-on-another-branch + retired numbers).
+    try:
+        ref_max = _scan_max_fn_from_refs(repo_root)
+        if ref_max > max_n:
+            max_n = ref_max
+    except Exception:
+        pass
 
     return max_n
 
