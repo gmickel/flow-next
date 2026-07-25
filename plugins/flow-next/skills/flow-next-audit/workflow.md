@@ -296,12 +296,28 @@ Capture the per-term outcomes into a glossary section of the report (see §5.1 b
 # SECOND zero and break the later numeric comparison. Swallow the exit status instead.
 UPDATE_HEADINGS=$(grep -c '^## Update ' "$entry_file" 2>/dev/null || true)
 UPDATE_HEADINGS=${UPDATE_HEADINGS:-0}
-ENTRY_COMMITS=$(git -C "$REPO_ROOT" log --oneline -- "$entry_file" 2>/dev/null | wc -l | tr -d ' ')
+# SUBSTANTIVE commits only — a raw `git log | wc -l` counts the audit's OWN bookkeeping
+# (every `mark-fresh` / `mark-stale` / `mark-hardened` rewrites `last_audited` & friends), so
+# in a repo that commits its audits three routine sweeps alone would clear the >= 4 threshold
+# and permanently bypass auto-Keep. One git call per entry; awk drops commits whose diff on
+# this file touches ONLY frontmatter bookkeeping fields.
+ENTRY_COMMITS=$(git -C "$REPO_ROOT" log --format='COMMIT %H' --patch --unified=0 \
+  -- "$entry_file" 2>/dev/null | awk '
+  /^COMMIT /        { substantive = 0; next }        # new commit — reset the per-commit flag
+  /^(--- |\+\+\+ )/ { next }                         # skip file headers, not content
+  /^[+-]/ {
+    field = substr($0, 2)
+    if (field ~ /^(last_audited|audit_notes|status|stale_reason|stale_date|hardened_into):/) next
+    if (!substantive) { substantive = 1; count++ }
+  }
+  END { print count + 0 }')                          # prints 0 for an untracked/new file
 ENTRY_COMMITS=${ENTRY_COMMITS:-0}
 # plus, from the frontmatter already parsed in §0.1: related_to length, last_updated
 ```
 
 An entry is **recurrence-qualified** when `UPDATE_HEADINGS >= 2` OR `ENTRY_COMMITS >= 4`.
+
+`ENTRY_COMMITS` counts only commits that changed the lesson itself — the entry-creation commit and every later body/reference edit. Audit-stamp commits are not evidence the lesson was re-taught, and counting them would make the store's recurrence signal grow with audit diligence rather than with recurring pain, collapsing the O(changed) pre-filter over time.
 
 A `related_to` **cluster** qualifies only as a corroborated whole, never on size alone: a cluster of `>= 3` entries qualifies when **any member** has at least one `## Update` heading, or **any member** meets the commit signal. Cluster aggregates must therefore be computed here too, before anything is auto-Kept — a cluster whose members all have unchanged modules would otherwise be auto-Kept entry-by-entry and never seen:
 

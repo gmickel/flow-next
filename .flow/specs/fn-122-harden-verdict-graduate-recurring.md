@@ -63,7 +63,10 @@ Standard flow-next split (CLAUDE.md "SKILL + thin flowctl plumbing"): the skill 
 ```bash
 grep -c '^## Update ' <entry-file>          # reinforcement writes
 # frontmatter: related_to length, last_updated
-git log --oneline -- <entry-file> | wc -l   # write history
+# substantive write history: git log --format='COMMIT %H' --patch --unified=0 -- <entry-file>
+# piped through awk, counting only commits whose diff on the entry touches something other
+# than the audit's own bookkeeping fields (last_audited, audit_notes, status, stale_reason,
+# stale_date, hardened_into) -- exact command in workflow.md 0.75.1
 ```
 
 Plus LLM judgment: entries in the same `related_to` cluster count toward one candidate (the cluster, not each member, is the Harden unit -- consolidate first if needed).
@@ -71,7 +74,7 @@ Plus LLM judgment: entries in the same `related_to` cluster count toward one can
 **Proposal thresholds (recalibrated at plan time 2026-07-24 per Decision 3's standing instruction; documented in phases.md, overridable by judgment in either direction with evidence stated).** An entry (or cluster) becomes a Harden CANDIDATE when ANY of the two primary signals fires:
 
 - (i) >= 2 `## Update` headings on the entry;
-- (iii) >= 4 commits touching the entry file.
+- (iii) >= 4 **substantive** commits touching the entry file -- commits that changed only the audit's bookkeeping frontmatter (`last_audited`, `audit_notes`, `status`, `stale_reason`, `stale_date`, `hardened_into`) are excluded. Every `mark-fresh` / `mark-stale` / `mark-hardened` rewrites those fields, so counting them would make the signal grow with audit diligence rather than recurring pain: in a repo that commits its audits, the creation commit plus three routine sweeps would clear the threshold, permanently bypassing the 0.75 auto-Keep pre-filter and eroding the intended O(changed) behavior (review finding, PR #239).
 
 `related_to` cluster size is **demoted from a standalone trigger to a corroborating signal**: a cluster of >= 3 entries raises a candidate ONLY when it co-occurs with at least one `## Update` heading somewhere in the cluster (or with signal (iii) on any member). On its own it proposes nothing.
 
@@ -82,7 +85,7 @@ Thresholds gate PROPOSING only; the human gates APPLYING. Mechanizability is a s
 | Signal | Entries matching | Share |
 |---|---|---|
 | (i) >= 2 `## Update` headings | 3 | 4% |
-| (iii) >= 4 commits on the entry file | ~1 in 20 sampled | ~5% |
+| (iii) >= 4 substantive commits on the entry file | ~1 in 20 sampled | ~5% |
 | `related_to` >= 3 (as a standalone trigger) | 20 | **28%** |
 
 `related_to` is auto-populated by overlap scoring on every `memory add`, so a large cluster reflects tag/topic collision, not a re-taught lesson. Left standalone it would flag more than a quarter of the store on the first post-ship audit run — noise that would train the user to decline Harden reflexively. Signals (i) and (iii) are selective and match the "recurring pain" intuition, so they stay as-is. The structure Decision 3 fixed (any-of, propose-only, judgment-overridable) is preserved; only `related_to`'s standing changed.
@@ -91,7 +94,7 @@ Thresholds gate PROPOSING only; the human gates APPLYING. Mechanizability is a s
 
 Assume a Python repo with ruff configured. Entry `.flow/memory/conventions/timestamps-utc.md`, lesson "always stamp timestamps UTC ISO-8601; naive `datetime.now()` broke receipt comparisons", carrying two `## Update` sections (re-learned in fn-97 and fn-104) and 4 commits.
 
-1. Phase 1 evidence: `grep -c '^## Update '` -> 2; `git log --oneline -- <file> | wc -l` -> 4; `related_to: []`. Candidate (threshold (i) met). Mechanizable: yes -- naive-datetime use is grep/lint-detectable.
+1. Phase 1 evidence: `grep -c '^## Update '` -> 2; substantive commit count -> 4 (audit-stamp commits excluded); `related_to: []`. Candidate (threshold (i) met). Mechanizable: yes -- naive-datetime use is grep/lint-detectable.
 2. Duplication guard: grep ruff config for `DTZ` -> absent. Proceed.
 3. Ask step shows: gate type (a) lint rule; draft artifact = add `DTZ` to the ruff `select` list in `pyproject.toml`; evidence bullets from step 1; options accept / different gate type / decline.
 4. On accept: edit `pyproject.toml`. **Then verify the gate actually fires before retiring the lesson** -- run `ruff check` and confirm the `DTZ` rule is active in the resolved config (not merely present as text in a file that ruff does not read, and not disabled by a later `ignore` entry). Verification failing means the entry stays `active` and the graduation is reported as failed; nothing is demoted.

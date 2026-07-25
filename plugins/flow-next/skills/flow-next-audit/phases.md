@@ -250,18 +250,20 @@ An entry that is re-injected each run and re-taught each time is the anti-patter
 
 ```bash
 grep -c '^## Update ' <entry-file>            # reinforcement writes (memory add --update)
-git log --oneline -- <entry-file> | wc -l     # write history
+# substantive write history — see workflow.md §0.75.1 for the exact command; it filters out
+# commits whose diff on the entry touches only audit bookkeeping (last_audited, audit_notes,
+# status, stale_reason, stale_date, hardened_into)
 # frontmatter: related_to length, last_updated
 ```
 
 An entry (or cluster) becomes a **candidate** when ANY primary signal fires:
 
 - (i) **`>= 2` `## Update` headings** on the entry — the lesson was explicitly re-taught at least twice.
-- (iii) **`>= 4` commits** touching the entry file — sustained write churn on one lesson.
+- (iii) **`>= 4` substantive commits** touching the entry file — sustained write churn on one lesson. **Audit-stamp commits do not count**: a commit whose diff on the entry changes only `last_audited` / `audit_notes` / `status` / `stale_reason` / `stale_date` / `hardened_into` is the audit's own bookkeeping, not a re-teaching. Counting them would let three routine sweeps in a repo that commits its audits push every entry over the threshold — recurrence would then track audit diligence, not recurring pain.
 
 `related_to` cluster size is a **corroborating signal only**: a cluster of `>= 3` raises a candidate ONLY when it co-occurs with at least one `## Update` heading somewhere in the cluster, or with signal (iii) on any member. **On its own it proposes nothing.**
 
-> **Calibration evidence (this repo's store, 71 entries, measured 2026-07-24).** Signal (i) matched 3 entries (4%); signal (iii) matched ~1 in 20 sampled (~5%); a standalone `related_to >= 3` trigger would have matched 20 entries (**28%**). `related_to` is auto-populated by overlap scoring on every `memory add`, so cluster size measures topic collision, not re-teaching — left standalone it would flag more than a quarter of the store on the first run and train the user to decline Harden reflexively. Signals (i) and (iii) are selective and match the recurring-pain intuition, so they keep their values.
+> **Calibration evidence (this repo's store, 71 entries, measured 2026-07-24).** Signal (i) matched 3 entries (4%); signal (iii) matched ~1 in 20 sampled (~5%) — measured on a store whose commits were all substantive, so the bookkeeping filter leaves that rate unchanged here and only holds it steady as audits accumulate; a standalone `related_to >= 3` trigger would have matched 20 entries (**28%**). `related_to` is auto-populated by overlap scoring on every `memory add`, so cluster size measures topic collision, not re-teaching — left standalone it would flag more than a quarter of the store on the first run and train the user to decline Harden reflexively. Signals (i) and (iii) are selective and match the recurring-pain intuition, so they keep their values.
 
 Thresholds gate **proposing** only; the human gates **applying**. They are overridable by judgment in either direction — state the evidence when you override (e.g. a single-`## Update` entry that names a rule the linter already almost covers is worth proposing; four commits that were all typo fixes are not recurrence).
 
@@ -300,7 +302,7 @@ A textual hit is never sufficient evidence of enforcement.
 
 **Action steps:**
 
-1. **Gather the recurrence artifacts** (the three commands above) — done in [workflow.md](workflow.md) Phase 1, and for Harden specifically *before* the Phase 0.75 auto-Keep decision.
+1. **Gather the recurrence artifacts** (the commands above) — done in [workflow.md](workflow.md) Phase 1, and for Harden specifically *before* the Phase 0.75 auto-Keep decision.
 2. **Judge mechanizability.** Not mechanizable → Keep, stop.
 3. **Run the duplication guard.** Active match → pointer-demotion path (skip to step 6 with the existing gate's ref). Inactive match → report the broken gate, entry stays `active`, stop.
 4. **Pick the gate type** (a) → (b) → (c), cheapest fitting first, and **draft the artifact** — the concrete config/YAML/prose line for THIS repo. The draft is shown in the Phase 3 ask before anything is written.
