@@ -42,7 +42,7 @@ Verification failure means the entry stays `active`, `mark-hardened` is NOT call
 
 **Duplication guard**: before proposing, grep the candidate gate surfaces for a rule already covering the class. A textual hit is not enough — apply the same activeness check as above. Already enforced AND active → propose pointer-demotion only, citing the existing gate as `--gate-ref`, with no new artifact. Matched but inactive (commented out, ignored, in a dead workflow) → that is a broken gate, not a duplicate: the entry stays active and the finding is reported.
 
-**`--gate-ref` composition.** The audit skill owns the format `<path>#<rule-id> -- <note>` (flowctl stores it verbatim and validates nothing). `<path>` is repo-relative; `<rule-id>` must be a token a later `grep` can find in that file. This is what makes R13's gate-liveness check possible — a prose description would give the next audit nothing to look at. Examples: `pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes`, `.github/workflows/ci.yml#jobs.lint.steps[name=ruff] -- runs the DTZ gate`, `CLAUDE.md#timestamps-utc -- always stamp UTC ISO-8601`.
+**`--gate-ref` composition.** The audit skill owns the format `<path>#<rule-id> -- <note>` (flowctl stores it verbatim and validates nothing). `<path>` is repo-relative; `<rule-id>` must be a token a later `grep` can find in that file. This is what makes R13's gate-liveness check possible — a prose description would give the next audit nothing to look at. Examples: `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes`, `.github/workflows/ci.yml#ruff check -- lint job runs the DTZ gate`, `CLAUDE.md#stamp timestamps in UTC ISO-8601 -- instruction-file floor gate`.
 
 ### Investigation targets
 

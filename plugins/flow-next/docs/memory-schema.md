@@ -149,7 +149,7 @@ Every entry carries an implicit `status`. The field is optional in frontmatter �
 
 Optional frontmatter fields that carry status: `status`, `stale_reason`, `stale_date`, `hardened_into`, `last_audited`, `audit_notes`.
 
-`hardened_into` is stored **verbatim**; flowctl validates only that `--gate-ref` is non-empty at the CLI boundary. The skill-side convention is `<path>#<rule-id> -- <note>`, e.g. `pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes`. Parsing that convention is judgment and stays in `/flow-next:audit`, not in flowctl.
+`hardened_into` is stored **verbatim**; flowctl validates only that `--gate-ref` is non-empty at the CLI boundary. The skill-side convention is `<path>#<rule-id> -- <note>`, e.g. `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes`. Parsing that convention is judgment and stays in `/flow-next:audit`, not in flowctl.
 
 Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) clears the **other** statuses' companion fields, not just its own — no field from the prior status survives a transition. `stale → hardened` and `hardened → stale` are both legal; `mark-fresh` returns any status to `active` and drops both families.
 
@@ -182,7 +182,7 @@ flowctl memory mark-stale <id> --reason "..." --json
 
 # Graduate a recurring lesson into a gate (fn-122) — demote the entry to a pointer
 flowctl memory mark-hardened <id> \
-  --gate-ref "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes" \
+  --gate-ref "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes" \
   [--audited-by "/flow-next:audit"] [--json]
 
 # Clear the stale flag OR un-graduate a hardened entry (both return it to active)

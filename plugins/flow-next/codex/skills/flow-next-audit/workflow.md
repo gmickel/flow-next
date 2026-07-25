@@ -342,7 +342,7 @@ Recurrence is inferred from these **write-side artifacts plus LLM judgment**. Th
 
 ### 0.75.2 — Hardened entries: gate-liveness check only
 
-An entry with `status: hardened` skips both auto-Keep and full investigation. Instead, grep the `<path>` from its `hardened_into` for the `<rule-id>` token, and apply the same activeness check as Phase 4's verification (resolved lint config, live CI job, substantive instruction file):
+An entry with `status: hardened` skips both auto-Keep and full investigation. Instead, grep the `<path>` from its `hardened_into` for the `<rule-id>` **verbatim, as a literal substring** (that is the contract §4.7 composes against), and apply the same activeness check as Phase 4's verification (resolved lint config, live CI job, substantive instruction file):
 
 - **Gate present and active** → report as still-hardened. No investigation, no write.
 - **Gate gone or inactive** → propose un-graduation via `flowctl memory mark-fresh "$entry_id"` (returns the entry to `active` and drops `hardened_into`), citing which surface was checked and what was missing. Interactive asks in Phase 3; autofix reports it under Recommended without applying.
@@ -747,7 +747,7 @@ Process Harden candidates **one at a time, sequentially** — each one edits sha
  ```
 
  The helper sets `status: hardened`, stores `hardened_into` verbatim, clears the stale-only fields, and stamps `last_audited` (UTC date). It is atomic and preserves unknown frontmatter fields — **never hand-edit frontmatter to demote**.
-5. **`--gate-ref` format** is the skill's contract (flowctl stores it verbatim and validates only non-emptiness): `<path>#<rule-id> -- <note>`, with `<path>` repo-relative and `<rule-id>` a token a later `grep` can find in that file, so the next run's gate-liveness check has something to look at. See [phases.md](phases.md) §Harden for an example per gate type.
+5. **`--gate-ref` format** is the skill's contract (flowctl stores it verbatim and validates only non-emptiness): `<path>#<rule-id> -- <note>`, with `<path>` repo-relative and `<rule-id>` a **literal substring of the artifact at that path** — copy the exact token from the file you just wrote. §0.75.2 greps for it verbatim on the next run, so a locator expression describing where the rule lives (`tool.ruff.select:DTZ`, `jobs.lint.steps[name=ruff]`) is wrong: it never occurs in the TOML/YAML, and the live gate would be falsely proposed for un-graduation. Grep the artifact to confirm the ref hits before calling `mark-hardened`. See [phases.md](phases.md) §Harden for an example per gate type.
 
 **Never `git rm` on Harden — on any track.** The entry file stays on disk with its body intact; it becomes a pointer at the gate, so provenance survives and "why does this rule exist?" stays answerable. For `knowledge/decisions/` entries the supersession fields (`decision_status`, `superseded_by`, `alternatives_considered`) are preserved alongside the new status — `mark-hardened` touches only status, `hardened_into`, `last_audited`, and `audit_notes`.
 

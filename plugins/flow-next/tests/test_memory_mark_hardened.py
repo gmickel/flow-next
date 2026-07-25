@@ -41,8 +41,8 @@ from typing import Any
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
 
-GATE_REF = "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes"
-GATE_REF_2 = "CLAUDE.md#timestamps-utc -- always stamp UTC ISO-8601"
+GATE_REF = "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes"
+GATE_REF_2 = "CLAUDE.md#stamp timestamps in UTC ISO-8601 -- instruction-file floor gate"
 ENTRY_ID = "bug/runtime-errors/null-deref-in-auth-2026-05-01"
 
 

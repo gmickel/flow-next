@@ -39,10 +39,10 @@ Standard flow-next split (CLAUDE.md "SKILL + thin flowctl plumbing"): the skill 
 
 - `MEMORY_STATUS` extends from `("active", "stale")` to `("active", "stale", "hardened")`.
 - New optional frontmatter field `hardened_into: <gate-ref>`. **Not free text** -- a later audit has to re-find the gate to check it is still live (R13), and a prose description gives it nothing to look at. The value is a single conventionally formatted string with two required parts: a repo-relative artifact path, then a stable rule/check identifier, then an optional human note. Format: `<path>#<rule-id> -- <note>`. Per gate type:
-  - lint: `pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes`
-  - CI: `.github/workflows/ci.yml#jobs.lint.steps[name=ruff] -- runs the DTZ gate`
-  - instruction file: `CLAUDE.md#timestamps-utc -- always stamp UTC ISO-8601`
-  The `<rule-id>` must be something a grep can find in the named file. Permitted on both tracks.
+  - lint: `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes`
+  - CI: `.github/workflows/ci.yml#ruff check -- lint job runs the DTZ gate`
+  - instruction file: `CLAUDE.md#stamp timestamps in UTC ISO-8601 -- instruction-file floor gate`
+  The `<rule-id>` must be a **literal substring of the artifact at `<path>`**, because R13's liveness check greps for it verbatim. A locator expression that merely describes where the rule lives (`tool.ruff.select:DTZ`, `jobs.lint.steps[name=ruff]`) does not occur in the TOML/YAML and would make a live gate grep as missing, producing a false un-graduation. Permitted on both tracks.
 - Demotion preserves the file: status flips to `hardened`, `hardened_into` + `last_audited` set, body untouched (provenance survives; the entry becomes a pointer). Never `git rm` on Harden.
 - **Field invariants per status.** The invariant this spec enforces is **negative**: after any status flip, no field belonging to the PREVIOUS status survives. It is not a claim that each status populates a field.
 
@@ -98,12 +98,12 @@ Assume a Python repo with ruff configured. Entry `.flow/memory/conventions/times
 2. Duplication guard: grep ruff config for `DTZ` -> absent. Proceed.
 3. Ask step shows: gate type (a) lint rule; draft artifact = add `DTZ` to the ruff `select` list in `pyproject.toml`; evidence bullets from step 1; options accept / different gate type / decline.
 4. On accept: edit `pyproject.toml`. **Then verify the gate actually fires before retiring the lesson** -- run `ruff check` and confirm the `DTZ` rule is active in the resolved config (not merely present as text in a file that ruff does not read, and not disabled by a later `ignore` entry). Verification failing means the entry stays `active` and the graduation is reported as failed; nothing is demoted.
-5. Only after verification passes: `flowctl memory mark-hardened conventions/timestamps-utc --gate-ref "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes" --audited-by "/flow-next:audit"`.
+5. Only after verification passes: `flowctl memory mark-hardened conventions/timestamps-utc --gate-ref "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes" --audited-by "/flow-next:audit"`.
 6. Entry frontmatter after (body untouched):
 
 ```yaml
 status: hardened            # was: active
-hardened_into: "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes"
+hardened_into: "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes"
 last_audited: '2026-07-22'
 ```
 

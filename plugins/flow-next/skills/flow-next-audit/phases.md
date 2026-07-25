@@ -329,13 +329,13 @@ A textual hit is never sufficient evidence of enforcement.
 <path>#<rule-id> -- <note>
 ```
 
-`<path>` is repo-relative. `<rule-id>` must be a token a later `grep` can find **in that file** — that is what makes the gate-liveness check on the next audit run possible; a prose description would give the next audit nothing to look at. `<note>` is a short human gloss. One example per gate type:
+`<path>` is repo-relative. **`<rule-id>` must be a literal substring of the artifact at `<path>`** — copy the exact token as it appears in the file. The next run's gate-liveness check (§0.75.2 in [workflow.md](workflow.md)) greps `<path>` for that string verbatim, so a *locator expression* that describes where the rule lives (`tool.ruff.select:DTZ`, `jobs.lint.steps[name=ruff]`, a heading anchor, a JSON path) is **wrong**: it does not occur in the TOML/YAML/Markdown, the grep misses, and a perfectly healthy gate gets a false un-graduation proposal. Before composing the ref, run the grep yourself and confirm it hits. `<note>` is a short human gloss — never grepped, so put the human context there. One example per gate type:
 
-- lint: `pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes`
-- CI: `.github/workflows/ci.yml#jobs.lint.steps[name=ruff] -- runs the DTZ gate`
-- instruction file: `CLAUDE.md#timestamps-utc -- always stamp UTC ISO-8601`
+- lint: `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes` (`DTZ` is the literal token in the select list)
+- CI: `.github/workflows/ci.yml#ruff check -- lint job runs the DTZ gate` (the command string as written in the YAML)
+- instruction file: `CLAUDE.md#stamp timestamps in UTC ISO-8601 -- instruction-file floor gate` (the rule line's own wording)
 
-**Already-hardened entries on later runs (gate-liveness check).** A hardened entry is never dropped silently and never fully re-investigated. Grep `<path>` for `<rule-id>` from its `hardened_into`, and apply the same activeness check as verification:
+**Already-hardened entries on later runs (gate-liveness check).** A hardened entry is never dropped silently and never fully re-investigated. Grep `<path>` for the `<rule-id>` from its `hardened_into` **verbatim** — that literal-substring grep is exactly why the ref must be composed as a literal above — and apply the same activeness check as verification:
 
 - **Gate present and active** → report as still-hardened. Done; no re-investigation.
 - **Gate gone or now inactive** → the lesson is stranded outside the context window with no enforcement. Propose un-graduation: `flowctl memory mark-fresh <id>` (returns the entry to `active` and drops `hardened_into`), with the evidence — which surface was checked and what was missing. Interactive asks; autofix reports it under Recommended.

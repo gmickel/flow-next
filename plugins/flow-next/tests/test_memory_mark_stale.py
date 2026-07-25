@@ -330,7 +330,7 @@ class TestMarkStaleDropsHardenedPointer(unittest.TestCase):
                 "mark-hardened",
                 "bug/runtime-errors/null-deref-in-auth-2026-05-01",
                 "--gate-ref",
-                "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes",
+                "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes",
                 "--json",
             )
             fm = flowctl.parse_memory_frontmatter(path)

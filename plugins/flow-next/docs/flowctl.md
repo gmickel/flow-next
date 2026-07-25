@@ -916,7 +916,7 @@ Graduate a recurring lesson into an enforced gate and demote the entry to a poin
 
 ```bash
 flowctl memory mark-hardened <id> \
-  --gate-ref "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes" \
+  --gate-ref "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes" \
   [--audited-by "/flow-next:audit"] [--json]
 ```
 

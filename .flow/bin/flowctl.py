@@ -12142,7 +12142,7 @@ def cmd_memory_mark_hardened(args: argparse.Namespace) -> None:
     if not gate_ref.strip():
         error_exit(
             "--gate-ref is required (the gate this lesson graduated into, "
-            'e.g. "pyproject.toml#tool.ruff.select:DTZ -- bans naive datetimes")',
+            'e.g. "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes")',
             code=2,
             use_json=args.json,
         )
