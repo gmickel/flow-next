@@ -469,6 +469,20 @@ class RecoveryWritesAreContainedInFlow(unittest.TestCase):
         self._put()
         self.assertEqual(cfg.read_bytes(), before, "in-tree symlink clobbered config.json")
 
+
+    def test_record_is_refused_when_the_ignore_leaf_is_unsafe(self) -> None:
+        """An unignored record is committable - refuse rather than write it."""
+        gi = self.repo / ".flow" / ".gitignore"
+        gi.unlink()
+        gi.symlink_to("config.json")
+        r = self._put()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(
+            list((self.repo / ".flow" / "create-first").glob("*.json"))
+            if (self.repo / ".flow" / "create-first").exists() else [],
+            [], "an unprotected record was written",
+        )
+
     def test_a_legitimately_symlinked_flow_dir_still_works(self) -> None:
         """`.flow` itself being a symlink is supported and common."""
         with tempfile.TemporaryDirectory() as host, tempfile.TemporaryDirectory() as data:

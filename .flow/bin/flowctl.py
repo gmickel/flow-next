@@ -18809,18 +18809,22 @@ def _iter_task_h1_candidates(content: str):
     and starting at column zero.
     """
     lines = content.split("\n")
-    fenced = [f for _, f in _iter_fence_aware(lines)]
     start = 0
     if lines and lines[0].strip() == "---":
         for i in range(1, len(lines)):
             if lines[i].strip() == "---":
                 start = i + 1
                 break
-    for i in range(start, len(lines)):
-        if i < len(fenced) and fenced[i]:
+    # Track fences over the BODY ONLY. Frontmatter is YAML, not markdown, so a
+    # stray fence marker inside it (an indented ``` in a block scalar) must not
+    # leak fence state into the body and hide the real heading.
+    body = lines[start:]
+    fenced = [f for _, f in _iter_fence_aware(body)]
+    for offset, line in enumerate(body):
+        if offset < len(fenced) and fenced[offset]:
             continue
-        if lines[i].startswith("# "):
-            yield i, lines[i]
+        if line.startswith("# "):
+            yield start + offset, line
 
 
 def _task_h1_title(content: str, task_id: str) -> Optional[str]:
@@ -23795,6 +23799,22 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
         # would otherwise get an untracked-but-unignored recovery record, and a
         # `git add -A` would commit it - letting another checkout computing the
         # same retry key resume onto the first developer's issue.
+        # NOTE: `_ensure_flow_gitignore` returns False for a NO-OP (already
+        # current) as well as for a refusal, so its return value cannot be the
+        # safety signal - check the leaf explicitly.
+        if not _flow_leaf_is_safe(flow_dir, flow_dir / ".gitignore"):
+            # The ignore block cannot be ensured, so a record written now would
+            # be committable - and a committed record lets another checkout
+            # computing the same key resume onto someone else's issue. That is
+            # the exact failure the ignore prevents, so refuse rather than write
+            # an unprotected record.
+            error_exit(
+                "Refusing to write a recovery record: .flow/.gitignore could not "
+                "be ensured (unsafe or symlinked). An unignored record can be "
+                "committed and let another checkout resume onto someone else's "
+                "issue. Restore .flow/.gitignore as a regular file.",
+                use_json=use_json,
+            )
         _ensure_flow_gitignore(flow_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(path, record)
