@@ -408,5 +408,66 @@ class RetryKeyNormalizesTrackerType(unittest.TestCase):
         )
 
 
+class RecoveryWritesAreContainedInFlow(unittest.TestCase):
+    """A repository is untrusted input (PR #241, Cursor security review, HIGH).
+
+    A checkout can ship `.flow/create-first` or `.flow/.gitignore` as a symlink
+    pointing outside the workspace; the following mkdir + write then performs an
+    arbitrary same-user file write outside the repo. Both vectors were
+    reproduced before the guard existed - the record landed outside the repo,
+    and an unrelated user file was overwritten with gitignore content.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self._out = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        self.outside = Path(self._out.name)
+        _run(self.repo, "init")
+        self.key = flowctl.compute_create_first_key("github", "X", "")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup(); self._out.cleanup()
+
+    def _put(self) -> subprocess.CompletedProcess:
+        return _run(self.repo, "sync", "create-first-put", "--key", self.key,
+                    "--id", "I", "--identifier", "#1", "--url", "u",
+                    "--title", "X", "--transport", "gh")
+
+    def test_symlinked_record_dir_is_refused(self) -> None:
+        (self.repo / ".flow" / "create-first").symlink_to(self.outside)
+        r = self._put()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(list(self.outside.iterdir()), [], "write escaped the workspace")
+        self.assertNotIn("Traceback", r.stderr)
+
+    def test_symlinked_gitignore_is_not_written_through(self) -> None:
+        victim = self.outside / "victim.txt"
+        victim.write_text("IMPORTANT-USER-FILE\n", encoding="utf-8")
+        gi = self.repo / ".flow" / ".gitignore"
+        gi.unlink()
+        gi.symlink_to(victim)
+        self._put()
+        self.assertEqual(
+            victim.read_text(encoding="utf-8"), "IMPORTANT-USER-FILE\n",
+            "an out-of-tree file was overwritten through a symlinked .gitignore",
+        )
+
+    def test_a_legitimately_symlinked_flow_dir_still_works(self) -> None:
+        """`.flow` itself being a symlink is supported and common."""
+        with tempfile.TemporaryDirectory() as host, tempfile.TemporaryDirectory() as data:
+            repo = Path(host)
+            real = Path(data) / "flowdata"
+            real.mkdir()
+            (repo / ".flow").symlink_to(real)
+            _run(repo, "init")
+            r = _run(repo, "sync", "create-first-put", "--key", self.key,
+                     "--id", "I", "--identifier", "#1", "--url", "u",
+                     "--title", "X", "--transport", "gh")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            got = _run(repo, "sync", "create-first-get", "--key", self.key, "--json")
+            self.assertEqual(got.returncode, 0, got.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

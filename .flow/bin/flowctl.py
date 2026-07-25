@@ -8832,6 +8832,10 @@ def _ensure_flow_gitignore(flow_dir: Path) -> bool:
     Preserves any user-added patterns below the auto-managed footer.
     """
     gi_path = flow_dir / ".gitignore"
+    if not _flow_path_is_contained(flow_dir, gi_path):
+        # Untrusted checkout shipped .flow/.gitignore as a symlink out of tree.
+        # Never write through it; the caller's own work is unaffected.
+        return False
     auto_block = "\n".join(
         [FLOW_GITIGNORE_AUTO_HEADER, *FLOW_GITIGNORE_AUTO_PATTERNS, FLOW_GITIGNORE_AUTO_FOOTER]
     )
@@ -23608,6 +23612,30 @@ def _read_optional_arg_or_file(file_arg: Optional[str], inline_arg: Optional[str
 CREATE_FIRST_DIR = "create-first"
 
 
+def _flow_path_is_contained(flow_dir: Path, target: Path) -> bool:
+    """True when `target` cannot escape `.flow/` through a symlinked component.
+
+    A repository is untrusted input. A checkout can ship `.flow/create-first`
+    or `.flow/.gitignore` as a symlink pointing outside the workspace; a
+    following `mkdir` + write then performs an arbitrary same-user file write
+    outside the repo. Both were reproduced before this guard existed.
+
+    `.flow` ITSELF being a symlink is legitimate and common (worktrees, shared
+    checkouts), so the resolved `.flow` is the root - only escapes from WITHIN
+    it are refused. Resolution walks to the deepest existing ancestor so the
+    check works before the leaf is created.
+    """
+    try:
+        root = flow_dir.resolve()
+        probe = target
+        while not probe.exists() and probe != probe.parent:
+            probe = probe.parent
+        real = probe.resolve()
+        return real == root or root in real.parents
+    except OSError:
+        return False
+
+
 CREATE_FIRST_KEY_RE = re.compile(r"[0-9a-f]{16}")
 
 
@@ -23678,6 +23706,13 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
         )
 
     path = _create_first_dir(flow_dir) / f"{args.key}.json"
+    if not _flow_path_is_contained(flow_dir, path):
+        error_exit(
+            "Refusing to touch a create-first record outside .flow/ - "
+            f"{path} resolves out of the workspace (symlinked component). "
+            "Remove the symlink; flowctl never writes through it.",
+            use_json=use_json,
+        )
 
     if action == "get":
         if not path.exists():
