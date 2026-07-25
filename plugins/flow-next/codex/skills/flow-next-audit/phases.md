@@ -240,30 +240,22 @@ That's it. No archive directory, no metadata flag. Git history preserves the fil
 
 ## Harden
 
-**Meaning:** the entry is correct, keeps getting re-learned, and states a rule a machine can check. Graduate it into an enforced gate (lint rule / CI step / instruction-file rule) and demote the entry to a pointer at that gate. The lesson stops riding the context window on every run and starts firing automatically — for every agent and every human, in every harness.
+**Meaning:** the entry is correct, keeps getting re-learned, and states a rule a machine can check. Graduate it into an enforced gate (lint rule / CI step / instruction-file rule) and demote the entry to a pointer at that gate — the file stays on disk, body intact. The lesson stops riding the context window on every run and starts firing automatically — for every agent and every human, in every harness.
 
 An entry that is re-injected each run and re-taught each time is the anti-pattern: the agent re-fixes the same class instead of the class being impossible. Harden closes that loop.
 
 **Two conditions, both required (AND):**
 
-**(1) Recurrence signal.** There is **no read-side usage telemetry** in flow-next — `memory-scout` retrieval and worker re-anchor reads leave zero trace on the entry, and nothing records "this entry fired during a run." Recurrence is therefore an inference over **write-side artifacts** plus LLM judgment, never a counter read. The artifacts, per entry:
+**(1) Recurrence signal.** Inferred from **write-side artifacts plus LLM judgment, never a usage count** — flow-next has no read-side telemetry: `memory-scout` retrieval and worker re-anchor reads leave zero trace, and nothing records "this entry fired during a run." Cite the artifacts in evidence bullets, never a count of uses. An entry (or cluster) becomes a **candidate** when ANY primary signal fires:
 
-```bash
-grep -c '^## Update ' <entry-file> # reinforcement writes (memory add --update)
-# substantive write history — see workflow.md §0.75.1 for the exact command; it filters out
-# commits whose diff on the entry touches only audit bookkeeping (last_audited, audit_notes,
-# status, stale_reason, stale_date, hardened_into)
-# frontmatter: related_to length, last_updated
-```
+- **`>= 2` `## Update` headings** on the entry — the lesson was explicitly re-taught at least twice.
+- **`>= 4` substantive commits** touching the entry file — sustained write churn on one lesson. Audit-bookkeeping commits and pure renames are not re-teachings and do not count.
 
-An entry (or cluster) becomes a **candidate** when ANY primary signal fires:
+`related_to` cluster size is a **corroborating signal only**: a cluster of `>= 3` raises a candidate ONLY when it co-occurs with at least one `## Update` heading somewhere in the cluster, or with the commit signal on any member. **On its own it proposes nothing.**
 
-- (i) **`>= 2` `## Update` headings** on the entry — the lesson was explicitly re-taught at least twice.
-- (iii) **`>= 4` substantive commits** touching the entry file — sustained write churn on one lesson. **Audit-stamp commits do not count**: a commit whose diff on the entry changes only `last_audited` / `audit_notes` / `status` / `stale_reason` / `stale_date` / `hardened_into` is the audit's own bookkeeping, not a re-teaching. Counting them would let three routine sweeps in a repo that commits its audits push every entry over the threshold — recurrence would then track audit diligence, not recurring pain. The scan follows renames (`git log --follow`): entries get moved by `flowctl memory migrate` and by consolidation, and a path-limited log would stop at the rename and undercount an old, well-churned entry into an auto-Keep. A pure `git mv` is not itself substantive.
+The scan that produces these numbers — the rename-following `git log`, the bookkeeping filter and why it exists, the cluster aggregates — lives in [workflow.md](workflow.md) §0.75.1 and runs before the auto-Keep decision.
 
-`related_to` cluster size is a **corroborating signal only**: a cluster of `>= 3` raises a candidate ONLY when it co-occurs with at least one `## Update` heading somewhere in the cluster, or with signal (iii) on any member. **On its own it proposes nothing.**
-
-> **Calibration evidence (this repo's store, 71 entries, measured 2026-07-24).** Signal (i) matched 3 entries (4%); signal (iii) matched ~1 in 20 sampled (~5%) — measured on a store whose commits were all substantive, so the bookkeeping filter leaves that rate unchanged here and only holds it steady as audits accumulate; a standalone `related_to >= 3` trigger would have matched 20 entries (**28%**). `related_to` is auto-populated by overlap scoring on every `memory add`, so cluster size measures topic collision, not re-teaching — left standalone it would flag more than a quarter of the store on the first run and train the user to decline Harden reflexively. Signals (i) and (iii) are selective and match the recurring-pain intuition, so they keep their values.
+> **Calibration evidence (this repo's store, 71 entries, measured 2026-07-24).** The `## Update` signal matched 3 entries (4%); the commit signal matched ~1 in 20 sampled (~5%) — measured on a store whose commits were all substantive, so the bookkeeping filter leaves that rate unchanged here and only holds it steady as audits accumulate; a standalone `related_to >= 3` trigger would have matched 20 entries (**28%**). `related_to` is auto-populated by overlap scoring on every `memory add`, so cluster size measures topic collision, not re-teaching — left standalone it would flag more than a quarter of the store on the first run and train the user to decline Harden reflexively. The two primary signals are selective and match the recurring-pain intuition, so they keep their values.
 
 Thresholds gate **proposing** only; the human gates **applying**. They are overridable by judgment in either direction — state the evidence when you override (e.g. a single-`## Update` entry that names a rule the linter already almost covers is worth proposing; four commits that were all typo fixes are not recurrence).
 
@@ -294,57 +286,24 @@ Thresholds gate **proposing** only; the human gates **applying**. They are overr
 
 **Duplication guard (run BEFORE proposing):** grep the candidate gate surfaces (linter config, CI workflows, instruction files) for a rule already covering the class.
 
-- **Matched AND active** (confirmed by the same liveness check as the verification step below) → the class is already enforced. Propose **pointer-demotion only**: no new artifact, `mark-hardened` citing the *existing* gate as `--gate-ref`.
+- **Matched AND active** (confirmed by the same activeness check as gate verification — [workflow.md](workflow.md) §4.7 step 2) → the class is already enforced. Propose **pointer-demotion only**: no new artifact, `mark-hardened` citing the *existing* gate as `--gate-ref`.
 - **Matched but inactive** (commented out, sitting in an `ignore` list, in a config the tool does not read, in a disabled or unreferenced CI job) → this is **not** a duplicate, it is a broken gate. The entry **stays `active`**, nothing is demoted, and the finding is reported so a human can fix the gate.
 - **No match** → proceed with a new artifact.
 
 A textual hit is never sufficient evidence of enforcement.
 
-**Action steps:**
+**Execution.** The procedure is [workflow.md](workflow.md) §4.7 (interactive only): write the accepted draft, **verify the gate actually fires**, then demote via `flowctl memory mark-hardened` with a `<path>#<rule-id> -- <note>` gate-ref. Three rules from it are decision-shaping, so know them before you propose:
 
-1. **Gather the recurrence artifacts** (the commands above) — done in [workflow.md](workflow.md) Phase 1, and for Harden specifically *before* the Phase 0.75 auto-Keep decision.
-2. **Judge mechanizability.** Not mechanizable → Keep, stop.
-3. **Run the duplication guard.** Active match → pointer-demotion path (skip to step 6 with the existing gate's ref). Inactive match → report the broken gate, entry stays `active`, stop.
-4. **Pick the gate type** (a) → (b) → (c), cheapest fitting first, and **draft the artifact** — the concrete config/YAML/prose line for THIS repo. The draft is shown in the Phase 3 ask before anything is written.
-5. **On acceptance, write the artifact**, then **verify the gate actually fires** (below). Verification failure → entry stays `active`, `mark-hardened` is NOT called, report a failed graduation with the reason.
-6. **Demote** — only after verification passes:
+- **Verification is a hard precondition of demotion.** Writing config is not enforcing a rule, and a gate that does not fire is strictly worse than no gate: it retires the only working copy of the lesson while enforcing nothing. Verification failure → the entry stays `active`, `mark-hardened` is NOT called, and the run reports a failed graduation.
+- **`<rule-id>` must be a literal substring of the artifact**, not a locator expression — the next run's gate-liveness check greps for it verbatim.
+- **Never `git rm` on Harden**, on any track. The entry becomes a pointer so "why does this rule exist?" stays answerable forever.
 
- ```bash
- "$FLOWCTL" memory mark-hardened "$ENTRY_ID" \
- --gate-ref "<path>#<rule-id> -- <note>" \
- --audited-by "/flow-next:audit"
- ```
-
- This sets `status: hardened`, stores `hardened_into` verbatim, clears the stale-only fields, and stamps `last_audited` (a UTC date — a same-day re-mark is observably a no-op on that field). **The entry file stays on disk with its body intact** — it becomes a pointer, so provenance survives and "why does this lint rule exist?" stays answerable forever. **Never `git rm` on Harden**, on any track.
-
-**Gate verification before demotion — the load-bearing step.** Writing config is not the same as enforcing a rule. A gate that does not fire is strictly worse than no gate: it retires the only working copy of the lesson while enforcing nothing. Verify by gate type:
-
-- **lint** — run the linter and confirm the new rule is active in the **resolved** config: not merely present as text in a file the tool does not read, and not neutralized by a later `ignore` / disable entry.
-- **CI** — confirm the step parses and sits in a workflow AND a job that actually run on the relevant trigger — not a disabled, unreferenced, or manual-only one.
-- **instruction file** — confirm the rule landed in the **substantive** file the agents actually read, not an `@`-including stub.
-
-**`--gate-ref` composition.** The audit skill owns the format; flowctl stores it verbatim and validates nothing but non-emptiness (parsing it there would be judgment leaking into plumbing). The format is:
-
-```
-<path>#<rule-id> -- <note>
-```
-
-`<path>` is repo-relative. **`<rule-id>` must be a literal substring of the artifact at `<path>`** — copy the exact token as it appears in the file. The next run's gate-liveness check (§0.75.2 in [workflow.md](workflow.md)) greps `<path>` for that string verbatim, so a *locator expression* that describes where the rule lives (`tool.ruff.select:DTZ`, `jobs.lint.steps[name=ruff]`, a heading anchor, a JSON path) is **wrong**: it does not occur in the TOML/YAML/Markdown, the grep misses, and a perfectly healthy gate gets a false un-graduation proposal. Before composing the ref, run the grep yourself and confirm it hits. `<note>` is a short human gloss — never grepped, so put the human context there. One example per gate type:
-
-- lint: `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes` (`DTZ` is the literal token in the select list)
-- CI: `.github/workflows/ci.yml#ruff check -- lint job runs the DTZ gate` (the command string as written in the YAML)
-- instruction file: `CLAUDE.md#stamp timestamps in UTC ISO-8601 -- instruction-file floor gate` (the rule line's own wording)
-
-**Already-hardened entries on later runs (gate-liveness check).** A hardened entry is never dropped silently and never fully re-investigated. Grep `<path>` for the `<rule-id>` from its `hardened_into` **verbatim** — that literal-substring grep is exactly why the ref must be composed as a literal above — and apply the same activeness check as verification:
-
-- **Gate present and active** → report as still-hardened. Done; no re-investigation.
-- **Gate gone or now inactive** → the lesson is stranded outside the context window with no enforcement. Propose un-graduation: `flowctl memory mark-fresh <id>` (returns the entry to `active` and drops `hardened_into`), with the evidence — which surface was checked and what was missing. Interactive asks; autofix reports it under Recommended.
-- **Gate upgraded** (e.g. an instruction-file rule promoted to a lint rule) → re-run `mark-hardened` with the new ref. It is idempotent and replaces `hardened_into`.
+**Already-hardened entries on later runs** are never dropped silently and never re-investigated: they get the cheap gate-liveness check in [workflow.md](workflow.md) §0.75.2 (gate live → still-hardened; gate gone or inactive → propose un-graduation via `mark-fresh`; gate upgraded → re-`mark-hardened` with the new ref).
 
 **Edge cases:**
 
 - **Cluster candidates** — the cluster, not each member, is the Harden unit. Consolidate first (precedence), then evaluate the merged entry once. Never write one gate per member.
-- **Decision-track entries** (`knowledge/decisions/`) — `mark-hardened` keeps the file on disk, consistent with "decision history stays on disk", and the supersession fields (`decision_status`, `superseded_by`, `alternatives_considered`) are preserved alongside the new status. Expect Harden to be **rare** here: most decisions are judgment records, not mechanizable checks.
+- **Decision-track entries** (`knowledge/decisions/`) — legal and **rare**; most decisions are judgment records, not mechanizable checks. See [Decision-entry calibration](#decision-entry-calibration) below.
 - **Stale entries** — `stale → hardened` is legal. A lesson can be stale as written and still name a real, mechanizable class; `mark-hardened` clears `stale_reason` / `stale_date` as part of the flip. Do not force a `mark-fresh` round trip first.
 - **Non-code repos** (docs sites, an Obsidian vault) — targets (a)/(b) are simply unavailable; (c) is the floor.
 - **First post-ship run** — recurrence signals are derived retroactively, so the first ordinary audit after this ships may surface several candidates at once. That is intended: the thresholds above are what keeps the volume sane, and there is no first-run suppression or rate limit.
