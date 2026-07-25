@@ -219,11 +219,12 @@ $FLOWCTL sync set-tracker-id "<spec-id>" "$ISSUE_ID" --identifier "$ISSUE_KEY" -
  **tracker-first like Linear** (steps.md): `spec create --tracker-first
  --tracker-identifier PROJ-123` mints a clean `proj-123-slug` canonical id, and bare
  `proj-123` / `proj-123.M` resolve like `wor-17`. Both entry flows work (tracker-first
- AND flow-first). Distinct from GitHub/GitLab (flow-first only — their keys don't
- slugify into a canonical id).
+ AND flow-first). GitHub/GitLab also support tracker-first, but via **synthetic keys**
+ (`gh-N` / `gl-N`) because their native identifiers are not literal `KEY-N` — see
+ docs/tracker-sync.md and github.md / gitlab.md § identity.
  - **Exception — a DC/Server CUSTOM key that isn't clean `KEY-N`** (underscores
  `MY_PROJECT-7`, OR a >10-char alnum key `PRODUCT2013-7`) can't mint a kebab canonical
- id, so it links **flow-first / display-only** like a GitHub ref: the spec stays
+ id, so it links **flow-first / display-only**: the spec stays
  `fn-NN`, and `set-tracker-id
  --identifier MY_PROJECT-7` stores the bare handle as a shown alias + back-reference
  (NOT a resolvable spec handle — you never `work MY_PROJECT-7`). Standard keys (no

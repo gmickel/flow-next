@@ -37,12 +37,20 @@ It also rewrites the version badges in `README.md` + `plugins/flow-next/README.m
 jq . plugins/flow-next/.codex-plugin/plugin.json   # 3. verify version
 # 4. update CHANGELOG.md with [flow-next X.Y.Z] entry (repo canonical, keep-a-changelog style)
 # 5. update the flow-next.dev docs-site changelog — see "Docs-site changelog entry" below
+# 6. if this release has a behavior-affecting change or new opt-in default, append one line
+#    to plugins/flow-next/docs/README.md § "Notable updates" (newest first; format is
+#    documented inline in that section). Same story on the flow-next.dev landing page
+#    when that surface exists for the release.
 
 git add -A && git commit -m "chore(flow-next): bump version to X.Y.Z"
 git push
 
 git tag flow-next-vX.Y.Z && git push origin flow-next-vX.Y.Z   # triggers release + Discord
 ```
+
+### Notable updates (docs home)
+
+`plugins/flow-next/docs/README.md` § **Notable updates** is the GitHub docs entry point for behavior-affecting changes and new opt-in defaults — one line each plus how to enable, newest first. Append when a release introduces something a user (or agent reading the docs home) would otherwise miss. Do not dump the full CHANGELOG there; the section documents its own format inline.
 
 ## Re-sync local installs (dogfood)
 

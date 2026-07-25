@@ -258,38 +258,42 @@ $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<iss
 $FLOWCTL sync set-tracker-id "wor-17-slug" "$ISSUE_UUID" --identifier "WOR-17" --url "$ISSUE_URL"
 ```
 
+> **All four trackers support tracker-first.** Linear `WOR-17` and Jira `PROJ-123`
+> are native `KEY-N` and mint directly (`wor-17-slug` / `proj-123-slug`). GitHub `#N`
+> and GitLab `<project>#<iid>` are **not** literal `KEY-N` (no alpha key / path + `#`),
+> so flowctl mints **synthetic keys** while `tracker.type` matches: `#123` →
+> `gh-123-slug`, `<project>#456` → `gl-456-slug` (project-scoped `iid`, never the
+> opaque global id). Bare `gh-123` / `gl-456` resolve as aliases. Guards: contextual
+> `gh`/`gl` prefix reservation while type matches, plus a preflight of the existing
+> store. A Linear/Jira repo natively keyed `GH` is unaffected. Flow-first remains
+> available on every tracker (create `fn-NN`, then `set-tracker-id`).
+>
 > **Jira grabs go TRACKER-FIRST (like Linear).** A Jira issue key `PROJ-123` IS an
 > alpha-prefixed `KEY-N` (key `PROJ`, number `123`), so it takes the **same
 > tracker-first path as Linear** — `spec create --tracker-first --tracker-identifier
 > PROJ-123` mints a clean `proj-123-slug` canonical id (Jira keys are alnum-`-num`,
 > no slugify hazard), and bare `proj-123` / `proj-123.M` resolve like `wor-17`. BOTH
-> entry flows work for Jira (tracker-first AND flow-first), distinct from GitHub/GitLab
-> (flow-first only — below).
+> entry flows work for Jira (tracker-first AND flow-first).
 >
 > **Exception — a DC/Server CUSTOM key that isn't clean `KEY-N`** (underscores
 > `MY_PROJECT-7`, OR a >10-char alnum key `PRODUCT2013-7`) can't mint a kebab canonical
-> id, so the strict `--tracker-first` validator REJECTS it. Those grabs go **flow-first**
-> like GitHub/GitLab: create an `fn-NN` spec, then `sync set-tracker-id "<fn-id>"
+> id, so the strict `--tracker-first` validator REJECTS it. Those grabs go **flow-first**:
+> create an `fn-NN` spec, then `sync set-tracker-id "<fn-id>"
 > "$ISSUE_ID" --identifier "MY_PROJECT-7" --url "$ISSUE_URL"` (display-only alias — stored,
 > shown, back-referenced, but you never `work MY_PROJECT-7`). Standard keys (no underscore,
 > ≤10-char) stay tracker-first.
 >
-> **GitLab grabs go FLOW-FIRST, not tracker-first.** The `--tracker-first
-> --tracker-identifier` path above only accepts an **alpha-prefixed `KEY-N`** display
-> key (Linear `WOR-17` / Jira `PROJ-123` → mints `wor-17-slug` / `proj-123-slug`).
-> **GitHub `#N` is NOT a `KEY-N` either**
-> (`#123` has no alpha key) — it too goes flow-first; only `KEY-N`-keyed
-> trackers (Linear, Jira) are tracker-first. A GitLab key is `<project>#<iid>` (slashes + `#`) which
-> likewise can't slugify into a canonical spec id, so `cmd_spec_create`'s strict
-> validator (`validate_tracker_identifier(..., allow_reference=False)`, verified)
-> rejects **both `#123` and `<project>#<iid>`** at create time (issue refs are accepted
-> only at LINK time via `set-tracker-id`, `allow_reference=True`). For a GitLab grab,
-> create a **flow-first `fn-NN` spec** instead, then attach the issue:
-> `$FLOWCTL sync set-tracker-id "<fn-id>" "<global-issue-id>" --identifier
-> "<project>#<iid>" --url "<web_url>"` — the **`set-tracker-id`**
-> validator accepts `group/subgroup/project#12` + bare `#<iid>`. The key is stored as
-> the display `identifier`, but flowctl's resolver does NOT resolve a bare GitLab key
-> (`fn-*` / `KEY-N` only) — use the **`fn-NN` id** for commands. (gitlab.md § identity.)
+> **GitHub / GitLab grabs go TRACKER-FIRST via synthetic keys.** Pass the native
+> issue ref to `--tracker-first --tracker-identifier`:
+> - GitHub: `$FLOWCTL spec create --tracker-first --tracker-identifier "#123" --title "…"`
+>   → `gh-123-slug`; attach with `--identifier "#123"`.
+> - GitLab: `$FLOWCTL spec create --tracker-first --tracker-identifier "group/project#12" --title "…"`
+>   → `gl-12-slug` (uses the project-scoped `iid`); attach with the **global** issue
+>   id as the durable `tracker.id` and `"group/project#12"` as the display
+>   `identifier`. Re-pointing `tracker.perTracker.project` at a different GitLab
+>   project is a collision hazard (ids never change; preflight refuses a colliding mint).
+> Flow-first still works if preferred: create `fn-NN`, then `set-tracker-id` with the
+> issue ref as a display alias. (gitlab.md / github.md § identity.)
 
 Seed the merge base from the **current issue body** so the first sync is pull-only (never surfaces the whole issue as a conflict) — first-link base-seeding is in **[→ ref: body-merge.md]**; call `sync set-merge-base` with the flow-form + tracker-form snapshots it produces:
 

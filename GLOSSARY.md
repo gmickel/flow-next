@@ -148,7 +148,7 @@ The detect → surface → ask → never-assume flow `/flow-next:tracker-sync` r
 
 ## tracker-key handle
 
-A tracker identifier (e.g. `WOR-17`) used as a **resolvable flow id**, the hybrid id model. **Tracker-first** specs are canonically `wor-17-slug` (tasks `wor-17-slug.M`); bare `wor-17` / `wor-17.M` resolve as aliases. **Flow-first** specs keep `fn-NN-slug` and store `WOR-17` in `tracker.identifier` as a resolvable display alias. Resolution is case-insensitive (`show wor-17`, `work wor-17` resolve); the native `fn-` scheme is reserved (`fn-N` allocation counts `fn-*` only); one tracker team per repo; **ids never rename** on link.
+A tracker identifier used as a **resolvable flow id**, the hybrid id model. **Tracker-first** specs are canonically `KEY-N-slug` from a native key (Linear `WOR-17` → `wor-17-slug`, Jira `PROJ-123` → `proj-123-slug`) or a **synthetic** key while `tracker.type` matches (GitHub `#123` → `gh-123-slug`, GitLab `<project>#456` → `gl-456-slug`, project-scoped `iid`). Bare `wor-17` / `gh-123` / `gl-456` (and `.M` task forms) resolve as aliases. **Flow-first** specs keep `fn-NN-slug` and store the tracker display key in `tracker.identifier` as a resolvable alias. Resolution is case-insensitive; **`fn` is the only globally reserved prefix** (`fn-N` allocation counts `fn-*` only; synthetic `gh`/`gl` are reserved only while type is github/gitlab); one tracker team per repo; **ids never rename** on link. `tracker.specIds=tracker` is the team default that routes new mints onto this path.
 
 ## dependency projection
 

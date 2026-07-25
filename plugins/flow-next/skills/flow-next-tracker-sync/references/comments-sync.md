@@ -141,8 +141,8 @@ comment with the **same `issue` + `evt` + `evidence`** marker already exists →
 >    tracker's mention markup back to bare text:
 >    `s/<issue [^>]*>([^<]*)<\/issue>/$1/g` (GitHub **and GitLab** auto-linkify `#N` /
 >    `<project>#N` to `<a …>#123</a>` anchor markup; strip it the same way). Then even an
->    older `spec=`-keyed marker re-matches. (GitLab specs are flow-first — markers carry
->    `fn-NN`, not a tracker key — so the mangle risk is lowest there, but the strip is uniform.)
+>    older `spec=`-keyed marker re-matches. (GitLab flow-first specs carry `fn-NN` in
+>    markers; tracker-first ones carry synthetic `gl-N-slug` — either way the strip is uniform.)
 >
 > The same hazard hits the flow back-reference: write it as a **`flow:<id>` label**
 > (labels are plain text — never linkified), NOT as a body/title-embedded `[<id>]`

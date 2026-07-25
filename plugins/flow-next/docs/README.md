@@ -45,6 +45,18 @@ The offline-resilient reference for flow-next — **repeatable agentic engineeri
 | [`teams.md`](teams.md) | Spec-driven team workflow — handover objects, Spec-as-PR, parallel work from one spec, symmetric interview, adoption ladder |
 | [`ci-workflow-example.yml`](ci-workflow-example.yml) | Drop-in GitHub Actions example running `flowctl validate --all` |
 
+## Notable updates
+
+Append-only list of **behavior-affecting changes and new opt-in defaults**. Newest first. Not a changelog — one line each, plus how to enable. Seeded by fn-134; later releases append.
+
+**Format (keep this shape):**
+
+```
+- **`config.key` or feature name** — one-line what changed / why it matters. Enable: `command or config`. Details: [link](path).
+```
+
+- **`tracker.specIds`** — team default id scheme for new specs when a tracker is configured. Parallel agents collide on bare `fn-N`; tracker-keyed ids (`WOR-17` → `wor-17-slug`; GitHub `#123` → `gh-123-slug`; GitLab iid → `gl-N-slug`) use the tracker as the distributed allocator. Enable: `flowctl config set tracker.specIds tracker` (or answer the setup question when a tracker is configured and the key is still unset). Details: [`tracker-sync.md`](tracker-sync.md) § Hybrid id model / `tracker.specIds`.
+
 ## Conventions
 
 - **R17 cross-link discipline.** Each doc here is a self-contained reference. Canonical sources (`templates/spec.md`, `scripts/sync-codex.sh`, `STRATEGY.md`, `GLOSSARY.md`) are linked, never re-embedded.

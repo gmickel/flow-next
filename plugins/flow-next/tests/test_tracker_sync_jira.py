@@ -558,8 +558,9 @@ class JiraCeremonyWiringTestCase(unittest.TestCase):
     # --- tracker-first caveat (R6-identity) ---------------------------------
 
     def test_steps_phase2_caveat_says_jira_tracker_first(self) -> None:
-        # Jira PROJ-123 IS KEY-N → tracker-first like Linear (distinct from
-        # GitHub/GitLab flow-first-only). The Phase 2 caveat must say so.
+        # Jira PROJ-123 IS KEY-N → tracker-first like Linear. GitHub/GitLab also
+        # support tracker-first via synthetic keys (fn-134); the Phase 2 caveat
+        # still names the Jira path explicitly.
         self.assertIn("Jira grabs go TRACKER-FIRST", self.steps)
         self.assertIn("PROJ-123", self.steps)
 

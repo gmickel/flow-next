@@ -190,7 +190,7 @@ Output:
 {"success": true, "id": "fn-1-spec-title", "title": "Spec title", "spec_path": ".flow/specs/fn-1-spec-title.md"}
 ```
 
-`--tracker-first` (requires `--tracker-identifier WOR-17`) keys the spec by the tracker key — canonical id `wor-17-slug`, tasks `wor-17-slug.M`, branch `wor-17-slug`; bare `wor-17` / `wor-17.M` resolve as aliases. Used by the `/flow-next:tracker-sync` "grab issue X and spec it" flow. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model. No fresh `fn-NN` is allocated; ids never rename.
+`--tracker-first` (requires `--tracker-identifier <key-or-ref>`) keys the spec by the tracker key — no fresh `fn-NN` is allocated; ids never rename. Native `KEY-N` (Linear `WOR-17`, Jira `PROJ-123`) mint `wor-17-slug` / `proj-123-slug`. GitHub `#123` / GitLab `<project>#456` mint synthetic keys while `tracker.type` matches (`gh-123-slug` / `gl-456-slug`, project-scoped iid). Bare `wor-17` / `gh-123` / `gl-456` resolve as aliases. Skills route to this automatically when `tracker.specIds=tracker`. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model.
 
 Pass `--branch` at create time to set `branch_name` in the same call; [`spec set-branch`](#spec-set-branch) is for renaming the branch of an existing spec.
 
@@ -700,15 +700,19 @@ Single spec output:
 All specs output:
 ```json
 {
-  "success": false,
-  "valid": false,
-  "root_errors": ["Spec ID collision: fn-1 used by multiple specs: fn-1-alpha, fn-1-beta"],
+  "success": true,
+  "valid": true,
+  "root_errors": [],
+  "root_warnings": ["Spec ID collision: fn-1 used by multiple specs: fn-1-alpha, fn-1-beta"],
   "specs": [{"spec": "fn-1", "valid": true, ...}],
   "total_specs": 2,
   "total_tasks": 10,
-  "total_errors": 1
+  "total_errors": 0,
+  "total_warnings": 1
 }
 ```
+
+A duplicate native `fn-N` ordinal whose full ids are distinct is a top-level **`root_warnings`** entry (counted in `total_warnings`), not a `root_error` — the full ids are the identity; the collision is untidy, not broken. Bare `fn-N` resolution disambiguates rather than guessing.
 
 Checks:
 - Spec/task markdown exists
@@ -716,7 +720,7 @@ Checks:
 - Task statuses are valid (`todo`, `in_progress`, `blocked`, `done`)
 - Dependencies exist and are within same spec
 - No dependency cycles
-- Native `fn-N` prefixes are unique; repository-level failures appear in `root_errors`
+- Duplicate native `fn-N` ordinals (distinct full ids) appear in `root_warnings`; other repository-level failures appear in `root_errors`
 - Done status consistency
 
 Exits with code 1 if validation fails (for CI use).
@@ -763,6 +767,7 @@ flowctl config set memory.enabled false [--json]
 | `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` — cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`sync`](#sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
+| `tracker.specIds` | string | `flow` (merged default; **unset-detectable** on disk) | Id scheme for new specs when a tracker bridge is active: `flow` (native `fn-N`) or `tracker` (tracker-keyed `KEY-N-slug` / synthetic `gh-N` / `gl-N`). Strict enum — invalid CLI writes rejected; malformed on-disk values fail closed to `flow`. Not materialized at init so setup can ask once when a tracker is configured and the key is still absent. Skills route to `--tracker-first` / create-first when value is `tracker` and the bridge is active. See [`tracker-sync.md`](tracker-sync.md). |
 | `tracker.provenance` | string | `null` | Free-form provenance written by the discovery ceremony on confirmation (who/when/signals). |
 | `tracker.perEvent.<event>` | string | `off` | Per-lifecycle-event sync op. Events: `capture`, `interview`, `plan`, `work.firstClaim`, `work.done`, `makePr`, `resolvePr`, `completionReview`. Leaf values: `off | pull | push | reconcile | comment`. **Schema default `off`** — so a bare `enabled=true` set without the ceremony fires no lifecycle-event sync (accidental-enable guard; two paths are unconditional whenever the bridge is active — make-pr's PR↔issue link + `In Review` push, and `land.merged`'s `Done`-on-merge — see [`tracker-sync.md`](tracker-sync.md)). But the `/flow-next:tracker-sync` discovery ceremony **activates all events by default (opt-out)** when you hook up the bridge; you turn any off with `config set tracker.perEvent.<event> off`. `completionReview` is seeded `comment` (verdict + R-ID coverage; **never terminal `Done`** — fn-66). |
 | `tracker.perEvent.qa` | string | `off` | **`/flow-next:qa` verdict post (fn-53, R9).** Posts the live-app QA ship verdict (`type: qa_verdict`) as a tracker comment when set non-`off` AND the bridge is active. Leaf values: **`off | comment` only** — `comment` is the only sensible verb for a verdict; `push`/`pull`/`reconcile` operate on the issue body/status and don't apply, so the QA skill treats any non-`off` value as `comment`. **Default `off`, and — unlike the other events — NOT switched on by the discovery ceremony's opt-out default-on set**: a QA verdict post is QA-specific opt-in, enabled explicitly with `config set tracker.perEvent.qa comment`. The post is best-effort and never blocks the verdict. |
@@ -1029,7 +1034,7 @@ flowctl sync check <spec-id> --events <csv> --since <iso> [--json]
 - **`receipt --status`** enum: `pushed | pulled | merged | updated | diverged | queued | errored | noop`. When no transport is reachable the run is a `noop` + receipt note, never a crash. **`--event <perEvent-key>`** tags the receipt with the lifecycle touchpoint it served (`work.firstClaim`, `work.done`, `capture`, `makePr`, …) — free-form, NOT enum-validated (the perEvent key set is an open extension point). Pre-flag receipts carry `event: null` and never satisfy an event-specific `sync check`.
 - **`check`** is the **read-only** end-of-skill audit (no tracker-mutation code lives in flowctl): for each event in `--events` (comma-separated perEvent keys that *triggered this run*), it reports `OK:<event>` / `MISSING:<event>` (`--json`: `{events, missing, count}`). MISSING iff the event triggered AND its `tracker.perEvent` leaf is enabled AND the bridge is active AND no receipt with a matching `event` tag and `timestamp ≥ --since` exists. Any receipt status clears (the check asserts the touchpoint *ran*); `--since` is the run-scoping lower bound (older receipts never clear); linkage is NOT a precondition (a never-linked spec that should have create-if-unlinked'd is exactly the miss this catches). **Bridge inactive → silent constant-time exit 0 before any IO** — the zero-overhead path for non-tracker repos. Exit 0 always; output drives agent action, not the exit code.
 - **`defer`** queues a genuine conflict to the review deferred-findings sink (`.flow/review-deferred/<branch>.md`) — **never blocks**. In Ralph mode an `always-ask` tiebreak resolves to *queue*, not prompt.
-- The hybrid id model (tracker-first `wor-17-slug` canonical / flow-first `fn-NN` + resolvable `WOR-17` alias) is keyed at create/link time: `flowctl spec create --tracker-first --tracker-identifier WOR-17` (see [`spec create`](#spec-create)). Ids never rename; resolution is case-insensitive. Details in [`tracker-sync.md`](tracker-sync.md) + [`architecture.md`](architecture.md).
+- The hybrid id model (tracker-first `wor-17-slug` / `gh-123-slug` / `gl-456-slug` canonical / flow-first `fn-NN` + resolvable alias) is keyed at create/link time: `flowctl spec create --tracker-first --tracker-identifier <key-or-ref>` (see [`spec create`](#spec-create)). Skills auto-route when `tracker.specIds=tracker`. Ids never rename; resolution is case-insensitive. Details in [`tracker-sync.md`](tracker-sync.md) + [`architecture.md`](architecture.md).
 
 ### repo-map
 

@@ -39,28 +39,63 @@ For a **Jira** tracker the ceremony writes `tracker.perTracker.baseUrl` (the sit
 
 After the config writes, the ceremony asks **one optional, skippable readiness question** (1.12.0+): *which tracker workflow state means "ready for work"?* — a Linear workflow-state name (discovered from the team's states, with a "Ready"-looking name recommended), a GitHub label (suggested `ready`, pre-created idempotently), on GitLab a label (suggested `ready`, pre-created idempotently; GitLab has no rich workflow, so readiness is a label like GitHub), or — on **Jira** — a workflow **status name** (like Linear; validated against the project's statuses when a credential is present, else skip → no-op backlog lane). The answer is stored as `tracker.readyState`; skipping writes nothing and leaves the readiness gate dormant. See [Readiness projection](#readiness-projection--trackerreadystate--local-ready-flag) below.
 
-## Two entry flows — no fixed starting point
+## Three entry flows — no fixed starting point
 
-Both attach sync state **on link**:
+All attach sync state **on link**:
 
 1. **Author-in-flow-then-push (flow-first).** A `fn-NN` spec already exists. Push creates the tracker issue, then `flowctl sync set-tracker-id` attaches the issue UUID + `--identifier WOR-17` + `--url`. The `fn-NN` id is kept; the tracker key becomes a resolvable alias.
-2. **Link-existing-issue (tracker-first): "grab issue X and spec it."** Fetch the issue, create the spec **keyed by the tracker key** (`flowctl spec create --tracker-first --tracker-identifier WOR-17`), seed the merge base from the current issue body, first pass is pull-only. **Tracker-first needs an alpha-prefixed `KEY-N` key — Linear `WOR-17` AND Jira `PROJ-123`** (both `KEY-N`: alpha key + number). It mints the canonical spec id from it (`wor-17-slug` / `proj-123-slug`), and bare `wor-17` / `proj-123` resolve as aliases. **GitHub `#N` and GitLab `<project>#<iid>` are NOT `KEY-N`** (no alpha key / slashes + `#`), so `cmd_spec_create`'s strict validator rejects them — **grab those flow-first**: create an `fn-NN` spec, then `flowctl sync set-tracker-id fn-NN <issue-id> --identifier <key> --url <url>` (the link-time validator accepts the issue ref), as in flow #1. So **Jira joins the tracker-first camp like Linear** — BOTH entry flows work — distinct from GitHub/GitLab flow-first-only.
+2. **Link-existing-issue (tracker-first): "grab issue X and spec it."** Fetch the issue, create the spec **keyed by the tracker key** (`flowctl spec create --tracker-first --tracker-identifier <key>`), seed the merge base from the current issue body, first pass is pull-only. **All four trackers support tracker-first:**
+   - Linear `WOR-17` / Jira `PROJ-123` are native `KEY-N` and mint directly (`wor-17-slug` / `proj-123-slug`).
+   - GitHub `#123` and GitLab `<project>#456` are **not** literal `KEY-N` (no alpha key / path + `#`), so flowctl mints **synthetic keys** while `tracker.type` matches: `#123` → `gh-123-slug`, `<project>#456` → `gl-456-slug` (project-scoped `iid`, never the opaque global id). Bare `gh-123` / `gl-456` resolve as aliases.
+   - Flow-first remains available on every tracker (create `fn-NN`, then `set-tracker-id` with the issue ref as a display alias).
+3. **Create-first (fresh idea — issue before any local spec).** When `tracker.specIds=tracker` and no issue exists yet, tracker-sync creates the issue from title + body (no local spec id), returns `{id, identifier, url}`, then the caller mints → attaches → seeds the merge base. Pre-spec recovery lives under `.flow/create-first/` (gitignored); a retry after partial failure **links**, never re-creates. See the skill's Phase 2d.
 
 ## Hybrid id model (R16)
 
-The two id schemes **coexist**; resolution is provided by flowctl's widened resolver (case-insensitive). **Ids NEVER change — there is no rename-on-push.**
+The two id schemes **coexist**; resolution is provided by flowctl's widened resolver (case-insensitive). **Ids NEVER change — there is no rename-on-push.** Mixed stores (`fn-N-slug` next to `KEY-N-slug` / `gh-N-slug`) are permanent and expected.
 
 | | Tracker-first (canonical) | Flow-first (alias) |
 |---|---|---|
-| canonical spec id | `wor-17-slug` | `fn-NN-slug` (unchanged) |
-| canonical task ids | `wor-17-slug.M` | `fn-NN-slug.M` |
-| branch | `wor-17-slug` | `fn-NN-slug` |
-| bare aliases | `wor-17` / `wor-17.M` resolve to the canonical slug id | `WOR-17` (stored in `tracker.identifier`) resolves to `fn-NN-slug` |
-| create / link | `flowctl spec create --tracker-first --tracker-identifier WOR-17` | `flowctl sync set-tracker-id fn-NN-slug <uuid> --identifier WOR-17 --url <url>` |
+| canonical spec id | `wor-17-slug` / `gh-123-slug` / `gl-456-slug` | `fn-NN-slug` (unchanged) |
+| canonical task ids | `wor-17-slug.M` / `gh-123-slug.M` | `fn-NN-slug.M` |
+| branch | same as canonical id | `fn-NN-slug` |
+| bare aliases | `wor-17` / `gh-123` / `gl-456` (and `.M` task forms) resolve to the full slug id | `WOR-17` / `#123` (stored in `tracker.identifier`) resolves to `fn-NN-slug` |
+| create / link | `flowctl spec create --tracker-first --tracker-identifier <key-or-ref>` | `flowctl sync set-tracker-id fn-NN-slug <uuid> --identifier <key> --url <url>` |
 
-- **Resolution is case-insensitive.** `flowctl show wor-17`, `work wor-17`, `plan wor-17`, tasks `wor-17.M` all resolve. `tracker.identifier` stores the **display form** (`WOR-17`); the canonical id derives from the lowercase key (`wor-17-slug`).
-- **The native `fn-` prefix is reserved** for the sequential scheme; tracker-key resolution is tried only after the `fn-` path misses. Enumeration sees tracker-key specs, but native `fn-N` allocation counts `fn-*` only — a `wor-9999` never bumps the next `fn`.
-- **One tracker team / workspace per repo.** The bridge assumes a single team key so a bare `wor-17` resolves unambiguously. Cross-workspace same-key collision (two teams both keyed `WOR`) is out of scope.
+### Synthetic keys (GitHub / GitLab)
+
+GitHub and GitLab do not ship a native `KEY-N` display form. While `tracker.type` is `github` / `gitlab`, flowctl synthesizes a resolvable key from the issue number:
+
+| `tracker.type` | Native identifier | Minted spec id |
+|---|---|---|
+| `linear` | `WOR-17` | `wor-17-slug` (native key, unchanged) |
+| `jira` | `PROJ-123` | `proj-123-slug` (native key, unchanged) |
+| `github` | `#123` | `gh-123-slug` (synthetic `gh`) |
+| `gitlab` | `<project>#456` | `gl-456-slug` (synthetic `gl`; uses project-scoped **`iid`**, never the opaque global id) |
+
+**Guards (not type-gating alone):** while `tracker.type` is `github`/`gitlab`, the matching prefix (`gh`/`gl`) is **contextually reserved** for synthesis — an explicit native `GH-123` identifier is rejected at mint/link. Before minting, a **preflight** of the existing store refuses a colliding canonical id or resolvable alias. A Linear/Jira repo natively keyed `GH` is unaffected (type is not `github`/`gitlab`). **Re-pointing `tracker.type`** (or re-pointing GitLab at a different project) is a documented hazard: previously minted ids keep their meaning; preflight stops a new mint from colliding with them.
+
+### `tracker.specIds` — team default gate
+
+| Value | Behavior |
+|---|---|
+| `flow` (default; also the fail-closed read for a malformed on-disk value) | Spec-creating skills mint `fn-N-slug` (today's behavior) |
+| `tracker` | With an active bridge, skills mint tracker-keyed ids: named issue → `--tracker-first`; fresh idea → create-first then mint |
+
+Write side: `flowctl config set tracker.specIds <value>` accepts only `flow` or `tracker` (invalid CLI writes are rejected). The leaf is **unset-detectable** (not materialized at init) so `/flow-next:setup` can ask once when a tracker is configured and the key is still absent; once set either way, setup never re-asks. Skills route on this from an existing root config snapshot — no new config read. Bridge inactive / no transport degrades silently to flow-first. Explicit user override always wins.
+
+Network cost is conditional: when the matching `tracker.perEvent.*` touchpoint is already active, tracker-first reorders an existing remote write; when those leaves are off (their default), tracker-first introduces an earlier remote write that flow-first would not make.
+
+### Duplicate ordinals
+
+A duplicate native `fn-N` ordinal whose full ids are distinct (e.g. two `fn-122-…` specs) is **untidy, not broken**. `flowctl validate --all` reports it as a top-level **`root_warnings`** entry (counted in `total_warnings`), not a `root_error`. Bare `fn-N` resolution disambiguates rather than guessing — lists candidates and requires the full id (same idea as git short-hash disambiguation). Ids never change; do not renumber.
+
+### Other hybrid rules
+
+- **Resolution is case-insensitive.** `flowctl show wor-17`, `work gh-123`, `plan gl-456`, tasks `wor-17.M` all resolve. `tracker.identifier` stores the **display form** (`WOR-17` / `#123` / `group/project#456`); the canonical id derives from the lowercase key.
+- **`fn` is the only globally reserved prefix.** Synthetic `gh`/`gl` are reserved only while `tracker.type` matches. Enumeration sees tracker-key specs, but native `fn-N` allocation counts `fn-*` only — a `wor-9999` never bumps the next `fn`.
+- **Native `fn-N` allocation is a union scan** over the working tree, every registered git worktree's `.flow/specs/`, and every ref (monotonic max-ever-allocated). Fail-open on git problems. That shrinks the parallel-agent collision window; separate unfetched clones can still collide — that is what `tracker.specIds=tracker` is for.
+- **One tracker team / workspace per repo.** The bridge assumes a single team key so a bare `wor-17` resolves unambiguously. Cross-workspace same-key collision is out of scope.
 - **No rename-on-push.** Existing spec/task ids, branches, and dep edges are never mutated on link; the tracker key is added as a resolvable handle, not a replacement. `flowctl spec set-title` on a tracker-linked spec updates the title only — it does **not** re-slug the id, branch, or files.
 
 The widened resolver / canonicalizer + the origin-branched id generator live in `flowctl.py` — see [`architecture.md`](architecture.md).

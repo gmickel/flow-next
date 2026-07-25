@@ -4,6 +4,15 @@ All notable changes to the flow-next.
 
 ## [Unreleased]
 
+### Added
+
+- **`tracker.specIds` + synthetic tracker keys + create-first (fn-134).** Team default id scheme when a tracker is configured: `flowctl config set tracker.specIds tracker` routes new specs to tracker-keyed ids (Linear/Jira native `KEY-N-slug`; GitHub `#N` → `gh-N-slug`; GitLab project-scoped `iid` → `gl-N-slug`). Synthetic keys are guarded by contextual `gh`/`gl` prefix reservation while `tracker.type` matches plus a preflight of the existing store. Fresh-idea path: tracker-sync **create-first** (title+body, no local spec) with pre-spec recovery under `.flow/create-first/` (gitignored; retry links, never re-creates). Setup asks the id-scheme question when a tracker is configured and the key is still unset. Notable updates surface seeded on `plugins/flow-next/docs/README.md`.
+- **`flowctl task set-title`** — updates JSON `title` and markdown H1 together so they cannot disagree (fn-134 incidental).
+
+### Changed
+
+- **Union-source `fn-N` allocation + duplicate ordinal as `root_warnings` (fn-134).** Native allocation takes the max across the working tree, every registered worktree, and every ref (monotonic, fail-open). Duplicate ordinals with distinct full ids are top-level `root_warnings` (counted in `total_warnings`), not `root_errors`. Docs corrected: GitHub/GitLab support tracker-first via synthetic keys (no longer "flow-first only").
+
 ## [flow-next 3.4.5] - 2026-07-25
 
 ### Changed

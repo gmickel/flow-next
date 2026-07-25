@@ -10,18 +10,26 @@ A spec pulled from a tracker issue ("grab issue X and spec it") IS keyed by the 
 
 | | value |
 |---|---|
-| canonical spec id | `wor-17-slug` |
-| canonical task ids | `wor-17-slug.M` (the existing `task_id = <spec-id>.N` rule) |
-| branch | `wor-17-slug` |
-| bare aliases | `wor-17` / `wor-17.M` — resolve exactly as `fn-52` / `fn-52.M` expand to the full-slug id today |
+| canonical spec id | `wor-17-slug` / `gh-123-slug` / `gl-456-slug` |
+| canonical task ids | `<canonical>.M` (the existing `task_id = <spec-id>.N` rule) |
+| branch | same as canonical id |
+| bare aliases | `wor-17` / `gh-123` / `gl-456` (and `.M`) — resolve exactly as `fn-52` / `fn-52.M` expand to the full-slug id today |
+
+| `tracker.type` | Native identifier | Minted id |
+|---|---|---|
+| `linear` / `jira` | `WOR-17` / `PROJ-123` | `wor-17-slug` / `proj-123-slug` (native `KEY-N`) |
+| `github` | `#123` | `gh-123-slug` (synthetic; reserved while type is github) |
+| `gitlab` | `<project>#456` | `gl-456-slug` (synthetic; project-scoped `iid`) |
 
 Create it with:
 
 ```bash
 $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<issue title>" --json
+# GitHub: --tracker-identifier "#123" → gh-123-slug
+# GitLab: --tracker-identifier "group/project#456" → gl-456-slug
 ```
 
-`--tracker-first` keys the spec by the tracker identifier instead of allocating a fresh `fn-NN`. No second id; no rename.
+`--tracker-first` keys the spec by the tracker identifier instead of allocating a fresh `fn-NN`. No second id; no rename. Skills route here when `tracker.specIds=tracker` and the bridge is active.
 
 ### Flow-first — keep `fn-NN`, gain a resolvable alias
 

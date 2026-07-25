@@ -15,6 +15,7 @@ Task tracking for AI agents. All state lives in `.flow/`.
 
 - Specs: `fn-N-slug` where slug is derived from title (e.g., fn-1-add-oauth, fn-2-fix-login-bug)
 - Tasks: `fn-N-slug.M` (e.g., fn-1-add-oauth.1, fn-2-fix-login-bug.2)
+- Tracker-keyed ids coexist and resolve (`wor-17-slug`, `gh-123-slug`, `gl-456-slug`). Default: `config set tracker.specIds tracker`.
 
 **Backwards compatibility**: Legacy formats `fn-N`, `fn-N-xxx`, `fn-N.M`, and `fn-N-xxx.M` still work.
 
