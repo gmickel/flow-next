@@ -9,6 +9,8 @@ problem_type: build-error
 symptoms: Platform gate prose says 'no OPENCODE_* marker' but bash checked only OPENCODE/OPENCODE_BIN — OPENCODE_SESSION etc. passed
 root_cause: Fixed two-var env check cannot honor an open-ended 'any X_* marker' exclusion contract
 resolution_type: fix
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 ---
 
 ## Problem

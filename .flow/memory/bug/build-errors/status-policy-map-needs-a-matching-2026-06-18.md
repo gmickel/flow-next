@@ -9,6 +9,8 @@ problem_type: build-error
 symptoms: "new normalized rung mapped in the table but unreachable — reconcile loop had no branch, setStatus never fired"
 root_cause: edited the flow→normalized table + fixtures without adding the matching reconcile-loop branch; fixture asserted a setStatus the loop couldn't produce
 resolution_type: fix
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 related_to: [bug/build-errors/id-grammar-widening-must-cover-the-full-2026-06-03, bug/build-errors/skill-prose-must-match-real-flowctl-2026-06-10]
 ---
 

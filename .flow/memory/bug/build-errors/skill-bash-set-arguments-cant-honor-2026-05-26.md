@@ -9,6 +9,8 @@ problem_type: build-error
 symptoms: Skill docs claimed verbatim shell passthrough but bash word-split corrupts quoted/globbed args; dangling --source crashed under set -e
 root_cause: Host hands $ARGUMENTS as a single string — word-split cannot recover shell quoting; case-arm shift past end-of-args trips set -e
 resolution_type: fix
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 related_to: [bug/build-errors/abort-option-copy-must-reflect-pre-2026-05-18, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21]
 ---
 

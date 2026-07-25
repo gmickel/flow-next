@@ -39,7 +39,8 @@ command shape. The scout still gets the count it needs (from the `count`
 field in the JSON envelope) without introducing a second command path
 the tests would have to cover separately.
 
-Fix in `plugins/flow-next/agents/context-scout.md` line 406: change
+Fix in `plugins/flow-next/agents/context-scout.md` (the fallback text now
+sits near line 425 as the file grew): change
 `flowctl repo-map list --count` returns `0`
 → `flowctl repo-map list --json` returns `count: 0`.
 
@@ -48,12 +49,17 @@ Fix in `plugins/flow-next/agents/context-scout.md` line 406: change
 When a spec carries a "Decision lock-in" / "decision lock-ins" section
 specifying a single command shape (here: "Scouts call `flowctl repo-map
 list --json`, not direct JSON parse. Centralizes schema-version
-check."), grep the entire authored output for the alternative flags
-**before commit** — even in prose sections that look orthogonal.
+check."), grep the authored SCOUT surfaces for the alternative flags
+**before commit** — even in prose sections that look orthogonal. Scope
+the sweep to scout/agent surfaces: legitimate `--count` uses exist
+elsewhere (prime's DE7 detection in `skills/flow-next-prime/workflow.md`
+and `pillars.md`, documented in `docs/flowctl.md`), so a repo-wide ban
+would false-positive.
 
 Static prose-contract tests caught the schema fields and enum values
 (per the test_scout_fallback_contract.py assertions), but did NOT lock
-the command-flag shape. Future tests of this kind should add an
+the command-flag shape — and still don't (as of 2026-07-25 the file only
+asserts the count:0 JSON shape). Future tests of this kind should add an
 assertion like:
 
 ```python

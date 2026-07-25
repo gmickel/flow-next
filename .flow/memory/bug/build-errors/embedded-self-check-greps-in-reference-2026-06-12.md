@@ -9,7 +9,9 @@ problem_type: build-error
 symptoms: self-check grep missed spaced fetch(); print block contradicted the A4 hard rule
 root_cause: PCRE shorthand in BSD grep -E + copy-paste block not diffed against its prose rule
 resolution_type: fix
-related_to: [bug/build-errors/codex-mirror-audit-must-verify-r2-block-2026-06-05, bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/mirror-regen-exposes-latent-canonical-2026-06-11, bug/build-errors/r2-ask-block-must-never-anchor-in-2026-06-10, bug/build-errors/skill-workflow-snippets-must-enforce-2026-06-11, bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18, bug/build-errors/template-rewrite-env-var-cascade-2026-05-09]
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
+related_to: [bug/build-errors/r2-ask-block-mis-injected-into-negation-2026-06-27, bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/mirror-regen-exposes-latent-canonical-2026-06-11, bug/build-errors/skill-workflow-snippets-must-enforce-2026-06-11, bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18, bug/build-errors/template-rewrite-env-var-cascade-2026-05-09]
 ---
 
 ## Problem

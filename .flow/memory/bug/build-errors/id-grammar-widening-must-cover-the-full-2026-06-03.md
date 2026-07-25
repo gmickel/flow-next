@@ -10,6 +10,8 @@ symptoms: "11 introduced impl-review findings over 3 rounds: tracker handles fai
 root_cause: Canonicalizer wired only into the commands the spec bullet named; every other direct-path / fn-only-regex / pre-gate validation site was missed. Identifier validated with the resolver grammar (too loose) and stored raw (not stripped).
 resolution_type: fix
 last_updated: "2026-06-03"
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 related_to: [bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21]
 ---
 

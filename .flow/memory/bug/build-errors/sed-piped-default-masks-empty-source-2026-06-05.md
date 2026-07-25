@@ -9,6 +9,8 @@ problem_type: build-error
 symptoms: DEFAULT_BRANCH/BASE_REF ends up empty when origin/HEAD unset; export-cognitive-aid --base then fails
 root_cause: cmd | sed ... || echo default — sed exits 0 on empty input so the || default is unreachable; and literal branch==spec-id match misses flow branches
 resolution_type: fix
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 related_to: [bug/build-errors/abort-option-copy-must-reflect-pre-2026-05-18, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21, bug/build-errors/scout-fallback-prose-drifted-from-specs-2026-05-26, bug/build-errors/skill-bash-set-arguments-cant-honor-2026-05-26]
 ---
 

@@ -9,6 +9,8 @@ problem_type: build-error
 symptoms: Documented enable command (config set work.delegate true) silently never activates delegation; activation predicate is value=='codex'
 root_cause: String-enum knob (codex|false) documented with the bool 'true' idiom used by every other flow knob; 'true' != 'codex' so resolves OFF
 resolution_type: fix
+last_audited: "2026-07-25"
+audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 related_to: [bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/env-marker-gate-must-scan-the-namespace-2026-06-04, bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18, bug/build-errors/template-rewrite-env-var-cascade-2026-05-09]
 ---
 

@@ -9,7 +9,7 @@ problem_type: build-error
 symptoms: "4 NEEDS_WORK rounds on a docs/release task: broken /skills/ path in Codex mirror, spec close never pushed, free-prose tracker dispatch, split ledger writes"
 root_cause: Mirror regen reviewed as introduced content; sync-codex lacked a generic /skills/ rewrite+validator; land tail mutated .flow with no persistence story
 resolution_type: fix
-related_to: [bug/build-errors/codex-mirror-audit-must-verify-r2-block-2026-06-05, bug/build-errors/codex-mirror-smoke-docs-miss-composed-2026-05-18, bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21, bug/build-errors/r2-ask-block-must-never-anchor-in-2026-06-10, bug/build-errors/skill-adding-version-bump-leaves-stale-2026-06-05, bug/build-errors/skill-workflow-snippets-must-enforce-2026-06-11, bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18, bug/build-errors/template-rewrite-env-var-cascade-2026-05-09]
+related_to: [bug/build-errors/r2-ask-block-mis-injected-into-negation-2026-06-27, bug/build-errors/codex-mirror-smoke-docs-miss-composed-2026-05-18, bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21, bug/build-errors/skill-adding-version-bump-leaves-stale-2026-06-05, bug/build-errors/skill-workflow-snippets-must-enforce-2026-06-11, bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18, bug/build-errors/template-rewrite-env-var-cascade-2026-05-09]
 ---
 
 ## Problem
@@ -19,7 +19,7 @@ The fn-60.3 release/docs pass regenerated the Codex mirror with the new land ski
 Treating the mirror regen as a mechanical step ("validators green = done"). The token-level validators passed every round; the breaks were semantic: unrewritten path vars, state mutated but never persisted, dispatch shapes that drift from the established lifecycle grammar.
 
 ## Solution
-- sync-codex.sh: generic catch-all rewrites `${...PLUGIN_ROOT...}/skills/` → `$HOME/.codex/skills/` AFTER the specific rules (specific destinations win since sed -e exprs run in order), `$HOME` not `~` so it expands inside double quotes; plus a RED validator failing on any surviving plugin-root /skills/ ref (scripts/sync-codex.sh ~:232, ~:1540).
+- sync-codex.sh: generic catch-all rewrites `${...PLUGIN_ROOT...}/skills/` → `$HOME/.codex/skills/` AFTER the specific rules (specific destinations win since sed -e exprs run in order), `$HOME` not `~` so it expands inside double quotes; plus a RED validator failing on any surviving plugin-root /skills/ ref (scripts/sync-codex.sh ~:321 catch-all, ~:1873 RED validator, as of 2026-07-25 — the file grew; grep for the rule, not the line).
 - land workflow tail: spec close → tracker touchpoint → ONE `.flow` persistence commit + push (covers close AND tracked sync state), `git pull --rebase` retry, and on still-failing push `git reset --hard HEAD^` of the .flow-only commit so the merged-but-unclosed re-entry path stays reachable (plugins/flow-next/skills/flow-next-land/workflow.md 3.5).
 - Lifecycle dispatches use the fn-57 grammar verbatim: `skill: flow-next-tracker-sync (operation: push <spec-id>, event: land.merged)`.
 - Centralize ledger post-push writes in ONE canonical snippet (sha + decision) that all push paths reference.

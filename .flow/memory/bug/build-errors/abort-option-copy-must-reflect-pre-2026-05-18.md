@@ -30,7 +30,7 @@ Adding an `abort` option to a multi-step skill's interactive prompt is harder th
 - Routing block: same fact set, longer prose, explicit user-visible message.
 - User-printed message: `Setup cancelled at migration prompt. .flow/ may have been initialized/upgraded by Step 1 (idempotent — safe to leave). No migration applied; Step 2 onward skipped. Re-run /flow-next:setup later to complete setup.`
 
-`plugins/flow-next/skills/flow-next-setup/workflow.md:69,71-95` (canonical); mirror at `plugins/flow-next/codex/skills/flow-next-setup/workflow.md` regenerated via `./scripts/sync-codex.sh`.
+Originally at `plugins/flow-next/skills/flow-next-setup/workflow.md:69,71-95`; mirror regenerated via `./scripts/sync-codex.sh`. (2026-07-25 note: the specific incident artifact is gone — the Step 1b migration prompt and banner-ack write no longer exist; pre-1.0 `.flow/epics/` porting is manual prose near workflow.md:76. The lesson survives applied: the "Earlier steps ... may already have run; they are idempotent and safe to leave" shape now appears at workflow.md:115, 177, 228, 244, 773.)
 
 ## Prevention
 

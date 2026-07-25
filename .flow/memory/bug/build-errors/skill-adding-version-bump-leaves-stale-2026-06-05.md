@@ -9,7 +9,7 @@ problem_type: build-error
 symptoms: Manifest descriptions still say '25 skills' / '21 commands' after adding a new skill; impl-review flags the count drift and holds the docs R-ID partial
 root_cause: bump.sh updates version numbers + README badges but not the prose skill/command counts embedded in the JSON manifest description strings; the README prose count was updated but the three manifests were missed
 resolution_type: fix
-related_to: [bug/build-errors/codex-mirror-audit-must-verify-r2-block-2026-06-05, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21, bug/build-errors/sed-piped-default-masks-empty-source-2026-06-05]
+related_to: [bug/build-errors/r2-ask-block-mis-injected-into-negation-2026-06-27, bug/build-errors/docs-activation-command-for-string-enum-2026-06-05, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21, bug/build-errors/sed-piped-default-masks-empty-source-2026-06-05]
 ---
 
 ## Problem
@@ -21,12 +21,12 @@ When a version-bump task adds a NEW skill, the human-readable skill/command coun
 Impl-review (rp) flagged it P2/confidence-100 and held R12 at `partial` until fixed.
 
 ## What Didn't Work
-Updating only the README prose count. The manifest descriptions are easy to forget because they are JSON `description`/`longDescription` strings, not an obvious "count" field, and they each phrase the count slightly differently (the codex plugin omits the command count entirely).
+Updating only the README prose count. The manifest descriptions are easy to forget because they are JSON `description`/`longDescription` strings, not an obvious "count" field, and they each phrase the count slightly differently (phrasings differ per manifest; as of 2026-07-25 the codex longDescription DOES carry the command count - all three currently agree at 28 skills / 23 commands / 22 subagents).
 
 ## Solution
 Before committing a skill-adding bump, sweep ALL count surfaces:
 `grep -rn "[0-9]\+ skills\|[0-9]\+ commands\|Twenty-" .claude-plugin/ .agents/ plugins/flow-next/.claude-plugin/ plugins/flow-next/.codex-plugin/ README.md plugins/flow-next/README.md`
-Derive the true counts deterministically: skills = `ls -d plugins/flow-next/skills/*/ | wc -l`; commands = `ls plugins/flow-next/commands/flow-next/*.md | wc -l`; subagents = `ls plugins/flow-next/agents/*.md | wc -l`. Update every surface to match, then re-run `./scripts/sync-codex.sh`.
+Derive the true counts deterministically: skills = `ls -d plugins/flow-next/skills/*/ | wc -l`; commands = `ls plugins/flow-next/commands/*.md | wc -l` (commands are FLAT - `commands/flow-next/` never existed per agent_docs/adding-skills.md); subagents = `ls plugins/flow-next/agents/*.md | wc -l`. Update every surface to match, then re-run `./scripts/sync-codex.sh`.
 
 ## Prevention
 `bump.sh` updates version numbers + README badges but does NOT touch the prose skill/command counts in the JSON manifest descriptions. When a release ADDS or REMOVES a skill/command/agent, treat the count-sweep as a manual checklist item (or add it to a release smoke check). A grep for the old count across all four manifests + both READMEs catches every surface in one pass.
