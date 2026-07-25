@@ -158,6 +158,10 @@ strategy status
 sync active
 sync check
 sync check-collisions
+sync create-first-clear
+sync create-first-get
+sync create-first-key
+sync create-first-put
 sync clear
 sync defer
 sync get-state

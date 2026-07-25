@@ -23520,6 +23520,124 @@ def _read_optional_arg_or_file(file_arg: Optional[str], inline_arg: Optional[str
     return None
 
 
+CREATE_FIRST_DIR = "create-first"
+
+
+def _create_first_dir(flow_dir: Path) -> Path:
+    return flow_dir / CREATE_FIRST_DIR
+
+
+def compute_create_first_key(tracker_type: str, title: str, body: str) -> str:
+    """Stable retry lookup key for a pre-spec create-first attempt (fn-134).
+
+    First 16 hex chars of sha256(type NUL title NUL body). Same inputs always
+    yield the same key, so a resumed run finds the record written by the
+    interrupted one and LINKS instead of creating a second issue. Must stay
+    identical to the definition in the tracker-sync skill's steps.md Phase 2d.
+    """
+    payload = "\0".join([tracker_type or "", title or "", body or ""])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
+    """Atomic pre-spec recovery records for tracker-sync `create-first`.
+
+    create-first creates a tracker issue BEFORE any local spec exists, so
+    `sync receipt` (which resolves a local spec id) cannot be used. This is the
+    thin, judgment-free file layer that makes "a retry links, never re-creates"
+    MECHANICAL rather than a promise the caller has to keep by hand.
+
+    Records live at `.flow/create-first/<key>.json` (gitignored - a committed
+    record would let a teammate computing the same key resume onto someone
+    else's issue). No tracker transport, no issue creation, no decisions.
+    """
+    use_json = getattr(args, "json", False)
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=use_json)
+    flow_dir = get_flow_dir()
+    action = args.recovery_action
+
+    if action == "key":
+        body = ""
+        body_file = getattr(args, "body_file", None)
+        if body_file:
+            try:
+                body = Path(body_file).read_text(encoding="utf-8")
+            except OSError as exc:
+                error_exit(f"Cannot read --body-file: {exc}", use_json=use_json)
+        key = compute_create_first_key(args.type, args.title, body)
+        if use_json:
+            json_output({"key": key})
+        else:
+            print(key)
+        return
+
+    path = _create_first_dir(flow_dir) / f"{args.key}.json"
+
+    if action == "get":
+        if not path.exists():
+            # Absent is a normal branch, not a crash: the caller uses the exit
+            # status to decide create-vs-link.
+            if use_json:
+                print("{}")
+            sys.exit(1)
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            error_exit(f"Unreadable recovery record: {exc}", use_json=use_json)
+        if use_json:
+            json_output(record)
+        else:
+            for field in ("id", "identifier", "url", "title", "transport", "createdAt"):
+                if record.get(field):
+                    print(f"{field}: {record[field]}")
+        return
+
+    if action == "put":
+        record = {
+            "retryKey": args.key,
+            "id": args.id,
+            "identifier": args.identifier,
+            "url": args.url,
+            "title": args.title,
+            "createdAt": now_iso(),
+            "transport": args.transport,
+        }
+        existing = None
+        if path.exists():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                existing = None
+        if existing and existing.get("createdAt"):
+            # Idempotent: a second put keeps the ORIGINAL creation time so the
+            # record still describes when the remote issue was actually made.
+            record["createdAt"] = existing["createdAt"]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(path, record)
+        if use_json:
+            json_output({"recorded": True, **record})
+        else:
+            print(f"Recovery record written: {path}")
+        return
+
+    if action == "clear":
+        removed = False
+        if path.exists():
+            try:
+                path.unlink()
+                removed = True
+            except OSError as exc:
+                error_exit(f"Cannot clear recovery record: {exc}", use_json=use_json)
+        if use_json:
+            json_output({"cleared": removed, "key": args.key})
+        else:
+            print("cleared" if removed else "nothing to clear")
+        return
+
+    error_exit(f"Unknown recovery action '{action}'", use_json=use_json)
+
+
 def cmd_sync_receipt(args: argparse.Namespace) -> None:
     """Write a sync run receipt (R12) at a guard-safe path.
 
@@ -30739,6 +30857,43 @@ def main() -> None:
     p_sync_setdep.add_argument("--source", default="flow", help="Provenance source (default: flow)")
     p_sync_setdep.add_argument("--json", action="store_true", help="JSON output")
     p_sync_setdep.set_defaults(func=cmd_sync_set_dep_relation)
+
+    # fn-134: pre-spec recovery for tracker-sync `create-first`. Thin atomic file
+    # layer only - it makes "a retry links, never re-creates" mechanical instead
+    # of a prose promise. No transport, no issue creation, no judgment.
+    # fn-134: pre-spec recovery for tracker-sync `create-first`. Thin atomic file
+    # layer only - it makes "a retry links, never re-creates" mechanical instead
+    # of a prose promise. Flat two-token names match every other sync subcommand
+    # (set-tracker-id, check-collisions, list-dep-relations); no 3-level nesting.
+    p_cfk = sync_sub.add_parser("create-first-key", help="Compute the create-first retry lookup key")
+    p_cfk.add_argument("--type", required=True, help="tracker.type (linear|github|gitlab|jira)")
+    p_cfk.add_argument("--title", required=True, help="Issue title")
+    p_cfk.add_argument("--body-file", dest="body_file", default=None, help="File holding the issue body")
+    p_cfk.add_argument("--json", action="store_true", help="JSON output")
+    p_cfk.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="key")
+
+    p_cfg = sync_sub.add_parser("create-first-get", help="Read a create-first recovery record (exit 1 when absent)")
+    p_cfg.add_argument("--key", required=True, help="Retry lookup key")
+    p_cfg.add_argument("--json", action="store_true", help="JSON output")
+    p_cfg.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="get")
+
+    p_cfp = sync_sub.add_parser("create-first-put", help="Record a created-but-unminted issue")
+    for _flag, _hlp in (
+        ("--id", "Tracker issue id"),
+        ("--identifier", "Tracker display identifier"),
+        ("--url", "Issue url"),
+        ("--title", "Issue title"),
+        ("--transport", "Transport used"),
+    ):
+        p_cfp.add_argument(_flag, required=True, help=_hlp)
+    p_cfp.add_argument("--key", required=True, help="Retry lookup key")
+    p_cfp.add_argument("--json", action="store_true", help="JSON output")
+    p_cfp.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="put")
+
+    p_cfc = sync_sub.add_parser("create-first-clear", help="Remove a recovery record after mint+attach")
+    p_cfc.add_argument("--key", required=True, help="Retry lookup key")
+    p_cfc.add_argument("--json", action="store_true", help="JSON output")
+    p_cfc.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="clear")
 
     p_sync_receipt = sync_sub.add_parser(
         "receipt", help="Write a sync run receipt (guard-safe path, type: sync)"

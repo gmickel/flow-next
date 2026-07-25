@@ -926,6 +926,19 @@ flowctl memory mark-stale <id> --reason "no longer accurate after fn-37 refactor
 
 Idempotent — re-marking replaces `audit_notes` and re-stamps `last_audited`. Also drops `hardened_into` (a stale entry never keeps pointing at a gate). Body untouched. Used by `/flow-next:audit`; also callable directly.
 
+#### sync create-first-recovery
+
+Pre-spec recovery records for tracker-sync `create-first`, which creates a tracker issue *before* any local spec exists (so `sync receipt`, which resolves a local spec id, cannot be used). Thin atomic file layer only - no transport, no issue creation, no judgment. Records live at `.flow/create-first/<key>.json` and are gitignored, because a committed record would let a teammate computing the same key resume onto someone else's issue.
+
+```bash
+flowctl sync create-first-key   --type github --title "Fix login" [--body-file b.md]
+flowctl sync create-first-get   --key <k> [--json]    # exit 1 when absent (a normal branch)
+flowctl sync create-first-put   --key <k> --id … --identifier … --url … --title … --transport …
+flowctl sync create-first-clear --key <k>             # after mint + attach succeed
+```
+
+The key is the first 16 hex chars of `sha256(type NUL title NUL body)`, so a resumed run recomputes it and finds the interrupted attempt. This is what makes "a retry links, never re-creates" mechanical rather than a promise the caller has to keep. `put` is idempotent and preserves the original `createdAt`.
+
 #### memory mark-hardened
 
 Graduate a recurring lesson into an enforced gate and demote the entry to a pointer at it (sets `status: hardened` and `hardened_into`, stamps `last_audited`, clears the stale-only fields).

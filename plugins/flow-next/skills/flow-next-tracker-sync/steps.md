@@ -342,8 +342,22 @@ This op never mints a spec id and never invents a synthetic key. GitHub/GitLab s
 
 1. **Retry lookup key** (stable; computable *before* create and on every retry):
 
-   ```
-   retryKey = first 16 hex chars of sha256( tracker.type + "\0" + title + "\0" + body )
+   ```bash
+   FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+   [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+   # The key is first 16 hex of sha256(type NUL title NUL body). Do NOT hand-roll
+   # it - flowctl owns the definition so prose and code cannot drift (fn-134):
+   KEY=$("$FLOWCTL" sync create-first-key --type "$TRACKER_TYPE" --title "$TITLE" --body-file "$BODY_FILE")
+
+   # BEFORE creating anything: a prior attempt may already have made the issue.
+   if REC=$("$FLOWCTL" sync create-first-get --key "$KEY" --json); then
+     : # found -> LINK to that issue; never create a second one
+   else
+     : # absent -> create via writeIssue, then immediately record it:
+     #   "$FLOWCTL" sync create-first-put --key "$KEY" --id … --identifier … --url … --title … --transport …
+   fi
+   # After mint + attach + merge-base seed succeed:
+   #   "$FLOWCTL" sync create-first-clear --key "$KEY"
    ```
 
    Same type + title + body always yields the same key. A rephrased *new* idea gets a new key (a new create is correct). A resumed run of the *same* intent recomputes the same key and finds the recovery file.

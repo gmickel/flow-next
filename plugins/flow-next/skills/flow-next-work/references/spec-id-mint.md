@@ -11,9 +11,9 @@ Explicit user override in the invocation always wins. No runtime nag here - setu
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-# ONE root snapshot for this mint (fn-110). Literal path; re-type it in this block.
+# REUSE the Phase 0 root snapshot - do NOT take another config read here (R7).
+# Literal path; re-type it because variables die across tool calls.
 WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
-$FLOWCTL config get --json > "$WORK_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$WORK_CFG"
 SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "$WORK_CFG" 2>/dev/null)
 BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // false')
 

@@ -44,6 +44,47 @@ def _read(path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+class SpecIdConfigReadBudget(unittest.TestCase):
+    """R7: mint sites route from a root snapshot, never a per-leaf read, and
+    never take a SECOND snapshot when the skill already holds one."""
+
+    # A mint site may (and does) PROHIBIT the per-leaf read in prose, so match an
+    # actual invocation - the flowctl binary followed by the leaf - not the bare
+    # phrase, which also appears inside "never a per-leaf `config get ...`".
+    LEAF_INVOCATION = re.compile(
+        r"""(?:\$FLOWCTL|"\$FLOWCTL"|flowctl(?:\.py)?)\s+config\s+get\s+tracker\.specIds"""
+    )
+
+    def test_no_per_leaf_specids_read_at_any_mint_site(self) -> None:
+        for name, path in MINT_SITES.items():
+            with self.subTest(site=name):
+                hit = self.LEAF_INVOCATION.search(_read(path))
+                self.assertIsNone(
+                    hit,
+                    f"{name}: per-leaf read invoked: {hit.group(0) if hit else ''}",
+                )
+
+    def test_sites_holding_a_snapshot_do_not_take_a_second(self) -> None:
+        # plan and capture take a root snapshot early; their mint sites must jq
+        # that file rather than issue another `config get --json`.
+        for name, path in (("plan", PLAN_STEPS), ("capture", CAPTURE_WF)):
+            text = _read(path)
+            with self.subTest(site=name):
+                self.assertLessEqual(
+                    text.count("config get --json"),
+                    1,
+                    f"{name}: more than one root snapshot taken",
+                )
+
+    def test_work_mint_reuses_phase0_snapshot(self) -> None:
+        # work promotes its Phase 0 leaf read to a root snapshot; the mint
+        # reference must REUSE it, not take its own.
+        ref = _read(WORK_MINT_REF)
+        self.assertNotIn("config get --json", ref)
+        self.assertIn("WORK_CFG", ref)
+        self.assertLessEqual(_read(WORK_PHASES).count("config get --json"), 1)
+
+
 class SpecIdRoutingGate(unittest.TestCase):
     """R7 / R20: every mint site routes on tracker.specIds."""
 

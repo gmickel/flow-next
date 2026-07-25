@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-134-spec-id-collisions-widen-allocation",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "needs_work",
+  "completion_reviewed_at": "2026-07-25T12:01:41.958425Z",
   "created_at": "2026-07-25T08:35:07.343327Z",
   "default_impl": null,
   "default_review": null,
@@ -79,12 +79,24 @@
       "task": null,
       "timestamp": "2026-07-25T09:20:44.204683Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "9df14934e23853b97ac3f27e15d57d96288c187f0481014fd62e7c55d4ae2bed",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-07-25T12:01:41.957546Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
-  "review_pending_rounds": {
-    "plan": 1
-  },
+  "review_pending_rounds": {},
   "review_transport_failures": {
+    "completion": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-134-spec-id-collisions-widen-allocation.md",
@@ -101,5 +113,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-25T11:58:16.859582Z"
+  "updated_at": "2026-07-25T12:01:41.958425Z"
 }

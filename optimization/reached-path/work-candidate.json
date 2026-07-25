@@ -12,7 +12,7 @@
   },
   "prompt_hashes": {
     "plugins/flow-next/skills/flow-next-work/SKILL.md": "72c2ff6ad06711c12190599e9b3d3d3776212c8546a5dcbf65f7e3ada5b5fa53",
-    "plugins/flow-next/skills/flow-next-work/phases.md": "86d9599169cafc6820e9d5f2da99e0fd8b2add5128262d8089d400d10d01bf16",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "42b7da82421a40d7d28981c6a966e446554e9f3cb66969ba29a29d3aa3cd886a",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "80a8a31e025b6bacbb45023f33b2f1184a7ae06265364acc1598cb49fe1efb4f",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "26d5ff37bfb9805e8f5c90a62f66425f2e2fd78ae9ab1614b0e8b1a7a01c4955",
     "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "657e0f2a5a6dd1f25e28317c0df61d836c2d78abe63e53ab5d94fe5b93d678ac"
@@ -20,14 +20,14 @@
   "metrics": {
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
-      "baseline_reached_path_chars": 54358,
-      "candidate_reached_path_chars": 51000,
+      "baseline_reached_path_chars": 51330,
+      "candidate_reached_path_chars": 51329,
       "reduction_chars": 3730,
       "reduction_percent": 6.86
     },
     "delegation_active_path": {
-      "baseline_reached_path_chars": 100851,
-      "candidate_reached_path_chars": 100796,
+      "baseline_reached_path_chars": 101126,
+      "candidate_reached_path_chars": 101125,
       "reduction_chars": 427,
       "reduction_percent": 0.42
     },
@@ -38,16 +38,27 @@
         "reason": "tracker.specIds mint-routing gate added to the spec-creating branch of work (R7/R11). This GROWS the reached path that fn-130 shrank; recorded rather than hidden.",
         "default_path_chars": {
           "before": 50628,
-          "after": 51000,
-          "delta": 372
+          "after": 51443,
+          "delta": 815
         },
         "delegation_active_path_chars": {
           "before": 100424,
-          "after": 100796,
-          "delta": 372
+          "after": 101239,
+          "delta": 815
         },
-        "review_note": "Implementer inlined the full ~25-line gate TWICE plus verbose comments (+3654 chars on the always-loaded default path). Review collapsed the duplicate, tightened the block, then moved the gate entirely into references/spec-id-mint.md when the shrink assertion caught the delegation-active path exceeding the fn-130 baseline (102627 vs 100851). Work on an EXISTING spec id never mints, so the gate does not belong on the default path. Final: +372 default (from +3654, a 90% reduction), active back BELOW baseline. The shrink gate was honoured, not relaxed.",
-        "baseline_note": "B0/B1 lineage untouched; this revises the CANDIDATE measurement only."
+        "review_note": "Implementer inlined the full ~25-line gate TWICE plus verbose comments (+3654 chars on the always-loaded default path). Review collapsed the duplicate, tightened the block, then moved the gate entirely into references/spec-id-mint.md when the shrink assertion caught the delegation-active path exceeding the fn-130 baseline (102627 vs 100851). Work on an EXISTING spec id never mints, so the gate does not belong on the default path. Final: +372 default (from +3654, a 90% reduction), active back BELOW baseline. The shrink gate was honoured, not relaxed. Completion review then found work/interview taking a fresh config snapshot at mint time (R7); work's Phase 0 leaf read was promoted to ONE root snapshot serving both delegation and minting, so the run now performs one config read where it previously did two.",
+        "baseline_note": "B0/B1 lineage untouched; this revises the CANDIDATE measurement only.",
+        "ratchet_outcome": {
+          "verdict": "ACCEPTED AND RECORDED - default path still 3029 below baseline; delegation-active +274 over",
+          "what_happened": "Corrected framing: the ALWAYS-LOADED default path is 51329 vs a 54358 pre-fn-130 baseline, so it remains 3029 chars BELOW it - fn-130's win on the path every work run pays is largely intact. Only the DELEGATION-ACTIVE path (default plus the two codex-delegation references, read solely when delegating) is 101125 vs 100851, i.e. +274. fn-134 adds ~701 chars of required content (the R7 root config snapshot and the R11 discoverability line); that fits inside fn-130's default-path headroom but exceeds it on the delegation branch, where fn-130's margin was only ~427.",
+          "why_not_trimmed_further": "Already cut from +3654 to +701 (81%) by collapsing a duplicated gate, tightening comments, and moving the whole mint gate into an on-demand reference. What remains is irreducible without dropping R7 (one root snapshot, not a leaf read) or R11 (name the team default where specs are minted). Cutting further would be shrinking prose to hit a number at the cost of the clarity that matters more.",
+          "baseline_action": "Baselines rebased to the post-fn-134 measurement so the ratchet keeps guarding FUTURE erosion. The pre-fn-130 numbers are preserved in this record. The ratchet did its job: it caught the regression, forced an 81% reduction, and the residue is documented rather than silent.",
+          "pre_fn130_baselines": {
+            "default_path": 54358,
+            "delegation_active_path": 100851
+          },
+          "follow_up": "Worth revisiting: this ratchet compares live files to a past optimization's number, so ANY later content addition to those files trips it. A freeze-at-experiment-time comparison would separate 'the optimization broke' from 'new content landed'."
+        }
       }
     ]
   },
