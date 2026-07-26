@@ -126,6 +126,8 @@ When ambiguous, pick the most specific that fits. `--root-cause` for a live find
 
 A finding worth fixing is **promoted to a flow spec/task** — compose from `flowctl spec create` + `spec set-plan`, or `/flow-next:capture` from the finding body. That closes the loop: the QA finding becomes the intent for the fix, traceable back through its R-ID to the original spec. QA itself **does not fix product code** — it files, surfaces, and hands off (BRB's "test, document, file, hand off; don't fix unless asked").
 
+**Spec-id routing gate:** when promoting via `/flow-next:capture`, the mint gate is **owned by capture** (capture/workflow.md Phase 5.2) — do not re-implement it here. When composing with `flowctl spec create` directly, apply the same gate: read `tracker.specIds` from ONE root config snapshot (fn-110; no per-leaf get), and when value is `tracker` AND the bridge is active, mint from a named issue key or run create-first then `spec create --tracker-first --tracker-identifier <key>` (tracker-sync steps.md Phase 2d) — and in BOTH cases follow the mint with the fetch/attach/seed ceremony (tracker-sync steps.md Phase 2b), because minting stores `tracker.identifier` but NOT the durable `tracker.id`, and an unlinked spec makes a later touchpoint create a SECOND remote issue instead of linking the named one; bridge inactive / no transport degrades **silently** to flow-first; explicit override wins. Network cost is conditional (reorder when `tracker.perEvent.qa` / capture is on; earlier remote write when off). No runtime nag (withdrawn R10).
+
 ## Anti-patterns
 
 | Don't | Why |

@@ -65,5 +65,22 @@ Cross-platform: canonical prose changes require `./scripts/sync-codex.sh` run TW
 - [ ] Focused suite green: `cd plugins/flow-next/tests && python3 -m unittest test_flowctl_surface test_startup_bootstrap -q` plus the new routing and setup tests.
 
 ## Done summary
+All five spec-creating sites (plan, work, capture, interview, qa) now route on `tracker.specIds`, reading it from the config snapshot each skill already holds so no new config read is added. Setup gained the id-scheme question. Tracker-first is named as the team default where specs are minted.
 
+Implemented by grok-4.5 via the grok CLI bridge; reviewed in-host (opus-5). Verified: no runtime nag at any mint site (withdrawn R10), no new leaf `config get` at mint sites, no blanket zero-cost claim, and the setup question carries both gate conditions plus the immediate-remote-write disclosure.
+
+REVIEW FINDING, the significant one. Grok's focused suite passed but the FULL suite caught three failures, and one was substantive: `test_measured_default_and_active_paths_shrink` refused because fn-134 had pushed the work skill's delegation-active reached path ABOVE the fn-130 baseline (102627 vs 100851). fn-130 shipped to shrink that path; this change was erasing the optimization and going negative.
+
+Root cause: the ~25-line mint gate was inlined TWICE in phases.md (spec-file and spec-less starts) plus verbose comments and prose, adding +3654 chars (~913 tokens) to an always-loaded file in one of the most-run skills. Same class as the fn-122 round-5 duplication finding.
+
+Fixed structurally rather than by relaxing the assertion, which would have been the weaken-the-gate anti-pattern: collapsed the duplicate to a pointer, tightened the block, then moved the gate entirely into `references/spec-id-mint.md`, read only when actually minting. Work on an EXISTING spec id never mints, so the gate was dead weight on the default path for the common case. Final: +372 chars (90% reduction from grok's version), delegation-active path back below the fn-130 baseline.
+
+Reached-path evidence for both work and setup regenerated against the final bytes, with a `revisions` entry recording the growth, the cause, and the review correction. Baselines untouched; only candidate measurements revised.
+
+Two other full-suite failures were mechanical: reached-path hashes needed regenerating after legitimate prose edits, and the routing-prose contract tests needed their work-site file set widened to include the new reference (identical assertions, corrected location).
+
+Also made the allocation benchmark from task .1 load-aware: it measures wall-clock and the full suite runs 14 jobs in parallel, which reliably pushed a ~155ms measurement past any fixed bound. It now skips on a contended machine and still runs standalone. Correctness properties do not depend on timing and are covered by the other tests.
 ## Evidence
+- Commits: 805a21e1
+- Tests: python3 scripts/run_tests_parallel.py (files=132 ran=2389 failures=0 errors=0 skipped=4), cd plugins/flow-next/tests && python3 -m unittest test_spec_id_routing_prose -q (14 tests OK), ./scripts/sync-codex.sh twice - idempotent, guards green, reached-path: work default 50628 -> 51000 (+372, was +3654); delegation-active 100796 vs baseline 100851 (BELOW), verified: no runtime nag, no new leaf config get at mint sites, no blanket zero-cost claim, setup question has both gate conditions + immediate-write disclosure
+- PRs:

@@ -1158,6 +1158,22 @@ def get_default_tracker_config() -> dict:
         # perTracker. None = readiness projection off (the gate stays
         # dormant — R7 invisibility).
         "readyState": None,
+        # fn-134.2 — id scheme for new specs when a tracker bridge is active.
+        # Strict string-enum: "flow" (default, native fn-N) | "tracker"
+        # (tracker-keyed KEY-N-slug / synthetic gh-N / gl-N). Only the literal
+        # "tracker" activates; a coerced bool / typo never does (fail-closed
+        # on read via normalize_tracker_spec_ids). WRITE-side validation in
+        # cmd_config_set rejects anything outside the enum.
+        #
+        # UNSET-DETECTABLE (R9): this leaf is in get_default_tracker_config so
+        # MERGED reads return "flow", but it is NOT materialized at init
+        # (_INIT_UNMATERIALIZED_LEAVES). Setup asks when a tracker is configured
+        # AND `config get tracker.specIds --raw` returns null ("never asked").
+        # A materialized default of "flow" would make "never asked"
+        # indistinguishable from "answered flow" and silently suppress the
+        # question. Decision: DO NOT materialize at init; leave the leaf absent
+        # on disk until the user (or setup) explicitly sets it.
+        "specIds": "flow",
     }
 
 
@@ -1369,17 +1385,71 @@ def get_default_config() -> dict:
 # their materialize-on-init behavior unchanged.
 _INIT_UNMATERIALIZED_BLOCKS = ("artifacts",)
 
+# Leaf keys (dotted paths) that must stay absent from the on-disk file after
+# init so setup can detect "never asked" via `config get <key> --raw` → null.
+# MERGED defaults still apply (see get_default_config / get_default_tracker_config).
+# fn-134.2: tracker.specIds — see get_default_tracker_config comment for the
+# materialization decision (DO NOT materialize; unset must be detectable).
+_INIT_UNMATERIALIZED_LEAVES = ("tracker.specIds",)
+
+# Strict enum for tracker.specIds (fn-134.2). Write-side rejects anything else;
+# read-side fail-closes anything else to "flow".
+TRACKER_SPEC_IDS_VALUES = frozenset({"flow", "tracker"})
+
+
+def normalize_tracker_spec_ids(value) -> str:
+    """Semantic value of ``tracker.specIds``.
+
+    Only the literal string ``"tracker"`` activates tracker-keyed ids. A coerced
+    bool, typo, null, or any other value fail-closes to ``"flow"`` (R6). Never
+    treat a truthy non-string as activating.
+    """
+    if isinstance(value, str) and value == "tracker":
+        return "tracker"
+    return "flow"
+
+
+def _with_tracker_spec_ids_normalized(cfg: dict) -> dict:
+    """Return cfg with ``tracker.specIds`` fail-closed on the merged tree.
+
+    Copy-on-write when normalizing so a shared defaults dict is never mutated.
+    """
+    tracker = cfg.get("tracker")
+    if not isinstance(tracker, dict) or "specIds" not in tracker:
+        return cfg
+    raw_val = tracker["specIds"]
+    norm = normalize_tracker_spec_ids(raw_val)
+    if raw_val == norm:
+        return cfg
+    new_cfg = dict(cfg)
+    new_tracker = dict(tracker)
+    new_tracker["specIds"] = norm
+    new_cfg["tracker"] = new_tracker
+    return new_cfg
+
 
 def _init_persisted_defaults() -> dict:
     """Defaults `cmd_init` writes/merges into config.json.
 
-    Equal to get_default_config() minus _INIT_UNMATERIALIZED_BLOCKS, so the
-    raw-file presence of those keys stays a faithful "explicitly set"
-    provenance signal for the setup ceremony's `--raw` probe.
+    Equal to get_default_config() minus _INIT_UNMATERIALIZED_BLOCKS and
+    _INIT_UNMATERIALIZED_LEAVES, so the raw-file presence of those keys stays
+    a faithful "explicitly set" provenance signal for the setup ceremony's
+    `--raw` probe.
     """
     defaults = get_default_config()
     for block in _INIT_UNMATERIALIZED_BLOCKS:
         defaults.pop(block, None)
+    for leaf in _INIT_UNMATERIALIZED_LEAVES:
+        parts = leaf.split(".")
+        cur = defaults
+        for part in parts[:-1]:
+            nxt = cur.get(part) if isinstance(cur, dict) else None
+            if not isinstance(nxt, dict):
+                cur = None
+                break
+            cur = nxt
+        if isinstance(cur, dict):
+            cur.pop(parts[-1], None)
     return defaults
 
 
@@ -1404,14 +1474,14 @@ def load_flow_config() -> dict:
     config_path = get_flow_dir() / CONFIG_FILE
     defaults = get_default_config()
     if not config_path.exists():
-        return defaults
+        return _with_tracker_spec_ids_normalized(defaults)
     try:
         data = json.loads(config_path.read_text(encoding="utf-8"))
         if isinstance(data, dict):
-            return deep_merge(defaults, data)
-        return defaults
+            return _with_tracker_spec_ids_normalized(deep_merge(defaults, data))
+        return _with_tracker_spec_ids_normalized(defaults)
     except (json.JSONDecodeError, Exception):
-        return defaults
+        return _with_tracker_spec_ids_normalized(defaults)
 
 
 def _walk_config_value(config, key: str, default=None):
@@ -1519,7 +1589,7 @@ def load_config_snapshot() -> ConfigSnapshot:
         merged = defaults
     else:
         merged = deep_merge(defaults, raw)
-    return ConfigSnapshot(raw, merged)
+    return ConfigSnapshot(raw, _with_tracker_spec_ids_normalized(merged))
 
 
 def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
@@ -2753,8 +2823,11 @@ def validate_tracker_identifier(
     / ``#01`` are rejected (fn-69 R4-identity). The bare-``N`` form (fn-64) lets
     ``sync set-tracker-id --identifier 42`` succeed; it is normalized to the
     ``#42`` display form on the way out. Tracker-first canonical-id generation
-    does NOT pass this flag, so a GitHub/GitLab ref can never become a canonical
-    spec id.
+    does NOT pass this flag: a GitHub/GitLab ref never becomes a canonical spec
+    id *through this function*. Since fn-134 such a ref CAN still mint one, but
+    only via ``resolve_tracker_first_mint``, which derives a synthetic
+    ``gh-<n>`` / ``gl-<iid>`` key from ``tracker.type`` rather than storing the
+    raw ref as the id. The raw ``#123`` form stays display-only either way.
     """
     if not identifier:
         if required:
@@ -2831,6 +2904,213 @@ def reject_reserved_tracker_key(
             "tracker key.",
             use_json=use_json,
         )
+
+
+# fn-134.2 — synthetic key prefixes for trackers that lack a native KEY-N
+# identifier. Type-gating alone is NOT enough (ids are permanent; config is
+# not): while tracker.type is github/gitlab the matching prefix is reserved
+# for synthesis in that repo, and minting preflights the store for collisions.
+_SYNTHETIC_TRACKER_KEYS = {
+    "github": "gh",
+    "gitlab": "gl",
+}
+
+
+def parse_issue_ref_for_mint(
+    identifier: Optional[str],
+) -> Optional[tuple[int, str]]:
+    """Mint-side parse for ``#123`` / ``<project>#456`` issue references.
+
+    Returns ``(iid, display)`` where ``iid`` is the project-scoped issue number
+    (GitLab ``iid`` / GitHub issue number) — never an opaque global id. Accepts
+    bare ``123`` (normalized to ``#123`` display) and nested GitLab paths
+    (``group/subgroup/project#12``).
+
+    Separate from ``validate_tracker_identifier(allow_reference=True)``, which
+    is link-time only and returns an empty key ``("", n, display)`` — the wrong
+    shape for minting a resolvable ``gh-N-slug`` / ``gl-N-slug`` id.
+    """
+    if not identifier:
+        return None
+    stripped = identifier.strip()
+    # Optional path + #N (positive integer, no leading zero).
+    ref = re.match(r"^(?:(?:[^/#]+/)+[^/#]+)?#([1-9][0-9]*)$", stripped)
+    if ref:
+        return (int(ref.group(1)), stripped)
+    bare = re.match(r"^([1-9][0-9]*)$", stripped)
+    if bare:
+        return (int(bare.group(1)), f"#{bare.group(1)}")
+    return None
+
+
+def _tracker_type_for_synthesis() -> str:
+    """Lowercased tracker.type from merged config, or empty when unset."""
+    ttype = get_config("tracker.type")
+    if not isinstance(ttype, str):
+        return ""
+    return ttype.strip().lower()
+
+
+def reject_synthetic_prefix_reservation(
+    key: str, display: str, *, use_json: bool = False
+) -> None:
+    """While tracker.type is github/gitlab, reserve gh/gl for synthesis.
+
+    An explicit native identifier using the reserved key (e.g. ``GH-123`` on a
+    GitHub-configured repo) is rejected at link and create time. Linear/Jira
+    repos natively keyed GH are unaffected — type is not github/gitlab, so the
+    reservation does not fire.
+    """
+    ttype = _tracker_type_for_synthesis()
+    reserved = _SYNTHETIC_TRACKER_KEYS.get(ttype)
+    if not reserved or key != reserved:
+        return
+    error_exit(
+        f"Tracker identifier '{display}' uses key '{key}' which is reserved "
+        f"for synthetic minting while tracker.type is {ttype}. Pass a "
+        f"#N-style issue reference (e.g. #123 or group/project#456) instead "
+        f"of a native {reserved.upper()}-N key, or re-point tracker.type.",
+        use_json=use_json,
+    )
+
+
+def resolve_tracker_first_mint(
+    identifier: Optional[str], *, use_json: bool = False
+) -> tuple[str, int, str]:
+    """Resolve a tracker-first identifier into ``(key, number, display)``.
+
+    - Linear/Jira ``KEY-N`` → native key (unchanged).
+    - GitHub ``#123`` / bare ``123`` when ``tracker.type=github`` → ``gh``, 123.
+    - GitLab ``<project>#456`` when ``tracker.type=gitlab`` → ``gl``, 456 (iid).
+    - Explicit ``GH-N`` / ``GL-N`` while type is github/gitlab → rejected
+      (contextual reservation).
+    - ``fn`` reserved key → rejected.
+    """
+    if not identifier or not str(identifier).strip():
+        error_exit(
+            "A tracker identifier is required (e.g., WOR-17, #123, or group/project#456).",
+            use_json=use_json,
+        )
+    stripped = str(identifier).strip()
+
+    # KEY-N path first (Linear/Jira; also catches mistaken GH-N under github).
+    parsed = parse_tracker_identifier(stripped)
+    if parsed is not None:
+        key, number = parsed
+        if key == RESERVED_TRACKER_KEY:
+            error_exit(
+                f"Tracker identifier '{stripped}' uses the reserved key 'fn', "
+                "which collides with flow's native id scheme. Use a different "
+                "tracker key.",
+                use_json=use_json,
+            )
+        reject_synthetic_prefix_reservation(key, stripped, use_json=use_json)
+        return (key, number, stripped)
+
+    # Reference form → synthetic mint only when type is github/gitlab.
+    ref = parse_issue_ref_for_mint(stripped)
+    if ref is not None:
+        number, display = ref
+        ttype = _tracker_type_for_synthesis()
+        synthetic = _SYNTHETIC_TRACKER_KEYS.get(ttype)
+        if synthetic:
+            return (synthetic, number, display)
+        error_exit(
+            f"Issue reference '{stripped}' requires tracker.type github or "
+            f"gitlab for synthetic key minting (got "
+            f"{get_config('tracker.type')!r}). Linear/Jira use KEY-N "
+            f"identifiers (e.g. WOR-17 / PROJ-123).",
+            use_json=use_json,
+        )
+
+    error_exit(
+        f"Invalid tracker identifier '{stripped}'. Expected a bare display "
+        "key like WOR-17 or PROJ-123, or (with tracker.type github/gitlab) an "
+        "issue reference like #123 or group/project#456.",
+        use_json=use_json,
+    )
+
+
+def preflight_tracker_mint(
+    flow_dir: Path,
+    key: str,
+    number: int,
+    suffix: str,
+    *,
+    display: Optional[str] = None,
+    use_json: bool = False,
+) -> None:
+    """Refuse a tracker-first mint that would collide with the existing store.
+
+    Checks for a colliding canonical id (exact path) or a resolvable alias
+    (prefix ``<key>-<n>-*``, bare ``<key>-<n>``, or stored ``tracker.identifier``
+    matching the handle). Type-gating alone is not enough: a mixed historical
+    store (e.g. a Linear-keyed ``gh-123-*`` that predated a re-point to GitHub)
+    must not be silently collided with.
+    """
+    candidate = f"{key}-{number}-{suffix}"
+    bare = f"{key}-{number}"
+    collisions: set[str] = set()
+
+    for path in (
+        flow_dir / SPECS_JSON_DIR / f"{candidate}.json",
+        flow_dir / EPICS_DIR / f"{candidate}.json",
+        flow_dir / SPECS_DIR / f"{candidate}.md",
+        flow_dir / SPECS_JSON_DIR / f"{bare}.json",
+        flow_dir / EPICS_DIR / f"{bare}.json",
+    ):
+        if path.exists():
+            collisions.add(path.stem)
+
+    for directory in (flow_dir / SPECS_JSON_DIR, flow_dir / EPICS_DIR):
+        if not directory.exists():
+            continue
+        for path in directory.glob(f"{bare}-*.json"):
+            collisions.add(path.stem)
+
+    # Alias index: flow-first or tracker specs whose stored identifier resolves
+    # as this bare handle (case-insensitive KEY-N or #N display forms).
+    alias_targets = {
+        bare.lower(),
+        f"{key.upper()}-{number}".lower(),
+    }
+    # The `#N` display form belongs ONLY to a mint that is synthetic FOR THE
+    # ACTIVE TRACKER, where `gh-123` and `#123` genuinely name the same issue.
+    # Gating on the key string alone is not enough: a Linear or Jira project
+    # legitimately keyed `GH` would mint `gh-123` natively and then be blocked
+    # by an unrelated historical `#123`. Confirm `tracker.type` is the
+    # GitHub/GitLab source this key is synthesized from.
+    # Same normalization as synthesis (`_tracker_type_for_synthesis`). Reading
+    # the raw config value would decide `GitHub` / " github " is not synthetic
+    # while `resolve_tracker_first_mint` happily synthesizes `gh-N` from it.
+    synthetic_key = _SYNTHETIC_TRACKER_KEYS.get(_tracker_type_for_synthesis())
+    is_synthetic_mint = bool(synthetic_key) and key.lower() == synthetic_key
+    if is_synthetic_mint:
+        # Match the ACTUAL incoming reference, not a bare issue number. A
+        # project-qualified `group/project#12` and a bare `#12` are different
+        # issues, and so are `#12` on GitHub and `#12` on GitLab after a repo
+        # changes provider - matching on the number alone would let a stored
+        # reference block an unrelated mint. The bare `#N` form is added only
+        # when the incoming identifier is itself bare.
+        if display:
+            alias_targets.add(display.strip().lower())
+        if not display or "/" not in display:
+            alias_targets.add(f"#{number}")
+    for spec_file in iter_spec_json_files(flow_dir):
+        ident_lc, _ = _spec_tracker_fields(spec_file)
+        if ident_lc and ident_lc in alias_targets:
+            collisions.add(spec_file.stem)
+
+    if not collisions:
+        return
+    listed = ", ".join(sorted(collisions))
+    error_exit(
+        f"Refusing to mint {candidate}: bare handle '{bare}' collides with "
+        f"existing spec(s): {listed}. Ids never change; preflight refuses a "
+        f"duplicate alias. Use the full existing id, pick a different issue, "
+        f"or keep the historical id and link instead of re-minting.",
+        use_json=use_json,
+    )
 
 
 def parse_id(id_str: str) -> tuple[Optional[int], Optional[int]]:
@@ -7058,6 +7338,13 @@ def reset_review_cap(
 
     Best-effort: a missing spec / unreadable state is silently ignored so a
     reset never breaks the review-write path.
+
+    fn-134.7 / R22: does NOT clear ``review_pending_rounds``. Pending is the
+    attempt-lifecycle reservation owned solely by reserve (enforce/increment)
+    and finalize/refund (``record_review_attempt``). Clearing it here raced
+    finalize: a SHIP path that reset before (or while) finalize ran left
+    ``pending_count == 0`` and made a successful convergence exit non-zero.
+    Re-plan abandon still clears pending via ``cmd_spec_reset_review_rounds``.
     """
     try:
         flow_dir = get_flow_dir()
@@ -7068,9 +7355,7 @@ def reset_review_cap(
             load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=True)
         )
         _write_review_rounds(spec_data, review_kind, task_id, 0)
-        pending = spec_data.get("review_pending_rounds")
-        if isinstance(pending, dict):
-            pending.pop(_review_counter_scope(review_kind, task_id), None)
+        # Intentionally leave review_pending_rounds alone — see docstring.
         spec_data["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, spec_data)
     except SystemExit:
@@ -7359,8 +7644,168 @@ def get_actor() -> str:
     return "unknown"
 
 
+# Hang-prevention ceiling for allocation git probes. Success path is <<150ms;
+# this only bounds a stuck git process so spec create never hangs.
+_SPEC_ID_ALLOC_GIT_TIMEOUT = 10
+
+# Filename pattern for native fn-N specs (json + md; legacy short suffix + slug).
+_FN_NATIVE_SPEC_NAME_RE = re.compile(
+    r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.(json|md)$"
+)
+
+
+def _scan_max_fn_names_in_dir(directory: Path) -> int:
+    """In-process max native fn-N from one directory via os.scandir. Fail-open."""
+    max_n = 0
+    try:
+        if not directory.is_dir():
+            return 0
+        with os.scandir(directory) as it:
+            for entry in it:
+                name = entry.name
+                if not name.startswith("fn-"):
+                    continue
+                match = _FN_NATIVE_SPEC_NAME_RE.match(name)
+                if match:
+                    n = int(match.group(1))
+                    if n > max_n:
+                        max_n = n
+    except OSError:
+        return max_n
+    return max_n
+
+
+def _scan_max_fn_in_flow_dir(flow_dir: Path) -> int:
+    """In-process max native fn-N across epics/ + specs/ of one .flow/ tree."""
+    max_n = 0
+    for sub in (EPICS_DIR, SPECS_DIR):
+        n = _scan_max_fn_names_in_dir(flow_dir / sub)
+        if n > max_n:
+            max_n = n
+    return max_n
+
+
+def _spec_alloc_git(
+    root: Path,
+    args: list,
+    timeout: float = _SPEC_ID_ALLOC_GIT_TIMEOUT,
+) -> "tuple[int, str, str]":
+    """Run `git -C <root> -c color.ui=never <args>`. Fail-open: never raises.
+
+    Matches the `_prime_git` subprocess convention: git -C, capture_output,
+    text, check=False, explicit timeout, catch TimeoutExpired / OSError /
+    SubprocessError. `-c color.ui=never` neutralizes forced-color configs
+    that have broken regex post-filters in this repo before (portable
+    substitute for global `--no-color`, which older gits reject).
+    """
+    try:
+        # Neutralize color via -c (portable): global --no-color is not accepted
+        # by all git builds, and forced color.ui=always has broken regex filters.
+        result = subprocess.run(
+            ["git", "-C", str(root), "-c", "color.ui=never", *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout,
+        )
+        return (result.returncode, result.stdout or "", result.stderr or "")
+    except subprocess.TimeoutExpired:
+        return (1, "", "timeout")
+    except (OSError, subprocess.SubprocessError) as exc:
+        return (1, "", str(exc))
+
+
+def _scan_max_fn_from_worktrees(repo_root: Path, current_flow_dir: Path) -> int:
+    """Max native fn-N across every registered worktree's .flow/ (in-process).
+
+    Parses `git worktree list --porcelain` once, then os.scandir each path's
+    .flow/specs and .flow/epics. Never spawns a subprocess per worktree.
+    Fail-open on missing paths, unreadable dirs, or absent .flow/.
+    """
+    rc, out, _err = _spec_alloc_git(
+        repo_root, ["worktree", "list", "--porcelain"]
+    )
+    if rc != 0 or not out:
+        return 0
+    max_n = 0
+    current_resolved = None
+    try:
+        current_resolved = current_flow_dir.resolve()
+    except OSError:
+        pass
+    for line in out.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        wt_path = line[len("worktree ") :].strip()
+        if not wt_path:
+            continue
+        try:
+            flow = Path(wt_path) / FLOW_DIR
+            if current_resolved is not None:
+                try:
+                    if flow.resolve() == current_resolved:
+                        continue  # source 1 already covered this tree
+                except OSError:
+                    pass
+            if not flow.is_dir():
+                continue
+            n = _scan_max_fn_in_flow_dir(flow)
+            if n > max_n:
+                max_n = n
+        except OSError:
+            continue
+    return max_n
+
+
+def _scan_max_fn_from_refs(repo_root: Path) -> int:
+    """Max native fn-N ever *added* under .flow/specs or .flow/epics on any ref.
+
+    Single `git log --all --full-history --diff-filter=A` process.
+    Added-then-deleted numbers still appear, so allocation is monotonic over
+    retired ids.
+
+    `--full-history` is load-bearing, not decoration. With a pathspec, git's
+    default history simplification can prune a merged side branch that added
+    and then deleted a spec - measured on this repo, the flag is the difference
+    between 285 and 287 observed adds. Without it the allocator can REUSE a
+    retired number, which is exactly the monotonicity guarantee this function
+    exists to provide. It costs nothing measurable (both forms run well inside
+    the R3 budget).
+    """
+    pathspecs = [f"{FLOW_DIR}/{SPECS_DIR}", f"{FLOW_DIR}/{EPICS_DIR}"]
+    rc, out, _err = _spec_alloc_git(
+        repo_root,
+        [
+            "log",
+            "--all",
+            "--full-history",
+            "--diff-filter=A",
+            "--format=",
+            "--name-only",
+            "--",
+            *pathspecs,
+        ],
+    )
+    if rc != 0 or not out:
+        return 0
+    max_n = 0
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        base = line.rsplit("/", 1)[-1]
+        match = _FN_NATIVE_SPEC_NAME_RE.match(base)
+        if match:
+            n = int(match.group(1))
+            if n > max_n:
+                max_n = n
+    return max_n
+
+
 def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
-    """Scan .flow/epics/ and .flow/specs/ to find max NATIVE `fn-N` spec number.
+    """Union max of native `fn-N` across working tree, worktrees, and refs.
 
     NATIVE-`fn`-ONLY (fn-52.10): this feeds `fn-N` allocation in
     `cmd_spec_create`, so tracker-key specs (`wor-9999-foo`) must NOT count —
@@ -7368,36 +7813,46 @@ def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
     higher `fn-N`. Tracker-key specs are still visible to enumeration
     (`iter_spec_json_files`); they just don't drive the native allocator.
 
+    Three sources, take the maximum (fn-134):
+      1. Current working tree `.flow/epics/` + `.flow/specs/` (always).
+      2. Every registered git worktree's `.flow/` (in-process scandir).
+      3. Every ref via one `git log --all --full-history --diff-filter=A` over
+         the specs dirs (`--full-history` keeps pruned side branches visible).
+
     Handles legacy (fn-N.json), short suffix (fn-N-xxx.json), and slug
-    (fn-N-slug.json) formats. Scans both epics/*.json (legacy) and specs/*.json
-    (canonical post-1.0) plus specs/*.md as a safety net for orphaned specs
-    created without flowctl. Returns 0 if none exist.
+    (fn-N-slug.json) formats. Returns 0 if none exist.
+
+    Fail-open on every git problem (absent git, not a repo, stale worktree
+    path, missing/unreadable `.flow/`, non-zero git exit): degrade to whatever
+    sources worked, worst case source 1 alone. Never blocks spec creation.
+    Monotonic: a number that was allocated and later deleted is never reused
+    because source 3 still sees the historical add.
     """
-    max_n = 0
-    pattern = r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.(json|md)$"
+    # Source 1 — current working tree (always available, never blocked).
+    max_n = _scan_max_fn_in_flow_dir(flow_dir)
 
-    # Scan epics/*.json (legacy 0.x location)
-    epics_dir = flow_dir / EPICS_DIR
-    if epics_dir.exists():
-        for spec_file in epics_dir.glob("fn-*.json"):
-            match = re.match(pattern, spec_file.name)
-            if match:
-                n = int(match.group(1))
-                max_n = max(max_n, n)
+    # Git sources need a repo root. flow_dir is conventionally `<repo>/.flow`.
+    try:
+        repo_root = flow_dir.parent
+    except (AttributeError, TypeError, OSError):
+        return max_n
 
-    # Scan specs/ (canonical post-1.0 location: both .json and .md)
-    specs_dir = flow_dir / SPECS_DIR
-    if specs_dir.exists():
-        for spec_file in specs_dir.glob("fn-*.json"):
-            match = re.match(pattern, spec_file.name)
-            if match:
-                n = int(match.group(1))
-                max_n = max(max_n, n)
-        for spec_file in specs_dir.glob("fn-*.md"):
-            match = re.match(pattern, spec_file.name)
-            if match:
-                n = int(match.group(1))
-                max_n = max(max_n, n)
+    # Source 2 — sibling/registered worktrees (created-but-uncommitted window).
+    try:
+        wt_max = _scan_max_fn_from_worktrees(repo_root, flow_dir)
+        if wt_max > max_n:
+            max_n = wt_max
+    except Exception:
+        # Helpers are already fail-open; this is belt-and-suspenders.
+        pass
+
+    # Source 3 — all refs (committed-on-another-branch + retired numbers).
+    try:
+        ref_max = _scan_max_fn_from_refs(repo_root)
+        if ref_max > max_n:
+            max_n = ref_max
+    except Exception:
+        pass
 
     return max_n
 
@@ -8361,6 +8816,12 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # ladder result, a runtime artifact keyed on the local CLI version — never
     # durable repo state.
     ".cache/",
+    # fn-134 tracker-sync create-first pre-spec recovery files. MUST stay local:
+    # the retry key is a hash of tracker type + title + body, so a committed
+    # recovery file would let a teammate computing the same key resume by
+    # linking to SOMEONE ELSE'S issue instead of creating their own. Runtime
+    # artifact, same class as sync-runs/.
+    "create-first/",
 ]
 
 
@@ -8371,6 +8832,11 @@ def _ensure_flow_gitignore(flow_dir: Path) -> bool:
     Preserves any user-added patterns below the auto-managed footer.
     """
     gi_path = flow_dir / ".gitignore"
+    if not _flow_leaf_is_safe(flow_dir, gi_path):
+        # Untrusted checkout shipped .flow/.gitignore as a symlink (out of tree,
+        # or in-tree at another managed file such as config.json).
+        # Never write through it; the caller's own work is unaffected.
+        return False
     auto_block = "\n".join(
         [FLOW_GITIGNORE_AUTO_HEADER, *FLOW_GITIGNORE_AUTO_PATTERNS, FLOW_GITIGNORE_AUTO_FOOTER]
     )
@@ -9049,6 +9515,21 @@ def cmd_config_set(args: argparse.Namespace) -> None:
                 f"Backend 'host' does not accept a model/effort (got {args.value!r}). "
                 f"Pins live in the AGENTS.md model-routing section, not the backend "
                 f"string. Use: flowctl config set review.backend host",
+                use_json=args.json,
+            )
+
+    # fn-134.2 — tracker.specIds is a strict string-enum (flow|tracker). Reject
+    # invalid values at WRITE time so a typo never lands on disk. READ-side
+    # fail-closed (normalize_tracker_spec_ids) is a separate contract for values
+    # that reached the file via hand-edit / merge / older versions.
+    if canonical_key == "tracker.specIds":
+        raw_val = args.value
+        # Pre-coercion check: set_config would turn "true"/"false" into bools.
+        if not isinstance(raw_val, str) or raw_val not in TRACKER_SPEC_IDS_VALUES:
+            error_exit(
+                f"Invalid tracker.specIds value {raw_val!r}. "
+                f"Expected one of: flow, tracker. "
+                f"Use: flowctl config set tracker.specIds flow|tracker",
                 use_json=args.json,
             )
 
@@ -14765,13 +15246,17 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     suffix = slug if slug else generate_epic_suffix()
 
     if tracker_first:
-        # Strict identifier validation: a bare display key (WOR-17) only — a
-        # slugged / suffixed / reserved-`fn` identifier is rejected so the
-        # stored alias is always a resolvable bare handle. Use the STRIPPED
-        # display form returned by the validator (never the raw input) so
-        # surrounding whitespace can't persist an unresolvable alias.
-        key, number, tracker_identifier = validate_tracker_identifier(
-            tracker_identifier, required=True, use_json=args.json
+        # fn-134.2: KEY-N (Linear/Jira) OR synthetic gh/gl from #N / project#N
+        # when tracker.type is github/gitlab. Contextual reservation rejects
+        # an explicit GH-N/GL-N under those types; preflight refuses a mint
+        # that would collide with a canonical id or resolvable alias in the
+        # existing store (mixed historical stores are permanent).
+        key, number, tracker_identifier = resolve_tracker_first_mint(
+            tracker_identifier, use_json=args.json
+        )
+        preflight_tracker_mint(
+            flow_dir, key, number, suffix,
+            display=tracker_identifier, use_json=args.json,
         )
         spec_id = f"{key}-{number}-{suffix}"
     else:
@@ -14900,6 +15385,10 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
+
+    # Reject here too, not only in `set-title`: otherwise the bad state is
+    # simply reachable one command earlier.
+    _reject_multiline_title(getattr(args, "title", ""), use_json=args.json)
 
     spec_id = resolve_spec_arg(args, get_flow_dir())
     if not spec_id or not is_spec_id(spec_id):
@@ -18304,6 +18793,219 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
         print(f"Task {task_id} backend specs updated: {', '.join(updated)}")
 
 
+def _iter_task_h1_candidates(content: str):
+    """Yield (index, line) for lines eligible to be the task markdown H1.
+
+    A task body's `# ` lines are not all headings. Three places produce
+    look-alikes, and each one was found in production separately (PR #241),
+    so they are handled by ONE rule rather than three patches:
+
+      * YAML frontmatter - `# fn-1.1 metadata example` inside the opening
+        `---` block
+      * fenced code - a bash block whose comments start with `#`
+      * indented code - a four-space block, which is markdown code too
+
+    Eligible means: outside the opening frontmatter block, outside any fence,
+    and starting at column zero.
+    """
+    # Bare CR is a valid Markdown line ending. Splitting on "\n" alone treats a
+    # CR-delimited file as ONE line, so a `# <id> ...` sequence inside it could
+    # be imported as the title.
+    lines = content.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    start = 0
+    # Column zero for BOTH delimiters: an indented `---` inside a block scalar
+    # is scalar content, not the closing delimiter.
+    if lines and lines[0] == "---":
+        for i in range(1, len(lines)):
+            if lines[i] == "---":
+                start = i + 1
+                break
+    # Track fences over the BODY ONLY. Frontmatter is YAML, not markdown, so a
+    # stray fence marker inside it (an indented ``` in a block scalar) must not
+    # leak fence state into the body and hide the real heading.
+    body = lines[start:]
+    fenced = [f for _, f in _iter_fence_aware(body)]
+    for offset, line in enumerate(body):
+        if offset < len(fenced) and fenced[offset]:
+            continue
+        if line.startswith("# "):
+            yield start + offset, line
+
+
+def _task_h1_title(content: str, task_id: str) -> Optional[str]:
+    """Extract the title from a task markdown H1 (`# <id> <title>`).
+
+    Returns None when no H1 is present or the H1 does not start with the
+    task id. Title is the remainder after `# <id>` (may be empty).
+
+    Candidate lines come from `_iter_task_h1_candidates`, which skips YAML
+    frontmatter, fenced code, and indented code. Reading a look-alike as the
+    H1 would sync the JSON title from an example while leaving the real
+    heading untouched - exactly the divergence this command exists to prevent.
+    """
+    # Scan for THIS task's heading rather than bailing on the first eligible
+    # one - `_task_rewrite_h1` targets the task's own H1, and the read and
+    # write paths must agree or set-spec reports None while set-title rewrites.
+    prefix = f"{task_id} "
+    for _, line in _iter_task_h1_candidates(content):
+        body = line[2:].strip()
+        if body == task_id:
+            return ""
+        if body.startswith(prefix):
+            return body[len(prefix) :].strip()
+    return None
+
+
+def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
+    """Rewrite (or insert) the task markdown H1 to `# <id> <title>`.
+
+    Uses the same candidate rule as `_task_h1_title`, and here the cost of
+    getting it wrong is higher: rewriting a `# ...` line inside frontmatter or
+    a code block would corrupt content the task body is documenting.
+    """
+    lines = content.splitlines(keepends=True)
+    new_h1 = f"# {task_id} {title}\n"
+    for i, cand in _iter_task_h1_candidates(content):
+        # Rewrite the H1 that BELONGS to this task. `_task_h1_title` only
+        # accepts a heading whose text starts with the task id, so targeting
+        # the first eligible heading here would let an unrelated leading H1 be
+        # overwritten while the read path reported None - the two must agree.
+        body_text = cand[2:].strip()
+        if body_text != task_id and not body_text.startswith(f"{task_id} "):
+            continue
+        if i < len(lines):
+            line = lines[i]
+            # Preserve the ORIGINAL terminator. `splitlines(keepends=True)`
+            # keeps bare "\r" and "\r\n" too; recognizing only "\n" would strip
+            # the separator and glue the heading onto the next line.
+            if line.endswith("\r\n"):
+                newline = "\r\n"
+            elif line.endswith("\n"):
+                newline = "\n"
+            elif line.endswith("\r"):
+                newline = "\r"
+            else:
+                newline = ""
+            lines[i] = f"# {task_id} {title}{newline}"
+            return "".join(lines)
+    # No H1 — insert after optional YAML frontmatter, else at the top.
+    # Delimiters must be column-zero here for the SAME reason as in
+    # `_iter_task_h1_candidates`: an indented `---` inside a block scalar is
+    # scalar content, and treating it as the close inserts the heading INTO the
+    # frontmatter. (The two paths were fixed separately, which is how this one
+    # kept its own strip-based check - hence the explicit note.)
+    # Exact delimiter line only: content beginning `---text` (a setext rule, a
+    # sentence with a leading dash run) is BODY, not frontmatter.
+    # Normalize bare CR first, exactly as `_iter_task_h1_candidates` does -
+    # splitting on "\n" alone makes a CR-delimited document ONE line, the
+    # delimiter check fails, and the heading is prepended before `---`,
+    # breaking frontmatter recognition for every Markdown tool downstream.
+    _norm = content.replace("\r\n", "\n").replace("\r", "\n")
+    first_line = _norm.split("\n", 1)[0]
+    if first_line == "---":
+        parts = content.splitlines(keepends=True)
+        close_idx = None
+        for i in range(1, len(parts)):
+            if parts[i].rstrip("\r\n") == "---":
+                close_idx = i
+                break
+        if close_idx is not None:
+            insert_at = close_idx + 1
+            # Skip a single blank line after the closing --- so we don't
+            # stack empties; always leave exactly one blank if the body
+            # already had separation.
+            while insert_at < len(parts) and parts[insert_at].strip() == "":
+                insert_at += 1
+            # Match the document's own terminator so a CR- or CRLF-delimited
+            # file does not end up with mixed line endings.
+            close_line = parts[close_idx]
+            if close_line.endswith("\r\n"):
+                term = "\r\n"
+            elif close_line.endswith("\r"):
+                term = "\r"
+            else:
+                term = "\n"
+            h1 = f"# {task_id} {title}{term}"
+            return "".join(parts[: close_idx + 1] + [term, h1] + parts[insert_at:])
+    if content and not content.endswith("\n"):
+        return new_h1 + content + "\n"
+    return new_h1 + content
+
+
+def _reject_multiline_title(title: str, *, use_json: bool = False) -> None:
+    """A task title must be one line, at EVERY entry point that sets one.
+
+    The H1 can only carry the first line while the JSON keeps the whole string,
+    so a newline splits the two representations apart and a later
+    `task set-spec --file` silently truncates the JSON title to that first
+    line. `set-title` guarded this first; `task create` did not, which left the
+    same bad state reachable one command earlier (PR #241).
+    """
+    if any(c in (title or "") for c in "\r\n"):
+        error_exit(
+            "Title must be a single line (no CR/LF) - the markdown H1 cannot "
+            "represent a multiline title, so the JSON and H1 would disagree.",
+            use_json=use_json,
+        )
+
+
+def cmd_task_set_title(args: argparse.Namespace) -> None:
+    """Rename a task: update JSON ``title`` and markdown H1 together (R21).
+
+    Title lives in exactly two places — the task JSON and the markdown H1.
+    This command writes both so they cannot disagree. Task ids are permanent
+    (unlike unlinked ``fn-*`` specs); only the display title changes.
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    task_id = casefold_handle(args.id)
+    if not is_task_id(task_id):
+        error_exit(
+            f"Invalid task ID: {task_id}. Expected format: fn-N.M or fn-N-slug.M "
+            f"(e.g., fn-1.2, fn-1-add-auth.2)",
+            use_json=args.json,
+        )
+
+    flow_dir = get_flow_dir()
+    task_id = resolve_task_arg(flow_dir, task_id, use_json=args.json)
+    task_json_path = flow_dir / TASKS_DIR / f"{task_id}.json"
+    task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+
+    if not task_json_path.exists():
+        error_exit(f"Task {task_id} not found", use_json=args.json)
+
+    title = (args.title or "").strip()
+    if not title:
+        error_exit("Title must be non-empty", use_json=args.json)
+    _reject_multiline_title(title, use_json=args.json)
+
+    task_data = load_json_or_exit(task_json_path, f"Task {task_id}", use_json=args.json)
+    task_data["title"] = title
+    task_data["updated_at"] = now_iso()
+    canonicalize_task_for_write(task_data)
+
+    if task_spec_path.exists():
+        current = read_text_or_exit(
+            task_spec_path, f"Task {task_id} spec", use_json=args.json
+        )
+        atomic_write(task_spec_path, _task_rewrite_h1(current, task_id, title))
+    atomic_write_json(task_json_path, task_data)
+
+    if args.json:
+        json_output(
+            {
+                "id": task_id,
+                "title": title,
+                "message": f"Task {task_id} title updated",
+            }
+        )
+    else:
+        print(f"Task {task_id} title updated: {title}")
+
+
 def cmd_task_set_description(args: argparse.Namespace) -> None:
     """Set task description section."""
     _task_set_section(args.id, "## Description", args.file, args.json)
@@ -18319,6 +19021,10 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
 
     Full replacement mode: --file replaces entire spec content (like epic set-plan).
     Section patch mode: --description and/or --acceptance update specific sections.
+
+    fn-134.7 / R21: on ``--file``, the markdown H1 title is synced into the
+    JSON ``title`` field so the two representations cannot disagree. A missing
+    or malformed H1 is rejected rather than leaving JSON stale.
     """
     if not ensure_flow_exists():
         error_exit(
@@ -18377,13 +19083,43 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
             }
             content = content.rstrip("\n") + "\n\n" + "\n".join(
                 _stubs[h] for h in _missing)
+        # R21: keep JSON title and markdown H1 agreed after --file replace.
+        # Prefer the H1 when present and well-formed; otherwise pin the H1 to
+        # the current JSON title (refuse to leave the two out of sync). Empty
+        # H1 titles are rejected.
+        h1_title = _task_h1_title(content, task_id)
+        if h1_title is not None and not h1_title:
+            error_exit(
+                f"Task {task_id} H1 title must be non-empty "
+                f"(`# {task_id} <title>`)",
+                use_json=args.json,
+            )
+        if h1_title:
+            task_data["title"] = h1_title
+        else:
+            # Missing/malformed H1 — rewrite from JSON so dual-rep agrees.
+            existing_title = (task_data.get("title") or "").strip()
+            if not existing_title:
+                error_exit(
+                    f"Task {task_id} --file content needs H1 "
+                    f"`# {task_id} <title>` (JSON title is empty)",
+                    use_json=args.json,
+                )
+            content = _task_rewrite_h1(content, task_id, existing_title)
+            h1_title = existing_title
         atomic_write(task_spec_path, content)
         task_data["updated_at"] = now_iso()
         canonicalize_task_for_write(task_data)
         atomic_write_json(task_json_path, task_data)
 
         if args.json:
-            json_output({"id": task_id, "message": f"Task {task_id} spec replaced"})
+            json_output(
+                {
+                    "id": task_id,
+                    "title": h1_title,
+                    "message": f"Task {task_id} spec replaced",
+                }
+            )
         else:
             print(f"Task {task_id} spec replaced")
         return
@@ -22455,6 +23191,14 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
         use_json=args.json,
         allow_reference=True,
     )
+    # fn-134.2: while tracker.type is github/gitlab, an explicit native
+    # GH-N / GL-N key is reserved for synthesis — reject at link time too.
+    if validated_identifier is not None and validated_identifier[0]:
+        reject_synthetic_prefix_reservation(
+            validated_identifier[0],
+            validated_identifier[2],
+            use_json=args.json,
+        )
 
     spec_json_path, spec_data = _resolve_sync_spec(args)
 
@@ -22927,6 +23671,239 @@ def _read_optional_arg_or_file(file_arg: Optional[str], inline_arg: Optional[str
     if inline_arg is not None:
         return inline_arg
     return None
+
+
+CREATE_FIRST_DIR = "create-first"
+
+
+def _flow_path_is_contained(flow_dir: Path, target: Path) -> bool:
+    """True when `target` cannot escape `.flow/` through a symlinked component.
+
+    A repository is untrusted input. A checkout can ship `.flow/create-first`
+    or `.flow/.gitignore` as a symlink pointing outside the workspace; a
+    following `mkdir` + write then performs an arbitrary same-user file write
+    outside the repo. Both were reproduced before this guard existed.
+
+    `.flow` ITSELF being a symlink is legitimate and common (worktrees, shared
+    checkouts), so the resolved `.flow` is the root - only escapes from WITHIN
+    it are refused. Resolution walks to the deepest existing ancestor so the
+    check works before the leaf is created.
+    """
+    try:
+        root = flow_dir.resolve()
+        probe = target
+        while not probe.exists() and probe != probe.parent:
+            probe = probe.parent
+        real = probe.resolve()
+        return real == root or root in real.parents
+    except OSError:
+        return False
+
+
+def _flow_leaf_is_safe(flow_dir: Path, target: Path) -> bool:
+    """Containment PLUS: the leaf itself must not be a symlink.
+
+    Containment alone is insufficient. `.flow/.gitignore` symlinked to
+    `.flow/config.json` stays inside `.flow` and still clobbers the config
+    (reproduced: 1682 -> 1973 bytes of ignore rules). flowctl's own managed
+    runtime artifacts are never legitimately symlinks, so refuse the leaf
+    outright - `.flow` itself may still be a symlink, which is what
+    `_flow_path_is_contained` allows.
+    """
+    if not _flow_path_is_contained(flow_dir, target):
+        return False
+    # Walk EVERY component between .flow and the leaf. Checking only the leaf
+    # left an in-tree symlinked DIRECTORY open: `.flow/create-first` -> `specs`
+    # passes containment and writes records straight into `.flow/specs/`
+    # (reproduced). `.flow` itself may still be a symlink - the walk starts
+    # below it.
+    try:
+        root = flow_dir.resolve()
+        probe = target
+        while True:
+            if probe.is_symlink():
+                return False
+            parent = probe.parent
+            if parent == probe or parent.resolve() == root:
+                return True
+            probe = parent
+    except OSError:
+        return False
+
+
+CREATE_FIRST_KEY_RE = re.compile(r"[0-9a-f]{16}")
+
+
+def _create_first_dir(flow_dir: Path) -> Path:
+    return flow_dir / CREATE_FIRST_DIR
+
+
+def compute_create_first_key(tracker_type: str, title: str, body: str) -> str:
+    """Stable retry lookup key for a pre-spec create-first attempt (fn-134).
+
+    First 16 hex chars of sha256(type NUL title NUL body). Same inputs always
+    yield the same key, so a resumed run finds the record written by the
+    interrupted one and LINKS instead of creating a second issue. Must stay
+    identical to the definition in the tracker-sync skill's steps.md Phase 2d.
+    """
+    # Normalize the tracker type with the SAME strip/lower semantics as
+    # `_tracker_type_for_synthesis`. An interrupted run that started from an
+    # accepted spelling (`GitHub`, ` github `) must recompute the identical key
+    # after the config is normalized, or `create-first-get` misses the record
+    # and the workflow creates a second remote issue.
+    normalized_type = (tracker_type or "").strip().lower()
+    payload = "\0".join([normalized_type, title or "", body or ""])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
+    """Atomic pre-spec recovery records for tracker-sync `create-first`.
+
+    create-first creates a tracker issue BEFORE any local spec exists, so
+    `sync receipt` (which resolves a local spec id) cannot be used. This is the
+    thin, judgment-free file layer that makes "a retry links, never re-creates"
+    MECHANICAL rather than a promise the caller has to keep by hand.
+
+    Records live at `.flow/create-first/<key>.json` (gitignored - a committed
+    record would let a teammate computing the same key resume onto someone
+    else's issue). No tracker transport, no issue creation, no decisions.
+    """
+    use_json = getattr(args, "json", False)
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=use_json)
+    flow_dir = get_flow_dir()
+    action = args.recovery_action
+
+    if action == "key":
+        body = ""
+        body_file = getattr(args, "body_file", None)
+        if body_file:
+            try:
+                body = Path(body_file).read_text(encoding="utf-8")
+            except OSError as exc:
+                error_exit(f"Cannot read --body-file: {exc}", use_json=use_json)
+        key = compute_create_first_key(args.type, args.title, body)
+        if use_json:
+            json_output({"key": key})
+        else:
+            print(key)
+        return
+
+    # The key is interpolated into a filesystem path, so it must be validated
+    # BEFORE the join, not trusted because callers normally pass
+    # `create-first-key` output. An unvalidated `--key ../config` resolves to
+    # `.flow/config.json`: `put` would overwrite it and `clear` would delete it.
+    if not CREATE_FIRST_KEY_RE.fullmatch(args.key or ""):
+        error_exit(
+            f"Invalid --key {args.key!r}: expected 16 lowercase hex characters "
+            "(the output of `flowctl sync create-first-key`).",
+            use_json=use_json,
+        )
+
+    path = _create_first_dir(flow_dir) / f"{args.key}.json"
+    if not _flow_leaf_is_safe(flow_dir, path):
+        error_exit(
+            "Refusing to touch a create-first record outside .flow/ - "
+            f"{path} resolves out of the workspace (symlinked component). "
+            "Remove the symlink; flowctl never writes through it.",
+            use_json=use_json,
+        )
+
+    if action == "get":
+        if not path.exists():
+            # Absent is a normal branch, not a crash: the caller uses the exit
+            # status to decide create-vs-link.
+            if use_json:
+                print("{}")
+            sys.exit(1)
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            error_exit(f"Unreadable recovery record: {exc}", use_json=use_json)
+        if use_json:
+            json_output(record)
+        else:
+            for field in ("id", "identifier", "url", "title", "transport", "createdAt"):
+                if record.get(field):
+                    print(f"{field}: {record[field]}")
+        return
+
+    if action == "put":
+        record = {
+            "retryKey": args.key,
+            "id": args.id,
+            "identifier": args.identifier,
+            "url": args.url,
+            "title": args.title,
+            "createdAt": now_iso(),
+            "transport": args.transport,
+        }
+        # Recorded only once the mint succeeds. A resumed run reads this instead
+        # of rebuilding `<key>-<number>-<slug>`, which is not reconstructible
+        # when the title slugifies to empty (CJK- or emoji-only titles get a
+        # random suffix from `spec create`).
+        spec_id = getattr(args, "spec_id", None)
+        if spec_id:
+            record["specId"] = spec_id
+        existing = None
+        if path.exists():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                existing = None
+        if existing and existing.get("createdAt"):
+            # Idempotent: a second put keeps the ORIGINAL creation time so the
+            # record still describes when the remote issue was actually made.
+            record["createdAt"] = existing["createdAt"]
+        if existing and existing.get("specId") and not record.get("specId"):
+            # A later put (e.g. re-recording transport) must not drop a specId
+            # an earlier post-mint put already established.
+            record["specId"] = existing["specId"]
+        # Reconcile the ignore block AT WRITE TIME, not on some future `init`.
+        # A project whose auto-managed .flow/.gitignore predates this release
+        # would otherwise get an untracked-but-unignored recovery record, and a
+        # `git add -A` would commit it - letting another checkout computing the
+        # same retry key resume onto the first developer's issue.
+        # NOTE: `_ensure_flow_gitignore` returns False for a NO-OP (already
+        # current) as well as for a refusal, so its return value cannot be the
+        # safety signal - check the leaf explicitly.
+        if not _flow_leaf_is_safe(flow_dir, flow_dir / ".gitignore"):
+            # The ignore block cannot be ensured, so a record written now would
+            # be committable - and a committed record lets another checkout
+            # computing the same key resume onto someone else's issue. That is
+            # the exact failure the ignore prevents, so refuse rather than write
+            # an unprotected record.
+            error_exit(
+                "Refusing to write a recovery record: .flow/.gitignore could not "
+                "be ensured (unsafe or symlinked). An unignored record can be "
+                "committed and let another checkout resume onto someone else's "
+                "issue. Restore .flow/.gitignore as a regular file.",
+                use_json=use_json,
+            )
+        _ensure_flow_gitignore(flow_dir)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(path, record)
+        if use_json:
+            json_output({"recorded": True, **record})
+        else:
+            print(f"Recovery record written: {path}")
+        return
+
+    if action == "clear":
+        removed = False
+        if path.exists():
+            try:
+                path.unlink()
+                removed = True
+            except OSError as exc:
+                error_exit(f"Cannot clear recovery record: {exc}", use_json=use_json)
+        if use_json:
+            json_output({"cleared": removed, "key": args.key})
+        else:
+            print("cleared" if removed else "nothing to clear")
+        return
+
+    error_exit(f"Unknown recovery action '{action}'", use_json=use_json)
 
 
 def cmd_sync_receipt(args: argparse.Namespace) -> None:
@@ -26374,19 +27351,22 @@ def cmd_validate(args: argparse.Namespace) -> None:
             if num is not None:
                 epic_nums.setdefault(num, []).append(spec_id)
 
-        # Spec ID collisions are repository-level errors. Keep them in the
-        # canonical root inventory so JSON and text render the same failures.
+        # fn-134.2 / R13: duplicate ordinal with distinct full ids is untidy,
+        # not broken — a machine-readable WARNING via top-level root_warnings
+        # (not root_errors). validate --all --json previously had no root-warning
+        # collection, so moving the text into the warning count alone would
+        # print/count it while dropping it from JSON.
+        root_warnings: list[str] = []
         for num in sorted(epic_nums):
             ids = epic_nums[num]
             if len(ids) > 1:
-                root_errors.append(
+                root_warnings.append(
                     f"Spec ID collision: fn-{num} used by multiple specs: {', '.join(sorted(ids))}"
                 )
 
         # One combined inventory drives validity, totals, and text rendering.
         all_errors = list(root_errors)
-
-        all_warnings = []
+        all_warnings = list(root_warnings)
 
         # Detect orphaned spec markdown (md exists but no spec JSON)
         specs_dir = flow_dir / SPECS_DIR
@@ -26436,6 +27416,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
                 {
                     "valid": valid,
                     "root_errors": root_errors,
+                    "root_warnings": root_warnings,
                     "specs": epic_results,
                     "total_specs": len(epic_ids),
                     "total_epics": len(epic_ids),
@@ -30145,6 +31126,49 @@ def main() -> None:
     p_sync_setdep.add_argument("--json", action="store_true", help="JSON output")
     p_sync_setdep.set_defaults(func=cmd_sync_set_dep_relation)
 
+    # fn-134: pre-spec recovery for tracker-sync `create-first`. Thin atomic file
+    # layer only - it makes "a retry links, never re-creates" mechanical instead
+    # of a prose promise. No transport, no issue creation, no judgment.
+    # fn-134: pre-spec recovery for tracker-sync `create-first`. Thin atomic file
+    # layer only - it makes "a retry links, never re-creates" mechanical instead
+    # of a prose promise. Flat two-token names match every other sync subcommand
+    # (set-tracker-id, check-collisions, list-dep-relations); no 3-level nesting.
+    p_cfk = sync_sub.add_parser("create-first-key", help="Compute the create-first retry lookup key")
+    p_cfk.add_argument("--type", required=True, help="tracker.type (linear|github|gitlab|jira)")
+    p_cfk.add_argument("--title", required=True, help="Issue title")
+    p_cfk.add_argument("--body-file", dest="body_file", default=None, help="File holding the issue body")
+    p_cfk.add_argument("--json", action="store_true", help="JSON output")
+    p_cfk.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="key")
+
+    p_cfg = sync_sub.add_parser("create-first-get", help="Read a create-first recovery record (exit 1 when absent)")
+    p_cfg.add_argument("--key", required=True, help="Retry lookup key")
+    p_cfg.add_argument("--json", action="store_true", help="JSON output")
+    p_cfg.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="get")
+
+    p_cfp = sync_sub.add_parser("create-first-put", help="Record a created-but-unminted issue")
+    for _flag, _hlp in (
+        ("--id", "Tracker issue id"),
+        ("--identifier", "Tracker display identifier"),
+        ("--url", "Issue url"),
+        ("--title", "Issue title"),
+        ("--transport", "Transport used"),
+    ):
+        p_cfp.add_argument(_flag, required=True, help=_hlp)
+    p_cfp.add_argument("--key", required=True, help="Retry lookup key")
+    p_cfp.add_argument(
+        "--spec-id",
+        default=None,
+        help="Minted spec id, recorded after a successful mint so a resumed run "
+        "finds it instead of reconstructing it from key/number/slug",
+    )
+    p_cfp.add_argument("--json", action="store_true", help="JSON output")
+    p_cfp.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="put")
+
+    p_cfc = sync_sub.add_parser("create-first-clear", help="Remove a recovery record after mint+attach")
+    p_cfc.add_argument("--key", required=True, help="Retry lookup key")
+    p_cfc.add_argument("--json", action="store_true", help="JSON output")
+    p_cfc.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="clear")
+
     p_sync_receipt = sync_sub.add_parser(
         "receipt", help="Write a sync run receipt (guard-safe path, type: sync)"
     )
@@ -31250,6 +32274,14 @@ def main() -> None:
     )
     p_task_create.add_argument("--json", action="store_true", help="JSON output")
     p_task_create.set_defaults(func=cmd_task_create)
+
+    p_task_title = task_sub.add_parser(
+        "set-title", help="Set task title (JSON + markdown H1)"
+    )
+    p_task_title.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
+    p_task_title.add_argument("--title", required=True, help="New task title")
+    p_task_title.add_argument("--json", action="store_true", help="JSON output")
+    p_task_title.set_defaults(func=cmd_task_set_title)
 
     p_task_desc = task_sub.add_parser("set-description", help="Set task description")
     p_task_desc.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")

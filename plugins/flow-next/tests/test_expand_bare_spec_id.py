@@ -146,6 +146,31 @@ class TestExpandBareSpecId(unittest.TestCase):
             self.assertFalse(payload["success"])
             self.assertIn("ambiguous", payload["error"])
 
+    def test_live_fn122_pair_bare_id_is_ambiguous(self) -> None:
+        """R12 regression: live fn-122 pair disambiguates (no new resolver code).
+
+        Verified 2026-07-25: expand_bare_spec_id ALREADY errors with
+        "Spec id 'fn-122' is ambiguous. Matches: … Use the full slug to
+        disambiguate." for the native-fn branch. This pins the two real
+        slug names from the flow-next store; no resolver changes required.
+        """
+        a = "fn-122-flowctl-hardening-and-performance-completion-sweep"
+        b = "fn-122-harden-verdict-graduate-recurring"
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = self._setup_flow(Path(tmp))
+            (flow_dir / "specs" / f"{a}.json").write_text("{}")
+            (flow_dir / "specs" / f"{b}.json").write_text("{}")
+            buf = io.StringIO()
+            with redirect_stderr(buf):
+                with self.assertRaises(SystemExit) as ctx:
+                    flowctl.expand_bare_spec_id(flow_dir, "fn-122")
+            self.assertEqual(ctx.exception.code, 1)
+            err = buf.getvalue()
+            self.assertIn("ambiguous", err)
+            self.assertIn(a, err)
+            self.assertIn(b, err)
+            self.assertIn("full slug", err)
+
 
 if __name__ == "__main__":
     unittest.main()

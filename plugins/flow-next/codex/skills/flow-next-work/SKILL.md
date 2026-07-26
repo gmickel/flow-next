@@ -157,6 +157,8 @@ If user chose review, pass the review mode to the worker. The worker agent invok
 
 **Handle recognition (R16):** `/flow-next:work wor-17` / `work wor-17.1` resolve the existing linked spec/task — the Phase 1 input grammar routes any single-token arg through `flowctl show` (which resolves tracker handles via fn-52.10) before treating it as idea text, so a tracker key is never re-created as a new spec.
 
+**Spec-id scheme on mint:** with a tracker configured, tracker-first is the recommended team default (`tracker.specIds=tracker`) — it stops parallel `fn-N` collisions. Gate: phases.md Phase 1.
+
 **Unlink / re-link lifecycle:** detaching a spec from its tracker issue is done via `/flow-next:tracker-sync unlink <id>` — that ceremony (in the tracker-sync skill) clears the tracker id + `lastSyncedAt` + merge-base atomically (`flowctl sync clear`) and posts a one-line "detached" comment to the issue. After unlink, all lifecycle touchpoints above no-op for that spec (no linked id). A later re-link re-seeds the merge base from the current issue body (so re-link does not resurrect stale state). The spec/task ids, branch, and files are NEVER touched by unlink (no rename).
 
 ## Codex implementation-delegation (opt-in, off by default)

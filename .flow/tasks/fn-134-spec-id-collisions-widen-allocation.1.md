@@ -42,19 +42,24 @@ Widen spec-id allocation so parallel spec creation stops colliding. `scan_max_na
 
 - [ ] `scan_max_native_fn_spec_id` returns the max across the current working tree, every registered worktree's `.flow/specs/`, and every ref; monotonic over numbers that were allocated and later removed (R1).
 - [ ] Each source degrades independently and silently. Covered in isolation by unit tests: `git` absent, not a git repo, a registered worktree whose path no longer exists, a worktree with no `.flow/`, an unreadable worktree, and a `git log` non-zero exit. Allocation still succeeds from whatever sources worked, worst case the working tree alone (R2).
-- [ ] Allocation completes **under 150ms** on a fixture comparable to this repo (300+ refs, 15+ worktrees), with the worktree scan performed in-process rather than one subprocess per worktree (R3).
+- [ ] Allocation completes **under 250ms** on a fixture comparable to this repo (300+ refs, 15+ worktrees), with the worktree scan performed in-process rather than one subprocess per worktree (R3). Budget raised from 150ms on measured evidence during review; record the per-source breakdown in evidence.
 - [ ] A test pins that `list`, `status`, `show`, `ready`, and `next` perform no worktree or ref scan, so the fn-109 latency work cannot regress (R4).
 - [ ] A regression test reproduces the two-worktree collision: create a spec in worktree A without committing, create one in worktree B, assert the second gets `max+2` and not a duplicate (R5).
 - [ ] Both git invocations pass `--no-color` or equivalent, and neither can hang (explicit timeout).
 - [ ] `SOURCE_SHA256` re-pinned in both bootstrap copies; all `.flow/bin/` copies byte-identical to their `plugins/flow-next/scripts/` originals.
 - [ ] Focused suite green: `cd plugins/flow-next/tests && python3 -m unittest test_spec_id_allocation test_flowctl_surface test_startup_bootstrap -q`
-- [ ] **Proof-point check reported explicitly:** the measured allocation time on the fixture. If it exceeds 150ms, STOP and report before task `.2` rather than shipping a slow allocator; the documented fallback is to drop the ref source and keep worktree scanning.
+- [ ] **Proof-point check reported explicitly:** the measured allocation time on the fixture. If it exceeds the budget, STOP and report before task `.2` rather than shipping a slow allocator; the documented fallback is to drop the ref source and keep worktree scanning.
 
 
 ## Done summary
-TBD
+Widened `scan_max_native_fn_spec_id` from a single working-tree scan into the max across three sources: the current working tree, every registered git worktree (in-process `os.scandir`, no subprocess per worktree), and every ref (one `git log --all --diff-filter=A`). This closes the created-but-uncommitted window that produced the live fn-122 duplicate. Fail-open on every git failure mode; monotonic over retired ids via the ref source. Aliases and the native-fn-only constraint preserved; hot paths pinned scan-free by test.
 
+Implemented by grok-4.5 via the grok CLI bridge; reviewed in-host (opus-5). Two review outcomes worth recording:
+
+1. grok found that this git rejects global `--no-color` with exit 129 and used `-c color.ui=never` instead. Verified true. Had it used `--no-color`, every git probe would have failed and silently degraded to the working-tree source only, defeating the feature while still passing a naive test.
+
+2. grok's reported performance number (83.2ms) was wrong: that is the ref scan alone, not the total. Independent measurement gave 152.8ms best / 160.2ms median, over the 150ms budget. Per-source: working tree 0.2ms, worktrees 47.2ms, refs 85.0ms. The early proof point fired as designed; budget raised to 250ms on maintainer decision rather than dropping the ref source, because dropping it would trade the committed-on-another-branch window and monotonicity for time nobody perceives on a cold path. The 150ms bound also sat exactly on the measured total and was a latent flake.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: bcb28d30
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_spec_id_allocation test_flowctl_surface test_startup_bootstrap -q (44 tests OK), python3 scripts/run_tests_parallel.py (files=131 ran=2359 failures=0 errors=0), independent perf: working tree 0.2ms / worktrees 47.2ms / refs 85.0ms / total 152.8ms best, 160.2ms median on 327 refs + 16 worktrees + 1723 commits, verified git --no-color exits 129 on this git; -c color.ui=never exits 0, dual-copy byte-identical + SOURCE_SHA256 matches sha256 of flowctl.py
 - PRs:

@@ -2,7 +2,9 @@
 
 The JSON and text renderers must expose the same repository-level failures.
 In particular, every error counted by ``total_errors`` must be discoverable in
-``root_errors`` or a per-spec ``errors`` collection.
+``root_errors`` or a per-spec ``errors`` collection. Duplicate ordinals with
+distinct full ids are top-level ``root_warnings`` (fn-134.2 / R13), counted in
+``total_warnings`` and visible in both renderers.
 """
 
 from __future__ import annotations
@@ -18,6 +20,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
+# Live fn-122 pair in this repo (ids never change; R13 regression target).
+LIVE_FN122_A = "fn-122-flowctl-hardening-and-performance-completion-sweep"
+LIVE_FN122_B = "fn-122-harden-verdict-graduate-recurring"
+REPO_ROOT = HERE.parents[2]
 
 
 class ValidateAllDiagnosticsTestCase(unittest.TestCase):
@@ -90,7 +96,14 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
             len(spec["errors"]) for spec in payload["specs"]
         )
 
+    @staticmethod
+    def _discoverable_warning_count(payload: dict) -> int:
+        return len(payload.get("root_warnings", [])) + sum(
+            len(spec.get("warnings") or []) for spec in payload["specs"]
+        )
+
     def test_collision_json_and_text_share_actionable_diagnostic(self) -> None:
+        """Duplicate ordinal is a root_warning, not a root_error (R13)."""
         self._create_collision(91, "beta", "alpha")
         expected = (
             "Spec ID collision: fn-91 used by multiple specs: "
@@ -98,17 +111,27 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
         )
 
         json_result = self._run("validate", "--all", "--json")
-        self.assertEqual(json_result.returncode, 1)
+        self.assertEqual(json_result.returncode, 0)
         payload = json.loads(json_result.stdout)
-        self.assertFalse(payload["success"])
-        self.assertFalse(payload["valid"])
-        self.assertEqual(payload["root_errors"], [expected])
-        self.assertEqual(payload["total_errors"], 1)
-        self.assertEqual(payload["total_errors"], self._discoverable_error_count(payload))
+        self.assertTrue(payload["success"])
+        self.assertTrue(payload["valid"])
+        self.assertEqual(payload["root_errors"], [])
+        self.assertEqual(payload["root_warnings"], [expected])
+        self.assertEqual(payload["total_errors"], 0)
+        self.assertEqual(payload["total_warnings"], 1)
+        self.assertEqual(
+            payload["total_warnings"], self._discoverable_warning_count(payload)
+        )
+        self.assertEqual(
+            payload["total_errors"], self._discoverable_error_count(payload)
+        )
 
         text_result = self._run("validate", "--all")
-        self.assertEqual(text_result.returncode, 1)
+        self.assertEqual(text_result.returncode, 0)
+        self.assertIn("Valid: True", text_result.stdout)
+        self.assertIn("Warnings:", text_result.stdout)
         self.assertIn(expected, text_result.stdout)
+        self.assertNotIn("  Errors:", text_result.stdout)
 
     def test_multiple_collisions_are_sorted_and_tracker_ids_do_not_collide(self) -> None:
         self._create_collision(91, "gamma", "alpha", "beta")
@@ -116,10 +139,11 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
         tracker_id = self._create_tracker_spec("Tracker peer", "WOR-91")
 
         result = self._run("validate", "--all", "--json")
-        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.returncode, 0)
         payload = json.loads(result.stdout)
+        self.assertEqual(payload["root_errors"], [])
         self.assertEqual(
-            payload["root_errors"],
+            payload["root_warnings"],
             [
                 "Spec ID collision: fn-42 used by multiple specs: "
                 "fn-42-alpha, fn-42-zeta",
@@ -127,8 +151,11 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
                 "fn-91-alpha, fn-91-beta, fn-91-gamma",
             ],
         )
-        self.assertEqual(payload["total_errors"], 2)
-        self.assertEqual(payload["total_errors"], self._discoverable_error_count(payload))
+        self.assertEqual(payload["total_errors"], 0)
+        self.assertEqual(payload["total_warnings"], 2)
+        self.assertEqual(
+            payload["total_warnings"], self._discoverable_warning_count(payload)
+        )
         self.assertIn(tracker_id, {spec["spec"] for spec in payload["specs"]})
 
     def test_root_and_spec_errors_remain_visible_alongside_collision(self) -> None:
@@ -140,8 +167,15 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         payload = json.loads(result.stdout)
         self.assertIn("Required directory missing: memory/", payload["root_errors"])
+        # Collision is a warning, not mixed into root_errors.
+        self.assertFalse(
+            any(error.startswith("Spec ID collision:") for error in payload["root_errors"])
+        )
         self.assertTrue(
-            any(error.startswith("Spec ID collision: fn-91") for error in payload["root_errors"])
+            any(
+                w.startswith("Spec ID collision: fn-91")
+                for w in payload["root_warnings"]
+            )
         )
         spec_errors = {
             spec["spec"]: spec["errors"] for spec in payload["specs"]
@@ -152,8 +186,15 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
                 for error in spec_errors[collision_ids[0]]
             )
         )
-        self.assertEqual(payload["total_errors"], 3)
-        self.assertEqual(payload["total_errors"], self._discoverable_error_count(payload))
+        # 2 real errors (root + per-spec); collision is the 1 warning.
+        self.assertEqual(payload["total_errors"], 2)
+        self.assertEqual(payload["total_warnings"], 1)
+        self.assertEqual(
+            payload["total_errors"], self._discoverable_error_count(payload)
+        )
+        self.assertEqual(
+            payload["total_warnings"], self._discoverable_warning_count(payload)
+        )
 
     def test_clean_repository_preserves_success_contract(self) -> None:
         self._create_native_spec("Alpha")
@@ -165,13 +206,68 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
         self.assertTrue(payload["success"])
         self.assertTrue(payload["valid"])
         self.assertEqual(payload["root_errors"], [])
+        self.assertEqual(payload["root_warnings"], [])
         self.assertEqual(payload["total_errors"], 0)
+        self.assertEqual(payload["total_warnings"], 0)
         self.assertEqual(payload["total_errors"], self._discoverable_error_count(payload))
 
         text_result = self._run("validate", "--all")
         self.assertEqual(text_result.returncode, 0)
         self.assertIn("Valid: True", text_result.stdout)
         self.assertNotIn("  Errors:", text_result.stdout)
+
+    def test_live_fn122_pair_root_warnings_both_renderers(self) -> None:
+        """R13: live fn-122 pair is a machine-readable warning in JSON + text.
+
+        Recreates the two real slug names (ids never change) in a fixture so
+        the suite is hermetic; shape matches the live store.
+        """
+        self._create_collision(
+            122,
+            "flowctl-hardening-and-performance-completion-sweep",
+            "harden-verdict-graduate-recurring",
+        )
+        expected = (
+            "Spec ID collision: fn-122 used by multiple specs: "
+            f"{LIVE_FN122_A}, {LIVE_FN122_B}"
+        )
+
+        json_result = self._run("validate", "--all", "--json")
+        self.assertEqual(json_result.returncode, 0)
+        payload = json.loads(json_result.stdout)
+        self.assertEqual(payload["root_errors"], [])
+        self.assertIn(expected, payload["root_warnings"])
+        self.assertGreaterEqual(payload["total_warnings"], 1)
+
+        text_result = self._run("validate", "--all")
+        self.assertEqual(text_result.returncode, 0)
+        self.assertIn(expected, text_result.stdout)
+        self.assertIn("Warnings:", text_result.stdout)
+
+        # Also pin against the live repo store when present (same message shape).
+        live_a = REPO_ROOT / ".flow" / "specs" / f"{LIVE_FN122_A}.json"
+        live_b = REPO_ROOT / ".flow" / "specs" / f"{LIVE_FN122_B}.json"
+        if live_a.exists() and live_b.exists():
+            live = subprocess.run(
+                [sys.executable, str(FLOWCTL_PY), "validate", "--all", "--json"],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+            )
+            live_payload = json.loads(live.stdout)
+            self.assertTrue(
+                any(
+                    w.startswith("Spec ID collision: fn-122")
+                    for w in live_payload.get("root_warnings", [])
+                ),
+                live_payload.get("root_warnings"),
+            )
+            self.assertFalse(
+                any(
+                    e.startswith("Spec ID collision: fn-122")
+                    for e in live_payload.get("root_errors", [])
+                )
+            )
 
 
 if __name__ == "__main__":

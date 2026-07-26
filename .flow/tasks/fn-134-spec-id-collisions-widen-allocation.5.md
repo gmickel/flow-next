@@ -71,5 +71,18 @@ The codex mirror is generated. Never hand-edit; run `sync-codex.sh` twice and co
 - [ ] Full gate green: `python3 scripts/run_tests_parallel.py`.
 
 ## Done summary
+Repo documentation pass. Corrected every statement that GitHub and GitLab cannot use tracker-first (synthetic keys make it false), updated the substance surfaces, and seeded the Notable updates section that replaces the runtime advisory rejected during planning.
 
+Implemented by grok-4.5 via the grok CLI bridge; reviewed in-host (opus-5).
+
+Verified rather than accepted: a grep sweep over docs and skills returns no remaining "flow-first only" / "NOT tracker-first" claims outside the generated mirror; the two `usage.md` copies are byte-identical; the stale `validate --all --json` example in flowctl.md now shows `root_warnings` instead of `root_errors`; CHANGELOG sits under `## [Unreleased]` with the version still 3.4.5 and no manifest touched.
+
+Grok's sweep caught a surface my task brief had not listed: `test_tracker_sync_jira.py` carried the same false "GitHub/GitLab flow-first-only" claim in a code comment. That is exactly the secondary-surface miss this repo has hit repeatedly, and grepping rather than working from the named-file list found it.
+
+The Notable updates section documents its own append format inline and is seeded with a single `tracker.specIds` entry (what changed, why it matters, how to enable, where the detail lives). Updating it is now a step in `agent_docs/releasing.md` so it does not decay into staleness the way an undocumented convention would.
+
+Note: `flow-next-tracker-sync/SKILL.md` already carried the corrected claim - task `.3` fixed it when adding create-first - so it correctly does not appear in this task's diff.
 ## Evidence
+- Commits: 8a6cb6d7
+- Tests: python3 scripts/run_tests_parallel.py (files=133 ran=2398 failures=0 errors=0 skipped=4), ./scripts/sync-codex.sh twice - idempotent, guards green, grep sweep for 'flow-first only' / 'NOT tracker-first' / 'go FLOW-FIRST' across docs+skills: no hits outside the generated codex mirror, diff .flow/usage.md plugins/flow-next/templates/usage.md - identical, verified flowctl.md validate example now shows root_warnings; CHANGELOG under Unreleased; plugin version still 3.4.5 (no bump)
+- PRs:

@@ -363,19 +363,21 @@ stays in reconcile.
 
 `tracker`/`type` on the struct are set to `"gitlab"` / `"issue"`.
 
-> **Identity is flow-first only — NOT tracker-first.** Grabbing a GitLab issue into a
-> spec creates a normal **flow-first `fn-NN` spec**, then `sync set-tracker-id <spec>
-> <global-id> --identifier "<project>#<iid>" --url <web_url>` attaches the GitLab key
-> as the resolvable alias (fn-69.1 widened the `set-tracker-id` validator to accept
-> `group/subgroup/project#12` + bare `#<iid>`). The **tracker-first** path
-> (`spec create --tracker-first --tracker-identifier`) is **NOT used for GitLab**: it
-> mints a canonical spec id from the key (`<key>-<number>-<slug>`), and a GitLab
-> `<project>#<iid>` can't slugify (slashes + `#`), so `cmd_spec_create`'s strict
-> `KEY-N` validator rightly rejects it. GitLab linking always goes flow-first →
-> `set-tracker-id`. The `<project>#<iid>` is stored as the display `identifier`
-> (surfaced in `sync` listings), but flowctl's resolver does **NOT** resolve a bare
-> GitLab key — `resolve_spec_id_arg` accepts only `fn-*` / `KEY-N` handles, so use the
-> **`fn-NN` spec id** for `show` / `work` / `sync` commands, never `group/project#12`.
+> **Identity — tracker-first via synthetic keys (fn-134).** A GitLab
+> `<project>#<iid>` is **not** a literal `KEY-N` (path + `#`), so flowctl mints a
+> **synthetic** resolvable id while `tracker.type=gitlab`: `spec create --tracker-first
+> --tracker-identifier "group/project#12"` → `gl-12-slug` (project-scoped **`iid`**,
+> never the opaque global id). Bare `gl-12` / `gl-12.M` resolve as aliases. Guards:
+> contextual `gl` prefix reservation while type is gitlab, plus a preflight of the
+> existing store. Flow-first remains available: create an `fn-NN` spec, then
+> `sync set-tracker-id <spec> <global-id> --identifier "<project>#<iid>" --url <web_url>`
+> (the link-time validator accepts `group/subgroup/project#12` + bare `#<iid>`). The
+> durable `tracker.id` is always the **global** issue id; `<project>#<iid>` is the
+> display `identifier` only. **Re-point hazard:** re-pointing `tracker.perTracker.project`
+> at a different GitLab project can mint `gl-<iid>` ids that collide with previously
+> minted ones (ids never change; preflight refuses). Use `gl-12-slug` (or `fn-NN`)
+> for `show` / `work` / `sync` commands — never the bare `group/project#12` path form
+> as a flowctl id.
 
 ### `authorAuthority` — from project membership `access_level` (fn-68 R15 security)
 
@@ -482,6 +484,18 @@ printf '%s' "$BODY_WITH_DEPS" | glab api --method PUT "projects/$ENC/issues/$IID
 - **`description=@-`** reads the body from stdin (the glab/curl `@-` field convention)
   — the GitLab analog of github.md's `--body-file -`. Never inline a markdown body
   as a shell argument.
+
+**create-first (fn-134.3 / R19)** - issue before any local spec (steps.md Phase 2d). Call
+`writeIssue` with **no** `issue.id` and **title + body only**. Return
+`{ id (global id), identifier ("<project>#"+iid), url }` exactly as above — **never**
+invent a `KEY-N` or a synthetic `gl-N` here; the caller mints `gl-<iid>-slug` via
+`spec create --tracker-first` after this returns (uses the project-scoped `iid`, never
+the global id). **Omit the `flow:<spec-id>` label** on create (no spec id yet); the
+caller writes it after mint + `set-tracker-id`. Do not call `sync receipt` from this
+path (no local spec id) — recovery is the pre-spec file
+`.flow/create-first/<retryKey>.json` keyed by
+`sha256(tracker.type + "\0" + title + "\0" + body)[:16]`; a retry that finds the file
+**links** and never creates a second issue.
 
 ### `setStatus(trackerId, status)` → ok | errored
 

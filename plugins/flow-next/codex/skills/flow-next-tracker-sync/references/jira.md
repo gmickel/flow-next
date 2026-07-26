@@ -219,11 +219,12 @@ $FLOWCTL sync set-tracker-id "<spec-id>" "$ISSUE_ID" --identifier "$ISSUE_KEY" -
  **tracker-first like Linear** (steps.md): `spec create --tracker-first
  --tracker-identifier PROJ-123` mints a clean `proj-123-slug` canonical id, and bare
  `proj-123` / `proj-123.M` resolve like `wor-17`. Both entry flows work (tracker-first
- AND flow-first). Distinct from GitHub/GitLab (flow-first only — their keys don't
- slugify into a canonical id).
+ AND flow-first). GitHub/GitLab also support tracker-first, but via **synthetic keys**
+ (`gh-N` / `gl-N`) because their native identifiers are not literal `KEY-N` — see
+ docs/tracker-sync.md and github.md / gitlab.md § identity.
  - **Exception — a DC/Server CUSTOM key that isn't clean `KEY-N`** (underscores
  `MY_PROJECT-7`, OR a >10-char alnum key `PRODUCT2013-7`) can't mint a kebab canonical
- id, so it links **flow-first / display-only** like a GitHub ref: the spec stays
+ id, so it links **flow-first / display-only**: the spec stays
  `fn-NN`, and `set-tracker-id
  --identifier MY_PROJECT-7` stores the bare handle as a shown alias + back-reference
  (NOT a resolvable spec handle — you never `work MY_PROJECT-7`). Standard keys (no
@@ -391,6 +392,18 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
  (`{"type":"doc","version":1,"content":[…]}`, confirmed to round-trip exactly); on
  `/rest/api/2` it is wiki/plain text. The splice algorithm (markdown ↔ ADF,
  unknown-node preservation) is § ADF translation below.
+
+**create-first (fn-134.3 / R19)** - issue before any local spec (steps.md Phase 2d). Call
+`writeIssue` with **no** `issue.id` and **title + body only**. Return
+`{ id (immutable), identifier (key e.g. PROJ-123), url }` exactly as above — a native
+`KEY-N`, so the caller mints via `spec create --tracker-first --tracker-identifier
+PROJ-123` (no synthesis). **Omit the `flow:<spec-id>` label** on create (no spec id
+yet; and when `LABELS_SETTABLE=0` the label is already omitted); the caller writes the
+back-reference after mint + `set-tracker-id`. Do not call `sync receipt` from this path
+(no local spec id) — recovery is the pre-spec file
+`.flow/create-first/<retryKey>.json` keyed by
+`sha256(tracker.type + "\0" + title + "\0" + body)[:16]`; a retry that finds the file
+**links** and never creates a second issue.
 
 ### `listComments(trackerId)` → normalized `comment[]`
 

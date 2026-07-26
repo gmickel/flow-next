@@ -18,8 +18,8 @@
     },
     {
       "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
-      "chars_lf": 68309,
-      "content_hash": "11d8de0cbde3784283a041a07a119690b85c8ac7c4627fdb79403c7f3ba72e64"
+      "chars_lf": 71471,
+      "content_hash": "b720e36a936473f306c89dbd0a27977bbab77d597937852f3d93b9301a693cb0"
     },
     {
       "path": "plugins/flow-next/skills/flow-next-setup/references/model-pins.md",
@@ -73,27 +73,188 @@
     }
   ],
   "fixture_results": [
-    {"fixture_id": "setup.autonomous", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
-    {"fixture_id": "setup.copy-first-install", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
-    {"fixture_id": "setup.copy-refresh", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
-    {"fixture_id": "setup.customized-snippet-keep", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
-    {"fixture_id": "setup.customized-snippet-overwrite", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
-    {"fixture_id": "setup.host-claude", "reads": ["model-routing-question-bridge.md", "model-routing-bridge.md"], "candidate_chars": 74854, "reduction_chars": 28834, "reduction_percent": 27.81},
-    {"fixture_id": "setup.host-codex", "reads": ["model-routing-question-bridge.md", "model-routing-bridge.md"], "candidate_chars": 74854, "reduction_chars": 28834, "reduction_percent": 27.81},
-    {"fixture_id": "setup.host-cursor", "reads": ["model-routing-question-cursor.md", "model-routing-cursor.md"], "candidate_chars": 74224, "reduction_chars": 29464, "reduction_percent": 28.42},
-    {"fixture_id": "setup.host-droid", "reads": ["model-routing-question-bridge.md", "model-routing-bridge.md"], "candidate_chars": 74854, "reduction_chars": 28834, "reduction_percent": 27.81},
-    {"fixture_id": "setup.host-grok", "reads": ["model-routing-question-grok.md", "model-routing-grok.md"], "candidate_chars": 74574, "reduction_chars": 29114, "reduction_percent": 28.08},
-    {"fixture_id": "setup.malformed-metadata", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
-    {"fixture_id": "setup.model-routing-accepted", "reads": ["model-routing-question-bridge.md", "model-routing-bridge.md"], "candidate_chars": 74854, "reduction_chars": 28834, "reduction_percent": 27.81},
-    {"fixture_id": "setup.model-routing-skipped", "reads": ["model-routing-question-bridge.md"], "candidate_chars": 70880, "reduction_chars": 32808, "reduction_percent": 31.64},
-    {"fixture_id": "setup.plugin-mode", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
-    {"fixture_id": "setup.ralph-available", "reads": ["ralph-question.md", "ralph-enable.md"], "candidate_chars": 71640, "reduction_chars": 32048, "reduction_percent": 30.91},
-    {"fixture_id": "setup.ralph-unsupported", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88}
+    {
+      "fixture_id": "setup.autonomous",
+      "reads": [],
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
+    },
+    {
+      "fixture_id": "setup.copy-first-install",
+      "reads": [],
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
+    },
+    {
+      "fixture_id": "setup.copy-refresh",
+      "reads": [],
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
+    },
+    {
+      "fixture_id": "setup.customized-snippet-keep",
+      "reads": [],
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
+    },
+    {
+      "fixture_id": "setup.customized-snippet-overwrite",
+      "reads": [],
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
+    },
+    {
+      "fixture_id": "setup.host-claude",
+      "reads": [
+        "model-routing-question-bridge.md",
+        "model-routing-bridge.md"
+      ],
+      "candidate_chars": 78016,
+      "reduction_chars": 25672,
+      "reduction_percent": 24.76,
+      "candidate_reached_path_chars": 78016
+    },
+    {
+      "fixture_id": "setup.host-codex",
+      "reads": [
+        "model-routing-question-bridge.md",
+        "model-routing-bridge.md"
+      ],
+      "candidate_chars": 78016,
+      "reduction_chars": 25672,
+      "reduction_percent": 24.76,
+      "candidate_reached_path_chars": 78016
+    },
+    {
+      "fixture_id": "setup.host-cursor",
+      "reads": [
+        "model-routing-question-cursor.md",
+        "model-routing-cursor.md"
+      ],
+      "candidate_chars": 77386,
+      "reduction_chars": 26302,
+      "reduction_percent": 25.37,
+      "candidate_reached_path_chars": 77386
+    },
+    {
+      "fixture_id": "setup.host-droid",
+      "reads": [
+        "model-routing-question-bridge.md",
+        "model-routing-bridge.md"
+      ],
+      "candidate_chars": 78016,
+      "reduction_chars": 25672,
+      "reduction_percent": 24.76,
+      "candidate_reached_path_chars": 78016
+    },
+    {
+      "fixture_id": "setup.host-grok",
+      "reads": [
+        "model-routing-question-grok.md",
+        "model-routing-grok.md"
+      ],
+      "candidate_chars": 77736,
+      "reduction_chars": 25952,
+      "reduction_percent": 25.03,
+      "candidate_reached_path_chars": 77736
+    },
+    {
+      "fixture_id": "setup.malformed-metadata",
+      "reads": [],
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
+    },
+    {
+      "fixture_id": "setup.model-routing-accepted",
+      "reads": [
+        "model-routing-question-bridge.md",
+        "model-routing-bridge.md"
+      ],
+      "candidate_chars": 78016,
+      "reduction_chars": 25672,
+      "reduction_percent": 24.76,
+      "candidate_reached_path_chars": 78016
+    },
+    {
+      "fixture_id": "setup.model-routing-skipped",
+      "reads": [
+        "model-routing-question-bridge.md"
+      ],
+      "candidate_chars": 74042,
+      "reduction_chars": 29646,
+      "reduction_percent": 28.59,
+      "candidate_reached_path_chars": 74042
+    },
+    {
+      "fixture_id": "setup.plugin-mode",
+      "reads": [],
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
+    },
+    {
+      "fixture_id": "setup.ralph-available",
+      "reads": [
+        "ralph-question.md",
+        "ralph-enable.md"
+      ],
+      "candidate_chars": 74802,
+      "reduction_chars": 28886,
+      "reduction_percent": 27.86,
+      "candidate_reached_path_chars": 74802
+    },
+    {
+      "fixture_id": "setup.ralph-unsupported",
+      "reads": [],
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
+    }
   ],
   "supplementary_branch_results": [
-    {"branch": "model-pin-write-or-stamp", "reads": ["model-pins.md"], "candidate_chars": 74820, "reduction_chars": 28868, "reduction_percent": 27.84},
-    {"branch": "model-pin-autonomous-skip", "reads": [], "candidate_chars": 69591, "reduction_chars": 34097, "reduction_percent": 32.88},
-    {"branch": "ralph-disable", "reads": ["ralph-question.md", "ralph-disable.md"], "candidate_chars": 71893, "reduction_chars": 31795, "reduction_percent": 30.66}
+    {
+      "branch": "model-pin-write-or-stamp",
+      "reads": [
+        "model-pins.md"
+      ],
+      "candidate_chars": 77982,
+      "reduction_chars": 25706,
+      "reduction_percent": 24.79,
+      "candidate_reached_path_chars": 77982
+    },
+    {
+      "branch": "model-pin-autonomous-skip",
+      "reads": [],
+      "candidate_chars": 72753,
+      "reduction_chars": 30935,
+      "reduction_percent": 29.83,
+      "candidate_reached_path_chars": 72753
+    },
+    {
+      "branch": "ralph-disable",
+      "reads": [
+        "ralph-question.md",
+        "ralph-disable.md"
+      ],
+      "candidate_chars": 75055,
+      "reduction_chars": 28633,
+      "reduction_percent": 27.61,
+      "candidate_reached_path_chars": 75055
+    }
   ],
   "trace_boundary": "Deterministic candidate read sets derived from the explicit router gates; B1 manifests are the pre-mutation trace baseline. No backend telemetry is claimed.",
   "ratchet": {
@@ -105,5 +266,20 @@
       "new direct-reference route-read assertions",
       "B1 input and manifest validation"
     ]
-  }
+  },
+  "revisions": [
+    {
+      "spec": "fn-134",
+      "date": "2026-07-25",
+      "reason": "setup gains the tracker.specIds id-scheme question (R9), which grows setup/workflow.md.",
+      "files_changed": [
+        {
+          "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
+          "chars_before": 68309,
+          "chars_after": 71541
+        }
+      ],
+      "baseline_note": "baseline reached_path_chars untouched; candidate measurement revised."
+    }
+  ]
 }

@@ -6,7 +6,7 @@ This file is the transport-blind orchestration **spine**: discovery ceremony, li
 
 ## Phase 0 — Mode + Ralph/autonomous awareness
 
-Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `comment` / `list-open` / `list-relations` / `question` / `link` / `unlink` / `discover`) and an optional spec id (or, for `question` / `list-relations`, a `<spec-id | tracker-id>`). With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
+Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `comment` / `list-open` / `list-relations` / `question` / `link` / `unlink` / `discover` / `create-first`) and an optional spec id (or, for `question` / `list-relations`, a `<spec-id | tracker-id>`; for `create-first`, a title + body - no spec id). With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
 
 `comment <spec-id>` is the lifecycle-event op the host skills invoke for opted-in touchpoints (`work.done` / `resolvePr` / `completionReview` / `qa` set to `comment` — see SKILL.md's perEvent table). It routes to the **comments-sync hook** (`postLifecycleComment` → `postComment` **[→ ref: comments-sync.md]**): append the structured lifecycle comment + evidence, dedup, receipt — it does NOT touch the body or status. Like `push` / `reconcile`, a `comment` op on an unlinked spec triggers the **Phase 3 create-if-unlinked** flow-first link first (create + attach), then posts the comment on the now-linked spec.
 
@@ -260,38 +260,42 @@ $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<iss
 $FLOWCTL sync set-tracker-id "wor-17-slug" "$ISSUE_UUID" --identifier "WOR-17" --url "$ISSUE_URL"
 ```
 
+> **All four trackers support tracker-first.** Linear `WOR-17` and Jira `PROJ-123`
+> are native `KEY-N` and mint directly (`wor-17-slug` / `proj-123-slug`). GitHub `#N`
+> and GitLab `<project>#<iid>` are **not** literal `KEY-N` (no alpha key / path + `#`),
+> so flowctl mints **synthetic keys** while `tracker.type` matches: `#123` →
+> `gh-123-slug`, `<project>#456` → `gl-456-slug` (project-scoped `iid`, never the
+> opaque global id). Bare `gh-123` / `gl-456` resolve as aliases. Guards: contextual
+> `gh`/`gl` prefix reservation while type matches, plus a preflight of the existing
+> store. A Linear/Jira repo natively keyed `GH` is unaffected. Flow-first remains
+> available on every tracker (create `fn-NN`, then `set-tracker-id`).
+>
 > **Jira grabs go TRACKER-FIRST (like Linear).** A Jira issue key `PROJ-123` IS an
 > alpha-prefixed `KEY-N` (key `PROJ`, number `123`), so it takes the **same
 > tracker-first path as Linear** — `spec create --tracker-first --tracker-identifier
 > PROJ-123` mints a clean `proj-123-slug` canonical id (Jira keys are alnum-`-num`,
 > no slugify hazard), and bare `proj-123` / `proj-123.M` resolve like `wor-17`. BOTH
-> entry flows work for Jira (tracker-first AND flow-first), distinct from GitHub/GitLab
-> (flow-first only — below).
+> entry flows work for Jira (tracker-first AND flow-first).
 >
 > **Exception — a DC/Server CUSTOM key that isn't clean `KEY-N`** (underscores
 > `MY_PROJECT-7`, OR a >10-char alnum key `PRODUCT2013-7`) can't mint a kebab canonical
-> id, so the strict `--tracker-first` validator REJECTS it. Those grabs go **flow-first**
-> like GitHub/GitLab: create an `fn-NN` spec, then `sync set-tracker-id "<fn-id>"
+> id, so the strict `--tracker-first` validator REJECTS it. Those grabs go **flow-first**:
+> create an `fn-NN` spec, then `sync set-tracker-id "<fn-id>"
 > "$ISSUE_ID" --identifier "MY_PROJECT-7" --url "$ISSUE_URL"` (display-only alias — stored,
 > shown, back-referenced, but you never `work MY_PROJECT-7`). Standard keys (no underscore,
 > ≤10-char) stay tracker-first.
 >
-> **GitLab grabs go FLOW-FIRST, not tracker-first.** The `--tracker-first
-> --tracker-identifier` path above only accepts an **alpha-prefixed `KEY-N`** display
-> key (Linear `WOR-17` / Jira `PROJ-123` → mints `wor-17-slug` / `proj-123-slug`).
-> **GitHub `#N` is NOT a `KEY-N` either**
-> (`#123` has no alpha key) — it too goes flow-first; only `KEY-N`-keyed
-> trackers (Linear, Jira) are tracker-first. A GitLab key is `<project>#<iid>` (slashes + `#`) which
-> likewise can't slugify into a canonical spec id, so `cmd_spec_create`'s strict
-> validator (`validate_tracker_identifier(..., allow_reference=False)`, verified)
-> rejects **both `#123` and `<project>#<iid>`** at create time (issue refs are accepted
-> only at LINK time via `set-tracker-id`, `allow_reference=True`). For a GitLab grab,
-> create a **flow-first `fn-NN` spec** instead, then attach the issue:
-> `$FLOWCTL sync set-tracker-id "<fn-id>" "<global-issue-id>" --identifier
-> "<project>#<iid>" --url "<web_url>"` — the **`set-tracker-id`**
-> validator accepts `group/subgroup/project#12` + bare `#<iid>`. The key is stored as
-> the display `identifier`, but flowctl's resolver does NOT resolve a bare GitLab key
-> (`fn-*` / `KEY-N` only) — use the **`fn-NN` id** for commands. (gitlab.md § identity.)
+> **GitHub / GitLab grabs go TRACKER-FIRST via synthetic keys.** Pass the native
+> issue ref to `--tracker-first --tracker-identifier`:
+> - GitHub: `$FLOWCTL spec create --tracker-first --tracker-identifier "#123" --title "…"`
+> → `gh-123-slug`; attach with `--identifier "#123"`.
+> - GitLab: `$FLOWCTL spec create --tracker-first --tracker-identifier "group/project#12" --title "…"`
+> → `gl-12-slug` (uses the project-scoped `iid`); attach with the **global** issue
+> id as the durable `tracker.id` and `"group/project#12"` as the display
+> `identifier`. Re-pointing `tracker.perTracker.project` at a different GitLab
+> project is a collision hazard (ids never change; preflight refuses a colliding mint).
+> Flow-first still works if preferred: create `fn-NN`, then `set-tracker-id` with the
+> issue ref as a display alias. (gitlab.md / github.md § identity.)
 
 Seed the merge base from the **current issue body** so the first sync is pull-only (never surfaces the whole issue as a conflict) — first-link base-seeding is in **[→ ref: body-merge.md]**; call `sync set-merge-base` with the flow-form + tracker-form snapshots it produces:
 
@@ -314,6 +318,269 @@ $FLOWCTL sync check-collisions --json # flags any UUID shared by >1 spec
 ```
 
 If `set-tracker-id` reports a collision, ask the user (interactive) or queue (`sync defer`, Ralph) — never `--force` silently.
+
+### 2d - Create-first (issue before any local spec) - R19
+
+**When:** a caller needs a tracker issue *before* a local spec exists (fresh-idea path when `tracker.specIds=tracker`). Distinct from **create-if-unlinked** (Phase 3), which requires an existing local spec and renders it first. Skill-level + transport-blind - not a new flowctl subcommand.
+
+**Inputs:** title + body. **No local spec id.**
+
+**Output:** `{id, identifier, url}` from the selected adapter's `writeIssue` create path (no `issue.id` on input). Return what the adapter gives - do not rewrite:
+
+| Adapter | `identifier` returned | Who mints the spec id |
+|---|---|---|
+| Linear | `WOR-17` | caller: `--tracker-first --tracker-identifier WOR-17` |
+| Jira | `PROJ-123` | caller: `--tracker-first --tracker-identifier PROJ-123` |
+| GitHub | `#123` | caller: synthetic `gh-123` via `--tracker-first` (flowctl mint, task .2) |
+| GitLab | `<project>#<iid>` | caller: synthetic `gl-<iid>` via `--tracker-first` (flowctl mint, task .2) |
+
+This op never mints a spec id and never invents a synthetic key. GitHub/GitLab stay native `#N` / `<project>#<iid>` on the wire; synthesis is the caller's job after return.
+
+#### Receipt / retry contract (pre-spec chicken-and-egg)
+
+`sync receipt` requires and resolves a **local spec id**. At create-first time none exists yet, so `sync receipt` cannot be called here - it comes later, after mint + attach. What IS available, and **required**, is the deterministic pre-spec recovery surface: `sync create-first-key|get|put|clear`. Use those helpers; do not hand-roll an equivalent (see the "use the helper commands exclusively" rule below). Only `sync receipt` is unavailable before a spec exists.
+
+**Chosen approach (a):** durable pre-spec recovery output + normal `sync receipt` **after** mint/attach.
+
+1. **Retry lookup key** (stable; computable *before* create and on every retry):
+
+ ```bash
+ FLOWCTL="$HOME/.codex/scripts/flowctl"
+ [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+ # The key is first 16 hex of sha256(type NUL title NUL body). Do NOT hand-roll
+ # it - flowctl owns the definition so prose and code cannot drift (fn-134):
+ KEY=$("$FLOWCTL" sync create-first-key --type "$TRACKER_TYPE" --title "$TITLE" --body-file "$BODY_FILE")
+
+ # BEFORE creating anything: a prior attempt may already have made the issue.
+ if REC=$("$FLOWCTL" sync create-first-get --key "$KEY" --json); then
+ : # found -> LINK to that issue; never create a second one
+ else
+ : # absent -> create via writeIssue, then immediately record it:
+ # "$FLOWCTL" sync create-first-put --key "$KEY" --id … --identifier … --url … --title … --transport …
+ fi
+ # LAST, after mint + attach + merge-base seed AND the back-reference write:
+ # "$FLOWCTL" sync create-first-clear --key "$KEY"
+ ```
+
+ Same type + title + body always yields the same key. A rephrased *new* idea gets a new key (a new create is correct). A resumed run of the *same* intent recomputes the same key and finds the recovery file.
+
+2. **Pre-spec recovery file** (written **immediately** after remote create succeeds, before returning to the caller):
+
+ ```
+ .flow/create-first/<retryKey>.json
+ ```
+
+ Shape: `{ "retryKey", "id", "identifier", "url", "title", "createdAt", "transport", "specId"? }` (`specId` appears once the mint succeeds). This is the durable recovery surface - **not** a `sync receipt`.
+
+ **`create-first/` is gitignored and MUST stay local** (flowctl's auto-managed `.flow/.gitignore` block, same runtime-artifact class as `sync-runs/`). This is a correctness requirement, not hygiene: the retry key is a hash of tracker type + title + body, so a committed recovery file would let a teammate who computes the same key "resume" by linking to **someone else's** issue instead of creating their own. On any failure after remote create (mint fails, process dies, attach errors), leave the file in place and surface `identifier` + `url` + `retryKey` in the report so the run resumes by linking.
+
+3. **On entry, always check recovery first** - this is what makes retry safe:
+
+ - File exists → load `{id, identifier, url}` and return it. **Never create a second issue.** Resume is link-only.
+ - File missing → create via `writeIssue({title, body})` (no id), write the recovery file immediately, return the triple.
+
+4. **After the caller mints + attaches** (`spec create --tracker-first` → `sync set-tracker-id` → seed merge base → `flow:<spec-id>` back-reference): write the normal `sync receipt <spec-id> …`, then **remove** the recovery file (consumed) - the removal is LAST, after the back-reference write, per the sequence below. From that point the audit trail is the normal spec-keyed receipt stream under `.flow/sync-runs/`.
+
+5. **Failure after remote create, before mint completes:** surface `identifier` + `url` + `retryKey`; keep the recovery file. A later `create-first` with the same title+body finds the file and returns the existing issue - **never** creates a duplicate.
+
+6. **Failure after the local mint, before attach completes.** The record alone is not enough here: the resumed run recovers the issue and re-runs `spec create --tracker-first`, which `preflight_tracker_mint` correctly refuses because the canonical spec already exists - leaving the retry unable to finish. So on resume, **before minting**, check whether the spec this record would mint already exists and is unlinked:
+
+ ```bash
+ # Resume order: recover the issue, THEN look for a spec already minted from it.
+ # `sync get-state` reports the tracker block; an existing spec with no tracker.id
+ # is this record's half-finished mint, so skip creation and go straight to attach.
+ # The record itself carries the minted id (`specId`, written by the post-mint
+ # put below) - do NOT reconstruct `<key>-<number>-<slug>`, which is not
+ # reconstructible when the title slugifies to empty (a CJK- or emoji-only
+ # title gets a random suffix from `spec create`).
+ #
+ # A spec at that id is still NOT automatically this record's half-finished
+ # mint: preflight may have left the record precisely BECAUSE the canonical id
+ # already belongs to a DIFFERENT tracker issue. Resuming on a bare `show` hit
+ # would relink that spec and overwrite its tracker state, so require BOTH:
+ # no durable tracker.id yet, AND (when an identifier is present) the same
+ # identifier this record carries.
+ EXISTING=$(printf '%s' "$REC" | jq -r '.specId // empty')
+ RESUMABLE=""
+ if [ -n "$EXISTING" ]; then
+ STATE=$($FLOWCTL sync get-state "$EXISTING" --json 2>/dev/null)
+ EXIST_ID=$(printf '%s' "$STATE" | jq -r '.tracker.id // empty')
+ EXIST_IDENT=$(printf '%s' "$STATE" | jq -r '.tracker.identifier // empty')
+ if [ -z "$EXIST_ID" ] && { [ -z "$EXIST_IDENT" ] || [ "$EXIST_IDENT" = "$IDENTIFIER" ]; }; then
+ RESUMABLE="$EXISTING"
+ fi
+ fi
+ if [ -n "$RESUMABLE" ]; then
+ SPEC_ID="$RESUMABLE" # resume: do NOT re-run spec create
+ elif [ -n "$EXISTING" ]; then
+ # Already linked to a DIFFERENT issue - never relink. Surface the conflict
+ # (identifier + url + retryKey) and stop; a human decides.
+ :
+ else
+ SPEC_ID=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json | jq -r '.id')
+ fi
+ # Attach + seed + clear proceed identically from here.
+ ```
+
+ Attach is idempotent (`set-tracker-id` writes the same triple), so a resume that
+ reaches attach twice is safe; a resume that re-mints is not.
+
+#### Flow
+
+```
+create-first(title, body):
+ if bridge inactive OR TRANSPORT=none:
+ return noop (best-effort - never block the caller's lifecycle; caller degrades to flow-first fn-N)
+ retryKey = sync create-first-key --type <tracker.type> --title <title> --body-file <body>
+ if sync create-first-get --key <retryKey> succeeds:
+ return that record's {id, identifier, url} # LINK path - never re-create
+ result = writeIssue({ title, body }) # no issue.id ⇒ CREATE [→ selected adapter]
+ # omit flow:<spec-id> label - no spec yet; caller writes the back-reference after attach
+ sync create-first-put --key <retryKey> … # record immediately, before any mint attempt
+ return result # {id, identifier, url}
+```
+
+Recompute the key in the same bash block that needs it (variables do not survive
+across prompt turns). **Use the helper commands exclusively** - never hand-roll the
+hash with `shasum`, never write the record with a shell redirect, never delete it
+with `rm`. The helper owns the key definition and writes atomically, which is what
+makes retry idempotency mechanical rather than a prose promise:
+
+```bash
+FLOWCTL="$HOME/.codex/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+# TITLE / BODY_FILE / TRACKER_TYPE come from the invocation and the reached-path router.
+RETRY_KEY=$("$FLOWCTL" sync create-first-key --type "$TRACKER_TYPE" --title "$TITLE" --body-file "$BODY_FILE")
+if REC=$("$FLOWCTL" sync create-first-get --key "$RETRY_KEY" --json); then
+ # Resume: return the already-created issue - never writeIssue create again.
+ printf '%s' "$REC" | jq -c '{id, identifier, url, retryKey}'
+ # Caller proceeds to mint → attach → seed merge base (below).
+else
+ # CREATE via writeIssue (no issue.id) [→ selected adapter]; capture {id, identifier, url},
+ # then record it IMMEDIATELY, before any local mint attempt:
+ # "$FLOWCTL" sync create-first-put --key "$RETRY_KEY" --id "$ISSUE_ID" \
+ # --identifier "$IDENTIFIER" --url "$ISSUE_URL" --title "$TITLE" --transport "$TRANSPORT"
+ # Surface identifier + url + retryKey on any subsequent failure so the run links, not re-creates.
+fi
+```
+
+#### Enabled caller sequence (end-to-end)
+
+Create issue → mint → attach → seed merge base so the first reconcile is not a spurious whole-body conflict:
+
+```bash
+FLOWCTL="$HOME/.codex/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+# 1. create-first already returned ISSUE_ID / IDENTIFIER / URL (or loaded them from recovery).
+# 2. mint from IDENTIFIER (native KEY-N or synthetic gh-N / gl-N - flowctl owns synthesis)
+# 2a. RESUME FIRST: if this record already carries a specId, a prior run minted
+# and died before attaching. Re-running `spec create` there would be refused
+# by preflight and strand the retry, so reuse it (step 6 of the retry
+# contract above defines the full unlinked/identifier check).
+SPEC_ID=$($FLOWCTL sync create-first-get --key "$RETRY_KEY" --json 2>/dev/null | jq -r '.specId // empty')
+if [ -n "$SPEC_ID" ]; then
+ # RE-VALIDATE at use time, not just at record time: between the interrupted
+ # run and this retry, an intervening lifecycle touchpoint may have linked
+ # this spec (create-if-unlinked runs on any opted-in event). Re-attaching
+ # would overwrite that link. Only proceed when it is STILL unlinked, or
+ # already linked to THIS issue (idempotent re-attach).
+ LINKED=$($FLOWCTL sync get-state "$SPEC_ID" --json 2>/dev/null | jq -r '.tracker.id // empty')
+ if [ -n "$LINKED" ] && [ "$LINKED" != "$ISSUE_ID" ]; then
+ # Linked to a DIFFERENT issue - never overwrite. Surface identifier + url +
+ # retryKey and STOP the whole sequence here. Do not fall through: the steps
+ # below attach, seed, write the back-reference and CLEAR the record, and
+ # running any of them with no valid SPEC_ID would destroy the recovery
+ # state that makes this resumable at all.
+ echo "create-first CONFLICT: spec $SPEC_ID is linked to $LINKED, not $ISSUE_ID." >&2
+ echo " issue: $IDENTIFIER url: $ISSUE_URL retryKey: $RETRY_KEY" >&2
+ echo " Recovery record KEPT. A human decides; re-running will not re-create." >&2
+ return 1 2>/dev/null || exit 1
+ fi
+fi
+if [ -z "$SPEC_ID" ]; then
+ CREATE_OUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json)
+ SPEC_ID=$(printf '%s' "$CREATE_OUT" | jq -r '.id // .spec_id // empty')
+ MINT_ERR=$(printf '%s' "$CREATE_OUT" | jq -r '.error // empty')
+ # Degrade ONLY for the display-only-identifier case. Any other mint failure -
+ # most importantly a `preflight_tracker_mint` alias collision - must NOT reach
+ # here: minting an unrelated `fn-*` spec and attaching this issue to it would
+ # link the issue to the WRONG spec, which is worse than failing.
+ case "$MINT_ERR" in
+ *"Invalid tracker identifier"*|*"display-only"*|*"Expected a bare display key"*) DISPLAY_ONLY=1 ;;
+ *) DISPLAY_ONLY=0 ;;
+ esac
+ if [ -z "$SPEC_ID" ] && [ "$DISPLAY_ONLY" != "1" ]; then
+ echo "create-first: mint of '$IDENTIFIER' failed and it is NOT a display-only key - refusing to attach to an unrelated spec." >&2
+ echo " error: $MINT_ERR" >&2
+ echo " issue: $IDENTIFIER url: $ISSUE_URL retryKey: $RETRY_KEY (record KEPT)" >&2
+ return 1 2>/dev/null || exit 1
+ fi
+ if [ -z "$SPEC_ID" ]; then
+ # NOT every identifier is mintable. A Jira DC/Server project with a custom
+ # key returns `MY_PROJECT-7` (underscore, or >10 chars), which is
+ # DISPLAY-ONLY by design and `--tracker-first` rejects it. The issue is
+ # already created at this point, so retrying re-reads the record and repeats
+ # the same rejected mint forever, never attaching anything.
+ #
+ # Degrade to flow-first AND ATTACH. This does not contradict the orphan
+ # guard at the calling mint sites: that guard forbids creating an fn-N spec
+ # and walking away, whereas here the already-created issue IS linked, which
+ # is exactly the documented display-only behaviour for such keys.
+ SPEC_ID=$($FLOWCTL spec create --title "$TITLE" --json | jq -r '.id // empty')
+ [ -n "$SPEC_ID" ] || { echo "create-first: mint AND flow-first both failed; issue $IDENTIFIER ($ISSUE_URL) is unlinked, retryKey $RETRY_KEY kept" >&2; return 1 2>/dev/null || exit 1; }
+ echo "create-first: '$IDENTIFIER' is display-only (custom Jira key) - minted flow-first $SPEC_ID and linking the existing issue." >&2
+ fi
+ # 2b. Record the minted id IMMEDIATELY, before attach can fail - this is what
+ # makes the window between mint and attach resumable.
+ $FLOWCTL sync create-first-put --key "$RETRY_KEY" --id "$ISSUE_ID" \
+ --identifier "$IDENTIFIER" --url "$ISSUE_URL" --title "$TITLE" \
+ --transport "$TRANSPORT" --spec-id "$SPEC_ID"
+fi
+# 3. attach (id, identifier, url - all three)
+# Attach MUST succeed before anything below runs. A UUID collision (this issue
+# already linked to another spec) leaves the spec unlinked, and the steps below
+# seed, back-reference and CLEAR the recovery record - discarding the only state
+# that makes this resumable. Abort loudly and keep the record.
+$FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_ID" --identifier "$IDENTIFIER" --url "$ISSUE_URL" || {
+ echo "create-first: attach failed for $SPEC_ID <- $IDENTIFIER ($ISSUE_URL); retryKey $RETRY_KEY KEPT" >&2
+ return 1 2>/dev/null || exit 1
+}
+# 4. seed merge base (BOTH halves - paired-snapshot invariant; body-merge.md first-link)
+# Tracker half = the issue body just created (fetch-back after writeIssue, body-merge.md Step 5).
+# Seeding must succeed too - this block has no `set -e`, so an unguarded
+# failure (missing fetched-body temp file, unwritable path) would fall straight
+# through to the back-reference, receipt and CLEAR, discarding the recovery
+# record while the spec has no paired base snapshot.
+$FLOWCTL sync set-merge-base "$SPEC_ID" \
+ --flow-file ".flow/specs/${SPEC_ID}.md" \
+ --tracker-file "${TMPDIR:-/tmp}/flow-base-tracker-${SPEC_ID}-$$.txt" || {
+ echo "create-first: merge-base seed failed for $SPEC_ID ($IDENTIFIER); retryKey $RETRY_KEY KEPT" >&2
+ return 1 2>/dev/null || exit 1
+}
+$FLOWCTL sync set-last-synced "$SPEC_ID" || {
+ echo "create-first: set-last-synced failed for $SPEC_ID; retryKey $RETRY_KEY KEPT" >&2
+ return 1 2>/dev/null || exit 1
+}
+# 5. write flow:<spec-id> back-reference label on the issue [→ selected adapter] (same as Phase 2a)
+# 6. ONLY NOW the receipt. Writing it earlier records an `updated` receipt whose
+# note claims recovery was consumed while the sequence is still incomplete -
+# a durable audit trail reporting success for a partial run.
+$FLOWCTL sync receipt "$SPEC_ID" --status updated --tracker-id "$ISSUE_ID" --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
+ --note "operation: create-first, event: ${EVENT:-manual} - issue $IDENTIFIER created then linked; recovery consumed"
+# 7. ONLY NOW consume the recovery record. Clearing before the back-reference
+# write is unsafe: if that final tracker write fails or the process exits,
+# the next identical create-first finds no record, creates ANOTHER remote
+# issue, and only then hits mint preflight - leaving the original issue
+# without its back-reference and a duplicate leaked. The record is the only
+# thing that makes that step resumable, so it is released last.
+$FLOWCTL sync create-first-clear --key "$RETRY_KEY" # computed at step 1
+```
+
+**Back-reference:** create-first cannot write `flow:<spec-id>` (the id does not exist yet). The caller adds it after attach, same as Phase 2a.
+
+**Best-effort:** a tracker failure never blocks the lifecycle. No transport / create error ⇒ `noop` or surface the error; the caller degrades to flow-first `fn-N`. Partial success (remote create ok, local mint fail) leaves the recovery file and surfaces the triple so the next run links.
+
+**Collision:** if `set-tracker-id` later reports the UUID already attached to another spec, handle as Phase 2c (ask / `sync defer`) - never `--force` silently.
 
 ## Phase 3 — Orchestration skeleton (transport-blind)
 
@@ -645,3 +912,4 @@ list-relations(trackerId):
 - Receipts on every run — event-tagged on lifecycle runs (`${EVENT:+--event "$EVENT"}`, Phase 0); conflicts queue (`sync defer`), never block (R11).
 - **Autonomy parity (R14):** the Phase-0 `RALPH` gate recognizes the full marker family (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH` / `FLOW_AUTONOMOUS` / `mode:autonomous`); under it NO path reaches `plain-text numbered prompt` — every "ask the human" resolves to `sync defer`.
 - **Backlog-mode ops (Phase 7):** `list-open` + `list-relations` + `question` are skill-level + transport-blind (never flowctl transport). `list-open` / `list-relations` are READ-only (no tracker write); `list-open` no-ops with a note when `tracker.readyState` is unset; `list-relations` no-ops when no transport / no relations; a tracker-only `question` is exempt from the spec-id sync receipt and parks in the tracker.
+- **Create-first (Phase 2d):** title + body only, no local spec. Pre-spec recovery via `.flow/create-first/<retryKey>.json` (retryKey = `sha256(type+"\0"+title+"\0"+body)[:16]`); normal `sync receipt` only after mint + attach. Retry after partial failure links, never re-creates. Best-effort: tracker failure never blocks the lifecycle.

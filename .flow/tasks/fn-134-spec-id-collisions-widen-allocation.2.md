@@ -63,5 +63,17 @@ Depends on `.1` because both edit `flowctl.py` and should not be in flight simul
 - [ ] Focused suite green: `cd plugins/flow-next/tests && python3 -m unittest test_tracker_config test_validate_all_diagnostics test_expand_bare_spec_id test_flowctl_surface test_startup_bootstrap -q`
 
 ## Done summary
+Added `tracker.specIds` (strict `flow|tracker` enum), synthetic `gh-`/`gl-` key minting so GitHub and GitLab can use tracker-first, and moved duplicate-ordinal reporting from `root_errors` to a new machine-readable `root_warnings` field.
 
+Implemented by grok-4.5 via the grok CLI bridge; reviewed in-host (opus-5). Verified behaviorally rather than from the summary:
+
+- Config: `config set tracker.specIds bogus` is rejected with a usage error; the key is absent from `.flow/config.json` after init (unset-detectable, so setup can tell "never asked" from "answered flow") while the merged read returns `flow`. Grok chose NOT to materialize it at init and recorded the reason.
+- Validate: `root_errors` is now empty on this repo and `root_warnings` carries the fn-122 collision text, with `total_warnings=1` and the text renderer showing it under Warnings. `total_errors` dropped 50 -> 49 accordingly. The new field was necessary: without it the message would have been counted but dropped from JSON.
+- Resolver: grok verified before building. `flowctl show fn-122` already errored with the correct ambiguity message listing both candidates, so R12 landed as a regression test only and no redundant resolver code was added.
+- Guards: the mixed-historical-store test is real — a Linear repo keyed `GH` mints `gh-123-old-linear`, then a re-point to GitHub attempting to mint issue 123 is refused with a message naming the colliding id. That is the exact case type-gating alone would have missed.
+
+No argparse surface change, so `flowctl-help.txt` and `HELP_SHA256` correctly untouched.
 ## Evidence
+- Commits: 1cc3c60f
+- Tests: python3 scripts/run_tests_parallel.py (files=131 ran=2375 failures=0 errors=0), cd plugins/flow-next/tests && python3 -m unittest test_tracker_config test_validate_all_diagnostics test_expand_bare_spec_id test_flowctl_surface test_startup_bootstrap -q (75 tests OK), behavioral: config set tracker.specIds bogus -> rejected; key absent from .flow/config.json; merged read = flow, behavioral: validate --all --json root_errors=[] root_warnings=[fn-122 collision] total_warnings=1; text renderer shows it under Warnings, behavioral: flowctl show fn-122 -> ambiguity error listing both candidates (pre-existing, regression test only), dual-copy byte-identical + SOURCE_SHA256 matches; flowctl-help.txt unchanged
+- PRs:

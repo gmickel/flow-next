@@ -142,18 +142,20 @@ The durable answer is a **notable-updates surface** that serves every release ra
 
 - **R1:** `scan_max_native_fn_spec_id` returns the maximum across the current working tree, every registered worktree's `.flow/specs/`, and every ref, and is monotonic over numbers that were allocated and later removed.
 - **R2:** Each source degrades independently and silently. With `git` absent, outside a repo, with a stale or unreadable worktree registration, or on a `git log` failure, allocation still succeeds using whatever sources worked. A unit test covers each failure in isolation.
-- **R3:** Allocation completes under 150ms on a fixture comparable to this repo (300+ refs, 15+ worktrees), with the worktree scan performed in-process rather than one subprocess per worktree.
+- **R3:** Allocation completes **under 250ms** on a fixture comparable to this repo (300+ refs, 15+ worktrees), with the worktree scan performed in-process rather than one subprocess per worktree. *(Budget raised from 150ms during task `.1` review, 2026-07-25, on measured evidence: working tree 0.2ms, worktrees ~47ms, refs ~85ms, total ~155ms on a near-worst-case checkout of 327 refs / 16 worktrees / 1723 commits. 150ms sat exactly on the total and was a latent flake. This is a cold `spec create` path that already performs several atomic writes, so the headroom costs nothing observable and preserves all three sources plus monotonicity. The documented fallback - dropping the ref source - was declined because it would trade the committed-on-another-branch window and monotonicity for time nobody perceives.)*
 - **R4:** A test pins that the hot-path commands (`list`, `status`, `show`, `ready`, `next`) issue no worktree or ref scan, so the fn-109 latency work cannot regress.
 - **R5:** A regression test reproduces the two-worktree collision: create a spec in worktree A without committing, then create one in worktree B, and assert the second gets `max+2` rather than a duplicate.
 - **R6:** `tracker.specIds` exists as a strict string enum defaulting to `flow`, with both contracts tested: an invalid value is **rejected** by `config set`, and an invalid value already on disk **fails closed** to `flow` on read. Only the literal `tracker` activates it.
-- **R7:** Every spec-creating skill (capture, plan, work, qa, interview) routes on `tracker.specIds` using the existing config snapshot, adding no new config read, and each degrades to flow-first when the bridge is inactive or no transport is reachable.
+- **R7:** Every spec-creating skill (capture, plan, work, qa, interview) routes on `tracker.specIds` from a **root config snapshot (fn-110), never a per-leaf read, and never more than one snapshot per run**. Where the skill already holds one (plan Step 0, capture preamble) the mint site `jq`s that file and adds no read at all. Where it does not, the skill takes exactly one root snapshot and reuses it: work promotes its Phase 0 `config get work.delegate` leaf read into a root snapshot serving both delegation and minting, so the run performs **one** config read where it previously performed two; interview has no earlier snapshot, so its write-back is where the run's single snapshot is taken. *(Wording corrected at completion review: the original 'adding no new config read' was unsatisfiable for a skill that held no snapshot to begin with, and would have forbidden tracker-first minting there outright.)* Each degrades to flow-first when the bridge is inactive or no transport is reachable.
 - **R8:** With `tracker.specIds=tracker` and an active bridge, a spec created from a fresh idea produces a `KEY-N-slug` id via the full sequence: create issue → mint → attach → seed merge base. Network cost is stated accurately, not as a blanket zero-cost claim: **no net new call when the matching `tracker.perEvent.*` touchpoint is already active; one earlier remote write when it is off.** The setup question discloses that choosing `tracker` makes spec creation contact the tracker immediately.
 - **R19:** A tracker-sync **create-first** operation exists that creates an issue from a title and body with no local spec and returns `{id, identifier, url}`. On a failure after remote creation it surfaces the created issue's identifier and url so the run resumes by linking, and a retry never creates a duplicate issue. Covered by a fake-adapter test.
 - **R21:** `flowctl task set-title <task-id> --title "..."` exists, updates the JSON `title` and the markdown H1 together so they cannot disagree, and is covered by a test. `task set-spec --file` no longer leaves the two out of sync.
 - **R22:** A verdict-bearing review finalizes cleanly and **exits zero**. The reset-on-convergence path and the finalize path no longer race over the same reservation. The resolution must be one of: **finalize consumes the reservation before reset clears it**, or **reset stops clearing pending reservations**. Simply tolerating a zero-pending verdict is NOT acceptable on its own: finalize cannot distinguish "cleared by this attempt's own reset" from an unreserved, duplicated, or stale verdict, so that option would let a duplicate verdict finalize and would hole the reservation invariant the deterministic round cap rests on. If a zero-pending verdict is to be allowed at all, it requires **attempt identity** so the finalize can prove it is the same attempt that reserved. Tests: a SHIP drives end to end and asserts exit code 0; the no-verdict transport-failure refund path is unchanged; and **negative paths still fail** - an unreserved verdict and a duplicate finalize are both rejected without recording a second attempt.
-- **R20:** Contract tests cover the routing behavior rather than asserting it in prose: every one of the five mint sites, issue-first linking, graceful degradation when no transport is reachable, explicit-override precedence, and a fake-adapter integration test proving create → mint → attach → a later touchpoint fires **without** creating a second issue.
+- **R20:** Contract tests cover the routing behavior rather than asserting it in prose, split by what is actually executable:
+  - **Behavioral, with a counted fake at the transport boundary** - the create -> mint -> attach -> later-touchpoint sequence runs through the real flowctl state transitions and asserts exactly one remote creation across a create, an interrupted mint, and a retry; a genuinely different intent still creates a second issue.
+  - **Prose-contract, asserted against the skill files** - the five mint sites, explicit-override precedence, and graceful degradation when no transport is reachable. These are host-agent behaviors with no executable entry point. A Python model of them would re-implement the prose and assert the model against itself, which can pass while the prose it mirrors is wrong; the repo has been bitten by that before, so these stay pinned by file-level contract tests rather than a simulated agent.
 - **R9:** `/flow-next:setup` asks the id-scheme question when a tracker is configured **AND `tracker.specIds` is unset**, states the collision rationale, and defaults to `tracker`. Once the key is set to either value it never asks again. A test covers the existing-repo path: tracker configured, key absent, question asked.
-- **R10:** *(withdrawn during planning — a runtime advisory in the spec-creating skills was rejected as scaffolding around a docs gap; superseded by R17.)*
+- **R10:** *(withdrawn during planning - a runtime advisory in the spec-creating skills was rejected as scaffolding around a docs gap; superseded by R17.)*
 - **R11:** Tracker-first is discoverable from where specs are actually created: `plan`, `work`, and `capture` prose name it as the recommended team default, not only the tracker-sync skill's own files.
 - **R12:** Bare `fn-N` resolution disambiguates rather than guessing when the ordinal is duplicated, listing candidates and requiring the full id.
 - **R13:** `validate` reports a duplicate ordinal whose full ids are distinct as a **warning**, not a root error, and the warning is machine-readable. `validate --all --json` currently exposes `root_errors`, per-spec `warnings`, and `total_warnings` but **no top-level root-warning collection**, so moving the message into the existing warning count would print and count it while dropping its text from JSON. This requires a new top-level field (`root_warnings`), `total_warnings` updated to include it, and text output, docs, and the spec's Quick commands kept consistent. A test covers the live `fn-122` pair in both renderers.
@@ -175,17 +177,17 @@ Out of scope:
 - **Closing the separate-clone case.** Move A cannot see an unfetched clone. That is what move B is for, and the limitation is documented rather than papered over.
 - **Retro-minting tracker ids for existing `fn-N` specs.** Ids never change. A repo that switches to `tracker` gets tracker-keyed ids for *new* specs only, and the mixed store is permanent and expected.
 
-## Plan-time findings (repo-scout, 2026-07-25) — these shrink the work
+## Plan-time findings (repo-scout, 2026-07-25) - these shrink the work
 
 Verified against the tree; they change what needs building versus what needs proving:
 
 - **`scan_max_native_fn_spec_id` (flowctl.py:7362-7404) has exactly ONE call site**, `cmd_spec_create:14783`. R4's "hot paths must not scan" is therefore already true today. The task is a pinning test that keeps it true, not a change to `list`/`status`/`show`/`ready`/`next`. Keep the `scan_max_spec_id` / `scan_max_epic_id` aliases at :7407-7408 working.
 - **The tracker key grammar already accepts `gh` and `gl`.** `parse_any_id` (:2584-2617) matches `^[a-z][a-z0-9]{0,9}-…`, and only `fn` is globally reserved (`RESERVED_TRACKER_KEY`, :2573). `id_sort_key`, `is_spec_id`, `is_task_id`, `spec_id_from_task` all route through `parse_any_id`, so **no grammar layer changes are needed**. B2 is confined to the minting path.
 - **But minting needs a new parse helper.** `validate_tracker_identifier`'s `allow_reference` mode (:2724-2801) is link-time only and returns `("", n, display)` with an EMPTY key, which is the wrong shape for minting a resolvable id. Do not reuse it; add a mint-side parse for `#123` / `<project>#456`.
-- **Ambiguity disambiguation may already exist.** `expand_bare_spec_id` (:7498-7581) already errors with "Spec id … is ambiguous. Matches: … Use the full slug to disambiguate." for the native-`fn` branch, tested in `test_expand_bare_spec_id.py:69,84`. **Verify against the live `fn-122` pair before writing any resolver code** — R12 may reduce to a regression test.
+- **Ambiguity disambiguation may already exist.** `expand_bare_spec_id` (:7498-7581) already errors with "Spec id … is ambiguous. Matches: … Use the full slug to disambiguate." for the native-`fn` branch, tested in `test_expand_bare_spec_id.py:69,84`. **Verify against the live `fn-122` pair before writing any resolver code** - R12 may reduce to a regression test.
 - **The validate downgrade is a retarget, not new logic.** `cmd_validate:26363-26386` appends to `root_errors`; the "full ids are distinct" condition is structurally guaranteed because ids come from unique file stems. Existing assertions in `test_validate_all_diagnostics.py:93-146` expect `root_errors` and must move to warnings.
 - **Reuse the existing git subprocess shape.** `_prime_git` (:26681-26706) uses `git -C`, `capture_output`, `text`, `check=False`, an explicit `timeout`, and catches `TimeoutExpired` / `OSError` / `SubprocessError` without raising. Match it. There is no existing `git worktree list --porcelain` parser or `git log --all` caller; both are new. `_prime_sibling_git_dirs` (:26975) has reusable logic for tolerating gitdir-pointer worktrees.
-- **Config leaf placement.** `tracker.*` defaults live in `get_default_tracker_config()` (:1069-1080); strict-enum precedent is `pipeline.qa` (:1322) and `pilot.autonomy` (:1339). There is no central enum registry, so write-time validation follows the ad hoc `cmd_config_set` pattern (:9032+, e.g. `review.backend` at :9043). **Open item for the implementer:** R9 needs `tracker.specIds` to be *unset-detectable*, so decide deliberately whether it materializes at `init` (like `pipeline`) or stays unmaterialized (`_INIT_UNMATERIALIZED_BLOCKS`, :1358) — a materialized default of `flow` would make "unset" indistinguishable and silently break the setup question.
+- **Config leaf placement.** `tracker.*` defaults live in `get_default_tracker_config()` (:1069-1080); strict-enum precedent is `pipeline.qa` (:1322) and `pilot.autonomy` (:1339). There is no central enum registry, so write-time validation follows the ad hoc `cmd_config_set` pattern (:9032+, e.g. `review.backend` at :9043). **Open item for the implementer:** R9 needs `tracker.specIds` to be *unset-detectable*, so decide deliberately whether it materializes at `init` (like `pipeline`) or stays unmaterialized (`_INIT_UNMATERIALIZED_BLOCKS`, :1358) - a materialized default of `flow` would make "unset" indistinguishable and silently break the setup question.
 - **Git colour hazard.** Forced ANSI colour breaks regex post-filters on git output (memory `forced-color-git-grep-output-defeats-2026-07-19`). Pass `--no-color` or neutralize config in the scan.
 
 ## Incidental flowctl fixes (found while planning this spec)
@@ -242,31 +244,31 @@ cd ~/work/flow-next.dev && pnpm build
 
 Task `.1` validates the core bet of move A: that a union scan over the working tree, all registered worktrees, and all refs stays inside the 150ms budget on a repo of this shape (325 refs, 16 worktrees) while actually catching the two-worktree collision.
 
-If it cannot hit the budget, stop and re-scope before `.2`: the fallback is to drop the ref scan (the cheaper, lower-value source) and keep worktree scanning, which measurement shows covers the dominant created-but-uncommitted window. Do not silently ship a slow allocator.
+If it cannot hit the budget, stop and re-scope before `.2` (this fired on 2026-07-25 and resolved by raising the budget to 250ms on measured evidence rather than dropping a source): the fallback is to drop the ref scan (the cheaper, lower-value source) and keep worktree scanning, which measurement shows covers the dominant created-but-uncommitted window. Do not silently ship a slow allocator.
 
 ## Requirement coverage
 
 | Req | Description | Task(s) | Gap justification |
 |-----|-------------|---------|-------------------|
-| R1 | Union allocation across worktree + worktrees + refs, monotonic | .1 | — |
-| R2 | Every source degrades independently and silently | .1 | — |
-| R3 | Under 150ms on a 300-ref / 15-worktree fixture, in-process | .1 | — |
-| R4 | Hot-path commands pinned as scan-free | .1 | — |
-| R5 | Two-worktree collision regression test | .1 | — |
-| R6 | `tracker.specIds` strict enum, default `flow` | .2 | — |
-| R7 | Spec-creating skills route on the config, no new config read | .4 | — |
-| R8 | Full create->mint->attach->seed sequence; honest conditional network-cost statement | .4 | — |
-| R9 | Setup asks when tracker configured AND key unset; never re-asks; discloses the remote write | .4 | — |
-| R10 | *(withdrawn during planning)* | — | Superseded by R17 |
-| R11 | Tracker-first named in plan / work / capture prose | .4 | — |
+| R1 | Union allocation across worktree + worktrees + refs, monotonic | .1 | - |
+| R2 | Every source degrades independently and silently | .1 | - |
+| R3 | Under 150ms on a 300-ref / 15-worktree fixture, in-process | .1 | - |
+| R4 | Hot-path commands pinned as scan-free | .1 | - |
+| R5 | Two-worktree collision regression test | .1 | - |
+| R6 | `tracker.specIds` strict enum, default `flow` | .2 | - |
+| R7 | Spec-creating skills route on the config, no new config read | .4 | - |
+| R8 | Full create->mint->attach->seed sequence; honest conditional network-cost statement | .4 | - |
+| R9 | Setup asks when tracker configured AND key unset; never re-asks; discloses the remote write | .4 | - |
+| R10 | *(withdrawn during planning)* | - | Superseded by R17 |
+| R11 | Tracker-first named in plan / work / capture prose | .4 | - |
 | R12 | Bare `fn-N` disambiguates on duplicate ordinal | .2 | May already hold; task verifies before building |
-| R13 | Duplicate ordinal is a machine-readable warning via a new `root_warnings` field | .2 | — |
-| R14 | Synthetic keys with contextual reservation + preflight; mixed-history test | .2 | — |
-| R15 | Repo docs + CHANGELOG + mirror | .5 | — |
-| R16 | flow-next.dev pages + FAQ + build gate | .6 | — |
+| R13 | Duplicate ordinal is a machine-readable warning via a new `root_warnings` field | .2 | - |
+| R14 | Synthetic keys with contextual reservation + preflight; mixed-history test | .2 | - |
+| R15 | Repo docs + CHANGELOG + mirror | .5 | - |
+| R16 | flow-next.dev pages + FAQ + build gate | .6 | - |
 | R17 | Notable-updates surface, seeded, format documented, release step | .5, .6 | repo home in .5, landing page in .6 |
-| R18 | Every GitHub/GitLab "flow-first only" statement corrected | .5 | — |
-| R19 | tracker-sync create-first operation + failure recovery, no duplicate on retry | .3 | — |
-| R20 | Contract tests for all five mint sites, degradation, override, no second issue | .3, .4 | op tests in .3, routing tests in .4 |
+| R18 | Every GitHub/GitLab "flow-first only" statement corrected | .5 | - |
+| R19 | tracker-sync create-first operation + failure recovery, no duplicate on retry | .3 | - |
+| R20 | Behavioral sequence test (counted fake) + prose-contract tests for mint sites, degradation, override | .3, .4 | sequence in .3, routing/prose in .4 |
 | R21 | `task set-title` keeps JSON title and markdown H1 in sync | .7 | incidental fix |
 | R22 | Converged review exits zero; reservation race removed | .7 | incidental fix |
