@@ -38,9 +38,12 @@ Adapters never call `subprocess.run` or open a socket directly. They call an **i
 
 "Typed" means specified, not aspirational:
 
-- **`Request`**: `method`, `url_or_argv`, `headers`, `body` (bytes or None), `timeout_s`, `idempotent: bool`.
+- **`Request`**: `provider`, `op`, `method`, `url_or_argv`, `headers` (**never authorization**), `body`, `connect_timeout_s`, `read_timeout_s`, `idempotent: bool`.
+- **Secrets are injected by the executor, after the adapter boundary.** An adapter never sets an authorization header - if it did, the credential would already have crossed the boundary the redaction rule exists to protect. The executor resolves the provider's credential and attaches it immediately before dispatch.
+- **`TrackerError`**: the normalized failure shape every adapter classifier returns - `{class, message, retry_after_s|None, details|None}`. Adapters never raise transport-native exceptions upward.
+- **Retry predicate**, explicit: retry iff `class == rate_limited and request.idempotent`. `idempotent` is not decorative.
 - **`Response`**: `status`, `headers`, `body`, `elapsed_s`. GraphQL errors arriving over **HTTP 200/400** are normalized here, not in each adapter.
-- **Bounds** (defaults, config-overridable): connect 5s, read 30s; **2** retries max, on `rate_limited` **only**, exponential backoff capped at 30s; concurrency cap 4.
+- **Bounds** (defaults, config-overridable): connect **5s**, read **30s** (separate values, not one `timeout_s`); **2** retries max; exponential backoff capped at 30s; concurrency cap 4.
 - **Credential precedence**, fixed: explicit env -> Keychain -> CLI config (e.g. `glab`) -> unauthenticated. Redaction happens at the executor boundary so no adapter can leak a token into a log or error.
 - **Classification is per-adapter and tabulated**, not a global rule. `401/403 = auth` is insufficient: GitLab returns 403 for *both* a bad token and a licence-gated `is_blocked_by`, so the GitLab table maps 403 **with the licence message body** to `capability` and bare 403 to `auth`. Linear rate limiting arrives as a GraphQL error over HTTP 400, so its table maps that to `rate_limited`.
 - **CLI serialization**: every command emits the JSON envelope on **stdout**; human-readable notes go to **stderr**. `--json` is accepted and ignored (always-JSON) so callers need no branch.
@@ -64,9 +67,24 @@ tracker.resolved = {
 | tracker | resolved fields | why it must be pinned |
 |---|---|---|
 | GitHub | `owner`, `repo` | stable |
-| GitLab | **numeric** `projectId`, `projectPath`, `host`, `plan` | API paths take the id and **the path changes on rename**; `plan` decides dependency degradation |
+| GitLab | **numeric** `projectId`, `projectPath`, `host`, `namespaceId`, `plan` | API paths take the id and **the path changes on rename**; `plan` decides dependency degradation |
 | Linear | `teamId`, `teamKey`, `stateIds{normalized -> stateId}`, `labelIds` | status writes need a `stateId`, and `type: started` maps to **two** states (In Progress, In Review) - a human decides that tiebreak once, at discovery |
 | Jira | `baseUrl`, `projectKey`, `projectId`, `issueTypeId`, `apiVersion: 2`, `style`, `statusIds{normalized -> statusId}` | status **cannot** be set via fields (measured: 400). **Transition ids are NOT cached**: `jira.md:738` states they are valid only FROM the current status, verified live (To Do -> In Progress -> Done each surfaced different ids). Only the stable target **status** ids are pinned |
+
+**Capability truth table, decided here so B cannot leave it open:**
+
+| | attachments | blockedBy | subIssues | deleteIssue |
+|---|---|---|---|---|
+| GitHub | **false** (no API; 404) | false (no issue-level blocked-by) | **true** (`sub_issues`) | **false** (close `not_planned` only) |
+| GitLab | true (via `uploads/:upload_id`) | **plan-dependent**: `free` -> false, Premium+ -> true | false | true |
+| Linear | true (presigned two-step) | true | false | true |
+| Jira | true (needs `X-Atlassian-Token: no-check`) | true (`Blocks`, works on free tier) | false | true |
+
+`subIssues` and `deleteIssue` are **kept**, with consumers assigned in B (dependency projection may use GitHub sub-issues as its degraded form; `deleteIssue` gates cleanup paths). They are not "may be dropped".
+
+GitLab's tier probe needs a **namespace id**, which is why `namespaceId` is pinned alongside `projectId` - without it the TTL re-probe costs an extra lookup to rediscover it.
+
+A **failed TTL re-probe is not a capability change.** It is reported in a separate `probe` field `{scope, at, ok, reason}`, distinct from `degraded`, which means an actual capability transition.
 
 Linear stops re-resolving team and state on every mint. **Jira does not get faster**: a status write must still `GET .../transitions` for the issue's current status before transitioning, because transition ids are current-state-relative. An earlier draft of this batch claimed the cache made it one request; that was wrong and is corrected here. The Jira win is correctness (the right status id, pinned once), not latency.
 
@@ -95,15 +113,19 @@ The GitLab tier probe specifically must not read a transient 403 as a downgrade:
 Spec A ships resolution only. The verb surface is spec B.
 
 ```
-flowctl tracker resolve [--refresh] [--scope destination|capabilities|statuses|states]
+flowctl tracker resolve [--refresh] [--scope <path>]
+
+Scopes are **exact nested paths**, each with its own timestamp: `destination`, `destination.statusIds` (Jira), `destination.stateIds` (Linear), `capabilities`.
 flowctl tracker resolve --select <normalized>=<stateId>    # persists a human tiebreak, validated against live candidates
 ```
 
 **Result envelope** (established here, consumed by B):
 
 ```
-{"success": true,  "data": {...}, "degraded": null | {"capability","from","to","reason"}}
-{"success": false, "class": "<enum>", "error": "<human string>", "retryable": bool}
+{"success": true,  "data": {...}, "degraded": null | {"capability","from","to","reason"}, "probe": null | {"scope","at","ok","reason"}}
+{"success": false, "class": "<enum>", "error": "<human string>", "retryable": bool, "details": null | <typed variant>}
+
+`details` is a **typed variant keyed by class**, not free-form: `conflict` carries `{candidates: [{id,name,type}]}` so an ambiguous Linear state surfaces both options structurally; `rate_limited` carries `{retry_after_s}`; `capability` carries `{capability, required_plan}`. Every variant's exact serialization is asserted.
 ```
 
 `class` enum, fixed and exhaustive: `inactive`, `unresolved`, `stale_id`, `auth`, `rate_limited`, `transport`, `not_found`, `capability`, `conflict`, `invalid_input`. Exit codes fixed and numeric: `0` success, `2` invalid_input, `3` inactive, `4` unresolved, `5` auth, `6` rate_limited, `7` transport, `8` not_found, `9` capability, `10` conflict, `11` stale_id.
@@ -126,18 +148,20 @@ Measured live on 2026-07-26 against all four real APIs:
 ## Acceptance Criteria
 <!-- scope: both -->
 
-- **R1:** The adapter package ships on **every** runtime. `flowctl_tracker/` is carried by plugin mode, copy-mode `.flow/bin`, `install-codex.sh`, `install-cursor.sh`, and Ralph scaffolding, with a **per-runtime import smoke test** that fails at install time rather than on first tracker operation.
-- **R2:** Integrity is verified **where it can actually run**. `flowctl_bootstrap.py` executes only for a bare `usage` / `--help` (`flowctl:44-48`); every ordinary command execs `flowctl.py` directly, so a hash mismatch today merely disables the help fast path and fails nothing. Therefore: **installers verify the manifest after copying** (`install-codex.sh`, `install-cursor.sh`, copy-mode setup, Ralph scaffolding) and fail loudly there, plus a CI packaging smoke. The manifest **enumerates its members explicitly**. Marketplace/plugin installs have no plan-controlled post-install hook, so those fail on first invocation with a clear integrity error rather than a silent fallback. Per-command hashing is explicitly rejected: it would tax every invocation to catch a case installers already cover.
+- **R1:** The adapter package ships on **every** runtime: plugin mode, copy-mode `.flow/bin`, `install-codex.sh`, `install-cursor.sh` **and `install-cursor.ps1`**, and Ralph scaffolding. A CI packaging smoke imports the package on each runtime row including Windows.
+- **R2:** Integrity is verified **by the installers, and nowhere else** - one design, chosen because the alternatives are not executable. `flowctl_bootstrap.py` runs only for a bare `usage` / `--help` (`flowctl:44-48`); ordinary commands exec `flowctl.py` directly, so there is no existing runtime verification point. The rejected alternatives, and why: **per-command hashing** taxes every invocation of a very hot CLI; a **persisted verification marker** needs a digest-keyed invalidation lifecycle that is itself a source of staleness bugs. So: each controlled installer verifies the manifest after copying and **fails loudly**, the manifest enumerates its members explicitly, and a CI packaging smoke covers every runtime.
+  **Stated residual gap:** a marketplace/plugin install has no plan-controlled post-install hook, so a corrupt package there is **not** detected by flow-next - it surfaces as an ordinary Python `ImportError` on first use. That is a real hole, accepted deliberately rather than papered over with machinery that would not reliably fire.
 - **R3:** Every test that loads flowctl via `spec_from_file_location` has `scripts/` on `sys.path`, so the package imports under test as it does in production.
 - **R4:** Adapters call an **injected request executor**; no adapter calls `subprocess.run` or opens a connection directly. The executor is substitutable, and that substitution is the fake transport spec B tests against.
 - **R5:** No shell. Content-bearing arguments (bodies, comments, titles) travel via stdin or a file, never argv - the existing flowctl prompt-injection lesson applies directly to issue bodies.
 - **R6:** Credentials are read per run from env/Keychain, **never persisted** into `tracker.resolved`, never logged, never included in a receipt or error string.
 - **R7:** Every request has an explicit timeout; retries are bounded and apply to `rate_limited` only, with backoff read from each adapter's own header shape; concurrency is capped. TLS verification defaults on, with the existing per-tracker `sslVerify` opt-out staying explicit.
-- **R8:** The resolve transaction is specified precisely, because atomic-write plus a lock does **not** prevent stale-read clobbering (two resolvers can read, compute different scopes, then serially replace the whole config): **network work happens outside the lock**; then acquire the lock **shared by every `.flow/config.json` writer** (today `set_config` writes without it, so it can race a resolve); **re-read inside the lock**; merge **only the resolved scope**; validate completeness; atomically replace. Tested with two **different-scope** resolves and with resolve-versus-`config set`, not merely two identical resolves.
+- **R8:** The resolve transaction is specified precisely, because atomic-write plus a lock prevents clobbering but **not stale resolution**: a resolver can query project A, then a `config set` repoints the tracker to project B, and the resolver merges A's ids into B's config. Required: **fingerprint every discovery input** used for the network work (tracker type, project/team identity, host, baseUrl) and compare it **inside the lock**; on mismatch discard and boundedly re-resolve, or return `class: conflict`. Order: network work **outside** the lock; acquire the lock; re-read; compare fingerprint; merge **only the resolved scope**; validate; atomically replace.
+- **R8b:** The lock is a **specified cross-platform primitive**, not "the existing one": its path, acquisition timeout, stale-owner recovery and crash behavior are defined, and **every `.flow/config.json` writer routes through it** - today `set_config` and `cmd_init` both write without it and can race a resolve. Contention and crash-recovery are exercised on the **Windows CI row**, not only POSIX.
 - **R9:** `flowctl tracker resolve` **explicitly backfills** an absent block for all four adapters, populating `destination` + `capabilities` per the Architecture table. This is distinct from a *consuming verb* meeting an absent block, which returns `class: unresolved` rather than resolving implicitly mid-operation - the two behaviors are separately specified and separately tested.
 - **R10:** Every row of the cache state table is implemented and tested, including that an absent block yields `class: unresolved` and **not** a false capability `false`, and that a transient 403 on the tier probe does not flip a capability.
 - **R11:** `resolve --select` persists a human's Linear tiebreak, validated against live candidates. `resolvedAt` is stamped only once all required fields are present.
-- **R12:** `--scope` re-resolves only the named sub-map. A rejected Jira transition refreshes transitions, not the whole destination block.
+- **R12:** `--scope` re-resolves only the named nested path and stamps only that path's timestamp. Note the scope set contains **no transitions**: Jira transition ids are never cached (they are valid only from the current status), so transition rejection and re-fetch are spec B's concern, not a cache scope here. A resolves stable `statusIds` only.
 - **R13:** Existing persisted `perTracker.apiVersion: 3` configs are **migrated to 2**, not orphaned.
 - **R14:** The result envelope, `class` enum and numeric exit codes are implemented and asserted, so callers branch on structure rather than parsing prose.
 - **R15:** The **bridge-inactive path is byte-for-byte unchanged**: one config read, no adapter import, no new output. Asserted by the existing reached-path harness.
@@ -179,10 +203,21 @@ Two claims made during that pass were wrong and are corrected here: GitLab `is_b
 
 Not verified: the Jira Data Center custom-key path, which Jira Cloud cannot reproduce (Cloud enforces uppercase-alphanumeric keys, max 10 chars). It is implemented from prose in spec B and marked unverified.
 
+## Observability
+
+Long synchronous waits (a bounded re-probe, a retry with backoff) must not look like a hang. Every attempt, backoff, scope and probe failure emits a **redacted event on stderr**, while stdout stays exactly one JSON envelope so callers parse without branching.
+
 ## Quick commands
 
+New focused modules this spec adds, each named so the work has a completion oracle:
+
 ```bash
-cd plugins/flow-next/tests && python3 -m unittest test_tracker_config test_startup_bootstrap -q
+cd plugins/flow-next/tests && python3 -m unittest \
+  test_tracker_executor test_tracker_classify test_tracker_resolved_cache \
+  test_tracker_resolve_github_gitlab test_tracker_resolve_linear_jira \
+  test_tracker_distribution test_tracker_config test_startup_bootstrap -q
 ```
+
+**Provider fixture matrix** (required, not optional): for each of the four providers, recorded response shapes for success, `auth`, `rate_limited` (with that provider's own header/GraphQL shape), `not_found`, `capability`, and a malformed body - so the classifier tables are asserted against real shapes rather than invented ones.
 
 Full gate once at completion: `python3 scripts/run_tests_parallel.py`

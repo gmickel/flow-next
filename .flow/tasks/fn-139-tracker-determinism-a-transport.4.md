@@ -1,28 +1,26 @@
 ---
-satisfies: [R9,R11]
+satisfies: [R9]
 ---
 
 # fn-139-tracker-determinism-a-transport.4 Per-adapter resolution + capability truth table + Linear tiebreak
 # fn-139-tracker-sync-determinism-flowctl-owns.4 Capabilities: attachments, relations, tier detection, degradation
 
 ## Description
-Resolve `destination` + `capabilities` for all four adapters.
+Resolve `destination` + `capabilities` for **GitHub and GitLab**, plus their scoped-resolution tests.
 
-**Jira pins status ids, NOT transition ids.** `jira.md:738` states transition ids are valid only from the current status, verified live (To Do -> In Progress -> Done each surfaced different ids). A status write must still GET transitions per issue; the cache buys correctness, not latency.
+GitHub: `owner`, `repo`. Capabilities per the truth table - `attachments: false` (no API, 404), `subIssues: true`, `deleteIssue: false` (close `not_planned` only).
 
-GitLab pins the **numeric** projectId (the path changes on rename) plus `plan` for tier detection - trials are GROUP-scoped, so a personal-namespace project stays Free.
+GitLab: **numeric** `projectId` (the path changes on rename), `projectPath`, `host`, **`namespaceId`**, `plan`. The tier probe is `GET /namespaces/:id`, which is why `namespaceId` is pinned - without it the TTL re-probe costs an extra lookup. Trials are **GROUP-scoped**, so a personal-namespace project stays Free even while a group of the same user is on Ultimate; `blockedBy` is plan-dependent.
 
-Implement the capability truth table from the spec exactly; `subIssues` and `deleteIssue` are kept with consumers assigned in B. A failed TTL re-probe reports via the separate `probe` field, not `degraded`.
-
-`resolve --select` persists the Linear tiebreak (`type: started` maps to two states), validated against live candidates.
+A failed TTL re-probe reports via the separate `probe` field, never `degraded`.
 
 ## Acceptance
-- [ ] All four adapters resolve every field in the Architecture table
-- [ ] Jira caches STATUS ids only; no transition id is persisted
-- [ ] GitLab numeric projectId + plan; group-scoped trial vs personal namespace distinguished
-- [ ] Capability truth table matches the spec exactly for all four
+- [ ] GitHub + GitLab resolve every field in the Architecture table
+- [ ] `namespaceId` pinned; TTL re-probe is one request
+- [ ] Group-scoped trial vs personal namespace distinguished (both directions tested)
+- [ ] Capability truth table matches exactly for both providers
 - [ ] Failed re-probe reports via `probe`, never `degraded`
-- [ ] `resolve --select` validates against live candidates before persisting
+- [ ] Scoped resolution (`--scope destination`, `--scope capabilities`) tested for both
 
 ## Done summary
 TBD

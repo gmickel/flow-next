@@ -13,9 +13,10 @@ Create the namespaced `flowctl_tracker/` package (never a bare `tracker/` - it l
 Manifest and integrity verification are deliberately NOT here - they land last, once .2-.4 have added the files a manifest must cover.
 
 ## Acceptance
-- [ ] `flowctl_tracker/` exists, namespaced, importable in plugin mode and copy mode
+- [ ] `flowctl_tracker/` exists, namespaced, importable from the repo checkout
 - [ ] All 68 `spec_from_file_location` modules have `scripts/` on sys.path
-- [ ] A trivial adapter stub imports successfully under test AND under the real launcher
+- [ ] A trivial adapter stub imports under test AND under the real launcher from the checkout
+- [ ] Copy-mode / installed-runtime import proof is NOT claimed here - it belongs to .5, which does the distribution work
 - [ ] No manifest work in this task
 
 ## Done summary
