@@ -85,6 +85,17 @@ else
         -cf - .) | (cd "$DEST" && tar -xf -)
 fi
 
+# fn-139.5: the blanket copy needs no enumeration change, but the copy is still
+# VERIFIED against the flowctl_tracker manifest - integrity is checked where it
+# can actually run (the installer), and fails LOUDLY on mismatch.
+if [ -f "$DEST/scripts/flowctl_tracker/MANIFEST.json" ]; then
+    if ! python3 "$DEST/scripts/lib/verify_tracker_manifest.py" "$DEST/scripts"; then
+        echo "ERROR: flowctl_tracker manifest verification FAILED - install is corrupt; re-clone and re-run" >&2
+        exit 1
+    fi
+    echo "flowctl_tracker package verified"
+fi
+
 echo ""
 echo "Installed. Cursor registers the components on next launch:"
 echo "  skills:   $(ls -d "$DEST"/skills/*/ 2>/dev/null | wc -l | tr -d ' ')"

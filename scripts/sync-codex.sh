@@ -2233,5 +2233,9 @@ if [ "$errors" -gt 0 ]; then
   exit 1
 fi
 
+# fn-139.5: keep the flowctl_tracker distribution manifest fresh as part of the
+# standard sync step (test_tracker_distribution.py fails CI when it is stale).
+python3 "$SCRIPT_DIR/gen_tracker_manifest.py"
+
 echo -e "${GREEN}Sync complete:${NC} $skill_count skills, $agent_count agents (no default hooks)"
 echo -e "  ${BLUE}Output:${NC} plugins/flow-next/codex/"

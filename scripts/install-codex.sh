@@ -250,6 +250,19 @@ fi
 if [ -f "$PLUGIN_DIR/scripts/flowctl.py" ]; then
     cp "$PLUGIN_DIR/scripts/flowctl.py" "$CODEX_DIR/scripts/"
 fi
+# fn-139.5: the flowctl_tracker package ships alongside flowctl.py (the
+# launcher runs bootstrap as a script, so a sibling package is importable with
+# no import-machinery change). Full replace, then VERIFY against the manifest -
+# integrity is checked here, where it can actually run, and fails LOUDLY.
+if [ -d "$PLUGIN_DIR/scripts/flowctl_tracker" ]; then
+    rm -rf "$CODEX_DIR/scripts/flowctl_tracker"
+    cp -R "$PLUGIN_DIR/scripts/flowctl_tracker" "$CODEX_DIR/scripts/flowctl_tracker"
+    if ! python3 "$PLUGIN_DIR/scripts/lib/verify_tracker_manifest.py" "$CODEX_DIR/scripts"; then
+        echo -e "${RED}✗${NC} flowctl_tracker manifest verification FAILED — install is corrupt; re-clone and re-run" >&2
+        exit 1
+    fi
+    echo -e "${GREEN}✓${NC} flowctl_tracker package verified → ~/.codex/scripts/"
+fi
 [ "$HAS_FLOWCTL" = true ] && echo -e "${GREEN}✓${NC} flowctl → ~/.codex/scripts/"
 
 # Clean up old bin/ location

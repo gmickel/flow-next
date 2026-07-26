@@ -105,9 +105,23 @@ cp "${PLUGIN_ROOT}/scripts/flowctl.cmd" .flow/bin/flowctl.cmd
 cp "${PLUGIN_ROOT}/scripts/flowctl.py" .flow/bin/flowctl.py
 cp "${PLUGIN_ROOT}/scripts/flowctl_bootstrap.py" .flow/bin/flowctl_bootstrap.py
 cp "${PLUGIN_ROOT}/scripts/flowctl-help.txt" .flow/bin/flowctl-help.txt
+rm -rf .flow/bin/flowctl_tracker
+cp -R "${PLUGIN_ROOT}/scripts/flowctl_tracker" .flow/bin/flowctl_tracker
 cp "${PLUGIN_ROOT}/templates/spec.md" .flow/templates/spec.md
 chmod +x .flow/bin/flowctl
 ```
+
+**Verify the tracker package post-copy (fn-139.5)** — integrity is checked here,
+where it can actually run, and fails loudly rather than surfacing later as an
+ImportError mid-command:
+
+```bash
+python3 "${PLUGIN_ROOT}/scripts/lib/verify_tracker_manifest.py" .flow/bin
+```
+
+If verification fails, STOP and tell the user the plugin install is corrupt
+(reinstall the plugin, then re-run `/flow-next:setup`) — do not continue with a
+half-copied package.
 
 `flowctl.cmd` is the Windows batch launcher (cmd.exe / PowerShell — Claude Desktop, native Codex, native Cursor); no `chmod +x` needed (PATHEXT resolves it, not the exec bit). The bash `flowctl` and the `.cmd` share the small `flowctl_bootstrap.py` front end, tracked `flowctl-help.txt`, and source-of-truth `flowctl.py`. Only exact static help/usage requests use fast paths; every other command compiles tracked source in memory and never reads executable cache state.
 

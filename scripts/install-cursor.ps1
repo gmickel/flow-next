@@ -94,6 +94,24 @@ foreach ($x in @("codex", "tests", "__pycache__")) {
     if (Test-Path $stale) { Remove-Item -Recurse -Force $stale }
 }
 
+# fn-139.5: verify the flowctl_tracker package post-copy - integrity is checked
+# where it can actually run (the installer) and fails LOUDLY on mismatch.
+$manifest = Join-Path $Dest "scripts\flowctl_tracker\MANIFEST.json"
+if (Test-Path $manifest) {
+    $verifier = Join-Path $Dest "scripts\lib\verify_tracker_manifest.py"
+    $py = Get-Command python3 -ErrorAction SilentlyContinue
+    if (-not $py) { $py = Get-Command python -ErrorAction SilentlyContinue }
+    if ($py) {
+        & $py.Source $verifier (Join-Path $Dest "scripts")
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "flowctl_tracker manifest verification FAILED - install is corrupt; re-clone and re-run."
+            exit 1
+        }
+    } else {
+        Write-Warning "python not found; skipping flowctl_tracker manifest verification"
+    }
+}
+
 function Get-DirCount($path) {
     if (-not (Test-Path $path)) { return 0 }
     return (Get-ChildItem -Path $path -Directory -ErrorAction SilentlyContinue | Measure-Object).Count
