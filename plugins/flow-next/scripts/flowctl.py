@@ -18843,14 +18843,16 @@ def _task_h1_title(content: str, task_id: str) -> Optional[str]:
     H1 would sync the JSON title from an example while leaving the real
     heading untouched - exactly the divergence this command exists to prevent.
     """
+    # Scan for THIS task's heading rather than bailing on the first eligible
+    # one - `_task_rewrite_h1` targets the task's own H1, and the read and
+    # write paths must agree or set-spec reports None while set-title rewrites.
+    prefix = f"{task_id} "
     for _, line in _iter_task_h1_candidates(content):
         body = line[2:].strip()
         if body == task_id:
             return ""
-        prefix = f"{task_id} "
         if body.startswith(prefix):
             return body[len(prefix) :].strip()
-        return None
     return None
 
 
@@ -18863,7 +18865,14 @@ def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
     """
     lines = content.splitlines(keepends=True)
     new_h1 = f"# {task_id} {title}\n"
-    for i, _ in _iter_task_h1_candidates(content):
+    for i, cand in _iter_task_h1_candidates(content):
+        # Rewrite the H1 that BELONGS to this task. `_task_h1_title` only
+        # accepts a heading whose text starts with the task id, so targeting
+        # the first eligible heading here would let an unrelated leading H1 be
+        # overwritten while the read path reported None - the two must agree.
+        body_text = cand[2:].strip()
+        if body_text != task_id and not body_text.startswith(f"{task_id} "):
+            continue
         if i < len(lines):
             line = lines[i]
             # Preserve the ORIGINAL terminator. `splitlines(keepends=True)`

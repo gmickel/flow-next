@@ -339,6 +339,16 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
                 out = flowctl._task_rewrite_h1(body, self.TASK_ID, "New")
                 self.assertEqual(out, "# " + self.TASK_ID + " New" + term + "body" + term)
 
+
+    def test_read_and_write_agree_on_which_h1_belongs_to_the_task(self) -> None:
+        """An unrelated leading H1 must not be rewritten (PR #241 wave 19)."""
+        body = "# Unrelated heading\n\n# " + self.TASK_ID + " Real\n\nbody\n"
+        self.assertEqual(flowctl._task_h1_title(body, self.TASK_ID), "Real")
+        out = flowctl._task_rewrite_h1(body, self.TASK_ID, "New")
+        self.assertIn("# Unrelated heading", out)
+        self.assertIn("# " + self.TASK_ID + " New", out)
+        self.assertNotIn("# " + self.TASK_ID + " Real", out)
+
     def test_unfenced_h1_still_works(self) -> None:
         plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")
