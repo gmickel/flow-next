@@ -35,6 +35,7 @@ TYPE_TO_SLOTS = {
 }
 
 _PAGE = 100
+_MAX_PAGES = 50  # 5000 items; a generous ceiling, not a tunable
 
 
 def _gql(execute: Callable, op: str, query: str,
@@ -64,7 +65,14 @@ def _drain(execute: Callable, op: str, query: str, team_id: str,
     """Fully drain one paginated team connection - never first-page-only."""
     nodes: list = []
     cursor: Optional[str] = None
+    seen_cursors: set = set()
+    pages = 0
     while True:
+        pages += 1
+        if pages > _MAX_PAGES:
+            return TrackerError(ErrorClass.TRANSPORT,
+                                f"{connection} pagination exceeded {_MAX_PAGES} pages",
+                                subtype="malformed_body")
         data = _gql(execute, op, query, {"teamId": team_id, "after": cursor})
         if isinstance(data, TrackerError):
             return data
@@ -83,6 +91,13 @@ def _drain(execute: Callable, op: str, query: str, team_id: str,
             return TrackerError(ErrorClass.TRANSPORT,
                                 "hasNextPage without an endCursor",
                                 subtype="malformed_body")
+        if cursor in seen_cursors:
+            # A provider looping the same cursor would otherwise drive an
+            # unbounded request loop with growing memory - progress or fail.
+            return TrackerError(ErrorClass.TRANSPORT,
+                                f"pagination repeated cursor {cursor!r}",
+                                subtype="malformed_body")
+        seen_cursors.add(cursor)
 
 
 _TEAM_QUERY = "query($teamId: String!) { team(id: $teamId) { id key } }"
@@ -155,7 +170,8 @@ def resolve_state_ids(config: dict, execute: Callable) -> Union[Assignment, Trac
     pools, live = fetched
     existing = (((config.get("tracker") or {}).get("resolved") or {})
                 .get("destination") or {}).get("stateIds") or {}
-    return assign_slots(pools, live, existing if isinstance(existing, dict) else {})
+    return assign_slots(pools, live, existing if isinstance(existing, dict) else {},
+                        policy="linear")
 
 
 def resolve_capabilities(config: dict, execute: Callable) -> dict:

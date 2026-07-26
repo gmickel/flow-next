@@ -58,11 +58,21 @@ def linear_states(states):
         "nodes": states, "pageInfo": {"hasNextPage": False, "endCursor": None}}}}})
 
 
+#: Two `started` states - the measured ambiguous workspace shape.
 FIVE_STATES = [
     {"id": "s-backlog", "name": "Backlog", "type": "backlog"},
     {"id": "s-todo", "name": "Todo", "type": "unstarted"},
     {"id": "s-prog", "name": "In Progress", "type": "started"},
     {"id": "s-review", "name": "In Review", "type": "started"},
+    {"id": "s-done", "name": "Done", "type": "completed"},
+    {"id": "s-cancel", "name": "Canceled", "type": "canceled"},
+]
+
+#: One state per type - resolves without any human tiebreak.
+SIMPLE_STATES = [
+    {"id": "s-backlog", "name": "Backlog", "type": "backlog"},
+    {"id": "s-todo", "name": "Todo", "type": "unstarted"},
+    {"id": "s-prog", "name": "In Progress", "type": "started"},
     {"id": "s-done", "name": "Done", "type": "completed"},
     {"id": "s-cancel", "name": "Canceled", "type": "canceled"},
 ]
@@ -81,14 +91,28 @@ class Vocabulary(unittest.TestCase):
 
 
 class LinearStates(unittest.TestCase):
-    def test_exact_names_disambiguate_the_started_pair(self) -> None:
-        ex = fake_execute({"resolve-states": linear_states(FIVE_STATES)})
+    def test_single_state_per_type_resolves_without_tiebreak(self) -> None:
+        ex = fake_execute({"resolve-states": linear_states(SIMPLE_STATES)})
         out = LN.resolve_state_ids(linear_cfg(), ex)
         self.assertIsNone(out.conflict)
         self.assertEqual(out.mapping, {
             "backlog": "s-backlog", "todo": "s-todo", "in_progress": "s-prog",
-            "in_review": "s-review", "done": "s-done", "cancelled": "s-cancel"})
+            "done": "s-done", "cancelled": "s-cancel"})
+        self.assertNotIn("in_review", out.mapping,
+                         "the single started state is in_progress - reusing it "
+                         "for in_review would be a silent alias")
         self.assertTrue(out.complete)
+
+    def test_names_do_not_bypass_the_type_ambiguity_contract(self) -> None:
+        """The mapping algorithm is TYPE-only: two started states are ambiguous
+        even when named exactly In Progress / In Review - the tiebreak is a
+        human decision, not a string match."""
+        ex = fake_execute({"resolve-states": linear_states(FIVE_STATES)})
+        out = LN.resolve_state_ids(linear_cfg(), ex)
+        self.assertIsNotNone(out.conflict)
+        self.assertEqual(out.conflict["normalized"], "in_progress")
+        self.assertEqual({c["id"] for c in out.conflict["candidates"]},
+                         {"s-prog", "s-review"})
 
     def test_two_generic_started_states_are_ambiguous(self) -> None:
         states = [
@@ -116,9 +140,9 @@ class LinearStates(unittest.TestCase):
         out = LN.resolve_state_ids(cfg, ex)
         self.assertIsNone(out.conflict, "required slots all resolvable now")
         self.assertEqual(out.mapping["in_progress"], "s-a", "human tiebreak kept")
-        self.assertEqual(out.mapping["in_review"], "s-b",
-                         "one remaining candidate resolves naturally - by the "
-                         "single-candidate rule, never by inference from the select")
+        self.assertNotIn("in_review", out.mapping,
+                         "selecting in_progress must NOT infer in_review - it "
+                         "stays unfilled until its own --select")
 
     def test_dead_prior_selection_is_dropped_with_warning(self) -> None:
         cfg = linear_cfg()
@@ -130,10 +154,10 @@ class LinearStates(unittest.TestCase):
 
     def test_pagination_is_fully_drained(self) -> None:
         page1 = ok({"data": {"team": {"states": {
-            "nodes": FIVE_STATES[:3],
+            "nodes": SIMPLE_STATES[:3],
             "pageInfo": {"hasNextPage": True, "endCursor": "c1"}}}}})
         page2 = ok({"data": {"team": {"states": {
-            "nodes": FIVE_STATES[3:],
+            "nodes": SIMPLE_STATES[3:],
             "pageInfo": {"hasNextPage": False, "endCursor": None}}}}})
         ex = fake_execute({"resolve-states": [page1, page2]})
         out = LN.resolve_state_ids(linear_cfg(), ex)
@@ -169,6 +193,16 @@ class LinearDestination(unittest.TestCase):
 
 
 class JiraDestination(unittest.TestCase):
+    def setUp(self) -> None:
+        # Isolate from a developer/CI machine that legitimately exports
+        # JIRA_BASE_URL - production honors the override; fixtures must not.
+        import os
+        from unittest import mock
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("JIRA_BASE_URL", None)
+
     PROJECT = {"id": 10000, "key": "SCRUM", "style": "next-gen", "simplified": True,
                "issueTypes": [
                    {"id": "10001", "name": "Task", "subtask": False},
@@ -225,6 +259,14 @@ class JiraDestination(unittest.TestCase):
 
 
 class JiraStatuses(unittest.TestCase):
+    def setUp(self) -> None:
+        import os
+        from unittest import mock
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("JIRA_BASE_URL", None)
+
     def _cfg(self, status_map=None) -> dict:
         cfg = jira_cfg(**({"statusMap": status_map} if status_map is not None else {}))
         cfg["tracker"]["resolved"] = {"destination": {"issueTypeId": "10001"}}
@@ -292,6 +334,12 @@ class JiraStatuses(unittest.TestCase):
 
 class ResolveVerb(unittest.TestCase):
     def setUp(self) -> None:
+        import os
+        from unittest import mock
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("JIRA_BASE_URL", None)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.flow = Path(self.tmp.name)
@@ -305,7 +353,7 @@ class ResolveVerb(unittest.TestCase):
                                                          "key": "FLOW"}}}),
             "resolve-labels": ok({"data": {"team": {"labels": {
                 "nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}}}}}),
-            "resolve-states": linear_states(FIVE_STATES),
+            "resolve-states": linear_states(SIMPLE_STATES),
         }
 
     def test_inactive_repo_reports_inactive(self) -> None:
@@ -457,3 +505,114 @@ class CliSurface(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LegacyStatusMapVocabulary(unittest.TestCase):
+    """Existing statusMap keys use the OLD normalized vocabulary (status-sync.md:
+    planned / in-progress / in-review / verified / wontfix ...). Copying them
+    verbatim silently ignored every real mapping."""
+
+    def setUp(self) -> None:
+        import os
+        from unittest import mock
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("JIRA_BASE_URL", None)
+
+    def _cfg(self, status_map) -> dict:
+        cfg = jira_cfg(statusMap=status_map)
+        cfg["tracker"]["resolved"] = {"destination": {"issueTypeId": "10001"}}
+        return cfg
+
+    def test_legacy_keys_migrate_to_the_new_slots(self) -> None:
+        ex = fake_execute({"resolve-statuses": JIRA_STATUSES})
+        out = JR.resolve_status_ids(self._cfg({
+            "planned": {"id": "1"}, "in-progress": {"id": "2"},
+            "done": {"id": "3"}}), ex)
+        self.assertEqual(out.mapping, {"todo": "1", "in_progress": "2", "done": "3"})
+
+    def test_verified_fills_done_only_when_done_is_absent(self) -> None:
+        ex = fake_execute({"resolve-statuses": JIRA_STATUSES})
+        out = JR.resolve_status_ids(self._cfg({"verified": {"id": "3"}}), ex)
+        self.assertEqual(out.mapping["done"], "3")
+        ex2 = fake_execute({"resolve-statuses": JIRA_STATUSES})
+        out2 = JR.resolve_status_ids(self._cfg(
+            {"done": {"id": "3"}, "verified": {"id": "3"}}), ex2)
+        self.assertTrue(any("verified" in w for w in out2.warnings))
+
+    def test_unknown_legacy_key_warns_never_silent(self) -> None:
+        ex = fake_execute({"resolve-statuses": JIRA_STATUSES})
+        out = JR.resolve_status_ids(self._cfg({"deferred": {"id": "1"}}), ex)
+        self.assertTrue(any("deferred" in w for w in out.warnings))
+
+
+class JiraIssueTypeIsNeverFirstEntry(unittest.TestCase):
+    def test_status_scope_without_resolved_issue_type_is_unresolved(self) -> None:
+        cfg = jira_cfg()  # no resolved destination at all
+        ex = fake_execute({"resolve-statuses": ok([
+            {"id": "10005", "name": "Story", "statuses": [
+                {"id": "9", "name": "Story Doing",
+                 "statusCategory": {"key": "indeterminate"}}]},
+        ])})
+        out = JR.resolve_status_ids(cfg, ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.UNRESOLVED)
+        self.assertIn("issueTypeId", out.message)
+
+
+class MalformedConfigShapes(unittest.TestCase):
+    def test_non_object_containers_return_the_envelope_not_a_traceback(self) -> None:
+        for cfg in ({"tracker": "bad"},
+                    {"tracker": ["x"]},
+                    {"tracker": {"type": "jira", "perTracker": "bad"}}):
+            with self.subTest(cfg=cfg):
+                with tempfile.TemporaryDirectory() as td:
+                    flow = Path(td)
+                    (flow / "config.json").write_text(json.dumps(cfg),
+                                                      encoding="utf-8")
+                    payload, code = RV.run(flow, execute=fake_execute({}))
+                    out = json.loads(payload)
+                    self.assertFalse(out["success"])
+                    self.assertIn(out["class"], ("invalid_input", "inactive"))
+
+
+class PaginationProgressGuard(unittest.TestCase):
+    def test_repeated_cursor_fails_rather_than_looping(self) -> None:
+        looping = ok({"data": {"team": {"states": {
+            "nodes": [{"id": "s1", "name": "X", "type": "unstarted"}],
+            "pageInfo": {"hasNextPage": True, "endCursor": "same"}}}}})
+        ex = fake_execute({"resolve-states": looping})  # same response forever
+        out = LN.resolve_state_ids(linear_cfg(), ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "malformed_body")
+        self.assertLess(len(ex.calls), 5, "must abort on the first repeat")
+
+
+class SelectIsFingerprintProtected(unittest.TestCase):
+    def test_mid_select_team_repoint_cannot_write_team_a_ids_into_team_b(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            flow = Path(td)
+            (flow / "config.json").write_text(json.dumps(linear_cfg()),
+                                              encoding="utf-8")
+            calls = {"n": 0}
+
+            def execute(request):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    # A `config set` repoints the team while the select's
+                    # validation fetch is in flight.
+                    repointed = {"tracker": {"type": "linear",
+                                             "perTracker": {"teamId": "team-B"}}}
+                    (flow / "config.json").write_text(json.dumps(repointed),
+                                                      encoding="utf-8")
+                return linear_states([
+                    {"id": "s-a", "name": "Doing", "type": "started"},
+                    {"id": "s-b", "name": "Verifying", "type": "started"},
+                ])
+
+            payload, code = RV.run(flow, select="in_progress=s-a", execute=execute)
+            self.assertEqual(code, 0, payload)
+            self.assertEqual(calls["n"], 2,
+                             "fingerprint mismatch forces ONE re-validation "
+                             "against the repointed team")

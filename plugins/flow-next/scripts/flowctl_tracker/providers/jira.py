@@ -35,6 +35,23 @@ CATEGORY_TO_SLOTS = {
 
 API_VERSION = 2
 
+#: Legacy `statusMap` normalized vocabulary (status-sync.md: `backlog, planned,
+#: in-progress, in-review, done, verified, deferred, wontfix`) -> fn-139 slots.
+#: `verified` (a second done-category status) has no slot of its own: it fills
+#: `done` only when the legacy map has no `done` entry, else it is dropped with
+#: a warning. `deferred` has no equivalent at all.
+LEGACY_KEY_MAP = {
+    "backlog": "backlog",
+    "planned": "todo",
+    "in-progress": "in_progress",
+    "in-review": "in_review",
+    "done": "done",
+    "wontfix": "cancelled",
+    # new-form keys pass through unchanged
+    "todo": "todo", "in_progress": "in_progress", "in_review": "in_review",
+    "cancelled": "cancelled", "canceled": "cancelled",
+}
+
 
 def base_url(config: dict) -> Optional[str]:
     """`JIRA_BASE_URL` overrides the persisted value at runtime (fn-70 R8)."""
@@ -143,10 +160,17 @@ def fetch_statuses(config: dict, execute: Callable) -> Union[tuple, TrackerError
                             subtype="malformed_body")
     resolved = ((config.get("tracker") or {}).get("resolved") or {})
     issue_type_id = (resolved.get("destination") or {}).get("issueTypeId")
+    if not issue_type_id:
+        # NEVER "first entry": without the resolved issue type a Task project
+        # would happily cache the first (e.g. Story) workflow's status ids -
+        # bypassing the configured -> Task -> first-non-subtask precedence.
+        return TrackerError(ErrorClass.UNRESOLVED,
+                            "no resolved issueTypeId; resolve destination first "
+                            "(statusIds is scoped to the pinned issue type)",
+                            subtype="statusIds")
     entry = None
     for t in data:
-        if isinstance(t, dict) and (issue_type_id is None
-                                    or str(t.get("id")) == str(issue_type_id)):
+        if isinstance(t, dict) and str(t.get("id")) == str(issue_type_id):
             entry = t
             break
     if entry is None:
@@ -181,9 +205,25 @@ def _migrated_status_map(config: dict, live: dict) -> tuple[dict, list]:
                for v in [live[k]]}
     migrated: dict = {}
     warnings: list = []
-    for slot, spec in status_map.items():
+    for legacy_key, spec in status_map.items():
+        # Legacy keys use the OLD normalized vocabulary (`planned`,
+        # `in-progress`, `verified`, ...) - copying them verbatim silently
+        # ignored every real existing mapping.
+        slot = LEGACY_KEY_MAP.get(str(legacy_key))
+        if slot is None and str(legacy_key) == "verified":
+            if "done" in status_map:
+                warnings.append(
+                    "dropped statusMap entry 'verified': the fn-139 vocabulary "
+                    "has no verified slot and 'done' is already mapped")
+                continue
+            slot = "done"
+        if slot is None:
+            warnings.append(
+                f"dropped statusMap entry {legacy_key!r}: no equivalent slot in "
+                f"the fn-139 vocabulary")
+            continue
         if not isinstance(spec, dict):
-            warnings.append(f"statusMap[{slot!r}] is malformed; dropped")
+            warnings.append(f"statusMap[{legacy_key!r}] is malformed; dropped")
             continue
         sid = spec.get("id")
         if sid is not None and str(sid) in live:
@@ -194,8 +234,8 @@ def _migrated_status_map(config: dict, live: dict) -> tuple[dict, list]:
             migrated[slot] = by_name[name]
             continue
         warnings.append(
-            f"dropped statusMap entry {slot!r}: {spec!r} no longer resolves "
-            "to a live status")
+            f"dropped statusMap entry {legacy_key!r}: {spec!r} no longer "
+            "resolves to a live status")
     return migrated, warnings
 
 

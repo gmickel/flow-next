@@ -55,16 +55,33 @@ class Assignment:
                 and all(s in self.mapping for s in REQUIRED_SLOTS))
 
 
-def assign_slots(pools: dict, live: dict, existing: Optional[dict] = None) -> Assignment:
-    """One deterministic pass over the vocabulary.
+def assign_slots(pools: dict, live: dict, existing: Optional[dict] = None,
+                 *, policy: str = "jira") -> Assignment:
+    """One deterministic pass over the vocabulary, with a PER-PROVIDER policy -
+    the two trackers' specs mandate different ambiguity contracts and one
+    generic heuristic erased Linear's.
 
-    `pools[slot]` - the slot's NATURAL candidates, `[{id, name, ...}]` (Linear:
-    states of the mapped type; Jira: statuses of the mapped category).
+    `policy="linear"` - TYPE-ONLY, per the mapping algorithm verbatim: where a
+    type yields exactly one state, take it; where it yields more than one
+    (`started` -> In Progress + In Review), the slot is AMBIGUOUS and requires
+    `--select` - even when the state names look obvious, and selecting one slot
+    NEVER infers a sibling (no cross-slot candidate elimination). `in_review`
+    (the secondary slot of `started`) is never auto-filled at all: with a
+    single started state that state IS in_progress, and auto-reusing it for
+    in_review would be a silent alias.
+
+    `policy="jira"` - statusCategory pools PLUS status-name hints (the spec
+    sanctions names here because three categories cannot separate six slots),
+    then the single-remaining-candidate rule.
+
+    `pools[slot]` - the slot's NATURAL candidates, `[{id, name, ...}]`.
     `live` - every live state/status by id (validation set for kept entries).
-    `existing` - prior `stateIds`/`statusIds` entries (a previous resolution or
-    a human's `--select` tiebreak). Kept where the id is still live - a refresh
-    must not clobber a human decision; dropped WITH A WARNING where dead.
+    `existing` - prior entries (a previous resolution or a human's `--select`
+    tiebreak). Kept where the id is still live - a refresh must not clobber a
+    human decision; dropped WITH A WARNING where dead.
     """
+    if policy not in ("jira", "linear"):
+        raise ValueError(f"unknown assignment policy {policy!r}")
     out = Assignment()
     used: set = set()
 
@@ -83,32 +100,52 @@ def assign_slots(pools: dict, live: dict, existing: Optional[dict] = None) -> As
                 f"dropped {slot}: previous id {prior!r} no longer resolves to a "
                 "live state")
 
-    # 1) Exact-name matches inside the natural pool.
-    for slot in ALL_SLOTS:
-        if slot in out.mapping:
-            continue
-        named = [c for c in pools.get(slot, [])
-                 if _NAME_TO_SLOT.get(normalize_name(c.get("name", ""))) == slot
-                 and c["id"] not in used]
-        if len(named) == 1:
-            out.mapping[slot] = named[0]["id"]
-            used.add(named[0]["id"])
+    if policy == "jira":
+        # 1) Exact-name matches inside the natural pool.
+        for slot in ALL_SLOTS:
+            if slot in out.mapping:
+                continue
+            named = [c for c in pools.get(slot, [])
+                     if _NAME_TO_SLOT.get(normalize_name(c.get("name", ""))) == slot
+                     and c["id"] not in used]
+            if len(named) == 1:
+                out.mapping[slot] = named[0]["id"]
+                used.add(named[0]["id"])
 
-    # 2) Single-remaining-candidate rule; multiple -> ambiguous.
+        # 2) Single-remaining-candidate rule; multiple -> ambiguous.
+        for slot in ALL_SLOTS:
+            if slot in out.mapping:
+                continue
+            remaining = [c for c in pools.get(slot, []) if c["id"] not in used]
+            if len(remaining) == 1:
+                out.mapping[slot] = remaining[0]["id"]
+                used.add(remaining[0]["id"])
+            elif len(remaining) > 1 and slot in REQUIRED_SLOTS and out.conflict is None:
+                out.conflict = {"normalized": slot, "candidates": remaining}
+            elif not remaining and slot in REQUIRED_SLOTS:
+                out.missing_required.append(slot)
+            # optional slot with 0 or >1 remaining candidates stays unfilled -
+            # never auto-aliased (aliasing is a HUMAN act via --select).
+        return out
+
+    # policy == "linear": type-only, no names, no cross-slot elimination.
     for slot in ALL_SLOTS:
         if slot in out.mapping:
             continue
-        remaining = [c for c in pools.get(slot, []) if c["id"] not in used]
-        if len(remaining) == 1:
-            out.mapping[slot] = remaining[0]["id"]
-            used.add(remaining[0]["id"])
-        elif len(remaining) > 1 and slot in REQUIRED_SLOTS and out.conflict is None:
-            out.conflict = {"normalized": slot, "candidates": remaining}
-        elif not remaining and slot in REQUIRED_SLOTS:
+        pool = pools.get(slot, [])
+        if slot == "in_review":
+            # Secondary slot of `started`: NEVER auto-filled. A single started
+            # state is in_progress; reusing it here would be a silent alias,
+            # and two started states are the mandated --select case.
+            continue
+        if len(pool) == 1:
+            out.mapping[slot] = pool[0]["id"]
+        elif len(pool) > 1:
+            if slot in REQUIRED_SLOTS and out.conflict is None:
+                out.conflict = {"normalized": slot, "candidates": list(pool)}
+            # optional multi-candidate slot stays unfilled until --select
+        elif slot in REQUIRED_SLOTS:
             out.missing_required.append(slot)
-        # optional slot with 0 or >1 remaining candidates stays unfilled -
-        # never auto-aliased (aliasing is a HUMAN act via --select).
-
     return out
 
 

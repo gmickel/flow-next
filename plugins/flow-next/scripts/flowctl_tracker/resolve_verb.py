@@ -37,9 +37,29 @@ _IDS_SCOPE = {"linear": "destination.stateIds", "jira": "destination.statusIds"}
 _ACTIVE_TYPES = {"github", "gitlab", "linear", "jira"}
 
 
+def _dict(value) -> dict:
+    """Malformed-but-valid config shapes must produce the JSON error envelope,
+    never an AttributeError - `{"tracker": "bad"}` is a thing users write."""
+    return value if isinstance(value, dict) else {}
+
+
 def _tracker_type(config: dict) -> Optional[str]:
-    t = (config.get("tracker") or {}).get("type")
+    t = _dict(config.get("tracker")).get("type")
     return t if t in _ACTIVE_TYPES else None
+
+
+def _config_shape_error(config: dict) -> Optional[TrackerError]:
+    tracker = config.get("tracker")
+    if tracker is not None and not isinstance(tracker, dict):
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            f"tracker config is {type(tracker).__name__}, not an "
+                            "object", subtype="config")
+    per = _dict(tracker).get("perTracker")
+    if per is not None and not isinstance(per, dict):
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            f"tracker.perTracker is {type(per).__name__}, not an "
+                            "object", subtype="config")
+    return None
 
 
 def _read_raw(flow_dir: Path) -> dict:
@@ -84,6 +104,9 @@ def run(flow_dir: Path, *, scope: Optional[str] = None, refresh: bool = False,
         execute: Callable = default_execute) -> tuple[str, int]:
     """Returns (stdout payload, exit code) - the single result envelope."""
     config = _read_raw(flow_dir)
+    shape_error = _config_shape_error(config)
+    if shape_error is not None:
+        return envelope.failure(shape_error)
     provider = _tracker_type(config)
     if provider is None:
         return envelope.inactive()
@@ -116,8 +139,8 @@ def run(flow_dir: Path, *, scope: Optional[str] = None, refresh: bool = False,
 
     for s in scopes:
         current = _read_raw(flow_dir)
-        already = (((current.get("tracker") or {}).get("resolved") or {})
-                   .get("scopeResolvedAt") or {})
+        already = _dict(_dict(_dict(_dict(current.get("tracker"))
+                                    .get("resolved")).get("scopeResolvedAt")))
         if s in already and not refresh and scope is None:
             continue  # backfill touches only what is absent; --refresh forces
 
@@ -138,7 +161,7 @@ def run(flow_dir: Path, *, scope: Optional[str] = None, refresh: bool = False,
             return envelope.failure(result)
 
     final = _read_raw(flow_dir)
-    resolved = (final.get("tracker") or {}).get("resolved") or {}
+    resolved = _dict(_dict(final.get("tracker")).get("resolved"))
     data = {"resolved": resolved, "warnings": warnings, "aliases": aliases}
     return envelope.success(data)
 
@@ -158,35 +181,39 @@ def _run_select(flow_dir: Path, config: dict, mod, provider: str,
     slot, chosen = select.split("=", 1)
     slot, chosen = slot.strip(), chosen.strip()
 
-    fetched = _fetch_pools(mod, provider, config, execute)
-    if isinstance(fetched, TrackerError):
-        return envelope.failure(fetched)
-    pools, live = fetched
-    error = validate_select(slot, chosen, pools, live)
-    if error:
-        return envelope.failure(TrackerError(
-            ErrorClass.INVALID_INPUT, error, subtype="select"))
-
     ids_scope = _IDS_SCOPE[provider]
     key = ids_scope.split(".", 1)[1]
+    seen = {}  # pools captured by network_fn for the alias verdict
 
-    def network_fn(cfg: dict) -> dict:
+    def network_fn(cfg: dict) -> object:
+        # Fetch + validate INSIDE the transaction's network step, against the
+        # config the transaction fingerprints: fetching before the transaction
+        # let a concurrent destination repoint slip between validation and the
+        # merge - team A's state id written into team B's config.
+        fetched = _fetch_pools(mod, provider, cfg, execute)
+        if isinstance(fetched, TrackerError):
+            return fetched
+        pools, live = fetched
+        error = validate_select(slot, chosen, pools, live)
+        if error:
+            return TrackerError(ErrorClass.INVALID_INPUT, error, subtype="select")
+        seen["pools"] = pools
         return {slot: chosen}
 
     def finalize_fn(current_cfg: dict, data: dict) -> dict:
         # Merge INSIDE the lock so a concurrent select of another slot is not
         # clobbered by a whole-map replace computed from a stale read.
-        existing = ((((current_cfg.get("tracker") or {}).get("resolved") or {})
-                     .get("destination") or {}).get(key)) or {}
-        return {**(existing if isinstance(existing, dict) else {}), **data}
+        existing = _dict(_dict(_dict(_dict(current_cfg.get("tracker"))
+                                     .get("resolved")).get("destination")).get(key))
+        return {**existing, **data}
 
     result = resolve_transaction(flow_dir, ids_scope, network_fn,
                                  finalize_fn=finalize_fn)
     if isinstance(result, TrackerError):
         return envelope.failure(result)
-    aliased = is_alias(slot, chosen, pools)
-    final_map = (((result.get("tracker") or {}).get("resolved") or {})
-                 .get("destination") or {}).get(key) or {}
+    aliased = is_alias(slot, chosen, seen.get("pools", {}))
+    final_map = _dict(_dict(_dict(_dict(result.get("tracker"))
+                                 .get("resolved")).get("destination")).get(key))
     return envelope.success({
         "selected": {slot: chosen},
         "alias": aliased,
