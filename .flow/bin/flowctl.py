@@ -23683,7 +23683,25 @@ def _flow_leaf_is_safe(flow_dir: Path, target: Path) -> bool:
     outright - `.flow` itself may still be a symlink, which is what
     `_flow_path_is_contained` allows.
     """
-    return _flow_path_is_contained(flow_dir, target) and not target.is_symlink()
+    if not _flow_path_is_contained(flow_dir, target):
+        return False
+    # Walk EVERY component between .flow and the leaf. Checking only the leaf
+    # left an in-tree symlinked DIRECTORY open: `.flow/create-first` -> `specs`
+    # passes containment and writes records straight into `.flow/specs/`
+    # (reproduced). `.flow` itself may still be a symlink - the walk starts
+    # below it.
+    try:
+        root = flow_dir.resolve()
+        probe = target
+        while True:
+            if probe.is_symlink():
+                return False
+            parent = probe.parent
+            if parent == probe or parent.resolve() == root:
+                return True
+            probe = parent
+    except OSError:
+        return False
 
 
 CREATE_FIRST_KEY_RE = re.compile(r"[0-9a-f]{16}")

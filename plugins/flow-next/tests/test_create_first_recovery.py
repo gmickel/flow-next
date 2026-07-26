@@ -483,6 +483,21 @@ class RecoveryWritesAreContainedInFlow(unittest.TestCase):
             [], "an unprotected record was written",
         )
 
+
+    def test_in_tree_symlinked_record_dir_is_refused(self) -> None:
+        """Leaf-only checking left symlinked DIRECTORIES open (PR #241 wave 18).
+
+        `.flow/create-first` -> `specs` passes containment and wrote records
+        straight into `.flow/specs/` (reproduced).
+        """
+        specs = self.repo / ".flow" / "specs"
+        before = sorted(p.name for p in specs.iterdir()) if specs.exists() else []
+        (self.repo / ".flow" / "create-first").symlink_to("specs")
+        r = self._put()
+        self.assertNotEqual(r.returncode, 0)
+        after = sorted(p.name for p in specs.iterdir()) if specs.exists() else []
+        self.assertEqual(before, after, "record was written into .flow/specs/")
+
     def test_a_legitimately_symlinked_flow_dir_still_works(self) -> None:
         """`.flow` itself being a symlink is supported and common."""
         with tempfile.TemporaryDirectory() as host, tempfile.TemporaryDirectory() as data:
