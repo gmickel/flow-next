@@ -1,5 +1,5 @@
 ---
-satisfies: [R8,R10,R12,R13]
+satisfies: [R8, R8b, R10, R12, R13]
 ---
 
 # fn-139-tracker-determinism-a-transport.3 tracker.resolved: scoped timestamps, lock transaction, migration
@@ -17,7 +17,10 @@ Migrate `perTracker.apiVersion: 3` to 2.
 ## Acceptance
 - [ ] Per-scope timestamps; scoped refresh does not falsely freshen another scope
 - [ ] Two DIFFERENT-scope concurrent resolves do not clobber each other
-- [ ] resolve-versus-`config set` race tested; shared writer lock
+- [ ] Discovery-input FINGERPRINT compared inside the lock; a mid-resolve project/type change is discarded or returns `class: conflict` (tested with a real repoint, not an unrelated write)
+- [ ] Lock path, timeout, stale-owner recovery and crash behavior specified and tested
+- [ ] `set_config` AND `cmd_init` both route through the shared lock
+- [ ] Contention + crash recovery exercised on the Windows CI row
 - [ ] State machine transitions unit-tested through the seam
 - [ ] `resolve` backfill vs consuming-verb `class: unresolved` separately tested
 - [ ] Transient 403 on tier probe does not flip a capability
