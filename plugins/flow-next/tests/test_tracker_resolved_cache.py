@@ -775,31 +775,67 @@ class ReclaimerClaimClosesTheCheckToRenameWindow(unittest.TestCase):
         self.assertFalse(CL._try_reclaim(self.lock))
         self.assertTrue(self.lock.exists())
 
-    def test_concurrent_reclaimer_blocks_rather_than_double_reclaims(self) -> None:
+    def _stale_owner(self) -> None:
         self.lock.mkdir(parents=True)
         (self.lock / "owner.json").write_text(json.dumps({
             "pid": 999999999, "host": CL.socket.gethostname(),
             "acquired_at": time.time() - 600}), encoding="utf-8")
-        claim = self.lock.with_name("config.d.reclaimer")
-        claim.mkdir()
+
+    def test_concurrent_reclaimer_blocks_rather_than_double_reclaims(self) -> None:
+        self._stale_owner()
+        held = CL._acquire_reclaimer_claim(self.lock)
+        self.assertIsNotNone(held)
         try:
             self.assertFalse(CL._try_reclaim(self.lock),
                              "an active claim must exclude a second reclaimer")
             self.assertTrue(self.lock.exists())
         finally:
-            claim.rmdir()
+            CL._release_reclaimer_claim(held)
         self.assertTrue(CL._try_reclaim(self.lock))
         self.assertFalse(self.lock.exists())
 
-    def test_orphaned_claim_is_aged_out(self) -> None:
-        self.lock.mkdir(parents=True)
-        (self.lock / "owner.json").write_text(json.dumps({
-            "pid": 999999999, "host": CL.socket.gethostname(),
-            "acquired_at": time.time() - 600}), encoding="utf-8")
-        claim = self.lock.with_name("config.d.reclaimer")
-        claim.mkdir()
-        old = time.time() - 600
-        os.utime(claim, (old, old))
-        # First call ages out the orphan claim; acquisition then proceeds.
-        with CL.config_lock(self.flow, timeout_s=5):
-            pass
+    def test_claim_is_never_deleted_and_needs_no_stale_recovery(self) -> None:
+        """The claim is an OS file lock: the kernel releases it when the holder
+        dies, so there is no orphan heuristic - and therefore no observation a
+        delayed contender could act on to delete a live claim (the round-2 ABA)."""
+        self._stale_owner()
+        # A claim holder that CRASHES (hard exit, no release call):
+        crasher = (
+            "import sys, os\n"
+            f"sys.path.insert(0, {str(ROOT / 'scripts')!r})\n"
+            "from flowctl_tracker import config_lock as CL\n"
+            f"claim = CL._acquire_reclaimer_claim(CL._lock_dir({str(self.flow)!r}))\n"
+            "assert claim is not None\n"
+            "os._exit(1)\n"
+        )
+        subprocess.run([sys.executable, "-c", crasher], check=False, timeout=60)
+        # The kernel released the crashed holder's lock: reclaim proceeds
+        # immediately, no age-out, no deletion of the claim path.
+        self.assertTrue(CL._try_reclaim(self.lock))
+        self.assertFalse(self.lock.exists())
+        self.assertTrue(self.lock.with_name("config.d.reclaimer.lock").exists(),
+                        "the claim path persists; only lock state changes")
+
+    def test_live_cross_process_claim_holder_excludes_us(self) -> None:
+        self._stale_owner()
+        holder = (
+            "import sys, time\n"
+            f"sys.path.insert(0, {str(ROOT / 'scripts')!r})\n"
+            "from flowctl_tracker import config_lock as CL\n"
+            f"claim = CL._acquire_reclaimer_claim(CL._lock_dir({str(self.flow)!r}))\n"
+            "assert claim is not None\n"
+            "print('held', flush=True)\n"
+            "time.sleep(10)\n"
+        )
+        proc = subprocess.Popen([sys.executable, "-c", holder],
+                                stdout=subprocess.PIPE)
+        try:
+            self.assertEqual(proc.stdout.readline().strip(), b"held")
+            self.assertFalse(CL._try_reclaim(self.lock),
+                             "a live cross-process claim must exclude us")
+            self.assertTrue(self.lock.exists())
+        finally:
+            proc.kill()
+            proc.wait(timeout=30)
+        self.assertTrue(CL._try_reclaim(self.lock),
+                        "kernel released the killed holder's claim")

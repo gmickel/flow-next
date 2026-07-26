@@ -148,36 +148,66 @@ def _owner_is_stale(lock: Path, now: float) -> bool:
     return not _pid_alive(pid)
 
 
+def _acquire_reclaimer_claim(lock: Path):
+    """Take the reclaimer claim as an OS FILE LOCK, or return None.
+
+    The claim's ONE job is to make the staleness re-check race-free, and it
+    must not itself need stale recovery - an aged-out mkdir claim reintroduced
+    the exact ABA it existed to close (a contender deleting a live claim off
+    an old observation). An OS lock has neither problem: the kernel releases
+    it when the holder dies (crash recovery for free, no age heuristic) and
+    nothing ever deletes the claim path - the file persists, only the lock
+    state changes. flock on POSIX, msvcrt byte-range locking on Windows.
+    """
+    path = lock.with_name("config.d.reclaimer.lock")
+    try:
+        f = open(path, "a+b")  # noqa: SIM115 - handle escapes for the caller to release
+    except OSError:
+        return None
+    try:
+        if os.name == "nt":  # pragma: no cover - exercised on the Windows CI row
+            import msvcrt
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return f
+    except OSError:
+        f.close()
+        return None
+
+
+def _release_reclaimer_claim(f) -> None:
+    try:
+        if os.name == "nt":  # pragma: no cover - exercised on the Windows CI row
+            import msvcrt
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    except OSError:  # pragma: no cover - close() below still drops the lock
+        pass
+    finally:
+        f.close()
+
+
 def _try_reclaim(lock: Path) -> bool:
     """Reclaim a stale lock without the ABA race, in two layers:
 
-    1. An **atomic reclaimer claim** (`config.d.reclaimer`, its own mkdir)
-       serializes reclaimers. While the claim is held the live path cannot
-       change hands: acquirers cannot `mkdir` it (the stale directory still
-       occupies the path) and no other reclaimer can rename it. That makes the
-       staleness RE-CHECK inside the claim race-free - the exact hole in
-       check-then-remove was a contender acting on a classification made
-       before another contender reclaimed and re-acquired.
+    1. The **reclaimer claim** (an OS file lock, see above) serializes
+       reclaimers and makes the staleness RE-CHECK inside it race-free: while
+       the claim is held the live path cannot change hands - acquirers cannot
+       `mkdir` an occupied path and no other reclaimer can rename it. The
+       hole in check-then-remove was a contender acting on a classification
+       made before another contender reclaimed and re-acquired.
     2. Removal goes through an atomic rename to a unique trash name, so the
        live lock path is never the target of a recursive delete.
-
-    A reclaimer that crashes holding the claim is itself recovered by age -
-    the claim is held for milliseconds, so an old claim is an orphan.
     """
-    claim = lock.with_name("config.d.reclaimer")
-    try:
-        claim.mkdir()
-    except FileExistsError:
-        # Another reclaimer is active - or crashed. Age out an orphaned claim;
-        # otherwise wait our turn through the caller's deadline loop.
-        try:
-            if (time.time() - claim.stat().st_mtime) > STALE_OWNER_S:
-                shutil.rmtree(claim, ignore_errors=True)
-        except OSError:
-            pass
-        return False
-    except OSError:
-        return False
+    claim = _acquire_reclaimer_claim(lock)
+    if claim is None:
+        return False  # another reclaimer is active; wait through the deadline loop
     try:
         if not _owner_is_stale(lock, time.time()):
             return False  # the world changed before we got the claim
@@ -189,7 +219,7 @@ def _try_reclaim(lock: Path) -> bool:
         shutil.rmtree(trash, ignore_errors=True)
         return True
     finally:
-        shutil.rmtree(claim, ignore_errors=True)
+        _release_reclaimer_claim(claim)
 
 
 @contextlib.contextmanager
