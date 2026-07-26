@@ -8,6 +8,7 @@ never read or written.
 
 import hashlib
 import importlib.util
+import json
 import os
 import sys
 import types
@@ -17,7 +18,10 @@ from pathlib import Path
 MIN_PYTHON = (3, 11)
 SOURCE_NAME = "flowctl.py"
 HELP_NAME = "flowctl-help.txt"
-SOURCE_SHA256 = "10229ccfd7975dbe42ab1adf93740a1ea79bff928bb1aa7ead0cfd07435164a1"
+# fn-139.5: the single-file SOURCE_SHA256 pin became the distribution manifest
+# (flowctl_tracker/MANIFEST.json) - one integrity mechanism, verified by
+# installers post-copy, consulted here only to authenticate the static-help
+# fast path. A missing/stale manifest declines the fast path safely.
 HELP_SHA256 = "ad7c987b1f90e8dd12f1e22c6ec4163c72222c3bbf49111ce278337258f01d85"
 HELP_PYTHON = (3, 14)
 USAGE_ERROR = (
@@ -107,6 +111,25 @@ def _load_flowctl(source: Path):
     return module
 
 
+def _manifest_source_sha(source: Path):
+    """flowctl.py's recorded hash from the sibling distribution manifest.
+
+    Returns None (never matches) when the manifest is absent or unreadable -
+    the fast path declines and live argparse serves help, exactly the old
+    mismatch behavior.
+    """
+    try:
+        manifest = json.loads(
+            (source.parent / "flowctl_tracker" / "MANIFEST.json")
+            .read_text(encoding="utf-8"))
+        for entry in manifest.get("files", []):
+            if entry.get("path") == SOURCE_NAME:
+                return entry.get("sha256")
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def _root_help_fast_path(source: Path) -> bool:
     """Write authenticated static help, or decline safely to live argparse."""
     # argparse's default help layout can change between Python minor releases.
@@ -123,7 +146,7 @@ def _root_help_fast_path(source: Path) -> bool:
     try:
         source_bytes = source.read_bytes()
         help_bytes = help_path.read_bytes()
-        if hashlib.sha256(source_bytes).hexdigest() != SOURCE_SHA256:
+        if hashlib.sha256(source_bytes).hexdigest() != _manifest_source_sha(source):
             return False
         if hashlib.sha256(help_bytes).hexdigest() != HELP_SHA256:
             return False

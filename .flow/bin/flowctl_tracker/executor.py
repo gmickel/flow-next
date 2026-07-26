@@ -32,7 +32,20 @@ Result = Union[Response, TrackerError]
 #: The cap is enforced HERE, at the shared boundary, because a module constant
 #: that nothing acquires is documentation, not a bound. Adapters get bounded
 #: concurrency by construction rather than by remembering to ask for it.
+#: Config-overridable (fn-139 R7: "defaults, config-overridable"): one
+#: semaphore per distinct cap, created on first use and shared process-wide.
 _SLOTS = threading.BoundedSemaphore(CONCURRENCY_CAP)
+_SLOTS_BY_CAP = {CONCURRENCY_CAP: _SLOTS}
+_SLOTS_LOCK = threading.Lock()
+
+
+def _slots_for(cap: Optional[int]) -> threading.BoundedSemaphore:
+    if not isinstance(cap, int) or cap < 1 or cap == CONCURRENCY_CAP:
+        return _SLOTS
+    with _SLOTS_LOCK:
+        if cap not in _SLOTS_BY_CAP:
+            _SLOTS_BY_CAP[cap] = threading.BoundedSemaphore(cap)
+        return _SLOTS_BY_CAP[cap]
 
 
 def concurrency_slots_available() -> int:
@@ -44,12 +57,13 @@ class Executor(Protocol):
     def __call__(self, request: Request) -> Result: ...
 
 
-def _sleep_backoff(attempt: int, retry_after: Optional[float]) -> None:
+def _backoff_delay(attempt: int, retry_after: Optional[float],
+                   cap_s: float = BACKOFF_CAP_S) -> float:
     """Server-supplied hints are untrusted input.
 
     `Retry-After: -1` reached `time.sleep(-1)` and raised ValueError - another
     breach of "never raises", caused by a hostile-or-broken header rather than
-    by our own code.
+    by our own code. Pure so the ACTUAL delay can be emitted before sleeping.
     """
     delay: Optional[float] = None
     if retry_after is not None:
@@ -60,8 +74,8 @@ def _sleep_backoff(attempt: int, retry_after: Optional[float]) -> None:
         if candidate == candidate and candidate >= 0 and candidate != float("inf"):
             delay = candidate
     if delay is None:
-        delay = min(2.0 ** attempt, BACKOFF_CAP_S)
-    time.sleep(max(0.0, min(delay, BACKOFF_CAP_S)))
+        delay = min(2.0 ** attempt, cap_s)
+    return max(0.0, min(delay, cap_s))
 
 
 def _origin(url: str) -> tuple[str, str, int]:
@@ -240,8 +254,17 @@ def execute(
     auth_scheme: Optional[str] = None,
     verify_tls: bool = True,
     on_event: Optional[Callable[[str], None]] = None,
+    max_retries: Optional[int] = None,
+    backoff_cap_s: Optional[float] = None,
+    concurrency: Optional[int] = None,
 ) -> Result:
-    """Run one request. Returns `Response | TrackerError` - never raises."""
+    """Run one request. Returns `Response | TrackerError` - never raises.
+
+    `max_retries` / `backoff_cap_s` / `concurrency` are the R7 bounds -
+    config-overridable by the caller, defaulting to the module constants.
+    Overrides are validated and CLAMPED (never raised past the defaults'
+    spirit): a hostile/typo'd config must not unbound the executor.
+    """
     route_err = _validate_route(request)
     if route_err is not None:
         return route_err
@@ -305,9 +328,23 @@ def execute(
                 subtype="tls_unrecorded",
             )
 
+    retries_cap = MAX_RETRIES
+    if isinstance(max_retries, int) and 0 <= max_retries <= 5:
+        retries_cap = max_retries
+    backoff_cap = BACKOFF_CAP_S
+    if isinstance(backoff_cap_s, (int, float)) and 0 < backoff_cap_s <= 300:
+        backoff_cap = float(backoff_cap_s)
+    slots = _slots_for(concurrency)
+
     attempt = 0
     while True:
-        with _SLOTS:
+        if on_event:
+            try:
+                on_event(f"attempt {attempt + 1} provider={request.provider} "
+                         f"op={request.op} route={'cli' if is_cli else 'http'}")
+            except Exception:  # noqa: BLE001, S110 - diagnostics only
+                pass
+        with slots:
             raw = _cli(request, verify_tls) if is_cli else _http(request, cred, verify_tls)
         if isinstance(raw, TrackerError):
             err = raw
@@ -319,14 +356,17 @@ def execute(
         # request idempotent. Replaying a non-idempotent write is how duplicates
         # get created - and no tracker dedups on create (measured).
         retryable = err.auto_retryable and err.cls is ErrorClass.RATE_LIMITED and request.idempotent
-        if not retryable or attempt >= MAX_RETRIES:
+        if not retryable or attempt >= retries_cap:
             return err
+        delay = _backoff_delay(attempt, err.retry_after_s, backoff_cap)
         if on_event:
             # Best-effort, unlike the downgrade record above: the retry event is
             # diagnostics, not the audit line a security property depends on.
+            # The ACTUAL delay is emitted, not the server's untrusted hint.
             try:
-                on_event(f"retry attempt={attempt + 1}/{MAX_RETRIES} class={err.cls.value} op={request.op}")
+                on_event(f"retry attempt={attempt + 1}/{retries_cap} "
+                         f"class={err.cls.value} op={request.op} backoff_s={delay:.2f}")
             except Exception:  # noqa: BLE001, S110 - never raises; diagnostics only
                 pass
-        _sleep_backoff(attempt, err.retry_after_s)
+        time.sleep(delay)
         attempt += 1

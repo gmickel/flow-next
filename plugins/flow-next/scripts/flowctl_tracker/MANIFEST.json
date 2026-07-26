@@ -1,6 +1,10 @@
 {
   "files": [
     {
+      "path": "flowctl.py",
+      "sha256": "10229ccfd7975dbe42ab1adf93740a1ea79bff928bb1aa7ead0cfd07435164a1"
+    },
+    {
       "path": "flowctl_tracker/__init__.py",
       "sha256": "21ac29eb50e4222bc741261a5a24e412eaf61de2a268eb29e9231119f3ded691"
     },
@@ -22,7 +26,7 @@
     },
     {
       "path": "flowctl_tracker/executor.py",
-      "sha256": "3c187d6491a37a1b7a341577afcffb710699e1c2335ffcffea3504c6ee015947"
+      "sha256": "f624479c7ac3988b91b956efc81d4baee13b3e51941469859c43934b7f9b72ea"
     },
     {
       "path": "flowctl_tracker/providers/__init__.py",
@@ -46,7 +50,7 @@
     },
     {
       "path": "flowctl_tracker/resolve_verb.py",
-      "sha256": "4e7f1422ae210221e51e5c011bbfcd64138424e9a1d898e50283319e18c60ecf"
+      "sha256": "2d1de0d55a55f0f1e2d4f2f88e6606289d8b73239ae660a4d6f127304454e117"
     },
     {
       "path": "flowctl_tracker/resolved_cache.py",

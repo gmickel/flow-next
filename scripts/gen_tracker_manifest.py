@@ -23,10 +23,17 @@ PKG = REPO / "plugins" / "flow-next" / "scripts" / "flowctl_tracker"
 MANIFEST = PKG / "MANIFEST.json"
 
 
-def compute() -> dict:
-    files = []
-    for path in sorted(PKG.rglob("*.py")):
-        rel = path.relative_to(PKG).as_posix()
+def compute(pkg: Path = PKG) -> dict:
+    # The manifest REPLACED the old single-file SOURCE_SHA256 pin (fn-139.5):
+    # it covers flowctl.py itself plus every package file. Installers verify
+    # all of it post-copy; the bootstrap consults only the flowctl.py entry to
+    # authenticate its static-help fast path.
+    files = [{
+        "path": "flowctl.py",
+        "sha256": hashlib.sha256((pkg.parent / "flowctl.py").read_bytes()).hexdigest(),
+    }]
+    for path in sorted(pkg.rglob("*.py")):
+        rel = path.relative_to(pkg).as_posix()
         files.append({
             "path": f"flowctl_tracker/{rel}",
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),

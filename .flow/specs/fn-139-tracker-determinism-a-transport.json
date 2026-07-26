@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-139-tracker-determinism-a-transport",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "needs_work",
+  "completion_reviewed_at": "2026-07-26T20:21:47.520164Z",
   "created_at": "2026-07-26T11:22:11.684198Z",
   "default_impl": null,
   "default_review": null,
@@ -15,7 +15,7 @@
     "fn-139-tracker-determinism-a-transport.6": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 0,
+  "plan_review_rounds": 1,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-07-26T14:50:31.519967Z",
   "ready": true,
@@ -630,10 +630,24 @@
       "task": "fn-139-tracker-determinism-a-transport.5",
       "timestamp": "2026-07-26T20:16:03.773536Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "5e6932dfb8cd0fa880c34ea0615b3f6a4880bf64c39c2136112f6e193b81b3d6",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-07-26T20:21:47.519422Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-139-tracker-determinism-a-transport.1": 0,
     "impl:fn-139-tracker-determinism-a-transport.2": 0,
     "impl:fn-139-tracker-determinism-a-transport.3": 0,
@@ -656,5 +670,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-26T20:16:03.774239Z"
+  "updated_at": "2026-07-26T20:21:47.520164Z"
 }

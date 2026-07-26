@@ -13,13 +13,17 @@ candidates; repeatable; re-select overwrites.
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 from typing import Callable, Optional, Union
 
 from . import envelope
+from .credentials import redact
 from .executor import execute as default_execute
 from .providers import resolver_for
-from .resolved_cache import SCOPES, resolve_transaction
+from .resolved_cache import (SCOPES, apply_capability_probe, capabilities_stale,
+                             resolve_transaction)
 from .states import Assignment, is_alias, validate_select
 from .types import ErrorClass, TrackerError
 
@@ -46,6 +50,64 @@ def _dict(value) -> dict:
 def _tracker_type(config: dict) -> Optional[str]:
     t = _dict(config.get("tracker")).get("type")
     return t if t in _ACTIVE_TYPES else None
+
+
+def _stderr_sink(message: str) -> None:
+    """R-observability: every attempt/backoff/scope/downgrade/probe event lands
+    on stderr, redacted. stdout stays reserved for the single JSON envelope."""
+    print(redact(str(message)), file=sys.stderr)
+
+
+def _float_or_none(value, lo: float, hi: float) -> Optional[float]:
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return f if lo < f <= hi else None
+
+
+def bound_executor(config: dict, execute: Callable,
+                   on_event: Callable[[str], None] = _stderr_sink) -> Callable:
+    """Bind the PERSISTED transport policy onto the raw executor.
+
+    This is the wiring the completion review caught missing: `authScheme`
+    decided at the discovery ceremony, `sslVerify` (+ `JIRA_SSL_VERIFY` env
+    override), the stderr event sink, and the R7 config-overridable bounds
+    (`tracker.transport.timeoutS/maxRetries/backoffCapS/concurrency`) - none
+    of which reached a real request when adapters called `execute` bare.
+    """
+    tracker = _dict(config.get("tracker"))
+    per = _dict(tracker.get("perTracker"))
+    transport = _dict(tracker.get("transport"))
+
+    auth_scheme = per.get("authScheme")
+    verify_tls = per.get("sslVerify")
+    verify_tls = True if verify_tls is None else bool(verify_tls)
+    env_ssl = os.environ.get("JIRA_SSL_VERIFY")
+    if tracker.get("type") == "jira" and env_ssl is not None:
+        verify_tls = env_ssl.strip().lower() not in ("false", "0", "no")
+
+    timeout_s = _float_or_none(transport.get("timeoutS"), 0, 600)
+    backoff_cap = _float_or_none(transport.get("backoffCapS"), 0, 300)
+    retries = transport.get("maxRetries")
+    retries = retries if isinstance(retries, int) and 0 <= retries <= 5 else None
+    concurrency = transport.get("concurrency")
+    concurrency = (concurrency if isinstance(concurrency, int)
+                   and 1 <= concurrency <= 16 else None)
+
+    if execute is not default_execute:
+        # Injected fake (tests): policy kwargs would explode a plain callable.
+        return execute
+
+    def bound(request):
+        if timeout_s is not None and request.timeout_s == type(request).__dataclass_fields__["timeout_s"].default:
+            import dataclasses
+            request = dataclasses.replace(request, timeout_s=timeout_s)
+        return default_execute(request, auth_scheme=auth_scheme,
+                               verify_tls=verify_tls, on_event=on_event,
+                               max_retries=retries, backoff_cap_s=backoff_cap,
+                               concurrency=concurrency)
+    return bound
 
 
 def _config_shape_error(config: dict) -> Optional[TrackerError]:
@@ -137,24 +199,40 @@ def run(flow_dir: Path, *, scope: Optional[str] = None, refresh: bool = False,
     else:
         scopes = SCOPES_BY_PROVIDER[provider]
 
+    probe_field = None
+    degraded_field = None
     for s in scopes:
         current = _read_raw(flow_dir)
         already = _dict(_dict(_dict(_dict(current.get("tracker"))
                                     .get("resolved")).get("scopeResolvedAt")))
         if s in already and not refresh and scope is None:
-            continue  # backfill touches only what is absent; --refresh forces
+            # Backfill touches only what is absent - EXCEPT the one dynamic
+            # capability: GitLab's plan-gated blockedBy re-probes when its
+            # scope timestamp is older than the TTL (24h). This is the wiring
+            # that makes `capabilities_stale` reachable in production.
+            if (s == "capabilities" and provider == "gitlab"
+                    and capabilities_stale(current)):
+                _stderr_sink(f"scope={s} provider={provider} ttl-reprobe")
+                outcome = _ttl_reprobe(flow_dir, current, mod, execute)
+                if isinstance(outcome, TrackerError):
+                    return envelope.failure(outcome)
+                probe_field, degraded_field = outcome
+            continue
+
+        _stderr_sink(f"scope={s} provider={provider} resolving")
 
         def network_fn(cfg: dict, _s: str = s) -> Union[dict, TrackerError]:
+            ex = bound_executor(cfg, execute)
             if _s == "destination":
-                return mod.resolve_destination(cfg, execute)
+                return mod.resolve_destination(cfg, ex)
             if _s in ("destination.stateIds", "destination.statusIds"):
-                out = _ids_resolver(mod, provider)(cfg, execute)
+                out = _ids_resolver(mod, provider)(cfg, ex)
                 if isinstance(out, TrackerError):
                     return out
                 warnings.extend(out.warnings)
                 aliases.update(out.aliases)
                 return _assignment_to_data(out)
-            return mod.resolve_capabilities(cfg, execute)
+            return mod.resolve_capabilities(cfg, ex)
 
         result = resolve_transaction(flow_dir, s, network_fn)
         if isinstance(result, TrackerError):
@@ -163,7 +241,39 @@ def run(flow_dir: Path, *, scope: Optional[str] = None, refresh: bool = False,
     final = _read_raw(flow_dir)
     resolved = _dict(_dict(final.get("tracker")).get("resolved"))
     data = {"resolved": resolved, "warnings": warnings, "aliases": aliases}
-    return envelope.success(data)
+    return envelope.success(data, degraded=degraded_field, probe=probe_field)
+
+
+def _ttl_reprobe(flow_dir: Path, config: dict, mod, execute: Callable):
+    """One synchronous, bounded re-probe; a FAILED probe keeps the prior value
+    and reports via `probe`, never `degraded`. Returns (probe, degraded)."""
+    ex = bound_executor(config, execute)
+    ok, plan, reason = mod.probe_plan(config, ex)
+    if not ok:
+        _stderr_sink(f"probe scope=capabilities ok=false reason={reason}")
+        staged = {"tracker": {"type": "gitlab",
+                              "resolved": _dict(_dict(config.get("tracker"))
+                                                .get("resolved"))}}
+        outcome = apply_capability_probe(staged, ok=False, reason=reason)
+        return outcome["probe"], outcome["degraded"]
+
+    # Success: fold through the transaction so the stamp + merge follow the
+    # same locked, fingerprinted path as any other capabilities resolve.
+    outcome_box = {}
+
+    def network_fn(cfg: dict):
+        staged = {"tracker": {"type": "gitlab",
+                              "resolved": _dict(_dict(cfg.get("tracker"))
+                                                .get("resolved"))}}
+        outcome_box.update(apply_capability_probe(staged, ok=True, plan=plan))
+        return _dict(_dict(staged["tracker"]["resolved"]).get("capabilities"))
+
+    result = resolve_transaction(flow_dir, "capabilities", network_fn)
+    if isinstance(result, TrackerError):
+        return result
+    if outcome_box.get("degraded"):
+        _stderr_sink(f"capability degraded: {outcome_box['degraded']}")
+    return outcome_box.get("probe"), outcome_box.get("degraded")
 
 
 def _run_select(flow_dir: Path, config: dict, mod, provider: str,
@@ -190,7 +300,7 @@ def _run_select(flow_dir: Path, config: dict, mod, provider: str,
         # config the transaction fingerprints: fetching before the transaction
         # let a concurrent destination repoint slip between validation and the
         # merge - team A's state id written into team B's config.
-        fetched = _fetch_pools(mod, provider, cfg, execute)
+        fetched = _fetch_pools(mod, provider, cfg, bound_executor(cfg, execute))
         if isinstance(fetched, TrackerError):
             return fetched
         pools, live = fetched

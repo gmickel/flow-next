@@ -46,7 +46,12 @@ class ManifestIsCurrent(unittest.TestCase):
         """Stale manifest = the sync step was skipped. This is the CI teeth."""
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         recorded = {f["path"]: f["sha256"] for f in manifest["files"]}
-        self.assertEqual(recorded, _hashes(PKG),
+        expected = _hashes(PKG)
+        # The manifest REPLACED the single-file SOURCE_SHA256 pin: it covers
+        # flowctl.py itself alongside the package (fn-139.5 completion gap 3).
+        expected["flowctl.py"] = hashlib.sha256(
+            (ROOT / "scripts" / "flowctl.py").read_bytes()).hexdigest()
+        self.assertEqual(recorded, expected,
                          "run scripts/gen_tracker_manifest.py")
 
     def test_generator_check_mode_agrees(self) -> None:
@@ -74,6 +79,7 @@ class InstallerVerifier(unittest.TestCase):
         dest = Path(tmp) / "scripts"
         shutil.copytree(PKG, dest / "flowctl_tracker",
                         ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copy2(ROOT / "scripts" / "flowctl.py", dest / "flowctl.py")
         return dest
 
     def test_clean_copy_verifies(self) -> None:

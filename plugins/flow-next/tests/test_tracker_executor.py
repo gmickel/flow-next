@@ -506,15 +506,14 @@ class MalformedGraphQL(unittest.TestCase):
 
 
 class UntrustedRetryAfter(unittest.TestCase):
-    def test_negative_retry_after_does_not_raise(self) -> None:
+    def test_hostile_retry_after_hints_yield_bounded_delays(self) -> None:
         """Retry-After is server-controlled; -1 reached time.sleep(-1)."""
-        slept = []
-        with mock.patch.object(X.time, "sleep", side_effect=slept.append):
-            X._sleep_backoff(0, -1)
-            X._sleep_backoff(0, float("inf"))
-            X._sleep_backoff(0, float("nan"))
-            X._sleep_backoff(0, "garbage")
-        self.assertTrue(all(0 <= s <= 30 for s in slept), slept)
+        for hint in (-1, float("inf"), float("nan"), "garbage"):
+            with self.subTest(hint=hint):
+                delay = X._backoff_delay(0, hint)
+                self.assertEqual(delay, 1.0, "falls back to 2**attempt")
+        self.assertLessEqual(X._backoff_delay(10, None), 30.0, "cap holds")
+        self.assertLessEqual(X._backoff_delay(0, 9999), 30.0, "hint clamped")
 
 
 class RedirectOriginNotHost(unittest.TestCase):
