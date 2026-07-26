@@ -169,6 +169,14 @@ More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive transport failures
 stop separately with `TRANSPORT_UNHEALTHY` + exit 5; never reset the verdict
 counter for transport health.
 
+**ANTI-PATTERN (never do either):** (1) a delivered verdict is never a
+transport failure. Once flowctl parses `VERDICT=...` the round is consumed and
+recorded; do not re-dispatch or re-frame a `NEEDS_WORK` as a backend/sandbox
+problem to claim a refund. (2) Never widen the reviewer sandbox. Reviewers are
+read-only by contract; a sandbox-blocked reviewer means something asked it to
+mutate the workspace. Fix that, do not pass `--sandbox workspace-write` /
+`danger-full-access` or set `CODEX_SANDBOX` (Windows resolves via `auto`).
+
 If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 1. **Parse issues** from reviewer feedback (missing requirements, incomplete implementations)

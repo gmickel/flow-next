@@ -25283,9 +25283,16 @@ def _finish_backend_exec(
     if sandbox_failure:
         _clear_stale_review_receipt(receipt_path)
         msg = (
-            "Codex sandbox blocked operations. "
-            "Try --sandbox danger-full-access (or auto) or set "
-            "CODEX_SANDBOX=danger-full-access"
+            "Codex sandbox blocked operations during review. Reviewers are "
+            "READ-ONLY by contract: a reviewer that needed a write or a "
+            "blocked shell command is a prompt/scope bug, not a permissions "
+            "problem. Do NOT widen the reviewer sandbox to work around this; "
+            "fix whatever asked the reviewer to mutate the workspace. "
+            "Widening (--sandbox danger-full-access / CODEX_SANDBOX) is "
+            "legitimate ONLY on Windows, where the AppContainer sandbox "
+            "blocks reads too (auto already resolves there). No verdict was "
+            "delivered, so no review round was consumed; a delivered verdict "
+            "is never a transport failure."
         )
         error_exit(msg, use_json=args.json, code=3)
 
