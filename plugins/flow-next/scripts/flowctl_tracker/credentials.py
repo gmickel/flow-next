@@ -111,7 +111,26 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None,
 _SEEN: set[str] = set()
 
 
+#: Refuse, rather than exempt-from-redaction, a credential too short to redact
+#: safely. A round-7 length floor inside `redact()` was the wrong end of the
+#: problem: it let a 3-character token attach to a live request while being
+#: deliberately excluded from scrubbing, which breaks R6 outright. Rejecting at
+#: resolution keeps `redact()` floorless AND keeps a 1-2 char value from
+#: shredding every message it happens to appear inside. No provider here issues
+#: a credential this short, so nothing legitimate is refused.
+MIN_CREDENTIAL_LEN = 4
+
+
+class ShortCredential(ValueError):
+    """Resolved a credential too short to be real. Never carries the value."""
+
+
 def _remember(value: Optional[str]) -> Optional[str]:
+    if value and len(value) < MIN_CREDENTIAL_LEN:
+        raise ShortCredential(
+            f"resolved credential is shorter than {MIN_CREDENTIAL_LEN} characters; "
+            "refusing to use it (a value this short cannot be redacted from logs)"
+        )
     if value:
         _SEEN.add(value)
     return value
@@ -122,15 +141,15 @@ def redact(text: str) -> str:
     out = text
     for name in ("GH_TOKEN", "GITLAB_TOKEN", "LINEAR_API_KEY", "JIRA_API_TOKEN", "JIRA_PAT"):
         val = os.environ.get(name)
-        if val:
+        # Same rule as `_remember`: a value this short is never a usable
+        # credential (resolution refuses it), and adding it here would let a
+        # stray `JIRA_PAT=p` rewrite every message containing the letter p.
+        if val and len(val) >= MIN_CREDENTIAL_LEN:
             _SEEN.add(val)
-    # The 8-character floor was a false economy - a short token is still a token.
-    # A 4-character floor is a different argument and is about CORRECTNESS, not
-    # "too short to matter": no provider here issues a credential under 4 chars,
-    # while a 1-2 char value is an ordinary substring that shreds every message
-    # containing it (a stray `JIRA_PAT=p` turned "in_progress" into
-    # "in_<redacted>rogress" - corrupting the exact field a caller must act on).
+    # NO length floor. Everything in `_SEEN` was accepted by `_remember`, which
+    # refuses anything under MIN_CREDENTIAL_LEN - so "too short to redact" is
+    # handled by rejecting the credential, never by exempting it here.
     for secret in sorted(_SEEN, key=len, reverse=True):
-        if secret and len(secret) >= 4:
+        if secret:
             out = out.replace(secret, "<redacted>")
     return out

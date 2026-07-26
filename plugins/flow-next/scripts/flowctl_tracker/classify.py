@@ -66,8 +66,11 @@ def _linear_retry_after(resp: Response) -> Optional[float]:
     fixed 1s/2s ladder meant every retry landed inside the same limit window and
     burned the whole budget without ever waiting long enough to clear it.
 
-    Only an EXHAUSTED bucket constrains us, so the delay is the soonest reset
-    among the buckets whose remaining is zero. `_sleep_backoff` still clamps.
+    Only an EXHAUSTED bucket constrains us, and the buckets are INDEPENDENT: the
+    request is blocked until the LAST of them clears, so the delay is `max`, not
+    `min`. Taking the soonest reset retried while a slower bucket was still
+    limiting - burning the retry budget inside one window, which is the exact
+    failure the header parsing was added to prevent. `_sleep_backoff` still clamps.
     """
     lowered = {str(k).lower(): v for k, v in (resp.headers or {}).items()}
     waits: list[float] = []
@@ -84,7 +87,7 @@ def _linear_retry_after(resp: Response) -> Optional[float]:
             continue
         waits.append(max(0.0, reset_ms / 1000.0 - now))
     if waits:
-        return min(waits)
+        return max(waits)
     return _retry_after(resp)
 
 

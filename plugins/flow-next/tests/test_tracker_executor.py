@@ -98,7 +98,8 @@ class Credentials(unittest.TestCase):
         self.assertIn("no keyring", src.lower())
 
     def test_jira_selects_by_persisted_auth_scheme_not_by_racing(self) -> None:
-        env = {"JIRA_EMAIL": "e@x", "JIRA_API_TOKEN": "t", "JIRA_PAT": "p"}
+        env = {"JIRA_EMAIL": "e@x", "JIRA_API_TOKEN": "cloud-token-1234",
+               "JIRA_PAT": "datacenter-pat-1234"}
         with mock.patch.dict(os.environ, env, clear=False):
             h = {}
             CR.resolve("jira", auth_scheme="bearer-pat").attach(h)
@@ -865,3 +866,64 @@ class TlsDowngradeEventIsNotEmittedForRefusedRoutes(unittest.TestCase):
         self.assertIs(r.cls, ErrorClass.INVALID_INPUT)
         self.assertEqual(r.subtype, "tls_unsupported")
         self.assertEqual([e for e in events if "tls-verification-disabled" in e], [])
+
+
+class ShortCredentialsAreRefusedNotExemptedFromRedaction(unittest.TestCase):
+    """Round-7 exempted 1-3 char secrets from redaction while still SENDING them.
+
+    That is the wrong end of the problem: the token reached the wire and the log.
+    Refusing at resolution keeps `redact()` floorless and keeps a stray 1-char
+    env value from shredding every message it appears inside.
+    """
+
+    def test_three_char_credential_is_refused_at_resolution(self) -> None:
+        with mock.patch.dict(os.environ, {"LINEAR_API_KEY": "abc"}, clear=False):
+            with self.assertRaises(CR.ShortCredential):
+                CR.resolve("linear")
+
+    def test_refusal_message_never_carries_the_value(self) -> None:
+        with mock.patch.dict(os.environ, {"JIRA_PAT": "abc"}, clear=False):
+            try:
+                CR.resolve("jira", auth_scheme="bearer-pat")
+            except CR.ShortCredential as exc:
+                self.assertNotIn("abc", str(exc))
+            else:
+                self.fail("expected ShortCredential")
+
+    def test_execute_maps_the_refusal_to_auth_rather_than_raising(self) -> None:
+        with mock.patch.dict(os.environ, {"LINEAR_API_KEY": "abc"}, clear=False):
+            r = X.execute(Request(provider="linear", op="q", method="POST",
+                                  url_or_argv="https://api.linear.app/graphql"))
+        self.assertIsInstance(r, TrackerError)
+        self.assertIs(r.cls, ErrorClass.AUTH)
+        self.assertNotIn("abc", r.message)
+
+    def test_redactor_has_no_length_floor_for_accepted_secrets(self) -> None:
+        """Everything that survives resolution must be fully redacted."""
+        saved = set(CR._SEEN)
+        self.addCleanup(lambda: (CR._SEEN.clear(), CR._SEEN.update(saved)))
+        CR._remember("abcd")
+        payload, _ = E.failure(TrackerError(
+            ErrorClass.CONFLICT, "x", details={"candidates": [{"why": "abcd"}]}))
+        self.assertNotIn("abcd", payload)
+
+    def test_short_env_value_does_not_shred_unrelated_text(self) -> None:
+        with mock.patch.dict(os.environ, {"JIRA_PAT": "p"}, clear=False):
+            self.assertEqual(CR.redact("in_progress"), "in_progress")
+
+
+class LinearWaitsForTheSlowestExhaustedBucket(unittest.TestCase):
+    """Buckets are independent: the request is blocked until the LAST clears."""
+
+    def test_two_exhausted_buckets_wait_for_the_later_reset(self) -> None:
+        import time
+        now = time.time()
+        err = C.classify("linear", resp(
+            200, b'{"errors":[{"extensions":{"code":"RATELIMITED"}}]}', {
+                "X-RateLimit-Requests-Remaining": "0",
+                "X-RateLimit-Requests-Reset": str((now + 5.0) * 1000.0),
+                "X-RateLimit-Complexity-Remaining": "0",
+                "X-RateLimit-Complexity-Reset": str((now + 25.0) * 1000.0),
+            }))
+        self.assertIs(err.cls, ErrorClass.RATE_LIMITED)
+        self.assertAlmostEqual(err.retry_after_s, 25.0, delta=1.5)
