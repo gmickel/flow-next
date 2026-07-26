@@ -21,7 +21,15 @@ Run the repo's own "how to spot a mistake" list (CLAUDE.md) against tracker-sync
 
 **Who is affected:** tracker-sync users only. The bridge-inactive path - the documented default - performs one config read and loads no adapter reference today, and that is unchanged. There is no downside for the majority of users because there is no new behavior on their path.
 
-**Why it is also faster.** Two compounding wins. Every operation currently costs agent tokens to read adapter prose and reason about which branch applies; those become a subprocess call. And the destination ids that today are re-derived per run get resolved once at discovery (below), removing a round-trip per status write on Jira and per mint on Linear.
+**Why it is also faster**, in rough order of magnitude:
+
+1. **Context.** A tracker-sync run today reads `steps.md` (86k chars) plus the relevant adapter reference (40k-75k) - roughly **120,000-160,000 characters, 30-40k tokens, per run**. A `flowctl tracker <verb>` call loads none of it.
+2. **Inference.** Every operation currently costs at least one model turn to walk the transport ladder, pick a branch and construct the call. A subprocess call infers nothing; wall-clock goes from seconds to about a hundred milliseconds.
+3. **Dispatch.** The `tracker-runner` subagent exists because a lifecycle comment needed an agent. A subprocess does not, so the whole background-dispatch path and its per-skill gating prose disappear (R15).
+4. **Batching.** Deterministic code can batch and parallelize adapter calls. Prose cannot; today every operation is strictly serial.
+5. **Round-trips.** Destination ids re-derived per run get resolved once at discovery (below), removing a request per status write on Jira and per mint on Linear.
+
+The last one is the smallest. The first is the one users will feel.
 
 ## Architecture & Data Models
 <!-- scope: technical -->
