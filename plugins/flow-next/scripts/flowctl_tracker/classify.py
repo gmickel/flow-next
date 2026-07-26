@@ -80,7 +80,7 @@ def _gitlab(resp: Response) -> Optional[TrackerError]:
     if resp.status == 403 and _LICENCE_RE.search(resp.body or b""):
         return TrackerError(
             ErrorClass.CAPABILITY, "feature not available on this GitLab tier",
-            subtype="licence", details={"required_plan": "premium"},
+            subtype="licence", details={"capability": "blockedBy", "required_plan": "premium"},
         )
     return _generic(resp)
 

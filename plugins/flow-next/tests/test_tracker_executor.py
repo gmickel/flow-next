@@ -227,6 +227,105 @@ class CliRoute(unittest.TestCase):
         self.assertIs(r.cls, ErrorClass.TRANSPORT)
 
 
+class CliClassificationThroughExecute(unittest.TestCase):
+    """The classifier branches must be reachable on the CLI route.
+
+    Testing `classify()` directly proved nothing here: a non-zero gh/glab exit
+    was collapsed to a synthetic HTTP 400, so auth / rate-limit / licence / 5xx
+    were all unreachable through `execute()` and every CLI failure read as
+    `invalid_input`.
+    """
+
+    def _cli(self, provider: str, stderr: bytes, rc: int = 1):
+        def fake(argv, **kw):
+            return subprocess.CompletedProcess(argv, rc, b"", stderr)
+
+        with mock.patch.object(X.subprocess, "run", side_effect=fake), \
+             mock.patch.object(X.time, "sleep"):
+            return X.execute(Request(provider=provider, op="r", method="GET",
+                                     url_or_argv=[provider, "api", "x"], idempotent=True))
+
+    def test_cli_auth_failure(self) -> None:
+        self.assertIs(self._cli("github", b"HTTP 401: Bad credentials").cls, ErrorClass.AUTH)
+
+    def test_cli_not_found(self) -> None:
+        self.assertIs(self._cli("github", b"HTTP 404: Not Found").cls, ErrorClass.NOT_FOUND)
+
+    def test_cli_server_error(self) -> None:
+        self.assertIs(self._cli("github", b"HTTP 502: Bad Gateway").cls, ErrorClass.TRANSPORT)
+
+    def test_cli_rate_limited(self) -> None:
+        self.assertIs(self._cli("github", b"HTTP 429: rate limited").cls, ErrorClass.RATE_LIMITED)
+
+    def test_cli_gitlab_licence_gate_is_capability(self) -> None:
+        e = self._cli("gitlab", b"HTTP 403: Blocked issues not available for current license")
+        self.assertIs(e.cls, ErrorClass.CAPABILITY)
+
+    def test_unparseable_cli_failure_falls_back(self) -> None:
+        e = self._cli("github", b"something went wrong")
+        self.assertIs(e.cls, ErrorClass.INVALID_INPUT)
+
+
+class TlsOptOut(unittest.TestCase):
+    def test_https_handler_carries_the_context_not_open(self) -> None:
+        """`OpenerDirector.open()` takes no `context` kwarg; passing one raised
+        TypeError and broke the documented opt-out entirely."""
+        import inspect
+        import urllib.request
+
+        self.assertNotIn("context",
+                         inspect.signature(urllib.request.OpenerDirector.open).parameters)
+        src = (ROOT / "scripts" / "flowctl_tracker" / "executor.py").read_text()
+        self.assertIn("HTTPSHandler(context=", src)
+        self.assertNotIn("open(r, timeout=req.timeout_s, context=", src)
+
+    def test_cli_route_rejects_tls_opt_out_rather_than_ignoring_it(self) -> None:
+        r = X.execute(Request(provider="github", op="r", method="GET",
+                              url_or_argv=["gh", "api", "x"]), verify_tls=False)
+        self.assertIs(r.cls, ErrorClass.INVALID_INPUT)
+        self.assertEqual(r.subtype, "tls_unsupported")
+
+    def test_tls_opt_out_is_recorded_never_silent(self) -> None:
+        events = []
+        with mock.patch.object(X, "_http", return_value=resp(200, b"{}")):
+            X.execute(Request(provider="linear", op="q", method="POST",
+                              url_or_argv="https://api.linear.app/graphql"),
+                      verify_tls=False, on_event=events.append)
+        self.assertTrue(any("tls-verification-disabled" in e for e in events))
+
+
+class MalformedTarget(unittest.TestCase):
+    def test_bad_url_returns_error_not_exception(self) -> None:
+        r = X.execute(Request(provider="linear", op="q", method="GET", url_or_argv="not-a-url"))
+        self.assertIsInstance(r, TrackerError)
+
+
+class ConcurrencyCap(unittest.TestCase):
+    def test_cap_is_enforced_not_merely_declared(self) -> None:
+        import threading
+
+        peak = {"n": 0}
+        live = {"n": 0}
+        lock = threading.Lock()
+
+        def slow(req, cred, verify):
+            with lock:
+                live["n"] += 1
+                peak["n"] = max(peak["n"], live["n"])
+            X.time.sleep(0.02)
+            with lock:
+                live["n"] -= 1
+            return resp(200, b"{}")
+
+        with mock.patch.object(X, "_http", side_effect=slow):
+            ts = [threading.Thread(target=lambda: X.execute(
+                Request(provider="linear", op="q", method="GET",
+                        url_or_argv="https://api.linear.app/graphql"))) for _ in range(12)]
+            for t_ in ts: t_.start()
+            for t_ in ts: t_.join()
+        self.assertLessEqual(peak["n"], 4, f"peak concurrency {peak['n']} exceeded the cap of 4")
+
+
 class Envelope(unittest.TestCase):
     def test_success_shape(self) -> None:
         payload, code = E.success({"id": 1})
@@ -241,6 +340,27 @@ class Envelope(unittest.TestCase):
             with self.subTest(cls=cls):
                 _, got = E.failure(TrackerError(cls, "x"))
                 self.assertEqual(got, code)
+
+    def test_rate_limited_details_carry_retry_after(self) -> None:
+        payload, _ = E.failure(TrackerError(ErrorClass.RATE_LIMITED, "slow down",
+                                            retry_after_s=12.5, auto_retryable=True))
+        self.assertEqual(json.loads(payload)["details"]["retry_after_s"], 12.5)
+
+    def test_capability_details_name_the_capability(self) -> None:
+        payload, _ = E.failure(TrackerError(ErrorClass.CAPABILITY, "gated",
+                                            details={"capability": "blockedBy",
+                                                     "required_plan": "premium"}))
+        d = json.loads(payload)["details"]
+        self.assertEqual(d["capability"], "blockedBy")
+        self.assertEqual(d["required_plan"], "premium")
+
+    def test_conflict_details_carry_slot_and_candidates(self) -> None:
+        payload, _ = E.failure(TrackerError(ErrorClass.CONFLICT, "ambiguous",
+                                            details={"normalized": "in_progress",
+                                                     "candidates": [{"id": "a"}, {"id": "b"}]}))
+        d = json.loads(payload)["details"]
+        self.assertEqual(d["normalized"], "in_progress")
+        self.assertEqual(len(d["candidates"]), 2)
 
     def test_probe_is_distinct_from_degraded(self) -> None:
         """A failed re-probe must not read as a capability change."""

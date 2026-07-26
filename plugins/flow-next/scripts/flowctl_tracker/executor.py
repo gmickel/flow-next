@@ -12,7 +12,9 @@ explosion into a `TrackerError`.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -21,10 +23,20 @@ from urllib.parse import urlparse
 
 from .classify import classify, malformed_body
 from .credentials import Credential, redact, resolve
-from .types import (BACKOFF_CAP_S, MAX_RETRIES, CredentialPolicy, ErrorClass,
-                    Request, Response, TrackerError)
+from .types import (BACKOFF_CAP_S, CONCURRENCY_CAP, MAX_RETRIES, CredentialPolicy,
+                    ErrorClass, Request, Response, TrackerError)
 
 Result = Union[Response, TrackerError]
+
+#: The cap is enforced HERE, at the shared boundary, because a module constant
+#: that nothing acquires is documentation, not a bound. Adapters get bounded
+#: concurrency by construction rather than by remembering to ask for it.
+_SLOTS = threading.BoundedSemaphore(CONCURRENCY_CAP)
+
+
+def concurrency_slots_available() -> int:
+    """Test seam: how many transports may still start."""
+    return _SLOTS._value  # noqa: SLF001 - deliberate introspection for tests
 
 
 class Executor(Protocol):
@@ -65,15 +77,22 @@ def _http(req: Request, cred: Optional[Credential], verify_tls: bool) -> Result:
     headers = dict(req.headers)
     _attach(req, headers, cred)
     started = time.monotonic()
-    ctx = None
+    handlers: list = [_NoRedirect]
     if not verify_tls:
         import ssl
 
-        ctx = ssl._create_unverified_context()  # noqa: S323 - opt-in, recorded by caller
-    opener = urllib.request.build_opener(_NoRedirect)
-    r = urllib.request.Request(req.url_or_argv, data=req.body, headers=headers, method=req.method)
+        # `OpenerDirector.open()` takes no `context` kwarg - it must be installed
+        # on an HTTPSHandler. Passing it to open() raises TypeError, which is
+        # exactly how the opt-out was broken.
+        handlers.append(urllib.request.HTTPSHandler(context=ssl._create_unverified_context()))  # noqa: S323
     try:
-        with opener.open(r, timeout=req.timeout_s, context=ctx) if ctx else opener.open(r, timeout=req.timeout_s) as resp:
+        # Request construction is INSIDE the try: a malformed persisted URL or a
+        # non-str target raises here, and the contract says this function returns
+        # a TrackerError rather than letting an exception escape.
+        opener = urllib.request.build_opener(*handlers)
+        r = urllib.request.Request(req.url_or_argv, data=req.body, headers=headers,
+                                   method=req.method)
+        with opener.open(r, timeout=req.timeout_s) as resp:
             return Response(resp.status, dict(resp.headers), resp.read(), time.monotonic() - started)
     except _Redirect as exc:
         same_host = urlparse(exc.url).netloc == urlparse(req.url_or_argv).netloc
@@ -87,11 +106,28 @@ def _http(req: Request, cred: Optional[Credential], verify_tls: bool) -> Result:
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         return TrackerError(ErrorClass.TRANSPORT, redact(str(exc)), subtype="timeout",
                             auto_retryable=True)
+    except (ValueError, TypeError) as exc:
+        return TrackerError(ErrorClass.INVALID_INPUT, redact(f"bad request target: {exc}"),
+                            subtype="construction")
+
+
+#: `gh`/`glab` surface the upstream status in their diagnostics ("HTTP 401",
+#: "status code 429"). Without this the CLI route cannot be classified at all.
+_CLI_STATUS_RE = re.compile(rb"(?:HTTP|status(?:\s+code)?)[^0-9]{0,8}([1-5][0-9]{2})", re.I)
 
 
 def _cli(req: Request, verify_tls: bool) -> Result:
     """CLI route. `timeout_s` is a TOTAL process deadline here - `gh`/`glab`
     expose no timeout flag of their own."""
+    if not verify_tls:
+        # gh/glab expose no TLS-verification flag. Silently ignoring the opt-out
+        # would claim a guarantee the route cannot honour.
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"sslVerify=false is not supported on the {req.provider} CLI route; "
+            "use the HTTP route or restore TLS verification",
+            subtype="tls_unsupported",
+        )
     started = time.monotonic()
     try:
         # No shell. Body goes on stdin, never argv, so a body containing shell
@@ -114,8 +150,16 @@ def _cli(req: Request, verify_tls: bool) -> Result:
         idx = min((i for i in (out.find(b"{"), out.find(b"[")) if i != -1), default=-1)
         if idx > 0:
             out = out[idx:]
-    status = 200 if proc.returncode == 0 else 400
-    return Response(status, {}, out or (proc.stderr or b""), elapsed)
+    if proc.returncode == 0:
+        return Response(200, {}, out, elapsed)
+    # A non-zero exit collapsed to a synthetic 400 made every CLI failure
+    # `invalid_input` and left the classifier's auth / rate-limit / licence /
+    # 5xx branches unreachable on the ordinary CLI route. `gh` and `glab` both
+    # print the upstream status, so extract it and classify on the real thing.
+    diag = (proc.stderr or b"") + b"\n" + (proc.stdout or b"")
+    m = _CLI_STATUS_RE.search(diag)
+    status = int(m.group(1)) if m else 400
+    return Response(status, {}, diag.strip() or b"", elapsed)
 
 
 def execute(
@@ -134,7 +178,8 @@ def execute(
 
     attempt = 0
     while True:
-        raw = _cli(request, verify_tls) if is_cli else _http(request, cred, verify_tls)
+        with _SLOTS:
+            raw = _cli(request, verify_tls) if is_cli else _http(request, cred, verify_tls)
         if isinstance(raw, TrackerError):
             err = raw
         else:
