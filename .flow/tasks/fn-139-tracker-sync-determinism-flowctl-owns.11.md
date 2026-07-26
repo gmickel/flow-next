@@ -1,19 +1,21 @@
 ---
-satisfies: [R16]
+satisfies: [R37]
 ---
-# fn-139-tracker-sync-determinism-flowctl-owns.11 DEFERRED: Jira Data Center custom-key smoke (needs DC instance)
+# fn-139-tracker-sync-determinism-flowctl-owns.11 flow-next.dev docs-site update (same workstream)
 
 ## Description
-**Deferred. Blocks nothing. Stays `todo` until its prerequisite exists.**
+Update `~/work/flow-next.dev` in the same workstream, per the repo's standing downstream rule. This is a user-facing command and behavior change, so in-repo docs alone are insufficient.
 
-Jira Cloud enforces uppercase-alphanumeric project keys, max 10 characters, so it **cannot reproduce** a custom Data Center key like `MY_PROJECT-7` or any key over 10 chars. That is the display-only path that produced a P1 in PR #241 (an unmintable identifier looping forever because the issue already existed), and it is the one adapter behavior in this spec implemented from prose rather than measurement.
+Pages identified by the docs-gap scout: `teams/tracker-sync.mdx` (the transport-ladder narrative is the most user-facing statement that becomes wrong), `teams/collaboration.mdx`, `flowctl/commands.mdx`, `flowctl/cli-reference.mdx`, `flowctl/configuration.mdx` (new `tracker.resolved` block), `reference/glossary.mdx`, `skills/pilot.mdx`, `skills/sync.mdx`, `autonomous/land.mdx`, plus a `releases/changelog.mdx` entry at release time.
 
-**Prerequisite:** a reachable Jira Data Center / Server instance with a custom-key project.
+Commit separately in the flow-next.dev repo.
 
 ## Acceptance
-- [ ] Oracle: minting from `MY_PROJECT-7` links display-only, and a rejected mint degrades to flow-first + attach rather than looping
-- [ ] The `unverified` marker is removed from code comment and spec once measured
-- [ ] If the prerequisite never materializes, the marker STAYS and this task stays open - it is never closed by assertion
+- [ ] No docs-site page still teaches runtime transport-ladder reasoning
+- [ ] `flowctl/configuration.mdx` documents `tracker.resolved` incl. capabilities
+- [ ] New `flowctl tracker` verbs documented with the result envelope and class enum
+- [ ] `pnpm build` green (75+ pages)
+- [ ] Committed separately in the flow-next.dev repo
 
 ## Done summary
 TBD
