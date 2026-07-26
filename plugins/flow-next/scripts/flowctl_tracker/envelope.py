@@ -28,6 +28,24 @@ def success(data: Any, *, degraded: Optional[dict] = None,
     }, sort_keys=True), 0
 
 
+def _scrub(obj: Any) -> Any:
+    """Redact every string reachable in an outbound payload, at any depth.
+
+    Redacting only `err.message` was a hole with a concrete exploit: a provider
+    echoes the credential back, the classifier files it under
+    `conflict.candidates` or a capability payload, and `details` serialized it
+    verbatim. The keys that carry provider text are exactly the ones a caller is
+    meant to act on, so they cannot be excluded.
+    """
+    if isinstance(obj, str):
+        return redact(obj)
+    if isinstance(obj, dict):
+        return {k: _scrub(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_scrub(v) for v in obj]
+    return obj
+
+
 def _details_for(err: TrackerError) -> Optional[dict]:
     """Typed variant keyed by class - NOT free-form.
 
@@ -61,14 +79,16 @@ def failure(err: TrackerError, *, retryable: Optional[bool] = None) -> tuple[str
         # Distinct from `auto_retryable`, which governs the executor's internal
         # retry. This answers a different question: would re-invoking help?
         "retryable": bool(err.auto_retryable if retryable is None else retryable),
-        "details": _details_for(err),
+        "details": _scrub(_details_for(err)),
     }
     return json.dumps(payload, sort_keys=True), EXIT_CODES[err.cls]
 
 
 def emit(payload_and_code: tuple[str, int], *, note: Optional[str] = None) -> int:
     if note:
-        print(note, file=sys.stderr)
+        # stderr is not a safe channel for an unredacted note: it is captured in
+        # CI logs and Ralph receipts exactly like stdout.
+        print(redact(note), file=sys.stderr)
     payload, code = payload_and_code
     print(payload)
     return code

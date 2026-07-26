@@ -769,3 +769,99 @@ class Envelope(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ErrorEnvelopeRedactsEveryOutboundString(unittest.TestCase):
+    """Round-6 redaction covered `error` only, leaving two live channels open."""
+
+    def setUp(self) -> None:
+        self._saved = set(CR._SEEN)
+        CR._remember("s3cret-token-value")
+        self.addCleanup(lambda: (CR._SEEN.clear(), CR._SEEN.update(self._saved)))
+
+    def test_nested_details_are_redacted(self) -> None:
+        """A provider that echoes the token back lands in `conflict.candidates`."""
+        err = TrackerError(
+            ErrorClass.CONFLICT, "conflict",
+            details={"normalized": "x",
+                     "candidates": [{"why": "rejected for s3cret-token-value"}]},
+        )
+        payload, _ = E.failure(err)
+        self.assertNotIn("s3cret-token-value", payload)
+
+    def test_every_typed_variant_is_covered(self) -> None:
+        for cls, details in (
+            (ErrorClass.CAPABILITY, {"capability": "s3cret-token-value"}),
+            (ErrorClass.EXTERNAL_ACTION_REQUIRED, {"payload": ["s3cret-token-value"]}),
+            (ErrorClass.RATE_LIMITED, {"note": "s3cret-token-value"}),
+        ):
+            with self.subTest(cls=cls):
+                payload, _ = E.failure(TrackerError(cls, "boom", details=details))
+                self.assertNotIn("s3cret-token-value", payload)
+
+    def test_stderr_note_is_redacted(self) -> None:
+        """stderr is captured by CI logs and Ralph receipts exactly like stdout."""
+        import io
+        buf = io.StringIO()
+        with mock.patch("sys.stderr", buf), mock.patch("sys.stdout", io.StringIO()):
+            E.emit(E.success({}), note="using s3cret-token-value")
+        self.assertNotIn("s3cret-token-value", buf.getvalue())
+
+
+class LinearBackoffUsesBucketResetHeaders(unittest.TestCase):
+    """Linear sends no Retry-After - only per-bucket epoch-MILLISECOND resets."""
+
+    @staticmethod
+    def _resp(headers):
+        return resp(200, b'{"errors":[{"extensions":{"code":"RATELIMITED"}}]}', headers)
+
+    def test_each_bucket_is_honoured(self) -> None:
+        import time
+        for bucket in ("requests", "endpoint-requests", "complexity"):
+            with self.subTest(bucket=bucket):
+                reset = (time.time() + 12.0) * 1000.0
+                err = C.classify("linear", self._resp({
+                    f"X-RateLimit-{bucket}-Remaining": "0",
+                    f"X-RateLimit-{bucket}-Reset": str(reset),
+                }))
+                self.assertIs(err.cls, ErrorClass.RATE_LIMITED)
+                self.assertAlmostEqual(err.retry_after_s, 12.0, delta=1.5)
+
+    def test_only_exhausted_buckets_constrain_the_wait(self) -> None:
+        """A bucket with headroom must not delay the retry."""
+        import time
+        now = time.time()
+        err = C.classify("linear", self._resp({
+            "X-RateLimit-Requests-Remaining": "500",
+            "X-RateLimit-Requests-Reset": str((now + 900.0) * 1000.0),
+            "X-RateLimit-Complexity-Remaining": "0",
+            "X-RateLimit-Complexity-Reset": str((now + 8.0) * 1000.0),
+        }))
+        self.assertAlmostEqual(err.retry_after_s, 8.0, delta=1.5)
+
+    def test_no_headers_falls_back_rather_than_raising(self) -> None:
+        err = C.classify("linear", self._resp({}))
+        self.assertIs(err.cls, ErrorClass.RATE_LIMITED)
+        self.assertIsNone(err.retry_after_s)
+
+    def test_github_seconds_reset_is_not_read_as_milliseconds(self) -> None:
+        """GitHub's X-RateLimit-Reset is epoch SECONDS - a shared helper corrupts it."""
+        import time
+        err = C.classify("github", resp(403, b"rate limit", {
+            "x-ratelimit-remaining": "0",
+            "x-ratelimit-reset": str(time.time() + 30.0)}))
+        self.assertIs(err.cls, ErrorClass.RATE_LIMITED)
+        self.assertAlmostEqual(err.retry_after_s, 30.0, delta=2.0)
+
+
+class TlsDowngradeEventIsNotEmittedForRefusedRoutes(unittest.TestCase):
+    """The audit stream must not claim a downgrade that never happened."""
+
+    def test_cli_rejection_emits_no_downgrade_event(self) -> None:
+        events: list[str] = []
+        r = X.execute(Request(provider="github", op="r", method="GET",
+                              url_or_argv=["gh", "api", "x"]),
+                      verify_tls=False, on_event=events.append)
+        self.assertIs(r.cls, ErrorClass.INVALID_INPUT)
+        self.assertEqual(r.subtype, "tls_unsupported")
+        self.assertEqual([e for e in events if "tls-verification-disabled" in e], [])

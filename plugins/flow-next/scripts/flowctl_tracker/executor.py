@@ -274,6 +274,17 @@ def execute(
                 "refusing to disable TLS verification silently",
                 subtype="tls_unrecorded",
             )
+        # Reject the unsupportable route BEFORE announcing a downgrade. Emitting
+        # first made the audit stream claim TLS verification was disabled on a
+        # request that was then refused and never sent - a false entry in the one
+        # record that exists to prove when verification was actually off.
+        if is_cli:
+            return TrackerError(
+                ErrorClass.INVALID_INPUT,
+                f"sslVerify=false is not supported on the {request.provider} CLI route; "
+                "use the HTTP route or restore TLS verification",
+                subtype="tls_unsupported",
+            )
         on_event(f"tls-verification-disabled provider={request.provider} op={request.op}")
 
     attempt = 0

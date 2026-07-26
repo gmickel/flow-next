@@ -124,9 +124,13 @@ def redact(text: str) -> str:
         val = os.environ.get(name)
         if val:
             _SEEN.add(val)
-    # No length floor. An 8-character minimum was a false economy: a short token
-    # is still a token, and "too short to matter" is not a security property.
+    # The 8-character floor was a false economy - a short token is still a token.
+    # A 4-character floor is a different argument and is about CORRECTNESS, not
+    # "too short to matter": no provider here issues a credential under 4 chars,
+    # while a 1-2 char value is an ordinary substring that shreds every message
+    # containing it (a stray `JIRA_PAT=p` turned "in_progress" into
+    # "in_<redacted>rogress" - corrupting the exact field a caller must act on).
     for secret in sorted(_SEEN, key=len, reverse=True):
-        if secret:
+        if secret and len(secret) >= 4:
             out = out.replace(secret, "<redacted>")
     return out

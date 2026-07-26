@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Optional
 
 from .credentials import redact
@@ -51,6 +52,40 @@ def _retry_after(resp: Response) -> Optional[float]:
         return float(v) if v else None
     except (TypeError, ValueError):
         return None
+
+
+_LINEAR_BUCKETS = ("requests", "endpoint-requests", "complexity")
+
+
+def _linear_retry_after(resp: Response) -> Optional[float]:
+    """Linear never sends `Retry-After`; it sends per-bucket reset timestamps.
+
+    Three independent buckets can exhaust (`requests`, `endpoint-requests`, and
+    the complexity budget), each with its own `x-ratelimit-<bucket>-remaining` /
+    `-reset` pair, where reset is **epoch milliseconds**. Falling back to the
+    fixed 1s/2s ladder meant every retry landed inside the same limit window and
+    burned the whole budget without ever waiting long enough to clear it.
+
+    Only an EXHAUSTED bucket constrains us, so the delay is the soonest reset
+    among the buckets whose remaining is zero. `_sleep_backoff` still clamps.
+    """
+    lowered = {str(k).lower(): v for k, v in (resp.headers or {}).items()}
+    waits: list[float] = []
+    now = time.time()
+    for bucket in _LINEAR_BUCKETS:
+        try:
+            remaining = float(lowered[f"x-ratelimit-{bucket}-remaining"])
+            reset_ms = float(lowered[f"x-ratelimit-{bucket}-reset"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if remaining > 0:
+            continue
+        if reset_ms != reset_ms or reset_ms in (float("inf"), float("-inf")):
+            continue
+        waits.append(max(0.0, reset_ms / 1000.0 - now))
+    if waits:
+        return min(waits)
+    return _retry_after(resp)
 
 
 class _Malformed(Exception):
@@ -127,7 +162,7 @@ def _linear(resp: Response) -> Optional[TrackerError]:
         codes = {str((e.get("extensions") or {}).get("code", "")).upper() for e in errs}
         if "RATELIMITED" in codes:
             return TrackerError(ErrorClass.RATE_LIMITED, "linear rate limit (RATELIMITED)",
-                                subtype="graphql_code", retry_after_s=_retry_after(resp),
+                                subtype="graphql_code", retry_after_s=_linear_retry_after(resp),
                                 auto_retryable=True)
         if "AUTHENTICATION_ERROR" in codes:
             return TrackerError(ErrorClass.AUTH, "linear authentication failed",
@@ -137,7 +172,7 @@ def _linear(resp: Response) -> Optional[TrackerError]:
         # and is complexity-based rather than request-count based.
         if "rate limit" in joined or "complexity" in joined:
             return TrackerError(ErrorClass.RATE_LIMITED, "linear rate limit",
-                                subtype="graphql", retry_after_s=_retry_after(resp),
+                                subtype="graphql", retry_after_s=_linear_retry_after(resp),
                                 auto_retryable=True)
         if "authentication" in joined or "unauthorized" in joined:
             return TrackerError(ErrorClass.AUTH, "linear authentication failed",
