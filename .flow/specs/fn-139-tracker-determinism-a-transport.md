@@ -238,6 +238,16 @@ Not verified: the Jira Data Center custom-key path, which Jira Cloud cannot repr
 
 Long synchronous waits (a bounded re-probe, a retry with backoff) must not look like a hang. Every attempt, backoff, scope and probe failure emits a **redacted event on stderr**, while stdout stays exactly one JSON envelope so callers parse without branching.
 
+## Review disposition (owner override, 2026-07-26)
+
+This spec is blessed ready and its plan-review status set to `ship` **by owner decision, not by a reviewer SHIP verdict**. Recorded so nobody later reads it as consensus.
+
+Five rounds of `codex:gpt-5.6-sol:high` review ran. They found and fixed real, verified defects: the package would not ship (installers copy files by name), Jira transition ids are not cacheable (`jira.md:738`), credentials crossed the boundary meant to protect them, separate connect/read timeouts are unachievable with the chosen transports, GitLab's dynamic `plan` sat in a scope a capability refresh may not write, and the executor would have leaked the Linear key to a third-party presigned host.
+
+The final round's remaining findings are **implementation-level** - exhaustive per-provider classifier rows, alias-metadata field names, exact config key paths, stale-lock reclamation internals. The repo's own doctrine is that plans are specs, not implementations, and the "What this spec fixes vs what the implementer decides" section above draws that line explicitly. Each deferred item has a stated rule or default; what is deferred is enumeration, not judgment.
+
+**Risk accepted:** implementation may surface a design gap review did not. If it does, that is a spec amendment, not a silent workaround.
+
 ## Quick commands
 
 New focused modules this spec adds, each named so the work has a completion oracle:
