@@ -326,6 +326,124 @@ class ConcurrencyCap(unittest.TestCase):
         self.assertLessEqual(peak["n"], 4, f"peak concurrency {peak['n']} exceeded the cap of 4")
 
 
+class LinearStructuredCodes(unittest.TestCase):
+    """linear-graphql.md documents extensions.code; message heuristics miss them."""
+
+    def _err(self, code: str, message: str = "something went wrong"):
+        body = json.dumps({"errors": [{"message": message,
+                                       "extensions": {"code": code}}]}).encode()
+        return C.classify("linear", resp(400, body))
+
+    def test_ratelimited_code_over_http_400(self) -> None:
+        e = self._err("RATELIMITED")
+        self.assertIs(e.cls, ErrorClass.RATE_LIMITED)
+        self.assertTrue(e.auto_retryable)
+
+    def test_authentication_error_code(self) -> None:
+        self.assertIs(self._err("AUTHENTICATION_ERROR").cls, ErrorClass.AUTH)
+
+    def test_structured_code_wins_over_generic_message(self) -> None:
+        """A generic message must not demote a structured code to invalid_input."""
+        self.assertIs(self._err("RATELIMITED", "error").cls, ErrorClass.RATE_LIMITED)
+
+    def test_ratelimited_retries_through_execute(self) -> None:
+        body = json.dumps({"errors": [{"message": "e",
+                                       "extensions": {"code": "RATELIMITED"}}]}).encode()
+        calls = {"n": 0}
+
+        def fake(req, cred, verify):
+            calls["n"] += 1
+            return resp(400, body)
+
+        with mock.patch.object(X, "_http", side_effect=fake), mock.patch.object(X.time, "sleep"):
+            X.execute(Request(provider="linear", op="q", method="POST",
+                              url_or_argv="https://api.linear.app/graphql", idempotent=True))
+        self.assertEqual(calls["n"], 3)
+
+
+class RouteEnforcement(unittest.TestCase):
+    def test_gitlab_upload_cannot_use_the_broken_cli_form(self) -> None:
+        e = X.execute(Request(provider="gitlab", op="upload", method="POST",
+                              url_or_argv=["glab", "api", "-F", "file=@x"]))
+        self.assertIs(e.cls, ErrorClass.INVALID_INPUT)
+        self.assertEqual(e.subtype, "forbidden_route")
+
+    def test_gitlab_upload_over_http_is_allowed(self) -> None:
+        with mock.patch.object(X, "_http", return_value=resp(201, b"{}")):
+            r = X.execute(Request(provider="gitlab", op="upload", method="POST",
+                                  url_or_argv="https://gitlab.com/api/v4/projects/1/uploads"))
+        self.assertIsInstance(r, Response)
+
+    def test_ordinary_gitlab_cli_calls_still_work(self) -> None:
+        def fake(argv, **kw):
+            return subprocess.CompletedProcess(argv, 0, b"{}", b"")
+
+        with mock.patch.object(X.subprocess, "run", side_effect=fake):
+            r = X.execute(Request(provider="gitlab", op="read", method="GET",
+                                  url_or_argv=["glab", "api", "x"]))
+        self.assertIsInstance(r, Response)
+
+
+class RedirectPolicy(unittest.TestCase):
+    """Refusing every redirect was too blunt - the rule is about credentials."""
+
+    def _handler(self, authenticated: bool):
+        return X._GuardedRedirect(authenticated)
+
+    def _redirect(self, authenticated: bool, new_host: str):
+        import urllib.request
+
+        req = urllib.request.Request("https://api.example.com/a",
+                                     headers={"Authorization": "Bearer secret"})
+        h = self._handler(authenticated)
+        return h.redirect_request(req, None, 302, "Found", {}, f"https://{new_host}/b")
+
+    def test_cross_host_strips_the_credential(self) -> None:
+        new = self._redirect(True, "cdn.other.com")
+        self.assertIsNotNone(new)
+        self.assertNotIn("Authorization", dict(new.headers))
+
+    def test_same_host_keeps_it(self) -> None:
+        new = self._redirect(True, "api.example.com")
+        self.assertIn("Authorization", dict(new.headers))
+
+    def test_anonymous_cross_host_is_allowed(self) -> None:
+        """A presigned upload has no secret to protect and legitimately redirects."""
+        new = self._redirect(False, "storage.googleapis.com")
+        self.assertIsNotNone(new)
+
+
+class ReadStageFailures(unittest.TestCase):
+    def test_incomplete_read_becomes_a_transport_error(self) -> None:
+        import http.client
+
+        class Boom:
+            status, headers = 200, {}
+            def read(self): raise http.client.IncompleteRead(b"partial")
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        with mock.patch("urllib.request.OpenerDirector.open", return_value=Boom()):
+            r = X.execute(Request(provider="linear", op="q", method="GET",
+                                  url_or_argv="https://api.linear.app/graphql"))
+        self.assertIsInstance(r, TrackerError)
+        self.assertIs(r.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(r.subtype, "read")
+
+
+class GitlabUploadCredential(unittest.TestCase):
+    def test_http_upload_route_is_authenticated_without_env_token(self) -> None:
+        """glab authenticates its own CLI calls, but the mandatory HTTP upload
+        route would otherwise go out unauthenticated."""
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(CR, "_glab_config_token", return_value="glpat-fromconfig"):
+            cred = CR.resolve("gitlab")
+        self.assertIsNotNone(cred)
+        h = {}
+        cred.attach(h)
+        self.assertEqual(h["PRIVATE-TOKEN"], "glpat-fromconfig")
+
+
 class Envelope(unittest.TestCase):
     def test_success_shape(self) -> None:
         payload, code = E.success({"id": 1})

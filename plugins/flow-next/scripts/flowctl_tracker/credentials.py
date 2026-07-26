@@ -29,6 +29,24 @@ class Credential:
         return "<Credential redacted>"
 
 
+def _glab_config_token() -> Optional[str]:
+    """Read glab's stored token. Not a keyring - glab's own config file."""
+    import re
+
+    for candidate in (
+        os.path.expanduser("~/.config/glab-cli/config.yml"),
+        os.path.expanduser("~/Library/Application Support/glab-cli/config.yml"),
+    ):
+        try:
+            with open(candidate, encoding="utf-8") as fh:
+                m = re.search(r"^\s+token:\s*(\S+)", fh.read(), re.M)
+            if m:
+                return m.group(1)
+        except OSError:
+            continue
+    return None
+
+
 def _basic(user: str, token: str) -> str:
     import base64
 
@@ -46,7 +64,10 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None) -> Optional[Cre
         return Credential(lambda h: h.__setitem__("Authorization", f"Bearer {tok}")) if tok else None
 
     if provider == "gitlab":
-        tok = os.environ.get("GITLAB_TOKEN")
+        # Ordinary calls go through `glab`, which authenticates itself - but the
+        # upload route MUST use HTTP, and returning None there would send it
+        # unauthenticated. So fall back to glab's own stored token.
+        tok = os.environ.get("GITLAB_TOKEN") or _glab_config_token()
         return Credential(lambda h: h.__setitem__("PRIVATE-TOKEN", tok)) if tok else None
 
     if provider == "linear":

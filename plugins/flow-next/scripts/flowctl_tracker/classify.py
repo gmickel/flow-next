@@ -88,6 +88,18 @@ def _gitlab(resp: Response) -> Optional[TrackerError]:
 def _linear(resp: Response) -> Optional[TrackerError]:
     errs = _graphql_errors(resp)
     if errs:
+        # STRUCTURED CODES FIRST. `linear-graphql.md` documents
+        # `errors[].extensions.code` of RATELIMITED (over HTTP 400, not 429) and
+        # AUTHENTICATION_ERROR. Message-text heuristics miss both whenever the
+        # message is generic, which silently demotes them to invalid_input.
+        codes = {str((e.get("extensions") or {}).get("code", "")).upper() for e in errs}
+        if "RATELIMITED" in codes:
+            return TrackerError(ErrorClass.RATE_LIMITED, "linear rate limit (RATELIMITED)",
+                                subtype="graphql_code", retry_after_s=_retry_after(resp),
+                                auto_retryable=True)
+        if "AUTHENTICATION_ERROR" in codes:
+            return TrackerError(ErrorClass.AUTH, "linear authentication failed",
+                                subtype="graphql_code")
         joined = " ".join(str(e.get("message", "")) for e in errs).lower()
         # MEASURED: Linear rate-limits via a GraphQL error, often over HTTP 200,
         # and is complexity-based rather than request-count based.

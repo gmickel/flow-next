@@ -12,6 +12,7 @@ explosion into a `TrackerError`.
 from __future__ import annotations
 
 import json
+import http.client
 import re
 import subprocess
 import threading
@@ -48,22 +49,31 @@ def _sleep_backoff(attempt: int, retry_after: Optional[float]) -> None:
     time.sleep(min(delay, BACKOFF_CAP_S))
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Never follow a redirect while holding a credential.
+class _GuardedRedirect(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but never carry a credential to a NEW host.
 
-    A cross-host redirect carrying an Authorization header hands the secret to
-    whatever host the first one names. Rather than try to decide which hops are
-    safe, the executor refuses to follow any redirect implicitly and surfaces it.
+    Refusing every redirect was too blunt: presigned uploads and CDN-backed
+    asset fetches legitimately redirect, and an anonymous request has no secret
+    to protect. The rule is about credentials, not about redirects:
+
+      * no credential attached -> follow normally
+      * same host              -> follow, credential may stay
+      * cross host WITH a credential -> strip it before following
     """
 
+    def __init__(self, authenticated: bool) -> None:
+        super().__init__()
+        self._authenticated = authenticated
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
-        raise _Redirect(newurl)
-
-
-class _Redirect(Exception):
-    def __init__(self, url: str) -> None:
-        super().__init__(url)
-        self.url = url
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        if self._authenticated and urlparse(newurl).netloc != urlparse(req.full_url).netloc:
+            for h in list(new.headers):
+                if h.lower() in {"authorization", "private-token", "x-api-key"}:
+                    del new.headers[h]
+        return new
 
 
 def _attach(req: Request, headers: dict[str, str], cred: Optional[Credential]) -> None:
@@ -77,7 +87,9 @@ def _http(req: Request, cred: Optional[Credential], verify_tls: bool) -> Result:
     headers = dict(req.headers)
     _attach(req, headers, cred)
     started = time.monotonic()
-    handlers: list = [_NoRedirect]
+    authenticated = (req.credential_policy is CredentialPolicy.PROVIDER_AUTH
+                     and cred is not None)
+    handlers: list = [_GuardedRedirect(authenticated)]
     if not verify_tls:
         import ssl
 
@@ -94,15 +106,13 @@ def _http(req: Request, cred: Optional[Credential], verify_tls: bool) -> Result:
                                    method=req.method)
         with opener.open(r, timeout=req.timeout_s) as resp:
             return Response(resp.status, dict(resp.headers), resp.read(), time.monotonic() - started)
-    except _Redirect as exc:
-        same_host = urlparse(exc.url).netloc == urlparse(req.url_or_argv).netloc
-        return TrackerError(
-            ErrorClass.TRANSPORT,
-            f"refused to follow {'same' if same_host else 'cross'}-host redirect while authenticated",
-            subtype="redirect", auto_retryable=False, details={"location": exc.url},
-        )
     except urllib.error.HTTPError as exc:
         return Response(exc.code, dict(exc.headers or {}), exc.read() or b"", time.monotonic() - started)
+    except http.client.HTTPException as exc:
+        # `resp.read()` can raise IncompleteRead / HTTPException AFTER the status
+        # line is parsed. Uncaught, these broke the "never raises" contract.
+        return TrackerError(ErrorClass.TRANSPORT, redact(f"incomplete response: {exc}"),
+                            subtype="read", auto_retryable=True)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         return TrackerError(ErrorClass.TRANSPORT, redact(str(exc)), subtype="timeout",
                             auto_retryable=True)
@@ -162,6 +172,25 @@ def _cli(req: Request, verify_tls: bool) -> Result:
     return Response(status, {}, diag.strip() or b"", elapsed)
 
 
+#: Operations that MUST NOT use the CLI route, per provider. `glab api -F file=@`
+#: produces invalid multipart (measured), so GitLab uploads have no permitted CLI
+#: path - documenting that was not enough, because nothing stopped an adapter
+#: from passing argv anyway.
+_CLI_FORBIDDEN = {("gitlab", "upload")}
+
+
+def _validate_route(req: Request) -> Optional[TrackerError]:
+    is_cli = isinstance(req.url_or_argv, (list, tuple))
+    if is_cli and (req.provider, req.op) in _CLI_FORBIDDEN:
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"{req.provider} '{req.op}' must use the HTTP route; the CLI form is "
+            "known-broken (glab api -F produces invalid multipart)",
+            subtype="forbidden_route",
+        )
+    return None
+
+
 def execute(
     request: Request,
     *,
@@ -170,6 +199,9 @@ def execute(
     on_event: Optional[Callable[[str], None]] = None,
 ) -> Result:
     """Run one request. Returns `Response | TrackerError` - never raises."""
+    route_err = _validate_route(request)
+    if route_err is not None:
+        return route_err
     cred = resolve(request.provider, auth_scheme=auth_scheme)
     is_cli = isinstance(request.url_or_argv, (list, tuple))
     if not verify_tls and on_event:
