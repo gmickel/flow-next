@@ -116,30 +116,77 @@ Linear's normalization, measured: `_italic_` to `*italic*`, `[l](url)` to `[l](<
 ## API Contracts
 <!-- scope: technical -->
 
-New flowctl surface, all verb-shaped and destination-aware:
+### Identifier semantics (every verb states which it takes)
+
+Three id kinds exist and were previously conflated:
+
+| kind | example | used by |
+|---|---|---|
+| **spec id** | `fn-1-slug`, `wor-17-slug` | spec-aware verbs (anything writing local state or a receipt) |
+| **durable tracker id** | GitHub `node_id`, GitLab global `id`, Linear UUID, Jira issue id | the dedupe key stored in `tracker.id` |
+| **display identifier** | `#1`, `group/project#12`, `FLOW-63`, `SCRUM-1` | human-facing, and the ONLY thing Linear MCP returns |
+
+Verbs are split into two groups, because conflating them is what made the receipt contract incoherent:
+
+**Wire verbs** - take a durable tracker id, touch no local state, write no receipt:
 
 ```
-flowctl tracker resolve [--refresh] [--json]        # write/refresh tracker.resolved
-flowctl tracker create --title T --body-file F [--json]
-flowctl tracker read <id> [--json]
-flowctl tracker update <id> [--title T] [--body-file F]
-flowctl tracker comment <id> --body-file F
-flowctl tracker comment-list <id> [--json]
-flowctl tracker comment-update <comment-id> --body-file F
-flowctl tracker comment-delete <comment-id>
-flowctl tracker status <id> --to <normalized-status>
-flowctl tracker label <id> [--add L]... [--remove L]...
-flowctl tracker attach <id> --file F                # capability-gated
-flowctl tracker attach-get <attachment-id> --out F
-flowctl tracker relate <id> --blocked-by <other>    # capability-gated, degrades
-flowctl tracker list-open [--json]
+flowctl tracker wire read <tracker-id>
+flowctl tracker wire update <tracker-id> [--title T] [--body-file F]
+flowctl tracker wire comment-add <tracker-id> --body-file F
+flowctl tracker wire comment-list <tracker-id>
+flowctl tracker wire comment-update <tracker-id> <comment-id> --body-file F   # parent id required: GitLab + Jira need both
+flowctl tracker wire comment-delete <tracker-id> <comment-id>
+flowctl tracker wire label <tracker-id> [--add L]... [--remove L]...
+flowctl tracker wire assign <tracker-id> [--add U]... [--remove U]...
+flowctl tracker wire attach <tracker-id> --file F
+flowctl tracker wire attach-get <attachment-id> --out F
+flowctl tracker wire list-open
 ```
 
-Every command:
-- resolves transport from config + env, never re-asks
-- returns structured JSON with a stable error shape (`{"success":false,"error":...,"class":...}`) so the skill can adjudicate rather than parse prose
-- writes a receipt, exactly as today
-- is a no-op returning `class: "inactive"` when the bridge is inactive
+**Spec-aware verbs** - take a spec id, write local state and an event-tagged receipt:
+
+```
+flowctl tracker resolve [--refresh] [--scope destination|capabilities|transitions|states]
+flowctl tracker create <spec-id> --title T --body-file F [--event E]
+flowctl tracker status <spec-id> --to <normalized> [--event E]      # embeds the fn-66 evidence gate
+flowctl tracker relate <spec-id> --blocked-by <other-spec-id>       # resolves both ends locally
+flowctl tracker sync-body <spec-id>                                 # write + readback + paired merge-base, one transaction
+flowctl tracker persist-external <spec-id> --identifier I [--id D] [--url U] --source mcp
+```
+
+`persist-external` is the R18 verb. It is spec-aware because it must write `tracker.id` and a receipt.
+
+### Result envelope
+
+Every command emits one JSON object. Success:
+
+```
+{"success": true, "data": {...}, "degraded": null | {"capability": "...", "from": "...", "to": "...", "reason": "..."}}
+```
+
+Failure:
+
+```
+{"success": false, "class": "<enum>", "error": "<human string>", "retryable": true|false}
+```
+
+`class` enum, fixed and exhaustive: `inactive`, `unresolved`, `stale_id`, `auth`, `rate_limited`, `transport`, `not_found`, `capability`, `conflict`, `invalid_input`. Exit code maps 1:1 to class so callers branch without parsing prose. **Degradation is a structured field, never a sentence in the receipt note.**
+
+### Receipt ownership
+
+Wire verbs write **no** receipt (they have no spec id, and `sync receipt` requires one - this is the existing constraint that made "every command writes a receipt" incoherent). Spec-aware verbs write one, event-tagged, exactly as today. `create` keeps fn-134's pre-spec **recovery record** path rather than a receipt, because at create time no local spec exists yet.
+
+## Non-functional requirements
+<!-- scope: technical -->
+
+- **Module boundary.** Adapters do NOT land in `flowctl.py` (already 32,919 lines). A new `plugins/flow-next/scripts/tracker/` package holds one module per adapter plus a shared typed transport/result layer. `flowctl.py` gains only argparse wiring and dispatch.
+- **Injected executor.** Adapters call an injected request executor, not `subprocess.run` directly. That seam IS the fake-transport used by tests, defined in task .1 rather than retrofitted in .6.
+- **Subprocess safety.** No shell. Content-bearing arguments (bodies, comments, titles) go via stdin or a file, never argv - the existing `flowctl.py` prompt-injection lesson applies directly to issue bodies.
+- **Secrets.** Credentials are read from env/Keychain per run, never persisted into `tracker.resolved`, never logged, never included in a receipt or error string.
+- **Bounded everything.** Explicit timeout per request, bounded retry with backoff on `rate_limited` only, and a concurrency cap. Linear's limit is complexity-based (`x-ratelimit-complexity-*`), GitHub 5000/hr, Jira 350 - the adapter reads its own headers.
+- **TLS.** Verification on by default; the existing `sslVerify` opt-out stays explicit and per-tracker.
+- **Batching is OUT of scope for this spec.** It was cited as a speed benefit with no API and no acceptance criterion. Removed rather than left as an unfalsifiable claim; it can be a follow-up once the verb surface is stable.
 
 ## Edge Cases & Constraints
 <!-- scope: technical -->
@@ -164,36 +211,47 @@ Each of these is a measured behavior, not a hypothetical:
 - **R1:** A `flowctl tracker` command group exists implementing create / read / update / comment CRUD / status / label / list-open against all four adapters, with a stable JSON result shape and a structured error class. Each command writes a receipt exactly as the current skill path does.
 - **R2:** `tracker.resolved` is written by the discovery ceremony and carries `destination` + `capabilities` + `resolvedAt`. Contents per tracker are at least the fields in the Architecture table.
 - **R3:** Status writes consume the resolved ids. A Jira status change performs **one** request (the transition), not a discover-then-transition pair, when the cache is warm.
-- **R4:** Resolve-on-miss: a stale or rejected resolved id triggers one re-resolution and retry, persists the new value, and never hard-fails the operation. `flowctl tracker resolve --refresh` re-runs resolution explicitly.
+- **R4:** Cache state transitions are a **single explicit table**, not four prose rules that contradict each other. Every row states trigger, action, retry budget, and whether a human is involved:
+
+  | state | trigger | action | human? |
+  |---|---|---|---|
+  | absent block | post-upgrade first run | explicit one-time backfill via `tracker resolve`; capability-gated verbs return `class: unresolved`, never a false `false` | no |
+  | absent field | partial prior resolution | scoped re-resolve of that field only (`--scope`) | no |
+  | stale value | write rejected with a stale-id class | one scoped re-resolve + one retry, then persist | no |
+  | capability downgrade | write rejected `capability` (e.g. trial expired) | degrade, emit structured `degraded` field, leave existing relations intact | no |
+  | capability upgrade | `resolvedAt` older than `capabilityTtlHours` (default 24) checked on any spec-aware verb | background re-probe; no user-visible stall | no |
+  | ambiguous Linear state | cached `stateId` gone AND >1 live state shares its `type` | `class: conflict`, surface both candidates | **yes** |
+  | auth failure | 401/403 | `class: auth`, no retry, no degradation (do not misread as a tier downgrade) | yes |
+  | retry exhausted | 2 scoped re-resolves failed | `class: unresolved`, operation fails cleanly, cache untouched | yes |
+
+  The GitLab tier probe specifically must not read a transient 403 as a downgrade: only a `capability`-classed rejection from a write flips a capability.
+
 - **R5:** `capabilities` gates capability-dependent verbs. `attach` on GitHub, and `relate --blocked-by` on GitLab Free, degrade with the degradation named in the receipt rather than erroring opaquely.
 - **R6:** GitLab tier is detected via `GET /namespaces/:id -> plan` and recorded. Dependency projection uses `is_blocked_by` on Premium and above, `relates_to` on Free.
 - **R7:** Jira uses `apiVersion: 2` for body operations on Cloud and Data Center. A plain-string body round-trips byte-exact; the ADF conversion for v3 readers is Jira's own and is not performed by flow-next.
-- **R8:** The merge base is seeded from the **post-write readback**, and body comparison normalizes the measured per-adapter mutations (Linear description rewriting, GitLab trailing-newline stripping). A no-op reconcile against an unmodified issue produces **no** diff on any of the four. This is asserted by test, per adapter.
+- **R8:** **Server readback is canonical.** The merge base is seeded from what the tracker returns after a write, never from what we sent. Client-side normalization is limited to a short, explicitly-enumerated set of stable transformations (trailing-newline stripping) and does NOT attempt to predict Linear's markdown rewriting - that is unsafe around code fences and escapes, and readback already supplies the authoritative body. `tracker sync-body <spec-id>` performs write + readback + paired merge-base as **one transaction**; a partial failure leaves the prior merge base untouched, asserted by test.
 - **R9:** Comment sync filters GitLab system notes (`system: true`).
 - **R10:** Attachments upload AND retrieve byte-identically on Jira, Linear and GitLab, asserted by test with a fake transport. GitHub records `attachments: false` and the commit-and-link workaround documents the expiring-token caveat for private repos.
-- **R11:** The adapter reference files shrink to **transport-shape documentation only**. No `gh api` / `glab api` / `curl` invocation remains in skill prose as an instruction to execute. Measured: the tracker-sync prose surface drops by at least 150,000 characters.
-- **R12:** The skill retains and documents exactly four judgment surfaces: the MCP rung, the discovery ceremony, conflict adjudication, and comment content synthesis. Each is named in `SKILL.md` with why it cannot be deterministic.
+- **R11:** The adapter references shrink to transport-shape documentation. Measured **mechanically**, not by eye: a test asserts zero matches for an executable-invocation pattern (`gh api`, `glab api`, `curl -sS`, `POST /rest/api`) inside bash fences across an enumerated file set, and asserts the summed character count of that file set is at least 150,000 below the pre-change baseline recorded in the test itself.
+- **R12:** The skill retains and documents exactly **five** judgment surfaces, each named in `SKILL.md` with why it cannot be deterministic: the MCP rung, the discovery ceremony, 3-way body-merge conflict adjudication, comment content synthesis, and **recovery routing from a structured flowctl error**. The earlier "exactly four" was wrong - the architecture table already listed recovery as agentic. Status-sync's deadlock fallback and unmapped-state handling are explicitly assigned: deterministic outcomes are enumerated in the who-wins ladder, and anything left genuinely ambiguous routes to the recovery surface rather than being silently defaulted.
 - **R13:** Every behavior in Edge Cases is covered by a test against a fake transport, including the no-dedup reality and the pre-create window being open.
 - **R14:** The bridge-inactive path is byte-for-byte unchanged: one config read, no adapter reference loaded, no new output. Asserted by the existing reached-path harness.
 - **R15:** Lifecycle touchpoints call `flowctl tracker <verb>` directly. The `tracker-runner` subagent dispatch and the per-skill gating-predicate prose are removed, since a subprocess call needs neither.
-- **R16:** The Jira Data Center custom-key path (`MY_PROJECT-7`, >10 chars) is implemented from existing prose and **explicitly marked unverified** in both code comment and spec, with a smoke task gated on a DC instance becoming available.
-
-### Added after research (scout fan-out, 2026-07-26)
-
+- **R16:** The Jira Data Center custom-key path (`MY_PROJECT-7`, >10 chars) is implemented from existing prose and marked unverified in code comment and spec. A **deferred smoke task exists** (task .11) carrying its prerequisite (a reachable DC/Server instance - Jira Cloud enforces uppercase-alphanumeric max-10 keys and CANNOT reproduce it) and its oracle (mint from `MY_PROJECT-7` succeeds display-only, links, and never loops on a rejected mint). It stays `todo` and blocks nothing.
 - **R17:** fn-57's **R3 is explicitly superseded.** That criterion states "flowctl gains no tracker-mutation code - all status / comment / link mutations stay agent-driven". fn-139 reverses it deliberately. The reversal is recorded in this spec, and the three in-code assertions of the old rule are updated rather than left contradicting the shipped behavior: `flowctl.py` `cmd_sync_check` (the "NO tracker-mutation code lives here or anywhere in flowctl (R3)" docstring), the `list-dep-relations` transport-blind docstring, and `docs/tracker-sync.md`'s "flowctl has no tracker transport" line.
-- **R18:** A named verb persists an **externally-performed** write: the MCP rung has the agent call the tool, so flowctl must be able to record `{id, identifier, url}` it did not fetch itself. This closes a window **worse than pre-create**: there, nothing was created; here the remote issue exists and, without a persist verb, nothing records it - no recovery record, no back-reference, no resume. On persist failure the run surfaces identifier + url for manual reconciliation and writes a warning receipt.
+- **R18:** `flowctl tracker persist-external <spec-id>` records a write the agent performed on a rung flowctl cannot reach (the MCP rung). **Linear MCP returns the display identifier only, never the durable UUID** (`linear-mcp.md:100`), so the verb accepts an identifier-only call and then resolves the UUID via the GraphQL rung before persisting. If GraphQL is unavailable, it persists an **identifier-only linked state**, marks it as such, and a later reconcile completes it - it never fabricates or omits `tracker.id` silently. This closes a window **worse than pre-create**: there nothing was created; here the remote issue exists and without this verb nothing records it. On persist failure the run surfaces identifier + url and writes a warning receipt for manual reconciliation.
 - **R19:** `tracker.resolved` writes are **atomic and lock-protected**, reusing the existing `atomic_write_json` and `cross_process_lock` primitives in flowctl.py. Two workers resolving concurrently must not produce a torn or clobbered cache. A partially-resolved block is never persisted with a `resolvedAt` stamp that would make it look warm.
-- **R20:** "Miss" is disambiguated: **absent block** (never resolved - the post-upgrade migration case), **absent field** within a present block, and **stale value** (present but rejected) are three distinct paths. Existing `perTracker`-only users get an explicit one-time backfill, not an implicit mid-operation resolve. A capability-gated verb run before any resolution has happened must not read an absent cache as `false`.
-- **R21:** Capability re-probe runs on the **upgrade** path, not only on rejection. A repo that moves Free -> Premium must not stay degraded to `relates_to` indefinitely with no signal. Conversely a trial expiring mid-project (`blockedBy` true -> false) degrades with the change named in the receipt, and previously-created relations are left intact rather than rewritten.
-- **R22:** Invalidation is **scoped**. A rejected Jira transition re-resolves the transitions sub-map, not the whole destination block - otherwise the refresh cost defeats R3's saving.
-- **R23:** A cached Linear `stateId` that no longer exists (board edited, state renamed or removed) **re-surfaces the ambiguity to a human** rather than silently retrying into whatever GraphQL resolves. The `type: started` tiebreak was a human decision at discovery; it stays one.
 - **R24:** `flowctl tracker status` **embeds fn-66's merge-evidence gate** rather than forwarding the caller's requested status: terminal `Done` only on a GitHub-confirmed MERGED, `In Review` on an open PR, never terminal from completion-review alone.
 - **R25:** `flowctl tracker relate` reproduces **fn-64's full contract**, not just the verb shape: the `depRelations` provenance ledger, additive-only writes, the completed-blocker rule, never-clobber-on-collision (defer + queue), and the `<!-- flow:deps -->` fenced block's exclusion from body-merge divergence hashing.
 - **R26:** The **paired merge-base snapshot invariant** is preserved: both halves written at one sync point, atomically, never per-flag. This is pre-existing hard-won behavior (memory: `paired-snapshot-setter-must-write-both`) and a deterministic rewrite is exactly where it could regress silently.
 - **R27:** The status **who-wins ladder keeps collision cases first**. Its branch order carries correctness dependencies (memory: `who-wins-ladder-must-check-the-...`); a port that reorders them lets an earlier rule win silently.
-- **R28:** fn-130's reached-path **B1 baselines are re-frozen** for the tracker cluster as part of this work, with the delta recorded honestly in `optimization/reached-path/` the way fn-134 recorded its own growth. R11's reduction invalidates them by design; leaving them stale would fail the harness for the wrong reason.
+- **R28:** fn-130's reached-path B1 baselines are re-frozen for the tracker cluster. The task **enumerates every affected fixture** under `optimization/reached-path/fixtures/b1/tracker` rather than "the tracker ones", and records a before/after delta artifact in the same honest form fn-134 used when its own change grew the path.
 - **R29:** fn-89's teardown is **clean**: removing the `tracker-runner` agent and its dispatch reference leaves no dangling reference from any of the fourteen calling skills, the codex mirror, or `docs/platforms.md`'s Tier-B dispatch text.
 - **R30:** Existing persisted `perTracker.apiVersion: 3` configs are **migrated, not orphaned**, when R7 flips the Jira body default to v2.
+
+- **R31:** Every behavior claimed deterministic has a **reachable verb**. Assignees get `wire assign`; GitHub's undocumented `duplicate` state reason is reachable through `status --reason`; `capabilities.deleteIssue` either gets a verb or is dropped from the descriptor; and Linear's create-label-before-attach rule has defined unknown-label semantics (auto-create vs `class: not_found`, chosen explicitly). No R13 test may target behavior the public surface cannot invoke.
+- **R32:** The **injected request executor and adapter interface are defined in task .1**, not retrofitted. Focused regression tests live in the task that writes the code (.1-.5); task .6 is the cross-adapter **conformance matrix plus fault injection** only - open pre-create window, post-write readback, scoped invalidation, lock race, retry exhaustion, rate-limit backoff.
+- **R33:** Adapters live in a new `plugins/flow-next/scripts/tracker/` package, one module per adapter over a shared typed transport/result layer; `flowctl.py` gains only argparse wiring. The non-functional invariants above (no shell, content via stdin/file, secrets never persisted or logged, bounded timeout/retry/concurrency, TLS default-on) are asserted by test where testable and by code review where not.
 
 ## Boundaries
 <!-- scope: business -->

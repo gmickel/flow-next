@@ -11,6 +11,6 @@
   "spec": "fn-139-tracker-sync-determinism-flowctl-owns",
   "spec_path": ".flow/tasks/fn-139-tracker-sync-determinism-flowctl-owns.2.md",
   "status": "todo",
-  "title": "flowctl tracker verbs: create/read/update/comment CRUD + MCP persist",
-  "updated_at": "2026-07-26T11:30:42.759649Z"
+  "title": "Wire verbs: read/update/comment CRUD/label/assign + persist-external",
+  "updated_at": "2026-07-26T11:58:06.661448Z"
 }

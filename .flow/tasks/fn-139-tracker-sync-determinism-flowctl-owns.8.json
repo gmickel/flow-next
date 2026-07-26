@@ -11,6 +11,6 @@
   "spec": "fn-139-tracker-sync-determinism-flowctl-owns",
   "spec_path": ".flow/tasks/fn-139-tracker-sync-determinism-flowctl-owns.8.md",
   "status": "todo",
-  "title": "Remove tracker-runner dispatch, rewire callers to flowctl",
-  "updated_at": "2026-07-26T11:30:34.453879Z"
+  "title": "Remove tracker-runner dispatch; rewire callers; verify inactive path",
+  "updated_at": "2026-07-26T11:58:08.594378Z"
 }
