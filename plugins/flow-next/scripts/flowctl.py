@@ -1621,9 +1621,48 @@ def resolve_config_key_for_write(key: str) -> tuple[str, str]:
     return key, ""
 
 
+def _shared_config_lock(flow_dir: Path):
+    """The `.flow/config.json` writer lock (fn-139.3, R8b), or a no-op.
+
+    EVERY config writer must route through `flowctl_tracker.config_lock` so a
+    read-modify-write cannot clobber a concurrent resolve transaction. The
+    import is guarded because the package ships alongside flowctl.py in the
+    repo and in post-fn-139.5 installs, but older `.flow/bin` copies carry only
+    the named files - and those copies also have no resolver to race, so the
+    unlocked fallback preserves exactly their current semantics.
+    """
+    import contextlib
+
+    try:
+        from flowctl_tracker.config_lock import config_lock as _lock
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+            try:
+                from flowctl_tracker.config_lock import config_lock as _lock
+            except ImportError:
+                return contextlib.nullcontext()
+        else:
+            return contextlib.nullcontext()
+    return _lock(flow_dir)
+
+
 def set_config(key: str, value) -> dict:
-    """Set nested config value and return updated config."""
-    config_path = get_flow_dir() / CONFIG_FILE
+    """Set nested config value and return updated config.
+
+    The whole read-modify-write runs INSIDE the shared config lock: reading
+    outside it is exactly the stale-read clobber the lock exists to prevent
+    (two writers read, compute different changes, serially replace the file,
+    and the second silently discards the first - fn-139 R8b).
+    """
+    flow_dir = get_flow_dir()
+    with _shared_config_lock(flow_dir):
+        return _set_config_locked(flow_dir, key, value)
+
+
+def _set_config_locked(flow_dir: Path, key: str, value) -> dict:
+    config_path = flow_dir / CONFIG_FILE
     if config_path.exists():
         try:
             config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -8806,6 +8845,9 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # fn-52 tracker-sync per-run receipts (proof-of-work; accumulate per sync,
     # same class as receipts/ — runtime artifacts, not durable repo state)
     "sync-runs/",
+    # fn-139.3 shared config-writer lock directory (per-run state; a committed
+    # lock would deadlock every fresh clone until stale-reclaim kicked in)
+    ".locks/",
     # fn-99 setup-block serialization locks (runtime artifacts, never repo state)
     "locks/",
     # fn-68 pilot backlog-mode decision-log rows (per-tick triage/advance/ask
@@ -9078,26 +9120,29 @@ def cmd_init(args: argparse.Namespace) -> None:
         atomic_write_json(meta_path, meta)
         actions.append("created meta.json")
 
-    # Config: create or upgrade (merge missing defaults)
+    # Config: create or upgrade (merge missing defaults). Routed through the
+    # shared config-writer lock (fn-139.3, R8b): init on an existing repo is a
+    # read-modify-write like any other and can race a resolve transaction.
     config_path = flow_dir / CONFIG_FILE
-    if not config_path.exists():
-        atomic_write_json(config_path, _init_persisted_defaults())
-        actions.append("created config.json")
-    else:
-        # Load raw config, compare with merged (which includes new defaults)
-        try:
-            raw = json.loads(config_path.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
+    with _shared_config_lock(flow_dir):
+        if not config_path.exists():
+            atomic_write_json(config_path, _init_persisted_defaults())
+            actions.append("created config.json")
+        else:
+            # Load raw config, compare with merged (which includes new defaults)
+            try:
+                raw = json.loads(config_path.read_text(encoding="utf-8"))
+                if not isinstance(raw, dict):
+                    raw = {}
+            except (json.JSONDecodeError, Exception):
                 raw = {}
-        except (json.JSONDecodeError, Exception):
-            raw = {}
-        # The 1.1.11 pre-merge crossEpic→crossSpec mirror was removed in
-        # 2.0.0 along with the `planSync.crossEpic` alias: a leftover legacy
-        # key in the file is now inert (preserved by the merge, never read).
-        merged = deep_merge(_init_persisted_defaults(), raw)
-        if merged != raw:
-            atomic_write_json(config_path, merged)
-            actions.append("upgraded config.json (added missing keys)")
+            # The 1.1.11 pre-merge crossEpic→crossSpec mirror was removed in
+            # 2.0.0 along with the `planSync.crossEpic` alias: a leftover legacy
+            # key in the file is now inert (preserved by the merge, never read).
+            merged = deep_merge(_init_persisted_defaults(), raw)
+            if merged != raw:
+                atomic_write_json(config_path, merged)
+                actions.append("upgraded config.json (added missing keys)")
 
     # Output
     if actions:
