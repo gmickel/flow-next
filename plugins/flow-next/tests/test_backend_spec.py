@@ -32,7 +32,13 @@ def _load_flowctl() -> Any:
     approach the smoke test uses).
     """
     here = Path(__file__).resolve()
-    flowctl_path = here.parent.parent / "scripts" / "flowctl.py"
+    scripts_dir = here.parent.parent / "scripts"
+    # fn-139.1: flowctl_tracker sits beside flowctl.py. In production sys.path[0]
+    # is the launcher's dir so it imports naturally; under a test module it is the
+    # tests dir, so scripts/ must be added explicitly BEFORE flowctl is loaded.
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    flowctl_path = scripts_dir / "flowctl.py"
     if not flowctl_path.is_file():
         raise RuntimeError(f"flowctl.py not found at {flowctl_path}")
     spec = importlib.util.spec_from_file_location("flowctl_under_test", flowctl_path)

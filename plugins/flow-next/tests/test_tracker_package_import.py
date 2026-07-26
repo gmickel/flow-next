@@ -22,6 +22,20 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 
+def _inserts_scripts_path(source: str) -> bool:
+    """True when some `sys.path.insert(...)` statement references `scripts`.
+
+    Deliberately statement-scoped rather than a naive regex: the canonical form
+    contains nested parentheses (`resolve()`), so a `[^)]*` pattern stops short
+    and reports a false negative on every correct module.
+    """
+    for line in source.splitlines():
+        idx = line.find("sys.path.insert")
+        if idx != -1 and "scripts" in line[idx:]:
+            return True
+    return False
+
+
 class TrackerPackageImports(unittest.TestCase):
     def test_package_imports_under_test(self) -> None:
         import flowctl_tracker  # noqa: PLC0415
@@ -60,17 +74,39 @@ class TrackerPackageImports(unittest.TestCase):
 class EveryFlowctlLoadingTestCanReachThePackage(unittest.TestCase):
     def test_all_spec_from_file_location_modules_insert_scripts_path(self) -> None:
         tests_dir = Path(__file__).resolve().parent
+        # A bare "contains sys.path.insert" check is NOT sufficient and was the
+        # original bug here: test_backend_spec.py inserts optimization/reached-path
+        # and nothing else, so it passed the string check while scripts/ stayed
+        # unreachable. Require an insert that actually references scripts/.
         missing = [
             f.name
             for f in sorted(tests_dir.glob("test_*.py"))
             if "spec_from_file_location" in f.read_text(encoding="utf-8")
-            and "sys.path.insert" not in f.read_text(encoding="utf-8")
+            and not _inserts_scripts_path(f.read_text(encoding="utf-8"))
         ]
         self.assertEqual(
             missing, [],
-            "these modules load flowctl but cannot import flowctl_tracker; "
-            "sys.path[0] is the tests dir under unittest",
+            "these modules load flowctl but do not put scripts/ on sys.path, so "
+            "flowctl_tracker is unreachable from them; sys.path[0] is the tests dir",
         )
+
+    def test_the_guard_itself_rejects_an_unrelated_insert(self) -> None:
+        """Mutation guard: the check must not be satisfiable by any old insert.
+
+        The first version of this guard only looked for the string
+        `sys.path.insert`, so `test_backend_spec.py` passed while inserting
+        `optimization/reached-path` and leaving scripts/ unreachable. The second
+        version used `insert\\([^)]*scripts`, which can never match the canonical
+        form because `[^)]*` stops at the `)` of `resolve()`. Both failure modes
+        are pinned here.
+        """
+        self.assertFalse(_inserts_scripts_path("sys.path.insert(0, str(harness_dir))"))
+        self.assertTrue(
+            _inserts_scripts_path(
+                'sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))'
+            )
+        )
+        self.assertTrue(_inserts_scripts_path('sys.path.insert(0, str(ROOT / "scripts"))'))
 
 
 if __name__ == "__main__":
