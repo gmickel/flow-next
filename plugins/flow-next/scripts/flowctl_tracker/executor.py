@@ -142,7 +142,9 @@ def _http(req: Request, cred: Optional[Credential], verify_tls: bool) -> Result:
         # One guarded reader serves both the success and error paths.
         try:
             body = _read_body(exc)
-        except http.client.HTTPException as read_exc:
+        except (http.client.HTTPException, TimeoutError, OSError) as read_exc:
+            # A sibling `except` cannot catch what is raised INSIDE this handler,
+            # so a socket timeout while reading the error body escaped entirely.
             return TrackerError(ErrorClass.TRANSPORT,
                                 redact(f"incomplete error body: {read_exc}"),
                                 subtype="read", auto_retryable=True)

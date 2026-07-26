@@ -610,6 +610,74 @@ class TlsDowngradeCannotBeSilent(unittest.TestCase):
         self.assertTrue(any("tls-verification-disabled" in e for e in events))
 
 
+class HttpStatusBeatsGraphqlBody(unittest.TestCase):
+    """A GraphQL-shaped body must not override the codes GraphQL never owns."""
+
+    GQL = b'{"errors":[{"message":"Internal server error"}]}'
+
+    def test_500_with_graphql_body_is_transport(self) -> None:
+        self.assertIs(C.classify("linear", resp(500, self.GQL)).cls, ErrorClass.TRANSPORT)
+
+    def test_401_with_graphql_body_is_auth(self) -> None:
+        self.assertIs(C.classify("linear", resp(401, self.GQL)).cls, ErrorClass.AUTH)
+
+    def test_429_with_graphql_body_is_rate_limited(self) -> None:
+        self.assertIs(C.classify("linear", resp(429, self.GQL)).cls, ErrorClass.RATE_LIMITED)
+
+    def test_400_still_uses_the_graphql_document(self) -> None:
+        body = json.dumps({"errors": [{"message": "e",
+                                       "extensions": {"code": "RATELIMITED"}}]}).encode()
+        self.assertIs(C.classify("linear", resp(400, body)).cls, ErrorClass.RATE_LIMITED)
+
+
+class CredentialsNeverReachTheEnvelope(unittest.TestCase):
+    """R6, end to end. The previous test exercised redact() in ISOLATION and so
+    never covered the path that actually leaked: provider error text copied
+    verbatim into TrackerError.message and emitted by the envelope."""
+
+    TOKEN = "lin_secret_value_1234"
+
+    def test_provider_echoed_token_is_absent_from_the_envelope(self) -> None:
+        body = json.dumps({"errors": [{"message": f"invalid key {self.TOKEN}"}]}).encode()
+        with mock.patch.dict(os.environ, {"LINEAR_API_KEY": self.TOKEN}):
+            err = C.classify("linear", resp(200, body))
+            payload, _ = E.failure(err)
+        self.assertNotIn(self.TOKEN, payload)
+
+    def test_redaction_also_applies_to_errors_from_any_other_source(self) -> None:
+        with mock.patch.dict(os.environ, {"LINEAR_API_KEY": self.TOKEN}):
+            payload, _ = E.failure(TrackerError(ErrorClass.TRANSPORT,
+                                                f"connect failed using {self.TOKEN}"))
+        self.assertNotIn(self.TOKEN, payload)
+
+    def test_full_path_through_execute(self) -> None:
+        body = json.dumps({"errors": [{"message": f"bad {self.TOKEN}"}]}).encode()
+        with mock.patch.dict(os.environ, {"LINEAR_API_KEY": self.TOKEN}), \
+             mock.patch.object(X, "_http", return_value=resp(200, body)):
+            r = X.execute(Request(provider="linear", op="q", method="GET",
+                                  url_or_argv="https://api.linear.app/graphql"))
+        payload, _ = E.failure(r)
+        self.assertNotIn(self.TOKEN, payload)
+
+
+class ErrorBodyReadTimeout(unittest.TestCase):
+    def test_timeout_reading_the_error_body_does_not_escape(self) -> None:
+        """A sibling `except` cannot catch what is raised inside another handler."""
+        import urllib.error
+
+        class SlowErr(urllib.error.HTTPError):
+            def __init__(self):
+                super().__init__("u", 500, "err", {}, None)
+            def read(self):
+                raise TimeoutError("read timed out")
+
+        with mock.patch("urllib.request.OpenerDirector.open", side_effect=SlowErr()):
+            r = X.execute(Request(provider="linear", op="q", method="GET",
+                                  url_or_argv="https://api.linear.app/graphql"))
+        self.assertIsInstance(r, TrackerError)
+        self.assertEqual(r.subtype, "read")
+
+
 class Envelope(unittest.TestCase):
     def test_success_shape(self) -> None:
         payload, code = E.success({"id": 1})

@@ -21,6 +21,7 @@ import json
 import re
 from typing import Optional
 
+from .credentials import redact
 from .types import ErrorClass, Response, TrackerError
 
 _LICENCE_RE = re.compile(rb"not available for current license", re.I)
@@ -108,6 +109,12 @@ def _gitlab(resp: Response) -> Optional[TrackerError]:
 
 
 def _linear(resp: Response) -> Optional[TrackerError]:
+    # STATUS FIRST for the codes GraphQL never owns. Parsing the body first meant
+    # an HTTP 500 carrying {"errors":[...]} classified as invalid_input instead of
+    # transport, and a 401 with a GraphQL-shaped body lost its auth class - the
+    # total fallback was being bypassed by the body parse.
+    if resp.status in (401, 403, 429) or resp.status >= 500:
+        return _fallback(resp)
     try:
         errs = _graphql_errors(resp)
     except _Malformed as exc:
@@ -138,8 +145,10 @@ def _linear(resp: Response) -> Optional[TrackerError]:
         if "not found" in joined:
             return TrackerError(ErrorClass.NOT_FOUND, "linear entity not found",
                                 subtype="graphql")
-        return TrackerError(ErrorClass.INVALID_INPUT, joined[:200] or "graphql error",
-                            subtype="graphql")
+        # Provider text is untrusted and may echo the credential back. Redact
+        # BEFORE it becomes a message; the envelope redacts again as depth.
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            redact(joined[:200]) or "graphql error", subtype="graphql")
     return _generic(resp)
 
 

@@ -16,6 +16,7 @@ import json
 import sys
 from typing import Any, Optional
 
+from .credentials import redact
 from .types import EXIT_CODES, ErrorClass, TrackerError
 
 
@@ -53,7 +54,10 @@ def failure(err: TrackerError, *, retryable: Optional[bool] = None) -> tuple[str
     payload = {
         "success": False,
         "class": err.cls.value,
-        "error": err.message,
+        # Last line of defence: provider error text is untrusted and has been
+        # observed to echo credentials back. Redacting only at the classifier
+        # would leave any other TrackerError source unprotected.
+        "error": redact(err.message),
         # Distinct from `auto_retryable`, which governs the executor's internal
         # retry. This answers a different question: would re-invoking help?
         "retryable": bool(err.auto_retryable if retryable is None else retryable),
