@@ -280,8 +280,12 @@ class TlsOptOut(unittest.TestCase):
         self.assertNotIn("open(r, timeout=req.timeout_s, context=", src)
 
     def test_cli_route_rejects_tls_opt_out_rather_than_ignoring_it(self) -> None:
+        # A sink is supplied so this reaches the CLI-specific branch: the
+        # "downgrade must be recordable" check fires first and is tested
+        # separately in TlsDowngradeCannotBeSilent.
         r = X.execute(Request(provider="github", op="r", method="GET",
-                              url_or_argv=["gh", "api", "x"]), verify_tls=False)
+                              url_or_argv=["gh", "api", "x"]),
+                      verify_tls=False, on_event=lambda _e: None)
         self.assertIs(r.cls, ErrorClass.INVALID_INPUT)
         self.assertEqual(r.subtype, "tls_unsupported")
 
@@ -567,6 +571,43 @@ class GitlabTokenIsHostScoped(unittest.TestCase):
     def test_fails_closed_on_unknown_host(self) -> None:
         """Returning the first token would send one host's secret to another."""
         self.assertIsNone(self._token("gitlab.someone-else.com"))
+
+
+class NeverRaisesHoles(unittest.TestCase):
+    """Each of these escaped execute() at some point despite the contract."""
+
+    def test_malformed_ipv6_target(self) -> None:
+        r = X.execute(Request(provider="linear", op="q", method="GET",
+                              url_or_argv="http://[::1"))
+        self.assertIsInstance(r, TrackerError)
+        self.assertEqual(r.subtype, "construction")
+
+    def test_graphql_extensions_of_any_shape(self) -> None:
+        for ext in (b'["bad"]', b'"str"', b"42", b"true"):
+            with self.subTest(extensions=ext):
+                body = b'{"errors":[{"message":"m","extensions":' + ext + b"}]}"
+                e = C.classify("linear", resp(200, body))
+                self.assertEqual(e.subtype, "malformed_body")
+
+
+class TlsDowngradeCannotBeSilent(unittest.TestCase):
+    def test_refused_when_there_is_no_event_sink(self) -> None:
+        """The default API passes no on_event, so the downgrade was silent -
+        which is precisely what 'never silent' forbids."""
+        r = X.execute(Request(provider="linear", op="q", method="GET",
+                              url_or_argv="https://api.linear.app/graphql"),
+                      verify_tls=False)
+        self.assertIsInstance(r, TrackerError)
+        self.assertEqual(r.subtype, "tls_unrecorded")
+
+    def test_allowed_and_recorded_when_a_sink_is_present(self) -> None:
+        events = []
+        with mock.patch.object(X, "_http", return_value=resp(200, b"{}")):
+            r = X.execute(Request(provider="linear", op="q", method="GET",
+                                  url_or_argv="https://api.linear.app/graphql"),
+                          verify_tls=False, on_event=events.append)
+        self.assertIsInstance(r, Response)
+        self.assertTrue(any("tls-verification-disabled" in e for e in events))
 
 
 class Envelope(unittest.TestCase):

@@ -241,12 +241,29 @@ def execute(
     route_err = _validate_route(request)
     if route_err is not None:
         return route_err
-    dest_host = (urlparse(request.url_or_argv).hostname
-                 if isinstance(request.url_or_argv, str) else None)
+    try:
+        # urlparse raises on malformed input (e.g. "http://[::1" - unterminated
+        # IPv6), and this ran outside the guarded path, so it escaped execute().
+        dest_host = (urlparse(request.url_or_argv).hostname
+                     if isinstance(request.url_or_argv, str) else None)
+    except ValueError as exc:
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            redact(f"malformed request target: {exc}"),
+                            subtype="construction")
     cred = resolve(request.provider, auth_scheme=auth_scheme, host=dest_host)
     is_cli = isinstance(request.url_or_argv, (list, tuple))
-    if not verify_tls and on_event:
-        # sslVerify=false is honoured but never silent.
+    if not verify_tls:
+        # "Honoured but never silent" cannot depend on the caller happening to
+        # pass a sink - with the default API (no on_event) the downgrade was
+        # completely silent. Fail closed instead: an unrecordable downgrade is
+        # refused rather than performed quietly.
+        if on_event is None:
+            return TrackerError(
+                ErrorClass.INVALID_INPUT,
+                "sslVerify=false requires an event sink so the downgrade is recorded; "
+                "refusing to disable TLS verification silently",
+                subtype="tls_unrecorded",
+            )
         on_event(f"tls-verification-disabled provider={request.provider} op={request.op}")
 
     attempt = 0

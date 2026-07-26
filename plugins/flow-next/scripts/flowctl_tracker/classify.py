@@ -75,6 +75,12 @@ def _graphql_errors(resp: Response) -> Optional[list[dict]]:
         return None
     if not isinstance(errs, list) or not all(isinstance(e, dict) for e in errs):
         raise _Malformed("GraphQL 'errors' is not a list of objects")
+    for e in errs:
+        ext = e.get("extensions")
+        # `extensions` is server-controlled and may be any JSON value. Assuming
+        # dict raised AttributeError on `{"extensions": ["bad"]}`.
+        if ext is not None and not isinstance(ext, dict):
+            raise _Malformed("GraphQL 'extensions' is not an object")
     return errs or None
 
 
