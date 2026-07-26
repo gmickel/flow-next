@@ -1,0 +1,70 @@
+{
+  "files": [
+    {
+      "path": "flowctl.py",
+      "sha256": "aa656f40c56aa045a3be20060b344284fb029bb0d4454700a181fa2b583a35d5"
+    },
+    {
+      "path": "flowctl_tracker/__init__.py",
+      "sha256": "21ac29eb50e4222bc741261a5a24e412eaf61de2a268eb29e9231119f3ded691"
+    },
+    {
+      "path": "flowctl_tracker/classify.py",
+      "sha256": "d6daf384710e585759f8a2dc3d87b6369af17e8a8dd1c1580424c3d6ee59db54"
+    },
+    {
+      "path": "flowctl_tracker/config_lock.py",
+      "sha256": "1f517b18bcfc8bee94c6d91739a79c47549cfb2a678e82ca8d25f0e0e24083d4"
+    },
+    {
+      "path": "flowctl_tracker/credentials.py",
+      "sha256": "7911099e37d053422aba9327a0169118f0fe5cbd14d54ad846ab865aa0a5a983"
+    },
+    {
+      "path": "flowctl_tracker/envelope.py",
+      "sha256": "fa0e8cd9b17dbd42c461c940d0c6f498c6430dd68184a48c4045d8ed842c4aa0"
+    },
+    {
+      "path": "flowctl_tracker/executor.py",
+      "sha256": "f624479c7ac3988b91b956efc81d4baee13b3e51941469859c43934b7f9b72ea"
+    },
+    {
+      "path": "flowctl_tracker/providers/__init__.py",
+      "sha256": "21e547a2f0bee33048c7e89f9f5fb0e43a01d18c303ccd01d551fe86298ebadb"
+    },
+    {
+      "path": "flowctl_tracker/providers/github.py",
+      "sha256": "e4882c0625c59d89b216e25468c52897ec9ab38827dc29e6d84c293c406507f7"
+    },
+    {
+      "path": "flowctl_tracker/providers/gitlab.py",
+      "sha256": "b4c5d526f7c4f0807a719a95ed07d442c30b05351f02e7b086656e138f6cd184"
+    },
+    {
+      "path": "flowctl_tracker/providers/jira.py",
+      "sha256": "c5d3f689d7c538612c20855ce7e413bf6cff15f1b499cb9233cf858d5b55f0ee"
+    },
+    {
+      "path": "flowctl_tracker/providers/linear.py",
+      "sha256": "c26a76b127758be2ad519c0bf603d0addf1e188fd33056ce5d1c65901c1a89bd"
+    },
+    {
+      "path": "flowctl_tracker/resolve_verb.py",
+      "sha256": "95ac59474cbc2c125e43a6bcf14137a8b162cb1993a7487d65ece9ffc5f5409c"
+    },
+    {
+      "path": "flowctl_tracker/resolved_cache.py",
+      "sha256": "aff12343ff4ee9ddb3c157b4022f69e76adf82beb4e16ce03f25d729f5eb1238"
+    },
+    {
+      "path": "flowctl_tracker/states.py",
+      "sha256": "133ccf527af6918cadb392592c252c1db544354701668030e54ad4737cbe5515"
+    },
+    {
+      "path": "flowctl_tracker/types.py",
+      "sha256": "cf82da7cc603529bc68e5ef5993ed67bccf42b8f42538493382dca70f03c9119"
+    }
+  ],
+  "generated_by": "scripts/gen_tracker_manifest.py",
+  "package": "flowctl_tracker"
+}

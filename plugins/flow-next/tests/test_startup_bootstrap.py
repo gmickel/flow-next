@@ -15,6 +15,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+# fn-139.1: the tracker package sits beside flowctl.py; under a test module
+# sys.path[0] is THIS directory, not scripts/, so it would not import.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP = ROOT / "scripts" / "flowctl_bootstrap.py"
@@ -304,8 +308,9 @@ class StartupBootstrapTest(unittest.TestCase):
             )
 
     def test_tracked_root_help_matches_argparse_byte_for_byte(self) -> None:
+        # fn-139.5: the single-file pin lives in the distribution manifest now.
         self.assertEqual(
-            bootstrap.SOURCE_SHA256,
+            bootstrap._manifest_source_sha(ROOT / "scripts" / "flowctl.py"),
             hashlib.sha256((ROOT / "scripts" / "flowctl.py").read_bytes()).hexdigest(),
         )
         self.assertEqual(

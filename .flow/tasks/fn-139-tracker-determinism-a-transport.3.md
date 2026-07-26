@@ -31,9 +31,14 @@ Migrate `perTracker.apiVersion: 3` to 2.
 - [ ] `apiVersion: 3` migrates to 2; partial resolution never stamps `resolvedAt`
 
 ## Done summary
-TBD
+tracker.resolved cache delivered with the epic's schema verbatim and the R8/R8b transaction.
 
+- config_lock.py: the ONE shared .flow/config.json writer lock - atomic lock dir .flow/.locks/config.d + owner.json {pid,host,acquired_at}; 10s timeout; stale owner (>120s, pid dead on same host) reclaimed by rule; crash between mkdir and owner write reclaimed by dir age; other hosts never reclaimed by age. Windows liveness is query-only (OpenProcess/GetExitCodeProcess - os.kill(pid,0) TERMINATES on Windows). Reclamation is ABA-free: a kernel-released OS file-lock claim (flock/msvcrt) serializes reclaimers with a race-free staleness re-check inside it, and removal goes through rename-to-trash so the live path is never rmtree'd. Full symlink containment on lock dirs AND the claim leaf (lstat + O_NOFOLLOW).
+- resolved_cache.py: canonical scopeResolvedAt (exactly 4 scope paths, legacy flat fields rejected); resolvedAt set-only-complete / preserved-on-partial / cleared-on-missing per tracker; scope-isolated merges; discovery fingerprint compared INSIDE the lock, one bounded re-resolve then class conflict; capability truth table + tier-probe application (failed probe never flips/re-stamps); TTL GitLab-only; apiVersion 3->2 in-transaction; state table as total plan_transition seam (spec-B rows tested through it); corrupt (non-object) config refused with zero byte change.
+- flowctl.py: set_config + cmd_init whole read-modify-write inside the shared lock (guarded import, older copies degrade to current semantics); .locks/ gitignored.
+
+4 review rounds (codex): 7 findings (Windows kill-probe, two ABA layers, unbounded reclaim spin, two symlink escapes, corrupt-config overwrite) all fixed with regression tests; round 4 SHIP, R8/R10/R12/R13 met, R8b met after fixes.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 58e418af, 623ede52, 286a562b, 21fd4dc3
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_resolved_cache -q, python3 scripts/run_tests_parallel.py
 - PRs:

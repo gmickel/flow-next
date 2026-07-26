@@ -2,6 +2,12 @@ import importlib.util
 import unittest
 from pathlib import Path
 
+import sys
+
+# fn-139.1: the tracker package sits beside flowctl.py; under a test module
+# sys.path[0] is THIS directory, not scripts/, so it would not import.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "optimization/reached-path/run_claude_fleet_smoke.py"

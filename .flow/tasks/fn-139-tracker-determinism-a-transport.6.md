@@ -35,9 +35,16 @@ Jira: `baseUrl`, `projectKey`, `projectId`, `issueTypeId`, `apiVersion: 2`, `sty
 - [ ] Scoped resolution on nested paths (`destination.stateIds`, `destination.statusIds`) tested
 
 ## Done summary
-TBD
+Linear + Jira resolution, the normalized vocabulary, and the flowctl tracker resolve verb.
 
+- states.py: shared six-slot vocabulary (todo/in_progress/done required) with an explicit PER-PROVIDER assignment policy. linear = type-only per the spec's mapping algorithm: >1 started states are ambiguous even with obvious names, --select resolves exactly one slot, no cross-slot inference, in_review never auto-fills. jira = category pools + sanctioned name hints + single-remaining rule. Human tiebreaks survive refresh; dead ids dropped with warning.
+- providers/linear.py: teamId/teamKey/labelIds destination (pagination fully drained with a progress guard: repeated cursor fails, 50-page ceiling); stateIds via type pools; static capabilities.
+- providers/jira.py: baseUrl (JIRA_BASE_URL override) / projectKey / projectId / issueTypeId (configured -> Task -> first non-subtask, configured-unresolvable errors, status scope REQUIRES the resolved issueTypeId - never first-entry) / apiVersion pinned 2 / style enum; statusIds ONLY (no transition id ever cached, asserted); legacy statusMap vocabulary migrated (planned/in-progress/in-review/verified/wontfix) with warnings for dropped/unknown keys; malformed statusMap tolerated.
+- resolve_verb.py + flowctl tracker resolve CLI: explicit backfill (absent scopes only), --refresh, --scope, --select (validated INSIDE the transaction so the fingerprint covers a mid-select repoint; merge inside the lock via finalize_fn; re-select overwrites; out-of-pool select recorded as alias). Malformed config shapes return the envelope, never a traceback.
+- resolvedAt completeness requires the three required slots in stateIds/statusIds.
+
+2 review rounds (codex): round 1 found 7 (ambiguity-contract bypass, legacy-key gap, select TOCTOU, first-entry issue type, shape crashes, pagination loop, env bleed) - all fixed and pinned; round 2 SHIP.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: abf86c70, e1d4c19e
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_resolution_linear_jira -q, python3 scripts/run_tests_parallel.py
 - PRs:

@@ -173,6 +173,7 @@ sync set-dep-relation
 sync set-last-synced
 sync set-merge-base
 sync set-tracker-id
+tracker resolve
 task create
 task reset
 task set-acceptance

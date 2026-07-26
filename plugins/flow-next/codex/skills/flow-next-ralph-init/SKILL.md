@@ -21,7 +21,7 @@ PLUGIN_ROOT="$HOME/.codex"
 - Only create/update `scripts/ralph/` in the current repo.
 - If `scripts/ralph/` already exists, offer to update (preserves config.env).
 - Copy templates from `templates/` into `scripts/ralph/` (includes `ralphctl.py` for pause/resume/stop/status).
-- Copy `flowctl`, `flowctl.cmd`, `flowctl.py`, `flowctl_bootstrap.py`, `flowctl-help.txt` (from `$PLUGIN_ROOT/scripts/`) and `pick-python.sh` (from `$PLUGIN_ROOT/scripts/lib/`) into `scripts/ralph/` — flat, so the resolver lands at `scripts/ralph/pick-python.sh` (NOT `scripts/ralph/lib/`) where `ralph.sh` and the hook wrapper source it.
+- Copy `flowctl`, `flowctl.cmd`, `flowctl.py`, `flowctl_bootstrap.py`, `flowctl-help.txt`, and the `flowctl_tracker/` package (from `$PLUGIN_ROOT/scripts/`) and `pick-python.sh` (from `$PLUGIN_ROOT/scripts/lib/`) into `scripts/ralph/` — flat, so the resolver lands at `scripts/ralph/pick-python.sh` (NOT `scripts/ralph/lib/`) where `ralph.sh` and the hook wrapper source it.
 - Set executable bit on `scripts/ralph/ralph.sh`, `scripts/ralph/ralph_once.sh`, `scripts/ralph/flowctl`, and `scripts/ralph/ralphctl.py`.
 - **Hook registration is agent-driven skill prose only.** The plugin ships ZERO hooks by default. You (the host agent) merge the guard entries into the project's host settings via Read+Edit. Never clobber unrelated hooks. Idempotent on re-run. **HARD BOUNDARY: no flowctl subcommand for hook install/remove/status — zero hook machinery in Python.**
 
@@ -81,6 +81,10 @@ PLUGIN_ROOT="$HOME/.codex"
  cp "~/.codex/templates/flow-next-ralph-init/watch-filter.py" scripts/ralph/
  cp "~/.codex/templates/flow-next-ralph-init/ralphctl.py" scripts/ralph/
  cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
+ rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
+ # fn-139.5: verify the tracker package post-copy - fail loudly here, never
+ # later as an ImportError mid-run
+ python3 "$PLUGIN_ROOT/scripts/lib/verify_tracker_manifest.py" scripts/ralph
  mkdir -p scripts/ralph/hooks
  cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
  chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/ralphctl.py scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
@@ -94,6 +98,10 @@ PLUGIN_ROOT="$HOME/.codex"
  mkdir -p scripts/ralph/runs scripts/ralph/hooks
  cp -R "~/.codex/templates/flow-next-ralph-init/." scripts/ralph/
  cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
+ rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
+ # fn-139.5: verify the tracker package post-copy - fail loudly here, never
+ # later as an ImportError mid-run
+ python3 "$PLUGIN_ROOT/scripts/lib/verify_tracker_manifest.py" scripts/ralph
  cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
  chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/ralphctl.py scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
  ```
