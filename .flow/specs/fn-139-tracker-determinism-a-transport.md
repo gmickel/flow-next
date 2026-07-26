@@ -38,12 +38,13 @@ Adapters never call `subprocess.run` or open a socket directly. They call an **i
 
 "Typed" means specified, not aspirational:
 
-- **`Request`**: `provider`, `op`, `method`, `url_or_argv`, `headers` (**never authorization**), `body`, `connect_timeout_s`, `read_timeout_s`, `idempotent: bool`.
+- **`Request`**: `provider`, `op`, `method`, `url_or_argv`, `headers` (**never authorization**), `body`, `timeout_s`, `idempotent: bool`.
 - **Secrets are injected by the executor, after the adapter boundary.** An adapter never sets an authorization header - if it did, the credential would already have crossed the boundary the redaction rule exists to protect. The executor resolves the provider's credential and attaches it immediately before dispatch.
 - **`TrackerError`**: the normalized failure shape every adapter classifier returns - `{class, message, retry_after_s|None, details|None}`. Adapters never raise transport-native exceptions upward.
 - **Retry predicate**, explicit: retry iff `class == rate_limited and request.idempotent`. `idempotent` is not decorative.
 - **`Response`**: `status`, `headers`, `body`, `elapsed_s`. GraphQL errors arriving over **HTTP 200/400** are normalized here, not in each adapter.
-- **Bounds** (defaults, config-overridable): connect **5s**, read **30s** (separate values, not one `timeout_s`); **2** retries max; exponential backoff capped at 30s; concurrency cap 4.
+- **Bounds** (defaults, config-overridable): **one `timeout_s`, default 30s**, because separate connect/read deadlines are **not achievable with the chosen transports** - verified: `urllib.request.urlopen` exposes a single `timeout`, and neither `gh api` nor `glab api` expose any timeout flag. Semantics per transport, stated rather than implied: **HTTP** (`urllib`) applies it per socket operation; **CLI** applies it as a total process deadline via `subprocess.run(timeout=)`. Splitting them would mean dropping to raw `http.client`/sockets, which is more machinery than the guarantee is worth. **2** retries max; exponential backoff capped 30s; concurrency cap 4.
+- **TLS**: verification on by default. `sslVerify: false` (per-tracker, or `JIRA_SSL_VERIFY=false`) is honoured for self-hosted internal-CA certs and is **never silent** - it is recorded on the receipt and in the executor's stderr event.
 - **Transport mechanism is decided per provider, not left open**: GitHub and GitLab go through their **CLI** (`gh`, `glab`) because it already carries host and auth resolution this repo depends on; Linear and Jira go through **stdlib HTTP** (`urllib`), because Linear GraphQL and Jira REST have no CLI in the dependency set. This keeps the zero-dependency rule.
 - **Credential precedence, per provider, by exact name**: GitHub `GH_TOKEN` -> `gh` CLI config; GitLab `GITLAB_TOKEN` -> `glab` CLI config; Linear `LINEAR_API_KEY`; Jira `JIRA_EMAIL`+`JIRA_API_TOKEN` (Cloud, basic) or `JIRA_PAT` (DC, bearer), with `JIRA_BASE_URL` overriding the persisted `baseUrl`. "Secure store" means **whatever the host OS provides and the user has already wired into their environment** - flow-next reads env, never implements a keyring. Redaction happens at the executor boundary.
 - **The Linear MCP rung is unchanged by spec A.** A resolves via GraphQL because flowctl cannot reach MCP; the MCP rung stays agentic and is spec B's `persist-external` concern. A does not deprecate or migrate it.
@@ -124,7 +125,9 @@ Spec A ships resolution only. The verb surface is spec B.
 flowctl tracker resolve [--refresh] [--scope <path>]
 
 Scopes are **exact nested paths**, each with its own timestamp: `destination`, `destination.statusIds` (Jira), `destination.stateIds` (Linear), `capabilities`.
-flowctl tracker resolve --select <normalized>=<stateId>    # persists a human tiebreak, validated against live candidates
+flowctl tracker resolve --select <normalized>=<stateId>    # persists ONE slot; repeatable
+
+**Slot-by-slot resolution.** Ambiguity is per normalized slot, not per provider. Two `started` states fill `in_progress` and the optional `in_review`, so `--select` is **repeatable** and each call resolves exactly one slot, leaving the others still ambiguous. Selecting `in_progress` does **not** infer `in_review` - three or more candidates for one type is handled the same way, one slot at a time. Re-selecting an already-resolved slot overwrites it. Resolution completes only when every **required** slot is filled.
 ```
 
 **Result envelope** (established here, consumed by B):
@@ -133,7 +136,7 @@ flowctl tracker resolve --select <normalized>=<stateId>    # persists a human ti
 {"success": true,  "data": {...}, "degraded": null | {"capability","from","to","reason"}, "probe": null | {"scope","at","ok","reason"}}
 {"success": false, "class": "<enum>", "error": "<human string>", "retryable": bool, "details": null | <typed variant>}
 
-`details` is a **typed variant keyed by class**, not free-form: `conflict` carries `{candidates: [{id,name,type}]}` so an ambiguous Linear state surfaces both options structurally; `rate_limited` carries `{retry_after_s}`; `capability` carries `{capability, required_plan}`. Every variant's exact serialization is asserted.
+`details` is a **typed variant keyed by class**, not free-form: `conflict` carries `{normalized, candidates: [{id,name,type}]}` - the **normalized slot being resolved** plus its options, so a caller knows which slot to answer; `rate_limited` carries `{retry_after_s}`; `capability` carries `{capability, required_plan}`. Every variant's exact serialization is asserted.
 ```
 
 `class` enum, fixed and exhaustive: `inactive`, `unresolved`, `stale_id`, `auth`, `rate_limited`, `transport`, `not_found`, `capability`, `conflict`, `invalid_input`. Exit codes fixed and numeric: `0` success, `2` invalid_input, `3` inactive, `4` unresolved, `5` auth, `6` rate_limited, `7` transport, `8` not_found, `9` capability, `10` conflict, `11` stale_id.
@@ -162,7 +165,7 @@ Measured live on 2026-07-26 against all four real APIs:
 - **R3:** Every test that loads flowctl via `spec_from_file_location` has `scripts/` on `sys.path`, so the package imports under test as it does in production.
 - **R4:** Adapters call an **injected request executor**; no adapter calls `subprocess.run` or opens a connection directly. The executor is substitutable, and that substitution is the fake transport spec B tests against.
 - **R5:** No shell. Content-bearing arguments (bodies, comments, titles) travel via stdin or a file, never argv - the existing flowctl prompt-injection lesson applies directly to issue bodies.
-- **R6:** Credentials are read per run from env/Keychain, **never persisted** into `tracker.resolved`, never logged, never included in a receipt or error string.
+- **R6:** Credentials are read per run **from the environment** (flow-next implements no keyring; a user's secure store exports into env), **never persisted** into `tracker.resolved`, never logged, never included in a receipt or error string. Precedence is provider-specific per the executor contract, not a generic ladder.
 - **R7:** Every request has an explicit timeout; retries are bounded and apply to `rate_limited` only, with backoff read from each adapter's own header shape; concurrency is capped. TLS verification defaults on, with the existing per-tracker `sslVerify` opt-out staying explicit.
 - **R8:** The resolve transaction is specified precisely, because atomic-write plus a lock prevents clobbering but **not stale resolution**: a resolver can query project A, then a `config set` repoints the tracker to project B, and the resolver merges A's ids into B's config. Required: **fingerprint every discovery input** used for the network work (tracker type, project/team identity, host, baseUrl) and compare it **inside the lock**; on mismatch discard and boundedly re-resolve, or return `class: conflict`. Order: network work **outside** the lock; acquire the lock; re-read; compare fingerprint; merge **only the resolved scope**; validate; atomically replace.
 - **R8b:** The lock is **one named design**: an **atomic lock directory** at `.flow/.locks/config.d` (mkdir is atomic on POSIX and Windows) containing `owner.json` with `{pid, host, acquired_at}`. Acquisition timeout **10s**; an owner older than **120s** whose pid is not alive on the same host is **stale and reclaimable**; a crashed holder is recovered by that rule rather than by manual cleanup. **Fingerprint mismatch has one bounded behavior**: discard and re-resolve **once**; a second mismatch returns `class: conflict` rather than looping. and **every `.flow/config.json` writer routes through it** - today `set_config` and `cmd_init` both write without it and can race a resolve. Contention and crash-recovery are exercised on the **Windows CI row**, not only POSIX.
@@ -226,6 +229,6 @@ cd plugins/flow-next/tests && python3 -m unittest \
   test_tracker_distribution test_tracker_config test_startup_bootstrap -q
 ```
 
-**Provider fixture matrix** (required, not optional): for each of the four providers, recorded response shapes for success, `auth`, `rate_limited` (with that provider's own header/GraphQL shape), `not_found`, `capability`, and a malformed body - so the classifier tables are asserted against real shapes rather than invented ones.
+**Provider fixture matrix** (required, not optional): for each provider, recorded response shapes for **the classes that provider actually emits** - success, `auth`, `rate_limited` (in its own header or GraphQL shape), `not_found`, and a malformed body. `capability` is recorded **only for GitLab**, whose licence gate is a real HTTP rejection; GitHub's unsupported attachments are a **static local check**, not an HTTP error, and are tested as such. Inventing a fixture for a response a provider never sends would assert fiction.
 
 Full gate once at completion: `python3 scripts/run_tests_parallel.py`
