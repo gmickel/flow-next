@@ -42,9 +42,16 @@ Result envelope, exhaustive class enum, fixed numeric exit codes. JSON on stdout
 - [ ] Envelope + class enum + numeric exit codes; JSON stdout, notes stderr
 
 ## Done summary
-TBD
+Injected executor delivered as the single transport seam: adapters call execute(request) only.
 
+- types.py: Request/Response/TrackerError, exhaustive ErrorClass (11 values incl. external_action_required), fixed exit codes 2-12, per-REQUEST CredentialPolicy (presigned uploads never carry the provider key). Adapters cannot set credential headers (post_init rejects).
+- executor.py: one timeout field (HTTP per-socket, CLI total process deadline), rate-limited+idempotent-only retry (max 2), clamped untrusted backoff hints, origin-scoped redirect credential stripping, BoundedSemaphore concurrency cap at the shared boundary, TLS opt-out honoured-but-never-silent (refused on CLI routes and when the record sink is missing OR fails), glab stdout-noise strip, CLI status extraction so the classifier's branches are reachable, forbidden-route table (gitlab upload must be HTTP), CLI route independent of unused credential state.
+- classify.py: per-provider tables over measured behavior - GitLab 403 licence vs auth, GitHub 403 rate limits, Linear GraphQL-over-200 rate limits with structured codes and per-bucket epoch-ms reset headers (slowest exhausted bucket wins), Jira XSRF-404, total fallback, malformed-body normalization.
+- credentials.py: exact-name per-provider resolution (no keyring rung), host-scoped glab config token, Jira scheme selected by persisted authScheme, short credentials refused at resolution (ShortCredential -> auth class), floorless process-wide redactor.
+- envelope.py: single stdout JSON envelope, typed details variants, recursive scrub of every outbound string (values, mapping keys, stderr notes).
+
+9 impl-review rounds (codex): 20+ findings, all fixed and pinned by regression tests; final round SHIP with R5/R6/R7/R14 met, R4 deferred to .4/.6 by design.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 92f5e428, 57ddc560, 3b893722, 9119e8f1, 954d7d2c, e3188bc5, 6e87d0ef, 71f912d5, dc3cbc51, 284fd328
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_executor test_tracker_package_import -q, python3 scripts/run_tests_parallel.py
 - PRs:
