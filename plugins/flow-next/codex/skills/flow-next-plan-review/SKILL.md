@@ -111,6 +111,14 @@ Callers invoke plan-review once and act on its terminal result. The verdict
 counter resets only on SHIP or an explicit re-plan, never on an edit, fresh
 invocation, or transport failure.**
 
+**ANTI-PATTERN (never do either):** (1) a delivered verdict is never a
+transport failure. Once flowctl parses `VERDICT=...` the round is consumed and
+recorded; do not re-dispatch or re-frame a `NEEDS_WORK` as a backend/sandbox
+problem to claim a refund. (2) Never widen the reviewer sandbox. Reviewers are
+read-only by contract; a sandbox-blocked reviewer means something asked it to
+mutate the workspace. Fix that, do not pass `--sandbox workspace-write` /
+`danger-full-access` or set `CODEX_SANDBOX` (Windows resolves via `auto`).
+
 When the verdict is `NEEDS_WORK`:
 
 1. Parse all valid issues from reviewer feedback.

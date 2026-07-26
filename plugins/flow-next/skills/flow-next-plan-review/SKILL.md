@@ -111,6 +111,12 @@ Callers invoke plan-review once and act on its terminal result. The verdict
 counter resets only on SHIP or an explicit re-plan, never on an edit, fresh
 invocation, or transport failure.**
 
+**ANTI-PATTERN:** a delivered verdict is never a transport failure - never
+re-dispatch or re-frame `NEEDS_WORK` as a backend/sandbox problem to claim a
+refund. And never widen the reviewer sandbox: reviewers are read-only by
+contract, so a sandbox-blocked reviewer means something asked it to mutate the
+workspace. Fix that instead (Windows resolves via `auto`).
+
 When the verdict is `NEEDS_WORK`:
 
 1. Parse all valid issues from reviewer feedback.

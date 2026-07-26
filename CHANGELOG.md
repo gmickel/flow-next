@@ -2,6 +2,14 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **The sandbox error no longer teaches agents to widen the reviewer sandbox.** `flowctl <backend> impl-review` / `plan-review` answered a sandbox-blocked reviewer with "Try `--sandbox danger-full-access` (or auto) or set `CODEX_SANDBOX=danger-full-access`". Reviewers are read-only by contract, so that path is a prompt/scope bug, not a permissions problem, and the suggested remedy is wrong everywhere except Windows (where `auto` already resolves it). Observed downstream effect: agents pattern-matched unrelated review failures onto the remedy and narrated a delivered `VERDICT=NEEDS_WORK` as "fundamentally a transport issue" needing a sandbox retry - a state the code cannot produce, since a parsed verdict returns before transport classification and consumes the round. The message now names the contract violation, refuses the widen, keeps the Windows carve-out, and states that no round was consumed.
+- **Anti-pattern rule added to all three review skills** (`impl-review`, `plan-review`, `spec-completion-review`): a delivered verdict is never a transport failure, and the reviewer sandbox is never widened. Closes the loophole the fn-134 refund vocabulary opened, where re-framing a `NEEDS_WORK` as transport is the cheapest way for an agent to dodge a consumed round.
+- Plan-review reached-path ratchet evidence refreshed for the added contract prose (+364 chars per route; every route still reduced, `none`/`export` 77.91%).
+
 ## [flow-next 3.5.0] - 2026-07-26
 
 ### Added
