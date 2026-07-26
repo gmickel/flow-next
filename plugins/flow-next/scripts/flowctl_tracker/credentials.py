@@ -74,18 +74,18 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None,
     auth - so None there is correct, not a failure.
     """
     if provider == "github":
-        tok = os.environ.get("GH_TOKEN")
+        tok = _remember(os.environ.get("GH_TOKEN"))
         return Credential(lambda h: h.__setitem__("Authorization", f"Bearer {tok}")) if tok else None
 
     if provider == "gitlab":
         # Ordinary calls go through `glab`, which authenticates itself - but the
         # upload route MUST use HTTP, and returning None there would send it
         # unauthenticated. So fall back to glab's own stored token.
-        tok = os.environ.get("GITLAB_TOKEN") or _glab_config_token(host)
+        tok = _remember(os.environ.get("GITLAB_TOKEN") or _glab_config_token(host))
         return Credential(lambda h: h.__setitem__("PRIVATE-TOKEN", tok)) if tok else None
 
     if provider == "linear":
-        key = os.environ.get("LINEAR_API_KEY")
+        key = _remember(os.environ.get("LINEAR_API_KEY"))
         return Credential(lambda h: h.__setitem__("Authorization", key)) if key else None
 
     if provider == "jira":
@@ -94,9 +94,9 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None,
         # between invocations. Racing them would also make "which credential
         # failed" unanswerable when both are present.
         if auth_scheme == "bearer-pat":
-            pat = os.environ.get("JIRA_PAT")
+            pat = _remember(os.environ.get("JIRA_PAT"))
             return Credential(lambda h: h.__setitem__("Authorization", f"Bearer {pat}")) if pat else None
-        email, tok = os.environ.get("JIRA_EMAIL"), os.environ.get("JIRA_API_TOKEN")
+        email, tok = os.environ.get("JIRA_EMAIL"), _remember(os.environ.get("JIRA_API_TOKEN"))
         if email and tok:
             return Credential(lambda h: h.__setitem__("Authorization", _basic(email, tok)))
         return None
@@ -104,11 +104,29 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None,
     return None
 
 
+#: Every secret this process has actually resolved, including ones that never
+#: appear in the environment. Scanning env vars alone missed the glab-config
+#: token used by the mandatory GitLab HTTP upload route, so a provider echoing
+#: it back would have leaked it.
+_SEEN: set[str] = set()
+
+
+def _remember(value: Optional[str]) -> Optional[str]:
+    if value:
+        _SEEN.add(value)
+    return value
+
+
 def redact(text: str) -> str:
-    """Strip any resolvable secret from a string bound for a log or error."""
+    """Strip every known secret from a string bound for a log, error or receipt."""
     out = text
     for name in ("GH_TOKEN", "GITLAB_TOKEN", "LINEAR_API_KEY", "JIRA_API_TOKEN", "JIRA_PAT"):
         val = os.environ.get(name)
-        if val and len(val) >= 8:
-            out = out.replace(val, f"<{name} redacted>")
+        if val:
+            _SEEN.add(val)
+    # No length floor. An 8-character minimum was a false economy: a short token
+    # is still a token, and "too short to matter" is not a security property.
+    for secret in sorted(_SEEN, key=len, reverse=True):
+        if secret:
+            out = out.replace(secret, "<redacted>")
     return out

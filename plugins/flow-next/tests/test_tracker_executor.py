@@ -280,9 +280,16 @@ class TlsOptOut(unittest.TestCase):
         self.assertNotIn("open(r, timeout=req.timeout_s, context=", src)
 
     def test_cli_route_rejects_tls_opt_out_rather_than_ignoring_it(self) -> None:
-        # A sink is supplied so this reaches the CLI-specific branch: the
-        # "downgrade must be recordable" check fires first and is tested
-        # separately in TlsDowngradeCannotBeSilent.
+        """Amended acceptance: the executor CANNOT honour sslVerify=false on a
+        CLI route - gh/glab expose no TLS flag, and rewriting the call into its
+        HTTP equivalent needs endpoint knowledge that lives in the adapters
+        (.4/.6). Rejecting is the honest option here; silently proceeding would
+        claim a guarantee this layer cannot deliver.
+
+        A sink is supplied so this reaches the CLI-specific branch: the
+        "downgrade must be recordable" check fires first and is tested
+        separately in TlsDowngradeCannotBeSilent.
+        """
         r = X.execute(Request(provider="github", op="r", method="GET",
                               url_or_argv=["gh", "api", "x"]),
                       verify_tls=False, on_event=lambda _e: None)
@@ -676,6 +683,39 @@ class ErrorBodyReadTimeout(unittest.TestCase):
                                   url_or_argv="https://api.linear.app/graphql"))
         self.assertIsInstance(r, TrackerError)
         self.assertEqual(r.subtype, "read")
+
+
+class RedactorCoversEverySecretSource(unittest.TestCase):
+    """Env-var scanning alone missed the glab-config token used by the
+    mandatory GitLab HTTP upload route."""
+
+    def test_glab_config_token_is_redacted(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(CR, "_glab_config_token", return_value="glpat-onlyinconfig"):
+            CR.resolve("gitlab")
+        payload, _ = E.failure(TrackerError(ErrorClass.TRANSPORT, "boom glpat-onlyinconfig"))
+        self.assertNotIn("glpat-onlyinconfig", payload)
+
+    def test_short_secrets_are_redacted_too(self) -> None:
+        """An 8-char floor was a false economy - a short token is still a token."""
+        with mock.patch.dict(os.environ, {"LINEAR_API_KEY": "abc123"}):
+            payload, _ = E.failure(TrackerError(ErrorClass.AUTH, "bad key abc123"))
+        self.assertNotIn("abc123", payload)
+
+
+class MalformedCliRequest(unittest.TestCase):
+    def test_non_string_argv_element_does_not_escape(self) -> None:
+        r = X.execute(Request(provider="github", op="r", method="GET",
+                              url_or_argv=["gh", None]))
+        self.assertIsInstance(r, TrackerError)
+        self.assertEqual(r.subtype, "spawn")
+
+    def test_credential_resolution_failure_does_not_escape(self) -> None:
+        with mock.patch.object(X, "resolve", side_effect=RuntimeError("corrupt config")):
+            r = X.execute(Request(provider="gitlab", op="r", method="GET",
+                                  url_or_argv="https://gitlab.com/api/v4/x"))
+        self.assertIsInstance(r, TrackerError)
+        self.assertEqual(r.subtype, "resolve")
 
 
 class Envelope(unittest.TestCase):

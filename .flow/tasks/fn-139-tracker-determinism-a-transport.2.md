@@ -36,7 +36,8 @@ Result envelope, exhaustive class enum, fixed numeric exit codes. JSON on stdout
 - [ ] GitLab upload uses the HTTP/multipart route, never `glab api -F`
 - [ ] Jira selects credentials by persisted `authScheme`; behavior defined when both sets are present
 - [ ] Redaction at the boundary; no token in any log/receipt/error (test)
-- [ ] `sslVerify: false` honoured and recorded, never silent
+- [ ] `sslVerify: false` on the **HTTP** route is honoured and recorded (fails closed if it cannot be recorded)
+- [ ] `sslVerify: false` on a **CLI** route is REJECTED, not silently ignored. Amended during review: the executor cannot honour it there, because `gh`/`glab` expose no TLS flag and rewriting a CLI call into the equivalent HTTP call needs endpoint knowledge that lives in the adapters (tasks .4/.6), not in the transport seam. Rejecting is the only honest option at this layer; silently proceeding would claim a guarantee the route cannot deliver. Routing CLI ops over HTTP when TLS is disabled is deferred to .4/.6, where the endpoints exist.
 - [ ] Content-bearing args never in argv (body with shell metacharacters)
 - [ ] Envelope + class enum + numeric exit codes; JSON stdout, notes stderr
 

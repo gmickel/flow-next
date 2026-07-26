@@ -190,7 +190,9 @@ def _cli(req: Request, verify_tls: bool) -> Result:
     except subprocess.TimeoutExpired:
         return TrackerError(ErrorClass.TRANSPORT, "CLI process deadline exceeded",
                             subtype="timeout", auto_retryable=True)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, TypeError) as exc:
+        # subprocess.run raises TypeError for a non-str argv element or a
+        # non-bytes body (e.g. ["gh", None]) - not OSError.
         return TrackerError(ErrorClass.TRANSPORT, redact(str(exc)), subtype="spawn",
                             auto_retryable=False)
     elapsed = time.monotonic() - started
@@ -252,7 +254,13 @@ def execute(
         return TrackerError(ErrorClass.INVALID_INPUT,
                             redact(f"malformed request target: {exc}"),
                             subtype="construction")
-    cred = resolve(request.provider, auth_scheme=auth_scheme, host=dest_host)
+    try:
+        # A corrupt glab config or an unreadable credential source must not
+        # escape either - this sits outside every other guard.
+        cred = resolve(request.provider, auth_scheme=auth_scheme, host=dest_host)
+    except Exception as exc:  # noqa: BLE001 - boundary: nothing may escape execute()
+        return TrackerError(ErrorClass.AUTH, redact(f"credential resolution failed: {exc}"),
+                            subtype="resolve")
     is_cli = isinstance(request.url_or_argv, (list, tuple))
     if not verify_tls:
         # "Honoured but never silent" cannot depend on the caller happening to
