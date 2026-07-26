@@ -55,6 +55,7 @@ Append-only list of **behavior-affecting changes and new opt-in defaults**. Newe
 - **`config.key` or feature name** — one-line what changed / why it matters. Enable: `command or config`. Details: [link](path).
 ```
 
+- **`.flow/` writes refuse symlinked components** — `flowctl` no longer writes through a symlink anywhere between `.flow` and the file it is writing, so an untrusted checkout cannot redirect a write outside the workspace or onto another managed file. A legitimately symlinked `.flow` **directory** is still supported. No action needed; if a run now reports a refused path, replace that symlink with a real file or directory.
 - **`tracker.specIds`** — team default id scheme for new specs when a tracker is configured. Parallel agents collide on bare `fn-N`; tracker-keyed ids (`WOR-17` → `wor-17-slug`; GitHub `#123` → `gh-123-slug`; GitLab iid → `gl-N-slug`) use the tracker as the distributed allocator. Enable: `flowctl config set tracker.specIds tracker` (or answer the setup question when a tracker is configured and the key is still unset). Details: [`tracker-sync.md`](tracker-sync.md) § Hybrid id model / `tracker.specIds`.
 
 ## Conventions

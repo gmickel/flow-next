@@ -139,7 +139,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-134-spec-id-collisions-widen-allocation.md",
-  "status": "open",
+  "status": "done",
   "title": "Spec-id collisions: widen allocation visibility, make tracker-keyed ids the team default",
   "tracker": {
     "baseHashFlow": null,
@@ -152,5 +152,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-25T12:46:47.835777Z"
+  "updated_at": "2026-07-26T01:42:08.267926Z"
 }

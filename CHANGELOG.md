@@ -2,12 +2,22 @@
 
 All notable changes to the flow-next.
 
-## [Unreleased]
+## [flow-next 3.5.0] - 2026-07-26
 
 ### Added
 
 - **`tracker.specIds` + synthetic tracker keys + create-first (fn-134).** Team default id scheme when a tracker is configured: `flowctl config set tracker.specIds tracker` routes new specs to tracker-keyed ids (Linear/Jira native `KEY-N-slug`; GitHub `#N` → `gh-N-slug`; GitLab project-scoped `iid` → `gl-N-slug`). Synthetic keys are guarded by contextual `gh`/`gl` prefix reservation while `tracker.type` matches plus a preflight of the existing store. Fresh-idea path: tracker-sync **create-first** (title+body, no local spec) with pre-spec recovery under `.flow/create-first/` (gitignored; retry links, never re-creates). Setup asks the id-scheme question when a tracker is configured and the key is still unset. Notable updates surface seeded on `plugins/flow-next/docs/README.md`.
 - **`flowctl task set-title`** — updates JSON `title` and markdown H1 together so they cannot disagree (fn-134 incidental).
+
+### Fixed
+
+- **Workspace containment for `create-first` recovery writes (security).** A repository is untrusted input: an attacker-supplied checkout could ship `.flow/create-first` or `.flow/.gitignore` as a symlink and have `flowctl sync create-first-put` write through it. Three variants were reproduced before fixing — out-of-tree (record written outside the repo), in-tree to another managed file (`.flow/config.json` overwritten with ignore rules), and a symlinked directory component (records written into `.flow/specs/`). Every component from the leaf up to the resolved `.flow` is now checked, and any symlink among them is refused. A legitimately symlinked `.flow` itself remains supported.
+- **`create-first` sequence hardening.** The recovery record is released last (after the back-reference write, then the receipt); attach, merge-base seeding and `set-last-synced` each abort the sequence rather than falling through to the cleanup that would discard the recovery state; a resumed run reuses the recorded `specId` instead of re-minting, and re-validates that the spec is still unlinked before attaching. A custom Jira DC/Server key (`MY_PROJECT-7`), which is display-only by design, degrades to flow-first **plus attach** instead of looping on a mint that can never succeed.
+- **Named-issue mints now attach.** All five spec-creating sites (capture, plan, work, interview, QA promotion) follow a named-issue mint with the fetch/attach/seed ceremony. Minting stores `tracker.identifier` but not the durable `tracker.id`, so without it a later lifecycle touchpoint treated the spec as unlinked and created a **second** remote issue.
+- **Flow-first degradation is reachable.** The fallback sat in an `else` arm that could never run when `create-first` returned a noop, so spec creation aborted when no transport was reachable. It is now an unconditional post-check, guarded so it never fires once a remote issue exists (which would orphan it).
+- **Task H1 handling.** Locating the task heading now ignores YAML frontmatter, fenced and indented code, requires column-zero markers and delimiters, understands CRLF and bare-CR line endings, preserves the original line terminator on rewrite, and targets the task's own heading — the read and write paths agree.
+- **Allocation monotonicity.** The ref scan passes `--full-history`; without it git's pathspec simplification pruned merged side branches (measured on this repo: 285 vs 287 observed adds), so a retired `fn-N` could be handed out again.
+- **`task create` / `task set-title` reject multiline titles**, which would otherwise split the JSON title and the markdown H1 apart.
 
 ### Changed
 
