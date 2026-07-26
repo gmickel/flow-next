@@ -18894,7 +18894,10 @@ def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
     # scalar content, and treating it as the close inserts the heading INTO the
     # frontmatter. (The two paths were fixed separately, which is how this one
     # kept its own strip-based check - hence the explicit note.)
-    if content.startswith("---"):
+    # Exact delimiter line only: content beginning `---text` (a setext rule, a
+    # sentence with a leading dash run) is BODY, not frontmatter.
+    first_line = content.split("\n", 1)[0].rstrip("\r")
+    if first_line == "---":
         parts = content.splitlines(keepends=True)
         close_idx = None
         for i in range(1, len(parts)):

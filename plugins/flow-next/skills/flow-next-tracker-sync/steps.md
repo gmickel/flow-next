@@ -535,7 +535,14 @@ if [ -z "$SPEC_ID" ]; then
     --transport "$TRANSPORT" --spec-id "$SPEC_ID"
 fi
 # 3. attach (id, identifier, url - all three)
-$FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_ID" --identifier "$IDENTIFIER" --url "$ISSUE_URL"
+# Attach MUST succeed before anything below runs. A UUID collision (this issue
+# already linked to another spec) leaves the spec unlinked, and the steps below
+# seed, back-reference and CLEAR the recovery record - discarding the only state
+# that makes this resumable. Abort loudly and keep the record.
+$FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_ID" --identifier "$IDENTIFIER" --url "$ISSUE_URL" || {
+  echo "create-first: attach failed for $SPEC_ID <- $IDENTIFIER ($ISSUE_URL); retryKey $RETRY_KEY KEPT" >&2
+  return 1 2>/dev/null || exit 1
+}
 # 4. seed merge base (BOTH halves - paired-snapshot invariant; body-merge.md first-link)
 #    Tracker half = the issue body just created (fetch-back after writeIssue, body-merge.md Step 5).
 $FLOWCTL sync set-merge-base "$SPEC_ID" \

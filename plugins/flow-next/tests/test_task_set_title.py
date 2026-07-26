@@ -349,6 +349,17 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
         self.assertIn("# " + self.TASK_ID + " New", out)
         self.assertNotIn("# " + self.TASK_ID + " Real", out)
 
+
+    def test_leading_dash_run_is_not_frontmatter(self) -> None:
+        """`---text` is body, not an opening delimiter (PR #241 wave 20)."""
+        body = "--- not frontmatter, just a dash run\n\nbody\n"
+        out = flowctl._task_rewrite_h1(body, self.TASK_ID, "T")
+        self.assertTrue(
+            out.startswith("# " + self.TASK_ID + " T"),
+            "heading must go at the top, not after a fake frontmatter block",
+        )
+        self.assertIn("--- not frontmatter", out)
+
     def test_unfenced_h1_still_works(self) -> None:
         plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")
