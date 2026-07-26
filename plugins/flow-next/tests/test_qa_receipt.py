@@ -50,6 +50,10 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+# fn-139.1: the tracker package sits beside flowctl.py; under a test module
+# sys.path[0] is THIS directory, not scripts/, so it would not import.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
 HERE = Path(__file__).resolve()
 TESTS_DIR = HERE.parent
 PLUGIN_DIR = TESTS_DIR.parent

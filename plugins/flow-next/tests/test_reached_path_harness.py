@@ -20,6 +20,12 @@ from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
 
+import sys
+
+# fn-139.1: the tracker package sits beside flowctl.py; under a test module
+# sys.path[0] is THIS directory, not scripts/, so it would not import.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
 REPO = Path(__file__).resolve().parents[3]
 HARNESS = REPO / "optimization" / "reached-path"
 RUN_EVAL = HARNESS / "run_eval.py"
