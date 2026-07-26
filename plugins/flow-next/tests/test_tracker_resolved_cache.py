@@ -837,5 +837,55 @@ class ReclaimerClaimClosesTheCheckToRenameWindow(unittest.TestCase):
         finally:
             proc.kill()
             proc.wait(timeout=30)
+            proc.stdout.close()
         self.assertTrue(CL._try_reclaim(self.lock),
                         "kernel released the killed holder's claim")
+
+
+class ClaimLeafSymlinkContainment(unittest.TestCase):
+    """The persistent claim leaf gets the same no-follow policy as the lock
+    directory components - a following open would create/open an external
+    target planted by a malicious checkout."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.flow = Path(self.tmp.name) / "repo" / ".flow"
+        (self.flow / ".locks").mkdir(parents=True)
+        self.lock = self.flow / ".locks" / "config.d"
+        self.outside = Path(self.tmp.name) / "outside"
+        self.outside.mkdir()
+
+    def test_symlinked_claim_leaf_is_refused_and_target_preserved(self) -> None:
+        victim = self.outside / "victim.bin"
+        victim.write_bytes(b"precious")
+        leaf = self.lock.with_name("config.d.reclaimer.lock")
+        try:
+            leaf.symlink_to(victim)
+        except (OSError, NotImplementedError):  # pragma: no cover
+            self.skipTest("symlinks unavailable on this platform/user")
+        with self.assertRaises(CL.ConfigLockUnsafe):
+            CL._acquire_reclaimer_claim(self.lock)
+        self.assertEqual(victim.read_bytes(), b"precious")
+
+    def test_unsafe_claim_leaf_surfaces_through_lock_acquisition(self) -> None:
+        # A stale lock forces the reclaim path, which meets the planted leaf.
+        self.lock.mkdir()
+        (self.lock / "owner.json").write_text(json.dumps({
+            "pid": 999999999, "host": CL.socket.gethostname(),
+            "acquired_at": time.time() - 600}), encoding="utf-8")
+        leaf = self.lock.with_name("config.d.reclaimer.lock")
+        try:
+            leaf.symlink_to(self.outside / "victim.bin")
+        except (OSError, NotImplementedError):  # pragma: no cover
+            self.skipTest("symlinks unavailable on this platform/user")
+        with self.assertRaises(CL.ConfigLockUnsafe):
+            with CL.config_lock(self.flow, timeout_s=1):
+                pass
+
+    def test_regular_claim_leaf_still_works(self) -> None:
+        leaf = self.lock.with_name("config.d.reclaimer.lock")
+        leaf.write_bytes(b"")
+        claim = CL._acquire_reclaimer_claim(self.lock)
+        self.assertIsNotNone(claim)
+        CL._release_reclaimer_claim(claim)

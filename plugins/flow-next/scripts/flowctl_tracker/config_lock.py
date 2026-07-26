@@ -160,8 +160,24 @@ def _acquire_reclaimer_claim(lock: Path):
     state changes. flock on POSIX, msvcrt byte-range locking on Windows.
     """
     path = lock.with_name("config.d.reclaimer.lock")
+    # No-follow semantics on the claim leaf, same policy as the directory
+    # components: a malicious checkout can commit this path as a symlink (or a
+    # FIFO/device) pointing outside the repository, and a following open would
+    # create or open the external target. lstat rejects what exists;
+    # O_NOFOLLOW closes the check-to-open window where the platform has it.
     try:
-        f = open(path, "a+b")  # noqa: SIM115 - handle escapes for the caller to release
+        st = os.lstat(path)
+        if not stat_mod.S_ISREG(st.st_mode):
+            raise ConfigLockUnsafe(
+                f"{path} is not a regular file; refusing to open a symlinked "
+                "or special claim leaf")
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return None
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        f = os.fdopen(os.open(path, flags, 0o644), "r+b")
     except OSError:
         return None
     try:
