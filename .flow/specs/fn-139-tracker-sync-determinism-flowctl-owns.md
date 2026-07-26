@@ -239,6 +239,22 @@ Two claims made during that pass were wrong and are corrected here: GitLab `is_b
 
 Not verified: the Jira Data Center custom-key path, which Jira Cloud cannot reproduce.
 
+## Downstream impact
+
+Specs that take a dependency on this one (edges set via `flowctl spec add-dep`):
+
+- **[[fn-138-published-json-schema-for-flow-config]]** - must publish the `tracker.resolved` block; publishing before this lands ships a schema that immediately drifts and fails its own honesty test.
+- **[[fn-73-glab-git-ops-make-prresolve-prland-over]]** - reuses the `glab` transport plumbing (token/host resolution, tier probe, structured errors) plus the two measured `glab` defects, rather than deriving a second divergent implementation.
+
+Cross-referenced without a dependency edge:
+
+- **[[fn-129-skill-only-invocation-architecture]]** - **file conflict, not an ordering requirement.** Both edit `flow-next-tracker-sync/steps.md`, `SKILL.md` and `references/*.md`. Scheduling choice; second one in should rebase.
+
+Superseded by this spec:
+
+- **fn-57 R3** ("flowctl gains no tracker-mutation code") - reversed deliberately, see R17.
+- **fn-130** tracker-cluster reached-path B1 baselines - invalidated by R11's prose reduction, re-frozen under R28.
+
 ## Quick commands
 
 ```bash

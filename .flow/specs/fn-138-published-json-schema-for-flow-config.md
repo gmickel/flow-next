@@ -26,3 +26,11 @@
 - **R3:** Setup stamps `$schema` on configs it writes (scaffold + refresh paths) pointing at the stable URL; existing configs untouched unless refreshed.
 - **R4:** Fixture validation tests (valid + invalid configs incl. the backend spec grammar pattern) pass stdlib-only; no new dependencies.
 - **R5:** Docs + Unreleased CHANGELOG updated; the downstream-walk note lists the docs-site publication step.
+
+## Cross-spec dependency (added 2026-07-26)
+
+**Depends on [[fn-139-tracker-sync-determinism-flowctl-owns]].**
+
+fn-139 adds a new top-level config block `tracker.resolved` (a discovery-written destination + capability cache: per-tracker resolved ids, plus `attachments` / `blockedBy` / `subIssues` / `deleteIssue` capability flags). Its shape is settled by fn-139's R2/R19-R23, including that it is atomic, lock-protected, and may be partially absent by design during migration.
+
+Publishing the schema before that block exists would ship a schema that immediately drifts, and fn-138's own honesty test would fail the moment fn-139 lands. Sequence fn-138 after fn-139, or land both in one window with the schema table updated in the same change.

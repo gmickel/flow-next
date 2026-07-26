@@ -1,7 +1,9 @@
 {
   "branch_name": "fn-138-published-json-schema-for-flow-config",
   "created_at": "2026-07-25T11:56:55.671060Z",
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-139-tracker-sync-determinism-flowctl-owns"
+  ],
   "id": "fn-138-published-json-schema-for-flow-config",
   "next_task": 1,
   "plan_review_status": "unknown",
@@ -20,5 +22,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-25T11:57:07.888649Z"
+  "updated_at": "2026-07-26T11:42:28.937489Z"
 }

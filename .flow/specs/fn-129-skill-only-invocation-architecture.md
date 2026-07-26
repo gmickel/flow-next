@@ -316,3 +316,11 @@ On revisit, repeat the live matrix; do not treat the 2026-07-23 results as curre
 | R17–R18 | Installer cleanup and regression suites. [inferred] |
 | R19–R20 | Final deletion gate and fail-closed host matrix. [inferred] |
 | R21–R22 | Community-port handoff and release discipline. [inferred] |
+
+## Parallel-work conflict (noted 2026-07-26)
+
+**Conflicts with [[fn-139-tracker-sync-determinism-flowctl-owns]] - deliberately NOT a dependency edge.**
+
+fn-139 gutting the tracker-sync skill prose (its R11 targets a >=150,000 character reduction across `steps.md` and the adapter references) touches the same files this spec's invocation-surface pass edits. Landing both in the same window means touch conflicts on `flow-next-tracker-sync/steps.md`, `SKILL.md` and `references/*.md`.
+
+No dependency is recorded because neither blocks the other semantically - this is a scheduling choice, not an ordering requirement. Whoever picks these up second should rebase rather than merge, and expect the tracker-sync prose to have changed shape entirely if fn-139 went first.

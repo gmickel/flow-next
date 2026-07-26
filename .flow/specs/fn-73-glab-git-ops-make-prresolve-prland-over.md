@@ -56,3 +56,16 @@ Companies hosting code on GitLab want flow-next's full pipeline, not just issue 
 
 ## Conversation Evidence
 > user: "might be worth creating a stub spec for using this gitlab for testing glab for git ops too for our companies that use gitlab instead of github for code hosting" (2026-06-28)
+
+## Cross-spec dependency (added 2026-07-26)
+
+**Depends on [[fn-139-tracker-sync-determinism-flowctl-owns]].**
+
+fn-139 moves GitLab issue transport out of skill prose and into deterministic flowctl Python, which means it builds the `glab` subprocess plumbing this spec also needs: token/host resolution for self-managed instances, the tier probe (`GET /namespaces/:id -> plan`), and the structured error shape.
+
+It also captures two measured `glab` defects that this spec would otherwise rediscover:
+
+- **`glab` prints its "Multiple config files found" warning to STDOUT**, corrupting JSON parsing.
+- **`glab api -F file=@` produces invalid multipart** and **`-f "assignee_ids[]="` is not array-encoded** - both require raw curl.
+
+This spec targets Merge Requests rather than issues, so it is not blocked on fn-139's semantics - only on reusing its transport layer instead of deriving a second, divergent one.
