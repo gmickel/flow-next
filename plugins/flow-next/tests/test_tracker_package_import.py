@@ -52,7 +52,8 @@ class TrackerPackageImports(unittest.TestCase):
     def test_providers_subpackage_imports(self) -> None:
         from flowctl_tracker import providers  # noqa: PLC0415
 
-        self.assertEqual(providers.__all__, [], "providers is intentionally empty until .4/.6")
+        # .4 shipped GitHub + GitLab behind resolver_for; .6 adds Linear + Jira.
+        self.assertEqual(providers.__all__, ["resolver_for"])
 
     def test_name_is_namespaced(self) -> None:
         """A bare `tracker/` would collide on sys.path with anything similarly named."""

@@ -1,9 +1,24 @@
-"""Per-provider adapters (GitHub, GitLab, Linear, Jira).
+"""Per-provider resolution adapters (fn-139.4/.6).
 
-Empty by design in spec A task .1. The injected executor and the typed
-Request/Response layer arrive in task .2; the adapters themselves in .4 and .6.
-This module exists now so the package shape - and its importability under both
-the test harness and the real launcher - is proven before anything depends on it.
+`resolver_for(provider)` is the dispatch the resolve verb builds on: each
+provider module exposes `resolve_destination(config, execute)` and
+`resolve_capabilities(config, execute)`. GitHub + GitLab arrive in task .4;
+Linear + Jira in task .6 - `resolver_for` on a not-yet-shipped provider raises
+KeyError so a caller cannot silently half-resolve.
 """
 
-__all__: list[str] = []
+from __future__ import annotations
+
+from importlib import import_module
+from types import ModuleType
+
+__all__ = ["resolver_for"]
+
+_PROVIDERS = {"github", "gitlab"}  # .6 adds linear + jira
+
+
+def resolver_for(provider: str) -> ModuleType:
+    if provider not in _PROVIDERS:
+        raise KeyError(f"no resolver for provider {provider!r}; "
+                       f"available: {sorted(_PROVIDERS)}")
+    return import_module(f".{provider}", __name__)
