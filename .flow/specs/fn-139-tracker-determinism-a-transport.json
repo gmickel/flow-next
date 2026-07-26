@@ -1,5 +1,5 @@
 {
-  "branch_name": "fn-139-tracker-sync-determinism-flowctl-owns",
+  "branch_name": "fn-139-tracker-determinism-a-transport",
   "completion_review_status": "unknown",
   "completion_reviewed_at": null,
   "created_at": "2026-07-26T11:22:11.684198Z",
@@ -125,5 +125,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-26T14:50:31.803910Z"
+  "updated_at": "2026-07-26T14:51:12.200069Z"
 }
