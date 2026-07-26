@@ -40,7 +40,14 @@ class TrackerPackageImports(unittest.TestCase):
     def test_package_imports_under_test(self) -> None:
         import flowctl_tracker  # noqa: PLC0415
 
-        self.assertTrue(flowctl_tracker.__version__)
+        self.assertEqual(flowctl_tracker.__all__, [])
+
+    def test_no_version_field_until_distribution_lands(self) -> None:
+        """A truthiness assertion previously masked a __version__ that contradicted
+        the manifests. Version wiring is task .5; until then there is no field."""
+        import flowctl_tracker  # noqa: PLC0415
+
+        self.assertFalse(hasattr(flowctl_tracker, "__version__"))
 
     def test_providers_subpackage_imports(self) -> None:
         from flowctl_tracker import providers  # noqa: PLC0415
@@ -58,7 +65,7 @@ class TrackerPackageImports(unittest.TestCase):
         """Production path: sys.path[0] is the bootstrap's dir, no insert needed."""
         r = subprocess.run(
             [sys.executable, "-c",
-             "import flowctl_tracker, flowctl_tracker.providers; print(flowctl_tracker.__version__)"],
+             "import flowctl_tracker, flowctl_tracker.providers; print('ok')"],
             cwd=str(ROOT / "scripts"), capture_output=True, text=True, check=False,
         )
         self.assertEqual(r.returncode, 0, r.stderr)

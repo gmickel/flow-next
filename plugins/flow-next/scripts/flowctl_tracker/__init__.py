@@ -17,8 +17,9 @@ Adapters land in `providers/` in later tasks; this module holds no transport
 logic and imports nothing from flowctl, so the dependency runs one way only.
 """
 
-__all__ = ["__version__"]
+# Deliberately no __version__ here. An earlier draft carried one claiming to
+# track the flow-next release while hardcoding a value the manifests contradict.
+# Nothing consumes it yet, and distribution/version wiring is task .5 - a field
+# that lies is worse than an absent one.
 
-# Tracks the flow-next release that shipped this package, not a separate
-# version line - the manifest in task .5 pins content, this is provenance.
-__version__ = "0.1.0-dev"
+__all__: list[str] = []
