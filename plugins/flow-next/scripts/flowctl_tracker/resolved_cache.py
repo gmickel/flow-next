@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
-from .config_lock import ConfigLockTimeout, config_lock
+from .config_lock import ConfigLockTimeout, ConfigLockUnsafe, config_lock
 from .types import ErrorClass, TrackerError
 
 #: Canonical scope paths - the ONLY keys `scopeResolvedAt` may contain.
@@ -237,7 +237,14 @@ def _read_config(config_path: Path) -> dict:
         return {}
     except (OSError, ValueError) as exc:
         raise ValueError(f"unreadable config at {config_path}: {exc}") from exc
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        # A present-but-non-object config is CORRUPT, not absent. Treating it
+        # as {} made the transaction atomically overwrite the file with a fresh
+        # document - silently destroying whatever the user had.
+        raise ValueError(
+            f"config at {config_path} is valid JSON but not an object; "
+            "refusing to overwrite it")
+    return data
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:
@@ -296,6 +303,8 @@ def resolve_transaction(
                 return current
         except ConfigLockTimeout as exc:
             return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
+        except ConfigLockUnsafe as exc:
+            return TrackerError(ErrorClass.INVALID_INPUT, str(exc), subtype="lock_unsafe")
         except ValueError as exc:
             return TrackerError(ErrorClass.INVALID_INPUT, str(exc), subtype="validate")
     return TrackerError(

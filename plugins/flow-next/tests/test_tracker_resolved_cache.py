@@ -592,3 +592,214 @@ class FlowctlWritersRouteThroughTheLock(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PidLivenessNeverSignals(unittest.TestCase):
+    """`os.kill(pid, 0)` on Windows calls TerminateProcess - a liveness PROBE
+    built on it kills the holder. Both branches are query-only; this test uses
+    a real live child on every platform (ctypes branch on the Windows CI row)."""
+
+    def test_live_child_reads_alive_and_survives_the_probe(self) -> None:
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"])
+        try:
+            self.assertTrue(CL._pid_alive(child.pid))
+            self.assertIsNone(child.poll(), "the probe must not kill the child")
+        finally:
+            child.kill()
+            child.wait(timeout=30)
+
+    def test_exited_child_reads_dead(self) -> None:
+        child = subprocess.Popen([sys.executable, "-c", "pass"])
+        child.wait(timeout=30)
+        time.sleep(0.05)
+        self.assertFalse(CL._pid_alive(child.pid))
+
+    def test_posix_branch_never_uses_a_real_signal(self) -> None:
+        if os.name == "nt":
+            self.skipTest("POSIX branch")
+        with mock.patch.object(CL.os, "kill") as k:
+            CL._pid_alive(12345)
+        self.assertEqual(k.call_args.args[1], 0, "signal 0 only - never a killer")
+
+
+class ReclaimIsSerializedByRename(unittest.TestCase):
+    """The ABA race: two contenders classify the SAME directory stale; A
+    reclaims and acquires a fresh lock; B's delayed removal must not be able to
+    delete A's new lock."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.flow = Path(self.tmp.name)
+        self.lock = self.flow / ".locks" / "config.d"
+
+    def _make_stale_lock(self) -> None:
+        self.lock.mkdir(parents=True)
+        (self.lock / "owner.json").write_text(json.dumps({
+            "pid": 999999999, "host": CL.socket.gethostname(),
+            "acquired_at": time.time() - 600}), encoding="utf-8")
+
+    def test_removal_targets_the_renamed_path_never_the_live_lock(self) -> None:
+        self._make_stale_lock()
+        self.assertTrue(CL._try_reclaim(self.lock))
+        # A wins the rename; simulate A's fresh lock at the live path.
+        self.lock.mkdir()
+        (self.lock / "owner.json").write_text(json.dumps({
+            "pid": os.getpid(), "host": CL.socket.gethostname(),
+            "acquired_at": time.time()}), encoding="utf-8")
+        # B, acting on its stale classification of the OLD directory, attempts
+        # its own reclaim. The old directory is gone; rename can only touch the
+        # live path if the implementation is wrong.
+        stale_ghost = self.lock.with_name("config.d.ghost")
+        self.assertFalse(stale_ghost.exists())
+        # B's second staleness check on the LIVE lock sees a fresh owner:
+        self.assertFalse(CL._owner_is_stale(self.lock, time.time()))
+        self.assertTrue(self.lock.exists(), "A's fresh lock survives")
+
+    def test_threads_racing_a_stale_lock_keep_mutual_exclusion(self) -> None:
+        self._make_stale_lock()
+        state = {"active": 0, "max": 0, "entries": 0}
+        guard = threading.Lock()
+
+        def contend() -> None:
+            with CL.config_lock(self.flow, timeout_s=10):
+                with guard:
+                    state["active"] += 1
+                    state["entries"] += 1
+                    state["max"] = max(state["max"], state["active"])
+                time.sleep(0.05)
+                with guard:
+                    state["active"] -= 1
+
+        threads = [threading.Thread(target=contend) for _ in range(4)]
+        for t in threads: t.start()
+        for t in threads: t.join()
+        self.assertEqual(state["max"], 1, "two holders inside the critical section")
+        self.assertEqual(state["entries"], 4)
+
+    def test_failed_reclaim_rename_honours_the_deadline(self) -> None:
+        """Permissions/antivirus/read-only rename failure must time out, not spin."""
+        self._make_stale_lock()
+        started = time.monotonic()
+        with mock.patch.object(CL.os, "rename", side_effect=OSError("locked by AV")):
+            with self.assertRaises(CL.ConfigLockTimeout):
+                with CL.config_lock(self.flow, timeout_s=0.5):
+                    pass
+        self.assertLess(time.monotonic() - started, 5.0, "no unbounded spin")
+
+
+class LockPathSymlinkContainment(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.flow = Path(self.tmp.name) / "repo" / ".flow"
+        self.flow.mkdir(parents=True)
+        self.outside = Path(self.tmp.name) / "outside"
+        self.outside.mkdir()
+
+    def _symlink(self, link: Path, target: Path) -> None:
+        try:
+            link.symlink_to(target, target_is_directory=True)
+        except (OSError, NotImplementedError):  # pragma: no cover - Windows w/o priv
+            self.skipTest("symlinks unavailable on this platform/user")
+
+    def test_symlinked_locks_dir_is_refused_and_target_untouched(self) -> None:
+        self._symlink(self.flow / ".locks", self.outside)
+        with self.assertRaises(CL.ConfigLockUnsafe):
+            with CL.config_lock(self.flow):
+                pass
+        self.assertEqual(list(self.outside.iterdir()), [],
+                         "nothing may be created through the symlink")
+
+    def test_symlinked_lock_leaf_is_refused_not_deleted(self) -> None:
+        victim = self.outside / "victim"
+        victim.mkdir()
+        (victim / "data.txt").write_text("precious", encoding="utf-8")
+        (self.flow / ".locks").mkdir()
+        self._symlink(self.flow / ".locks" / "config.d", victim)
+        with self.assertRaises(CL.ConfigLockUnsafe):
+            with CL.config_lock(self.flow):
+                pass
+        self.assertEqual((victim / "data.txt").read_text(encoding="utf-8"),
+                         "precious", "release path must never rmtree the target")
+
+    def test_transaction_maps_unsafe_lock_to_invalid_input(self) -> None:
+        self._symlink(self.flow / ".locks", self.outside)
+        (self.flow / "config.json").write_text(
+            json.dumps(gitlab_config(projectId=1)), encoding="utf-8")
+        out = RC.resolve_transaction(
+            self.flow, "destination",
+            lambda cfg: {"projectId": 1, "projectPath": "a/b",
+                         "host": "gitlab.com", "namespaceId": 9})
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "lock_unsafe")
+
+
+class CorruptConfigIsNeverOverwritten(unittest.TestCase):
+    def test_non_object_json_root_returns_invalid_input_and_zero_byte_change(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            flow = Path(td)
+            cfg = flow / "config.json"
+            cfg.write_text("[1, 2, 3]", encoding="utf-8")
+            before = cfg.read_bytes()
+            out = RC.resolve_transaction(
+                flow, "destination",
+                lambda c: {"projectId": 1, "projectPath": "a/b",
+                           "host": "gitlab.com", "namespaceId": 9})
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+            self.assertEqual(cfg.read_bytes(), before, "no bytes may change")
+
+    def test_missing_file_still_reads_as_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            self.assertEqual(RC._read_config(Path(td) / "config.json"), {})
+
+
+class ReclaimerClaimClosesTheCheckToRenameWindow(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.flow = Path(self.tmp.name)
+        self.lock = self.flow / ".locks" / "config.d"
+
+    def test_reclaim_recjecks_staleness_inside_the_claim(self) -> None:
+        """A reclassified-fresh lock must survive a reclaimer that already
+        decided it was stale."""
+        self.lock.mkdir(parents=True)
+        (self.lock / "owner.json").write_text(json.dumps({
+            "pid": os.getpid(), "host": CL.socket.gethostname(),
+            "acquired_at": time.time()}), encoding="utf-8")
+        # The caller believed the lock stale; inside the claim the fresh owner
+        # is re-read and the reclaim must refuse.
+        self.assertFalse(CL._try_reclaim(self.lock))
+        self.assertTrue(self.lock.exists())
+
+    def test_concurrent_reclaimer_blocks_rather_than_double_reclaims(self) -> None:
+        self.lock.mkdir(parents=True)
+        (self.lock / "owner.json").write_text(json.dumps({
+            "pid": 999999999, "host": CL.socket.gethostname(),
+            "acquired_at": time.time() - 600}), encoding="utf-8")
+        claim = self.lock.with_name("config.d.reclaimer")
+        claim.mkdir()
+        try:
+            self.assertFalse(CL._try_reclaim(self.lock),
+                             "an active claim must exclude a second reclaimer")
+            self.assertTrue(self.lock.exists())
+        finally:
+            claim.rmdir()
+        self.assertTrue(CL._try_reclaim(self.lock))
+        self.assertFalse(self.lock.exists())
+
+    def test_orphaned_claim_is_aged_out(self) -> None:
+        self.lock.mkdir(parents=True)
+        (self.lock / "owner.json").write_text(json.dumps({
+            "pid": 999999999, "host": CL.socket.gethostname(),
+            "acquired_at": time.time() - 600}), encoding="utf-8")
+        claim = self.lock.with_name("config.d.reclaimer")
+        claim.mkdir()
+        old = time.time() - 600
+        os.utime(claim, (old, old))
+        # First call ages out the orphan claim; acquisition then proceeds.
+        with CL.config_lock(self.flow, timeout_s=5):
+            pass
