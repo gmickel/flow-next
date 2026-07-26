@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-26T12:50:05.945857Z",
+  "depends_on": [
+    "fn-139-tracker-determinism-a-transport.4"
+  ],
+  "id": "fn-139-tracker-determinism-a-transport.5",
+  "priority": null,
+  "spec": "fn-139-tracker-determinism-a-transport",
+  "spec_path": ".flow/tasks/fn-139-tracker-determinism-a-transport.5.md",
+  "status": "todo",
+  "title": "Distribution finalization: manifest, installer verification, runtime smokes",
+  "updated_at": "2026-07-26T12:50:05.945857Z"
+}

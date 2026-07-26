@@ -4,7 +4,7 @@
   "claimed_at": null,
   "created_at": "2026-07-26T11:30:33.232861Z",
   "depends_on": [
-    "fn-139-tracker-determinism-a-transport.1"
+    "fn-139-tracker-determinism-a-transport.3"
   ],
   "id": "fn-139-tracker-determinism-a-transport.4",
   "impl": null,
@@ -14,6 +14,6 @@
   "spec_path": ".flow/tasks/fn-139-tracker-determinism-a-transport.4.md",
   "status": "todo",
   "sync": null,
-  "title": "Per-adapter destination + capability resolution, incl. Linear tiebreak",
-  "updated_at": "2026-07-26T12:32:24.610168Z"
+  "title": "Per-adapter resolution + capability truth table + Linear tiebreak",
+  "updated_at": "2026-07-26T12:50:05.487324Z"
 }

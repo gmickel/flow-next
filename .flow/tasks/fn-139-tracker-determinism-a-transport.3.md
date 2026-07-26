@@ -1,27 +1,27 @@
 ---
-satisfies: [R8, R10, R12, R13]
+satisfies: [R8,R10,R12,R13]
 ---
 
-# fn-139-tracker-determinism-a-transport.3 tracker.resolved cache: atomic writes, state table, migration
+# fn-139-tracker-determinism-a-transport.3 tracker.resolved: scoped timestamps, lock transaction, migration
 # fn-139-tracker-sync-determinism-flowctl-owns.3 Spec-aware status verb: fn-66 evidence gate + who-wins ladder
 
 ## Description
-Implement the `tracker.resolved` block and its full state-transition table.
+Implement the cache with **per-scope timestamps** - `destinationResolvedAt`, `capabilitiesCheckedAt`, and a top-level `resolvedAt` meaning "all required fields complete", never a TTL input. A scoped destination refresh must not make capabilities look fresh.
 
-Writes are atomic (`atomic_write_json`) and lock-protected (`cross_process_lock`) - both primitives already exist in flowctl.py. A partially-resolved block is never stamped with a `resolvedAt` that would make it look warm to consumers.
+**The transaction is the hard part.** Atomic write plus a lock does NOT prevent stale-read clobbering: two resolvers can read, compute different scopes, then serially replace the whole config. Required order: network work **outside** the lock; acquire the lock **shared by every `.flow/config.json` writer** (today `set_config` writes without it and can race a resolve); re-read **inside**; merge **only the resolved scope**; validate; atomically replace.
 
-Implement `--scope` so a rejected Jira transition refreshes the transitions sub-map, not the whole destination block. Migrate existing `perTracker.apiVersion: 3` configs to 2.
+Implement the state machine and its transitions behind a seam. Rows triggered by a mutation verb (stale-id retry, capability downgrade, retry exhaustion) are unit-tested through that seam here and wired to real verbs in spec B.
 
-The capability re-probe is synchronous and bounded, not a background process: no daemon, no lifecycle, and a failed probe leaves the prior capability and reports it.
+Migrate `perTracker.apiVersion: 3` to 2.
 
 ## Acceptance
-- [ ] Two concurrent resolves produce no torn or clobbered cache (two-process test)
-- [ ] Every row of the state table has a test
-- [ ] Absent block yields `class: unresolved`, NOT a false capability `false`
-- [ ] Transient 403 on the tier probe does not flip a capability
-- [ ] `--scope` refreshes only the named sub-map
-- [ ] `apiVersion: 3` migrates to 2
-- [ ] Partial resolution never stamps `resolvedAt`
+- [ ] Per-scope timestamps; scoped refresh does not falsely freshen another scope
+- [ ] Two DIFFERENT-scope concurrent resolves do not clobber each other
+- [ ] resolve-versus-`config set` race tested; shared writer lock
+- [ ] State machine transitions unit-tested through the seam
+- [ ] `resolve` backfill vs consuming-verb `class: unresolved` separately tested
+- [ ] Transient 403 on tier probe does not flip a capability
+- [ ] `apiVersion: 3` migrates to 2; partial resolution never stamps `resolvedAt`
 
 ## Done summary
 TBD

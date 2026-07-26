@@ -1,24 +1,28 @@
 ---
-satisfies: [R4, R5, R6, R7, R14]
+satisfies: [R4,R5,R6,R7,R14]
 ---
 
-# fn-139-tracker-determinism-a-transport.2 Injected request executor + adapter interface + result envelope
+# fn-139-tracker-determinism-a-transport.2 Injected executor: Request/Response types, bounds, classification
 # fn-139-tracker-sync-determinism-flowctl-owns.2 Wire verbs: read/update/comment CRUD/label/assign + persist-external
 
 ## Description
-Define the typed transport layer every adapter calls. No adapter calls `subprocess.run` or opens a connection directly - that seam IS the fake transport spec B tests against, so it is built here, not retrofitted.
+Build the transport seam every adapter calls. Specified, not aspirational:
 
-Implement the result envelope, the exhaustive `class` enum, and the fixed numeric exit-code mapping so callers branch on structure, never on prose.
+`Request{method,url_or_argv,headers,body,timeout_s,idempotent}` / `Response{status,headers,body,elapsed_s}`, with GraphQL errors arriving over HTTP 200/400 normalized here rather than in each adapter.
 
-Security and bounds are part of the seam, not an afterthought: no shell, content via stdin/file, credentials never persisted or logged, explicit per-request timeout, bounded retry on `rate_limited` only using each adapter's own header shape, capped concurrency, TLS on by default.
+Bounds: connect 5s / read 30s; max 2 retries on `rate_limited` only, exponential backoff capped 30s; concurrency cap 4. Credential precedence env -> Keychain -> CLI config -> unauthenticated, with redaction at the executor boundary.
+
+**Classification is per-adapter and tabulated.** `401/403 = auth` is insufficient: GitLab returns 403 for both a bad token and a licence-gated `is_blocked_by`, and Linear rate limiting arrives as a GraphQL error over HTTP 400.
+
+Result envelope, exhaustive class enum, fixed numeric exit codes. JSON on stdout, human notes on stderr.
 
 ## Acceptance
-- [ ] Adapters call only the injected executor; a test asserts no direct subprocess/socket use in `flowctl_tracker/`
-- [ ] Executor is substitutable with an in-process fake
-- [ ] Result envelope + class enum + numeric exit codes implemented and asserted
-- [ ] Content-bearing args never in argv (test with a body containing shell metacharacters)
-- [ ] No credential appears in any log line, receipt, or error string (test)
-- [ ] Timeout, bounded retry, concurrency cap, TLS default-on all asserted
+- [ ] Request/Response types implemented; GraphQL-over-200/400 normalized in the executor
+- [ ] Per-adapter classification table: GitLab 403+licence-body -> capability, bare 403 -> auth; Linear GraphQL 400 -> rate_limited
+- [ ] Bounds enforced and asserted (timeout, 2 retries, backoff clamp, concurrency 4)
+- [ ] Credential precedence + redaction at the boundary; no token in any log/receipt/error (test)
+- [ ] Content-bearing args never in argv (body with shell metacharacters)
+- [ ] Envelope + class enum + numeric exit codes; JSON stdout, notes stderr
 
 ## Done summary
 TBD

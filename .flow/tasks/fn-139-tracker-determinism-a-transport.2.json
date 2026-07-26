@@ -14,6 +14,6 @@
   "spec_path": ".flow/tasks/fn-139-tracker-determinism-a-transport.2.md",
   "status": "todo",
   "sync": null,
-  "title": "Injected request executor + adapter interface + result envelope",
-  "updated_at": "2026-07-26T12:32:24.045341Z"
+  "title": "Injected executor: Request/Response types, bounds, classification",
+  "updated_at": "2026-07-26T12:50:04.605164Z"
 }

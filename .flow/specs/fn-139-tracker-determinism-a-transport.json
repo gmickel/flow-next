@@ -10,9 +10,9 @@
   "id": "fn-139-tracker-determinism-a-transport",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 2,
+  "plan_review_rounds": 3,
   "plan_review_status": "needs_work",
-  "plan_reviewed_at": "2026-07-26T12:07:03.492492Z",
+  "plan_reviewed_at": "2026-07-26T12:47:17.023225Z",
   "review_attempts": [
     {
       "backend": "codex",
@@ -39,6 +39,19 @@
       "task": null,
       "timestamp": "2026-07-26T12:07:03.491521Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "ad9f81f061db3e4449b8202a48e4a72b37a24731f816a760ede3a99192cc6ff4",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-07-26T12:47:17.022250Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_pending_rounds": {},
@@ -59,5 +72,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-26T12:32:23.395702Z"
+  "updated_at": "2026-07-26T12:47:17.023225Z"
 }

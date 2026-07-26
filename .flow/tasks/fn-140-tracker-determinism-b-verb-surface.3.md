@@ -8,12 +8,13 @@ Implement `tracker status <spec-id> --to <normalized>`, embedding **fn-66's merg
 
 Port the who-wins ladder **preserving branch order** - collision cases first. Memory `who-wins-ladder-must-check-the-...` records that reordering lets an earlier rule silently win. Enumerate deterministic outcomes for deadlock fallback and unmapped states; genuinely ambiguous cases return `class: conflict` for the skill's recovery surface.
 
-Jira uses the cached transition id: one request, not discover-then-transition (status cannot be set via fields - measured 400). GitHub's undocumented `duplicate` reason is reachable via `--reason`.
+Jira uses the cached target STATUS id, then GETs the issue's legal transitions first - transition ids are valid only from the current status (`jira.md:738`, verified live: To Do/In Progress/Done each surfaced different ids). No legal transition to the target means defer + receipt, never a forced jump. GitHub's undocumented `duplicate` reason is reachable via `--reason`.
 
 ## Acceptance
 - [ ] Completion-review alone cannot produce terminal Done
 - [ ] Collision branches evaluate before single-field rules; a reordering test fails
-- [ ] Jira status write is ONE request with a warm cache
+- [ ] Jira resolves legal transitions per issue; no cached transition id is used
+- [ ] No legal transition -> defer + receipt, never an illegal jump
 - [ ] Unmapped/deadlock states return `class: conflict`, never a silent default
 - [ ] `--reason duplicate` reachable on GitHub; garbage reason 422s
 - [ ] GitLab states handled as `opened`/`closed`

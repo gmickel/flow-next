@@ -12,6 +12,6 @@
   "spec_path": ".flow/tasks/fn-139-tracker-determinism-a-transport.1.md",
   "status": "todo",
   "sync": null,
-  "title": "Distribution: ship flowctl_tracker/ on every runtime",
-  "updated_at": "2026-07-26T12:32:23.739119Z"
+  "title": "Package skeleton + test sys.path sweep",
+  "updated_at": "2026-07-26T12:50:04.085902Z"
 }
