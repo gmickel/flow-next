@@ -6,6 +6,8 @@ satisfies: [R9, R10, R11, R15]
 ## Description
 Implement capability-gated verbs and resolve every capability asymmetry (R15) rather than leaving contracts undecided.
 
+**Credential policy is load-bearing here**: Linear's presigned `PUT` must carry `presigned-anonymous` (no Linear key - it targets a third-party asset host), while its asset **retrieval** carries auth. GitLab uploads use the **HTTP/multipart route**, never `glab api -F file=@` (invalid multipart, measured). Both are spec A R4b.
+
 Attachments, each via its own measured route: Jira needs `X-Atlassian-Token: no-check` (omitting it returns **404**, not 403); Linear is two-step presigned PUT with declared size matching exactly, retrieval needs the auth header; GitLab retrieval works ONLY via `GET /projects/:id/uploads/:upload_id` (the markdown `/uploads/<secret>/` path needs a session cookie); GitHub has no API so `attachments: false`.
 
 Relations reproduce **fn-64's full contract**: `depRelations` ledger, additive-only, completed-blocker rule, never-clobber-on-collision (defer + queue), `<!-- flow:deps -->` excluded from divergence hashing. GitLab degrades to `relates_to` on Free via the resolved `plan`.
@@ -14,6 +16,8 @@ The capability table is decided in spec A - implement it, do not re-open it. Con
 
 ## Acceptance
 - [ ] Upload AND byte-identical retrieval asserted per adapter
+- [ ] Linear presigned PUT carries NO provider credential; retrieval does (asserted)
+- [ ] GitLab upload uses HTTP/multipart, never `glab api -F`
 - [ ] Jira attach without XSRF header handled as auth-shape, not "endpoint missing"
 - [ ] GitLab retrieval uses upload_id, not the markdown path
 - [ ] `relate` reproduces ledger + additive-only + completed-blocker + never-clobber

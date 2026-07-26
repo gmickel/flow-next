@@ -16,7 +16,9 @@ Bounds: **one `timeout_s`, default 30s** - separate connect/read deadlines are n
 
 **Credential precedence is provider-specific, copied from the epic** - there is no generic "Keychain" rung and flow-next never implements a keyring, it reads env: GitHub `GH_TOKEN` -> `gh` config; GitLab `GITLAB_TOKEN` -> `glab` config; Linear `LINEAR_API_KEY`; Jira selects by the **persisted `authScheme`** (`cloud-basic` -> `JIRA_EMAIL`+`JIRA_API_TOKEN`; `bearer-pat` -> `JIRA_PAT`) rather than re-racing both sets each run, with `JIRA_BASE_URL` overriding the persisted `baseUrl`.
 
-Transport mechanism per provider: GitHub/GitLab via their CLI (host+auth resolution already lives there); Linear/Jira via stdlib `urllib` (no CLI in the dependency set, keeps zero-dependency).
+Transport route is per provider **and operation**: GitHub/GitLab via their CLI for ordinary calls; Linear/Jira via stdlib `urllib`. **GitLab uploads use the HTTP/multipart route** - `glab api -F file=@` produces invalid multipart (measured), so the CLI has no permitted upload path.
+
+`Request.credential_policy` is explicit: `provider-auth` (default) | **`presigned-anonymous`** (attach nothing - Linear's presigned PUT targets a third-party asset host and must never receive the Linear key) | `none`. Credentials are dropped on any host-changing redirect.
 
 **Classification is per-adapter and tabulated.** `401/403 = auth` is insufficient: GitLab returns 403 for both a bad token and a licence-gated `is_blocked_by`, and Linear rate limiting arrives as a GraphQL error over HTTP 400.
 
@@ -29,6 +31,9 @@ Result envelope, exhaustive class enum, fixed numeric exit codes. JSON on stdout
 - [ ] Per-adapter classification table: GitLab 403+licence-body -> capability, bare 403 -> auth; Linear GraphQL 400 -> rate_limited
 - [ ] Bounds asserted: single `timeout_s` (HTTP per-op vs CLI process deadline), 2 retries, backoff clamp, concurrency 4
 - [ ] Provider-specific credential precedence implemented exactly; NO generic Keychain rung
+- [ ] `credential_policy` honoured: Linear presigned PUT carries ONLY presigned headers (no API key); asset retrieval DOES carry auth
+- [ ] Credentials dropped on host-changing redirect; no silent cross-host follow with auth
+- [ ] GitLab upload uses the HTTP/multipart route, never `glab api -F`
 - [ ] Jira selects credentials by persisted `authScheme`; behavior defined when both sets are present
 - [ ] Redaction at the boundary; no token in any log/receipt/error (test)
 - [ ] `sslVerify: false` honoured and recorded, never silent

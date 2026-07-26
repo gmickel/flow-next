@@ -16,9 +16,10 @@ MCP is restricted to create/discovery. Every other operation requires GraphQL - 
 - [ ] `create` vs `create-first` receipt semantics match the table
 - [ ] `create-first` preserves fn-134 no-duplicate-on-retry
 - [ ] `persist-external` resolves UUID via GraphQL after identifier-only MCP result
-- [ ] GraphQL unreachable -> `tracker.linkState: "identifier_only"` with populated identifier/url and null id; NOT misread as unlinked
+- [ ] `linkState` enum exhaustive (`unlinked|identifier_only|linked`) with legacy migration: id present -> linked; id null + identifier -> identifier_only; neither -> unlinked
+- [ ] GraphQL unreachable -> `identifier_only`, NOT misread as unlinked
 - [ ] Commands needing a durable id return `class: unresolved` against that state
-- [ ] `tracker reconcile` is the named entry point and atomically completes it (tested)
+- [ ] `tracker sync --op reconcile` is the SINGLE entry point (no separate `tracker reconcile` command) and atomically completes it
 - [ ] Persist failure surfaces identifier + url and writes a warning receipt
 - [ ] MCP restriction to create/discovery stated in the skill contract
 

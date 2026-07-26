@@ -15,7 +15,8 @@ Wire verbs touch no local state and write no receipt.
 ## Acceptance
 - [ ] All wire verbs work on GitHub, GitLab, Linear, Jira via fake transport
 - [ ] **Write verbs validate BEFORE mutating** via a pre-mutation parent read; mismatch aborts with `class: conflict`
-- [ ] Response-side validation retained as a second check
+- [ ] Response-side validation ONLY where the response carries parent identity; otherwise marked "parent identity not available", not faked
+- [ ] `attach-get` and `list-open` are context-free and take NO locator
 - [ ] Read-only verbs may validate on response alone
 - [ ] `comment-update`/`comment-delete` require the parent locator
 - [ ] `GET /issues` on GitHub filters pull requests (the `pull_request` key)

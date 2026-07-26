@@ -28,7 +28,9 @@ The cost is one extra read per write. That is the price of not writing to the wr
 
 This costs callers nothing: `sync set-tracker-id <spec> <uuid> --identifier X --url Y` means every linked spec already stores both fields.
 
-**Wire verbs** - take a locator, touch no local state, write no receipt:
+**Validation is per verb, not blanket.** Writes do the pre-mutation parent read. Reads validate on response **only where the response carries parent identity** - several providers' comment responses do not, so those are marked "parent identity not available" rather than pretending to check. And two verbs are **context-free and take no locator at all**: `attach-get <attachment-id>` and `list-open`.
+
+**Wire verbs** - take a locator unless noted, touch no local state, write no receipt:
 
 ```
 flowctl tracker wire read           --locator L
@@ -67,7 +69,20 @@ flowctl tracker sync <spec-id> --op push|pull|reconcile|comment --event <perEven
 
 One facade, four ops, matching the existing `perEvent` value vocabulary exactly (`off | pull | push | reconcile | comment`). It owns: create-if-unlinked, the granular-verb sequence, comment marker + dedup, the event-tagged receipt, and structured conflict/degradation reporting. Content that requires judgment (a rendered body, a resolved merge, comment text) is passed **in** as a file - the facade never composes it.
 
+**The MCP rung is the one exception, and it is explicit.** flowctl cannot call MCP, so a facade `push` against a Linear repo on the MCP rung cannot create the issue itself. It returns `class: external_action_required` with the action and payload the agent must perform, and the agent completes it via `persist-external`. Single-call conformance is therefore scoped to **shell-reachable transports**; the MCP path is a two-step continuation, and **spec C retains the host-side MCP create/discovery bridge** rather than deleting it.
+
 **Spec C gates on these facades passing conformance**, not on the granular verbs.
+
+### Facade composition
+
+| `--op` | required inputs | forbidden | internal sequence |
+|---|---|---|---|
+| `push` | `--flow-file` | `--body-file` | create-if-unlinked -> `sync-body` (push) -> `status` (if policy applies) |
+| `pull` | none | `--flow-file` | `wire read` -> snapshot both halves, no tracker write |
+| `reconcile` | `--flow-file`, `--body-file` | none | `wire read` -> `sync-body` (both halves) -> `status` |
+| `comment` | `--body-file` | `--flow-file` | create-if-unlinked -> `wire comment-add` (marker + dedup) |
+
+**Receipts do not stack.** Internal granular calls run with receipts **suppressed**; the facade writes **exactly one** aggregate, event-tagged receipt whose status is the worst of its steps. A **partial success** (write landed, readback failed) returns `success: false` with `data.completed_steps` naming what did land, so a resume is informed rather than blind. Re-running a facade op is **idempotent**: create-if-unlinked no-ops on a linked spec, and the comment marker dedups.
 
 ### Command semantics (single source of truth)
 
@@ -93,7 +108,7 @@ flowctl does **not** perform the semantic merge - that is the skill's judgment s
 
 flowctl cannot reach the MCP rung: `linear-mcp.md` states the tool surface is host-agent-visible with **no shell command**. The agent performs that call and hands the result to flowctl.
 
-**Linear MCP returns the display identifier only, never the durable UUID** (`linear-mcp.md:100`). So `persist-external` accepts an identifier-only call and resolves the UUID via the GraphQL rung before persisting. If GraphQL is unreachable it persists an explicitly-marked **identifier-only linked state**. That needs a schema, because today `tracker.id: null` means *unlinked* and would be misread: the state is `tracker.linkState: "identifier_only"` alongside the populated `identifier`/`url` and a null `id`. Commands that require a durable id return `class: unresolved` against it rather than treating it as unlinked; **`tracker reconcile` is the named entry point** that resolves the UUID and atomically completes the record. It never fabricates a durable id and never silently omits one.
+**Linear MCP returns the display identifier only, never the durable UUID** (`linear-mcp.md:100`). So `persist-external` accepts an identifier-only call and resolves the UUID via the GraphQL rung before persisting. If GraphQL is unreachable it persists an explicitly-marked **identifier-only linked state**. That needs a schema, because today `tracker.id: null` means *unlinked* and would be misread: `tracker.linkState` is an **exhaustive enum**: `unlinked` | `identifier_only` | `linked`. Legacy records carry no `linkState`, so migration is defined: `id` present -> `linked`; `id` null and `identifier` present -> `identifier_only`; neither -> `unlinked`. That removes today's ambiguity where `id: null` alone meant unlinked. Commands that require a durable id return `class: unresolved` against it rather than treating it as unlinked; **`tracker sync <spec-id> --op reconcile` is the single named entry point** (there is no separate `tracker reconcile` command - one name, used everywhere) that resolves the UUID and atomically completes the record. It never fabricates a durable id and never silently omits one.
 
 **MCP is restricted to create and discovery.** All other operations require GraphQL. This is a deliberate narrowing: a general "persist any externally-performed operation" contract would need per-operation state transitions and receipts for operations flowctl never saw, which is unbounded surface for one rung of one adapter.
 
