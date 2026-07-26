@@ -244,32 +244,42 @@ def run(flow_dir: Path, *, scope: Optional[str] = None, refresh: bool = False,
     return envelope.success(data, degraded=degraded_field, probe=probe_field)
 
 
+_PROBE_FAILED = "ttl_probe_failed_keep_prior"
+
+
 def _ttl_reprobe(flow_dir: Path, config: dict, mod, execute: Callable):
     """One synchronous, bounded re-probe; a FAILED probe keeps the prior value
-    and reports via `probe`, never `degraded`. Returns (probe, degraded)."""
-    ex = bound_executor(config, execute)
-    ok, plan, reason = mod.probe_plan(config, ex)
-    if not ok:
-        _stderr_sink(f"probe scope=capabilities ok=false reason={reason}")
-        staged = {"tracker": {"type": "gitlab",
-                              "resolved": _dict(_dict(config.get("tracker"))
-                                                .get("resolved"))}}
-        outcome = apply_capability_probe(staged, ok=False, reason=reason)
-        return outcome["probe"], outcome["degraded"]
+    and reports via `probe`, never `degraded`. Returns (probe, degraded).
 
-    # Success: fold through the transaction so the stamp + merge follow the
-    # same locked, fingerprinted path as any other capabilities resolve.
+    The probe runs INSIDE the transaction's `network_fn`, so the R8 discovery
+    fingerprint covers the exact config it queried: probing before the
+    transaction let a mid-probe repoint commit project A's plan under
+    project B (reproduced by the completion review).
+    """
     outcome_box = {}
 
     def network_fn(cfg: dict):
+        ex = bound_executor(cfg, execute)
+        ok, plan, reason = mod.probe_plan(cfg, ex)
         staged = {"tracker": {"type": "gitlab",
                               "resolved": _dict(_dict(cfg.get("tracker"))
                                                 .get("resolved"))}}
-        outcome_box.update(apply_capability_probe(staged, ok=True, plan=plan))
+        outcome_box.clear()
+        outcome_box.update(apply_capability_probe(staged, ok=ok, plan=plan,
+                                                  reason=reason))
+        if not ok:
+            _stderr_sink(f"probe scope=capabilities ok=false reason={reason}")
+            # No write on a failed probe - but not a failed COMMAND either.
+            # The sentinel aborts the transaction; the caller maps it back to
+            # success-with-probe-field.
+            return TrackerError(ErrorClass.TRANSPORT, "ttl probe failed",
+                                subtype=_PROBE_FAILED)
         return _dict(_dict(staged["tracker"]["resolved"]).get("capabilities"))
 
     result = resolve_transaction(flow_dir, "capabilities", network_fn)
     if isinstance(result, TrackerError):
+        if result.subtype == _PROBE_FAILED:
+            return outcome_box.get("probe"), None
         return result
     if outcome_box.get("degraded"):
         _stderr_sink(f"capability degraded: {outcome_box['degraded']}")

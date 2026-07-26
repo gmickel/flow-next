@@ -50,7 +50,7 @@
     },
     {
       "path": "flowctl_tracker/resolve_verb.py",
-      "sha256": "2d1de0d55a55f0f1e2d4f2f88e6606289d8b73239ae660a4d6f127304454e117"
+      "sha256": "95ac59474cbc2c125e43a6bcf14137a8b162cb1993a7487d65ece9ffc5f5409c"
     },
     {
       "path": "flowctl_tracker/resolved_cache.py",

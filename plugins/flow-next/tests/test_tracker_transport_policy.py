@@ -297,3 +297,78 @@ class StderrObservability(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TtlProbeIsFingerprintProtected(unittest.TestCase):
+    """The probe runs INSIDE the transaction's network step: a mid-probe
+    repoint must not commit project A's plan under project B."""
+
+    def test_mid_probe_repoint_forces_re_probe_against_the_new_project(self) -> None:
+        cfg_a = {"tracker": {"type": "gitlab",
+                             "perTracker": {"project": "a/a", "host": "gitlab.com"},
+                             "resolved": {
+                                 "resolvedAt": iso_ago(48),
+                                 "scopeResolvedAt": {"destination": iso_ago(48),
+                                                     "capabilities": iso_ago(48)},
+                                 "destination": {"projectId": 1, "projectPath": "a/a",
+                                                 "host": "gitlab.com", "namespaceId": 11},
+                                 "capabilities": {"attachments": True, "blockedBy": True,
+                                                  "subIssues": False, "deleteIssue": True,
+                                                  "_source": {"gitlabPlan": "ultimate"}}}}}
+        with tempfile.TemporaryDirectory() as td:
+            flow = Path(td)
+            (flow / "config.json").write_text(json.dumps(cfg_a), encoding="utf-8")
+            calls = {"n": 0}
+
+            def execute(request):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    # Repoint to project B mid-probe.
+                    cfg_b = json.loads(json.dumps(cfg_a))
+                    cfg_b["tracker"]["perTracker"]["project"] = "b/b"
+                    cfg_b["tracker"]["resolved"]["destination"].update(
+                        {"projectId": 2, "projectPath": "b/b", "namespaceId": 22})
+                    (flow / "config.json").write_text(json.dumps(cfg_b),
+                                                      encoding="utf-8")
+                    return resp(200, json.dumps({"id": 11, "plan": "free"}).encode())
+                # Second (re-probed) attempt sees the REPOINTED namespace.
+                self.assertIn("namespaces/22", str(request.url_or_argv))
+                return resp(200, json.dumps({"id": 22, "plan": "premium"}).encode())
+
+            with mock.patch.object(sys, "stderr", io.StringIO()):
+                payload, code = RV.run(flow, execute=execute)
+            self.assertEqual(code, 0, payload)
+            self.assertEqual(calls["n"], 2, "fingerprint mismatch -> one re-probe")
+            on_disk = json.loads((flow / "config.json").read_text(encoding="utf-8"))
+            caps = on_disk["tracker"]["resolved"]["capabilities"]
+            self.assertEqual(caps["_source"]["gitlabPlan"], "premium",
+                             "the committed plan belongs to project B, never A")
+
+
+class AdapterMalformedBodyMatrix(unittest.TestCase):
+    """Completion gap: exact malformed-body classification for the REST
+    providers (Linear's GraphQL case lives in the classify matrix)."""
+
+    def test_every_rest_adapter_maps_garbage_to_transport_malformed(self) -> None:
+        from flowctl_tracker.providers import github as GH
+        from flowctl_tracker.providers import gitlab as GL
+        from flowctl_tracker.providers import jira as JR
+        garbage = resp(200, b"<html>502 gateway</html>")
+
+        def execute(request):
+            return garbage
+
+        cases = [
+            ("github", GH.resolve_destination({}, execute)),
+            ("gitlab", GL.resolve_destination(
+                {"tracker": {"perTracker": {"project": "a/b"}}}, execute)),
+            ("jira", JR.resolve_destination(
+                {"tracker": {"perTracker": {
+                    "baseUrl": "https://x.atlassian.net",
+                    "projectKey": "K"}}}, execute)),
+        ]
+        for provider, out in cases:
+            with self.subTest(provider=provider):
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.TRANSPORT)
+                self.assertEqual(out.subtype, "malformed_body")
