@@ -683,7 +683,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-139-tracker-determinism-a-transport.md",
-  "status": "open",
+  "status": "done",
   "title": "Tracker determinism A: transport foundation, distribution, resolved cache",
   "tracker": {
     "baseHashFlow": null,
@@ -696,5 +696,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-26T20:42:56.269780Z"
+  "updated_at": "2026-07-26T22:22:20.182985Z"
 }
