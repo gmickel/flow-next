@@ -10,7 +10,7 @@ Attachments, each via its own measured route: Jira needs `X-Atlassian-Token: no-
 
 Relations reproduce **fn-64's full contract**: `depRelations` ledger, additive-only, completed-blocker rule, never-clobber-on-collision (defer + queue), `<!-- flow:deps -->` excluded from divergence hashing. GitLab degrades to `relates_to` on Free via the resolved `plan`.
 
-Decide and implement: `deleteIssue` verb-or-dropped; `subIssues` consumer-or-dropped; Linear unknown-label behavior; repeated `--add` on single-assignee trackers.
+The capability table is decided in spec A - implement it, do not re-open it. Consumers: `deleteIssue` gates cleanup paths; `subIssues` is dependency projection's **degraded GitHub form** and is hierarchy, **never** presented as blocked-by. Unknown Linear label -> **auto-create** (matches GitHub/GitLab create-on-demand). Repeated `--add` on a single-assignee tracker -> **replace**, reported in `degraded`.
 
 ## Acceptance
 - [ ] Upload AND byte-identical retrieval asserted per adapter
@@ -18,7 +18,9 @@ Decide and implement: `deleteIssue` verb-or-dropped; `subIssues` consumer-or-dro
 - [ ] GitLab retrieval uses upload_id, not the markdown path
 - [ ] `relate` reproduces ledger + additive-only + completed-blocker + never-clobber
 - [ ] Free tier degrades to relates_to via structured `degraded` field
-- [ ] Every R15 asymmetry decided and implemented; no test targets an undecided contract
+- [ ] Capability table implemented per spec A; not re-litigated
+- [ ] GitHub sub-issues never surfaced as a blocking relation
+- [ ] Unknown Linear label auto-created; single-assignee repeated `--add` replaces + reports
 
 ## Done summary
 TBD

@@ -20,7 +20,11 @@ A durable id **cannot address GitHub or GitLab endpoints**: GitHub REST needs th
 --locator '{"durable": "<id>", "display": "<#N | group/project#iid | FLOW-63 | SCRUM-1>"}'
 ```
 
-The adapter uses whichever field its endpoint needs. Responses carry the durable id back and the adapter **validates it matches the locator** - that is what catches a project move or a repoint instead of silently operating on the wrong issue.
+The adapter uses whichever field its endpoint needs.
+
+**Validation happens BEFORE the mutation, not after.** Response-only checking is too late: a stale display address would already have updated or commented on the wrong issue by the time the mismatch surfaced, and several providers' comment responses carry only the comment id, not the parent's durable id. So every **write** verb performs a **pre-mutation parent read** that resolves the display address and compares it to `locator.durable`, and **aborts with `class: conflict` on mismatch**. Response validation stays as a second, cheaper check. Read-only verbs may validate on response alone.
+
+The cost is one extra read per write. That is the price of not writing to the wrong issue after a project move or repoint, and it is accepted deliberately.
 
 This costs callers nothing: `sync set-tracker-id <spec> <uuid> --identifier X --url Y` means every linked spec already stores both fields.
 
@@ -50,7 +54,7 @@ flowctl tracker create-first     --title T --body-file F --retry-key K          
 flowctl tracker persist-external <spec-id> --identifier I [--id D] [--url U] --source mcp
 flowctl tracker status           <spec-id> --to <normalized> [--reason R] [--event E]
 flowctl tracker relate           <spec-id> --blocked-by <other-spec-id>
-flowctl tracker sync-body        <spec-id>
+flowctl tracker sync-body        <spec-id> --flow-file F [--tracker-body-file T] [--direction push|pull]
 ```
 
 ### Command semantics (single source of truth)
@@ -67,11 +71,17 @@ flowctl tracker sync-body        <spec-id>
 
 Wire verbs write no receipt because they have no spec id and `sync receipt` requires one. **Degradation is never a sentence in a receipt note** - it is the structured `degraded` field, and the receipt schema gains a matching structured field.
 
+### `sync-body` takes the body; it never composes one
+
+flowctl does **not** perform the semantic merge - that is the skill's judgment surface. So `sync-body` cannot be given only a spec id: it takes `--flow-file` (the agent's final rendered or conflict-resolved local body) and, on a two-way reconcile, `--tracker-body-file` (the agent-approved tracker-side body). flowctl writes what it is handed, reads back, and commits both merge-base halves atomically.
+
+`--direction pull` snapshots both forms without writing to the tracker, so a pull-only reconcile still establishes a valid paired base. The result reports **which side was written**.
+
 ### The MCP boundary
 
 flowctl cannot reach the MCP rung: `linear-mcp.md` states the tool surface is host-agent-visible with **no shell command**. The agent performs that call and hands the result to flowctl.
 
-**Linear MCP returns the display identifier only, never the durable UUID** (`linear-mcp.md:100`). So `persist-external` accepts an identifier-only call and resolves the UUID via the GraphQL rung before persisting. If GraphQL is unreachable it persists an explicitly-marked **identifier-only linked state** and a later reconcile completes it - it never fabricates a durable id and never silently omits one.
+**Linear MCP returns the display identifier only, never the durable UUID** (`linear-mcp.md:100`). So `persist-external` accepts an identifier-only call and resolves the UUID via the GraphQL rung before persisting. If GraphQL is unreachable it persists an explicitly-marked **identifier-only linked state**. That needs a schema, because today `tracker.id: null` means *unlinked* and would be misread: the state is `tracker.linkState: "identifier_only"` alongside the populated `identifier`/`url` and a null `id`. Commands that require a durable id return `class: unresolved` against it rather than treating it as unlinked; **`tracker reconcile` is the named entry point** that resolves the UUID and atomically completes the record. It never fabricates a durable id and never silently omits one.
 
 **MCP is restricted to create and discovery.** All other operations require GraphQL. This is a deliberate narrowing: a general "persist any externally-performed operation" contract would need per-operation state transitions and receipts for operations flowctl never saw, which is unbounded surface for one rung of one adapter.
 
@@ -88,7 +98,12 @@ Measured by posting one identical 391-byte markdown fixture to all four and diff
 
 Linear's rewriting, measured: `_italic_` to `*italic*`, `[l](url)` to `[l](<url>)`, `- bullet` to `* bullet`, `|---|---|` to `| -- | -- |`, `- [x]` to `- [X]`, trailing newline stripped. Comments untouched.
 
-The merge base is therefore seeded from **what the tracker returns after a write**, never from what we sent. Client-side normalization is limited to a short enumerated set of stable transformations (trailing-newline) and does **not** attempt to predict Linear's rewriting - that is unsafe around code fences and escapes, and readback already supplies the authoritative body.
+**The two halves are not the same body**, which the earlier draft got wrong by saying "the merge base equals the readback":
+
+- `mergeBaseFlow` = the **exact final local spec body** (it must stay comparable to the local spec, or every subsequent flow-side diff is false)
+- `mergeBaseTracker` = `trackerBodyForMerge(server readback)`
+
+Storing the readback in both halves would make Linear's rewriting look like immediate flow-side divergence on the very next reconcile. Both hashes and snapshots commit **atomically, only after write and readback both succeed**. Client-side normalization is limited to a short enumerated set of stable transformations (trailing-newline) and does **not** attempt to predict Linear's rewriting - that is unsafe around code fences and escapes, and readback already supplies the authoritative body.
 
 ## Edge Cases & Constraints
 <!-- scope: technical -->
@@ -116,7 +131,7 @@ Every item measured live on 2026-07-26:
 - **R3:** `create` (spec exists) and `create-first` (no spec, fn-134 recovery-record path) are separate verbs with the receipt semantics in the table. `create-first` preserves fn-134's no-duplicate-on-retry guarantee.
 - **R4:** `persist-external` accepts an identifier-only MCP result and resolves the UUID via GraphQL before persisting. GraphQL unreachable -> explicitly-marked identifier-only state, never a fabricated or silently-missing durable id. A later reconcile completes it, and that completion is tested.
 - **R5:** MCP is restricted to create/discovery; every other operation requires GraphQL, stated in the skill contract so no caller assumes otherwise.
-- **R6:** `status` **embeds fn-66's merge-evidence gate** rather than forwarding the caller's request: terminal `Done` only on a GitHub-confirmed MERGED, `In Review` on an open PR, never terminal from completion-review alone.
+- **R6:** `status` has a complete, stated state machine rather than a single sentence. `--to` is a **request, not an authority**: fn-66's merge-evidence gate decides the outcome, so terminal `Done` requires a GitHub-confirmed MERGED, `In Review` an open PR, and completion-review alone is never terminal. Allowed `--to`/`--reason` pairs are enumerated. Which local fields each branch may write is explicit: an **applied** write updates `lastSyncedAt` (and the local status where the ladder says the tracker wins); a **no-op, defer or conflict does NOT advance `lastSyncedAt`**, because advancing it would mark a sync that did not happen. Canceled-family transitions are **surfaced, never auto-applied**, so `--reason duplicate` on GitHub records the reason on an otherwise-legal close and never forces a cancel.
 - **R7:** The who-wins ladder keeps **collision cases first**; a reordering test fails. Deadlock fallback and unmapped states have enumerated deterministic outcomes; anything genuinely ambiguous returns `class: conflict` for the skill's recovery surface rather than defaulting silently.
 - **R8:** Jira status writes use the **cached target status id** but still `GET .../transitions` for the issue's current status first, because transition ids are valid only from the current status (`jira.md:738`, verified live). The cache buys correctness, not a saved round-trip. No legal transition to the target means **defer + receipt, never an illegal forced jump**. GitHub's `duplicate` reason is reachable via `--reason`.
 - **R9:** Attachments upload **and retrieve byte-identically** on Jira, Linear and GitLab, each via its own documented route. GitHub records `attachments: false`.
@@ -125,7 +140,7 @@ Every item measured live on 2026-07-26:
 - **R12:** `sync-body` performs write + readback + paired merge base as **one transaction**. The merge base equals the readback, not the sent body. A partial failure leaves the prior merge base untouched. A no-op reconcile against an unmodified issue produces **no** diff on any of the four.
 - **R13:** The paired merge-base snapshot invariant holds: both halves at one sync point, atomically, never per-flag.
 - **R14:** Comment sync filters GitLab system notes (`system: true`).
-- **R15:** Every capability asymmetry is **decided, not left open**: `deleteIssue` gets a verb or is dropped from the descriptor; `subIssues` gets a named consumer or is dropped; Linear unknown-label behavior is chosen explicitly (auto-create vs `class: not_found`); repeated `--add` on a single-assignee tracker has defined behavior. No test may target an undecided contract.
+- **R15:** The capability table is **already decided in spec A**; B implements it and does not re-open it. `deleteIssue` and `subIssues` are **kept**, with their consumers named here: `deleteIssue` gates cleanup paths (and is `false` on GitHub, which can only close `not_planned`); `subIssues` is consumed by dependency projection as GitHub's **degraded** form - and it is **hierarchy, not blocked-by**, so it must never be presented as a blocking relation. The two remaining behaviors are decided rather than deferred: an unknown Linear label is **auto-created** (matching GitHub/GitLab create-on-demand, so callers need no per-provider branch); a repeated `--add` on a single-assignee tracker **replaces** and reports the replacement in `degraded`.
 - **R16:** Jira body operations use **apiVersion 2** on Cloud and Data Center; a plain-string body round-trips byte-exact and the ADF conversion for v3 readers is Jira's own.
 - **R17:** The Jira Data Center custom-key path is implemented from prose and **marked unverified in code comment and spec**. Its live smoke is a separate externally-blocked follow-up, not a task here - a permanently-`todo` task would block spec close.
 - **R18:** A **cross-adapter conformance matrix** covers every verb on all four adapters, plus fault injection for: the open pre-create window, post-write readback failure, scoped invalidation, lock race, retry exhaustion, rate-limit backoff. Focused regression tests live with the code; this matrix is the cross-cutting layer.
