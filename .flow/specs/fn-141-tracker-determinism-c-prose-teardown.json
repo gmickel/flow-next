@@ -12,9 +12,9 @@
   "id": "fn-141-tracker-determinism-c-prose-teardown",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 1,
+  "plan_review_rounds": 3,
   "plan_review_status": "needs_work",
-  "plan_reviewed_at": "2026-07-26T13:56:37.187324Z",
+  "plan_reviewed_at": "2026-07-26T14:44:12.679554Z",
   "review_attempts": [
     {
       "backend": "codex",
@@ -28,9 +28,24 @@
       "task": null,
       "timestamp": "2026-07-26T13:56:37.186579Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "e3142ad2f104f673a8d1066f12db64337935852d04230bc08811263dfb3b303a",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-07-26T14:44:12.678476Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
-  "review_pending_rounds": {},
+  "review_pending_rounds": {
+    "plan": 1
+  },
   "review_transport_failures": {
     "plan": 0
   },
@@ -48,5 +63,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-26T13:56:37.187324Z"
+  "updated_at": "2026-07-26T14:44:12.679554Z"
 }

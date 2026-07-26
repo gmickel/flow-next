@@ -148,7 +148,7 @@ flowctl tracker resolve --select <normalized>=<stateId>    # persists ONE slot; 
 `details` is a **typed variant keyed by class**, not free-form: `conflict` carries `{normalized, candidates: [{id,name,type}]}` - the **normalized slot being resolved** plus its options, so a caller knows which slot to answer; `rate_limited` carries `{retry_after_s}`; `capability` carries `{capability, required_plan}`. Every variant's exact serialization is asserted.
 ```
 
-`class` enum, fixed and exhaustive: `inactive`, `unresolved`, `stale_id`, `auth`, `rate_limited`, `transport`, `not_found`, `capability`, `conflict`, `invalid_input`. Exit codes fixed and numeric: `0` success, `2` invalid_input, `3` inactive, `4` unresolved, `5` auth, `6` rate_limited, `7` transport, `8` not_found, `9` capability, `10` conflict, `11` stale_id.
+`class` enum, fixed and exhaustive: `inactive`, `unresolved`, `stale_id`, `auth`, `rate_limited`, `transport`, `not_found`, `capability`, `conflict`, `invalid_input`, **`external_action_required`** (spec B's MCP continuation - the operation cannot be completed by flowctl and the agent must act; **not** retryable, and **not** a failure of the request). Exit codes fixed and numeric: `0` success, `2` invalid_input, `3` inactive, `4` unresolved, `5` auth, `6` rate_limited, `7` transport, `8` not_found, `9` capability, `10` conflict, `11` stale_id, `12` external_action_required.
 
 **Degradation is a structured field, never a sentence in a receipt note.**
 

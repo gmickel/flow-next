@@ -26,6 +26,18 @@ After teardown the tracker-sync skill retains **exactly five judgment surfaces**
 
 The earlier draft of this batch claimed "exactly four" while its own architecture table listed recovery as agentic. Five is the honest count.
 
+### The exact call flow (one path, no ambiguity)
+
+Ownership was previously split in a way that read as a contradiction - the skill "keeps comment synthesis" while callers "call the facade directly". The single flow is:
+
+1. **Caller gate** (retained): bridge-active + `perEvent` value.
+2. **Caller-owned content synthesis**: the calling skill renders the comment text or body - that is its judgment.
+3. **Secure temp input file**: content is written to a `0600` file under `${TMPDIR}`, never argv; the caller deletes it after the call.
+4. **Inline tracker-sync skill wrapper**: the caller invokes the tracker-sync skill, which makes **one** facade call. The wrapper is where the skill's retained surfaces live.
+5. **Centralized recovery in that wrapper**: `class: conflict` and `external_action_required` are handled **once, in the skill**, not duplicated as recovery prose across fourteen callers. MCP continuations resolve there too.
+
+So callers own *what to say*; the skill owns *what to do when flowctl says no*. Receipt ownership is unchanged: the facade writes exactly one.
+
 ### What the callers keep
 
 **The caller-side gate is retained.** Only transport-ladder and dispatch prose is removed. This is not cosmetic: every flowctl command emits JSON and `inactive` is an error class, so routing a bridge-inactive repo into flowctl would replace silence with output and an extra process, breaking the invariant that a non-tracker repo sees nothing.
@@ -62,8 +74,10 @@ This batch reverses it deliberately. Three places assert the old rule in code an
 - **R2:** `SKILL.md` names **exactly five** judgment surfaces with the rationale for each.
 - **R3:** Lifecycle touchpoints call the **fn-140 lifecycle facade** `flowctl tracker sync <spec-id> --op <op> --event <key>`, not the granular verbs. The granular verbs cannot preserve behavior on their own - create-if-unlinked, comment markers, dedup and receipts are orchestration, and pushing that into each caller as prose is the problem this batch removes. **C is gated on fn-140 R19 passing conformance.** The `tracker-runner` agent and `references/tracker-dispatch.md` are then removed.
 - **R4:** The caller-side gate is **retained**; only transport-ladder and dispatch prose is removed. The `perEvent` to verb mapping is explicitly enumerated, and comment content synthesis is reassigned by name to each calling skill.
-- **R5:** Zero dangling references to the deleted agent, across an **enumerated** sweep: every canonical calling skill named individually; `scripts/sync-codex.sh` (which carries **18** runner-specific references incl. transforms and guards); runner-specific tests; the generated mirror's agent TOML; and `docs/platforms.md`. Asserted by test over the named inventory, not a single grep that a narrow scope could pass while dead transforms survive.
+- **R5:** Zero dangling references to the deleted agent, across an **enumerated** sweep: every canonical calling skill named individually; `scripts/sync-codex.sh` (measured at 19 matching lines / 29 tokens at time of writing - but the **inventory is an explicit path/token list asserted by test**, never a prose count, because the count is pattern-dependent and goes stale: an earlier draft of this spec said 18 using a narrower pattern); runner-specific tests; the generated mirror's agent TOML; and `docs/platforms.md`. Asserted by test over the named inventory, not a single grep that a narrow scope could pass while dead transforms survive.
+- **R5b:** The **pre-teardown oracle is captured before any caller edit**, hash-addressed and pinned to the post-fn-140 / pre-C commit. Capturing it after rewiring (the earlier ordering) cannot prove preservation, because the thing being compared has already changed. It records config reads, argv, imports, stdout and stderr per caller.
 - **R6:** The **bridge-inactive path is byte-for-byte unchanged** after rewiring: one config read, no adapter import, no new output. Verified here rather than in A, because C is what changes the final inactive path.
+- **R7b:** An **authoritative matrix** exists, naming for every caller: its file path, its event key, the legal configured values, the resolved facade `--op`, any **unconditional** behavior, the required content input, the expected receipt, and stream behavior. The semantics are not reconstructible from "enumerate the legal values" because several callers deviate: **QA coerces every non-`off` value to `comment`**; **make-pr and land have unconditional paths** (land's merge->Done rides bridge-active alone, not its leaf); **work events use fixed operations regardless of the configured verb**. The matrix is asserted by test against the real caller inventory.
 - **R7:** Every configured `perEvent` value is tested end to end: the enum is `off | pull | push | reconcile | comment` - an earlier draft omitted **`pull`**. Every event key and its legal values are enumerated by name, including QA's comment-only rule and land's unconditional status rule. Each caller is instrumented with a **fake flowctl** asserting config reads, argv, imports, stdout and stderr against a **pre-teardown captured oracle** - "byte-for-byte" names the streams compared and what it compares them to.
 - **R8:** fn-57's R3 supersession is recorded at all three assertion sites, with a pointer to this batch so a future reader finds the decision rather than a contradiction.
 - **R9:** `docs/tracker-sync.md` is rewritten: the Transport ladder section becomes flowctl-owned, the `tracker.resolved` schema and capability degradation are documented, and the "flowctl has no tracker transport" line is corrected.
