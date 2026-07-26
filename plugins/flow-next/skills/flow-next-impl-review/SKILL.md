@@ -307,6 +307,19 @@ the verdict counter. This loop is internal; callers invoke impl-review once.
 The counter resets only on SHIP or explicit re-plan, never on an edit, fresh
 invocation, or transport failure.**
 
+**ANTI-PATTERN (never do either):**
+1. **A delivered verdict is never a transport failure.** Once flowctl parses
+   `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`, the round is consumed and the
+   attempt is recorded; transport classification is unreachable past that
+   point. Do not re-dispatch, re-frame a `NEEDS_WORK` as a backend/sandbox
+   problem, or claim a refund for it. `NEEDS_WORK` is fix-loop input, full
+   stop.
+2. **Never widen the reviewer sandbox.** Reviewers are read-only by contract
+   (Unix default `read-only`). A sandbox-blocked reviewer means something
+   asked it to mutate the workspace: fix that, do not pass
+   `--sandbox workspace-write` / `danger-full-access` or set `CODEX_SANDBOX`.
+   The one exception is Windows, where `auto` already resolves for you.
+
 If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 0. **Deep-pass phase (only if `DEEP=true`)** — see [optional-phases.md](optional-phases.md) § Deep-Pass Phase.
