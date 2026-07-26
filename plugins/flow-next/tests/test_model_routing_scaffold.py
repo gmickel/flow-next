@@ -219,7 +219,7 @@ class ProbeComposition(unittest.TestCase):
     def _matrix(self):
         # Every on/off combination across all three probes.
         for combo in itertools.product((True, False), repeat=len(PROBES)):
-            yield dict(zip(PROBES.keys(), combo))
+            yield dict(zip(PROBES.keys(), combo, strict=True))
 
     def test_no_sentinel_survives_composition(self) -> None:
         for have in self._matrix():

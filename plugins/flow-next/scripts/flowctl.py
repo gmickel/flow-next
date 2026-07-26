@@ -4141,7 +4141,7 @@ def run_codex_exec(
                 resolution_out["resumed"] = True
             # For resumed sessions, thread_id stays the same
             return output, session_id, 0, result.stderr
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             # Resume failed - fall through to new session
             pass
         except subprocess.TimeoutExpired:
@@ -4244,7 +4244,6 @@ def extract_codex_final_message(output: str) -> str:
     if not output:
         return output
     messages: list[str] = []
-    saw_json = False
     for line in output.split("\n"):
         line = line.strip()
         if not line:
@@ -4255,7 +4254,6 @@ def extract_codex_final_message(output: str) -> str:
             continue
         if not isinstance(data, dict):
             continue
-        saw_json = True
         if data.get("type") == "item.completed":
             item = data.get("item", {})
             if isinstance(item, dict) and item.get("type") == "agent_message":
@@ -10466,7 +10464,7 @@ def write_prospect_artifact(
             # rename() on POSIX is atomic but overwrites — re-check existence
             # to keep the contract.
             if path.exists():
-                raise FileExistsError(str(path))
+                raise FileExistsError(str(path)) from None
             os.replace(tmp_path, path)
             return
     finally:
@@ -12248,8 +12246,8 @@ def _memory_score_search(
         "body": 1.5,
         "misc": 1.0,
     }
-    for field, weight in field_weights.items():
-        tokens = entry_tokens.get(field, [])
+    for field_name, weight in field_weights.items():
+        tokens = entry_tokens.get(field_name, [])
         if not tokens:
             continue
         token_set = set(tokens)
@@ -16590,7 +16588,7 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
 
     # Update task JSON content
     task_id_map = dict(task_files)  # old_task_id -> new_task_id
-    for old_task_id, new_task_id in task_files:
+    for _old_task_id, new_task_id in task_files:
         task_path = tasks_dir / f"{new_task_id}.json"
         if task_path.exists():
             task_data = normalize_task(load_json(task_path))
@@ -16840,7 +16838,7 @@ def cmd_spec_set_backend(args: argparse.Namespace) -> None:
 
     # Validate each non-empty spec up front — reject bad specs before we touch
     # disk. Empty string is a clear-signal and skips validation.
-    for field, value in (
+    for _field_name, value in (
         ("--impl", args.impl),
         ("--review", args.review),
         ("--sync", args.sync),
@@ -17216,7 +17214,7 @@ def _export_parse_boundaries(spec_text: str) -> list[str]:
     bullets: list[str] = []
     for line in body.splitlines():
         line = line.strip()
-        if line.startswith("- ") or line.startswith("* "):
+        if line.startswith(("- ", "* ")):
             bullets.append(line[2:].strip())
     return bullets
 
@@ -17232,7 +17230,7 @@ def _export_parse_open_questions(spec_text: str) -> list[str]:
     items: list[str] = []
     for line in body.splitlines():
         stripped = line.strip()
-        if stripped.startswith("- ") or stripped.startswith("* "):
+        if stripped.startswith(("- ", "* ")):
             items.append(stripped[2:].strip())
     return items
 
@@ -17964,10 +17962,7 @@ def _export_is_glossary_candidate(path: str) -> bool:
         return False
     if any(part in _EXPORT_GLOSSARY_SKIP_DIRS for part in parts[:-1]):
         return False
-    return not (
-        path.startswith("plugins/flow-next/codex/")
-        or path.startswith(".flow/memory/")
-    )
+    return not path.startswith(("plugins/flow-next/codex/", ".flow/memory/"))
 
 
 def _export_changed_glossary_paths(name_status: str) -> list[str]:
@@ -18141,7 +18136,7 @@ def _export_strategy_alignment(
     if body:
         for line in body.splitlines():
             stripped = line.strip()
-            if stripped.startswith("- ") or stripped.startswith("* "):
+            if stripped.startswith(("- ", "* ")):
                 track = stripped[2:].strip()
                 # Strip backticks / bold markers.
                 track = track.strip("`").strip("*").strip()
@@ -18160,7 +18155,7 @@ def _export_strategy_alignment(
             continue
         for line in body.splitlines():
             stripped = line.strip()
-            if stripped.startswith("- ") or stripped.startswith("* "):
+            if stripped.startswith(("- ", "* ")):
                 # Format: `- <track>: <reason>` if present.
                 content = stripped[2:].strip()
                 track, _, reason = content.partition(":")
@@ -18797,7 +18792,7 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
 
     # Validate each non-empty spec up front — reject bad specs before we touch
     # disk. Empty string is a clear-signal and skips validation.
-    for field, value in (
+    for _field_name, value in (
         ("--impl", args.impl),
         ("--review", args.review),
         ("--sync", args.sync),
@@ -19572,7 +19567,7 @@ def cmd_ready(args: argparse.Namespace) -> None:
     in_progress = []
     blocked = []
 
-    for task_id, task in tasks.items():
+    for task in tasks.values():
         # MU-2: Track in_progress tasks separately
         if task["status"] == "in_progress":
             in_progress.append(task)
@@ -21500,7 +21495,7 @@ def render_findings_block(findings: list[dict]) -> str:
             header_bits.append(f"confidence={conf}")
         if cls:
             header_bits.append(f"classification={cls}")
-        lines.append(f"### " + " | ".join(header_bits))
+        lines.append("### " + " | ".join(header_bits))
         if loc:
             lines.append(f"- location: `{loc}`")
         if title:
@@ -25014,7 +25009,7 @@ def _dispatch_backend_review(
             use_json=args.json,
             code=2,
         )
-        raise AssertionError("error_exit must terminate")
+        raise AssertionError("error_exit must terminate") from None
 
 
 
@@ -26146,7 +26141,7 @@ def _triage_chore_is_version_only(
     for line in proc.stdout.splitlines():
         if line.startswith(("+++", "---", "diff ", "index ", "@@", "Binary ")):
             continue
-        if not (line.startswith("+") or line.startswith("-")):
+        if not line.startswith(("+", "-")):
             continue
         content = line[1:]
         if not content.strip():
@@ -27838,7 +27833,7 @@ def _prime_git_many(
         from concurrent.futures import ThreadPoolExecutor
 
         with ThreadPoolExecutor(max_workers=min(4, len(commands))) as pool:
-            results = list(pool.map(run, zip(commands, private_collectors)))
+            results = list(pool.map(run, zip(commands, private_collectors, strict=False)))
     except Exception:
         # Thread/resource exhaustion must not turn the fail-soft classifier
         # into a crash. Re-run in stable command order; read-only probes may
@@ -29186,7 +29181,6 @@ def _prime_collect_scope(
     if top is None:
         # Not a git repo — home-base detection FIRST.
         c.op()
-        parent_self = root_resolved
         siblings, _wt = _prime_sibling_git_dirs(root_resolved, Path("/__none__"))
         has_manifest = any(
             (root_resolved / m).exists()
@@ -29445,7 +29439,7 @@ def _prime_destructive_context(line: str, target: str) -> str:
     bounded | unbounded. The skill maps these to severities.
     """
     stripped = line.strip()
-    if stripped.startswith("#") or stripped.startswith("//") or stripped.startswith("*"):
+    if stripped.startswith(("#", "//", "*")):
         return "comment"
     if re.match(r'^\s*echo\s', line) or re.search(r'echo\s+["\'].*(?:rm|clean|force)', line):
         return "string-literal"
@@ -29668,7 +29662,7 @@ def _prime_collect_atomic_pairs(
         base = rel.rsplit("/", 1)[-1]
         if base.endswith((".py", ".ts", ".js", ".go")) and "/" in rel:
             by_base.setdefault(base, []).append(rel)
-    for base, locs in by_base.items():
+    for locs in by_base.values():
         if len(locs) >= 2:
             pairs.append({"kind": "dual-copy-candidate", "files": sorted(locs)[:4]})
     # Dedup identical pair entries.
@@ -29739,7 +29733,7 @@ def _prime_collect_docs_freshness(
         )
     results = _prime_git_many(root, commands, c)
 
-    for doc, (rc, out, _err) in zip(docs, results[: len(docs)]):
+    for doc, (rc, out, _err) in zip(docs, results[: len(docs)], strict=False):
         ts = int(out.strip()) if rc == 0 and out.strip().isdigit() else None
         if ts is not None:
             instruction_files.append({"path": doc, "last_commit_ts": ts})
@@ -30202,7 +30196,6 @@ def _prime_collect_config_presence(
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
     """FH7 / FH11 / FH12 / FH13: config-presence rows (raw booleans + evidence)."""
     c = _PrimeCollector("substance-config-presence", budget=120)
-    tracked = set(deduped)
     basenames = {p.rsplit("/", 1)[-1] for p in deduped}
 
     def _grep_any(files: "list[str]", pat: "re.Pattern") -> "Optional[str]":
@@ -30395,7 +30388,6 @@ def _prime_collect_coverage_threshold(
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
     """TS5: an ENFORCED coverage threshold quoted from config (raw presence)."""
     c = _PrimeCollector("substance-coverage-threshold", budget=60)
-    basenames = {p.rsplit("/", 1)[-1] for p in deduped}
     candidates = [
         p for p in deduped if p.rsplit("/", 1)[-1] in (
             "pyproject.toml", "setup.cfg", ".coveragerc", "tox.ini", "pytest.ini",
@@ -32813,7 +32805,7 @@ def main() -> None:
     p_codex = subparsers.add_parser("codex", help="Codex CLI helpers")
     codex_sub = p_codex.add_subparsers(dest="codex_cmd", required=True)
 
-    p_codex_impl = _add_impl_review_parser(codex_sub, "codex")
+    _add_impl_review_parser(codex_sub, "codex")
 
     _add_plan_review_parser(codex_sub, "codex")
     _add_completion_review_parser(codex_sub, "codex")
@@ -32879,7 +32871,7 @@ def main() -> None:
     p_copilot = subparsers.add_parser("copilot", help="GitHub Copilot CLI helpers")
     copilot_sub = p_copilot.add_subparsers(dest="copilot_cmd", required=True)
 
-    p_copilot_impl = _add_impl_review_parser(copilot_sub, "copilot")
+    _add_impl_review_parser(copilot_sub, "copilot")
 
     _add_plan_review_parser(copilot_sub, "copilot")
     _add_completion_review_parser(copilot_sub, "copilot")
@@ -32892,7 +32884,7 @@ def main() -> None:
     p_cursor = subparsers.add_parser("cursor", help="Cursor (cursor-agent CLI) helpers")
     cursor_sub = p_cursor.add_subparsers(dest="cursor_cmd", required=True)
 
-    p_cursor_impl = _add_impl_review_parser(cursor_sub, "cursor")
+    _add_impl_review_parser(cursor_sub, "cursor")
 
     _add_plan_review_parser(cursor_sub, "cursor")
     _add_completion_review_parser(cursor_sub, "cursor")

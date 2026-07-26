@@ -206,7 +206,7 @@ class GateReceiptHarness(unittest.TestCase):
                     func(ns)
                 except SystemExit as exc:
                     raw = 0 if exc.code is None else exc.code
-                    code = int(raw) if not isinstance(raw, bool) else int(raw)
+                    code = int(raw)
         finally:
             os.chdir(prev)
         return subprocess.CompletedProcess(

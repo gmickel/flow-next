@@ -11,7 +11,6 @@ explosion into a `TrackerError`.
 
 from __future__ import annotations
 
-import json
 import http.client
 import re
 import subprocess
@@ -22,7 +21,7 @@ import urllib.request
 from typing import Callable, Optional, Protocol, Union
 from urllib.parse import urlparse
 
-from .classify import classify, malformed_body
+from .classify import classify
 from .credentials import Credential, redact, resolve
 from .types import (BACKOFF_CAP_S, CONCURRENCY_CAP, MAX_RETRIES, CredentialPolicy,
                     ErrorClass, Request, Response, TrackerError)

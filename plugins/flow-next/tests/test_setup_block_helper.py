@@ -78,7 +78,6 @@ class SetupBlockFixtureTest(unittest.TestCase):
         self.assertEqual(claude.read_text(encoding="utf-8"), "Existing prose.\n\n" + canonical)
         self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"], _hash(canonical))
 
-        agents = self.repo / "AGENTS.md"
         self._result(self._flowctl("apply", "AGENTS.md", TEMPLATES / "agents-md-snippet.md"))
         hashes = self._meta()["setup"]["block_hashes"]
         self.assertEqual(set(hashes), {"CLAUDE.md", "AGENTS.md"})

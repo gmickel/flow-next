@@ -19,6 +19,8 @@ on:
       - ".cursor-plugin/**"
       # fn-119 parallel unit-suite entrypoint
       - "scripts/run_tests_parallel.py"
+      # Ruff gate config (chore/ruff-gate)
+      - "ruff.toml"
   pull_request:
     branches: [main]
     paths:
@@ -32,6 +34,8 @@ on:
       - "scripts/ci/verify_cursor_install.py"
       - ".cursor-plugin/**"
       - "scripts/run_tests_parallel.py"
+      # Ruff gate config (chore/ruff-gate)
+      - "ruff.toml"
   workflow_dispatch:
     inputs:
       shuffle:
@@ -90,6 +94,16 @@ jobs:
 
       - name: Syntax check — flowctl.py
         run: python -m py_compile plugins/flow-next/scripts/flowctl.py
+
+      # Correctness-only ruleset; see ruff.toml for what is deliberately out.
+      # PIN THE VERSION: ruff 0.16 moved its default set from 59 rules to 413,
+      # which turns an unpinned `ruff` into an unannounced CI break.
+      # One row only - lint results do not vary by OS or Python version.
+      - name: Lint — ruff
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        run: |
+          python -m pip install --disable-pip-version-check ruff==0.16.0
+          ruff check .
 
       - name: Syntax check — ralph.sh
         run: bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh

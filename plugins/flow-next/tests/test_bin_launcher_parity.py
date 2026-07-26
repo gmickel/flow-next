@@ -44,7 +44,7 @@ class TestBinLauncherParity(unittest.TestCase):
 
         diffs = [
             (i, s, b)
-            for i, (s, b) in enumerate(zip(scripts_lines, bin_lines))
+            for i, (s, b) in enumerate(zip(scripts_lines, bin_lines, strict=True))
             if s != b
         ]
         self.assertEqual(

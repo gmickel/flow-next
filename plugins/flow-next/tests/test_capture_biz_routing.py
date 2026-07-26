@@ -70,7 +70,7 @@ def _parse_routing_table(body: str) -> list[tuple[int, str, str]]:
     lines = body.splitlines()
     rows: list[tuple[int, str, str]] = []
     in_table = False
-    for i, line in enumerate(lines):
+    for _i, line in enumerate(lines):
         if line.strip().startswith("| # | Signal category | Destination"):
             in_table = True
             continue

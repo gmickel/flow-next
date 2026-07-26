@@ -18,7 +18,7 @@ from typing import Callable, Optional, Union
 from urllib.parse import quote
 
 from ..states import Assignment, assign_slots
-from ..types import ErrorClass, Request, Response, TrackerError
+from ..types import ErrorClass, Request, TrackerError
 
 #: Truth-table row: everything static (attachments need the XSRF header, Blocks
 #: links work on the free tier, no sub-issues we consume, real delete).

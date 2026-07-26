@@ -72,7 +72,7 @@ class TrackerIdGeneratorTestCase(unittest.TestCase):
 
     # --- helpers ------------------------------------------------------------
 
-    def _call(self, func_name: str = None, *, func=None, **kwargs) -> dict:
+    def _call(self, func_name: str | None = None, *, func=None, **kwargs) -> dict:
         kwargs.setdefault("json", True)
         ns = argparse.Namespace(**kwargs)
         handler = func or getattr(self.flowctl, f"cmd_{func_name}")

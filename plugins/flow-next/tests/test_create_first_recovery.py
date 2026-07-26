@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -153,7 +152,7 @@ class CreateFirstRecoveryRoundTrip(unittest.TestCase):
         Simulates the whole sequence the way the skill drives it, and asserts
         exactly one record exists for the key across the entire run.
         """
-        title, body, ttype = "Harden the gate", "why it matters", "github"
+        title, _body, ttype = "Harden the gate", "why it matters", "github"
         key = _run(self.repo, "sync", "create-first-key",
                    "--type", ttype, "--title", title).stdout.strip()
 
