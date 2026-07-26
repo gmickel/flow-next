@@ -4,7 +4,8 @@
   "claimed_at": null,
   "created_at": "2026-07-26T12:35:46.554985Z",
   "depends_on": [
-    "fn-141-tracker-determinism-c-prose-teardown.1"
+    "fn-141-tracker-determinism-c-prose-teardown.2",
+    "fn-141-tracker-determinism-c-prose-teardown.3"
   ],
   "id": "fn-141-tracker-determinism-c-prose-teardown.5",
   "priority": null,

@@ -57,6 +57,18 @@ flowctl tracker relate           <spec-id> --blocked-by <other-spec-id>
 flowctl tracker sync-body        <spec-id> --flow-file F [--tracker-body-file T] [--direction push|pull]
 ```
 
+### Lifecycle facades (what callers actually invoke)
+
+The granular verbs above are the **mechanism**. Callers do not compose them: a touchpoint today says "push this spec" and gets create-if-unlinked, body orchestration, status, comment markers, dedup, receipts and event tagging as one unit. Exposing only granular verbs would push that orchestration into every calling skill as prose - which is the problem this batch exists to remove, and would make spec C's behavior-preserving teardown impossible.
+
+```
+flowctl tracker sync <spec-id> --op push|pull|reconcile|comment --event <perEvent-key> [--flow-file F] [--body-file B]
+```
+
+One facade, four ops, matching the existing `perEvent` value vocabulary exactly (`off | pull | push | reconcile | comment`). It owns: create-if-unlinked, the granular-verb sequence, comment marker + dedup, the event-tagged receipt, and structured conflict/degradation reporting. Content that requires judgment (a rendered body, a resolved merge, comment text) is passed **in** as a file - the facade never composes it.
+
+**Spec C gates on these facades passing conformance**, not on the granular verbs.
+
 ### Command semantics (single source of truth)
 
 | verb | takes | writes local state | receipt | `--event` | degradation |
@@ -143,6 +155,7 @@ Every item measured live on 2026-07-26:
 - **R15:** The capability table is **already decided in spec A**; B implements it and does not re-open it. `deleteIssue` and `subIssues` are **kept**, with their consumers named here: `deleteIssue` gates cleanup paths (and is `false` on GitHub, which can only close `not_planned`); `subIssues` is consumed by dependency projection as GitHub's **degraded** form - and it is **hierarchy, not blocked-by**, so it must never be presented as a blocking relation. The two remaining behaviors are decided rather than deferred: an unknown Linear label is **auto-created** (matching GitHub/GitLab create-on-demand, so callers need no per-provider branch); a repeated `--add` on a single-assignee tracker **replaces** and reports the replacement in `degraded`.
 - **R16:** Jira body operations use **apiVersion 2** on Cloud and Data Center; a plain-string body round-trips byte-exact and the ADF conversion for v3 readers is Jira's own.
 - **R17:** The Jira Data Center custom-key path is implemented from prose and **marked unverified in code comment and spec**. Its live smoke is a separate externally-blocked follow-up, not a task here - a permanently-`todo` task would block spec close.
+- **R19:** The lifecycle facade `tracker sync <spec-id> --op push|pull|reconcile|comment --event E` exists and is conformance-tested per adapter. It reproduces today's touchpoint behavior as one unit - create-if-unlinked, granular sequence, comment marker + dedup, event-tagged receipt, structured conflict/degradation - so a caller replaces a dispatch with a single call and no orchestration prose. Judgment-bearing content is passed in as a file; the facade never composes it.
 - **R18:** A **cross-adapter conformance matrix** covers every verb on all four adapters, plus fault injection for: the open pre-create window, post-write readback failure, scoped invalidation, lock race, retry exhaustion, rate-limit backoff. Focused regression tests live with the code; this matrix is the cross-cutting layer.
 
 ## Boundaries

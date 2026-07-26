@@ -4,14 +4,18 @@ satisfies: [R14, R15]
 # fn-141-tracker-determinism-c-prose-teardown.5 Re-freeze fn-130 tracker baselines with enumerated fixtures + delta
 
 ## Description
-Re-freeze fn-130's reached-path B1 baselines for the tracker cluster, invalidated by design by R1's prose reduction.
+**Do NOT re-freeze B1.** `freeze_b1()` refuses a non-empty destination because B1 is write-once and hash-addressed; overwriting it destroys the provenance the delta is measured against. fn-134 updated **candidate** evidence, not B1 - follow that precedent.
 
-**Enumerate every affected fixture by name** under `optimization/reached-path/fixtures/b1/tracker` rather than treating it as a blanket refresh, and record a before/after delta artifact in the honest form fn-134 used when its own change grew the path.
+Record the reduction as a **candidate delta**, naming every affected tracker fixture explicitly. If a genuinely new baseline is wanted, that is a deliberate **B2** with its own commit/tag, inventory constant, validator, lineage and migration rationale - never an in-place overwrite.
+
+Runs after the canonical skill and caller edits (.2) and their behavioral verification (.3), so it never measures an intermediate tree or races generated mirror edits.
 
 ## Acceptance
-- [ ] Every affected fixture enumerated by name
+- [ ] B1 left untouched; reduction recorded as a CANDIDATE delta
+- [ ] Every affected tracker fixture enumerated by name
 - [ ] Before/after delta recorded as an artifact
 - [ ] Rationale recorded: reduction by design, not regression
+- [ ] If a B2 is introduced instead, it carries commit/tag, inventory constant, validator and lineage
 - [ ] Reached-path harness green
 - [ ] sync-codex.sh run twice, mirror committed
 
