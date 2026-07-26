@@ -18896,7 +18896,12 @@ def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
     # kept its own strip-based check - hence the explicit note.)
     # Exact delimiter line only: content beginning `---text` (a setext rule, a
     # sentence with a leading dash run) is BODY, not frontmatter.
-    first_line = content.split("\n", 1)[0].rstrip("\r")
+    # Normalize bare CR first, exactly as `_iter_task_h1_candidates` does -
+    # splitting on "\n" alone makes a CR-delimited document ONE line, the
+    # delimiter check fails, and the heading is prepended before `---`,
+    # breaking frontmatter recognition for every Markdown tool downstream.
+    _norm = content.replace("\r\n", "\n").replace("\r", "\n")
+    first_line = _norm.split("\n", 1)[0]
     if first_line == "---":
         parts = content.splitlines(keepends=True)
         close_idx = None
@@ -18911,7 +18916,17 @@ def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
             # already had separation.
             while insert_at < len(parts) and parts[insert_at].strip() == "":
                 insert_at += 1
-            return "".join(parts[: close_idx + 1] + ["\n", new_h1] + parts[insert_at:])
+            # Match the document's own terminator so a CR- or CRLF-delimited
+            # file does not end up with mixed line endings.
+            close_line = parts[close_idx]
+            if close_line.endswith("\r\n"):
+                term = "\r\n"
+            elif close_line.endswith("\r"):
+                term = "\r"
+            else:
+                term = "\n"
+            h1 = f"# {task_id} {title}{term}"
+            return "".join(parts[: close_idx + 1] + [term, h1] + parts[insert_at:])
     if content and not content.endswith("\n"):
         return new_h1 + content + "\n"
     return new_h1 + content

@@ -360,6 +360,19 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
         )
         self.assertIn("--- not frontmatter", out)
 
+
+    def test_insert_after_frontmatter_for_every_line_ending(self) -> None:
+        """Frontmatter must be recognized and terminators kept (PR #241 wave 21)."""
+        for term in ("\r", "\n", "\r\n"):
+            with self.subTest(terminator=repr(term)):
+                doc = f"---{term}satisfies: [R1]{term}---{term}{term}body{term}"
+                out = flowctl._task_rewrite_h1(doc, self.TASK_ID, "T")
+                self.assertTrue(out.startswith(f"---{term}"), "frontmatter no longer opens the doc")
+                self.assertIn(f"# {self.TASK_ID} T{term}", out)
+                others = {"\r": "\n", "\n": "\r"}.get(term)
+                if others:
+                    self.assertNotIn(others, out.replace("\r\n", ""), "mixed line endings")
+
     def test_unfenced_h1_still_works(self) -> None:
         plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")
