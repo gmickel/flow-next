@@ -927,3 +927,81 @@ class LinearWaitsForTheSlowestExhaustedBucket(unittest.TestCase):
             }))
         self.assertIs(err.cls, ErrorClass.RATE_LIMITED)
         self.assertAlmostEqual(err.retry_after_s, 25.0, delta=1.5)
+
+
+class CliRouteDoesNotDependOnUnusedCredentialState(unittest.TestCase):
+    """`_cli` never consumes the credential - gh/glab carry their own auth.
+
+    Resolving anyway meant a garbage GITLAB_TOKEN in the environment failed a
+    glab CLI call with auth/resolve even though the call would have succeeded.
+    """
+
+    def test_short_gitlab_token_in_env_does_not_fail_a_glab_cli_call(self) -> None:
+        ok = mock.Mock(returncode=0, stdout=b'{"id": 1}', stderr=b"")
+        with mock.patch.dict(os.environ, {"GITLAB_TOKEN": "ab"}, clear=False), \
+             mock.patch.object(X.subprocess, "run", return_value=ok):
+            r = X.execute(Request(provider="gitlab", op="read", method="GET",
+                                  url_or_argv=["glab", "api", "projects/1"]))
+        self.assertIsInstance(r, Response)
+        self.assertEqual(r.status, 200)
+
+    def test_http_route_still_fails_closed_on_a_bad_credential_source(self) -> None:
+        with mock.patch.dict(os.environ, {"GITLAB_TOKEN": "ab"}, clear=False):
+            r = X.execute(Request(provider="gitlab", op="upload", method="POST",
+                                  url_or_argv="https://gitlab.com/api/v4/projects/1/uploads"))
+        self.assertIsInstance(r, TrackerError)
+        self.assertIs(r.cls, ErrorClass.AUTH)
+        self.assertEqual(r.subtype, "resolve")
+
+
+class ScrubCoversMappingKeys(unittest.TestCase):
+    def test_secret_as_a_details_key_is_redacted(self) -> None:
+        saved = set(CR._SEEN)
+        self.addCleanup(lambda: (CR._SEEN.clear(), CR._SEEN.update(saved)))
+        CR._remember("s3cret-token-value")
+        payload, _ = E.failure(TrackerError(
+            ErrorClass.CONFLICT, "x",
+            details={"candidates": [{"s3cret-token-value": "rejected"}]}))
+        self.assertNotIn("s3cret-token-value", payload)
+
+
+class FailingDowngradeSinkRefusesTheRequest(unittest.TestCase):
+    """A sink that fails at record time is as unrecordable as a missing one."""
+
+    def test_raising_sink_refuses_and_sends_nothing(self) -> None:
+        sent = {"n": 0}
+
+        def sink(_e: str) -> None:
+            raise RuntimeError("disk full")
+
+        def fake_http(*a, **kw):
+            sent["n"] += 1
+            return resp(200, b"{}")
+
+        with mock.patch.object(X, "_http", side_effect=fake_http):
+            r = X.execute(Request(provider="jira", op="read", method="GET",
+                                  url_or_argv="https://x.example.com/rest/api/2/issue/K-1"),
+                          verify_tls=False, on_event=sink)
+        self.assertIsInstance(r, TrackerError)
+        self.assertEqual(r.subtype, "tls_unrecorded")
+        self.assertEqual(sent["n"], 0, "request must not be sent unrecorded")
+
+    def test_raising_sink_on_the_retry_event_is_best_effort(self) -> None:
+        """The retry line is diagnostics - a broken sink must not break the retry."""
+        calls = {"n": 0}
+
+        def fake_http(*a, **kw):
+            calls["n"] += 1
+            return resp(429, b"", {"Retry-After": "0"})
+
+        def sink(e: str) -> None:
+            if "retry" in e:
+                raise RuntimeError("boom")
+
+        with mock.patch.object(X, "_http", side_effect=fake_http), \
+             mock.patch.object(X.time, "sleep"):
+            r = X.execute(Request(provider="github", op="read", method="GET",
+                                  url_or_argv="https://api.github.com/x", idempotent=True),
+                          on_event=sink)
+        self.assertIsInstance(r, TrackerError)
+        self.assertEqual(calls["n"], 3, "1 attempt + 2 retries despite the broken sink")

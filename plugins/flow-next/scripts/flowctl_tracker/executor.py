@@ -254,14 +254,20 @@ def execute(
         return TrackerError(ErrorClass.INVALID_INPUT,
                             redact(f"malformed request target: {exc}"),
                             subtype="construction")
-    try:
-        # A corrupt glab config or an unreadable credential source must not
-        # escape either - this sits outside every other guard.
-        cred = resolve(request.provider, auth_scheme=auth_scheme, host=dest_host)
-    except Exception as exc:  # noqa: BLE001 - boundary: nothing may escape execute()
-        return TrackerError(ErrorClass.AUTH, redact(f"credential resolution failed: {exc}"),
-                            subtype="resolve")
     is_cli = isinstance(request.url_or_argv, (list, tuple))
+    cred: Optional[Credential] = None
+    if not is_cli:
+        # HTTP route only. `_cli` never consumes the credential - gh/glab carry
+        # their own auth - so resolving here anyway meant a garbage GITLAB_TOKEN
+        # in the environment failed a glab CLI call with auth/resolve even
+        # though the call would have succeeded. Unused state must not gate.
+        try:
+            # A corrupt glab config or an unreadable credential source must not
+            # escape either - this sits outside every other guard.
+            cred = resolve(request.provider, auth_scheme=auth_scheme, host=dest_host)
+        except Exception as exc:  # noqa: BLE001 - boundary: nothing may escape execute()
+            return TrackerError(ErrorClass.AUTH, redact(f"credential resolution failed: {exc}"),
+                                subtype="resolve")
     if not verify_tls:
         # "Honoured but never silent" cannot depend on the caller happening to
         # pass a sink - with the default API (no on_event) the downgrade was
@@ -285,7 +291,19 @@ def execute(
                 "use the HTTP route or restore TLS verification",
                 subtype="tls_unsupported",
             )
-        on_event(f"tls-verification-disabled provider={request.provider} op={request.op}")
+        # The sink is caller-supplied and can itself raise. A sink that fails AT
+        # RECORD TIME is exactly as unrecordable as a missing one, so the same
+        # rule applies: refuse rather than downgrade with no record. Letting the
+        # exception escape would also break the "never raises" contract.
+        try:
+            on_event(f"tls-verification-disabled provider={request.provider} op={request.op}")
+        except Exception as exc:  # noqa: BLE001 - boundary: nothing may escape execute()
+            return TrackerError(
+                ErrorClass.INVALID_INPUT,
+                redact(f"event sink failed while recording the TLS downgrade: {exc}; "
+                       "refusing to disable TLS verification unrecorded"),
+                subtype="tls_unrecorded",
+            )
 
     attempt = 0
     while True:
@@ -304,6 +322,11 @@ def execute(
         if not retryable or attempt >= MAX_RETRIES:
             return err
         if on_event:
-            on_event(f"retry attempt={attempt + 1}/{MAX_RETRIES} class={err.cls.value} op={request.op}")
+            # Best-effort, unlike the downgrade record above: the retry event is
+            # diagnostics, not the audit line a security property depends on.
+            try:
+                on_event(f"retry attempt={attempt + 1}/{MAX_RETRIES} class={err.cls.value} op={request.op}")
+            except Exception:  # noqa: BLE001, S110 - never raises; diagnostics only
+                pass
         _sleep_backoff(attempt, err.retry_after_s)
         attempt += 1

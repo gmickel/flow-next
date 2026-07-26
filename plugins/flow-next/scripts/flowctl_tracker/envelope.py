@@ -40,7 +40,9 @@ def _scrub(obj: Any) -> Any:
     if isinstance(obj, str):
         return redact(obj)
     if isinstance(obj, dict):
-        return {k: _scrub(v) for k, v in obj.items()}
+        # Keys too: a provider that echoes the token back as a mapping KEY
+        # (e.g. a per-credential error index) would otherwise leak it.
+        return {_scrub(k): _scrub(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_scrub(v) for v in obj]
     return obj
