@@ -20,7 +20,7 @@ Jira: `baseUrl`, `projectKey`, `projectId`, `issueTypeId`, `apiVersion: 2`, `sty
 - **Existing `perTracker.statusMap` entries are migrated** into `statusIds` where they resolve to a live status; entries that no longer resolve are dropped with a warning rather than carried forward or silently kept. Transition ids are NEVER cached - `jira.md:738` states they are valid only from the current status, verified live (To Do / In Progress / Done each surfaced different ids). Transition re-fetch is spec B's concern.
 
 ## Acceptance
-- [ ] Normalized vocabulary implemented; the five required keys present, `in_review` optional
+- [ ] Normalized vocabulary implemented; **three required** slots (`todo`, `in_progress`, `done`); **three optional** (`backlog`, `in_review`, `cancelled`)
 - [ ] Linear label pagination fully drained (test with >1 page)
 - [ ] Existing `statusMap` migrated into `statusIds`; unresolvable entries dropped with a warning
 - [ ] Malformed existing config handled without crashing

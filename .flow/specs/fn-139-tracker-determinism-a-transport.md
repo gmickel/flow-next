@@ -40,7 +40,7 @@ Adapters never call `subprocess.run` or open a socket directly. They call an **i
 
 - **`Request`**: `provider`, `op`, `method`, `url_or_argv`, `headers` (**never authorization**), `body`, `timeout_s`, `idempotent: bool`.
 - **Secrets are injected by the executor, after the adapter boundary.** An adapter never sets an authorization header - if it did, the credential would already have crossed the boundary the redaction rule exists to protect. The executor resolves the provider's credential and attaches it immediately before dispatch.
-- **`TrackerError`**: the normalized failure shape every adapter classifier returns - `{class, message, retry_after_s|None, details|None}`. Adapters never raise transport-native exceptions upward.
+- **`TrackerError`**: `{class, subtype, message, retry_after_s|None, details|None, auto_retryable: bool}`. `subtype` distinguishes cases that share a class but not a retry policy - `transport/timeout` and `transport/5xx` are auto-retryable, `transport/malformed_body` is not. `auto_retryable` governs the **executor's** internal retry; the envelope's `retryable` tells the **caller** whether re-invoking could help. They are different questions and are now different fields. Adapters never raise transport-native exceptions upward.
 - **Retry predicate**, explicit: retry iff `class == rate_limited and request.idempotent`. `idempotent` is not decorative.
 - **`Response`**: `status`, `headers`, `body`, `elapsed_s`. GraphQL errors arriving over **HTTP 200/400** are normalized here, not in each adapter.
 - **Bounds** (defaults, config-overridable): **one `timeout_s`, default 30s**, because separate connect/read deadlines are **not achievable with the chosen transports** - verified: `urllib.request.urlopen` exposes a single `timeout`, and neither `gh api` nor `glab api` expose any timeout flag. Semantics per transport, stated rather than implied: **HTTP** (`urllib`) applies it per socket operation; **CLI** applies it as a total process deadline via `subprocess.run(timeout=)`. Splitting them would mean dropping to raw `http.client`/sockets, which is more machinery than the guarantee is worth. **2** retries max; exponential backoff capped 30s; concurrency cap 4.
@@ -69,14 +69,17 @@ tracker.resolved = {
     "capabilities": "<iso8601>"
   },
   "destination": { ...per-tracker... },
-  "capabilities": { "attachments": bool, "blockedBy": bool, "subIssues": bool, "deleteIssue": bool }
+  "capabilities": {
+    "attachments": bool, "blockedBy": bool, "subIssues": bool, "deleteIssue": bool,
+    "_source": { "gitlabPlan": "free|premium|ultimate|ultimate_trial|null" }   // dynamic inputs live
+  }                                                                            // with the scope that owns them
 }
 ```
 
 | tracker | resolved fields | why it must be pinned |
 |---|---|---|
 | GitHub | `owner`, `repo` | stable |
-| GitLab | **numeric** `projectId`, `projectPath`, `host`, `namespaceId`, `plan` | API paths take the id and **the path changes on rename**; `plan` decides dependency degradation |
+| GitLab | **numeric** `projectId`, `projectPath`, `host`, `namespaceId` | API paths take the id and **the path changes on rename**; `plan` decides dependency degradation |
 | Linear | `teamId`, `teamKey`, `stateIds{normalized -> stateId}`, `labelIds` | status writes need a `stateId`, and `type: started` maps to **two** states (In Progress, In Review) - a human decides that tiebreak once, at discovery |
 | Jira | `baseUrl`, `projectKey`, `projectId`, `issueTypeId`, `apiVersion: 2`, `style`, `statusIds{normalized -> statusId}` | status **cannot** be set via fields (measured: 400). **Transition ids are NOT cached**: `jira.md:738` states they are valid only FROM the current status, verified live (To Do -> In Progress -> Done each surfaced different ids). Only the stable target **status** ids are pinned |
 
@@ -91,7 +94,7 @@ tracker.resolved = {
 
 `subIssues` and `deleteIssue` are **kept**, with consumers assigned in B (dependency projection may use GitHub sub-issues as its degraded form; `deleteIssue` gates cleanup paths). They are not "may be dropped".
 
-GitLab's tier probe needs a **namespace id**, which is why `namespaceId` is pinned alongside `projectId` - without it the TTL re-probe costs an extra lookup to rediscover it.
+GitLab's `plan` lives under **`capabilities._source`, not `destination`** - it is a dynamic input to a capability, so a capability-only TTL refresh can update it without writing or timestamping the `destination` scope. Putting it in `destination` would force a refresh to either leave it stale or violate scope isolation. The tier probe needs a **namespace id**, which is why `namespaceId` is pinned in `destination` alongside `projectId` - without it the TTL re-probe costs an extra lookup to rediscover it.
 
 A **failed TTL re-probe is not a capability change.** It is reported in a separate `probe` field `{scope, at, ok, reason}`, distinct from `degraded`, which means an actual capability transition.
 
@@ -176,6 +179,16 @@ Measured live on 2026-07-26 against all four real APIs:
 - **R13:** Existing persisted `perTracker.apiVersion: 3` configs are **migrated to 2**, not orphaned.
 - **R14:** The result envelope, `class` enum and numeric exit codes are implemented and asserted, so callers branch on structure rather than parsing prose.
 - **R15:** The **bridge-inactive path is byte-for-byte unchanged**: one config read, no adapter import, no new output. Asserted by the existing reached-path harness.
+
+## What this spec fixes vs what the implementer decides
+
+This spec is repeatedly reviewed against a "no ambiguity anywhere" bar, which conflicts with the repo's own planning doctrine that plans are specs, not implementations. The boundary is therefore stated once, explicitly:
+
+**Fixed here** (getting these wrong means rework): the shipped-package decision and its residual gap; the executor's type shapes and where secrets are injected; the credential precedence per provider; the cache schema, its scope paths and timestamp rules; which scope owns a dynamic input; the lock design and its constants; the capability truth table; the normalized-state vocabulary and which slots are required.
+
+**Left to the implementer** (local, reversible, better decided with the code in front of you): the exhaustive per-provider classifier rows beyond the stated fallback rule; the alias-metadata field names; exact config key paths and their validation; the precise stale-lock reclamation algorithm within the stated constants; pagination page sizes. Each of these has a stated **rule** or **default** above; what is deferred is enumeration, not judgment.
+
+A task is complete when its acceptance holds, not when every table in this document is exhaustive.
 
 ## Boundaries
 <!-- scope: business -->

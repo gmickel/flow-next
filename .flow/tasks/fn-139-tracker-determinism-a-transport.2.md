@@ -23,7 +23,7 @@ Transport mechanism per provider: GitHub/GitLab via their CLI (host+auth resolut
 Result envelope, exhaustive class enum, fixed numeric exit codes. JSON on stdout, human notes on stderr.
 
 ## Acceptance
-- [ ] Request/Response match the epic schema EXACTLY, incl. `provider`, `op`, and separate connect/read timeouts
+- [ ] Request/Response match the epic schema EXACTLY, incl. `provider`, `op`, and **exactly one** `timeout_s` (no connect/read timeout fields)
 - [ ] Executor returns `Response | TrackerError`; no transport-native exception escapes
 - [ ] GraphQL-over-200/400 normalized in the executor
 - [ ] Per-adapter classification table: GitLab 403+licence-body -> capability, bare 403 -> auth; Linear GraphQL 400 -> rate_limited
