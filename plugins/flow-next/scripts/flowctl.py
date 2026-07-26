@@ -18808,7 +18808,10 @@ def _iter_task_h1_candidates(content: str):
     Eligible means: outside the opening frontmatter block, outside any fence,
     and starting at column zero.
     """
-    lines = content.split("\n")
+    # Bare CR is a valid Markdown line ending. Splitting on "\n" alone treats a
+    # CR-delimited file as ONE line, so a `# <id> ...` sequence inside it could
+    # be imported as the title.
+    lines = content.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     start = 0
     # Column zero for BOTH delimiters: an indented `---` inside a block scalar
     # is scalar content, not the closing delimiter.

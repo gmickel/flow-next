@@ -316,6 +316,20 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
         self.assertIn("still scalar", head)
         self.assertIn("Body text.", tail)
 
+
+    def test_bare_cr_line_endings_are_understood(self) -> None:
+        """Bare CR is a valid Markdown line ending (PR #241 wave 16).
+
+        Splitting on "\\n" alone treated a CR-delimited file as one line, so the
+        fenced decoy was not skipped and the real heading was not found.
+        """
+        cr = "```\r# " + self.TASK_ID + " decoy\r```\r\r# " + self.TASK_ID + " Real\r"
+        self.assertEqual(flowctl._task_h1_title(cr, self.TASK_ID), "Real")
+        self.assertEqual(
+            flowctl._task_h1_title("# " + self.TASK_ID + " Plain\r\rbody\r", self.TASK_ID),
+            "Plain",
+        )
+
     def test_unfenced_h1_still_works(self) -> None:
         plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")
