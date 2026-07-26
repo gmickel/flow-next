@@ -6,16 +6,27 @@ satisfies: [R9, R11]
 ## Description
 Resolve `destination` + `capabilities` for **Linear and Jira**, plus their scoped-resolution tests.
 
-Linear: `teamId`, `teamKey`, `stateIds{normalized -> stateId}`, `labelIds`. `type: started` maps to **two** states (In Progress, In Review), so `resolve --select <normalized>=<stateId>` persists a human's tiebreak, validated against live candidates. An ambiguous state returns `class: conflict` with **both candidates in the typed `details` variant**, not a prose message.
+**Normalized state vocabulary** (the keys `stateIds`/`statusIds` must cover, shared with fn-66's policy): `backlog`, `todo`, `in_progress`, `in_review`, `done`, `cancelled`. `in_review` is OPTIONAL (not every board has it); the other five are required for "all fields complete".
 
-Jira: `baseUrl`, `projectKey`, `projectId`, `issueTypeId`, `apiVersion: 2`, `style`, and **`statusIds` only**. Transition ids are NEVER cached - `jira.md:738` states they are valid only from the current status, verified live (To Do / In Progress / Done each surfaced different ids). Transition re-fetch is spec B's concern.
+Linear: `teamId`, `teamKey`, `stateIds{normalized -> stateId}`, `labelIds{name -> id}`.
+- Mapping algorithm: group live states by `type` (`backlog|unstarted|started|completed|canceled`), map type -> normalized key; where a type yields **exactly one** state, take it; where it yields **more than one** (`started` -> In Progress + In Review), the run is ambiguous and requires `--select`.
+- `labelIds` is keyed by label **name**, lowercased; GraphQL results are **paginated** (`pageInfo.hasNextPage`) and must be fully drained, not first-page-only. `type: started` maps to **two** states (In Progress, In Review), so `resolve --select <normalized>=<stateId>` persists a human's tiebreak, validated against live candidates. An ambiguous state returns `class: conflict` with **both candidates in the typed `details` variant**, not a prose message.
+
+Jira: `baseUrl`, `projectKey`, `projectId`, `issueTypeId`, `apiVersion: 2`, `style` (enum: `next-gen` team-managed | `classic` company-managed), and **`statusIds` only**.
+- Map via `statusCategory.key` (`new|indeterminate|done`) plus status name, to the normalized vocabulary above.
+- **Existing `perTracker.statusMap` entries are migrated** into `statusIds` where they resolve to a live status; entries that no longer resolve are dropped with a warning rather than carried forward or silently kept. Transition ids are NEVER cached - `jira.md:738` states they are valid only from the current status, verified live (To Do / In Progress / Done each surfaced different ids). Transition re-fetch is spec B's concern.
 
 ## Acceptance
+- [ ] Normalized vocabulary implemented; the five required keys present, `in_review` optional
+- [ ] Linear label pagination fully drained (test with >1 page)
+- [ ] Existing `statusMap` migrated into `statusIds`; unresolvable entries dropped with a warning
+- [ ] Malformed existing config handled without crashing
 - [ ] Linear + Jira resolve every field in the Architecture table
 - [ ] Jira persists STATUS ids only; no transition id is written to the cache (asserted)
 - [ ] `resolve --select` validates against live candidates before persisting
 - [ ] Ambiguous Linear state returns `class: conflict` with both candidates in typed `details`
 - [ ] Capability truth table matches exactly for both providers
+- [ ] Linear and Jira capabilities are STATIC: no TTL re-probe is implemented for either (asserted)
 - [ ] Scoped resolution on nested paths (`destination.stateIds`, `destination.statusIds`) tested
 
 ## Done summary

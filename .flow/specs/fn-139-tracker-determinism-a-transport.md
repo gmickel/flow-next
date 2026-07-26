@@ -44,8 +44,10 @@ Adapters never call `subprocess.run` or open a socket directly. They call an **i
 - **Retry predicate**, explicit: retry iff `class == rate_limited and request.idempotent`. `idempotent` is not decorative.
 - **`Response`**: `status`, `headers`, `body`, `elapsed_s`. GraphQL errors arriving over **HTTP 200/400** are normalized here, not in each adapter.
 - **Bounds** (defaults, config-overridable): connect **5s**, read **30s** (separate values, not one `timeout_s`); **2** retries max; exponential backoff capped at 30s; concurrency cap 4.
-- **Credential precedence**, fixed: explicit env -> Keychain -> CLI config (e.g. `glab`) -> unauthenticated. Redaction happens at the executor boundary so no adapter can leak a token into a log or error.
-- **Classification is per-adapter and tabulated**, not a global rule. `401/403 = auth` is insufficient: GitLab returns 403 for *both* a bad token and a licence-gated `is_blocked_by`, so the GitLab table maps 403 **with the licence message body** to `capability` and bare 403 to `auth`. Linear rate limiting arrives as a GraphQL error over HTTP 400, so its table maps that to `rate_limited`.
+- **Transport mechanism is decided per provider, not left open**: GitHub and GitLab go through their **CLI** (`gh`, `glab`) because it already carries host and auth resolution this repo depends on; Linear and Jira go through **stdlib HTTP** (`urllib`), because Linear GraphQL and Jira REST have no CLI in the dependency set. This keeps the zero-dependency rule.
+- **Credential precedence, per provider, by exact name**: GitHub `GH_TOKEN` -> `gh` CLI config; GitLab `GITLAB_TOKEN` -> `glab` CLI config; Linear `LINEAR_API_KEY`; Jira `JIRA_EMAIL`+`JIRA_API_TOKEN` (Cloud, basic) or `JIRA_PAT` (DC, bearer), with `JIRA_BASE_URL` overriding the persisted `baseUrl`. "Secure store" means **whatever the host OS provides and the user has already wired into their environment** - flow-next reads env, never implements a keyring. Redaction happens at the executor boundary.
+- **The Linear MCP rung is unchanged by spec A.** A resolves via GraphQL because flowctl cannot reach MCP; the MCP rung stays agentic and is spec B's `persist-external` concern. A does not deprecate or migrate it.
+- **Classification is per-adapter and tabulated**, with a **total fallback rule so no response is unclassified**: 5xx / timeout / DNS / TLS -> `transport` (retryable only if `idempotent`); malformed body -> `transport` (non-retryable); unrecognised 4xx -> `invalid_input`. Each adapter's table must be **exhaustive over the classes that provider actually emits** - a provider whose unsupported capability is *static* (GitHub attachments) has no HTTP capability error and is tested as a local capability check, not a recorded fixture. `401/403 = auth` is insufficient: GitLab returns 403 for *both* a bad token and a licence-gated `is_blocked_by`, so the GitLab table maps 403 **with the licence message body** to `capability` and bare 403 to `auth`. Linear rate limiting arrives as a GraphQL error over HTTP 400, so its table maps that to `rate_limited`.
 - **CLI serialization**: every command emits the JSON envelope on **stdout**; human-readable notes go to **stderr**. `--json` is accepted and ignored (always-JSON) so callers need no branch.
 
 ### `tracker.resolved`: resolve once, consume deterministically
@@ -56,9 +58,15 @@ What changes is *what* gets resolved, because two adapters cannot execute a stat
 
 ```
 tracker.resolved = {
-  "resolvedAt": "<iso8601>",            // "all required fields complete" - NOT a TTL input
-  "destinationResolvedAt": "<iso8601>",
-  "capabilitiesCheckedAt": "<iso8601>",
+  "resolvedAt": "<iso8601>",            // set ONLY when every required field is present; preserved
+                                        // across a partial refresh; cleared if a refresh reveals a
+                                        // now-missing required field. Never a TTL input.
+  "scopeResolvedAt": {                  // canonical map: one entry per resolvable scope path
+    "destination": "<iso8601>",
+    "destination.statusIds": "<iso8601>",
+    "destination.stateIds": "<iso8601>",
+    "capabilities": "<iso8601>"
+  },
   "destination": { ...per-tracker... },
   "capabilities": { "attachments": bool, "blockedBy": bool, "subIssues": bool, "deleteIssue": bool }
 }
@@ -98,7 +106,7 @@ One explicit table, not prose rules that contradict each other:
 | absent field | partial prior resolution | scoped re-resolve of that field only | no |
 | stale value | write rejected `stale_id` **(spec B)** | attempt 1: scoped re-resolve + retry. attempt 2: same once more. Both failed -> retry exhausted | no |
 | capability downgrade | write rejected `capability` **(spec B)** | degrade, structured `degraded` field, existing relations left intact | no |
-| capability upgrade | **`capabilitiesCheckedAt`** older than `capabilityTtlHours` (default 24), checked on any consuming call - a scoped destination refresh must NOT make capabilities look fresh | **synchronous, bounded** re-probe (one request, own timeout). No background process: no daemon, no lifecycle, and a failed probe leaves the prior capability and reports it | no |
+| capability upgrade | **`scopeResolvedAt["capabilities"]`** older than `capabilityTtlHours` (default 24). **Only GitLab has a dynamic capability** (plan-gated `blockedBy`), so the TTL re-probe applies to GitLab alone; GitHub, Linear and Jira capabilities are static and are never re-probed - a scoped destination refresh must NOT make capabilities look fresh | **synchronous, bounded** re-probe (one request, own timeout). No background process: no daemon, no lifecycle, and a failed probe leaves the prior capability and reports it | no |
 | ambiguous Linear state | cached `stateId` gone AND >1 live state shares its `type` | `class: conflict`, surface both candidates | **yes** |
 | auth failure | 401/403 | `class: auth`, no retry, **no degradation** - never misread as a tier downgrade | yes |
 | retry exhausted | both attempts failed **(spec B)** | `class: unresolved`, operation fails cleanly, cache untouched | yes |
@@ -157,7 +165,7 @@ Measured live on 2026-07-26 against all four real APIs:
 - **R6:** Credentials are read per run from env/Keychain, **never persisted** into `tracker.resolved`, never logged, never included in a receipt or error string.
 - **R7:** Every request has an explicit timeout; retries are bounded and apply to `rate_limited` only, with backoff read from each adapter's own header shape; concurrency is capped. TLS verification defaults on, with the existing per-tracker `sslVerify` opt-out staying explicit.
 - **R8:** The resolve transaction is specified precisely, because atomic-write plus a lock prevents clobbering but **not stale resolution**: a resolver can query project A, then a `config set` repoints the tracker to project B, and the resolver merges A's ids into B's config. Required: **fingerprint every discovery input** used for the network work (tracker type, project/team identity, host, baseUrl) and compare it **inside the lock**; on mismatch discard and boundedly re-resolve, or return `class: conflict`. Order: network work **outside** the lock; acquire the lock; re-read; compare fingerprint; merge **only the resolved scope**; validate; atomically replace.
-- **R8b:** The lock is a **specified cross-platform primitive**, not "the existing one": its path, acquisition timeout, stale-owner recovery and crash behavior are defined, and **every `.flow/config.json` writer routes through it** - today `set_config` and `cmd_init` both write without it and can race a resolve. Contention and crash-recovery are exercised on the **Windows CI row**, not only POSIX.
+- **R8b:** The lock is **one named design**: an **atomic lock directory** at `.flow/.locks/config.d` (mkdir is atomic on POSIX and Windows) containing `owner.json` with `{pid, host, acquired_at}`. Acquisition timeout **10s**; an owner older than **120s** whose pid is not alive on the same host is **stale and reclaimable**; a crashed holder is recovered by that rule rather than by manual cleanup. **Fingerprint mismatch has one bounded behavior**: discard and re-resolve **once**; a second mismatch returns `class: conflict` rather than looping. and **every `.flow/config.json` writer routes through it** - today `set_config` and `cmd_init` both write without it and can race a resolve. Contention and crash-recovery are exercised on the **Windows CI row**, not only POSIX.
 - **R9:** `flowctl tracker resolve` **explicitly backfills** an absent block for all four adapters, populating `destination` + `capabilities` per the Architecture table. This is distinct from a *consuming verb* meeting an absent block, which returns `class: unresolved` rather than resolving implicitly mid-operation - the two behaviors are separately specified and separately tested.
 - **R10:** Every row of the cache state table is implemented and tested, including that an absent block yields `class: unresolved` and **not** a false capability `false`, and that a transient 403 on the tier probe does not flip a capability.
 - **R11:** `resolve --select` persists a human's Linear tiebreak, validated against live candidates. `resolvedAt` is stamped only once all required fields are present.

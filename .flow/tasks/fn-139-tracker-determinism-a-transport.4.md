@@ -20,6 +20,7 @@ A failed TTL re-probe reports via the separate `probe` field, never `degraded`.
 - [ ] Group-scoped trial vs personal namespace distinguished (both directions tested)
 - [ ] Capability truth table matches exactly for both providers
 - [ ] Failed re-probe reports via `probe`, never `degraded`
+- [ ] GitLab is the ONLY provider with a TTL re-probe (its plan-gated `blockedBy`); GitHub's capabilities are static and never re-probed
 - [ ] Scoped resolution (`--scope destination`, `--scope capabilities`) tested for both
 
 ## Done summary

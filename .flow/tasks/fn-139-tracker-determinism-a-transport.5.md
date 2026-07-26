@@ -8,7 +8,9 @@ Finalize distribution **last**, once .1-.4 have added every file a manifest must
 
 Integrity is verified **where it can actually run**. `flowctl_bootstrap.py` executes only for a bare `usage` / `--help` (`flowctl:44-48`); every ordinary command execs `flowctl.py` directly, so today a hash mismatch merely disables the help fast path and fails nothing. Therefore: **installers verify the manifest after copying** and fail loudly there (`install-codex.sh:245-251` enumerates files by name; copy-mode setup and Ralph scaffolding do the same; `install-cursor.sh:72` is a blanket rsync and needs no enumeration change), plus a CI packaging smoke.
 
-Marketplace/plugin installs have no plan-controlled post-install hook, so those fail on **first invocation** with a clear integrity error rather than a silent fallback.
+**Marketplace/plugin installs are NOT covered.** They have no plan-controlled post-install hook, and detecting arbitrary corruption at runtime would require the per-command hashing this design rejects. A corrupt marketplace install therefore surfaces as an ordinary Python `ImportError` on first use. That residual gap is stated in R2 and accepted; do not add a first-run integrity guarantee that only runtime hashing could honour.
+
+**Manifest is concrete**: `flowctl_tracker/MANIFEST.json`, listing `{path, sha256}` per distributed file, written by the build/sync step and read by each installer's verifier.
 
 Per-command hashing is explicitly rejected: it would tax every invocation to catch what installers already cover.
 
@@ -17,7 +19,7 @@ Finally, assert the bridge-inactive path is byte-for-byte unchanged with the pac
 ## Acceptance
 - [ ] Manifest enumerates its members explicitly
 - [ ] Each installer verifies post-copy and FAILS loudly on mismatch
-- [ ] Marketplace/plugin mode fails on first invocation with a clear integrity error, never a silent fallback
+- [ ] Marketplace/plugin mode is explicitly NOT covered; the residual gap is documented, not silently implied
 - [ ] CI packaging smoke covers every runtime incl. Windows `flowctl.cmd`
 - [ ] Bridge-inactive path byte-for-byte unchanged with the package present (reached-path harness)
 - [ ] No per-command hashing added

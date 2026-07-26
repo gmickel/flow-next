@@ -8,7 +8,9 @@ satisfies: [R4,R5,R6,R7,R14]
 ## Description
 Build the transport seam every adapter calls. Specified, not aspirational:
 
-`Request{method,url_or_argv,headers,body,timeout_s,idempotent}` / `Response{status,headers,body,elapsed_s}`, with GraphQL errors arriving over HTTP 200/400 normalized here rather than in each adapter.
+Use the epic's schema verbatim - `Request{provider, op, method, url_or_argv, headers (NEVER authorization), body, connect_timeout_s, read_timeout_s, idempotent}` and `Response{status, headers, body, elapsed_s}`. Note `connect_timeout_s` and `read_timeout_s` are **separate**, not one `timeout_s`.
+
+Executor signature returns `Response | TrackerError` - never raises a transport-native exception upward. GraphQL errors arriving over HTTP 200/400 are normalized in the executor, not in each adapter.
 
 Bounds: connect 5s / read 30s; max 2 retries on `rate_limited` only, exponential backoff capped 30s; concurrency cap 4. Credential precedence env -> Keychain -> CLI config -> unauthenticated, with redaction at the executor boundary.
 
@@ -17,7 +19,9 @@ Bounds: connect 5s / read 30s; max 2 retries on `rate_limited` only, exponential
 Result envelope, exhaustive class enum, fixed numeric exit codes. JSON on stdout, human notes on stderr.
 
 ## Acceptance
-- [ ] Request/Response types implemented; GraphQL-over-200/400 normalized in the executor
+- [ ] Request/Response match the epic schema EXACTLY, incl. `provider`, `op`, and separate connect/read timeouts
+- [ ] Executor returns `Response | TrackerError`; no transport-native exception escapes
+- [ ] GraphQL-over-200/400 normalized in the executor
 - [ ] Per-adapter classification table: GitLab 403+licence-body -> capability, bare 403 -> auth; Linear GraphQL 400 -> rate_limited
 - [ ] Bounds enforced and asserted (timeout, 2 retries, backoff clamp, concurrency 4)
 - [ ] Credential precedence + redaction at the boundary; no token in any log/receipt/error (test)
