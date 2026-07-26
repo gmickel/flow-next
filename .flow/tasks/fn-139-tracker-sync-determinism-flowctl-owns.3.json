@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-26T11:30:32.913379Z",
+  "depends_on": [
+    "fn-139-tracker-sync-determinism-flowctl-owns.1"
+  ],
+  "id": "fn-139-tracker-sync-determinism-flowctl-owns.3",
+  "priority": null,
+  "spec": "fn-139-tracker-sync-determinism-flowctl-owns",
+  "spec_path": ".flow/tasks/fn-139-tracker-sync-determinism-flowctl-owns.3.md",
+  "status": "todo",
+  "title": "Status verb with fn-66 merge-evidence gate and who-wins ladder",
+  "updated_at": "2026-07-26T11:30:32.913379Z"
+}

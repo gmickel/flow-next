@@ -178,6 +178,23 @@ Each of these is a measured behavior, not a hypothetical:
 - **R15:** Lifecycle touchpoints call `flowctl tracker <verb>` directly. The `tracker-runner` subagent dispatch and the per-skill gating-predicate prose are removed, since a subprocess call needs neither.
 - **R16:** The Jira Data Center custom-key path (`MY_PROJECT-7`, >10 chars) is implemented from existing prose and **explicitly marked unverified** in both code comment and spec, with a smoke task gated on a DC instance becoming available.
 
+### Added after research (scout fan-out, 2026-07-26)
+
+- **R17:** fn-57's **R3 is explicitly superseded.** That criterion states "flowctl gains no tracker-mutation code - all status / comment / link mutations stay agent-driven". fn-139 reverses it deliberately. The reversal is recorded in this spec, and the three in-code assertions of the old rule are updated rather than left contradicting the shipped behavior: `flowctl.py` `cmd_sync_check` (the "NO tracker-mutation code lives here or anywhere in flowctl (R3)" docstring), the `list-dep-relations` transport-blind docstring, and `docs/tracker-sync.md`'s "flowctl has no tracker transport" line.
+- **R18:** A named verb persists an **externally-performed** write: the MCP rung has the agent call the tool, so flowctl must be able to record `{id, identifier, url}` it did not fetch itself. This closes a window **worse than pre-create**: there, nothing was created; here the remote issue exists and, without a persist verb, nothing records it - no recovery record, no back-reference, no resume. On persist failure the run surfaces identifier + url for manual reconciliation and writes a warning receipt.
+- **R19:** `tracker.resolved` writes are **atomic and lock-protected**, reusing the existing `atomic_write_json` and `cross_process_lock` primitives in flowctl.py. Two workers resolving concurrently must not produce a torn or clobbered cache. A partially-resolved block is never persisted with a `resolvedAt` stamp that would make it look warm.
+- **R20:** "Miss" is disambiguated: **absent block** (never resolved - the post-upgrade migration case), **absent field** within a present block, and **stale value** (present but rejected) are three distinct paths. Existing `perTracker`-only users get an explicit one-time backfill, not an implicit mid-operation resolve. A capability-gated verb run before any resolution has happened must not read an absent cache as `false`.
+- **R21:** Capability re-probe runs on the **upgrade** path, not only on rejection. A repo that moves Free -> Premium must not stay degraded to `relates_to` indefinitely with no signal. Conversely a trial expiring mid-project (`blockedBy` true -> false) degrades with the change named in the receipt, and previously-created relations are left intact rather than rewritten.
+- **R22:** Invalidation is **scoped**. A rejected Jira transition re-resolves the transitions sub-map, not the whole destination block - otherwise the refresh cost defeats R3's saving.
+- **R23:** A cached Linear `stateId` that no longer exists (board edited, state renamed or removed) **re-surfaces the ambiguity to a human** rather than silently retrying into whatever GraphQL resolves. The `type: started` tiebreak was a human decision at discovery; it stays one.
+- **R24:** `flowctl tracker status` **embeds fn-66's merge-evidence gate** rather than forwarding the caller's requested status: terminal `Done` only on a GitHub-confirmed MERGED, `In Review` on an open PR, never terminal from completion-review alone.
+- **R25:** `flowctl tracker relate` reproduces **fn-64's full contract**, not just the verb shape: the `depRelations` provenance ledger, additive-only writes, the completed-blocker rule, never-clobber-on-collision (defer + queue), and the `<!-- flow:deps -->` fenced block's exclusion from body-merge divergence hashing.
+- **R26:** The **paired merge-base snapshot invariant** is preserved: both halves written at one sync point, atomically, never per-flag. This is pre-existing hard-won behavior (memory: `paired-snapshot-setter-must-write-both`) and a deterministic rewrite is exactly where it could regress silently.
+- **R27:** The status **who-wins ladder keeps collision cases first**. Its branch order carries correctness dependencies (memory: `who-wins-ladder-must-check-the-...`); a port that reorders them lets an earlier rule win silently.
+- **R28:** fn-130's reached-path **B1 baselines are re-frozen** for the tracker cluster as part of this work, with the delta recorded honestly in `optimization/reached-path/` the way fn-134 recorded its own growth. R11's reduction invalidates them by design; leaving them stale would fail the harness for the wrong reason.
+- **R29:** fn-89's teardown is **clean**: removing the `tracker-runner` agent and its dispatch reference leaves no dangling reference from any of the fourteen calling skills, the codex mirror, or `docs/platforms.md`'s Tier-B dispatch text.
+- **R30:** Existing persisted `perTracker.apiVersion: 3` configs are **migrated, not orphaned**, when R7 flips the Jira body default to v2.
+
 ## Boundaries
 <!-- scope: business -->
 
@@ -189,6 +206,7 @@ Each of these is a measured behavior, not a hypothetical:
 - Replacing the MCP rung. It stays agentic by necessity.
 - Changing the projection model or the hybrid id scheme. Both are settled by fn-134 and unaffected.
 - Any change to the bridge-inactive default path.
+- **A fallback to the prose path.** R11/R15 remove it, so flowctl becomes the sole route. This is an accepted consequence, not an oversight: two paths would mean two behaviours to keep in sync, which is the problem being solved. The mitigation is the fake-transport test suite (R13), not a hidden second implementation.
 
 ## Decision Context
 <!-- scope: both -->
@@ -204,6 +222,14 @@ Because two adapters cannot execute a status write without ids that only an API 
 ### Why discovery stays agentic
 
 Choosing "which project" is ambiguous, one-time, and interactive - the textbook skill case. The split is not "agentic bad, deterministic good"; it is **discovery is judgment, execution is plumbing**.
+
+### The strongest counter-evidence, and why it does not apply
+
+Memory entry `plan-sync-skip-gate-not-viable-2026-07-03` records a deterministic gate that was **built, evaluated, and killed by its own eval**: a 27-scenario cross-repo run with frozen ground truth produced a genuine false skip, and the conclusion was that "whether a completed task invalidates a downstream plan is a *semantic* question... any deterministic proxy is either unsafe or so conservative it never skips."
+
+That is the right warning to hold against this spec, and it is the reason **body-merge conflict adjudication stays agentic here** (R12). Body reconciliation is more semantic than plan-sync drift detection, not less. What fn-139 moves is not judgment: it is `POST /issues` with a title and a body. The test for whether a candidate belongs in flowctl is the CLAUDE.md symptom list, and for transport it fires zero of six.
+
+If this spec ever grows a task that makes conflict resolution deterministic, that task is out of scope by construction.
 
 ### What was verified and what was not
 

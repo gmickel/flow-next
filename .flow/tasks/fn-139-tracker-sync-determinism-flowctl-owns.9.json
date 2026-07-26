@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-26T11:30:34.797263Z",
+  "depends_on": [
+    "fn-139-tracker-sync-determinism-flowctl-owns.7",
+    "fn-139-tracker-sync-determinism-flowctl-owns.8"
+  ],
+  "id": "fn-139-tracker-sync-determinism-flowctl-owns.9",
+  "priority": null,
+  "spec": "fn-139-tracker-sync-determinism-flowctl-owns",
+  "spec_path": ".flow/tasks/fn-139-tracker-sync-determinism-flowctl-owns.9.md",
+  "status": "todo",
+  "title": "Supersede fn-57 R3 in code and docs; full docs pass",
+  "updated_at": "2026-07-26T11:30:34.797263Z"
+}
