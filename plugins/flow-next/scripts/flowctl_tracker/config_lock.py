@@ -259,15 +259,20 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
                 # acquires first, their FRESH owner is not stale, so this
                 # branch cannot repeat - the loop is bounded by the deadline.
                 continue
-            # Held, un-reclaimable, or the reclaim rename failed (permissions,
-            # antivirus, read-only fs): all of these go through the deadline so
-            # acquisition can never spin forever.
-            if time.monotonic() >= deadline:
-                raise ConfigLockTimeout(
-                    f"could not acquire {lock} within {timeout_s:.0f}s; "
-                    "holder appears alive (see owner.json)"
-                ) from None
-            time.sleep(_POLL_S)
+        except PermissionError:
+            # Windows: a directory whose deletion is still PENDING (the last
+            # holder released while a reader kept a handle open) fails mkdir
+            # with ERROR_ACCESS_DENIED, not FileExistsError. Transient - poll.
+            pass
+        # Held, un-reclaimable, delete-pending, or the reclaim rename failed
+        # (permissions, antivirus, read-only fs): all of these go through the
+        # deadline so acquisition can never spin forever.
+        if time.monotonic() >= deadline:
+            raise ConfigLockTimeout(
+                f"could not acquire {lock} within {timeout_s:.0f}s; "
+                "holder appears alive (see owner.json)"
+            ) from None
+        time.sleep(_POLL_S)
     try:
         (lock / "owner.json").write_text(json.dumps({
             "pid": os.getpid(),
@@ -276,4 +281,30 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
         }), encoding="utf-8")
         yield
     finally:
-        shutil.rmtree(lock, ignore_errors=True)
+        _release(lock)
+
+
+def _release(lock: Path) -> None:
+    """Windows-robust release. A concurrent staleness check holds owner.json
+    open for milliseconds; deleting it in that window raises a sharing
+    violation, and `rmtree(ignore_errors=True)` swallowed it - the lock then
+    NEVER released, deadlocking every writer until the 120s stale rule fired
+    (measured on the windows-latest CI row as 10s acquisition timeouts).
+    Retry briefly; sharing violations clear as soon as the reader closes.
+    """
+    deadline = time.monotonic() + 5.0
+    while True:
+        try:
+            try:
+                (lock / "owner.json").unlink()
+            except FileNotFoundError:
+                pass
+            os.rmdir(lock)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            if time.monotonic() >= deadline:
+                shutil.rmtree(lock, ignore_errors=True)  # last resort
+                return
+            time.sleep(0.01)
