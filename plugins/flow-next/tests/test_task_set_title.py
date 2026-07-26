@@ -330,6 +330,15 @@ class TaskH1LookupIsFenceAware(unittest.TestCase):
             "Plain",
         )
 
+
+    def test_rewrite_preserves_the_original_line_terminator(self) -> None:
+        """Bare CR / CRLF must survive the rewrite (PR #241 wave 17)."""
+        for term in ("\r", "\n", "\r\n"):
+            with self.subTest(terminator=repr(term)):
+                body = "# " + self.TASK_ID + " Old" + term + "body" + term
+                out = flowctl._task_rewrite_h1(body, self.TASK_ID, "New")
+                self.assertEqual(out, "# " + self.TASK_ID + " New" + term + "body" + term)
+
     def test_unfenced_h1_still_works(self) -> None:
         plain = f"# {self.TASK_ID} Plain title\n\nBody.\n"
         self.assertEqual(flowctl._task_h1_title(plain, self.TASK_ID), "Plain title")

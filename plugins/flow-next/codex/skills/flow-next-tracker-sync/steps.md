@@ -500,6 +500,21 @@ fi
 if [ -z "$SPEC_ID" ]; then
  CREATE_OUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$TITLE" --json)
  SPEC_ID=$(printf '%s' "$CREATE_OUT" | jq -r '.id // .spec_id // empty')
+ MINT_ERR=$(printf '%s' "$CREATE_OUT" | jq -r '.error // empty')
+ # Degrade ONLY for the display-only-identifier case. Any other mint failure -
+ # most importantly a `preflight_tracker_mint` alias collision - must NOT reach
+ # here: minting an unrelated `fn-*` spec and attaching this issue to it would
+ # link the issue to the WRONG spec, which is worse than failing.
+ case "$MINT_ERR" in
+ *"Invalid tracker identifier"*|*"display-only"*|*"Expected a bare display key"*) DISPLAY_ONLY=1 ;;
+ *) DISPLAY_ONLY=0 ;;
+ esac
+ if [ -z "$SPEC_ID" ] && [ "$DISPLAY_ONLY" != "1" ]; then
+ echo "create-first: mint of '$IDENTIFIER' failed and it is NOT a display-only key - refusing to attach to an unrelated spec." >&2
+ echo " error: $MINT_ERR" >&2
+ echo " issue: $IDENTIFIER url: $ISSUE_URL retryKey: $RETRY_KEY (record KEPT)" >&2
+ return 1 2>/dev/null || exit 1
+ fi
  if [ -z "$SPEC_ID" ]; then
  # NOT every identifier is mintable. A Jira DC/Server project with a custom
  # key returns `MY_PROJECT-7` (underscore, or >10 chars), which is

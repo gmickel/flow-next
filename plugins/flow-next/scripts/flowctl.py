@@ -18866,7 +18866,17 @@ def _task_rewrite_h1(content: str, task_id: str, title: str) -> str:
     for i, _ in _iter_task_h1_candidates(content):
         if i < len(lines):
             line = lines[i]
-            newline = "\n" if line.endswith("\n") else ""
+            # Preserve the ORIGINAL terminator. `splitlines(keepends=True)`
+            # keeps bare "\r" and "\r\n" too; recognizing only "\n" would strip
+            # the separator and glue the heading onto the next line.
+            if line.endswith("\r\n"):
+                newline = "\r\n"
+            elif line.endswith("\n"):
+                newline = "\n"
+            elif line.endswith("\r"):
+                newline = "\r"
+            else:
+                newline = ""
             lines[i] = f"# {task_id} {title}{newline}"
             return "".join(lines)
     # No H1 — insert after optional YAML frontmatter, else at the top.
