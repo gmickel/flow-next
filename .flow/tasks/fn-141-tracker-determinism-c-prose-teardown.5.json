@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-26T12:35:46.554985Z",
+  "depends_on": [
+    "fn-141-tracker-determinism-c-prose-teardown.1"
+  ],
+  "id": "fn-141-tracker-determinism-c-prose-teardown.5",
+  "priority": null,
+  "spec": "fn-141-tracker-determinism-c-prose-teardown",
+  "spec_path": ".flow/tasks/fn-141-tracker-determinism-c-prose-teardown.5.md",
+  "status": "todo",
+  "title": "Re-freeze fn-130 tracker baselines with enumerated fixtures + delta",
+  "updated_at": "2026-07-26T12:35:46.554985Z"
+}

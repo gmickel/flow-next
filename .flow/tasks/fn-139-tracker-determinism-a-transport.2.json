@@ -1,0 +1,19 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-26T11:30:12.316107Z",
+  "depends_on": [
+    "fn-139-tracker-determinism-a-transport.1"
+  ],
+  "id": "fn-139-tracker-determinism-a-transport.2",
+  "impl": null,
+  "priority": null,
+  "review": null,
+  "spec": "fn-139-tracker-determinism-a-transport",
+  "spec_path": ".flow/tasks/fn-139-tracker-determinism-a-transport.2.md",
+  "status": "todo",
+  "sync": null,
+  "title": "Injected request executor + adapter interface + result envelope",
+  "updated_at": "2026-07-26T12:32:24.045341Z"
+}

@@ -1,16 +1,16 @@
 {
-  "branch_name": "fn-138-published-json-schema-for-flow-config",
-  "created_at": "2026-07-25T11:56:55.671060Z",
+  "branch_name": "fn-140-tracker-determinism-b-verb-surface",
+  "created_at": "2026-07-26T12:32:33.523854Z",
   "depends_on_epics": [
     "fn-139-tracker-determinism-a-transport"
   ],
-  "id": "fn-138-published-json-schema-for-flow-config",
+  "id": "fn-140-tracker-determinism-b-verb-surface",
   "next_task": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
-  "spec_path": ".flow/specs/fn-138-published-json-schema-for-flow-config.md",
+  "spec_path": ".flow/specs/fn-140-tracker-determinism-b-verb-surface.md",
   "status": "open",
-  "title": "Published JSON Schema for flow config",
+  "title": "Tracker determinism B: verb surface, capabilities, body fidelity",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -22,5 +22,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-26T12:29:54.862961Z"
+  "updated_at": "2026-07-26T12:34:30.509141Z"
 }

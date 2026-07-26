@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-26T12:35:46.243649Z",
+  "depends_on": [
+    "fn-141-tracker-determinism-c-prose-teardown.2"
+  ],
+  "id": "fn-141-tracker-determinism-c-prose-teardown.4",
+  "priority": null,
+  "spec": "fn-141-tracker-determinism-c-prose-teardown",
+  "spec_path": ".flow/tasks/fn-141-tracker-determinism-c-prose-teardown.4.md",
+  "status": "todo",
+  "title": "Supersede fn-57 R3; rewrite repo docs",
+  "updated_at": "2026-07-26T12:35:46.243649Z"
+}

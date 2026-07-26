@@ -1,0 +1,19 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-26T12:35:12.221601Z",
+  "depends_on": [
+    "fn-140-tracker-determinism-b-verb-surface.2",
+    "fn-140-tracker-determinism-b-verb-surface.3",
+    "fn-140-tracker-determinism-b-verb-surface.4",
+    "fn-140-tracker-determinism-b-verb-surface.5"
+  ],
+  "id": "fn-140-tracker-determinism-b-verb-surface.6",
+  "priority": null,
+  "spec": "fn-140-tracker-determinism-b-verb-surface",
+  "spec_path": ".flow/tasks/fn-140-tracker-determinism-b-verb-surface.6.md",
+  "status": "todo",
+  "title": "Cross-adapter conformance matrix + fault injection",
+  "updated_at": "2026-07-26T12:35:12.221601Z"
+}

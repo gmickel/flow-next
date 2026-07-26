@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-26T12:35:11.358949Z",
+  "depends_on": [
+    "fn-140-tracker-determinism-b-verb-surface.1"
+  ],
+  "id": "fn-140-tracker-determinism-b-verb-surface.4",
+  "priority": null,
+  "spec": "fn-140-tracker-determinism-b-verb-surface",
+  "spec_path": ".flow/tasks/fn-140-tracker-determinism-b-verb-surface.4.md",
+  "status": "todo",
+  "title": "Capabilities: attachments, relations, tier degradation",
+  "updated_at": "2026-07-26T12:35:11.358949Z"
+}
