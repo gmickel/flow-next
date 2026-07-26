@@ -547,10 +547,20 @@ $FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_ID" --identifier "$IDENTIFIER" -
 }
 # 4. seed merge base (BOTH halves - paired-snapshot invariant; body-merge.md first-link)
 # Tracker half = the issue body just created (fetch-back after writeIssue, body-merge.md Step 5).
+# Seeding must succeed too - this block has no `set -e`, so an unguarded
+# failure (missing fetched-body temp file, unwritable path) would fall straight
+# through to the back-reference, receipt and CLEAR, discarding the recovery
+# record while the spec has no paired base snapshot.
 $FLOWCTL sync set-merge-base "$SPEC_ID" \
  --flow-file ".flow/specs/${SPEC_ID}.md" \
- --tracker-file "${TMPDIR:-/tmp}/flow-base-tracker-${SPEC_ID}-$$.txt"
-$FLOWCTL sync set-last-synced "$SPEC_ID"
+ --tracker-file "${TMPDIR:-/tmp}/flow-base-tracker-${SPEC_ID}-$$.txt" || {
+ echo "create-first: merge-base seed failed for $SPEC_ID ($IDENTIFIER); retryKey $RETRY_KEY KEPT" >&2
+ return 1 2>/dev/null || exit 1
+}
+$FLOWCTL sync set-last-synced "$SPEC_ID" || {
+ echo "create-first: set-last-synced failed for $SPEC_ID; retryKey $RETRY_KEY KEPT" >&2
+ return 1 2>/dev/null || exit 1
+}
 # 5. write flow:<spec-id> back-reference label on the issue [→ selected adapter] (same as Phase 2a)
 # 6. ONLY NOW the receipt. Writing it earlier records an `updated` receipt whose
 # note claims recovery was consumed while the sequence is still incomplete -
