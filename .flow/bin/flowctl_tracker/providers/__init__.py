@@ -2,9 +2,10 @@
 
 `resolver_for(provider)` is the dispatch the resolve verb builds on: each
 provider module exposes `resolve_destination(config, execute)` and
-`resolve_capabilities(config, execute)`. GitHub + GitLab arrive in task .4;
-Linear + Jira in task .6 - `resolver_for` on a not-yet-shipped provider raises
-KeyError so a caller cannot silently half-resolve.
+`resolve_capabilities(config, execute)`; Linear/Jira additionally expose their
+ids-scope resolvers (`resolve_state_ids` / `resolve_status_ids`) and the live
+fetchers `--select` validates against. `resolver_for` on an unknown provider
+raises KeyError so a caller cannot silently half-resolve.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from types import ModuleType
 
 __all__ = ["resolver_for"]
 
-_PROVIDERS = {"github", "gitlab"}  # .6 adds linear + jira
+_PROVIDERS = {"github", "gitlab", "linear", "jira"}
 
 
 def resolver_for(provider: str) -> ModuleType:

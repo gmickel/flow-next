@@ -53,8 +53,8 @@ class Dispatch(unittest.TestCase):
         self.assertIs(resolver_for("github"), GH)
         self.assertIs(resolver_for("gitlab"), GL)
 
-    def test_unshipped_provider_raises_rather_than_half_resolving(self) -> None:
-        for p in ("linear", "jira", "bogus"):
+    def test_unknown_provider_raises_rather_than_half_resolving(self) -> None:
+        for p in ("bogus", "gitea", ""):
             with self.subTest(provider=p), self.assertRaises(KeyError):
                 resolver_for(p)
 

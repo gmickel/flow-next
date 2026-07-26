@@ -111,7 +111,19 @@ def _required_complete(resolved: dict, tracker_type: str) -> bool:
     if required is None:
         return False
     for f in required:
-        if dest.get(f) in (None, "", [], {}):
+        value = dest.get(f)
+        if value is None or value == "":
+            # NOTE: an empty dict is PRESENT (a team with zero labels has
+            # labelIds {}); slot-level completeness below is what guards the
+            # ids maps, not container non-emptiness.
+            return False
+    # Slot-level rule: resolution completes only when every REQUIRED normalized
+    # slot is filled (todo / in_progress / done - fn-139.6 vocabulary).
+    ids_key = {"linear": "stateIds", "jira": "statusIds"}.get(tracker_type)
+    if ids_key:
+        from .states import REQUIRED_SLOTS
+        ids = dest.get(ids_key)
+        if not isinstance(ids, dict) or not all(s in ids for s in REQUIRED_SLOTS):
             return False
     return all(isinstance(caps.get(k), bool) for k in CAPABILITY_KEYS)
 
@@ -266,12 +278,19 @@ def resolve_transaction(
     network_fn: Callable[[dict], Union[dict, TrackerError]],
     *,
     now: Optional[str] = None,
+    finalize_fn: Optional[Callable[[dict, dict], dict]] = None,
 ) -> Union[dict, TrackerError]:
     """Run one scoped resolve with the R8 ordering. Returns the merged config,
     or a TrackerError (never raises for the specified failure modes).
 
     `network_fn(config)` performs the provider round-trip OUTSIDE the lock and
     returns the scope data (or a TrackerError to propagate verbatim).
+
+    `finalize_fn(current_config, data)`, when given, recomputes the scope data
+    INSIDE the lock against the just-re-read config. `--select` needs it: its
+    data is one slot merged into the current map, and computing that merge from
+    the pre-lock read would let two concurrent selects clobber each other with
+    whole-map replaces.
     """
     if scope not in SCOPES:
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -297,7 +316,8 @@ def resolve_transaction(
                     # ids into the NEW project's config. Bounded: retry once.
                     continue
                 migrate_config(current)
-                apply_scope_result(current, scope, data, now=now)
+                final_data = finalize_fn(current, data) if finalize_fn else data
+                apply_scope_result(current, scope, final_data, now=now)
                 validate_resolved_block(current["tracker"]["resolved"])
                 _atomic_write_json(config_path, current)
                 return current

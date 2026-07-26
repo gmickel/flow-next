@@ -23801,6 +23801,42 @@ def compute_create_first_key(tracker_type: str, title: str, body: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def cmd_tracker_resolve(args: argparse.Namespace) -> None:
+    """`flowctl tracker resolve` (fn-139.6, R9) - explicit deterministic
+    backfill of `tracker.resolved` (destination + ids scope + capabilities).
+
+    Thin shell: the whole verb lives in `flowctl_tracker.resolve_verb`, which
+    emits the single result envelope on stdout and a fixed numeric exit code.
+    `--json` is accepted-and-ignored (the envelope is always JSON). The package
+    ships alongside flowctl.py; a named-files-only legacy copy reports the gap
+    explicitly rather than pretending the verb does not exist.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    try:
+        from flowctl_tracker import resolve_verb  # noqa: PLC0415
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import resolve_verb  # noqa: PLC0415
+        except ImportError:
+            error_exit(
+                "flowctl_tracker package is not installed alongside flowctl.py; "
+                "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+                use_json=getattr(args, "json", False))
+    payload, code = resolve_verb.run(
+        get_flow_dir(),
+        scope=getattr(args, "scope", None),
+        refresh=bool(getattr(args, "refresh", False)),
+        select=getattr(args, "select", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
 def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
     """Atomic pre-spec recovery records for tracker-sync `create-first`.
 
@@ -31059,6 +31095,33 @@ def main() -> None:
 
     # sync (tracker bridge plumbing — fn-52.1). Distinct from /flow-next:sync
     # (plan-sync); this command group is the deterministic tracker-sync substrate.
+    # fn-139.6: deterministic tracker verbs (flowctl_tracker package).
+    p_tracker = subparsers.add_parser(
+        "tracker", help="Deterministic tracker transport verbs (fn-139)"
+    )
+    tracker_sub = p_tracker.add_subparsers(dest="tracker_cmd", required=True)
+    p_tracker_resolve = tracker_sub.add_parser(
+        "resolve",
+        help="Backfill/refresh tracker.resolved (destination, ids scope, capabilities)",
+    )
+    p_tracker_resolve.add_argument(
+        "--scope", default=None,
+        help="Re-resolve only this nested path (destination | "
+             "destination.statusIds | destination.stateIds | capabilities)",
+    )
+    p_tracker_resolve.add_argument(
+        "--refresh", action="store_true",
+        help="Force re-resolution of scopes that are already fresh",
+    )
+    p_tracker_resolve.add_argument(
+        "--select", default=None, metavar="NORMALIZED=ID",
+        help="Persist ONE human slot tiebreak (validated against live "
+             "candidates; repeatable across calls; re-select overwrites)",
+    )
+    p_tracker_resolve.add_argument("--json", action="store_true",
+                                   help="Accepted and ignored (output is always JSON)")
+    p_tracker_resolve.set_defaults(func=cmd_tracker_resolve)
+
     p_sync = subparsers.add_parser(
         "sync", help="Tracker sync plumbing (config / state / enumerate / receipt)"
     )
