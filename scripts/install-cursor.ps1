@@ -97,19 +97,27 @@ foreach ($x in @("codex", "tests", "__pycache__")) {
 # fn-139.5: verify the flowctl_tracker package post-copy - integrity is checked
 # where it can actually run (the installer) and fails LOUDLY on mismatch.
 $manifest = Join-Path $Dest "scripts\flowctl_tracker\MANIFEST.json"
-if (Test-Path $manifest) {
-    $verifier = Join-Path $Dest "scripts\lib\verify_tracker_manifest.py"
-    $py = Get-Command python3 -ErrorAction SilentlyContinue
-    if (-not $py) { $py = Get-Command python -ErrorAction SilentlyContinue }
-    if ($py) {
-        & $py.Source $verifier (Join-Path $Dest "scripts")
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "flowctl_tracker manifest verification FAILED - install is corrupt; re-clone and re-run."
-            exit 1
-        }
-    } else {
-        Write-Warning "python not found; skipping flowctl_tracker manifest verification"
-    }
+$verifier = Join-Path $Dest "scripts\lib\verify_tracker_manifest.py"
+if (-not (Test-Path $manifest) -or -not (Test-Path $verifier)) {
+    # Fail CLOSED: the source ships both; absence after the copy means a
+    # truncated checkout or a broken copy, never an acceptable install.
+    Write-Error "flowctl_tracker manifest/verifier missing after copy - corrupt checkout/install; re-clone and re-run."
+    exit 1
+}
+# Same interpreter resolution contract as flowctl.cmd: py -3 -> python3 -> python.
+$pyArgs = @()
+$py = Get-Command py -ErrorAction SilentlyContinue
+if ($py) { $pyArgs = @("-3") }
+if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
+if (-not $py) { $py = Get-Command python -ErrorAction SilentlyContinue }
+if (-not $py) {
+    Write-Error "No Python interpreter found (py -3 / python3 / python) - cannot verify flowctl_tracker; install Python and re-run."
+    exit 1
+}
+& $py.Source @pyArgs $verifier (Join-Path $Dest "scripts")
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "flowctl_tracker manifest verification FAILED - install is corrupt; re-clone and re-run."
+    exit 1
 }
 
 function Get-DirCount($path) {

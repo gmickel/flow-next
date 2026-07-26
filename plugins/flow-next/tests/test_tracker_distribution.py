@@ -55,10 +55,18 @@ class ManifestIsCurrent(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
 
     def test_flow_bin_copy_matches_the_manifest_too(self) -> None:
-        """The dual-copy invariant extends to the package."""
+        """The dual-copy invariant extends to the package AND its manifest."""
         bin_pkg = REPO / ".flow" / "bin" / "flowctl_tracker"
         self.assertTrue(bin_pkg.is_dir(), ".flow/bin ships the package")
         self.assertEqual(_hashes(bin_pkg), _hashes(PKG))
+        self.assertEqual((bin_pkg / "MANIFEST.json").read_bytes(),
+                         MANIFEST.read_bytes(),
+                         "a stale .flow/bin manifest verifies yesterday's hashes")
+        # And the verifier actually passes against BOTH shipped trees.
+        for root in (PKG.parent, bin_pkg.parent):
+            out = subprocess.run([sys.executable, str(VERIFIER), str(root)],
+                                 capture_output=True, text=True, timeout=120)
+            self.assertEqual(out.returncode, 0, (root, out.stderr))
 
 
 class InstallerVerifier(unittest.TestCase):
@@ -113,16 +121,70 @@ class InstallerVerifier(unittest.TestCase):
 
 class RuntimeSmoke(unittest.TestCase):
     """The packaging smoke: the REAL launcher for this OS resolves the package.
-    On windows-latest this exercises flowctl.cmd; elsewhere the bash launcher."""
+    On windows-latest this exercises flowctl.cmd; elsewhere the bash launcher.
 
-    def _launcher(self) -> list:
+    `--help` is NOT sufficient - argparse exits before `cmd_tracker_resolve`
+    ever imports the package, so a help run passes with no package installed
+    at all (reproduced). The smoke therefore runs a REAL `tracker resolve` in
+    an inactive temp repo: the inactive envelope (exit 3) is only reachable
+    AFTER `flowctl_tracker.resolve_verb` imported successfully.
+    """
+
+    def _launcher(self, scripts_dir: Path) -> list:
         if os.name == "nt":  # pragma: no cover - the Windows CI row
-            return ["cmd", "/c", str(ROOT / "scripts" / "flowctl.cmd")]
-        return [str(ROOT / "scripts" / "flowctl")]
+            return ["cmd", "/c", str(scripts_dir / "flowctl.cmd")]
+        return [str(scripts_dir / "flowctl")]
 
-    def test_tracker_resolve_help_runs_through_the_launcher(self) -> None:
-        out = subprocess.run(self._launcher() + ["tracker", "resolve", "--help"],
-                             capture_output=True, text=True, timeout=180)
+    def _temp_repo(self, tmp: str) -> Path:
+        repo = Path(tmp) / "repo"
+        (repo / ".flow").mkdir(parents=True)
+        (repo / ".flow" / "config.json").write_text("{}\n", encoding="utf-8")
+        (repo / ".flow" / "meta.json").write_text(
+            '{"schema_version": 3, "next_spec": 1}\n', encoding="utf-8")
+        return repo
+
+    def test_real_resolve_reaches_the_package_through_the_launcher(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._temp_repo(tmp)
+            out = subprocess.run(
+                self._launcher(ROOT / "scripts") + ["tracker", "resolve"],
+                capture_output=True, text=True, timeout=180, cwd=repo)
+            self.assertEqual(out.returncode, 3, out.stderr)
+            self.assertEqual(json.loads(out.stdout.strip())["class"], "inactive")
+
+    def test_staged_layouts_import_the_package(self) -> None:
+        """Every named-files runtime layout: flowctl.py + bootstrap + package
+        copied flat (the shape Codex installs, copy-mode setup, and ralph all
+        produce), with and without the package - absence must FAIL loudly."""
+        for with_package in (True, False):
+            with self.subTest(with_package=with_package), \
+                    tempfile.TemporaryDirectory() as tmp:
+                staged = Path(tmp) / "bin"
+                staged.mkdir()
+                for name in ("flowctl.py", "flowctl_bootstrap.py"):
+                    shutil.copy2(ROOT / "scripts" / name, staged / name)
+                if with_package:
+                    shutil.copytree(PKG, staged / "flowctl_tracker",
+                                    ignore=shutil.ignore_patterns("__pycache__"))
+                repo = self._temp_repo(tmp)
+                out = subprocess.run(
+                    [sys.executable, str(staged / "flowctl.py"),
+                     "tracker", "resolve"],
+                    capture_output=True, text=True, timeout=180, cwd=repo)
+                if with_package:
+                    self.assertEqual(out.returncode, 3, out.stderr)
+                    self.assertEqual(json.loads(out.stdout.strip())["class"],
+                                     "inactive")
+                else:
+                    self.assertNotEqual(out.returncode, 0)
+                    self.assertIn("flowctl_tracker",
+                                  out.stderr + out.stdout,
+                                  "the gap must be named, not a bare traceback")
+
+    def test_help_still_works(self) -> None:
+        out = subprocess.run(
+            self._launcher(ROOT / "scripts") + ["tracker", "resolve", "--help"],
+            capture_output=True, text=True, timeout=180)
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn("--select", out.stdout)
 
@@ -172,3 +234,86 @@ class BridgeInactiveByteParity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipIf(os.name == "nt", "installer scripts are bash; the guard logic "
+                                  "is identical cross-platform")
+class ExecutableInstallerFailClosed(unittest.TestCase):
+    """Run the REAL cursor installer against a staged source tree - presence
+    strings prove nothing about behavior."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._stage = tempfile.TemporaryDirectory()
+        root = Path(cls._stage.name) / "repo"
+        (root / "plugins").mkdir(parents=True)
+        shutil.copytree(REPO / "scripts", root / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(REPO / "plugins" / "flow-next", root / "plugins" / "flow-next",
+                        ignore=shutil.ignore_patterns(
+                            "tests", "codex", "__pycache__", "*.pyc"))
+        cls.root = root
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._stage.cleanup()
+
+    def _run(self, source_root: Path) -> subprocess.CompletedProcess:
+        with tempfile.TemporaryDirectory() as home:
+            return subprocess.run(
+                ["bash", str(source_root / "scripts" / "install-cursor.sh")],
+                capture_output=True, text=True, timeout=300,
+                env={**os.environ, "HOME": home})
+
+    def test_clean_install_verifies(self) -> None:
+        out = self._run(self.root)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("verified", out.stdout + out.stderr)
+
+    def test_absent_package_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            mutated = Path(tmp) / "repo"
+            shutil.copytree(self.root, mutated)
+            shutil.rmtree(mutated / "plugins" / "flow-next" / "scripts"
+                          / "flowctl_tracker")
+            out = self._run(mutated)
+            self.assertNotEqual(out.returncode, 0,
+                                "a truncated source must not install successfully")
+
+    def test_absent_manifest_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            mutated = Path(tmp) / "repo"
+            shutil.copytree(self.root, mutated)
+            (mutated / "plugins" / "flow-next" / "scripts" / "flowctl_tracker"
+             / "MANIFEST.json").unlink()
+            out = self._run(mutated)
+            self.assertNotEqual(out.returncode, 0)
+
+    def test_tampered_file_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            mutated = Path(tmp) / "repo"
+            shutil.copytree(self.root, mutated)
+            (mutated / "plugins" / "flow-next" / "scripts" / "flowctl_tracker"
+             / "executor.py").write_text("tampered\n", encoding="utf-8")
+            out = self._run(mutated)
+            self.assertNotEqual(out.returncode, 0)
+
+    def test_codex_installer_fails_closed_on_absent_package(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            mutated = Path(tmp) / "repo"
+            shutil.copytree(self.root, mutated)
+            shutil.rmtree(mutated / "plugins" / "flow-next" / "scripts"
+                          / "flowctl_tracker")
+            # install-codex.sh refuses to run without the pre-built mirror -
+            # stage the real one so the run reaches the tracker-package guard.
+            shutil.copytree(REPO / "plugins" / "flow-next" / "codex",
+                            mutated / "plugins" / "flow-next" / "codex",
+                            ignore=shutil.ignore_patterns("__pycache__"))
+            with tempfile.TemporaryDirectory() as home:
+                (Path(home) / ".codex").mkdir()  # installer probes for Codex CLI
+                out = subprocess.run(
+                    ["bash", str(mutated / "scripts" / "install-codex.sh")],
+                    capture_output=True, text=True, timeout=300,
+                    env={**os.environ, "HOME": home})
+            self.assertNotEqual(out.returncode, 0)
+            self.assertIn("flowctl_tracker", out.stdout + out.stderr)

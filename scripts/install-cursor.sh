@@ -88,13 +88,18 @@ fi
 # fn-139.5: the blanket copy needs no enumeration change, but the copy is still
 # VERIFIED against the flowctl_tracker manifest - integrity is checked where it
 # can actually run (the installer), and fails LOUDLY on mismatch.
-if [ -f "$DEST/scripts/flowctl_tracker/MANIFEST.json" ]; then
-    if ! python3 "$DEST/scripts/lib/verify_tracker_manifest.py" "$DEST/scripts"; then
-        echo "ERROR: flowctl_tracker manifest verification FAILED - install is corrupt; re-clone and re-run" >&2
-        exit 1
-    fi
-    echo "flowctl_tracker package verified"
+if [ ! -f "$DEST/scripts/flowctl_tracker/MANIFEST.json" ] \
+    || [ ! -f "$DEST/scripts/lib/verify_tracker_manifest.py" ]; then
+    # Fail CLOSED: the source ships both; their absence after the copy means a
+    # truncated checkout or a broken copy, never an acceptable install.
+    echo "ERROR: flowctl_tracker manifest/verifier missing after copy - corrupt checkout/install; re-clone and re-run" >&2
+    exit 1
 fi
+if ! python3 "$DEST/scripts/lib/verify_tracker_manifest.py" "$DEST/scripts"; then
+    echo "ERROR: flowctl_tracker manifest verification FAILED - install is corrupt; re-clone and re-run" >&2
+    exit 1
+fi
+echo "flowctl_tracker package verified"
 
 echo ""
 echo "Installed. Cursor registers the components on next launch:"
