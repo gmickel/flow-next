@@ -45,8 +45,11 @@ def resolve_destination(config: dict, execute: Callable) -> Union[dict, TrackerE
     data = _json_body(result)
     if isinstance(data, TrackerError):
         return data
-    owner = (data.get("owner") or {}).get("login")
+    owner_obj = data.get("owner")
+    owner = owner_obj.get("login") if isinstance(owner_obj, dict) else None
+    owner = owner if isinstance(owner, str) else None
     repo = data.get("name")
+    repo = repo if isinstance(repo, str) else None
     if not owner or not repo:
         return TrackerError(ErrorClass.UNRESOLVED,
                             "gh repo view returned no owner/name; is this a "

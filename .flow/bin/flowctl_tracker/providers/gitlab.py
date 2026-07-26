@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from typing import Callable, Optional, Union
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from ..resolved_cache import STATIC_CAPABILITIES, apply_capability_probe
 from ..types import ErrorClass, Request, Response, TrackerError
@@ -23,6 +23,14 @@ from ..types import ErrorClass, Request, Response, TrackerError
 #: Plans that unlock `is_blocked_by` (Free degrades to `relates_to` in B).
 BLOCKEDBY_PLANS = frozenset({
     "premium", "premium_trial", "ultimate", "ultimate_trial", "gold", "silver",
+})
+
+#: Every plan value we treat as EVIDENCE. Anything else - absent, non-string,
+#: or unknown - is a failed probe, not a `blockedBy: false`: subgroup and
+#: non-owner namespace responses can simply omit this conditional billing
+#: field, and missing evidence must never read as a capability answer.
+KNOWN_PLANS = BLOCKEDBY_PLANS | frozenset({
+    "free", "bronze", "default", "opensource", "early_adopter",
 })
 
 
@@ -47,7 +55,18 @@ def _argv(config: dict, endpoint: str) -> list[str]:
 
 
 def resolve_destination(config: dict, execute: Callable) -> Union[dict, TrackerError]:
-    """`GET /projects/:url-encoded-path` -> numeric id, path, host, namespaceId."""
+    """`GET /projects/:url-encoded-path` -> numeric id, path, host, namespaceId.
+
+    Two rules that came out of review, not preference:
+
+    * The persisted `host` is derived from the RESPONSE (`web_url`), never
+      assumed. With `perTracker.host` unset, `glab` may resolve a self-managed
+      host from the git remote - the query then succeeds against one host while
+      a `gitlab.com` default would cache another.
+    * `namespaceId` is the **top-level (billing) namespace**. Plans live on the
+      root group, and a subgroup's own namespace can omit or misreport the
+      billing plan - pinning the subgroup id would poison every TTL re-probe.
+    """
     per = (config.get("tracker") or {}).get("perTracker") or {}
     path = per.get("project")
     if not path:
@@ -65,15 +84,52 @@ def resolve_destination(config: dict, execute: Callable) -> Union[dict, TrackerE
     if isinstance(data, TrackerError):
         return data
     project_id = data.get("id")
-    namespace_id = (data.get("namespace") or {}).get("id")
+    namespace = data.get("namespace")
+    namespace = namespace if isinstance(namespace, dict) else {}
+    namespace_id = namespace.get("id")
     if not isinstance(project_id, int) or not isinstance(namespace_id, int):
         return TrackerError(ErrorClass.UNRESOLVED,
                             "gitlab project lookup returned no numeric "
                             "id/namespace id", subtype="destination")
+
+    host = per.get("host")
+    if not host:
+        web_url = data.get("web_url")
+        parsed_host = urlparse(web_url).hostname if isinstance(web_url, str) else None
+        if not parsed_host:
+            return TrackerError(
+                ErrorClass.UNRESOLVED,
+                "cannot determine the GitLab host: perTracker.host is unset and "
+                "the project response carries no parseable web_url; set "
+                "tracker.perTracker.host explicitly", subtype="destination")
+        host = parsed_host
+
+    # Subgroup project: the billing namespace is the ROOT group. One extra
+    # lookup at RESOLUTION time keeps the TTL re-probe at one request.
+    full_path = namespace.get("full_path")
+    if isinstance(full_path, str) and "/" in full_path:
+        root = full_path.split("/", 1)[0]
+        root_result = execute(Request(
+            provider="gitlab", op="resolve-billing-namespace", method="GET",
+            url_or_argv=_argv(config, f"namespaces/{quote(root, safe='')}"),
+            idempotent=True,
+        ))
+        if isinstance(root_result, TrackerError):
+            return root_result
+        root_data = _json_body(root_result)
+        if isinstance(root_data, TrackerError):
+            return root_data
+        root_id = root_data.get("id")
+        if not isinstance(root_id, int):
+            return TrackerError(ErrorClass.UNRESOLVED,
+                                f"root namespace lookup for {root!r} returned "
+                                "no numeric id", subtype="destination")
+        namespace_id = root_id
+
     return {
         "projectId": project_id,
         "projectPath": data.get("path_with_namespace") or str(path),
-        "host": per.get("host") or "gitlab.com",
+        "host": host,
         "namespaceId": namespace_id,
     }
 
@@ -104,7 +160,10 @@ def probe_plan(config: dict, execute: Callable,
     if isinstance(data, TrackerError):
         return False, None, data.message
     plan = data.get("plan")
-    return True, (str(plan) if plan is not None else None), None
+    if not isinstance(plan, str) or plan.lower() not in KNOWN_PLANS:
+        # A 200 with no recognizable plan is MISSING EVIDENCE, not Free.
+        return False, None, f"namespace response carries no recognized plan (got {plan!r})"
+    return True, plan, None
 
 
 def resolve_capabilities(config: dict, execute: Callable,

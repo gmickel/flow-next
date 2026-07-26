@@ -107,7 +107,8 @@ class GitHubCapabilities(unittest.TestCase):
 
 class GitLabDestination(unittest.TestCase):
     PROJECT = {"id": 84817009, "path_with_namespace": "gmickel/flow-next-smoke",
-               "namespace": {"id": 111, "kind": "user"}}
+               "web_url": "https://gitlab.com/gmickel/flow-next-smoke",
+               "namespace": {"id": 111, "kind": "user", "full_path": "gmickel"}}
 
     def test_resolves_every_architecture_table_field(self) -> None:
         ex = fake_execute({"resolve-destination": ok(self.PROJECT)})
@@ -299,3 +300,137 @@ class ScopedResolutionThroughTheTransaction(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GitLabHostDerivation(unittest.TestCase):
+    """With perTracker.host unset, glab may have answered from a self-managed
+    host resolved off the git remote - the persisted host must come from the
+    RESPONSE, never from a gitlab.com default."""
+
+    def test_host_unset_derives_from_web_url(self) -> None:
+        project = dict(GitLabDestination.PROJECT)
+        project["web_url"] = "https://gitlab.example.com/gmickel/flow-next-smoke"
+        ex = fake_execute({"resolve-destination": ok(project)})
+        out = GL.resolve_destination(gitlab_cfg(), ex)
+        self.assertEqual(out["host"], "gitlab.example.com")
+
+    def test_host_unset_and_no_web_url_is_unresolved_not_gitlab_com(self) -> None:
+        project = {k: v for k, v in GitLabDestination.PROJECT.items()
+                   if k != "web_url"}
+        ex = fake_execute({"resolve-destination": ok(project)})
+        out = GL.resolve_destination(gitlab_cfg(), ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.UNRESOLVED)
+        self.assertIn("host", out.message)
+
+    def test_explicit_host_wins_over_web_url(self) -> None:
+        cfg = gitlab_cfg()
+        cfg["tracker"]["perTracker"]["host"] = "gitlab.example.com"
+        ex = fake_execute({"resolve-destination": ok(GitLabDestination.PROJECT)})
+        out = GL.resolve_destination(cfg, ex)
+        self.assertEqual(out["host"], "gitlab.example.com")
+
+
+class GitLabSubgroupBillingNamespace(unittest.TestCase):
+    def _subgroup_project(self) -> dict:
+        return {"id": 5, "path_with_namespace": "acme/platform/api",
+                "web_url": "https://gitlab.com/acme/platform/api",
+                "namespace": {"id": 333, "kind": "group", "full_path": "acme/platform"}}
+
+    def test_subgroup_pins_the_root_billing_namespace(self) -> None:
+        ex = fake_execute({
+            "resolve-destination": ok(self._subgroup_project()),
+            "resolve-billing-namespace": ok({"id": 300, "full_path": "acme",
+                                             "plan": "premium"}),
+        })
+        out = GL.resolve_destination(gitlab_cfg(), ex)
+        self.assertEqual(out["namespaceId"], 300, "root group, not the subgroup")
+        self.assertEqual(ex.calls[1].url_or_argv[2], "namespaces/acme")
+
+    def test_top_level_namespace_needs_no_second_lookup(self) -> None:
+        ex = fake_execute({"resolve-destination": ok(GitLabDestination.PROJECT)})
+        GL.resolve_destination(gitlab_cfg(), ex)
+        self.assertEqual(len(ex.calls), 1)
+
+    def test_failed_root_lookup_is_unresolved(self) -> None:
+        ex = fake_execute({
+            "resolve-destination": ok(self._subgroup_project()),
+            "resolve-billing-namespace": ok({"id": None}),
+        })
+        out = GL.resolve_destination(gitlab_cfg(), ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.UNRESOLVED)
+
+
+class MissingPlanIsNotEvidence(unittest.TestCase):
+    """A 200 whose plan is absent/unknown is a FAILED probe - subgroup and
+    non-owner responses omit the billing field, and missing evidence must
+    never become blockedBy: false."""
+
+    def _cfg_with_prior(self) -> dict:
+        cfg = gitlab_cfg()
+        cfg["tracker"]["resolved"] = {
+            "destination": {"projectId": 1, "projectPath": "a/b",
+                            "host": "gitlab.com", "namespaceId": 111},
+            "capabilities": {"attachments": True, "blockedBy": True,
+                             "subIssues": False, "deleteIssue": True,
+                             "_source": {"gitlabPlan": "ultimate"}},
+            "scopeResolvedAt": {"capabilities": "2026-01-01T00:00:00Z"}}
+        return cfg
+
+    def test_absent_plan_fails_the_probe(self) -> None:
+        for payload in ({"id": 111}, {"id": 111, "plan": None},
+                        {"id": 111, "plan": 7}, {"id": 111, "plan": "mystery_tier"}):
+            with self.subTest(payload=payload):
+                ex = fake_execute({"probe-plan": ok(payload)})
+                ok_, plan, reason = GL.probe_plan(gitlab_cfg(), ex, namespace_id=111)
+                self.assertFalse(ok_)
+                self.assertIn("plan", reason)
+
+    def test_fresh_resolution_fails_on_missing_plan(self) -> None:
+        ex = fake_execute({"probe-plan": ok({"id": 111})})
+        out = GL.resolve_capabilities(gitlab_cfg(), ex, namespace_id=111)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.UNRESOLVED)
+
+    def test_ttl_probe_on_missing_plan_keeps_the_prior_capability(self) -> None:
+        cfg = self._cfg_with_prior()
+        ex = fake_execute({"probe-plan": ok({"id": 111})})
+        out = GL.ttl_reprobe(cfg, ex, now="2026-06-01T00:00:00Z")
+        self.assertFalse(out["probe"]["ok"])
+        self.assertIsNone(out["degraded"])
+        self.assertTrue(cfg["tracker"]["resolved"]["capabilities"]["blockedBy"])
+
+    def test_every_known_plan_is_accepted(self) -> None:
+        for plan in sorted(GL.KNOWN_PLANS):
+            ex = fake_execute({"probe-plan": ok({"id": 111, "plan": plan})})
+            ok_, got, _ = GL.probe_plan(gitlab_cfg(), ex, namespace_id=111)
+            self.assertTrue(ok_, plan)
+            self.assertEqual(got, plan)
+
+
+class NestedShapeGuards(unittest.TestCase):
+    """Malformed provider output returns TrackerError, never AttributeError."""
+
+    def test_github_non_dict_owner(self) -> None:
+        for owner in ("gmickel", 5, ["x"], None):
+            with self.subTest(owner=owner):
+                ex = fake_execute({"resolve-destination": ok(
+                    {"name": "airtest", "owner": owner})})
+                out = GH.resolve_destination({}, ex)
+                self.assertIsInstance(out, TrackerError)
+
+    def test_github_non_string_name(self) -> None:
+        ex = fake_execute({"resolve-destination": ok(
+            {"name": 7, "owner": {"login": "gmickel"}})})
+        out = GH.resolve_destination({}, ex)
+        self.assertIsInstance(out, TrackerError)
+
+    def test_gitlab_non_dict_namespace(self) -> None:
+        for ns in ("acme", 5, ["x"], None):
+            with self.subTest(namespace=ns):
+                ex = fake_execute({"resolve-destination": ok(
+                    {"id": 1, "namespace": ns,
+                     "web_url": "https://gitlab.com/a/b"})})
+                out = GL.resolve_destination(gitlab_cfg(), ex)
+                self.assertIsInstance(out, TrackerError)
