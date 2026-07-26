@@ -26,6 +26,7 @@ import unicodedata
 import uuid
 from abc import ABC, abstractmethod
 from collections import deque
+from collections.abc import Iterator
 from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date, datetime, timedelta, timezone
@@ -8512,7 +8513,7 @@ def _section_title_variant_re(section: str) -> "re.Pattern[str]":
     return re.compile(rf"^##\s+{re.escape(word)}{criteria}\s*([(:—-].*)?$")
 
 
-def _iter_fence_aware(lines: list) -> "Iterator[tuple[str, bool]]":
+def _iter_fence_aware(lines: list) -> Iterator[tuple[str, bool]]:
     """Yield (line, in_fence) pairs tracking fenced-code-block state.
 
     `in_fence` is True for lines inside a ``` / ~~~ fenced code block
@@ -21344,23 +21345,39 @@ implementations.
         review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
     )
 
+VALIDATOR_TEMPLATE_REL = (
+    "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md"
+)
+
 # Fallback template body if the on-disk file is missing (global installs, Codex
-# mirror, or stripped-down deployments). Keep in sync with validate-pass.md.
+# mirror, or stripped-down deployments). Keep byte-identical to validate-pass.md
+# - test_review_prompt_template_parity fails on drift (fn-112.3 invariant).
 VALIDATOR_TEMPLATE_FALLBACK = """# Validator prompt (fn-32.1 --validate)
 
-You are validating review findings for false positives. For each finding below,
-independently re-check it against the **current code** and decide whether the
-finding is actually valid.
+You are validating review findings for false positives. The primary review has
+already produced a NEEDS_WORK verdict with a list of findings. For each finding
+below, independently re-check it against the **current code** and decide whether
+the finding is actually valid.
 
 **Conservative bias — only drop findings that are clearly wrong.** When
-uncertain, keep the finding. A kept false-positive is cheap; a dropped real bug
-is expensive.
+uncertain, keep the finding. A kept false-positive is cheap (one extra check by
+the fixer); a dropped real bug is expensive (escapes to production).
 
-For each finding: open the cited file, read ±20 lines around the cited line,
-check whether the claimed issue is actually present, and look for guards /
-handlers / assumptions that address the concern elsewhere.
+## Procedure
+
+For each finding:
+
+1. Open the cited file and read around the cited line (±20 lines of context).
+2. Check whether the claimed issue is actually present in the current code.
+3. Look for guards, handlers, or assumptions that address the concern elsewhere
+   in the call chain (the primary reviewer may have missed them).
+4. Consider whether the finding is factually correct about the language /
+   framework / library semantics.
 
 Do **not** re-score confidence, re-classify severity, or invent new findings.
+Decide only: is this finding a real issue in the current code, or not?
+
+## Output format
 
 Return exactly one line per finding in this strict format:
 
@@ -21368,9 +21385,21 @@ Return exactly one line per finding in this strict format:
 <finding-id>: validated: <true|false> -- <one-sentence reason>
 ```
 
+Examples:
+
+```
+f1: validated: true -- null deref confirmed; no upstream guard
+f2: validated: false -- null check already present at src/auth.ts:40
+f3: validated: true -- race condition reproducible with concurrent requests
+f4: validated: false -- suggested fix misunderstands TypeScript narrowing
+```
+
 Rules:
-- One line per finding id. Missing ids default to `validated: true`.
-- Use the literal tokens `validated: true` or `validated: false`.
+- One line per finding id. Missing ids are treated as `validated: true`
+  (conservative — when you say nothing, the finding stays).
+- Reason must fit on one line (≤200 chars is a good cap).
+- Use the literal tokens `validated: true` or `validated: false`. No synonyms.
+- Emit the lines anywhere in your response — the parser finds them by regex.
 
 ## Findings to validate
 

@@ -311,7 +311,7 @@ class TestEvidenceBlock(unittest.TestCase):
         self.assertEqual(got["files"], ["a.py", "b.py"])
 
 
-class TestRemovedRefsCrossExtension(RemovedExportRefsBase if 'RemovedExportRefsBase' in dir() else unittest.TestCase):
+class TestRemovedRefsCrossExtension(unittest.TestCase):
     """PR #205 review: a symbol removed from one extension but referenced from a
     SIBLING extension (.ts removal, .tsx caller) must still be caught — the
     grep pathspec covers all known source extensions, not diff-touched only."""

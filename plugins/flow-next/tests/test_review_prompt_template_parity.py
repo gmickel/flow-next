@@ -64,6 +64,10 @@ PARITY_PAIRS = [
         "COMPLETION_REVIEW_PROMPT_FALLBACK",
         "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
     ),
+    (
+        "VALIDATOR_TEMPLATE_FALLBACK",
+        "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md",
+    ),
 ]
 
 # Fixed inputs used when freezing fixtures/review_prompts/*.txt
@@ -171,6 +175,40 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self.assertIn("Do not invoke Flow-Next skills", prompt)
         self.assertIn("`flowctl *-review`", prompt)
         self.assertIn("launch another reviewer", prompt)
+
+
+class TestValidatorTemplateRepoRootPath(unittest.TestCase):
+    """Regression: the repo-root branch of ``load_validator_template`` was dead.
+
+    ``VALIDATOR_TEMPLATE_REL`` was referenced but never defined, so the branch
+    raised ``NameError`` into a bare ``except Exception: pass`` on every call.
+    Copy-mode installs silently fell through to the embedded fallback, which had
+    meanwhile drifted to a shorter, older prompt than validate-pass.md.
+    """
+
+    def test_rel_constant_points_at_a_real_template(self) -> None:
+        path = REPO_ROOT / flowctl.VALIDATOR_TEMPLATE_REL
+        self.assertTrue(
+            path.is_file(), f"VALIDATOR_TEMPLATE_REL missing on disk: {path}"
+        )
+
+    def test_repo_root_branch_is_reachable(self) -> None:
+        """Patch the repo root and assert the on-disk copy wins over the fallback."""
+        import tempfile
+
+        marker = "# MARKER validate-pass\n\n<!-- FINDINGS_BLOCK -->\n"
+        original = flowctl.get_repo_root
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / flowctl.VALIDATOR_TEMPLATE_REL
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(marker, encoding="utf-8")
+            flowctl.get_repo_root = lambda: root
+            try:
+                got = flowctl.load_validator_template()
+            finally:
+                flowctl.get_repo_root = original
+        self.assertEqual(got, marker)
 
 
 if __name__ == "__main__":

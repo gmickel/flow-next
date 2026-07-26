@@ -71,7 +71,8 @@ def _backoff_delay(attempt: int, retry_after: Optional[float],
             candidate = float(retry_after)
         except (TypeError, ValueError):
             candidate = float("nan")
-        if candidate == candidate and candidate >= 0 and candidate != float("inf"):
+        # `candidate == candidate` is the NaN test, not a typo.
+        if candidate == candidate and candidate >= 0 and candidate != float("inf"):  # noqa: PLR0124
             delay = candidate
     if delay is None:
         delay = min(2.0 ** attempt, cap_s)
