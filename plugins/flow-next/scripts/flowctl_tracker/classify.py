@@ -52,14 +52,30 @@ def _retry_after(resp: Response) -> Optional[float]:
         return None
 
 
+class _Malformed(Exception):
+    """The body is not a GraphQL document we can reason about."""
+
+
 def _graphql_errors(resp: Response) -> Optional[list[dict]]:
-    """GraphQL puts failures in a 200/400 body; the executor normalizes here."""
+    """GraphQL puts failures in a 200/400 body; the executor normalizes here.
+
+    Raises `_Malformed` rather than returning None for unparseable input:
+    returning None made invalid JSON over HTTP 200 look like SUCCESS, and a
+    non-dict entry in `errors` (e.g. `{"errors":["bad"]}`) raised AttributeError
+    out of the classifier.
+    """
     try:
         payload = json.loads(resp.body or b"{}")
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as exc:
+        raise _Malformed(str(exc)) from exc
+    if not isinstance(payload, dict):
+        raise _Malformed("GraphQL payload is not an object")
+    errs = payload.get("errors")
+    if errs is None:
         return None
-    errs = payload.get("errors") if isinstance(payload, dict) else None
-    return errs if isinstance(errs, list) and errs else None
+    if not isinstance(errs, list) or not all(isinstance(e, dict) for e in errs):
+        raise _Malformed("GraphQL 'errors' is not a list of objects")
+    return errs or None
 
 
 def classify(provider: str, resp: Response) -> Optional[TrackerError]:
@@ -86,7 +102,10 @@ def _gitlab(resp: Response) -> Optional[TrackerError]:
 
 
 def _linear(resp: Response) -> Optional[TrackerError]:
-    errs = _graphql_errors(resp)
+    try:
+        errs = _graphql_errors(resp)
+    except _Malformed as exc:
+        return malformed_body(str(exc))
     if errs:
         # STRUCTURED CODES FIRST. `linear-graphql.md` documents
         # `errors[].extensions.code` of RATELIMITED (over HTTP 400, not 429) and
@@ -128,7 +147,35 @@ def _jira(resp: Response) -> Optional[TrackerError]:
     return _generic(resp)
 
 
-_TABLE = {"gitlab": _gitlab, "linear": _linear, "jira": _jira, "github": _generic}
+def _github(resp: Response) -> Optional[TrackerError]:
+    # GitHub serves rate limiting as **403**, not 429, with X-RateLimit-Remaining: 0.
+    # Falling through to the generic rule reported it as `auth`, so the caller
+    # got false credential advice and no backoff ever happened.
+    if resp.status in (403, 429):
+        hdrs = {k.lower(): v for k, v in (resp.headers or {}).items()}
+        remaining = hdrs.get("x-ratelimit-remaining")
+        body = (resp.body or b"").lower()
+        if remaining == "0" or b"rate limit" in body or b"secondary rate limit" in body:
+            return TrackerError(
+                ErrorClass.RATE_LIMITED, "github rate limit", subtype="http_403",
+                retry_after_s=_retry_after(resp) or _reset_delay(hdrs), auto_retryable=True,
+            )
+    return _generic(resp)
+
+
+def _reset_delay(hdrs: dict[str, str]) -> Optional[float]:
+    """X-RateLimit-Reset is an absolute epoch; convert to a bounded delay."""
+    import time as _t
+
+    try:
+        reset = float(hdrs.get("x-ratelimit-reset", ""))
+    except (TypeError, ValueError):
+        return None
+    delay = reset - _t.time()
+    return delay if 0 < delay < 3600 else None
+
+
+_TABLE = {"gitlab": _gitlab, "linear": _linear, "jira": _jira, "github": _github}
 
 
 def malformed_body(detail: str) -> TrackerError:

@@ -444,6 +444,131 @@ class GitlabUploadCredential(unittest.TestCase):
         self.assertEqual(h["PRIVATE-TOKEN"], "glpat-fromconfig")
 
 
+class GithubRateLimitIs403(unittest.TestCase):
+    """GitHub serves rate limiting as 403, not 429 - generic handling called it auth."""
+
+    def test_403_with_remaining_zero_is_rate_limited(self) -> None:
+        e = C.classify("github", resp(403, b"API rate limit exceeded",
+                                      {"X-RateLimit-Remaining": "0"}))
+        self.assertIs(e.cls, ErrorClass.RATE_LIMITED)
+        self.assertTrue(e.auto_retryable)
+
+    def test_bare_403_is_still_auth(self) -> None:
+        self.assertIs(C.classify("github", resp(403, b"{}")).cls, ErrorClass.AUTH)
+
+    def test_429_also_rate_limited(self) -> None:
+        self.assertIs(C.classify("github", resp(429, b"slow down")).cls, ErrorClass.RATE_LIMITED)
+
+    def test_retries_through_execute(self) -> None:
+        calls = {"n": 0}
+
+        def fake(req, cred, verify):
+            calls["n"] += 1
+            return resp(403, b"API rate limit exceeded", {"X-RateLimit-Remaining": "0"})
+
+        with mock.patch.object(X, "_http", side_effect=fake), mock.patch.object(X.time, "sleep"):
+            X.execute(Request(provider="github", op="r", method="GET",
+                              url_or_argv="https://api.github.com/x", idempotent=True))
+        self.assertEqual(calls["n"], 3)
+
+
+class MalformedGraphQL(unittest.TestCase):
+    """Invalid JSON over HTTP 200 previously read as SUCCESS."""
+
+    def test_invalid_json_is_not_success(self) -> None:
+        e = C.classify("linear", resp(200, b"not json at all"))
+        self.assertIsNotNone(e)
+        self.assertEqual(e.subtype, "malformed_body")
+        self.assertFalse(e.auto_retryable)
+
+    def test_errors_of_wrong_shape_does_not_raise(self) -> None:
+        e = C.classify("linear", resp(200, b'{"errors":["bad"]}'))
+        self.assertEqual(e.subtype, "malformed_body")
+
+    def test_through_execute(self) -> None:
+        with mock.patch.object(X, "_http", return_value=resp(200, b"{{{")):
+            r = X.execute(Request(provider="linear", op="q", method="GET",
+                                  url_or_argv="https://api.linear.app/graphql"))
+        self.assertIsInstance(r, TrackerError)
+        self.assertEqual(r.subtype, "malformed_body")
+
+
+class UntrustedRetryAfter(unittest.TestCase):
+    def test_negative_retry_after_does_not_raise(self) -> None:
+        """Retry-After is server-controlled; -1 reached time.sleep(-1)."""
+        slept = []
+        with mock.patch.object(X.time, "sleep", side_effect=slept.append):
+            X._sleep_backoff(0, -1)
+            X._sleep_backoff(0, float("inf"))
+            X._sleep_backoff(0, float("nan"))
+            X._sleep_backoff(0, "garbage")
+        self.assertTrue(all(0 <= s <= 30 for s in slept), slept)
+
+
+class RedirectOriginNotHost(unittest.TestCase):
+    def test_https_to_http_downgrade_strips_credentials(self) -> None:
+        """Same host, different scheme - the token would have gone out in clear."""
+        import urllib.request
+
+        req = urllib.request.Request("https://api.example.com/a",
+                                     headers={"Authorization": "Bearer secret"})
+        new = X._GuardedRedirect(True).redirect_request(
+            req, None, 302, "Found", {}, "http://api.example.com/b")
+        self.assertNotIn("Authorization", dict(new.headers))
+
+    def test_same_origin_keeps_credentials(self) -> None:
+        import urllib.request
+
+        req = urllib.request.Request("https://api.example.com/a",
+                                     headers={"Authorization": "Bearer secret"})
+        new = X._GuardedRedirect(True).redirect_request(
+            req, None, 302, "Found", {}, "https://api.example.com/b")
+        self.assertIn("Authorization", dict(new.headers))
+
+
+class ErrorBodyReadFailure(unittest.TestCase):
+    def test_incomplete_read_of_an_error_body_is_normalized(self) -> None:
+        import http.client
+        import urllib.error
+
+        class BadErr(urllib.error.HTTPError):
+            def __init__(self):
+                super().__init__("u", 500, "err", {}, None)
+            def read(self):
+                raise http.client.IncompleteRead(b"partial")
+
+        with mock.patch("urllib.request.OpenerDirector.open", side_effect=BadErr()):
+            r = X.execute(Request(provider="linear", op="q", method="GET",
+                                  url_or_argv="https://api.linear.app/graphql"))
+        self.assertIsInstance(r, TrackerError)
+        self.assertEqual(r.subtype, "read")
+
+
+class GitlabTokenIsHostScoped(unittest.TestCase):
+    CFG = """hosts:
+    gitlab.com:
+        token: glpat-dotcom
+    gitlab.internal.corp:
+        token: glpat-internal
+"""
+
+    def _token(self, host):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as fh:
+            fh.write(self.CFG)
+            path = fh.name
+        with mock.patch.object(CR.os.path, "expanduser", return_value=path):
+            return CR._glab_config_token(host)
+
+    def test_picks_the_matching_host(self) -> None:
+        self.assertEqual(self._token("gitlab.com"), "glpat-dotcom")
+        self.assertEqual(self._token("gitlab.internal.corp"), "glpat-internal")
+
+    def test_fails_closed_on_unknown_host(self) -> None:
+        """Returning the first token would send one host's secret to another."""
+        self.assertIsNone(self._token("gitlab.someone-else.com"))
+
+
 class Envelope(unittest.TestCase):
     def test_success_shape(self) -> None:
         payload, code = E.success({"id": 1})

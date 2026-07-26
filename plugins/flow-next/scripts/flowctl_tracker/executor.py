@@ -45,8 +45,29 @@ class Executor(Protocol):
 
 
 def _sleep_backoff(attempt: int, retry_after: Optional[float]) -> None:
-    delay = retry_after if retry_after is not None else min(2.0 ** attempt, BACKOFF_CAP_S)
-    time.sleep(min(delay, BACKOFF_CAP_S))
+    """Server-supplied hints are untrusted input.
+
+    `Retry-After: -1` reached `time.sleep(-1)` and raised ValueError - another
+    breach of "never raises", caused by a hostile-or-broken header rather than
+    by our own code.
+    """
+    delay: Optional[float] = None
+    if retry_after is not None:
+        try:
+            candidate = float(retry_after)
+        except (TypeError, ValueError):
+            candidate = float("nan")
+        if candidate == candidate and candidate >= 0 and candidate != float("inf"):
+            delay = candidate
+    if delay is None:
+        delay = min(2.0 ** attempt, BACKOFF_CAP_S)
+    time.sleep(max(0.0, min(delay, BACKOFF_CAP_S)))
+
+
+def _origin(url: str) -> tuple[str, str, int]:
+    u = urlparse(url)
+    default_port = 443 if u.scheme == "https" else 80
+    return (u.scheme, (u.hostname or "").lower(), u.port or default_port)
 
 
 class _GuardedRedirect(urllib.request.HTTPRedirectHandler):
@@ -69,11 +90,19 @@ class _GuardedRedirect(urllib.request.HTTPRedirectHandler):
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new is None:
             return None
-        if self._authenticated and urlparse(newurl).netloc != urlparse(req.full_url).netloc:
+        # Compare ORIGIN (scheme + host + port), not just host: an HTTPS->HTTP
+        # downgrade on the same host would otherwise carry the token in clear.
+        if self._authenticated and _origin(newurl) != _origin(req.full_url):
             for h in list(new.headers):
                 if h.lower() in {"authorization", "private-token", "x-api-key"}:
                     del new.headers[h]
         return new
+
+
+def _read_body(resp) -> bytes:
+    """Single guarded reader. `.read()` can raise after the status line."""
+    data = resp.read()
+    return data if data is not None else b""
 
 
 def _attach(req: Request, headers: dict[str, str], cred: Optional[Credential]) -> None:
@@ -105,9 +134,19 @@ def _http(req: Request, cred: Optional[Credential], verify_tls: bool) -> Result:
         r = urllib.request.Request(req.url_or_argv, data=req.body, headers=headers,
                                    method=req.method)
         with opener.open(r, timeout=req.timeout_s) as resp:
-            return Response(resp.status, dict(resp.headers), resp.read(), time.monotonic() - started)
+            return Response(resp.status, dict(resp.headers), _read_body(resp),
+                            time.monotonic() - started)
     except urllib.error.HTTPError as exc:
-        return Response(exc.code, dict(exc.headers or {}), exc.read() or b"", time.monotonic() - started)
+        # Reading the ERROR body can itself raise IncompleteRead, and doing it
+        # inside this handler put it beyond the reach of the sibling handlers.
+        # One guarded reader serves both the success and error paths.
+        try:
+            body = _read_body(exc)
+        except http.client.HTTPException as read_exc:
+            return TrackerError(ErrorClass.TRANSPORT,
+                                redact(f"incomplete error body: {read_exc}"),
+                                subtype="read", auto_retryable=True)
+        return Response(exc.code, dict(exc.headers or {}), body, time.monotonic() - started)
     except http.client.HTTPException as exc:
         # `resp.read()` can raise IncompleteRead / HTTPException AFTER the status
         # line is parsed. Uncaught, these broke the "never raises" contract.
@@ -202,7 +241,9 @@ def execute(
     route_err = _validate_route(request)
     if route_err is not None:
         return route_err
-    cred = resolve(request.provider, auth_scheme=auth_scheme)
+    dest_host = (urlparse(request.url_or_argv).hostname
+                 if isinstance(request.url_or_argv, str) else None)
+    cred = resolve(request.provider, auth_scheme=auth_scheme, host=dest_host)
     is_cli = isinstance(request.url_or_argv, (list, tuple))
     if not verify_tls and on_event:
         # sslVerify=false is honoured but never silent.

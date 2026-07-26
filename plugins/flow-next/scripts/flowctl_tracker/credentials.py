@@ -29,21 +29,34 @@ class Credential:
         return "<Credential redacted>"
 
 
-def _glab_config_token() -> Optional[str]:
-    """Read glab's stored token. Not a keyring - glab's own config file."""
+def _glab_config_token(host: Optional[str] = None) -> Optional[str]:
+    """Read glab's stored token FOR A SPECIFIC HOST. Not a keyring - glab's config.
+
+    Host scoping is the point: taking the first token in the file would send a
+    self-managed instance's token to gitlab.com (or the reverse) whenever a user
+    has more than one authenticated host. Fails closed when no stanza matches.
+    """
     import re
 
+    want = (host or "gitlab.com").lower()
     for candidate in (
         os.path.expanduser("~/.config/glab-cli/config.yml"),
         os.path.expanduser("~/Library/Application Support/glab-cli/config.yml"),
     ):
         try:
             with open(candidate, encoding="utf-8") as fh:
-                m = re.search(r"^\s+token:\s*(\S+)", fh.read(), re.M)
-            if m:
-                return m.group(1)
+                text = fh.read()
         except OSError:
             continue
+        # hosts:\n    <host>:\n        token: <value>
+        m = re.search(
+            rf"^\s+{re.escape(want)}:\s*$(.*?)(?=^\s{{0,8}}\S+:\s*$|\Z)",
+            text, re.M | re.S,
+        )
+        if m:
+            tok = re.search(r"^\s+token:\s*(\S+)", m.group(1), re.M)
+            if tok:
+                return tok.group(1)
     return None
 
 
@@ -53,7 +66,8 @@ def _basic(user: str, token: str) -> str:
     return "Basic " + base64.b64encode(f"{user}:{token}".encode()).decode()
 
 
-def resolve(provider: str, *, auth_scheme: Optional[str] = None) -> Optional[Credential]:
+def resolve(provider: str, *, auth_scheme: Optional[str] = None,
+            host: Optional[str] = None) -> Optional[Credential]:
     """Return a Credential, or None when the transport authenticates itself.
 
     GitHub and GitLab ordinarily go through their CLI, which carries its own
@@ -67,7 +81,7 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None) -> Optional[Cre
         # Ordinary calls go through `glab`, which authenticates itself - but the
         # upload route MUST use HTTP, and returning None there would send it
         # unauthenticated. So fall back to glab's own stored token.
-        tok = os.environ.get("GITLAB_TOKEN") or _glab_config_token()
+        tok = os.environ.get("GITLAB_TOKEN") or _glab_config_token(host)
         return Credential(lambda h: h.__setitem__("PRIVATE-TOKEN", tok)) if tok else None
 
     if provider == "linear":
