@@ -30,9 +30,12 @@ Judgment-bearing content is passed **in** as a file. The facade never renders a 
 - [ ] A caller can replace a today-dispatch with one facade call and observe identical tracker state
 
 ## Done summary
-TBD
+Lifecycle facade shipped: tracker sync <spec-id> --op push|pull|reconcile|comment --event E (grok-4.5, 3 codex rounds).
 
+One call replaces a touchpoint dispatch: push = create-if-unlinked -> sync-body(push) -> gate-derived status; pull = ONE durable-validated wire read that IS the stored snapshot (tracker_snapshot_body threaded into sync_body - the double-read desync the reviewer caught is closed); reconcile completes an identifier_only link first then read -> sync-body(both halves) -> status; comment = create-if-unlinked -> flow-next:sync marker dedup via comment-list BEFORE any post (issue+evt+evidence; fn-89 retry rule) -> comment-add. Receipts do not stack: write_receipt=False seam through the composed verbs; EXACTLY ONE aggregate event-tagged receipt, worst-of-steps status; partial success returns success false + completed_steps; every op idempotent on re-run. MCP rung returns external_action_required with the actionable payload and zero tracker requests. Degradation surfaces structurally incl. the NESTED status-write payload the facade initially lost. Input matrix enforced pre-request. 4x4 adapter x op conformance matrix in tests.
+
+Rounds: 2 findings -> 1 -> SHIP.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d93dc2c5, 47126a19, c29b0cbb
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_facade -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:
