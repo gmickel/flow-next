@@ -20,7 +20,7 @@ The capability table is decided in spec A - implement it, do not re-open it. Con
 - [ ] GitLab upload uses HTTP/multipart, never `glab api -F`
 - [ ] Jira attach without XSRF header handled as auth-shape, not "endpoint missing"
 - [ ] GitLab retrieval uses upload_id, not the markdown path
-- [ ] `relate` reproduces ledger + additive-only + completed-blocker + never-clobber
+- [ ] `relate` reproduces ledger + additive-only + completed-blocker(-still-projects) + never-clobber (the `<!-- flow:deps -->` HASH-EXCLUSION half of R10 completes in .5 where body-divergence hashing exists; marker constants ship here)
 - [ ] Free tier degrades to relates_to via structured `degraded` field
 - [ ] Capability table implemented per spec A; not re-litigated
 - [ ] GitHub sub-issues never surfaced as a blocking relation

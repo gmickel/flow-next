@@ -66,11 +66,8 @@ def _linear_edge_exists(execute: Execute, from_id: str, to_id: str
 
 def linear_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
                from_display: str, to_display: str) -> Result:
-    exists = _linear_edge_exists(execute, from_id, to_id)
-    if isinstance(exists, TrackerError):
-        return exists
-    if exists:
-        return {"projected": False, "already": True, "form": "blocks"}
+    # Presence classification is relate.__init__'s job (4-way probe) -
+    # set() performs the mutation only.
     data = _gql(
         execute, "relate-create",
         "mutation($issueId: String!, $relatedIssueId: String!) { "
@@ -132,11 +129,8 @@ def _jira_edge_exists(config: dict, execute: Execute, *, from_id: str,
 
 def jira_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
              from_display: str, to_display: str) -> Result:
-    exists = _jira_edge_exists(config, execute, from_id=from_id, to_id=to_id)
-    if isinstance(exists, TrackerError):
-        return exists
-    if exists:
-        return {"projected": False, "already": True, "form": "blocks"}
+    # Presence classification is relate.__init__'s job (4-way probe) -
+    # set() performs the mutation only.
     dest = _destination(config)
     if isinstance(dest, TrackerError):
         return dest
@@ -203,17 +197,11 @@ def gitlab_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
     pid = _gl_project(dest)
     if isinstance(pid, TrackerError):
         return pid
-    links = _gitlab_links(config, execute, iid=from_iid)
-    if isinstance(links, TrackerError):
-        return links
-
+    # Presence classification is relate.__init__'s job (4-way probe).
     degraded = None
     if blocked_by:
         link_type = "is_blocked_by"
         form = "is_blocked_by"
-        if _gitlab_pair_present(links, target_iid=to_iid,
-                                link_types={"is_blocked_by", "relates_to"}):
-            return {"projected": False, "already": True, "form": form}
     else:
         link_type = "relates_to"
         form = "relates_to"
@@ -223,10 +211,6 @@ def gitlab_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
             "reason": "blockedBy unavailable on this GitLab tier",
             "plan": plan,
         }
-        if _gitlab_pair_present(links, target_iid=to_iid,
-                                link_types={"is_blocked_by", "relates_to"}):
-            return {"projected": False, "already": True, "form": form,
-                    "degraded": degraded}
 
     target_project = dest.get("projectId")
     body = {
@@ -278,25 +262,7 @@ def github_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
                             subtype="malformed_body")
     child_db_id = child["id"]
 
-    # Read-before-write: list existing sub-issues of the parent.
-    existing = _cli(execute, "github", config, "relate-list", "GET",
-                    f"repos/{repo}/issues/{parent_num}/sub_issues",
-                    idempotent=True)
-    if isinstance(existing, TrackerError):
-        return existing
-    if isinstance(existing, list):
-        for item in existing:
-            if isinstance(item, dict) and item.get("id") == child_db_id:
-                return {
-                    "projected": False, "already": True,
-                    "form": "sub_issues",
-                    "degraded": {
-                        "kind": "hierarchy",
-                        "form": "sub_issues",
-                        "note": "GitHub sub_issues is hierarchy, never blocked-by",
-                    },
-                }
-
+    # Presence classification is relate.__init__'s job (4-way probe).
     data = _cli(execute, "github", config, "relate-create", "POST",
                 f"repos/{repo}/issues/{parent_num}/sub_issues",
                 body={"sub_issue_id": child_db_id})
@@ -317,4 +283,67 @@ PROVIDERS = {
     "jira": jira_set,
     "gitlab": gitlab_set,
     "github": github_set,
+}
+
+
+# ---------------------------------------------------------------------------
+# Probe-only presence (read, never mutate) - the 4-way ledger x remote
+# classification in relate.__init__ needs presence WITHOUT a write attempt.
+# ---------------------------------------------------------------------------
+
+def linear_probe(config, execute, *, from_id, to_id, **_kw):
+    return _linear_edge_exists(execute, from_id, to_id)
+
+
+def jira_probe(config, execute, *, from_id, to_id, from_display, to_display, **_kw):
+    return _jira_edge_exists(config, execute, from_id=from_id, to_id=to_id,
+                             from_display=from_display, to_display=to_display)
+
+
+def gitlab_probe_pair(config, execute, *, from_display, to_display, **_kw):
+    from ..wire import _gitlab_iid  # noqa: PLC0415
+    self_iid = _gitlab_iid(from_display)
+    if isinstance(self_iid, TrackerError):
+        return self_iid
+    target_iid = _gitlab_iid(to_display)
+    if isinstance(target_iid, TrackerError):
+        return target_iid
+    links = _gitlab_links(config, execute, iid=self_iid)
+    if isinstance(links, TrackerError):
+        return links
+    return _gitlab_pair_present(links, target_iid=target_iid,
+                                link_types={"is_blocked_by", "blocks",
+                                            "relates_to"})
+
+
+def github_probe(config, execute, *, from_display, to_display, **_kw):
+    # Direction matches github_set: the PARENT is the BLOCKER (to_display);
+    # the blocked issue (from_display) appears among its sub_issues.
+    from ..wire import _cli, _destination, _gh_repo, _github_number  # noqa: PLC0415
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    repo = _gh_repo(dest)
+    if isinstance(repo, TrackerError):
+        return repo
+    parent = _github_number(to_display)
+    if isinstance(parent, TrackerError):
+        return parent
+    child = _github_number(from_display)
+    if isinstance(child, TrackerError):
+        return child
+    subs = _cli(execute, "github", config, "wire-relate-probe", "GET",
+                f"repos/{repo}/issues/{parent}/sub_issues", idempotent=True)
+    if isinstance(subs, TrackerError):
+        return subs
+    if not isinstance(subs, list):
+        return False
+    return any(isinstance(x, dict) and x.get("number") == child for x in subs)
+
+
+PROBES = {
+    "linear": linear_probe,
+    "jira": jira_probe,
+    "gitlab": gitlab_probe_pair,
+    "github": github_probe,
 }

@@ -334,14 +334,23 @@ class RelateLedger(unittest.TestCase):
             first = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
             self.assertEqual(first["kind"], "applied")
             key = first["key"]
-            # Second call: ledger hit → noop, no further network.
-            ex2 = fake_execute({})
+            # Second call: presence is RE-PROBED (4-way rule) - ledger+remote
+            # noops, and no mutation request is issued.
+            listed = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": [
+                    {"type": "blocks", "issue": {"id": LN_UUID_B}},
+                ]},
+            }}})
+            ex2 = fake_execute({"relate-list": [listed]})
             second = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex2)
             self.assertEqual(second["kind"], "noop")
             self.assertEqual(second["key"], key)
-            self.assertEqual(ex2.calls, [])
+            self.assertEqual([c.op for c in ex2.calls], ["relate-list"],
+                             "probe only - never a second create")
 
-    def test_completed_blocker_skipped(self) -> None:
+    def test_completed_blocker_still_projects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp)
             a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
@@ -350,13 +359,21 @@ class RelateLedger(unittest.TestCase):
                     "depRelations": [], "linkState": "linked"}
             _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr,
                         b_status="done")
-            ex = fake_execute({})
+            # fn-64 (docs/tracker-sync.md): a completed blocker stays VISIBLE
+            # on the tracker; only readiness gating treats it as satisfied.
+            list_empty = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": []},
+            }}})
+            create = ok({"data": {"issueRelationCreate": {
+                "success": True, "issueRelation": {"id": "rel-1"}}}})
+            ex = fake_execute({"relate-list": [list_empty],
+                               "relate-create": create})
             out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
-            self.assertEqual(out["kind"], "skipped")
-            self.assertEqual(out["reason"], "completed_blocker")
-            self.assertEqual(ex.calls, [])
-            receipts = _receipts(flow)
-            self.assertTrue(any(r.get("status") == "noop" for r in receipts))
+            self.assertEqual(out["kind"], "applied")
+            self.assertTrue(out["completed_blocker"],
+                            "annotated for readiness, still projected")
 
     def test_foreign_edge_defers_never_clobber(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -376,11 +393,16 @@ class RelateLedger(unittest.TestCase):
             }}})
             ex = fake_execute({"relate-list": listed})
             out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
-            self.assertEqual(out["kind"], "defer")
+            self.assertEqual(out["kind"], "queued")
             self.assertEqual(out["reason"], "foreign_edge")
-            # Ledger untouched.
+            # Ledger untouched; conflict QUEUED to the deferred-decisions sink.
             spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
             self.assertEqual(spec["tracker"].get("depRelations") or [], [])
+            sink = flow / "review-deferred" / "tracker-relate.md"
+            self.assertTrue(sink.is_file())
+            self.assertIn("foreign-edge", sink.read_text(encoding="utf-8"))
+            receipts = _receipts(flow)
+            self.assertTrue(any(r.get("status") == "queued" for r in receipts))
 
 
 class GitlabRelateDegrade(unittest.TestCase):
@@ -418,6 +440,7 @@ class GithubSubIssuesHierarchy(unittest.TestCase):
                     "depRelations": [], "linkState": "linked"}
             _write_pair(flow, gh_cfg(), a_tracker=a_tr, b_tracker=b_tr)
             ex = fake_execute({
+                "wire-relate-probe": ok([]),
                 "relate-child-read": ok({
                     "id": 999001, "node_id": GH_NODE, "number": 42}),
                 "relate-list": ok([]),
@@ -525,3 +548,65 @@ class UnresolvedRelate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Round1HostFixes(unittest.TestCase):
+    def test_linear_attach_get_refuses_untrusted_origins(self) -> None:
+        """The retrieval carries LINEAR_API_KEY - an arbitrary URL is a
+        credential-exfiltration primitive."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_pair(flow, ln_cfg())
+            from flowctl_tracker import attach as A
+            cfg = json.loads((flow / "config.json").read_text())
+            ex = fake_execute({})  # any request would AssertionError
+            for url in ("https://attacker.example/x",
+                        "http://uploads.linear.app/x",
+                        "https://uploads.linear.app.evil.com/x"):
+                with self.subTest(url=url):
+                    out = A.attach_get(cfg, attachment_id=url,
+                                       out_path=str(Path(tmp) / "out.bin"),
+                                       execute=ex)
+                    self.assertIsInstance(out, TrackerError)
+                    self.assertEqual(out.subtype, "untrusted_origin")
+            self.assertEqual(ex.calls, [], "no request may leave the process")
+
+    def test_multipart_boundary_never_collides_with_payload(self) -> None:
+        from flowctl_tracker.attach import providers as AP
+        evil = b"x" * 10
+        body, ctype = AP._multipart("f.bin", evil)
+        boundary = ctype.split("boundary=")[-1]
+        # adversarial: payload CONTAINING a candidate boundary still round-trips
+        body2, ctype2 = AP._multipart("f.bin", boundary.encode() + b"tail")
+        b2 = ctype2.split("boundary=")[-1]
+        self.assertNotIn(b2.encode(), boundary.encode() + b"tail")
+        self.assertIn(evil, body)
+
+    def test_human_removed_edge_is_queued_not_recreated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            key = R.dep_relation_key(LN_UUID, LN_UUID_B)
+            a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                    "linkState": "linked",
+                    "depRelations": [{"key": key, "dep_spec": "fn-2-dep",
+                                      "from_tracker_id": LN_UUID,
+                                      "to_tracker_id": LN_UUID_B,
+                                      "type": "blocks", "source": "flow",
+                                      "updatedAt": "2026-01-01T00:00:00Z"}]}
+            b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            # Remote edge GONE (human removed it) while our ledger has it.
+            listed = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": []},
+            }}})
+            ex = fake_execute({"relate-list": [listed]})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
+            self.assertEqual(out["kind"], "queued")
+            self.assertEqual(out["reason"], "human_removed_edge")
+            self.assertEqual([c.op for c in ex.calls], ["relate-list"],
+                             "default NOT re-created - no mutation issued")
+            sink = flow / "review-deferred" / "tracker-relate.md"
+            self.assertIn("removed", sink.read_text(encoding="utf-8"))
