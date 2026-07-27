@@ -21344,35 +21344,27 @@ VALIDATOR_TEMPLATE_REL = (
     "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md"
 )
 
-# Fallback template body if the on-disk file is missing (global installs, Codex
-# mirror, or stripped-down deployments). Keep byte-identical to validate-pass.md
-# - test_review_prompt_template_parity fails on drift (fn-112.3 invariant).
+# Fallback body used only when validate-pass.md is absent (global installs,
+# Codex mirror, stripped-down deployments). This is a deliberately SHORTER
+# hand-written condensation of that template, authored alongside it in #118 -
+# NOT a copy, and NOT drift. Do not expand it to match the template: that is a
+# prompt change, and it is the exact mistake reverted in #245. Keep it
+# semantically faithful; test_prompt_text_pinned.py pins the bytes.
 VALIDATOR_TEMPLATE_FALLBACK = """# Validator prompt (fn-32.1 --validate)
 
-You are validating review findings for false positives. The primary review has
-already produced a NEEDS_WORK verdict with a list of findings. For each finding
-below, independently re-check it against the **current code** and decide whether
-the finding is actually valid.
+You are validating review findings for false positives. For each finding below,
+independently re-check it against the **current code** and decide whether the
+finding is actually valid.
 
 **Conservative bias — only drop findings that are clearly wrong.** When
-uncertain, keep the finding. A kept false-positive is cheap (one extra check by
-the fixer); a dropped real bug is expensive (escapes to production).
+uncertain, keep the finding. A kept false-positive is cheap; a dropped real bug
+is expensive.
 
-## Procedure
-
-For each finding:
-
-1. Open the cited file and read around the cited line (±20 lines of context).
-2. Check whether the claimed issue is actually present in the current code.
-3. Look for guards, handlers, or assumptions that address the concern elsewhere
-   in the call chain (the primary reviewer may have missed them).
-4. Consider whether the finding is factually correct about the language /
-   framework / library semantics.
+For each finding: open the cited file, read ±20 lines around the cited line,
+check whether the claimed issue is actually present, and look for guards /
+handlers / assumptions that address the concern elsewhere.
 
 Do **not** re-score confidence, re-classify severity, or invent new findings.
-Decide only: is this finding a real issue in the current code, or not?
-
-## Output format
 
 Return exactly one line per finding in this strict format:
 
@@ -21380,21 +21372,9 @@ Return exactly one line per finding in this strict format:
 <finding-id>: validated: <true|false> -- <one-sentence reason>
 ```
 
-Examples:
-
-```
-f1: validated: true -- null deref confirmed; no upstream guard
-f2: validated: false -- null check already present at src/auth.ts:40
-f3: validated: true -- race condition reproducible with concurrent requests
-f4: validated: false -- suggested fix misunderstands TypeScript narrowing
-```
-
 Rules:
-- One line per finding id. Missing ids are treated as `validated: true`
-  (conservative — when you say nothing, the finding stays).
-- Reason must fit on one line (≤200 chars is a good cap).
-- Use the literal tokens `validated: true` or `validated: false`. No synonyms.
-- Emit the lines anywhere in your response — the parser finds them by regex.
+- One line per finding id. Missing ids default to `validated: true`.
+- Use the literal tokens `validated: true` or `validated: false`.
 
 ## Findings to validate
 
@@ -21957,8 +21937,11 @@ DEEP_PASSES_TEMPLATE_REL = (
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md"
 )
 
-# Fallback templates if the on-disk file is missing (global installs, Codex
-# mirror, stripped-down deployments). Keep in sync with deep-passes.md.
+# Fallback bodies used only when deep-passes.md is absent (global installs,
+# Codex mirror, stripped-down deployments). Deliberately SHORTER hand-written
+# condensations of the template blocks, authored alongside them in #118 - NOT
+# copies, and NOT drift. Do not expand them to match the template; see the note
+# on VALIDATOR_TEMPLATE_FALLBACK above.
 DEEP_PASSES_FALLBACK: dict[str, str] = {
     "adversarial": """# Adversarial pass
 

@@ -64,11 +64,13 @@ PARITY_PAIRS = [
         "COMPLETION_REVIEW_PROMPT_FALLBACK",
         "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
     ),
-    (
-        "VALIDATOR_TEMPLATE_FALLBACK",
-        "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md",
-    ),
 ]
+
+# NOT in PARITY_PAIRS, deliberately: VALIDATOR_TEMPLATE_FALLBACK and
+# DEEP_PASSES_FALLBACK are hand-written CONDENSATIONS of their templates
+# (authored that way in #118), not byte-identical mirrors like the four above.
+# The fn-112.3 byte-identical rule was introduced for the extracted review
+# prompts and does not apply to them. Do not "fix" the difference.
 
 # Fixed inputs used when freezing fixtures/review_prompts/*.txt
 _SPEC = "SPEC_BODY_LINE1\nSPEC_BODY_LINE2"
@@ -175,6 +177,53 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self.assertIn("Do not invoke Flow-Next skills", prompt)
         self.assertIn("`flowctl *-review`", prompt)
         self.assertIn("launch another reviewer", prompt)
+
+
+class TestDeepPassFallbackCoverage(unittest.TestCase):
+    """Structural checks only - deliberately NOT a content comparison.
+
+    DEEP_PASSES_FALLBACK entries are hand-written condensations of the
+    deep-passes.md blocks (#118), not copies of them. Asserting byte-identity
+    here would be asserting a rule this repo never adopted for these loaders.
+    What DOES need guarding is structural: a declared pass with no fallback
+    entry is a KeyError on exactly the stripped installs the fallback exists
+    for, and a missing template file breaks the normal path for everyone else.
+    """
+
+    def test_fallback_covers_every_declared_pass(self) -> None:
+        self.assertEqual(
+            sorted(flowctl.DEEP_PASSES), sorted(flowctl.DEEP_PASSES_FALLBACK)
+        )
+
+    def test_rel_constant_points_at_a_real_template(self) -> None:
+        path = REPO_ROOT / flowctl.DEEP_PASSES_TEMPLATE_REL
+        self.assertTrue(
+            path.is_file(), f"DEEP_PASSES_TEMPLATE_REL missing on disk: {path}"
+        )
+
+    def test_every_pass_parses_out_of_the_template(self) -> None:
+        """The marker/fence path must work - without pinning what it returns.
+
+        A sentinel in the fallback slot proves extraction actually reached the
+        file, so a renamed marker or broken ```markdown fence fails loudly
+        instead of silently degrading to the condensed copy.
+        """
+        for pass_name in flowctl.DEEP_PASSES:
+            with self.subTest(deep_pass=pass_name):
+                sentinel = f"<<DEEP-PASS-FALLBACK-USED:{pass_name}>>"
+                real = flowctl.DEEP_PASSES_FALLBACK[pass_name]
+                flowctl.DEEP_PASSES_FALLBACK[pass_name] = sentinel
+                try:
+                    got = flowctl.load_deep_pass_template(pass_name)
+                finally:
+                    flowctl.DEEP_PASSES_FALLBACK[pass_name] = real
+                self.assertNotEqual(
+                    got, sentinel,
+                    f"load_deep_pass_template({pass_name!r}) fell back instead of "
+                    f"parsing {flowctl.DEEP_PASSES_TEMPLATE_REL} - the "
+                    f"<!-- {pass_name.upper()}_TEMPLATE --> marker or its "
+                    f"```markdown fence is missing or renamed.",
+                )
 
 
 class TestValidatorTemplateRepoRootPath(unittest.TestCase):
