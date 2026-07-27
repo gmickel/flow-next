@@ -21962,56 +21962,115 @@ DEEP_PASSES_TEMPLATE_REL = (
 DEEP_PASSES_FALLBACK: dict[str, str] = {
     "adversarial": """# Adversarial pass
 
-You've already reviewed this diff. Switch modes: construct specific scenarios
-that break this implementation. Think in sequences — "if X then Y then Z."
+You've already reviewed this diff and produced primary findings. Now switch modes.
+
+Instead of evaluating against known patterns, **construct specific scenarios
+that break this implementation.** Think in sequences: "if this happens, then
+that happens, which causes this to fail."
 
 Techniques:
-1. Assumption violation — data shapes, timing, ordering, value ranges.
-2. Composition failures — contract mismatches, shared state, ordering.
-3. Cascade construction — multi-step failure chains.
-4. Abuse cases — malicious or naive caller scenarios.
 
-Do not re-surface primary findings. Probe for what wasn't caught.
+1. **Assumption violation** — what assumptions does this code make? (data
+   shapes, timing, ordering, value ranges) Where is each violable?
+2. **Composition failures** — where do components interact? Contract mismatches,
+   shared state mutations, ordering across boundaries, error-type divergence.
+3. **Cascade construction** — build multi-step failure chains: A causes B causes
+   C. Do not stop at a single failure if a chain is visible.
+4. **Abuse cases** — how would a malicious or naive user/caller break this?
 
-Output format: severity, confidence anchor (0/25/50/75/100), classification
-(introduced/pre_existing), file:line, suggested fix. Prefix ids with `a`.
-Tag findings `pass: adversarial`. Suppress <75 except P0 @ 50+.
+Do not re-surface findings you already flagged in the primary review. **Probe
+for what wasn't caught.** If you find nothing new, say so — it is a valid
+result.
+
+## Output format
+
+Same format as primary review — severity, confidence anchor (0/25/50/75/100),
+classification (introduced/pre_existing), file:line, suggested fix. Prefix each
+finding's id with `a` to distinguish from primary (`a1`, `a2`, ...) and tag the
+finding with `pass: adversarial`.
+
+Example:
+
+    **a1** | severity=P1 | confidence=75 | classification=introduced | pass=adversarial
+    - location: `src/auth.ts:42`
+    - issue: cascade — if upstream rate-limiter resets mid-request, middleware reuses stale token
+    - suggested fix: re-validate token after any upstream transition
+
+## Suppression gate
+
+Suppress findings below anchor 75 except P0 @ 50+ (same rule as primary).
+Report suppressed count in a `Suppressed findings (adversarial):` line.
 
 ## Primary findings (for context; do NOT re-flag)
 
-<!-- PRIMARY_FINDINGS_BLOCK -->
-""",
+<!-- PRIMARY_FINDINGS_BLOCK -->""",
     "security": """# Security pass
 
-Specialized security review. Primary findings are context — do not re-flag.
+Specialized security review. Primary findings are available as context — do not
+re-flag issues already listed there.
 
-Focus: authN gaps, authZ gaps (IDOR, privilege escalation), input handling
-(injection, XSS, SSRF, path traversal), secrets handling, permission
-boundaries (TOCTOU, race conditions).
+Focus areas:
 
-Output format: same as primary. Prefix ids with `s`. Tag findings
-`pass: security`. Suppress <75 except P0 @ 50+.
+- **Authentication gaps** — missing auth checks on endpoints, session handling
+  flaws, credential rotation issues.
+- **Authorization gaps** — missing ownership checks, IDOR patterns, privilege
+  escalation, tenant-boundary violations.
+- **Input handling** — injection (SQL, command, template, LDAP), deserialization
+  issues, XSS, SSRF, path traversal.
+- **Secrets handling** — hardcoded credentials, token leakage in logs,
+  insecure storage, secret sprawl.
+- **Permission boundaries** — TOCTOU, race conditions on auth state, trust
+  boundaries crossed, client-side-only checks.
+
+Probe for specific security patterns the primary review's generalist framing
+may have missed. If you find nothing new, say so.
+
+## Output format
+
+Same format as primary. Prefix each finding's id with `s` (`s1`, `s2`, ...) and
+tag with `pass: security`.
+
+## Suppression gate
+
+Same rule as primary (suppress <75 except P0 @ 50+). Report suppressed count in
+a `Suppressed findings (security):` line.
 
 ## Primary findings (for context; do NOT re-flag)
 
-<!-- PRIMARY_FINDINGS_BLOCK -->
-""",
+<!-- PRIMARY_FINDINGS_BLOCK -->""",
     "performance": """# Performance pass
 
-Specialized performance review. Primary findings are context — do not re-flag.
+Specialized performance review.
 
-Focus: database (N+1, missing indexes, large scans), algorithmic (O(n²)
-where O(n) suffices, unbounded loops), I/O (sequential parallelizable,
-sync-in-hot-path, missing cache), memory (unbounded growth, GC pressure),
-concurrency (contention, lock ordering).
+Focus areas:
 
-Output format: same as primary. Prefix ids with `p`. Tag findings
-`pass: performance`. Suppress <75 except P0 @ 50+.
+- **Database** — N+1 queries, missing indexes, large scans, transaction scope
+  too wide, lock contention.
+- **Algorithmic** — O(n²) where O(n) suffices, unbounded loops, repeated
+  computations of pure results, recursive calls that could memoize.
+- **I/O** — sequential calls that could parallelize, sync calls in hot paths,
+  missing cache, chatty protocols, large payloads.
+- **Memory** — unbounded growth, reference leaks, large-object allocations in
+  loops, GC-pressure patterns.
+- **Concurrency** — contention, lock ordering, async-over-sync anti-patterns,
+  missing backpressure.
+
+Do not re-flag issues already in primary findings. Probe for specific
+performance patterns the primary's generalist framing may have missed.
+
+## Output format
+
+Same format as primary. Prefix each finding's id with `p` (`p1`, `p2`, ...) and
+tag with `pass: performance`.
+
+## Suppression gate
+
+Same rule as primary (suppress <75 except P0 @ 50+). Report suppressed count in
+a `Suppressed findings (performance):` line.
 
 ## Primary findings (for context; do NOT re-flag)
 
-<!-- PRIMARY_FINDINGS_BLOCK -->
-""",
+<!-- PRIMARY_FINDINGS_BLOCK -->""",
 }
 
 # Confidence anchor order for cross-pass promotion.

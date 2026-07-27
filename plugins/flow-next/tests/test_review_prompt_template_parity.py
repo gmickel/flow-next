@@ -177,6 +177,45 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self.assertIn("launch another reviewer", prompt)
 
 
+class TestDeepPassFallbackParity(unittest.TestCase):
+    """Same invariant as PARITY_PAIRS, one loader down.
+
+    DEEP_PASSES_FALLBACK is a dict rather than a flat constant, so it sat
+    outside the PARITY_PAIRS table and drifted unnoticed: all three passes had
+    been compressed to roughly 40% of their deep-passes.md bodies. The file
+    ships in the Codex mirror, so the fallback fires only on stripped installs
+    - which is exactly why nobody noticed.
+
+    Comparing through ``load_deep_pass_template`` rather than re-implementing
+    the marker/fence extraction keeps this honest: if the parser changes, this
+    test follows it instead of pinning a stale copy of its logic.
+    """
+
+    def test_every_pass_fallback_matches_the_template_block(self) -> None:
+        for pass_name in flowctl.DEEP_PASSES:
+            with self.subTest(deep_pass=pass_name):
+                extracted = flowctl.load_deep_pass_template(pass_name)
+                self.assertEqual(
+                    _normalize(extracted),
+                    _normalize(flowctl.DEEP_PASSES_FALLBACK[pass_name]),
+                    f"DEEP_PASSES_FALLBACK[{pass_name!r}] drifted from "
+                    f"{flowctl.DEEP_PASSES_TEMPLATE_REL} - keep the embedded copy "
+                    f"byte-identical to the template block.",
+                )
+
+    def test_fallback_covers_every_declared_pass(self) -> None:
+        """A pass with no fallback entry is a KeyError on stripped installs."""
+        self.assertEqual(
+            sorted(flowctl.DEEP_PASSES), sorted(flowctl.DEEP_PASSES_FALLBACK)
+        )
+
+    def test_rel_constant_points_at_a_real_template(self) -> None:
+        path = REPO_ROOT / flowctl.DEEP_PASSES_TEMPLATE_REL
+        self.assertTrue(
+            path.is_file(), f"DEEP_PASSES_TEMPLATE_REL missing on disk: {path}"
+        )
+
+
 class TestValidatorTemplateRepoRootPath(unittest.TestCase):
     """Regression: the repo-root branch of ``load_validator_template`` was dead.
 
