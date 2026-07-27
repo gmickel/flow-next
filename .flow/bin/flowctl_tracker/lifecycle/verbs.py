@@ -10,6 +10,7 @@ from typing import Optional
 from ..executor import execute as default_execute
 from ..types import ErrorClass, TrackerError
 from .helpers import (CREATE_FIRST_KEY_RE, Execute, Result, atomic_write_json,
+                      leaf_is_safe,
                       collision, default_tracker, dict_, load_spec, now_iso,
                       read_config, tracker_type, write_sync_receipt,
                       write_tracker_block)
@@ -94,6 +95,9 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
     rec_path = flow_dir / "create-first" / f"{retry_key}.json"
+    unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
+    if unsafe:
+        return unsafe
     if rec_path.is_file():
         try:
             prior = json.loads(rec_path.read_text(encoding="utf-8"))
@@ -148,17 +152,54 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
         return loaded
     path, spec_data = loaded
     tracker = {**default_tracker(), **dict_(spec_data.get("tracker"))}
+
+    # Existing-link guard: persist-external may (a) link an UNLINKED spec,
+    # (b) idempotently complete/confirm the SAME identifier, and nothing else.
+    # A retry against a linked spec must never repoint it, and a resolution
+    # failure must never erase a durable id (reproduced by review: linked/old
+    # silently became identifier_only/NEW).
+    state = derive_link_state(tracker)
+    if state != "unlinked" and tracker.get("identifier") != identifier:
+        return TrackerError(
+            ErrorClass.CONFLICT,
+            f"spec {spec_id!r} is already {state} to "
+            f"{tracker.get('identifier')!r}; refusing to repoint to "
+            f"{identifier!r}",
+            subtype="already_linked",
+            details={"linkState": state,
+                     "identifier": tracker.get("identifier")})
+    if state == "linked":
+        # Same identifier, durable already present: idempotent no-op success
+        # (unless the caller asserts a DIFFERENT durable - that is a conflict).
+        if durable_id and str(durable_id).strip() != str(tracker.get("id")):
+            return TrackerError(
+                ErrorClass.CONFLICT,
+                f"--id {durable_id!r} does not match the linked durable "
+                f"{tracker.get('id')!r} for {identifier!r}",
+                subtype="durable_mismatch")
+        return {"id": tracker.get("id"), "identifier": tracker.get("identifier"),
+                "url": tracker.get("url"), "linkState": "linked",
+                "idempotent": True}
+
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
 
     resolved_id = (durable_id.strip()
                    if isinstance(durable_id, str) and durable_id.strip() else None)
     resolved_url = url
-    warning = False
+    degraded = None
     if resolved_id is None:
         resolved = resolve_linear_uuid(ex, identifier)
         if isinstance(resolved, TrackerError):
-            warning = True
+            # Degrade ONLY on reachability failures. A semantic answer -
+            # not-found, auth, invalid input, conflict - is a real verdict
+            # about this identifier and must propagate unchanged, never be
+            # dressed up as "GraphQL unreachable".
+            if resolved.cls not in (ErrorClass.TRANSPORT, ErrorClass.RATE_LIMITED):
+                return resolved
+            degraded = {"kind": "identifier_only",
+                        "reason": resolved.cls.value,
+                        "identifier": identifier, "url": url}
             tracker.update({
                 "id": None, "identifier": identifier, "url": url,
                 "linkState": "identifier_only", "lastSyncedAt": now_iso(),
@@ -187,6 +228,9 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
                     {"durable": resolved_id, "role": "caller"},
                     {"durable": check["id"], "role": "graphql"},
                 ]})
+        if isinstance(check, TrackerError) and check.cls not in (
+                ErrorClass.TRANSPORT, ErrorClass.RATE_LIMITED):
+            return check
         if isinstance(check, dict):
             resolved_url = check.get("url") or resolved_url
         tracker.update({
@@ -205,15 +249,17 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
 
     note = None
     status = "pushed"
-    if warning:
-        note = (f"WARNING: identifier_only; GraphQL unreachable for "
+    if degraded is not None:
+        note = (f"identifier_only: UUID resolution degraded for "
                 f"identifier={identifier} url={resolved_url}")
         status = "updated"
     err = write_sync_receipt(
         flow_dir, spec_id=spec_id, status=status,
         tracker_id=resolved_id, event=event, transport="mcp", note=note,
+        degraded=degraded,
     )
     if err:
         return err
     return {"id": tracker.get("id"), "identifier": tracker.get("identifier"),
-            "url": tracker.get("url"), "linkState": tracker["linkState"]}
+            "url": tracker.get("url"), "linkState": tracker["linkState"],
+            "degraded": degraded}

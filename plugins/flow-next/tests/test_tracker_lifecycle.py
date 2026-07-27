@@ -227,9 +227,13 @@ class PersistExternal(unittest.TestCase):
             receipts = _receipts(flow)
             self.assertEqual(len(receipts), 1)
             note = receipts[0]["note"] or ""
-            self.assertIn("WARNING", note)
+            # Round-1 finding 5: degradation is the STRUCTURED field; the note
+            # stays informational.
+            self.assertIn("identifier_only", note)
             self.assertIn("WOR-17", note)
             self.assertIn("https://linear.app/x/issue/WOR-17", note)
+            self.assertEqual((receipts[0].get("degraded") or {}).get("kind"),
+                             "identifier_only")
 
     def test_non_mcp_source_is_invalid_input(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -450,3 +454,91 @@ class HostRoundFixes(unittest.TestCase):
         flow = Path(td.name)
         _write_flow(flow, ln_cfg(), spec_id=SPEC_ID)
         return flow
+
+
+class Round1Fixes(unittest.TestCase):
+    """Path containment, symlink safety, link-state guard, degrade classes."""
+
+    def test_spec_id_path_traversal_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, ln_cfg())
+            victim = Path(tmp) / "victim.json"
+            victim.write_text('{"precious": true}', encoding="utf-8")
+            out = L.create(flow, "../../victim", title="t", body="b",
+                           execute=fake_execute({}))
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+            self.assertEqual(json.loads(victim.read_text(encoding="utf-8")),
+                             {"precious": True}, "no byte may change")
+
+    def test_symlinked_create_first_dir_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, ln_cfg())
+            outside = Path(tmp) / "outside"
+            outside.mkdir()
+            try:
+                (flow / "create-first").symlink_to(outside,
+                                                   target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks unavailable")
+            out = L.create_first(flow, title="t", body="b",
+                                 retry_key="a" * 16, execute=fake_execute({}))
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+            self.assertEqual(list(outside.iterdir()), [],
+                             "nothing written through the symlink")
+
+    def test_persist_external_never_repoints_a_linked_spec(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, ln_cfg(), tracker={
+                "id": "old-uuid", "identifier": "WOR-1",
+                "url": None, "linkState": "linked"})
+            out = L.persist_external(flow, "fn-1-demo", identifier="NEW-2",
+                                     source="mcp", execute=fake_execute({}))
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            saved = json.loads((flow / "specs" / "fn-1-demo.json")
+                               .read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["id"], "old-uuid", "durable never erased")
+
+    def test_persist_external_same_identifier_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, ln_cfg(), tracker={
+                "id": "old-uuid", "identifier": "WOR-1",
+                "url": None, "linkState": "linked"})
+            out = L.persist_external(flow, "fn-1-demo", identifier="WOR-1",
+                                     source="mcp", execute=fake_execute({}))
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertTrue(out.get("idempotent"))
+
+    def test_semantic_resolution_errors_propagate_not_degrade(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, ln_cfg())
+            # issue: null over a healthy 200 is NOT unreachable - it is a real
+            # not-found verdict about this identifier.
+            ex = fake_execute({"lifecycle-resolve-uuid": gql_issue(None)})
+            out = L.persist_external(flow, "fn-1-demo", identifier="GHOST-9",
+                                     source="mcp", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.NOT_FOUND)
+            saved = json.loads((flow / "specs" / "fn-1-demo.json")
+                               .read_text(encoding="utf-8")).get("tracker")
+            self.assertNotEqual((saved or {}).get("linkState"), "identifier_only",
+                                "a semantic failure must not fake a degraded link")
+
+    def test_degraded_is_structured_on_result_and_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, ln_cfg())
+            ex = fake_execute({"lifecycle-resolve-uuid": TrackerError(
+                ErrorClass.TRANSPORT, "down")})
+            out = L.persist_external(flow, "fn-1-demo", identifier="WOR-3",
+                                     source="mcp", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["degraded"]["kind"], "identifier_only")
+            self.assertEqual(out["degraded"]["reason"], "transport")

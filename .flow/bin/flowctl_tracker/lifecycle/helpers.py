@@ -19,6 +19,52 @@ ACTIVE = frozenset({"github", "gitlab", "linear", "jira"})
 LINK_STATES = frozenset({"unlinked", "identifier_only", "linked"})
 CREATE_FIRST_KEY_RE = re.compile(r"[0-9a-f]{16}")
 
+#: Spec ids are lowercase slug tokens (fn-12, fn-12-add-auth, wor-17-slug).
+#: The shape gate is the FIRST containment defence: "../../victim" reproduced
+#: an arbitrary-file overwrite before this existed.
+SPEC_ID_RE = re.compile(r"^[a-z][a-z0-9]*-[0-9]+(?:-[a-z0-9][a-z0-9-]*)?$")
+
+
+def validate_spec_id(spec_id) -> Optional[TrackerError]:
+    if not isinstance(spec_id, str) or not SPEC_ID_RE.fullmatch(spec_id):
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            f"invalid spec id {spec_id!r}",
+                            subtype="spec_id")
+    return None
+
+
+def leaf_is_safe(base_dir: Path, leaf: Path) -> Optional[TrackerError]:
+    """Containment + no-follow, mirroring flowctl's _flow_leaf_is_safe policy:
+    the leaf must resolve INSIDE base_dir and no component below base_dir may
+    be a symlink (a committed symlink at `.flow/create-first` or a spec leaf
+    redirected the write out of tree - reproduced)."""
+    import stat as stat_mod
+    try:
+        base_real = base_dir.resolve()
+        target_real = leaf.resolve()
+    except OSError:
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            f"unresolvable path {leaf}", subtype="path")
+    if base_real != target_real and base_real not in target_real.parents:
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            f"{leaf} escapes {base_dir}", subtype="path")
+    probe = leaf
+    while True:
+        try:
+            st = os.lstat(probe)
+            if stat_mod.S_ISLNK(st.st_mode):
+                return TrackerError(ErrorClass.INVALID_INPUT,
+                                    f"{probe} is a symlink; refusing to write "
+                                    "through it", subtype="path")
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+        if probe == base_dir or probe.parent == probe:
+            break
+        probe = probe.parent
+    return None
+
 
 def dict_(value: Any) -> dict:
     return value if isinstance(value, dict) else {}
@@ -82,7 +128,13 @@ def spec_path(flow_dir: Path, spec_id: str) -> Path:
 
 
 def load_spec(flow_dir: Path, spec_id: str) -> Union[tuple[Path, dict], TrackerError]:
+    bad = validate_spec_id(spec_id)
+    if bad:
+        return bad
     path = spec_path(flow_dir, spec_id)
+    unsafe = leaf_is_safe(Path(flow_dir) / "specs", path)
+    if unsafe:
+        return unsafe
     if not path.is_file():
         return TrackerError(ErrorClass.NOT_FOUND, f"spec {spec_id!r} not found",
                             subtype="spec")
@@ -138,7 +190,8 @@ def write_sync_receipt(flow_dir: Path, *, spec_id: str, status: str,
                        tracker_id: Optional[str] = None,
                        event: Optional[str] = None,
                        transport: Optional[str] = None,
-                       note: Optional[str] = None) -> Optional[TrackerError]:
+                       note: Optional[str] = None,
+                       degraded: Optional[dict] = None) -> Optional[TrackerError]:
     receipt = {
         "type": "sync",
         "id": spec_id,
@@ -148,6 +201,8 @@ def write_sync_receipt(flow_dir: Path, *, spec_id: str, status: str,
         "transport": transport,
         "merges": [],
         "note": note,
+        # Degradation is STRUCTURED, never a sentence in `note` (epic contract).
+        "degraded": degraded,
         "timestamp": now_iso(),
     }
     runs = Path(flow_dir) / "sync-runs"
