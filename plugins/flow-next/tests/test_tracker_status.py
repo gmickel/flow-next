@@ -226,9 +226,11 @@ class DecideLadder(unittest.TestCase):
         self.assertEqual(d.kind, "conflict")
         self.assertEqual(d.reason, "merge-evidence-gate")
 
-    def test_closed_unmerged_defers(self) -> None:
+    def test_closed_unmerged_is_a_conflict_for_recovery(self) -> None:
+        """R7: genuinely ambiguous evidence returns class conflict, never a
+        successful defer envelope (codex round-1 finding 3)."""
         d = decide("done", None, "in_review", "in_progress", "closed-unmerged")
-        self.assertEqual(d.kind, "defer")
+        self.assertEqual(d.kind, "conflict")
         self.assertEqual(d.reason, "closed-unmerged")
 
     def test_cancelled_surfaced_never_applied(self) -> None:
@@ -267,7 +269,7 @@ class MergeEvidence(unittest.TestCase):
             ([{"state": "OPEN"}], "open"),
             ([{"state": "CLOSED"}], "closed-unmerged"),
             ([], "none"),
-            ([{"state": "OPEN"}, {"state": "CLOSED"}], "open"),
+            ([{"state": "OPEN"}, {"state": "CLOSED"}], "ambiguous"),
         ]
         for rows, want in cases:
             with self.subTest(want=want):
@@ -356,6 +358,7 @@ class StatusVerbGate(unittest.TestCase):
                 "status-set": capture_set,
                 "status-label-rm": empty_ok(),
                 "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": ok([{"name": "status:done"}]),
             })
             out = S.status(flow, "fn-1-demo", to="done", reason="duplicate",
                            execute=ex)
@@ -403,13 +406,14 @@ class StatusVerbGate(unittest.TestCase):
                 "merge-evidence": ok([{"state": "CLOSED"}]),
             })
             out = S.status(flow, "fn-1-demo", to="done", execute=ex)
-            self.assertEqual(out["kind"], "defer")
-            self.assertEqual(out["reason"], "closed-unmerged")
+            # R7: ambiguous evidence is a CONFLICT error, not a defer success.
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "closed-unmerged")
             saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
             self.assertEqual(saved["lastSyncedAt"], "OLD")
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            self.assertEqual(receipts[0]["status"], "deferred")
+            # A conflict is the skill's recovery surface - no defer receipt.
+            self.assertEqual(_receipts(flow), [])
 
     def test_identifier_only_is_unresolved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -606,3 +610,67 @@ class ReorderingUnit(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Round1HostFixes(unittest.TestCase):
+    """Tracker-terminal local fold + partial label accounting."""
+
+    def test_tracker_terminal_folds_into_local_spec(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "open"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+            # PM closed the issue (completed); flow is NOT in_progress (no tasks
+            # started) -> tracker wins, folded LOCALLY, no tracker mutation.
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed", labels=[], state_reason="completed")),
+                "merge-evidence": ok([]),
+            })
+            out = S.status(flow, "fn-1-demo", to="todo", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "applied_local")
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["status"], "done", "local spec folded")
+            self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
+            mutations = [c for c in ex.calls if c.op == "status-set"]
+            self.assertEqual(mutations, [], "no tracker write on a local fold")
+            receipts = _receipts(flow)
+            self.assertEqual(receipts[0]["status"], "pulled")
+
+    def test_partial_label_failure_is_explicit_never_silent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done", "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed"}),
+                "status-label-rm": empty_ok(),
+                "status-label-add": TrackerError(ErrorClass.TRANSPORT, "boom"),
+                "status-label-readback": ok([{"name": "status:in_review"}]),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertNotIsInstance(out, TrackerError,
+                                     "the STATE change landed - not a bare failure")
+            self.assertEqual(out["kind"], "applied")
+            write = out["write"]
+            self.assertEqual(write["completed_steps"], ["state"])
+            self.assertEqual(write["degraded"]["kind"], "status_labels_inconsistent")
+            self.assertIn({"op": "add", "label": "status:done", "error": "boom"},
+                          write["degraded"]["failures"])

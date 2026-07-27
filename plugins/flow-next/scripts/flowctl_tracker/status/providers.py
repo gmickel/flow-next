@@ -221,20 +221,43 @@ def _apply_github(config, locator, parent, execute, *, target_slot, close_reason
                 f"repos/{repo}/issues/{number}", body=payload)
     if isinstance(data, TrackerError):
         return data
-    # Labels: status:* is single-valued — remove others, then add target.
-    if remove:
-        for old in remove:
-            _cli(execute, "github", config, "status-label-rm", "DELETE",
-                 f"repos/{repo}/issues/{number}/labels/{quote(old, safe='')}",
-                 idempotent=False)
-            # Best-effort: missing/forbidden label must not block the status write.
+    # Labels: status:* is single-valued. The STATE change above is the
+    # operation and has ALREADY landed - every label failure from here on is
+    # reported as explicit partial evidence, never a bare failure a retry
+    # would misread as nothing-happened (the re-run would noop on the closed
+    # issue and silently lose the label + receipt).
+    label_failures: list = []
+    for old in remove:
+        rm = _cli(execute, "github", config, "status-label-rm", "DELETE",
+                  f"repos/{repo}/issues/{number}/labels/{quote(old, safe='')}",
+                  idempotent=False)
+        if isinstance(rm, TrackerError):
+            label_failures.append({"op": "remove", "label": old,
+                                   "error": rm.message})
     add = _cli(execute, "github", config, "status-label-add", "POST",
                f"repos/{repo}/issues/{number}/labels",
                body={"labels": [label]})
     if isinstance(add, TrackerError):
-        return add
+        label_failures.append({"op": "add", "label": label, "error": add.message})
+    # Read back and verify the single-valued invariant actually holds.
+    labels_degraded = None
+    readback = _cli(execute, "github", config, "status-label-readback", "GET",
+                    f"repos/{repo}/issues/{number}/labels", idempotent=True)
+    if isinstance(readback, list):
+        present = [x.get("name") for x in readback
+                   if isinstance(x, dict) and isinstance(x.get("name"), str)
+                   and x["name"].startswith("status:")]
+        if present != [label]:
+            labels_degraded = {"kind": "status_labels_inconsistent",
+                               "expected": [label], "present": present,
+                               "failures": label_failures}
+    elif label_failures:
+        labels_degraded = {"kind": "status_labels_unverified",
+                           "failures": label_failures}
     return {"applied": target_slot, "state_reason": payload.get("state_reason"),
-            "label": label}
+            "label": label,
+            "completed_steps": ["state"] + ([] if label_failures else ["labels"]),
+            "degraded": labels_degraded}
 
 
 def _apply_gitlab(config, locator, parent, execute, *, target_slot,

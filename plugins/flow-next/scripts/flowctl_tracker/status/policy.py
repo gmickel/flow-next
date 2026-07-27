@@ -138,17 +138,19 @@ def _classify_pr_rows(rows: list) -> str:
             open_ += 1
         elif state == "CLOSED":
             closed += 1
+    # Canonical buckets, status-sync.md verbatim: BOTH an open AND a
+    # closed-unmerged PR is explicitly named ambiguous (a host "recreate-PR"
+    # simplification was reverted here - the doc decides, not intuition).
     if merged >= 1:
         return "merged"
-    if open_ >= 1:
-        # An OPEN PR is the live signal even alongside earlier CLOSED ones -
-        # closing and recreating a PR is the common flow, not an ambiguity.
+    if open_ >= 1 and closed == 0:
         return "open"
+    if open_ >= 1 and closed >= 1:
+        return "ambiguous"
     if closed >= 1:
         return "closed-unmerged"
     if not rows:
         return "none"
-    # rows present but no recognized state - genuinely ambiguous
     return "ambiguous"
 
 
@@ -263,12 +265,22 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
                      "both_sides": {"flow": flow_norm, "tracker": tracker_norm}},
         )
 
-    # ── CLOSED-UNMERGED / AMBIGUOUS / PROBE-ERROR — needs human ─────
+    # ── TRACKER-TERMINAL WINS: fold into LOCAL state (no tracker write).
+    #    Evaluated before the merge-gate refusal - a PM closing the issue is
+    #    authoritative for closure, and deadlock (terminal x in_progress) was
+    #    already caught above, so this is the calm branch. ──
+    if tracker_norm in TERMINAL and flow_norm != ACTIVE_IN_PROGRESS:
+        return Decision("apply_local", target_slot=tracker_norm,
+                        details={"who": "tracker-terminal"})
+
+    # ── CLOSED-UNMERGED / AMBIGUOUS / PROBE-ERROR — genuinely ambiguous
+    #    evidence is a CONFLICT for the skill's recovery surface (R7), never
+    #    a successful defer envelope. ──
     if pr_evidence in NEEDS_HUMAN_EVIDENCE and (
         requested_to == "done" or flow_norm == "in_review"
     ):
         return Decision(
-            "defer", reason=pr_evidence,
+            "conflict", reason=pr_evidence,
             details={"flow": flow_norm, "tracker": tracker_norm,
                      "pr_evidence": pr_evidence, "requested": requested_to},
         )
@@ -286,11 +298,6 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
         or (requested_to == "done" and tracker_norm in TERMINAL)
     ):
         return Decision("noop", target_slot=tracker_norm)
-
-    # tracker wins terminal (flow NOT in_progress — deadlock already caught)
-    if tracker_norm in TERMINAL and flow_norm != ACTIVE_IN_PROGRESS:
-        return Decision("noop", target_slot=tracker_norm,
-                        details={"who": "tracker-terminal"})
 
     # flow wins in-progress — push when tracker is early
     if flow_norm == ACTIVE_IN_PROGRESS and tracker_norm in EARLY:

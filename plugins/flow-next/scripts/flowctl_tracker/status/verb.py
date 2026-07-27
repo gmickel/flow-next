@@ -136,14 +136,47 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
             "lastSyncedAt": prior_synced,
         }
 
+    if decision.kind == "apply_local":
+        # Tracker-terminal wins: fold into the LOCAL spec (status + lastSyncedAt),
+        # never issue a tracker mutation. A PM closing the issue is authoritative.
+        spec_data = dict(spec_data)
+        spec_data["status"] = "done"
+        tracker["lastSyncedAt"] = now_iso()
+        werr = write_tracker_block(path, spec_data, tracker)
+        if werr:
+            return werr
+        rerr = write_sync_receipt(
+            flow_dir, spec_id=spec_id, status="pulled",
+            tracker_id=durable, event=event, transport=provider,
+            note=f"tracker-terminal folded locally ({tracker_norm})",
+        )
+        if rerr:
+            import dataclasses  # noqa: PLC0415
+            return dataclasses.replace(rerr, details={
+                **(rerr.details or {}),
+                "completed_steps": ["local-status", "lastSyncedAt"]})
+        return {
+            "kind": "applied_local",
+            "to": to,
+            "applied": decision.target_slot,
+            "flow": flow_norm,
+            "tracker": tracker_norm,
+            "pr_evidence": pr_evidence,
+            "lastSyncedAt": tracker["lastSyncedAt"],
+        }
+
     if decision.kind == "defer":
-        write_sync_receipt(
+        rerr = write_sync_receipt(
             flow_dir, spec_id=spec_id, status="deferred",
             tracker_id=durable, event=event, transport=provider,
             note=f"status deferred ({decision.reason})",
             degraded=None,
         )
-        # Re-read to confirm lastSyncedAt unchanged (we did not write tracker block).
+        if rerr:
+            import dataclasses  # noqa: PLC0415
+            return dataclasses.replace(rerr, details={
+                **(rerr.details or {}), "defer_reason": decision.reason,
+                "defer_details": decision.details})
         return {
             "kind": "defer",
             "reason": decision.reason,
@@ -176,11 +209,16 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
 
     # Jira defer-from-apply (no legal transition) — receipt, no lastSyncedAt.
     if isinstance(written, dict) and written.get("defer"):
-        write_sync_receipt(
+        rerr = write_sync_receipt(
             flow_dir, spec_id=spec_id, status="deferred",
             tracker_id=durable, event=event, transport=provider,
             note=f"status deferred ({written.get('reason')})",
         )
+        if rerr:
+            import dataclasses  # noqa: PLC0415
+            return dataclasses.replace(rerr, details={
+                **(rerr.details or {}), "defer_reason": written.get("reason"),
+                "defer_details": written})
         return {
             "kind": "defer",
             "reason": written.get("reason"),
