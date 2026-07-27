@@ -18,9 +18,7 @@ Asserts:
 
 from __future__ import annotations
 
-import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path

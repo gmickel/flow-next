@@ -86,7 +86,7 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
     def _create_collision(self, number: int, *slugs: str) -> list[str]:
         old_ids = [self._create_native_spec(slug.title()) for slug in slugs]
         new_ids = [f"fn-{number}-{slug}" for slug in slugs]
-        for old_id, new_id in zip(old_ids, new_ids):
+        for old_id, new_id in zip(old_ids, new_ids, strict=True):
             self._rename_spec(old_id, new_id)
         return new_ids
 

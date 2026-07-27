@@ -19,7 +19,6 @@ its module-level caches never collide with other suites.
 """
 
 import importlib.util
-import os
 import subprocess
 import tempfile
 import unittest

@@ -83,7 +83,8 @@ def _linear_retry_after(resp: Response) -> Optional[float]:
             continue
         if remaining > 0:
             continue
-        if reset_ms != reset_ms or reset_ms in (float("inf"), float("-inf")):
+        # `reset_ms != reset_ms` is the NaN test, not a typo.
+        if reset_ms != reset_ms or reset_ms in (float("inf"), float("-inf")):  # noqa: PLR0124
             continue
         waits.append(max(0.0, reset_ms / 1000.0 - now))
     if waits:

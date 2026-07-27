@@ -20,7 +20,6 @@ smoke tests in task 6); they verify the helpers + descriptor shape.
 from __future__ import annotations
 
 import importlib.util
-import os
 import tempfile
 import unittest
 from datetime import date, timedelta
@@ -579,7 +578,6 @@ class ArchiveCommand(unittest.TestCase):
             d = flow / "prospects"
             arch = d / "_archive"
             arch.mkdir(parents=True)
-            today = date.today()
             target = arch / "old-2026-01-01.md"
             _write_artifact(
                 target,

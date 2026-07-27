@@ -26,7 +26,6 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import date
 from pathlib import Path
 from typing import Any
 

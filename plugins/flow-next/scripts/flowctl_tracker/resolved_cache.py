@@ -296,7 +296,7 @@ def resolve_transaction(
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"unknown scope {scope!r}", subtype="scope")
     config_path = Path(flow_dir) / "config.json"
-    for attempt in (1, 2):
+    for _attempt in (1, 2):
         try:
             before = _read_config(config_path)
         except ValueError as exc:

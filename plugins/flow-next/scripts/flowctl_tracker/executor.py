@@ -11,7 +11,6 @@ explosion into a `TrackerError`.
 
 from __future__ import annotations
 
-import json
 import http.client
 import re
 import subprocess
@@ -22,7 +21,7 @@ import urllib.request
 from typing import Callable, Optional, Protocol, Union
 from urllib.parse import urlparse
 
-from .classify import classify, malformed_body
+from .classify import classify
 from .credentials import Credential, redact, resolve
 from .types import (BACKOFF_CAP_S, CONCURRENCY_CAP, MAX_RETRIES, CredentialPolicy,
                     ErrorClass, Request, Response, TrackerError)
@@ -71,7 +70,8 @@ def _backoff_delay(attempt: int, retry_after: Optional[float],
             candidate = float(retry_after)
         except (TypeError, ValueError):
             candidate = float("nan")
-        if candidate == candidate and candidate >= 0 and candidate != float("inf"):
+        # `candidate == candidate` is the NaN test, not a typo.
+        if candidate == candidate and candidate >= 0 and candidate != float("inf"):  # noqa: PLR0124
             delay = candidate
     if delay is None:
         delay = min(2.0 ** attempt, cap_s)

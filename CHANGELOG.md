@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **`--validate` was running a stale, thinner prompt in copy-mode installs.** `load_validator_template()` referenced `VALIDATOR_TEMPLATE_REL`, a constant defined nowhere. The repo-root lookup raised `NameError` straight into a bare `except Exception: pass`, so the branch never resolved and copy-mode installs silently used the embedded fallback instead. That fallback had drifted to roughly half the length of the on-disk `validate-pass.md`, missing the Procedure section, the worked examples, and the "missing ids are conservative" rule. Plugin-mode installs were unaffected. The constant is defined, the fallback is byte-identical again, and the pair joined the fn-112.3 parity guard so it cannot drift back.
+- Two further undefined names: `Iterator` used in a string annotation but never imported, and a test base class expression that always fell through to `unittest.TestCase`.
+
+### Added
+
+- **Ruff gate in CI** (`ruff.toml`, pinned `ruff==0.16.0`). Correctness-only ruleset - pyflakes, bugbear, pylint errors, a few security and bug-pattern rules. Ruff 0.16 enables 413 rules by default where 0.15 enabled 59; the pin is deliberate, since an unpinned `ruff` turns that into an unannounced CI break. Style rules are out of scope on purpose, and `ruff.toml` records why each excluded rule was excluded. The install copy under `.flow/`, the generated Codex mirror, and the test fixtures are excluded so `--fix` can never write into them.
+
 ## [flow-next 3.5.1] - 2026-07-26
 
 ### Fixed

@@ -439,9 +439,10 @@ class TestResolve(unittest.TestCase):
         # Snapshot + scrub any FLOW_* env that could bleed between tests.
         self._env_snapshot = os.environ.copy()
         for key in list(os.environ.keys()):
-            if key.startswith("FLOW_CODEX_") or key.startswith("FLOW_COPILOT_") \
-               or key.startswith("FLOW_CURSOR_") \
-               or key.startswith("FLOW_RP_") or key.startswith("FLOW_NONE_"):
+            if key.startswith((
+                "FLOW_CODEX_", "FLOW_COPILOT_", "FLOW_CURSOR_",
+                "FLOW_RP_", "FLOW_NONE_",
+            )):
                 os.environ.pop(key, None)
         # Hermetic vs repo config: resolve() consults models.roles pins from
         # the enclosing repo's .flow/config.json (fn-115). Any real repo with
@@ -901,7 +902,6 @@ def _stub_subprocess(module, captured: list, *, stdout: str = "", returncode: in
     so ``require_codex`` / ``require_copilot`` don't error out on hosts that
     don't have codex/copilot installed.
     """
-    import subprocess as _subprocess
 
     real_run = module.subprocess.run
     real_which = module.shutil.which

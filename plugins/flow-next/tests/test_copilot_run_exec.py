@@ -11,7 +11,6 @@ These tests mock ``subprocess.run`` and ``require_copilot`` so they run
 cleanly on any host without spawning copilot.
 """
 
-import io
 import sys
 import tempfile
 import unittest

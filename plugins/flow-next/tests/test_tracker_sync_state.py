@@ -73,7 +73,7 @@ class TrackerSyncStateTestCase(unittest.TestCase):
 
     # --- helpers ------------------------------------------------------------
 
-    def _call(self, func_name: str = None, *, func=None, **kwargs) -> dict:
+    def _call(self, func_name: str | None = None, *, func=None, **kwargs) -> dict:
         """Invoke a cmd handler in-process with --json and capture the JSON."""
         kwargs.setdefault("json", True)
         ns = argparse.Namespace(**kwargs)
@@ -369,7 +369,7 @@ class TrackerDepRelationsTestCase(unittest.TestCase):
 
     # --- helpers ------------------------------------------------------------
 
-    def _call(self, func_name: str = None, *, func=None, **kwargs) -> dict:
+    def _call(self, func_name: str | None = None, *, func=None, **kwargs) -> dict:
         kwargs.setdefault("json", True)
         ns = argparse.Namespace(**kwargs)
         handler = func or getattr(self.flowctl, f"cmd_{func_name}")

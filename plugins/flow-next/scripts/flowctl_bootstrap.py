@@ -107,7 +107,8 @@ def _load_flowctl(source: Path):
     module.__package__ = ""
     module.__spec__ = spec
     sys.modules["flowctl"] = module
-    exec(code, module.__dict__)
+    exec(  # noqa: S102 - compiling flowctl.py in memory is this module's job
+        code, module.__dict__)
     return module
 
 

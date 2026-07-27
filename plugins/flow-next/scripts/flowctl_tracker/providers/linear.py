@@ -15,7 +15,7 @@ import json
 from typing import Callable, Optional, Union
 
 from ..states import Assignment, assign_slots
-from ..types import ErrorClass, Request, Response, TrackerError
+from ..types import ErrorClass, Request, TrackerError
 
 GRAPHQL_URL = "https://api.linear.app/graphql"
 
