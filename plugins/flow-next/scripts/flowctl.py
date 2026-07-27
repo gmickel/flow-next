@@ -21344,8 +21344,12 @@ VALIDATOR_TEMPLATE_REL = (
     "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md"
 )
 
-# Fallback template body if the on-disk file is missing (global installs, Codex
-# mirror, or stripped-down deployments). Keep in sync with validate-pass.md.
+# Fallback body used only when validate-pass.md is absent (global installs,
+# Codex mirror, stripped-down deployments). This is a deliberately SHORTER
+# hand-written condensation of that template, authored alongside it in #118 -
+# NOT a copy, and NOT drift. Do not expand it to match the template: that is a
+# prompt change, and it is the exact mistake reverted in #245. Keep it
+# semantically faithful; test_prompt_text_pinned.py pins the bytes.
 VALIDATOR_TEMPLATE_FALLBACK = """# Validator prompt (fn-32.1 --validate)
 
 You are validating review findings for false positives. For each finding below,
@@ -21933,8 +21937,11 @@ DEEP_PASSES_TEMPLATE_REL = (
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md"
 )
 
-# Fallback templates if the on-disk file is missing (global installs, Codex
-# mirror, stripped-down deployments). Keep in sync with deep-passes.md.
+# Fallback bodies used only when deep-passes.md is absent (global installs,
+# Codex mirror, stripped-down deployments). Deliberately SHORTER hand-written
+# condensations of the template blocks, authored alongside them in #118 - NOT
+# copies, and NOT drift. Do not expand them to match the template; see the note
+# on VALIDATOR_TEMPLATE_FALLBACK above.
 DEEP_PASSES_FALLBACK: dict[str, str] = {
     "adversarial": """# Adversarial pass
 

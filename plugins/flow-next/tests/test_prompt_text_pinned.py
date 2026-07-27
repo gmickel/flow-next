@@ -173,6 +173,20 @@ class TestEmbeddedPromptsPinned(unittest.TestCase):
                     _sha(value), expected, f"{name} prompt text changed. {_FIX_HINT}"
                 )
 
+    def test_every_deep_pass_fallback_is_pinned(self) -> None:
+        """A 4th deep pass must be pinned too, not just structurally present.
+
+        The value loop below only visits keys already in DEEP_PASS_HASHES, so a
+        new pass added to both DEEP_PASSES and DEEP_PASSES_FALLBACK would sail
+        past unpinned and its later wording changes would go unnoticed (#245
+        review). Same rot as the constant-discovery hole, one container down.
+        """
+        self.assertEqual(
+            set(DEEP_PASS_HASHES), set(flowctl.DEEP_PASSES_FALLBACK),
+            "DEEP_PASS_HASHES and DEEP_PASSES_FALLBACK disagree - pin every "
+            "deep-pass fallback, or drop the hash for a removed one.",
+        )
+
     def test_deep_pass_fallbacks_unchanged(self) -> None:
         for name, expected in DEEP_PASS_HASHES.items():
             with self.subTest(deep_pass=name):
