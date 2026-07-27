@@ -121,5 +121,7 @@ fn-57 R3 is a live acceptance criterion asserted in two code docstrings and one 
 cd plugins/flow-next/tests && python3 -m unittest test_tracker_sync_mirror_parity test_reached_path_harness -q
 ```
 
-Full gate once at completion: `python3 scripts/run_tests_parallel.py`
+Full gate once at completion: `python3 scripts/run_tests_parallel.py` plus `uvx ruff@0.16.0 check .` (pinned lint gate, landed post-spec-A in #244/#245 - both must be green before a PR).
+
+Post-#245 invariants (see CLAUDE.md): any `flowctl.py`/`flowctl_tracker/` change needs the propagation chain (copy to `.flow/bin/`, `python3 scripts/gen_tracker_manifest.py`, `./scripts/sync-codex.sh` twice); `tests/test_prompt_text_pinned.py` pins embedded prompt constants by SHA-256 - a deliberate prompt change updates the hash in the same commit with the rationale in the commit message.
 Docs site: `cd ~/work/flow-next.dev && pnpm build`
