@@ -397,6 +397,24 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
             "tracker_id": durable,
         }, statuses=statuses, completed=completed)
 
+    # Marker not found - but a truncated scan proves nothing about absence.
+    # Posting here would duplicate on high-comment issues; refuse instead
+    # (same contract as relate's truncated drain: absence unproven).
+    if isinstance(listed, dict) and listed.get("truncated"):
+        return fail_result(
+            TrackerError(
+                ErrorClass.TRANSPORT,
+                "comment dedup scan truncated at drain cap; "
+                "marker absence unproven, refusing to post",
+                subtype="dedup_truncated",
+                details={"truncated": True, "event": event,
+                         "issue": str(durable)},
+            ),
+            completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            tracker_id=durable, transport=provider,
+        )
+
     posted_body = f"{marker}\n\n{comment_text}"
     added = wire_dispatch(
         "comment-add", config, locator=locator, body=posted_body, execute=ex)

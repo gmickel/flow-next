@@ -710,6 +710,85 @@ class Round1HostFixes(unittest.TestCase):
             self.assertEqual(write["degraded"]["kind"], "status_labels_unverified")
             self.assertIn({"op": "readback", "error": "readback boom"},
                           write["degraded"]["failures"])
+            # The DURABLE receipt must carry the same degradation - the result
+            # dict alone is ephemeral (PR #246 review).
+            receipts = _receipts(flow)
+            self.assertEqual(receipts[0]["status"], "updated")
+            self.assertEqual(receipts[0]["degraded"]["kind"],
+                             "status_labels_unverified")
+
+
+class Round4PersistIntegrity(unittest.TestCase):
+    """PR #246 review: reload-under-lock persistence for the applied paths."""
+
+    def test_applied_write_does_not_erase_concurrent_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+            def concurrent_set(req):
+                # Another command updates the same spec while status() is
+                # mid-flight (after its snapshot load, before its persist).
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["title"] = "CONCURRENT"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                return ok({"node_id": GH_NODE, "number": 42, "state": "closed"})
+
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-set": concurrent_set,
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": ok([{"name": "status:done"}]),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "applied")
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["title"], "CONCURRENT",
+                             "persist must reload, never replay the stale snapshot")
+            self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
+
+    def test_local_fold_does_not_erase_concurrent_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "open"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+
+            def concurrent_parent(req):
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["title"] = "CONCURRENT"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                return ok(_gh_parent(state="closed", labels=[],
+                                     state_reason="completed"))
+
+            ex = fake_execute({
+                "status-parent-read": concurrent_parent,
+                "merge-evidence": ok([]),
+            })
+            out = S.status(flow, "fn-1-demo", to="todo", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "applied_local")
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["title"], "CONCURRENT")
+            self.assertEqual(saved["status"], "done", "fold still lands")
+            self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
 
 
 class Round2Ordering(unittest.TestCase):

@@ -46,7 +46,7 @@
     },
     {
       "path": "flowctl_tracker/facade/ops.py",
-      "sha256": "f68f7025c46d3cb724a5e1a0eea431987689f625e422af55951a091d0460f110"
+      "sha256": "55791b64e0aef0c5413ee1dd7043f5d10102e1f1f341f24fc5a761baf5818477"
     },
     {
       "path": "flowctl_tracker/facade/steps.py",
@@ -130,7 +130,7 @@
     },
     {
       "path": "flowctl_tracker/status/verb.py",
-      "sha256": "dedb859de72df105662c4970e8047c987ea647e541179c622090b7b6d1c6c1e9"
+      "sha256": "4d06ceb4143c82ac083f488ab963988fd1c4b2bcc3f49d3a358ca8742fa08396"
     },
     {
       "path": "flowctl_tracker/syncbody/__init__.py",
@@ -154,7 +154,7 @@
     },
     {
       "path": "flowctl_tracker/wire/jira.py",
-      "sha256": "24a84e55d642b154ff2fcfd40ac39899a80b73bfcf418e367cade94c00a68ed7"
+      "sha256": "a0e8aa8659be858597530b46c1a9910d4adaac2fbfcf424e953b0c5f85e1c032"
     },
     {
       "path": "flowctl_tracker/wire/linear.py",

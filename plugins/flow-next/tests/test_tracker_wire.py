@@ -724,6 +724,33 @@ class JiraUpdateReturnsThePostUpdateState(unittest.TestCase):
         self.assertEqual(out["body"], "NEW BODY")
 
 
+class JiraAssignRemovePreservesUnrelatedAssignee(unittest.TestCase):
+    def test_remove_nonmatching_identity_is_a_noop(self) -> None:
+        # Current assignee acct-1; removing acct-2 must NOT clear acct-1.
+        ex = fake_execute({"wire-parent-read": ok(JR_ISSUE)})
+        out = W.dispatch("assign", jr_cfg(), locator=loc(JR_ID, "SCRUM-1"),
+                         remove=["acct-2"], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        self.assertEqual([c.op for c in ex.calls], ["wire-parent-read"])
+        deg = out.get("degraded")
+        self.assertIsInstance(deg, dict)
+        self.assertEqual(deg["kind"], "assignee_remove_skipped")
+        self.assertEqual(deg["requested"], ["acct-2"])
+        self.assertEqual(deg["current"], "acct-1")
+
+    def test_remove_matching_identity_sends_null(self) -> None:
+        # Current assignee acct-1; removing acct-1 clears the assignee.
+        ex = fake_execute({"wire-parent-read": ok(JR_ISSUE),
+                           "wire-assign": empty()})
+        out = W.dispatch("assign", jr_cfg(), locator=loc(JR_ID, "SCRUM-1"),
+                         remove=["acct-1"], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        assign_call = next(c for c in ex.calls if c.op == "wire-assign")
+        body = json.loads(assign_call.body)
+        self.assertIsNone(body["fields"]["assignee"])
+        self.assertNotIn("degraded", out)
+
+
 GH_COMMENT = {"id": 1, "body": "hi", "html_url": "https://github.com/c/1"}
 
 

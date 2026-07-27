@@ -281,6 +281,23 @@ def assign(config: dict, locator: dict, execute: Execute, *,
         assignee = {"accountId": user} if len(user) > 20 or "-" in user else {"name": user}
         applied = user
     else:
+        # Remove-only: clear the single assignee ONLY when the current identity
+        # matches a requested removal (accountId on Cloud; name/key on DC).
+        # Otherwise preserve the unrelated assignee and no-op.
+        current_ids = set()
+        if prior:
+            for k in ("accountId", "name", "key"):
+                v = prior.get(k)
+                if isinstance(v, str) and v:
+                    current_ids.add(v)
+        if not current_ids.intersection(remove):
+            out = _issue_out(parent)
+            out["degraded"] = {
+                "kind": "assignee_remove_skipped",
+                "requested": list(remove),
+                "current": previous,
+            }
+            return out
         assignee = None
         applied = None
     data = _jira(execute, "wire-assign", "PUT",

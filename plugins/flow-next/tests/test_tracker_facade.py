@@ -466,6 +466,38 @@ class CommentFacade(unittest.TestCase):
             self.assertFalse(any(c.op == "wire-comment-add" for c in ex2.calls))
             self.assertEqual(len(_receipts(flow)), 2)
 
+    def test_comment_truncated_scan_without_marker_refuses_post(self) -> None:
+        """A truncated dedup scan proves nothing about marker absence:
+        the facade must refuse to post rather than risk a duplicate."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            bf = _body_file(root, "evidence=abc1234\n**done** - shipped.\n")
+
+            # Every page comes back full (no marker anywhere), so the REST
+            # drain hits _MAX_PAGES and reports truncated=True.
+            def full_page(req):
+                return ok([{"id": i, "body": f"noise {i}"} for i in range(100)])
+
+            ex = fake_execute({
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-comment-list": full_page,
+            })
+            out = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                         body_file=bf, execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.cls, ErrorClass.TRANSPORT)
+            self.assertEqual(out.subtype, "dedup_truncated")
+            self.assertFalse(out.auto_retryable)
+            self.assertTrue((out.details or {}).get("truncated"))
+            self.assertEqual((out.details or {}).get("event"), "work.done")
+            self.assertEqual((out.details or {}).get("issue"), GH_NODE)
+            self.assertFalse(any(c.op == "wire-comment-add" for c in ex.calls))
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "errored")
+
 
 # ---------------------------------------------------------------------------
 # MCP rung

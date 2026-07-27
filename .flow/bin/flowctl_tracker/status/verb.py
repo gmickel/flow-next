@@ -61,6 +61,34 @@ def _locator(tracker: dict) -> Result:
     return {"durable": durable.strip(), "display": display.strip()}
 
 
+def _persist_applied_state(flow_dir: Path, spec_id: str, *,
+                           fold_local_done: bool) -> Result:
+    """Reload + merge ONLY status-owned fields + persist, serialized under the
+    shared .flow writer lock (same pattern as relate._ledger_write and
+    syncbody._commit_paired_base). The spec snapshot loaded before the parent,
+    PR-evidence, and provider requests must never be written back wholesale -
+    that would silently erase a concurrent update to the same spec. Returns the
+    persisted tracker block, or a TrackerError - never raises."""
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            reloaded = load_spec(flow_dir, spec_id)
+            if isinstance(reloaded, TrackerError):
+                return reloaded
+            path, spec = reloaded
+            tracker = {**default_tracker(), **dict_(spec.get("tracker"))}
+            if fold_local_done:
+                spec = dict(spec)
+                spec["status"] = "done"
+            tracker["lastSyncedAt"] = now_iso()
+            werr = write_tracker_block(path, spec, tracker)
+            if werr:
+                return werr
+            return tracker
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
+
+
 def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
            event: Optional[str] = None,
            execute: Execute = default_execute,
@@ -140,12 +168,11 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
     if decision.kind == "apply_local":
         # Tracker-terminal wins: fold into the LOCAL spec (status + lastSyncedAt),
         # never issue a tracker mutation. A PM closing the issue is authoritative.
-        spec_data = dict(spec_data)
-        spec_data["status"] = "done"
-        tracker["lastSyncedAt"] = now_iso()
-        werr = write_tracker_block(path, spec_data, tracker)
-        if werr:
-            return werr
+        persisted = _persist_applied_state(flow_dir, spec_id,
+                                           fold_local_done=True)
+        if isinstance(persisted, TrackerError):
+            return persisted
+        tracker = persisted
         if write_receipt:
             rerr = write_sync_receipt(
                 flow_dir, spec_id=spec_id, status="pulled",
@@ -246,15 +273,16 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
         }
 
     # Applied — advance lastSyncedAt + receipt.
-    tracker["lastSyncedAt"] = now_iso()
-    werr = write_tracker_block(path, spec_data, tracker)
-    if werr:
-        return werr
+    persisted = _persist_applied_state(flow_dir, spec_id, fold_local_done=False)
+    if isinstance(persisted, TrackerError):
+        return persisted
+    tracker = persisted
     if write_receipt:
         rerr = write_sync_receipt(
             flow_dir, spec_id=spec_id, status="updated",
             tracker_id=durable, event=event, transport=provider,
             note=f"status applied → {decision.target_slot}",
+            degraded=written.get("degraded") if isinstance(written, dict) else None,
         )
         if rerr:
             import dataclasses  # noqa: PLC0415
