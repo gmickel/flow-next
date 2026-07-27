@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from flowctl_tracker import relate as R  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
+from flowctl_tracker.relate import providers as RP  # noqa: E402
 from flowctl_tracker.classify import classify  # noqa: E402
 from flowctl_tracker.relate.ledger import (  # noqa: E402
     FLOW_DEPS_CLOSE, FLOW_DEPS_OPEN, dep_relation_key,
@@ -405,6 +406,74 @@ class RelateLedger(unittest.TestCase):
             self.assertTrue(any(r.get("status") == "queued" for r in receipts))
 
 
+class LinearRelateProbeDrain(unittest.TestCase):
+    """The probe drains BOTH relation connections before concluding absence."""
+
+    def test_edge_on_second_page_is_found(self) -> None:
+        # Page 1: no matching edge, inverseRelations reports hasNextPage.
+        page1 = ok({"data": {"issue": {
+            "id": LN_UUID,
+            "relations": {"nodes": [],
+                          "pageInfo": {"hasNextPage": False, "endCursor": None}},
+            "inverseRelations": {
+                "nodes": [{"type": "blocks", "issue": {"id": "other-uuid"}}],
+                "pageInfo": {"hasNextPage": True, "endCursor": "cur-1"}},
+        }}})
+        page2 = ok({"data": {"issue": {
+            "id": LN_UUID,
+            "relations": {"nodes": [],
+                          "pageInfo": {"hasNextPage": False, "endCursor": None}},
+            "inverseRelations": {
+                "nodes": [{"type": "blocks", "issue": {"id": LN_UUID_B}}],
+                "pageInfo": {"hasNextPage": False, "endCursor": "cur-2"}},
+        }}})
+        ex = fake_execute({"relate-list": [page1, page2]})
+        out = RP._linear_edge_exists(ex, LN_UUID, LN_UUID_B)
+        self.assertIs(out, True)
+        self.assertEqual([c.op for c in ex.calls],
+                         ["relate-list", "relate-list"],
+                         "cursor drain issues a second page request")
+
+    def test_truncated_at_cap_does_not_report_absence(self) -> None:
+        # Every page claims more with a fresh cursor; the edge never appears.
+        counter = {"n": 0}
+
+        def endless(_request):
+            counter["n"] += 1
+            return ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": [],
+                              "pageInfo": {"hasNextPage": False,
+                                           "endCursor": None}},
+                "inverseRelations": {
+                    "nodes": [{"type": "blocks",
+                               "issue": {"id": f"uuid-{counter['n']}"}}],
+                    "pageInfo": {"hasNextPage": True,
+                                 "endCursor": f"cur-{counter['n']}"}},
+            }}})
+
+        ex = fake_execute({"relate-list": endless})
+        out = RP._linear_edge_exists(ex, LN_UUID, LN_UUID_B)
+        self.assertIsInstance(out, TrackerError,
+                              "a probe that cannot prove absence must not "
+                              "report absence")
+        self.assertEqual(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "truncated")
+        self.assertEqual(len(ex.calls), W._MAX_PAGES)
+
+    def test_single_page_absence_still_reports_false(self) -> None:
+        # Both connections exhausted on page 1 → honest False, one request.
+        page = ok({"data": {"issue": {
+            "id": LN_UUID,
+            "relations": {"nodes": []},
+            "inverseRelations": {"nodes": []},
+        }}})
+        ex = fake_execute({"relate-list": [page]})
+        out = RP._linear_edge_exists(ex, LN_UUID, LN_UUID_B)
+        self.assertIs(out, False)
+        self.assertEqual(len(ex.calls), 1)
+
+
 class GitlabRelateDegrade(unittest.TestCase):
     def test_free_tier_relates_to_with_structured_degraded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -682,3 +751,119 @@ class Round2HostFixes(unittest.TestCase):
             keys = {e["dep_spec"] for e in spec["tracker"]["depRelations"]}
             self.assertEqual(keys, {"fn-2-dep", "fn-3-dep2"},
                              "a lost update dropped a ledger entry")
+
+
+class RelateLedgerDurability(unittest.TestCase):
+    """Two-phase intent write (PR #246 review): a ledger failure AFTER the
+    provider create must not orphan ownership - the pending entry keeps the
+    edge OURS, so a retry heals instead of queueing a false foreign collision."""
+
+    def _pair(self, flow: Path) -> None:
+        a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+
+    @staticmethod
+    def _list_empty():
+        return ok({"data": {"issue": {
+            "id": LN_UUID,
+            "relations": {"nodes": []},
+            "inverseRelations": {"nodes": []},
+        }}})
+
+    @staticmethod
+    def _list_present():
+        return ok({"data": {"issue": {
+            "id": LN_UUID,
+            "relations": {"nodes": []},
+            "inverseRelations": {"nodes": [
+                {"type": "blocks", "issue": {"id": LN_UUID_B}},
+            ]},
+        }}})
+
+    @staticmethod
+    def _create_ok():
+        return ok({"data": {"issueRelationCreate": {
+            "success": True, "issueRelation": {"id": "rel-1"}}}})
+
+    def test_finalize_failure_is_recoverable_and_retry_heals(self) -> None:
+        from unittest import mock
+        from flowctl_tracker.lifecycle.helpers import (
+            write_tracker_block as real_wtb,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            ex = fake_execute({"relate-list": [self._list_empty()],
+                               "relate-create": self._create_ok()})
+            calls = {"n": 0}
+
+            def flaky(path, spec, tracker):
+                calls["n"] += 1
+                if calls["n"] == 2:  # the FINALIZE write, after the create
+                    return TrackerError(ErrorClass.TRANSPORT, "disk full",
+                                        subtype="write")
+                return real_wtb(path, spec, tracker)
+
+            with mock.patch.object(R, "write_tracker_block", flaky):
+                out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                               execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "ledger_finalize")
+            self.assertTrue((out.details or {}).get("recoverable"))
+            self.assertEqual((out.details or {}).get("completed_steps"),
+                             ["relate-create"])
+            # Ownership is durable: the pending entry landed BEFORE the create.
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["status"], "pending")
+
+            # RETRY: pending + remote-present -> heal the ledger; never a
+            # duplicate create, never a foreign-edge collision.
+            ex2 = fake_execute({"relate-list": [self._list_present()]})
+            again = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                             execute=ex2)
+            self.assertNotIsInstance(again, TrackerError, msg=repr(again))
+            self.assertEqual(again["kind"], "applied")
+            self.assertEqual(again["reason"], "ledger_repaired")
+            self.assertEqual([c.op for c in ex2.calls], ["relate-list"],
+                             "probe only - never a second create")
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertNotIn("status", entries[0],
+                             "finalized entry matches the fn-64 shape")
+            self.assertFalse(
+                (flow / "review-deferred" / "tracker-relate.md").exists(),
+                "no false collision queued")
+
+    def test_create_failure_leaves_pending_and_retry_creates_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            boom = ok({"data": {"issueRelationCreate": {"success": False}}})
+            ex = fake_execute({"relate-list": [self._list_empty()],
+                               "relate-create": boom})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["status"], "pending")
+
+            # RETRY: pending + remote-absent -> the create is retried; the
+            # idempotent append never duplicates the ledger entry.
+            ex2 = fake_execute({"relate-list": [self._list_empty()],
+                                "relate-create": self._create_ok()})
+            again = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                             execute=ex2)
+            self.assertNotIsInstance(again, TrackerError, msg=repr(again))
+            self.assertEqual(again["kind"], "applied")
+            self.assertIn("relate-create", [c.op for c in ex2.calls])
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertNotIn("status", entries[0])

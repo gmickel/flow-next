@@ -675,6 +675,42 @@ class Round1HostFixes(unittest.TestCase):
             self.assertIn({"op": "add", "label": "status:done", "error": "boom"},
                           write["degraded"]["failures"])
 
+    def test_readback_failure_is_degraded_even_when_label_ops_succeed(self) -> None:
+        """A failed label readback must surface as degraded evidence even when
+        every preceding label op succeeded - the single-valued invariant is
+        unverifiable, so the verb cannot claim clean success."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done", "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed"}),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": TrackerError(
+                    ErrorClass.TRANSPORT, "readback boom"),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertNotIsInstance(out, TrackerError,
+                                     "state landed - never a bare failure")
+            self.assertEqual(out["kind"], "applied")
+            write = out["write"]
+            self.assertEqual(write["degraded"]["kind"], "status_labels_unverified")
+            self.assertIn({"op": "readback", "error": "readback boom"},
+                          write["degraded"]["failures"])
+
 
 class Round2Ordering(unittest.TestCase):
     def test_terminal_agreement_is_a_noop_never_a_refold(self) -> None:

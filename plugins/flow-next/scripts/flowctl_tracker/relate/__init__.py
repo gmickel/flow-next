@@ -32,7 +32,7 @@ from ..lifecycle.helpers import (ACTIVE, Execute, Result, default_tracker, dict_
 from ..types import ErrorClass, TrackerError
 from . import providers as P
 from .ledger import (blocker_completed, caps_of, dep_relation_key, ledger_append,
-                     ledger_has, require_linked_pair)
+                     ledger_entry, ledger_finalize, require_linked_pair)
 
 __all__ = [
     "FLOW_DEPS_CLOSE",
@@ -69,6 +69,29 @@ def _queue_conflict(flow_dir: Path, spec_id: str, *, summary: str,
         return TrackerError(ErrorClass.TRANSPORT,
                             f"cannot queue conflict: {exc}", subtype="queue")
     return None
+
+
+def _ledger_write(flow_dir: Path, spec_id: str, mutate) -> Result:
+    """Reload + mutate + persist the tracker block, SERIALIZED under the shared
+    .flow writer lock (reload alone narrowed but did not close the lost-update
+    window: two relates could reload the same pre-write state and the second
+    atomic replace dropped the first edge). Returns the persisted tracker
+    block, or a TrackerError - never raises."""
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            reloaded = load_spec(flow_dir, spec_id)
+            if isinstance(reloaded, TrackerError):
+                return reloaded
+            path, spec = reloaded
+            tracker = {**default_tracker(), **dict_(spec.get("tracker"))}
+            tracker = mutate(tracker)
+            werr = write_tracker_block(path, spec, tracker)
+            if werr:
+                return werr
+            return tracker
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
 
 
 def _locator(tracker: dict) -> Result:
@@ -147,11 +170,17 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
         "from_display": loc_a["display"], "to_display": loc_b["display"],
     }
 
-    # 4-way ledger x remote classification BEFORE any mutation (fn-64):
+    # 4-way ledger x remote classification BEFORE any mutation (fn-64).
+    # A `pending` entry is recorded ownership INTENT from an earlier run whose
+    # create/finalize was interrupted - it is OURS to complete, never a
+    # collision (two-phase write: intent lands durably BEFORE the provider
+    # mutation, so a ledger failure can no longer orphan ownership).
     remote = probe(config, ex, **kwargs)
     if isinstance(remote, TrackerError):
         return remote
-    in_ledger = ledger_has(tracker_a, key)
+    entry = ledger_entry(tracker_a, key)
+    pending = entry is not None and entry.get("status") == "pending"
+    in_ledger = entry is not None and not pending
 
     if in_ledger and remote:
         return {
@@ -185,7 +214,34 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
             "lastSyncedAt": tracker_a.get("lastSyncedAt"),
         }
 
-    if not in_ledger and remote:
+    if pending and remote:
+        # OUR interrupted create: the provider mutation succeeded on an earlier
+        # run but the finalize did not land. Repair the ledger - no provider
+        # mutation, no collision queue.
+        finalized = _ledger_write(
+            flow_dir, spec_id,
+            lambda t: ledger_finalize(t, key=key))
+        if isinstance(finalized, TrackerError):
+            return finalized
+        tracker_a = finalized
+        rerr = write_sync_receipt(
+            flow_dir, spec_id=spec_id, status="pushed",
+            tracker_id=from_id, event=event, transport=provider,
+            note=f"ledger finalized for flow-created blocked-by {blocked_by} "
+                 "(interrupted earlier run; edge already on tracker)")
+        if rerr:
+            return rerr
+        return {
+            "kind": "applied",
+            "reason": "ledger_repaired",
+            "from": spec_id, "to": blocked_by, "key": key,
+            "form": None,
+            "completed_blocker": completed_blocker,
+            "degraded": None,
+            "depRelations": tracker_a.get("depRelations") or [],
+        }
+
+    if entry is None and remote:
         # Foreign edge - never clobber, never claim ownership.
         qerr = _queue_conflict(
             flow_dir, spec_id,
@@ -207,9 +263,26 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
             "lastSyncedAt": tracker_a.get("lastSyncedAt"),
         }
 
-    # Neither ledgered nor remote: CREATE. Completed blockers project too -
-    # the relation is the board's historical ordering; readiness gating alone
-    # treats done deps as satisfied (docs/tracker-sync.md fn-64 rule).
+    # Neither ledgered nor remote (or pending + remote-absent = retry): CREATE.
+    # Completed blockers project too - the relation is the board's historical
+    # ordering; readiness gating alone treats done deps as satisfied
+    # (docs/tracker-sync.md fn-64 rule).
+    #
+    # Two-phase write: record ownership INTENT (a `pending` entry) durably
+    # BEFORE the provider mutation. If the create then fails, the pending
+    # entry makes the next run retry-the-create; if the finalize fails after
+    # a successful create, the pending entry keeps the edge OURS so the next
+    # run repairs the ledger instead of queueing a false foreign collision.
+    if entry is None:
+        appended = _ledger_write(
+            flow_dir, spec_id,
+            lambda t: ledger_append(
+                t, key=key, dep_spec=blocked_by,
+                from_tracker_id=from_id, to_tracker_id=to_id,
+                status="pending"))
+        if isinstance(appended, TrackerError):
+            return appended
+
     if provider == "gitlab":
         source = caps.get("_source") if isinstance(caps.get("_source"), dict) else {}
         plan = source.get("gitlabPlan")
@@ -223,28 +296,24 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
 
     degraded = out.get("degraded")
 
-    # Applied: SERIALIZE the reload+append+persist under the shared .flow
-    # writer lock - reload alone narrowed but did not close the lost-update
-    # window (two relates could still reload the same pre-write state and the
-    # second atomic replace dropped the first edge, which the next run then
-    # misclassified as foreign).
-    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
-    try:
-        with config_lock(flow_dir):
-            reloaded = load_spec(flow_dir, spec_id)
-            if isinstance(reloaded, TrackerError):
-                return reloaded
-            path_a, spec_a = reloaded
-            tracker_a = {**default_tracker(), **dict_(spec_a.get("tracker"))}
-            tracker_a = ledger_append(
-                tracker_a, key=key, dep_spec=blocked_by,
-                from_tracker_id=from_id, to_tracker_id=to_id,
-            )
-            werr = write_tracker_block(path_a, spec_a, tracker_a)
-            if werr:
-                return werr
-    except ConfigLockTimeout as exc:
-        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
+    # Applied: FINALIZE the pending entry (drop the status marker) under the
+    # shared .flow writer lock. A failure here is a RECOVERABLE partial
+    # success: the remote edge exists and the pending entry preserves
+    # ownership, so a retry heals the ledger without a duplicate create.
+    finalized = _ledger_write(
+        flow_dir, spec_id,
+        lambda t: ledger_finalize(t, key=key))
+    if isinstance(finalized, TrackerError):
+        return TrackerError(
+            finalized.cls,
+            f"relation created on tracker but ledger finalize failed: "
+            f"{finalized.message}; re-run relate to heal the ledger "
+            "(ownership is preserved by the pending entry)",
+            subtype="ledger_finalize",
+            details={"recoverable": True,
+                     "completed_steps": ["relate-create"],
+                     "key": key})
+    tracker_a = finalized
     # GitHub's sub_issues form is a HIERARCHY PROXY, never a blocked-by (R15).
     form = out.get("form")
     if form == "sub_issues":

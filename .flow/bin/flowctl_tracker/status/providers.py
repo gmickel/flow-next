@@ -251,9 +251,14 @@ def _apply_github(config, locator, parent, execute, *, target_slot, close_reason
             labels_degraded = {"kind": "status_labels_inconsistent",
                                "expected": [label], "present": present,
                                "failures": label_failures}
-    elif label_failures:
+    else:
+        # Readback failed or returned an unusable shape: the invariant is
+        # unverifiable even when every label op above succeeded.
+        detail = (readback.message if isinstance(readback, TrackerError)
+                  else "unexpected readback shape")
         labels_degraded = {"kind": "status_labels_unverified",
-                           "failures": label_failures}
+                           "failures": label_failures
+                           + [{"op": "readback", "error": detail}]}
     return {"applied": target_slot, "state_reason": payload.get("state_reason"),
             "label": label,
             "completed_steps": ["state"] + ([] if label_failures else ["labels"]),

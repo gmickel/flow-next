@@ -35,17 +35,31 @@ def ledger_has(tracker: dict, key: str) -> bool:
     return False
 
 
+def ledger_entry(tracker: dict, key: str) -> Optional[dict]:
+    """The ledger entry for `key`, or None. An entry WITHOUT a `status` field
+    is applied (the fn-64 schema); `status: "pending"` marks recorded intent
+    whose provider create + finalize has not completed yet (crash-safe
+    two-phase write - ownership is durable before the remote mutation)."""
+    for entry in tracker.get("depRelations") or []:
+        if isinstance(entry, dict) and entry.get("key") == key:
+            return entry
+    return None
+
+
 def ledger_append(tracker: dict, *, key: str, dep_spec: str,
                   from_tracker_id: str, to_tracker_id: str,
-                  rel_type: str = "blocks", source: str = "flow") -> dict:
-    """Idempotent append. Returns the (possibly unchanged) tracker block."""
+                  rel_type: str = "blocks", source: str = "flow",
+                  status: Optional[str] = None) -> dict:
+    """Idempotent append. Returns the (possibly unchanged) tracker block.
+    `status="pending"` records ownership INTENT before the provider mutation;
+    omitted means applied (field absent, matching existing fn-64 entries)."""
     ledger = list(tracker.get("depRelations") or [])
     for entry in ledger:
         if isinstance(entry, dict) and entry.get("key") == key:
             tracker = dict(tracker)
             tracker["depRelations"] = ledger
             return tracker
-    ledger.append({
+    new: dict = {
         "key": key,
         "dep_spec": dep_spec,
         "from_tracker_id": from_tracker_id,
@@ -53,7 +67,25 @@ def ledger_append(tracker: dict, *, key: str, dep_spec: str,
         "type": rel_type,
         "source": source,
         "updatedAt": now_iso(),
-    })
+    }
+    if status is not None:
+        new["status"] = status
+    ledger.append(new)
+    tracker = dict(tracker)
+    tracker["depRelations"] = ledger
+    return tracker
+
+
+def ledger_finalize(tracker: dict, *, key: str) -> dict:
+    """Mark a pending entry applied by DROPPING its status field, so finalized
+    entries are byte-shaped like pre-existing fn-64 entries. Idempotent."""
+    ledger = []
+    for entry in tracker.get("depRelations") or []:
+        if (isinstance(entry, dict) and entry.get("key") == key
+                and entry.get("status") == "pending"):
+            entry = {k: v for k, v in entry.items() if k != "status"}
+            entry["updatedAt"] = now_iso()
+        ledger.append(entry)
     tracker = dict(tracker)
     tracker["depRelations"] = ledger
     return tracker

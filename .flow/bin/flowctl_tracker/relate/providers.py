@@ -14,6 +14,8 @@ from urllib.parse import quote
 
 from ..types import ErrorClass, TrackerError
 from ..wire import (
+    _MAX_PAGES,
+    _PAGE_SIZE,
     Execute,
     Result,
     _cli,
@@ -33,35 +35,75 @@ from ..wire import (
 
 def _linear_edge_exists(execute: Execute, from_id: str, to_id: str
                         ) -> Union[bool, TrackerError]:
-    """Canonicalize relations + inverseRelations (fn-64 read-before-write)."""
-    data = _gql(
-        execute, "relate-list",
-        "query($id: String!) { issue(id: $id) { id "
-        "relations(first: 50) { nodes { type relatedIssue { id } } } "
-        "inverseRelations(first: 50) { nodes { type issue { id } } } } }",
-        {"id": from_id}, idempotent=True,
+    """Canonicalize relations + inverseRelations (fn-64 read-before-write).
+
+    Drains BOTH connections cursor-by-cursor (one query per round trip, each
+    connection with its own cursor) up to the shared wire page cap. A probe
+    that cannot prove absence must not report absence: hitting the cap with
+    pages still remaining returns a TrackerError, never False.
+    """
+    query = (
+        "query($id: String!, $afterRel: String, $afterInv: String) { "
+        "issue(id: $id) { id "
+        f"relations(first: {_PAGE_SIZE}, after: $afterRel) "
+        "{ nodes { type relatedIssue { id } } "
+        "pageInfo { hasNextPage endCursor } } "
+        f"inverseRelations(first: {_PAGE_SIZE}, after: $afterInv) "
+        "{ nodes { type issue { id } } "
+        "pageInfo { hasNextPage endCursor } } } }"
     )
-    if isinstance(data, TrackerError):
-        return data
-    issue = data.get("issue")
-    if not isinstance(issue, dict):
-        return TrackerError(ErrorClass.TRANSPORT, "linear relate list malformed",
-                            subtype="malformed_body")
-    # relations: this blocks relatedIssue → from=related, to=this
-    # inverseRelations: node.issue blocks this → from=this, to=node.issue
-    for n in ((issue.get("relations") or {}).get("nodes") or []):
-        if not isinstance(n, dict) or n.get("type") != "blocks":
-            continue
-        related = n.get("relatedIssue") if isinstance(n.get("relatedIssue"), dict) else {}
-        if related.get("id") == from_id and issue.get("id") == to_id:
-            return True
-    for n in ((issue.get("inverseRelations") or {}).get("nodes") or []):
-        if not isinstance(n, dict) or n.get("type") != "blocks":
-            continue
-        blocker = n.get("issue") if isinstance(n.get("issue"), dict) else {}
-        if issue.get("id") == from_id and blocker.get("id") == to_id:
-            return True
-    return False
+    rel_cursor: Optional[str] = None
+    inv_cursor: Optional[str] = None
+    seen: set = set()
+    for _ in range(_MAX_PAGES):
+        data = _gql(
+            execute, "relate-list", query,
+            {"id": from_id, "afterRel": rel_cursor, "afterInv": inv_cursor},
+            idempotent=True,
+        )
+        if isinstance(data, TrackerError):
+            return data
+        issue = data.get("issue")
+        if not isinstance(issue, dict):
+            return TrackerError(ErrorClass.TRANSPORT, "linear relate list malformed",
+                                subtype="malformed_body")
+        rel = issue.get("relations") if isinstance(issue.get("relations"), dict) else {}
+        inv = (issue.get("inverseRelations")
+               if isinstance(issue.get("inverseRelations"), dict) else {})
+        # relations: this blocks relatedIssue → from=related, to=this
+        # inverseRelations: node.issue blocks this → from=this, to=node.issue
+        for n in (rel.get("nodes") or []):
+            if not isinstance(n, dict) or n.get("type") != "blocks":
+                continue
+            related = n.get("relatedIssue") if isinstance(n.get("relatedIssue"), dict) else {}
+            if related.get("id") == from_id and issue.get("id") == to_id:
+                return True
+        for n in (inv.get("nodes") or []):
+            if not isinstance(n, dict) or n.get("type") != "blocks":
+                continue
+            blocker = n.get("issue") if isinstance(n.get("issue"), dict) else {}
+            if issue.get("id") == from_id and blocker.get("id") == to_id:
+                return True
+        rel_info = rel.get("pageInfo") or {}
+        inv_info = inv.get("pageInfo") or {}
+        rel_more = bool(rel_info.get("hasNextPage"))
+        inv_more = bool(inv_info.get("hasNextPage"))
+        if not rel_more and not inv_more:
+            return False
+        # An exhausted connection keeps its last cursor (yields empty pages).
+        next_rel = rel_info.get("endCursor") if rel_more else rel_cursor
+        next_inv = inv_info.get("endCursor") if inv_more else inv_cursor
+        step = (next_rel, next_inv)
+        if (rel_more and not next_rel) or (inv_more and not next_inv) or step in seen:
+            return TrackerError(ErrorClass.TRANSPORT,
+                                "pagination made no progress",
+                                subtype="malformed_body")
+        seen.add(step)
+        rel_cursor, inv_cursor = next_rel, next_inv
+    return TrackerError(
+        ErrorClass.TRANSPORT,
+        "linear relation pages truncated at drain cap; edge absence unproven",
+        subtype="truncated")
 
 
 def linear_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
