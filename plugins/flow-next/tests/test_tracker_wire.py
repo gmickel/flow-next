@@ -1,7 +1,7 @@
 """Wire verbs: locator addressing + pre-mutation durable check (fn-140.1).
 
 Fake transport = the injected executor seam from fn-139.2. Every test drives
-the real wire.py against recorded response shapes — no live API.
+the real wire package against recorded response shapes — no live API.
 """
 
 from __future__ import annotations
@@ -143,7 +143,8 @@ class LocatorParsing(unittest.TestCase):
 
 class NoLocalState(unittest.TestCase):
     def test_wire_source_imports_no_receipt_and_writes_no_config(self) -> None:
-        src = (ROOT / "scripts" / "flowctl_tracker" / "wire.py").read_text()
+        wire_dir = ROOT / "scripts" / "flowctl_tracker" / "wire"
+        src = "\n".join(p.read_text(encoding="utf-8") for p in sorted(wire_dir.glob("*.py")))
         self.assertNotRegex(src, r"(?m)^\s*(from|import)\s+.*receipt")
         self.assertNotIn("resolve_transaction", src)
         # Reads config.json for destination; must never WRITE it.
@@ -411,6 +412,7 @@ class AllVerbsAllProviders(unittest.TestCase):
             ("linear", ln_cfg(), loc(LN_UUID, "WOR-17"),
              {"wire-parent-read": gql_issue(LN_ISSUE),
               "wire-comment-add": ok({"data": {"commentCreate": {
+                  "success": True,
                   "comment": {"id": "c", "body": "hi",
                               "issue": {"id": LN_UUID}}}}})}),
             ("jira", jr_cfg(), loc(JR_ID, "SCRUM-1"),
@@ -456,6 +458,9 @@ class AllVerbsAllProviders(unittest.TestCase):
         cases = [
             ("github", gh_cfg(), loc(GH_NODE, "#42"),
              {"wire-parent-read": ok(GH_ISSUE),
+              "wire-comment-belong": ok({
+                  "id": 1, "body": "x",
+                  "issue_url": "https://api.github.com/repos/o/r/issues/42"}),
               "wire-comment-update": ok({"id": 1, "body": "x"})}),
             ("gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"),
              {"wire-parent-read": ok(GL_ISSUE),
@@ -463,7 +468,10 @@ class AllVerbsAllProviders(unittest.TestCase):
                                          "noteable_id": GL_ID})}),
             ("linear", ln_cfg(), loc(LN_UUID, "WOR-17"),
              {"wire-parent-read": gql_issue(LN_ISSUE),
+              "wire-comment-belong": ok({"data": {"comment": {
+                  "id": "c", "issue": {"id": LN_UUID}}}}),
               "wire-comment-update": ok({"data": {"commentUpdate": {
+                  "success": True,
                   "comment": {"id": "c", "body": "x",
                               "issue": {"id": LN_UUID}}}}})}),
             ("jira", jr_cfg(), loc(JR_ID, "SCRUM-1"),
@@ -480,11 +488,17 @@ class AllVerbsAllProviders(unittest.TestCase):
     def test_comment_delete_all(self) -> None:
         cases = [
             ("github", gh_cfg(), loc(GH_NODE, "#42"),
-             {"wire-parent-read": ok(GH_ISSUE), "wire-comment-delete": empty()}),
+             {"wire-parent-read": ok(GH_ISSUE),
+              "wire-comment-belong": ok({
+                  "id": 1, "body": "x",
+                  "issue_url": "https://api.github.com/repos/o/r/issues/42"}),
+              "wire-comment-delete": empty()}),
             ("gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"),
              {"wire-parent-read": ok(GL_ISSUE), "wire-comment-delete": empty()}),
             ("linear", ln_cfg(), loc(LN_UUID, "WOR-17"),
              {"wire-parent-read": gql_issue(LN_ISSUE),
+              "wire-comment-belong": ok({"data": {"comment": {
+                  "id": "1", "issue": {"id": LN_UUID}}}}),
               "wire-comment-delete": ok({"data": {"commentDelete": {
                   "success": True}}})}),
             ("jira", jr_cfg(), loc(JR_ID, "SCRUM-1"),
@@ -509,7 +523,7 @@ class AllVerbsAllProviders(unittest.TestCase):
             ("linear", ln_cfg(), loc(LN_UUID, "WOR-17"),
              {"wire-parent-read": gql_issue(LN_ISSUE),
               "wire-label": ok({"data": {"issueUpdate": {
-                  "issue": LN_ISSUE}}})}, ["ready"]),
+                  "success": True, "issue": LN_ISSUE}}})}, ["ready"]),
             ("jira", jr_cfg(), loc(JR_ID, "SCRUM-1"),
              {"wire-parent-read": ok(JR_ISSUE), "wire-label": empty()},
              ["ready"]),
@@ -532,7 +546,7 @@ class AllVerbsAllProviders(unittest.TestCase):
             ("linear", ln_cfg(), loc(LN_UUID, "WOR-17"),
              {"wire-parent-read": gql_issue(LN_ISSUE),
               "wire-assign": ok({"data": {"issueUpdate": {
-                  "issue": LN_ISSUE}}})}, ["user-2"]),
+                  "success": True, "issue": LN_ISSUE}}})}, ["user-2"]),
             ("jira", jr_cfg(), loc(JR_ID, "SCRUM-1"),
              {"wire-parent-read": ok(JR_ISSUE), "wire-assign": empty()},
              ["acct-2"]),
@@ -762,7 +776,133 @@ class PaginationIsDrainedNeverSilentlyCapped(unittest.TestCase):
 class NoAssertsInProductionPaths(unittest.TestCase):
     def test_wire_module_contains_no_assert_statements(self) -> None:
         import ast
-        src = (ROOT / "scripts" / "flowctl_tracker" / "wire.py").read_text(encoding="utf-8")
-        asserts = [n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Assert)]
+        wire_dir = ROOT / "scripts" / "flowctl_tracker" / "wire"
+        asserts = []
+        for path in sorted(wire_dir.glob("*.py")):
+            asserts.extend(
+                n for n in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+                if isinstance(n, ast.Assert))
         self.assertEqual(asserts, [],
                          "asserts vanish under -O and raise across the never-raises boundary")
+
+
+# ---------------------------------------------------------------------------
+# Review follow-ups (fn-140.1): success honesty, comment parent bind, list aggregate
+# ---------------------------------------------------------------------------
+
+
+class LinearMutationSuccessRequired(unittest.TestCase):
+    def test_comment_delete_success_false_is_mutation_failed(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-comment-belong": ok({"data": {"comment": {
+                "id": "c1", "issue": {"id": LN_UUID}}}}),
+            "wire-comment-delete": ok({"data": {"commentDelete": {"success": False}}}),
+        })
+        out = W.dispatch("comment-delete", ln_cfg(),
+                         locator=loc(LN_UUID, "WOR-17"), comment_id="c1", execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "mutation_failed")
+        self.assertNotIn("deleted", out.__dict__.get("details") or {})
+
+    def test_comment_delete_null_payload_is_mutation_failed(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-comment-belong": ok({"data": {"comment": {
+                "id": "c1", "issue": {"id": LN_UUID}}}}),
+            "wire-comment-delete": ok({"data": {"commentDelete": None}}),
+        })
+        out = W.dispatch("comment-delete", ln_cfg(),
+                         locator=loc(LN_UUID, "WOR-17"), comment_id="c1", execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "mutation_failed")
+
+    def test_update_success_false_with_issue_present_is_error(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-update": ok({"data": {"issueUpdate": {
+                "success": False, "issue": dict(LN_ISSUE, title="N")}}}),
+        })
+        out = W.dispatch("update", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         title="N", execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "mutation_failed")
+
+
+class CommentParentBelongCheck(unittest.TestCase):
+    """comment-update/delete must bind comment_id to the locator parent."""
+
+    def test_github_comment_update_mismatch_skips_mutation(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": ok(GH_ISSUE),
+            "wire-comment-belong": ok({
+                "id": 99, "body": "x",
+                "issue_url": "https://api.github.com/repos/o/r/issues/999"}),
+        })
+        out = W.dispatch("comment-update", gh_cfg(), locator=loc(GH_NODE, "#42"),
+                         comment_id="99", body="x", execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "comment_parent_mismatch")
+        self.assertEqual([c.op for c in ex.calls],
+                         ["wire-parent-read", "wire-comment-belong"])
+
+    def test_github_comment_delete_mismatch_skips_mutation(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": ok(GH_ISSUE),
+            "wire-comment-belong": ok({
+                "id": 99, "body": "x",
+                "issue_url": "https://api.github.com/repos/o/r/issues/7"}),
+        })
+        out = W.dispatch("comment-delete", gh_cfg(), locator=loc(GH_NODE, "#42"),
+                         comment_id="99", execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "comment_parent_mismatch")
+        self.assertNotIn("wire-comment-delete", [c.op for c in ex.calls])
+
+    def test_linear_comment_update_mismatch_skips_mutation(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-comment-belong": ok({"data": {"comment": {
+                "id": "c-other", "issue": {"id": "other-uuid"}}}}),
+        })
+        out = W.dispatch("comment-update", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         comment_id="c-other", body="x", execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "comment_parent_mismatch")
+        self.assertNotIn("wire-comment-update", [c.op for c in ex.calls])
+
+    def test_linear_comment_delete_mismatch_skips_mutation(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-comment-belong": ok({"data": {"comment": {
+                "id": "c-other", "issue": {"id": "other-uuid"}}}}),
+        })
+        out = W.dispatch("comment-delete", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         comment_id="c-other", execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "comment_parent_mismatch")
+        self.assertEqual([c.op for c in ex.calls],
+                         ["wire-parent-read", "wire-comment-belong"])
+
+
+class GitlabCommentListAggregateHonesty(unittest.TestCase):
+    def test_empty_list_is_not_available(self) -> None:
+        ex = fake_execute({"wire-comment-list": ok([])})
+        out = W.dispatch("comment-list", gl_cfg(),
+                         locator=loc(str(GL_ID), "g/p#12"), execute=ex)
+        self.assertEqual(out["comments"], [])
+        self.assertEqual(out["parent_identity"], "not_available")
+
+    def test_note_without_noteable_id_is_not_available(self) -> None:
+        ex = fake_execute({"wire-comment-list": ok([
+            {"id": 1, "body": "a", "system": False},  # no noteable_id
+        ])})
+        out = W.dispatch("comment-list", gl_cfg(),
+                         locator=loc(str(GL_ID), "g/p#12"), execute=ex)
+        self.assertEqual(len(out["comments"]), 1)
+        self.assertEqual(out["comments"][0]["parent_identity"], "not_available")
+        self.assertEqual(out["parent_identity"], "not_available")

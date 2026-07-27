@@ -65,8 +65,24 @@
       "sha256": "cf82da7cc603529bc68e5ef5993ed67bccf42b8f42538493382dca70f03c9119"
     },
     {
-      "path": "flowctl_tracker/wire.py",
-      "sha256": "634047e96a894892335eb6f99a97bfae2f7836d08b75be1f6aaf66f1a3218f4a"
+      "path": "flowctl_tracker/wire/__init__.py",
+      "sha256": "5b8e31d27a6d67661305071fcfb68558ca1bc7ee7d6ceb2c18ef2cc89423eaff"
+    },
+    {
+      "path": "flowctl_tracker/wire/github.py",
+      "sha256": "687b60fc4fb10f7611b043e5b9d70a6988bf5a6ad7c48f4bf14be9fe026fee58"
+    },
+    {
+      "path": "flowctl_tracker/wire/gitlab.py",
+      "sha256": "9d28599239a884d9ebf23c3cb63f4d669add282cc0dd510cb6bd225b8e611960"
+    },
+    {
+      "path": "flowctl_tracker/wire/jira.py",
+      "sha256": "daf64f2ab34580c48ad546f8737f2c261b6307b84edbf522a0ade71dbbf0a54a"
+    },
+    {
+      "path": "flowctl_tracker/wire/linear.py",
+      "sha256": "f4023da1e43674adae2903b1f252e2bbecd5ce8bb194314bf077a2f141f074a4"
     }
   ],
   "generated_by": "scripts/gen_tracker_manifest.py",
