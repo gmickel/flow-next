@@ -1,3 +1,12 @@
+# THIS GATE IS CODE QUALITY ONLY. It must never change prompt text.
+#
+# Prompts are the product. Do NOT select any rule that can rewrite the contents
+# of a string literal - ISC (implicit concat), Q (quote style), UP032 (f-string
+# conversion), COM, W291/W293, and the D docstring family all can. The current
+# select touches control flow, names, and imports; it never edits prose.
+# `test_prompt_text_pinned.py` pins every prompt by SHA-256 and will fail if a
+# lint or refactor pass alters one, deliberately or not.
+#
 # Ruff 0.16 enables 413 rules by default (up from 59). We do not take that set:
 # flowctl is a 33k-LOC single file with deliberate fail-open error handling, and
 # a wholesale style sweep would be churn. This select is correctness-only -

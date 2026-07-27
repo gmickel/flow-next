@@ -64,11 +64,13 @@ PARITY_PAIRS = [
         "COMPLETION_REVIEW_PROMPT_FALLBACK",
         "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
     ),
-    (
-        "VALIDATOR_TEMPLATE_FALLBACK",
-        "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md",
-    ),
 ]
+
+# NOT in PARITY_PAIRS, deliberately: VALIDATOR_TEMPLATE_FALLBACK and
+# DEEP_PASSES_FALLBACK are hand-written CONDENSATIONS of their templates
+# (authored that way in #118), not byte-identical mirrors like the four above.
+# The fn-112.3 byte-identical rule was introduced for the extracted review
+# prompts and does not apply to them. Do not "fix" the difference.
 
 # Fixed inputs used when freezing fixtures/review_prompts/*.txt
 _SPEC = "SPEC_BODY_LINE1\nSPEC_BODY_LINE2"
@@ -177,63 +179,18 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self.assertIn("launch another reviewer", prompt)
 
 
-class TestDeepPassFallbackParity(unittest.TestCase):
-    """Same invariant as PARITY_PAIRS, one loader down.
+class TestDeepPassFallbackCoverage(unittest.TestCase):
+    """Structural checks only - deliberately NOT a content comparison.
 
-    DEEP_PASSES_FALLBACK is a dict rather than a flat constant, so it sat
-    outside the PARITY_PAIRS table and drifted unnoticed: all three passes had
-    been compressed to roughly 40% of their deep-passes.md bodies. The file
-    ships in the Codex mirror, so the fallback fires only on stripped installs
-    - which is exactly why nobody noticed.
-
-    Comparing through ``load_deep_pass_template`` rather than re-implementing
-    the marker/fence extraction keeps this honest: if the parser changes, this
-    test follows it instead of pinning a stale copy of its logic.
+    DEEP_PASSES_FALLBACK entries are hand-written condensations of the
+    deep-passes.md blocks (#118), not copies of them. Asserting byte-identity
+    here would be asserting a rule this repo never adopted for these loaders.
+    What DOES need guarding is structural: a declared pass with no fallback
+    entry is a KeyError on exactly the stripped installs the fallback exists
+    for, and a missing template file breaks the normal path for everyone else.
     """
 
-    def _extract_from_disk(self, pass_name: str) -> str:
-        """Return the on-disk block, proving it did not come from the fallback.
-
-        ``load_deep_pass_template`` degrades to ``DEEP_PASSES_FALLBACK`` when a
-        marker or fence goes missing. A naive parity assertion would then be
-        comparing the fallback against itself and passing - blind to exactly
-        the template/parser drift it exists to catch (#245 review).
-
-        Swapping a sentinel in for the duration of the call closes that: if
-        extraction silently failed, the sentinel comes back and we say so
-        instead of quietly succeeding. This keeps the guard following the real
-        parser rather than pinning a second copy of its marker/fence logic.
-        """
-        sentinel = f"<<DEEP-PASS-FALLBACK-USED:{pass_name}>>"
-        real = flowctl.DEEP_PASSES_FALLBACK[pass_name]
-        flowctl.DEEP_PASSES_FALLBACK[pass_name] = sentinel
-        try:
-            got = flowctl.load_deep_pass_template(pass_name)
-        finally:
-            flowctl.DEEP_PASSES_FALLBACK[pass_name] = real
-        self.assertNotEqual(
-            got, sentinel,
-            f"load_deep_pass_template({pass_name!r}) fell back instead of parsing "
-            f"{flowctl.DEEP_PASSES_TEMPLATE_REL} - the "
-            f"<!-- {pass_name.upper()}_TEMPLATE --> marker or its ```markdown "
-            f"fence is missing or renamed.",
-        )
-        return got
-
-    def test_every_pass_fallback_matches_the_template_block(self) -> None:
-        for pass_name in flowctl.DEEP_PASSES:
-            with self.subTest(deep_pass=pass_name):
-                extracted = self._extract_from_disk(pass_name)
-                self.assertEqual(
-                    _normalize(extracted),
-                    _normalize(flowctl.DEEP_PASSES_FALLBACK[pass_name]),
-                    f"DEEP_PASSES_FALLBACK[{pass_name!r}] drifted from "
-                    f"{flowctl.DEEP_PASSES_TEMPLATE_REL} - keep the embedded copy "
-                    f"byte-identical to the template block.",
-                )
-
     def test_fallback_covers_every_declared_pass(self) -> None:
-        """A pass with no fallback entry is a KeyError on stripped installs."""
         self.assertEqual(
             sorted(flowctl.DEEP_PASSES), sorted(flowctl.DEEP_PASSES_FALLBACK)
         )
@@ -243,6 +200,30 @@ class TestDeepPassFallbackParity(unittest.TestCase):
         self.assertTrue(
             path.is_file(), f"DEEP_PASSES_TEMPLATE_REL missing on disk: {path}"
         )
+
+    def test_every_pass_parses_out_of_the_template(self) -> None:
+        """The marker/fence path must work - without pinning what it returns.
+
+        A sentinel in the fallback slot proves extraction actually reached the
+        file, so a renamed marker or broken ```markdown fence fails loudly
+        instead of silently degrading to the condensed copy.
+        """
+        for pass_name in flowctl.DEEP_PASSES:
+            with self.subTest(deep_pass=pass_name):
+                sentinel = f"<<DEEP-PASS-FALLBACK-USED:{pass_name}>>"
+                real = flowctl.DEEP_PASSES_FALLBACK[pass_name]
+                flowctl.DEEP_PASSES_FALLBACK[pass_name] = sentinel
+                try:
+                    got = flowctl.load_deep_pass_template(pass_name)
+                finally:
+                    flowctl.DEEP_PASSES_FALLBACK[pass_name] = real
+                self.assertNotEqual(
+                    got, sentinel,
+                    f"load_deep_pass_template({pass_name!r}) fell back instead of "
+                    f"parsing {flowctl.DEEP_PASSES_TEMPLATE_REL} - the "
+                    f"<!-- {pass_name.upper()}_TEMPLATE --> marker or its "
+                    f"```markdown fence is missing or renamed.",
+                )
 
 
 class TestValidatorTemplateRepoRootPath(unittest.TestCase):

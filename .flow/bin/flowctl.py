@@ -21345,34 +21345,22 @@ VALIDATOR_TEMPLATE_REL = (
 )
 
 # Fallback template body if the on-disk file is missing (global installs, Codex
-# mirror, or stripped-down deployments). Keep byte-identical to validate-pass.md
-# - test_review_prompt_template_parity fails on drift (fn-112.3 invariant).
+# mirror, or stripped-down deployments). Keep in sync with validate-pass.md.
 VALIDATOR_TEMPLATE_FALLBACK = """# Validator prompt (fn-32.1 --validate)
 
-You are validating review findings for false positives. The primary review has
-already produced a NEEDS_WORK verdict with a list of findings. For each finding
-below, independently re-check it against the **current code** and decide whether
-the finding is actually valid.
+You are validating review findings for false positives. For each finding below,
+independently re-check it against the **current code** and decide whether the
+finding is actually valid.
 
 **Conservative bias — only drop findings that are clearly wrong.** When
-uncertain, keep the finding. A kept false-positive is cheap (one extra check by
-the fixer); a dropped real bug is expensive (escapes to production).
+uncertain, keep the finding. A kept false-positive is cheap; a dropped real bug
+is expensive.
 
-## Procedure
-
-For each finding:
-
-1. Open the cited file and read around the cited line (±20 lines of context).
-2. Check whether the claimed issue is actually present in the current code.
-3. Look for guards, handlers, or assumptions that address the concern elsewhere
-   in the call chain (the primary reviewer may have missed them).
-4. Consider whether the finding is factually correct about the language /
-   framework / library semantics.
+For each finding: open the cited file, read ±20 lines around the cited line,
+check whether the claimed issue is actually present, and look for guards /
+handlers / assumptions that address the concern elsewhere.
 
 Do **not** re-score confidence, re-classify severity, or invent new findings.
-Decide only: is this finding a real issue in the current code, or not?
-
-## Output format
 
 Return exactly one line per finding in this strict format:
 
@@ -21380,21 +21368,9 @@ Return exactly one line per finding in this strict format:
 <finding-id>: validated: <true|false> -- <one-sentence reason>
 ```
 
-Examples:
-
-```
-f1: validated: true -- null deref confirmed; no upstream guard
-f2: validated: false -- null check already present at src/auth.ts:40
-f3: validated: true -- race condition reproducible with concurrent requests
-f4: validated: false -- suggested fix misunderstands TypeScript narrowing
-```
-
 Rules:
-- One line per finding id. Missing ids are treated as `validated: true`
-  (conservative — when you say nothing, the finding stays).
-- Reason must fit on one line (≤200 chars is a good cap).
-- Use the literal tokens `validated: true` or `validated: false`. No synonyms.
-- Emit the lines anywhere in your response — the parser finds them by regex.
+- One line per finding id. Missing ids default to `validated: true`.
+- Use the literal tokens `validated: true` or `validated: false`.
 
 ## Findings to validate
 
@@ -21962,115 +21938,56 @@ DEEP_PASSES_TEMPLATE_REL = (
 DEEP_PASSES_FALLBACK: dict[str, str] = {
     "adversarial": """# Adversarial pass
 
-You've already reviewed this diff and produced primary findings. Now switch modes.
-
-Instead of evaluating against known patterns, **construct specific scenarios
-that break this implementation.** Think in sequences: "if this happens, then
-that happens, which causes this to fail."
+You've already reviewed this diff. Switch modes: construct specific scenarios
+that break this implementation. Think in sequences — "if X then Y then Z."
 
 Techniques:
+1. Assumption violation — data shapes, timing, ordering, value ranges.
+2. Composition failures — contract mismatches, shared state, ordering.
+3. Cascade construction — multi-step failure chains.
+4. Abuse cases — malicious or naive caller scenarios.
 
-1. **Assumption violation** — what assumptions does this code make? (data
-   shapes, timing, ordering, value ranges) Where is each violable?
-2. **Composition failures** — where do components interact? Contract mismatches,
-   shared state mutations, ordering across boundaries, error-type divergence.
-3. **Cascade construction** — build multi-step failure chains: A causes B causes
-   C. Do not stop at a single failure if a chain is visible.
-4. **Abuse cases** — how would a malicious or naive user/caller break this?
+Do not re-surface primary findings. Probe for what wasn't caught.
 
-Do not re-surface findings you already flagged in the primary review. **Probe
-for what wasn't caught.** If you find nothing new, say so — it is a valid
-result.
-
-## Output format
-
-Same format as primary review — severity, confidence anchor (0/25/50/75/100),
-classification (introduced/pre_existing), file:line, suggested fix. Prefix each
-finding's id with `a` to distinguish from primary (`a1`, `a2`, ...) and tag the
-finding with `pass: adversarial`.
-
-Example:
-
-    **a1** | severity=P1 | confidence=75 | classification=introduced | pass=adversarial
-    - location: `src/auth.ts:42`
-    - issue: cascade — if upstream rate-limiter resets mid-request, middleware reuses stale token
-    - suggested fix: re-validate token after any upstream transition
-
-## Suppression gate
-
-Suppress findings below anchor 75 except P0 @ 50+ (same rule as primary).
-Report suppressed count in a `Suppressed findings (adversarial):` line.
+Output format: severity, confidence anchor (0/25/50/75/100), classification
+(introduced/pre_existing), file:line, suggested fix. Prefix ids with `a`.
+Tag findings `pass: adversarial`. Suppress <75 except P0 @ 50+.
 
 ## Primary findings (for context; do NOT re-flag)
 
-<!-- PRIMARY_FINDINGS_BLOCK -->""",
+<!-- PRIMARY_FINDINGS_BLOCK -->
+""",
     "security": """# Security pass
 
-Specialized security review. Primary findings are available as context — do not
-re-flag issues already listed there.
+Specialized security review. Primary findings are context — do not re-flag.
 
-Focus areas:
+Focus: authN gaps, authZ gaps (IDOR, privilege escalation), input handling
+(injection, XSS, SSRF, path traversal), secrets handling, permission
+boundaries (TOCTOU, race conditions).
 
-- **Authentication gaps** — missing auth checks on endpoints, session handling
-  flaws, credential rotation issues.
-- **Authorization gaps** — missing ownership checks, IDOR patterns, privilege
-  escalation, tenant-boundary violations.
-- **Input handling** — injection (SQL, command, template, LDAP), deserialization
-  issues, XSS, SSRF, path traversal.
-- **Secrets handling** — hardcoded credentials, token leakage in logs,
-  insecure storage, secret sprawl.
-- **Permission boundaries** — TOCTOU, race conditions on auth state, trust
-  boundaries crossed, client-side-only checks.
-
-Probe for specific security patterns the primary review's generalist framing
-may have missed. If you find nothing new, say so.
-
-## Output format
-
-Same format as primary. Prefix each finding's id with `s` (`s1`, `s2`, ...) and
-tag with `pass: security`.
-
-## Suppression gate
-
-Same rule as primary (suppress <75 except P0 @ 50+). Report suppressed count in
-a `Suppressed findings (security):` line.
+Output format: same as primary. Prefix ids with `s`. Tag findings
+`pass: security`. Suppress <75 except P0 @ 50+.
 
 ## Primary findings (for context; do NOT re-flag)
 
-<!-- PRIMARY_FINDINGS_BLOCK -->""",
+<!-- PRIMARY_FINDINGS_BLOCK -->
+""",
     "performance": """# Performance pass
 
-Specialized performance review.
+Specialized performance review. Primary findings are context — do not re-flag.
 
-Focus areas:
+Focus: database (N+1, missing indexes, large scans), algorithmic (O(n²)
+where O(n) suffices, unbounded loops), I/O (sequential parallelizable,
+sync-in-hot-path, missing cache), memory (unbounded growth, GC pressure),
+concurrency (contention, lock ordering).
 
-- **Database** — N+1 queries, missing indexes, large scans, transaction scope
-  too wide, lock contention.
-- **Algorithmic** — O(n²) where O(n) suffices, unbounded loops, repeated
-  computations of pure results, recursive calls that could memoize.
-- **I/O** — sequential calls that could parallelize, sync calls in hot paths,
-  missing cache, chatty protocols, large payloads.
-- **Memory** — unbounded growth, reference leaks, large-object allocations in
-  loops, GC-pressure patterns.
-- **Concurrency** — contention, lock ordering, async-over-sync anti-patterns,
-  missing backpressure.
-
-Do not re-flag issues already in primary findings. Probe for specific
-performance patterns the primary's generalist framing may have missed.
-
-## Output format
-
-Same format as primary. Prefix each finding's id with `p` (`p1`, `p2`, ...) and
-tag with `pass: performance`.
-
-## Suppression gate
-
-Same rule as primary (suppress <75 except P0 @ 50+). Report suppressed count in
-a `Suppressed findings (performance):` line.
+Output format: same as primary. Prefix ids with `p`. Tag findings
+`pass: performance`. Suppress <75 except P0 @ 50+.
 
 ## Primary findings (for context; do NOT re-flag)
 
-<!-- PRIMARY_FINDINGS_BLOCK -->""",
+<!-- PRIMARY_FINDINGS_BLOCK -->
+""",
 }
 
 # Confidence anchor order for cross-pass promotion.
