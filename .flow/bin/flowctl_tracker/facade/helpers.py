@@ -277,7 +277,15 @@ def link_state_of(tracker: dict) -> str:
 
 
 def collect_degraded(*parts: Any) -> Optional[dict]:
+    """First structured degradation across step results - including the
+    NESTED write payload: the status verb reports label degradation under
+    result["write"]["degraded"], which the top-level check silently lost."""
     for p in parts:
-        if isinstance(p, dict) and p.get("degraded"):
+        if not isinstance(p, dict):
+            continue
+        if p.get("degraded"):
             return p["degraded"]
+        write = p.get("write")
+        if isinstance(write, dict) and write.get("degraded"):
+            return write["degraded"]
     return None

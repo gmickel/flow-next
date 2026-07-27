@@ -921,3 +921,20 @@ class FacadeMatrix(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FacadeDegradationPropagation(unittest.TestCase):
+    def test_status_write_degradation_reaches_response_and_receipt(self) -> None:
+        """The status verb nests label degradation under result['write'];
+        the facade must surface it in BOTH the response and the aggregate
+        receipt, never silently drop it."""
+        from flowctl_tracker.facade import helpers as FH
+        nested = {"kind": "status_labels_inconsistent",
+                  "expected": ["status:done"], "present": []}
+        got = FH.collect_degraded({"kind": "applied",
+                                   "write": {"degraded": nested}})
+        self.assertEqual(got, nested)
+        # top-level still wins when present
+        top = {"kind": "relates_to"}
+        self.assertEqual(FH.collect_degraded({"degraded": top}), top)
+        self.assertIsNone(FH.collect_degraded({"kind": "noop"}, None))
