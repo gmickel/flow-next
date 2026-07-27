@@ -158,7 +158,8 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               tracker_body: Optional[str] = None,
               direction: str = "push",
               event: Optional[str] = None,
-              execute: Execute = default_execute) -> Result:
+              execute: Execute = default_execute,
+              write_receipt: bool = True) -> Result:
     """Write (optional) + readback + paired merge base. Never raises."""
     flow_dir = Path(flow_dir)
     if not spec_id:
@@ -209,17 +210,18 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
         )
         if isinstance(committed, TrackerError):
             return committed
-        rerr = write_sync_receipt(
-            flow_dir, spec_id=spec_id, status="pulled",
-            tracker_id=durable, event=event, transport=provider,
-            note="sync-body pull seeded paired merge base",
-        )
-        if rerr:
-            return TrackerError(
-                rerr.cls, rerr.message, subtype=rerr.subtype,
-                details={**(rerr.details or {}),
-                         "completed_steps": ["paired-base"]},
-                auto_retryable=rerr.auto_retryable)
+        if write_receipt:
+            rerr = write_sync_receipt(
+                flow_dir, spec_id=spec_id, status="pulled",
+                tracker_id=durable, event=event, transport=provider,
+                note="sync-body pull seeded paired merge base",
+            )
+            if rerr:
+                return TrackerError(
+                    rerr.cls, rerr.message, subtype=rerr.subtype,
+                    details={**(rerr.details or {}),
+                             "completed_steps": ["paired-base"]},
+                    auto_retryable=rerr.auto_retryable)
         return {
             "kind": "pulled",
             "direction": "pull",
@@ -284,17 +286,18 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
         )
         if isinstance(committed, TrackerError):
             return committed
-        rerr = write_sync_receipt(
-            flow_dir, spec_id=spec_id, status="pushed",
-            tracker_id=durable, event=event, transport=provider,
-            note="sync-body no-op seeded paired merge base",
-        )
-        if rerr:
-            return TrackerError(
-                rerr.cls, rerr.message, subtype=rerr.subtype,
-                details={**(rerr.details or {}),
-                         "completed_steps": ["paired-base"]},
-                auto_retryable=rerr.auto_retryable)
+        if write_receipt:
+            rerr = write_sync_receipt(
+                flow_dir, spec_id=spec_id, status="pushed",
+                tracker_id=durable, event=event, transport=provider,
+                note="sync-body no-op seeded paired merge base",
+            )
+            if rerr:
+                return TrackerError(
+                    rerr.cls, rerr.message, subtype=rerr.subtype,
+                    details={**(rerr.details or {}),
+                             "completed_steps": ["paired-base"]},
+                    auto_retryable=rerr.auto_retryable)
         return {
             "kind": "seeded",
             "direction": "push",
@@ -343,17 +346,18 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
             auto_retryable=committed.auto_retryable,
         )
 
-    rerr = write_sync_receipt(
-        flow_dir, spec_id=spec_id, status="pushed",
-        tracker_id=durable, event=event, transport=provider,
-        note="sync-body push wrote body + paired merge base",
-    )
-    if rerr:
-        return TrackerError(
-            rerr.cls, rerr.message, subtype=rerr.subtype,
-            details={**(rerr.details or {}),
-                     "completed_steps": ["wire-update", "wire-read", "paired-base"]},
-            auto_retryable=rerr.auto_retryable)
+    if write_receipt:
+        rerr = write_sync_receipt(
+            flow_dir, spec_id=spec_id, status="pushed",
+            tracker_id=durable, event=event, transport=provider,
+            note="sync-body push wrote body + paired merge base",
+        )
+        if rerr:
+            return TrackerError(
+                rerr.cls, rerr.message, subtype=rerr.subtype,
+                details={**(rerr.details or {}),
+                         "completed_steps": ["wire-update", "wire-read", "paired-base"]},
+                auto_retryable=rerr.auto_retryable)
 
     return {
         "kind": "pushed",

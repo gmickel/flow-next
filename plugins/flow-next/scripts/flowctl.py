@@ -24080,6 +24080,49 @@ def cmd_tracker_syncbody(args: argparse.Namespace) -> None:
     sys.exit(code)
 
 
+def _import_tracker_facade():
+    """Guarded import matching cmd_tracker_syncbody / cmd_tracker_wire."""
+    try:
+        from flowctl_tracker import facade as tracker_facade  # noqa: PLC0415
+        return tracker_facade
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import facade as tracker_facade  # noqa: PLC0415
+            return tracker_facade
+        except ImportError:
+            return None
+
+
+def cmd_tracker_facade(args: argparse.Namespace) -> None:
+    """`flowctl tracker sync <spec-id> --op ...` (fn-140.7 lifecycle facade).
+
+    Distinct from legacy `flowctl sync ...` plumbing. One aggregate receipt;
+    judgment-bearing content always arrives as an input file.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_facade = _import_tracker_facade()
+    if tracker_facade is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_facade.run(
+        get_flow_dir(),
+        spec_id=getattr(args, "spec_id", None),
+        op=getattr(args, "op", None),
+        event=getattr(args, "event", None),
+        flow_file=getattr(args, "flow_file", None),
+        body_file=getattr(args, "body_file", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
 def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
     """Atomic pre-spec recovery records for tracker-sync `create-first`.
 
@@ -31570,6 +31613,35 @@ def main() -> None:
     p_tracker_syncbody.add_argument("--json", action="store_true",
                                     help="Accepted and ignored (output is always JSON)")
     p_tracker_syncbody.set_defaults(func=cmd_tracker_syncbody)
+
+    # lifecycle facade (fn-140.7) — distinct from legacy `flowctl sync ...`.
+    p_tracker_sync = tracker_sub.add_parser(
+        "sync",
+        help="Lifecycle facade: push|pull|reconcile|comment as one unit "
+             "(create-if-unlinked, sequence, marker dedup, one aggregate receipt)",
+    )
+    p_tracker_sync.add_argument("spec_id", help="Spec ID")
+    p_tracker_sync.add_argument(
+        "--op", required=True, choices=["push", "pull", "reconcile", "comment"],
+        help="Facade op (matches perEvent vocabulary)",
+    )
+    p_tracker_sync.add_argument(
+        "--event", required=True,
+        help="perEvent key stamped on the single aggregate sync receipt",
+    )
+    p_tracker_sync.add_argument(
+        "--flow-file", default=None, dest="flow_file",
+        help="Agent-rendered local body (required for push/reconcile; "
+             "forbidden for pull/comment)",
+    )
+    p_tracker_sync.add_argument(
+        "--body-file", default=None, dest="body_file",
+        help="Comment text or agent-approved tracker half (required for "
+             "comment/reconcile; forbidden for push)",
+    )
+    p_tracker_sync.add_argument("--json", action="store_true",
+                                help="Accepted and ignored (output is always JSON)")
+    p_tracker_sync.set_defaults(func=cmd_tracker_facade)
 
     p_sync = subparsers.add_parser(
         "sync", help="Tracker sync plumbing (config / state / enumerate / receipt)"

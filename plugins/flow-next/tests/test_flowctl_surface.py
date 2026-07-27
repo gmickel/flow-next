@@ -180,6 +180,7 @@ tracker persist-external
 tracker status
 tracker relate
 tracker sync-body
+tracker sync
 tracker wire read
 tracker wire update
 tracker wire comment-add

@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "6a87b40438d61589c37fe9f5692d299a4417528e4c2233986735759cc24f0a7c"
+      "sha256": "3432976f910180f6bd1ebe508ca31b36cb73db5deb8f23e8596a2f069c810bb6"
     },
     {
       "path": "flowctl_tracker/__init__.py",
@@ -37,6 +37,22 @@
       "sha256": "bfadd07876a06dfd7b27724435773305f00f5feded15d8a992ab1878eebd53da"
     },
     {
+      "path": "flowctl_tracker/facade/__init__.py",
+      "sha256": "b29362e8b6eab37d5d27b8db49252a16b7f4df13bc437d440ce7a64b0a2ec44f"
+    },
+    {
+      "path": "flowctl_tracker/facade/helpers.py",
+      "sha256": "89857e91bcc6a24aaf295ac4929b394989e554365c25a4c98d82ccf2f8f19b9c"
+    },
+    {
+      "path": "flowctl_tracker/facade/ops.py",
+      "sha256": "8aef232b5c45b62aba1dd50e85c3548a6cd167fbb4773027efd6fc963d6e2fe9"
+    },
+    {
+      "path": "flowctl_tracker/facade/steps.py",
+      "sha256": "be54fde9f754bd59c57720475803a48512b74b1e76bebda8c5e15fa5100a45b4"
+    },
+    {
       "path": "flowctl_tracker/lifecycle/__init__.py",
       "sha256": "90897266fe4b5eeedfdb61c1fb7bdd08b16299c7d051cdc5caf7a0357eb8e1f4"
     },
@@ -54,7 +70,7 @@
     },
     {
       "path": "flowctl_tracker/lifecycle/verbs.py",
-      "sha256": "fcafc8e7f1950765ecdf90f3582324d80a6b92a4395a7152872f2cd66392449f"
+      "sha256": "c03fe4fee7f1aee903c39fc627ad33b2321792a1086349b268b505fbee7445fd"
     },
     {
       "path": "flowctl_tracker/providers/__init__.py",
@@ -114,11 +130,11 @@
     },
     {
       "path": "flowctl_tracker/status/verb.py",
-      "sha256": "7cf54449e5ac2c640efc8ae1e1d649e2e85ec4e32dccb633434a148236f162fb"
+      "sha256": "dedb859de72df105662c4970e8047c987ea647e541179c622090b7b6d1c6c1e9"
     },
     {
       "path": "flowctl_tracker/syncbody/__init__.py",
-      "sha256": "88f15f5871d9effd8d42c94b53a17f7d40547372b9e66a857c928b87e06bff6c"
+      "sha256": "6126e82de4c65b088a9af512ce118ba51b079bab9ffa13147433f09148fee103"
     },
     {
       "path": "flowctl_tracker/types.py",

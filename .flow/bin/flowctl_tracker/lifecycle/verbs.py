@@ -20,7 +20,8 @@ from .providers import provider_create
 
 def create(flow_dir, spec_id: str, *, title: str, body: str,
            event: Optional[str] = None,
-           execute: Execute = default_execute) -> Result:
+           execute: Execute = default_execute,
+           write_receipt: bool = True) -> Result:
     """Spec exists → provider create → atomic tracker block + sync receipt."""
     flow_dir = Path(flow_dir)
     config = read_config(flow_dir)
@@ -57,20 +58,21 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
     err = write_tracker_block(path, spec_data, tracker)
     if err:
         return err
-    err = write_sync_receipt(
-        flow_dir, spec_id=spec_id, status="pushed",
-        tracker_id=created["id"], event=event, transport=provider,
-    )
-    if err:
-        # The issue exists and the link IS persisted - a bare failure here
-        # would read as "nothing happened" and invite a duplicating retry.
-        # TrackerError is frozen: rebuild with the completed-steps detail.
-        import dataclasses  # noqa: PLC0415
-        return dataclasses.replace(err, details={
-            **(err.details or {}),
-            "completed_steps": ["create", "link"],
-            "id": created["id"],
-            "identifier": created["identifier"]})
+    if write_receipt:
+        err = write_sync_receipt(
+            flow_dir, spec_id=spec_id, status="pushed",
+            tracker_id=created["id"], event=event, transport=provider,
+        )
+        if err:
+            # The issue exists and the link IS persisted - a bare failure here
+            # would read as "nothing happened" and invite a duplicating retry.
+            # TrackerError is frozen: rebuild with the completed-steps detail.
+            import dataclasses  # noqa: PLC0415
+            return dataclasses.replace(err, details={
+                **(err.details or {}),
+                "completed_steps": ["create", "link"],
+                "id": created["id"],
+                "identifier": created["identifier"]})
     return {"id": created["id"], "identifier": created["identifier"],
             "url": created.get("url"), "linkState": "linked"}
 
