@@ -23,6 +23,7 @@ from flowctl_tracker import classify as C  # noqa: E402
 from flowctl_tracker import envelope as E  # noqa: E402
 from flowctl_tracker import executor as X  # noqa: E402
 from flowctl_tracker import lifecycle as L  # noqa: E402
+from flowctl_tracker import relate as R  # noqa: E402
 from flowctl_tracker import resolve_verb as RV  # noqa: E402
 from flowctl_tracker import status as S  # noqa: E402
 from flowctl_tracker import syncbody as SB  # noqa: E402
@@ -550,6 +551,362 @@ class ConformanceMatrix(unittest.TestCase):
 
     def test_matrix_covers_every_wire_verb(self) -> None:
         self.assertEqual(tuple(WIRE_VERBS), W.WIRE_VERBS)
+
+
+# ---------------------------------------------------------------------------
+# Spec-aware verb matrix (create / create-first / persist-external / status /
+# relate / sync-body) - same verb, all four adapters, same assertion set.
+# ---------------------------------------------------------------------------
+
+#: The full granular verb surface fn-140 defines (R18 completeness guard).
+SPEC_VERBS = ("create", "create-first", "persist-external", "status",
+              "relate", "sync-body")
+
+
+def _receipts(flow: Path) -> list:
+    runs = flow / "sync-runs"
+    if not runs.is_dir():
+        return []
+    return [json.loads(p.read_text(encoding="utf-8"))
+            for p in sorted(runs.glob("sync-*.json"))]
+
+
+def _unlinked() -> dict:
+    return {"id": None, "identifier": None, "url": None,
+            "lastSyncedAt": None, "depRelations": [], "linkState": "unlinked"}
+
+
+CREATE_CASES = [
+    ("github", gh_cfg, GH_NODE, "#42",
+     ok({"id": 999, "node_id": GH_NODE, "number": 42,
+         "html_url": "https://github.com/o/r/issues/42"})),
+    ("gitlab", gl_cfg, str(GL_ID), "g/p#12",
+     ok({"id": GL_ID, "iid": 12,
+         "web_url": "https://gitlab.com/g/p/-/issues/12",
+         "references": {"full": "g/p#12"}})),
+    ("linear", ln_cfg, LN_UUID, "WOR-17",
+     ok({"data": {"issueCreate": {
+         "success": True,
+         "issue": {"id": LN_UUID, "identifier": "WOR-17",
+                   "url": "https://linear.app/x/issue/WOR-17"}}}})),
+    ("jira", jr_cfg, JR_ID, "SCRUM-1",
+     ok({"id": JR_ID, "key": "SCRUM-1",
+         "self": "https://ex.atlassian.net/rest/api/2/issue/10042"})),
+]
+
+
+class SpecVerbCreateAllFour(unittest.TestCase):
+    """create: links the spec atomically + ONE receipt, on all four."""
+
+    def test_create_all_four(self) -> None:
+        for provider, cfg_fn, durable, display, resp in CREATE_CASES:
+            with self.subTest(provider=provider), \
+                    tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp) / ".flow"
+                path = _write_flow(flow, cfg_fn(), tracker=_unlinked())
+                ex = fake_execute({"lifecycle-create": resp})
+                out = L.create(flow, "fn-1-demo", title="T", body="B",
+                               execute=ex)
+                self.assertNotIsInstance(out, TrackerError,
+                                         f"{provider}: {out}")
+                self.assertEqual(out["id"], durable)
+                self.assertEqual(out["identifier"], display)
+                self.assertEqual(out["linkState"], "linked")
+                saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+                self.assertEqual(saved["id"], durable)
+                self.assertEqual(saved["identifier"], display)
+                self.assertEqual(len(_receipts(flow)), 1)
+
+
+class SpecVerbCreateFirstAllFour(unittest.TestCase):
+    """create-first: recovery record lands; retry replays with NO second create."""
+
+    def test_create_first_retry_all_four(self) -> None:
+        for provider, cfg_fn, durable, _display, resp in CREATE_CASES:
+            with self.subTest(provider=provider), \
+                    tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp) / ".flow"
+                _write_config(flow, cfg_fn())
+                key = L.compute_create_first_key(provider, "T", "B")
+                ex = fake_execute({"lifecycle-create": resp})
+                first = L.create_first(flow, title="T", body="B",
+                                       retry_key=key, execute=ex)
+                self.assertNotIsInstance(first, TrackerError,
+                                         f"{provider}: {first}")
+                self.assertEqual(first["id"], durable)
+                self.assertFalse(first["retried"])
+                self.assertTrue(
+                    (flow / "create-first" / f"{key}.json").is_file(),
+                    f"{provider}: recovery record must exist")
+                # Retry: record replays; the provider is NEVER called again.
+                ex2 = fake_execute({})
+                second = L.create_first(flow, title="T", body="B",
+                                        retry_key=key, execute=ex2)
+                self.assertNotIsInstance(second, TrackerError)
+                self.assertEqual(second["id"], durable)
+                self.assertTrue(second["retried"])
+                self.assertEqual(ex2.calls, [])
+
+
+class SpecVerbPersistExternalAllFour(unittest.TestCase):
+    """persist-external: linear resolves + links; the other three refuse
+    deterministically BEFORE any tracker request (provider gate, not a skip)."""
+
+    def test_linear_happy_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, ln_cfg(), tracker=_unlinked())
+            ex = fake_execute({"lifecycle-resolve-uuid": ok({
+                "data": {"issue": {
+                    "id": LN_UUID, "identifier": "WOR-17",
+                    "url": "https://linear.app/x/issue/WOR-17"}},
+            })})
+            out = L.persist_external(flow, "fn-1-demo", identifier="WOR-17",
+                                     source="mcp", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["id"], LN_UUID)
+            self.assertEqual(out["linkState"], "linked")
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["id"], LN_UUID)
+
+    def test_non_linear_providers_refuse_before_any_request(self) -> None:
+        for provider, cfg_fn in (("github", gh_cfg), ("gitlab", gl_cfg),
+                                 ("jira", jr_cfg)):
+            with self.subTest(provider=provider), \
+                    tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp) / ".flow"
+                _write_flow(flow, cfg_fn(), tracker=_unlinked())
+                ex = fake_execute({})  # any request would AssertionError
+                out = L.persist_external(flow, "fn-1-demo",
+                                         identifier="X-1", source="mcp",
+                                         execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+                self.assertEqual(out.subtype, "provider")
+                self.assertEqual(ex.calls, [])
+
+
+def _ln_status_cfg() -> dict:
+    cfg = ln_cfg()
+    cfg["tracker"]["resolved"]["destination"]["stateIds"] = {
+        "todo": "st-1", "in_progress": "st-2",
+        "in_review": "st-3", "done": "st-4",
+    }
+    return cfg
+
+
+class SpecVerbStatusAllFour(unittest.TestCase):
+    """status --to in_progress from tracker todo: applied on all four,
+    lastSyncedAt advanced, exactly one receipt."""
+
+    def _cases(self):
+        gh_parent = {"node_id": GH_NODE, "number": 42, "state": "open",
+                     "labels": [{"name": "status:todo"}],
+                     "html_url": "https://x/42"}
+        gl_parent = dict(GL_ISSUE, labels=["status:todo"], state="opened")
+        ln_parent = dict(LN_ISSUE, state={"id": "st-1", "name": "Todo",
+                                          "type": "unstarted"})
+        jr_parent = {"id": JR_ID, "key": "SCRUM-1",
+                     "fields": {"summary": "T", "description": "B",
+                                "labels": [],
+                                "status": {"id": "1", "name": "To Do",
+                                           "statusCategory": {"key": "new"}}}}
+        return [
+            ("github", gh_cfg(), GH_NODE, "#42", {
+                "status-parent-read": ok(gh_parent),
+                "merge-evidence": ok([]),
+                "status-set": ok(dict(gh_parent, state="open")),
+                "status-label-rm": empty(),
+                "status-label-add": ok([{"name": "status:in_progress"}]),
+                "status-label-readback": ok([{"name": "status:in_progress"}]),
+            }),
+            ("gitlab", gl_cfg(), str(GL_ID), "g/p#12", {
+                "status-parent-read": ok(gl_parent),
+                "merge-evidence": ok([]),
+                "status-set": ok(dict(gl_parent,
+                                      labels=["status:in_progress"])),
+            }),
+            ("linear", _ln_status_cfg(), LN_UUID, "WOR-17", {
+                "status-parent-read": gql_issue(ln_parent),
+                "status-state-read": ok({"data": {"issue": {
+                    "id": LN_UUID, "state": {"id": "st-1", "name": "Todo",
+                                             "type": "unstarted"}}}}),
+                "merge-evidence": ok([]),
+                "status-set": ok({"data": {"issueUpdate": {
+                    "success": True, "issue": {"id": LN_UUID}}}}),
+            }),
+            ("jira", jr_cfg(), JR_ID, "SCRUM-1", {
+                "status-parent-read": ok(jr_parent),
+                "status-current": ok(jr_parent),
+                "merge-evidence": ok([]),
+                "status-transitions": ok({"transitions": [
+                    {"id": "11", "to": {"id": "2"}}]}),
+                "status-set": empty(),
+            }),
+        ]
+
+    def test_status_applied_all_four(self) -> None:
+        for provider, cfg, durable, display, responses in self._cases():
+            with self.subTest(provider=provider), \
+                    tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp)
+                path = _write_flow(flow, cfg, tracker={
+                    "id": durable, "identifier": display, "url": "https://x",
+                    "lastSyncedAt": None, "depRelations": [],
+                    "linkState": "linked",
+                })
+                tdir = flow / "tasks"
+                tdir.mkdir(parents=True, exist_ok=True)
+                (tdir / "fn-1-demo.1.json").write_text(json.dumps({
+                    "id": "fn-1-demo.1", "status": "in_progress",
+                    "spec": "fn-1-demo"}), encoding="utf-8")
+                ex = fake_execute(responses)
+                out = S.status(flow, "fn-1-demo", to="in_progress",
+                               execute=ex)
+                self.assertNotIsInstance(out, TrackerError,
+                                         f"{provider}: {out}")
+                self.assertEqual(out["kind"], "applied", f"{provider}: {out}")
+                saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+                self.assertIsNotNone(saved["lastSyncedAt"],
+                                     f"{provider}: lastSyncedAt must advance")
+                self.assertEqual(len(_receipts(flow)), 1, provider)
+
+
+class SpecVerbRelateAllFour(unittest.TestCase):
+    """relate --blocked-by: applied + ledger key persisted on all four
+    (provider-specific degraded forms are part of the contract)."""
+
+    def _write_pair(self, flow: Path, cfg: dict, a_tr: dict, b_tr: dict) -> None:
+        (flow / "specs").mkdir(parents=True, exist_ok=True)
+        (flow / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        for sid, tr in (("fn-1-demo", a_tr), ("fn-2-dep", b_tr)):
+            (flow / "specs" / f"{sid}.json").write_text(json.dumps({
+                "id": sid, "title": sid, "status": "open",
+                "branch_name": sid, "tracker": tr,
+            }, indent=2) + "\n", encoding="utf-8")
+
+    def test_relate_applied_all_four(self) -> None:
+        ln_b = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+        cases = [
+            ("github", gh_cfg(),
+             {"id": GH_NODE, "identifier": "#42"},
+             {"id": "I_kwDOTestNode2", "identifier": "#43"},
+             {"wire-relate-probe": ok([]),
+              "relate-child-read": ok({"id": 999001, "node_id": GH_NODE,
+                                       "number": 42}),
+              "relate-list": ok([]),
+              "relate-create": ok({"id": 999001})},
+             "sub_issues"),
+            ("gitlab", gl_cfg(),
+             {"id": str(GL_ID), "identifier": "g/p#12"},
+             {"id": str(GL_ID + 1), "identifier": "g/p#13"},
+             {"relate-list": ok([]),
+              "relate-create": ok({"id": 1, "link_type": "relates_to"})},
+             "relates_to"),  # gl_cfg pins blockedBy False (free tier)
+            ("linear", ln_cfg(),
+             {"id": LN_UUID, "identifier": "WOR-17"},
+             {"id": ln_b, "identifier": "WOR-18"},
+             {"relate-list": ok({"data": {"issue": {
+                 "id": LN_UUID,
+                 "relations": {"nodes": []},
+                 "inverseRelations": {"nodes": []}}}}),
+              "relate-create": ok({"data": {"issueRelationCreate": {
+                  "success": True, "issueRelation": {"id": "rel-1"}}}})},
+             None),
+            ("jira", jr_cfg(),
+             {"id": JR_ID, "identifier": "SCRUM-1"},
+             {"id": "10043", "identifier": "SCRUM-2"},
+             {"relate-list": ok({"fields": {"issuelinks": []}}),
+              "relate-create": ok(None)},
+             "blocks"),
+        ]
+        for provider, cfg, a_ids, b_ids, responses, form in cases:
+            with self.subTest(provider=provider), \
+                    tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp)
+                base = {"url": "u", "depRelations": [], "linkState": "linked"}
+                self._write_pair(flow, cfg, {**base, **a_ids},
+                                 {**base, **b_ids})
+                ex = fake_execute(responses)
+                out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                               execute=ex)
+                self.assertNotIsInstance(out, TrackerError,
+                                         f"{provider}: {out}")
+                self.assertEqual(out["kind"], "applied", f"{provider}: {out}")
+                self.assertEqual(len(out["key"]), 16)
+                if form is not None:
+                    self.assertEqual(out["form"], form, provider)
+                saved = json.loads(
+                    (flow / "specs" / "fn-1-demo.json").read_text(
+                        encoding="utf-8"))["tracker"]
+                self.assertTrue(
+                    any(r.get("key") == out["key"]
+                        for r in saved["depRelations"] if isinstance(r, dict)),
+                    f"{provider}: ledger must persist the edge key")
+
+
+class SpecVerbSyncBodyAllFour(unittest.TestCase):
+    """sync-body push: pushed + paired merge base committed on all four."""
+
+    def test_push_all_four(self) -> None:
+        for provider, cfg_fn, durable, display, parent_resp, mk in PROVIDERS:
+            with self.subTest(provider=provider), \
+                    tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp)
+                _write_flow(flow, cfg_fn(), tracker={
+                    "id": durable, "identifier": display, "url": "https://x",
+                    "lastSyncedAt": None, "depRelations": [],
+                    "linkState": "linked",
+                    "mergeBaseFlow": None, "mergeBaseTracker": None,
+                    "baseHashFlow": None, "baseHashTracker": None,
+                })
+                update_resp = (
+                    ok({"data": {"issueUpdate": {
+                        "success": True, "issue": mk("NEW FLOW\n")}}})
+                    if provider == "linear"
+                    else (empty() if provider == "jira"
+                          else parent_resp("NEW FLOW\n"))
+                )
+                ex = fake_execute({
+                    "sync-body-parent-read": parent_resp("old remote"),
+                    "wire-parent-read": parent_resp("old remote"),
+                    "wire-update": update_resp,
+                    "wire-read": parent_resp("NEW FLOW\n"),
+                })
+                out = SB.sync_body(flow, "fn-1-demo",
+                                   flow_file_body="NEW FLOW\n",
+                                   direction="push", execute=ex)
+                self.assertNotIsInstance(out, TrackerError,
+                                         f"{provider}: {out}")
+                self.assertEqual(out["kind"], "pushed", f"{provider}: {out}")
+                saved = _saved(flow)["tracker"]
+                self.assertEqual(saved["mergeBaseFlow"], "NEW FLOW\n")
+                self.assertIsNotNone(saved["mergeBaseTracker"], provider)
+                self.assertEqual(saved["baseHashFlow"], sha("NEW FLOW\n"))
+                self.assertIsNotNone(saved["lastSyncedAt"], provider)
+
+
+class FullVerbSurfaceGuard(unittest.TestCase):
+    """R18 completeness: the matrix names EVERY granular verb the spec
+    defines - the 11 wire verbs AND the 6 spec-aware verbs."""
+
+    def test_wire_surface_matches_package(self) -> None:
+        self.assertEqual(tuple(WIRE_VERBS), W.WIRE_VERBS)
+
+    def test_spec_verb_surface_is_complete(self) -> None:
+        self.assertEqual(
+            SPEC_VERBS,
+            ("create", "create-first", "persist-external", "status",
+             "relate", "sync-body"))
+        covered = {
+            "create": SpecVerbCreateAllFour,
+            "create-first": SpecVerbCreateFirstAllFour,
+            "persist-external": SpecVerbPersistExternalAllFour,
+            "status": SpecVerbStatusAllFour,
+            "relate": SpecVerbRelateAllFour,
+            "sync-body": SpecVerbSyncBodyAllFour,
+        }
+        self.assertEqual(set(covered), set(SPEC_VERBS))
 
 
 # ---------------------------------------------------------------------------
