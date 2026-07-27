@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-140-tracker-determinism-b-verb-surface",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-07-27T16:45:44.896933Z",
   "created_at": "2026-07-26T12:32:33.523854Z",
   "default_impl": null,
   "default_review": null,
@@ -20,7 +20,7 @@
     "fn-140-tracker-determinism-b-verb-surface.7": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 2,
+  "plan_review_rounds": 0,
   "plan_review_status": "needs_work",
   "plan_reviewed_at": "2026-07-26T14:22:24.381935Z",
   "ready": true,
@@ -804,10 +804,24 @@
       "task": "fn-140-tracker-determinism-b-verb-surface.6",
       "timestamp": "2026-07-27T16:39:01.400503Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "7b24cc56be76bb430dff08f9e4040823662f491d07d8c95982af6744f5a2b24f",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-07-27T16:45:44.895100Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-140-tracker-determinism-b-verb-surface.1": 0,
     "impl:fn-140-tracker-determinism-b-verb-surface.2": 0,
     "impl:fn-140-tracker-determinism-b-verb-surface.3": 0,
@@ -831,5 +845,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-27T16:39:01.401566Z"
+  "updated_at": "2026-07-27T16:45:44.896933Z"
 }
