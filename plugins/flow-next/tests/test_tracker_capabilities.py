@@ -485,6 +485,8 @@ class GitlabRelateDegrade(unittest.TestCase):
             _write_pair(flow, gl_cfg(blocked_by=False, plan="free"),
                         a_tracker=a_tr, b_tracker=b_tr)
             ex = fake_execute({
+                "relate-parent-read": [ok({"id": int(GL_ID), "iid": 12}),
+                                       ok({"id": int(GL_ID_B), "iid": 13})],
                 "relate-list": ok([]),
                 "relate-create": ok({"id": 1, "link_type": "relates_to"}),
             })
@@ -509,6 +511,9 @@ class GithubSubIssuesHierarchy(unittest.TestCase):
                     "depRelations": [], "linkState": "linked"}
             _write_pair(flow, gh_cfg(), a_tracker=a_tr, b_tracker=b_tr)
             ex = fake_execute({
+                "relate-parent-read": [
+                    ok({"id": 999001, "node_id": GH_NODE, "number": 42}),
+                    ok({"id": 999002, "node_id": GH_NODE_B, "number": 43})],
                 "wire-relate-probe": ok([]),
                 "relate-child-read": ok({
                     "id": 999001, "node_id": GH_NODE, "number": 42}),
@@ -867,3 +872,132 @@ class RelateLedgerDurability(unittest.TestCase):
             entries = spec["tracker"]["depRelations"]
             self.assertEqual(len(entries), 1)
             self.assertNotIn("status", entries[0])
+
+
+class RelateDisplayDurableGuard(unittest.TestCase):
+    """PR #246 review: GitHub/GitLab relate paths address issues by DISPLAY
+    (number/IID). Both display locators must be validated against the linked
+    durable ids BEFORE any probe or mutation - a moved, repointed, or stale
+    identifier aborts instead of relating unrelated issues (wire parity)."""
+
+    def test_gitlab_stale_display_aborts_before_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": GL_ID, "identifier": "g/p#12", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": GL_ID_B, "identifier": "g/p#13", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, gl_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            # IID 12 now resolves to a DIFFERENT issue (destination move /
+            # repoint / stale stored identifier).
+            ex = fake_execute({
+                "relate-parent-read": [ok({"id": 555000, "iid": 12})],
+            })
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "durable_mismatch")
+            self.assertEqual([c.op for c in ex.calls], ["relate-parent-read"],
+                             "abort BEFORE any probe or mutation request")
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            self.assertEqual(spec["tracker"].get("depRelations") or [], [],
+                             "no ledger intent recorded on identity abort")
+
+    def test_gitlab_target_end_is_also_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": GL_ID, "identifier": "g/p#12", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": GL_ID_B, "identifier": "g/p#13", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, gl_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            ex = fake_execute({
+                "relate-parent-read": [ok({"id": int(GL_ID), "iid": 12}),
+                                       ok({"id": 555001, "iid": 13})],
+            })
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "durable_mismatch")
+            self.assertEqual([c.op for c in ex.calls],
+                             ["relate-parent-read", "relate-parent-read"],
+                             "both ends read, nothing else issued")
+
+    def test_github_stale_display_aborts_before_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": GH_NODE, "identifier": "#42", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": GH_NODE_B, "identifier": "#43", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, gh_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            # Issue #42 now carries a different node id.
+            ex = fake_execute({
+                "relate-parent-read": [ok({"id": 111, "node_id": "I_kwDOOther",
+                                           "number": 42})],
+            })
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "durable_mismatch")
+            self.assertEqual([c.op for c in ex.calls], ["relate-parent-read"],
+                             "abort BEFORE any probe or mutation request")
+
+
+class GitlabProbeDirection(unittest.TestCase):
+    """PR #246 review: GitLab link_type is relative to the QUERIED issue.
+    A reverse `blocks` link (A blocks B) must never satisfy an
+    A blocked-by B request."""
+
+    def test_reverse_blocks_link_does_not_match(self) -> None:
+        ex = fake_execute({"relate-list": ok([
+            {"iid": 13, "link_type": "blocks"}])})
+        out = RP.gitlab_probe_pair(gl_cfg(), ex, from_display="g/p#12",
+                                   to_display="g/p#13")
+        self.assertIs(out, False,
+                      "A-blocks-B is the OPPOSITE of A-blocked-by-B")
+
+    def test_forward_is_blocked_by_matches(self) -> None:
+        ex = fake_execute({"relate-list": ok([
+            {"iid": 13, "link_type": "is_blocked_by"}])})
+        out = RP.gitlab_probe_pair(gl_cfg(), ex, from_display="g/p#12",
+                                   to_display="g/p#13")
+        self.assertIs(out, True)
+
+    def test_degraded_relates_to_still_matches(self) -> None:
+        # flow's own degraded projection on tiers without blockedBy is
+        # symmetric - it stays in the match set.
+        ex = fake_execute({"relate-list": ok([
+            {"iid": 13, "link_type": "relates_to"}])})
+        out = RP.gitlab_probe_pair(gl_cfg(), ex, from_display="g/p#12",
+                                   to_display="g/p#13")
+        self.assertIs(out, True)
+
+    def test_reverse_edge_end_to_end_creates_required_relation(self) -> None:
+        # A blocks B already on the tracker; requesting A blocked-by B must
+        # CREATE the missing relation - not noop and not queue it as a
+        # false foreign collision.
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": GL_ID, "identifier": "g/p#12", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": GL_ID_B, "identifier": "g/p#13", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, gl_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            ex = fake_execute({
+                "relate-parent-read": [ok({"id": int(GL_ID), "iid": 12}),
+                                       ok({"id": int(GL_ID_B), "iid": 13})],
+                "relate-list": ok([{"iid": 13, "link_type": "blocks"}]),
+                "relate-create": ok({"id": 2, "link_type": "is_blocked_by"}),
+            })
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "applied")
+            self.assertEqual(out["form"], "is_blocked_by")
+            self.assertIn("relate-create", [c.op for c in ex.calls])
+            sink = flow / "review-deferred" / "tracker-relate.md"
+            self.assertFalse(sink.exists(),
+                             "no false foreign collision queued")

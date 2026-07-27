@@ -11,7 +11,7 @@ from ..executor import execute as default_execute
 from ..types import ErrorClass, TrackerError
 from .helpers import (CREATE_FIRST_KEY_RE, Execute, Result, atomic_write_json,
                       leaf_is_safe,
-                      collision, default_tracker, dict_, load_spec, now_iso,
+                      collision, load_spec, merged_tracker, now_iso,
                       read_config, tracker_type, write_sync_receipt,
                       write_tracker_block)
 from .linkstate import derive_link_state, resolve_linear_uuid
@@ -32,7 +32,7 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
     if isinstance(loaded, TrackerError):
         return loaded
     path, spec_data = loaded
-    tracker = {**default_tracker(), **dict_(spec_data.get("tracker"))}
+    tracker = merged_tracker(spec_data)
     if derive_link_state(tracker) != "unlinked":
         return TrackerError(
             ErrorClass.CONFLICT,
@@ -57,7 +57,19 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
     })
     err = write_tracker_block(path, spec_data, tracker)
     if err:
-        return err
+        # The issue exists but the spec is still unlinked - a bare failure
+        # here reads as "nothing happened" and a retry would create a
+        # duplicate (the crash window itself stays open by spec decision;
+        # this is the OBSERVED-failure path, so the created identity is in
+        # hand). TrackerError is frozen: rebuild with the completed-steps
+        # detail so the caller can link the existing issue instead.
+        import dataclasses  # noqa: PLC0415
+        return dataclasses.replace(err, details={
+            **(err.details or {}),
+            "completed_steps": ["create"],
+            "id": created["id"],
+            "identifier": created["identifier"],
+            "url": created.get("url")})
     if write_receipt:
         err = write_sync_receipt(
             flow_dir, spec_id=spec_id, status="pushed",
@@ -204,7 +216,7 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
     if isinstance(loaded, TrackerError):
         return loaded
     path, spec_data = loaded
-    tracker = {**default_tracker(), **dict_(spec_data.get("tracker"))}
+    tracker = merged_tracker(spec_data)
 
     # Existing-link guard: persist-external may (a) link an UNLINKED spec,
     # (b) idempotently complete/confirm the SAME identifier, and nothing else.

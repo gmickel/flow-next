@@ -791,7 +791,11 @@ class SpecVerbRelateAllFour(unittest.TestCase):
             ("github", gh_cfg(),
              {"id": GH_NODE, "identifier": "#42"},
              {"id": "I_kwDOTestNode2", "identifier": "#43"},
-             {"wire-relate-probe": ok([]),
+             {"relate-parent-read": [
+                 ok({"id": 999001, "node_id": GH_NODE, "number": 42}),
+                 ok({"id": 999002, "node_id": "I_kwDOTestNode2",
+                     "number": 43})],
+              "wire-relate-probe": ok([]),
               "relate-child-read": ok({"id": 999001, "node_id": GH_NODE,
                                        "number": 42}),
               "relate-list": ok([]),
@@ -800,7 +804,10 @@ class SpecVerbRelateAllFour(unittest.TestCase):
             ("gitlab", gl_cfg(),
              {"id": str(GL_ID), "identifier": "g/p#12"},
              {"id": str(GL_ID + 1), "identifier": "g/p#13"},
-             {"relate-list": ok([]),
+             {"relate-parent-read": [
+                 ok({"id": GL_ID, "iid": 12}),
+                 ok({"id": GL_ID + 1, "iid": 13})],
+              "relate-list": ok([]),
               "relate-create": ok({"id": 1, "link_type": "relates_to"})},
              "relates_to"),  # gl_cfg pins blockedBy False (free tier)
             ("linear", ln_cfg(),

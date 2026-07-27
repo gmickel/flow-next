@@ -761,6 +761,60 @@ class Round4PersistIntegrity(unittest.TestCase):
                              "persist must reload, never replay the stale snapshot")
             self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
 
+    def test_persist_failure_after_tracker_write_reports_the_write(self) -> None:
+        """PR #246 review: when the provider mutation LANDED but the locked
+        local persistence fails, the returned error must carry the completed
+        provider write (completed_steps + write details, mirroring the
+        syncbody post-write pattern) and lastSyncedAt must NOT advance."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+            def corrupt_after_readback(req):
+                # Persistence reloads the spec under the lock; corrupting it
+                # after the final provider call makes that reload fail while
+                # the tracker mutation has already landed.
+                path.write_text("{not json", encoding="utf-8")
+                return ok([{"name": "status:done"}])
+
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed"}),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": corrupt_after_readback,
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIn("after tracker write", out.message)
+            details = out.details or {}
+            self.assertEqual(details["completed_steps"], ["status-write"])
+            self.assertEqual(details["target"], "done")
+            write = details["write"]
+            self.assertIsInstance(write, dict,
+                                  "landed provider write must be reported")
+            self.assertEqual(write["applied"], "done")
+            self.assertIn("state", write["completed_steps"])
+            # lastSyncedAt must NOT advance - it advances only on applied.
+            mutations = [c for c in ex.calls if c.op == "status-set"]
+            self.assertEqual(len(mutations), 1, "the mutation DID land")
+            self.assertNotIn("lastSyncedAt",
+                             path.read_text(encoding="utf-8"),
+                             "no persisted advance on a failed persist")
+
     def test_local_fold_does_not_erase_concurrent_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"

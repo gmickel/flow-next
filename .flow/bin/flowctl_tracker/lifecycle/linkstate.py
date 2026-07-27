@@ -7,24 +7,11 @@ from typing import Any, Union
 
 from ..executor import execute as default_execute
 from ..types import ErrorClass, TrackerError
-from .helpers import (Execute, LINK_STATES, Result, collision, default_tracker,
-                      dict_, load_spec, now_iso, read_config, tracker_type,
-                      write_tracker_block)
-
-
-def derive_link_state(tracker_block: Any) -> str:
-    """LEGACY MIGRATION read. Explicit linkState wins; else migrate."""
-    block = dict_(tracker_block)
-    explicit = block.get("linkState")
-    if isinstance(explicit, str) and explicit in LINK_STATES:
-        return explicit
-    durable = block.get("id")
-    ident = block.get("identifier")
-    if durable is not None and str(durable).strip() != "":
-        return "linked"
-    if ident is not None and str(ident).strip() != "":
-        return "identifier_only"
-    return "unlinked"
+# derive_link_state lives in helpers (merged_tracker needs it below the
+# defaults); re-exported here because this module is its public home.
+from .helpers import (Execute, Result, collision, derive_link_state, dict_,
+                      load_spec, merged_tracker, now_iso, read_config,
+                      tracker_type, write_tracker_block)
 
 
 def require_durable(tracker_block: Any) -> Union[str, TrackerError]:
@@ -96,7 +83,7 @@ def complete_identifier_only(flow_dir, spec_id: str, *,
     if isinstance(loaded, TrackerError):
         return loaded
     path, spec_data = loaded
-    tracker = {**default_tracker(), **dict_(spec_data.get("tracker"))}
+    tracker = merged_tracker(spec_data)
     state = derive_link_state(tracker)
     if state == "linked" and tracker.get("id"):
         return {"id": tracker["id"], "identifier": tracker.get("identifier"),

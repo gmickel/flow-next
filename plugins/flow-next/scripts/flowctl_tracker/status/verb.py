@@ -13,9 +13,10 @@ from pathlib import Path
 from typing import Optional
 
 from ..executor import execute as default_execute
-from ..lifecycle.helpers import (Execute, Result, default_tracker, dict_,
-                                 load_spec, now_iso, read_config, tracker_type,
-                                 write_sync_receipt, write_tracker_block)
+from ..lifecycle.helpers import (Execute, Result, dict_, load_spec,
+                                 merged_tracker, now_iso, read_config,
+                                 tracker_type, write_sync_receipt,
+                                 write_tracker_block)
 from ..lifecycle.linkstate import require_durable
 from ..types import ErrorClass, TrackerError
 from .policy import (Decision, decide, decision_as_error, flow_to_normalized,
@@ -76,7 +77,7 @@ def _persist_applied_state(flow_dir: Path, spec_id: str, *,
             if isinstance(reloaded, TrackerError):
                 return reloaded
             path, spec = reloaded
-            tracker = {**default_tracker(), **dict_(spec.get("tracker"))}
+            tracker = merged_tracker(spec)
             if fold_local_done:
                 spec = dict(spec)
                 spec["status"] = "done"
@@ -109,7 +110,7 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
     if isinstance(loaded, TrackerError):
         return loaded
     path, spec_data = loaded
-    tracker = {**default_tracker(), **dict_(spec_data.get("tracker"))}
+    tracker = merged_tracker(spec_data)
 
     durable = require_durable(tracker)
     if isinstance(durable, TrackerError):
@@ -275,7 +276,21 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
     # Applied — advance lastSyncedAt + receipt.
     persisted = _persist_applied_state(flow_dir, spec_id, fold_local_done=False)
     if isinstance(persisted, TrackerError):
-        return persisted
+        # Provider mutation LANDED; only local persistence failed. Report the
+        # completed write in the error details (mirrors the syncbody
+        # post-write pattern) so receipts reflect the landed mutation and a
+        # retry that sees the remote no-op is explainable. lastSyncedAt stays
+        # behind on purpose - it advances only on fully applied.
+        return TrackerError(
+            persisted.cls,
+            f"status persist failed after tracker write: {persisted.message}",
+            subtype=persisted.subtype,
+            details={**(persisted.details or {}),
+                     "completed_steps": ["status-write"],
+                     "target": decision.target_slot,
+                     "write": written if isinstance(written, dict) else None},
+            auto_retryable=persisted.auto_retryable,
+        )
     tracker = persisted
     if write_receipt:
         rerr = write_sync_receipt(

@@ -19,9 +19,10 @@ from typing import Optional
 
 from .. import envelope
 from ..executor import execute as default_execute
-from ..lifecycle.helpers import (ACTIVE, Execute, Result, default_tracker, dict_,
-                                 load_spec, now_iso, read_config, tracker_type,
-                                 write_sync_receipt, write_tracker_block)
+from ..lifecycle.helpers import (ACTIVE, Execute, Result, dict_, load_spec,
+                                 merged_tracker, now_iso, read_config,
+                                 tracker_type, write_sync_receipt,
+                                 write_tracker_block)
 from ..lifecycle.linkstate import require_durable
 from ..relate.ledger import FLOW_DEPS_CLOSE, FLOW_DEPS_OPEN
 from ..types import ErrorClass, TrackerError
@@ -132,7 +133,7 @@ def _commit_paired_base(flow_dir: Path, spec_id: str, *,
             if isinstance(loaded, TrackerError):
                 return loaded
             path, spec_data = loaded
-            tracker = {**default_tracker(), **dict_(spec_data.get("tracker"))}
+            tracker = merged_tracker(spec_data)
             tracker["mergeBaseFlow"] = base_flow
             tracker["mergeBaseTracker"] = merge_tracker
             tracker["baseHashFlow"] = hash_flow
@@ -187,7 +188,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
     if isinstance(loaded, TrackerError):
         return loaded
     _path, spec_data = loaded
-    tracker = {**default_tracker(), **dict_(spec_data.get("tracker"))}
+    tracker = merged_tracker(spec_data)
 
     durable = require_durable(tracker)
     if isinstance(durable, TrackerError):

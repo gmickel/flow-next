@@ -123,6 +123,35 @@ def default_tracker() -> dict:
     }
 
 
+def derive_link_state(tracker_block: Any) -> str:
+    """LEGACY MIGRATION read. Explicit linkState wins; else migrate."""
+    block = dict_(tracker_block)
+    explicit = block.get("linkState")
+    if isinstance(explicit, str) and explicit in LINK_STATES:
+        return explicit
+    durable = block.get("id")
+    ident = block.get("identifier")
+    if durable is not None and str(durable).strip() != "":
+        return "linked"
+    if ident is not None and str(ident).strip() != "":
+        return "identifier_only"
+    return "unlinked"
+
+
+def merged_tracker(spec_data: Any) -> dict:
+    """Spec tracker block with schema defaults filled in.
+
+    linkState is derived from the RAW block, not defaulted: a legacy record
+    that predates the field ({"id": ..., "identifier": ...}) must migrate to
+    linked/identifier_only, and merging the explicit "unlinked" default first
+    would defeat derive_link_state's migration read (reproduced by review:
+    create duplicated the issue; status/relate/sync-body rejected the link)."""
+    raw = dict_(dict_(spec_data).get("tracker"))
+    merged = {**default_tracker(), **raw}
+    merged["linkState"] = derive_link_state(raw)
+    return merged
+
+
 def spec_path(flow_dir: Path, spec_id: str) -> Path:
     return Path(flow_dir) / "specs" / f"{spec_id}.json"
 

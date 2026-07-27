@@ -628,3 +628,81 @@ class GitignoreRuleSemanticsNotSubstrings(unittest.TestCase):
         for text in ("# create-first/\n", "!create-first/\n",
                      "create-first/\n!create-first/\n", ""):
             self.assertFalse(L.verbs._create_first_rule_active(text), repr(text))
+
+
+class LegacyBlockDefaultsDoNotClobberMigration(unittest.TestCase):
+    """PR #246 review: merging {"linkState": "unlinked"} defaults over a
+    legacy block that predates the field defeated derive_link_state's
+    migration read - create duplicated the issue, status/relate/sync-body
+    rejected the existing link as unresolved."""
+
+    def test_merged_tracker_derives_link_state_from_raw_block(self) -> None:
+        from flowctl_tracker.lifecycle.helpers import merged_tracker
+        legacy = {"tracker": {"id": "I_legacy", "identifier": "#7"}}
+        self.assertEqual(merged_tracker(legacy)["linkState"], "linked")
+        self.assertEqual(
+            merged_tracker({"tracker": {"id": None, "identifier": "WOR-9"}})
+            ["linkState"], "identifier_only")
+        self.assertEqual(merged_tracker({"tracker": {}})["linkState"],
+                         "unlinked")
+        # An explicit stored linkState still wins over derivation.
+        self.assertEqual(
+            merged_tracker({"tracker": {"id": "x",
+                                        "linkState": "identifier_only"}})
+            ["linkState"], "identifier_only")
+        # Defaults are still filled in for the rest of the schema.
+        self.assertEqual(merged_tracker(legacy)["depRelations"], [])
+
+    def test_legacy_linked_spec_refuses_bare_create(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, gh_cfg(),
+                        tracker={"id": "I_legacy", "identifier": "#7"})
+            ex = fake_execute({})  # any provider call would AssertionError
+            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "already_linked")
+            self.assertEqual(len(ex.calls), 0,
+                             "refusal must happen before any remote call")
+
+    def test_legacy_linked_block_passes_require_durable_after_merge(self) -> None:
+        from flowctl_tracker.lifecycle.helpers import merged_tracker
+        got = L.require_durable(
+            merged_tracker({"tracker": {"id": "uuid-1", "identifier": "WOR-1"}}))
+        self.assertEqual(got, "uuid-1")
+
+
+class CreateLinkWriteFailureCarriesCreatedIdentity(unittest.TestCase):
+    """PR #246 review: provider create succeeded but the tracker-block write
+    failed -> a bare error read as "nothing happened" and a retry duplicated
+    the issue. The error must carry the created durable identity so the
+    caller can link the existing issue instead of re-creating."""
+
+    def test_write_failure_error_carries_id_and_completed_steps(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            spec_path = _write_flow(flow, gh_cfg())
+            before = spec_path.read_text(encoding="utf-8")
+            ex = fake_execute({"lifecycle-create": ok({
+                "id": 1, "node_id": GH_NODE, "number": 42,
+                "html_url": "https://github.com/o/r/issues/42"})})
+            boom = TrackerError(ErrorClass.TRANSPORT,
+                                "atomic write failed: disk full",
+                                subtype="write")
+            with mock.patch.object(L.verbs, "write_tracker_block",
+                                   return_value=boom):
+                out = L.create(flow, "fn-1-demo", title="T", body="B",
+                               execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.TRANSPORT)
+            details = out.details or {}
+            self.assertEqual(details.get("completed_steps"), ["create"])
+            self.assertEqual(details.get("id"), GH_NODE)
+            self.assertEqual(details.get("identifier"), "#42")
+            self.assertEqual(details.get("url"),
+                             "https://github.com/o/r/issues/42")
+            # The spec really is still unlinked, and no receipt was written.
+            self.assertEqual(spec_path.read_text(encoding="utf-8"), before)
+            self.assertEqual(_receipts(flow), [])

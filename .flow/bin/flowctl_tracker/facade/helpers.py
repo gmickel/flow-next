@@ -8,8 +8,8 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
-from ..lifecycle.helpers import (Execute, Result, default_tracker, dict_,
-                                 load_spec, tracker_type,
+from ..lifecycle.helpers import (Execute, Result, dict_, load_spec,
+                                 merged_tracker, tracker_type,
                                  write_sync_receipt)
 from ..lifecycle.linkstate import derive_link_state
 from ..types import ErrorClass, TrackerError
@@ -144,7 +144,7 @@ def load_tracker(flow_dir: Path, spec_id: str) -> Result:
     if isinstance(loaded, TrackerError):
         return loaded
     path, spec_data = loaded
-    tracker = {**default_tracker(), **dict_(spec_data.get("tracker"))}
+    tracker = merged_tracker(spec_data)
     return path, spec_data, tracker
 
 

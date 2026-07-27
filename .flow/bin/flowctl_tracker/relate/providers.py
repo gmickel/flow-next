@@ -224,6 +224,35 @@ def _gitlab_pair_present(links: list, *, target_iid: int,
     return False
 
 
+# GitHub and GitLab relation paths address issues by DISPLAY (issue number /
+# IID); Linear and Jira address by durable id and need no guard.
+_DISPLAY_ADDRESSED = ("github", "gitlab")
+
+
+def display_durable_guard(provider: str, config: dict, execute: Execute, *,
+                          locators: tuple) -> Optional[TrackerError]:
+    """Pre-mutation display -> durable identity check (wire-verb parity).
+
+    GitHub/GitLab probes and setters address issues by display; a destination
+    move, repoint, or stale stored identifier would otherwise inspect and then
+    relate UNRELATED issues. Mirror the wire write verbs: read each display
+    locator and compare the returned durable id against the linked durable id
+    (`_check_durable`), aborting as CONFLICT/durable_mismatch on drift. Never
+    raises - returns a TrackerError or None.
+    """
+    if provider not in _DISPLAY_ADDRESSED:
+        return None
+    from ..wire import github as _wire_github  # noqa: PLC0415
+    from ..wire import gitlab as _wire_gitlab  # noqa: PLC0415
+    mod = _wire_github if provider == "github" else _wire_gitlab
+    for locator in locators:
+        got = mod.parent_read(config, locator, execute,
+                              op="relate-parent-read")
+        if isinstance(got, TrackerError):
+            return got
+    return None
+
+
 def gitlab_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
                from_display: str, to_display: str, blocked_by: bool,
                plan: Optional[str]) -> Result:
@@ -352,9 +381,14 @@ def gitlab_probe_pair(config, execute, *, from_display, to_display, **_kw):
     links = _gitlab_links(config, execute, iid=self_iid)
     if isinstance(links, TrackerError):
         return links
+    # link_type is expressed relative to the QUERIED issue (from):
+    # "is_blocked_by" is the requested edge (from blocked by target);
+    # "blocks" is the REVERSE direction (from blocks target) and must NOT
+    # match - a reverse edge is not the requested one. "relates_to" stays:
+    # it is flow's own degraded projection form on tiers without blockedBy
+    # (symmetric, direction-free).
     return _gitlab_pair_present(links, target_iid=target_iid,
-                                link_types={"is_blocked_by", "blocks",
-                                            "relates_to"})
+                                link_types={"is_blocked_by", "relates_to"})
 
 
 def github_probe(config, execute, *, from_display, to_display, **_kw):

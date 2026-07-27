@@ -26,8 +26,8 @@ from typing import Optional
 
 from .. import envelope
 from ..executor import execute as default_execute
-from ..lifecycle.helpers import (ACTIVE, Execute, Result, default_tracker, dict_,
-                                 load_spec, read_config, tracker_type,
+from ..lifecycle.helpers import (ACTIVE, Execute, Result, dict_, load_spec,
+                                 merged_tracker, read_config, tracker_type,
                                  write_sync_receipt, write_tracker_block)
 from ..types import ErrorClass, TrackerError
 from . import providers as P
@@ -84,7 +84,7 @@ def _ledger_write(flow_dir: Path, spec_id: str, mutate) -> Result:
             if isinstance(reloaded, TrackerError):
                 return reloaded
             path, spec = reloaded
-            tracker = {**default_tracker(), **dict_(spec.get("tracker"))}
+            tracker = merged_tracker(spec)
             tracker = mutate(tracker)
             werr = write_tracker_block(path, spec, tracker)
             if werr:
@@ -135,8 +135,8 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
         return loaded_b
     _path_b, spec_b = loaded_b
 
-    tracker_a = {**default_tracker(), **dict_(spec_a.get("tracker"))}
-    tracker_b = {**default_tracker(), **dict_(spec_b.get("tracker"))}
+    tracker_a = merged_tracker(spec_a)
+    tracker_b = merged_tracker(spec_b)
 
     pair_err = require_linked_pair(tracker_a, tracker_b,
                                    self_id=spec_id, other_id=blocked_by)
@@ -169,6 +169,15 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
         "from_id": from_id, "to_id": to_id,
         "from_display": loc_a["display"], "to_display": loc_b["display"],
     }
+
+    # GitHub/GitLab relation paths address issues by display (number/IID):
+    # validate display -> durable for BOTH ends BEFORE any probe or mutation
+    # (wire write-verb parity), so a moved, repointed, or stale identifier
+    # aborts instead of inspecting or relating unrelated issues.
+    verr = P.display_durable_guard(provider, config, ex,
+                                   locators=(loc_a, loc_b))
+    if verr:
+        return verr
 
     # 4-way ledger x remote classification BEFORE any mutation (fn-64).
     # A `pending` entry is recorded ownership INTENT from an earlier run whose
