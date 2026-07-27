@@ -24037,6 +24037,49 @@ def cmd_tracker_relate(args: argparse.Namespace) -> None:
     sys.exit(code)
 
 
+def _import_tracker_syncbody():
+    """Guarded import matching cmd_tracker_relate / cmd_tracker_wire."""
+    try:
+        from flowctl_tracker import syncbody as tracker_syncbody  # noqa: PLC0415
+        return tracker_syncbody
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import syncbody as tracker_syncbody  # noqa: PLC0415
+            return tracker_syncbody
+        except ImportError:
+            return None
+
+
+def cmd_tracker_syncbody(args: argparse.Namespace) -> None:
+    """`flowctl tracker sync-body <spec-id> --flow-file F` (fn-140.5).
+
+    Thin envelope shell over `flowctl_tracker.syncbody`. Writes (optional) +
+    readback + paired merge base atomically; never composes a merged body.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_syncbody = _import_tracker_syncbody()
+    if tracker_syncbody is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_syncbody.run(
+        get_flow_dir(),
+        spec_id=getattr(args, "spec_id", None),
+        flow_file=getattr(args, "flow_file", None),
+        tracker_body_file=getattr(args, "tracker_body_file", None),
+        direction=getattr(args, "direction", "push") or "push",
+        event=getattr(args, "event", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
 def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
     """Atomic pre-spec recovery records for tracker-sync `create-first`.
 
@@ -31501,6 +31544,32 @@ def main() -> None:
     p_tracker_relate.add_argument("--json", action="store_true",
                                   help="Accepted and ignored (output is always JSON)")
     p_tracker_relate.set_defaults(func=cmd_tracker_relate)
+
+    # sync-body verb (fn-140.5) - write/readback + paired merge base transaction.
+    p_tracker_syncbody = tracker_sub.add_parser(
+        "sync-body",
+        help="Write issue body (optional), read back, commit paired merge base "
+             "(server readback is canonical for the tracker half)",
+    )
+    p_tracker_syncbody.add_argument("spec_id", help="Spec ID")
+    p_tracker_syncbody.add_argument(
+        "--flow-file", required=True, dest="flow_file",
+        help="Final local body (agent-rendered or conflict-resolved); becomes "
+             "mergeBaseFlow exactly",
+    )
+    p_tracker_syncbody.add_argument(
+        "--tracker-body-file", default=None, dest="tracker_body_file",
+        help="Optional agent-approved tracker-side body for a two-way reconcile push",
+    )
+    p_tracker_syncbody.add_argument(
+        "--direction", default="push", choices=["push", "pull"],
+        help="push writes then readbacks; pull snapshots without writing",
+    )
+    p_tracker_syncbody.add_argument("--event", default=None,
+                                    help="perEvent key stamped on the sync receipt")
+    p_tracker_syncbody.add_argument("--json", action="store_true",
+                                    help="Accepted and ignored (output is always JSON)")
+    p_tracker_syncbody.set_defaults(func=cmd_tracker_syncbody)
 
     p_sync = subparsers.add_parser(
         "sync", help="Tracker sync plumbing (config / state / enumerate / receipt)"

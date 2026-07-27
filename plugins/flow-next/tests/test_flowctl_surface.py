@@ -179,6 +179,7 @@ tracker create-first
 tracker persist-external
 tracker status
 tracker relate
+tracker sync-body
 tracker wire read
 tracker wire update
 tracker wire comment-add
