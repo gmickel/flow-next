@@ -23881,6 +23881,55 @@ def cmd_tracker_wire(args: argparse.Namespace) -> None:
     sys.exit(code)
 
 
+def _import_tracker_lifecycle():
+    """Guarded import matching cmd_tracker_wire / cmd_tracker_resolve."""
+    try:
+        from flowctl_tracker import lifecycle as tracker_lifecycle  # noqa: PLC0415
+        return tracker_lifecycle
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import lifecycle as tracker_lifecycle  # noqa: PLC0415
+            return tracker_lifecycle
+        except ImportError:
+            return None
+
+
+def cmd_tracker_lifecycle(args: argparse.Namespace) -> None:
+    """`flowctl tracker create|create-first|persist-external` (fn-140.2).
+
+    Thin envelope shells over `flowctl_tracker.lifecycle`. No `tracker reconcile`
+    command — UUID completion is `complete_identifier_only`, called by the .7
+    facade's `tracker sync --op reconcile`.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_lifecycle = _import_tracker_lifecycle()
+    if tracker_lifecycle is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_lifecycle.run(
+        get_flow_dir(),
+        args.lifecycle_verb,
+        spec_id=getattr(args, "spec_id", None),
+        title=getattr(args, "title", None),
+        body_file=getattr(args, "body_file", None),
+        event=getattr(args, "event", None),
+        retry_key=getattr(args, "retry_key", None),
+        identifier=getattr(args, "identifier", None),
+        durable_id=getattr(args, "durable_id", None),
+        url=getattr(args, "url", None),
+        source=getattr(args, "source", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
 def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
     """Atomic pre-spec recovery records for tracker-sync `create-first`.
 
@@ -31243,6 +31292,52 @@ def main() -> None:
                                      help="List open issues (no locator)")
     _wire_json(p_wire_list)
     p_wire_list.set_defaults(func=cmd_tracker_wire)
+
+    # lifecycle verbs (fn-140.2) — create / create-first / persist-external.
+    # No `tracker reconcile` CLI: UUID completion is complete_identifier_only,
+    # invoked by the .7 facade's `tracker sync --op reconcile`.
+    p_tracker_create = tracker_sub.add_parser(
+        "create",
+        help="Create a tracker issue and link an existing spec (writes receipt)",
+    )
+    p_tracker_create.add_argument("spec_id", help="Spec ID")
+    p_tracker_create.add_argument("--title", required=True)
+    p_tracker_create.add_argument("--body-file", required=True)
+    p_tracker_create.add_argument("--event", default=None,
+                                  help="perEvent key stamped on the sync receipt")
+    p_tracker_create.add_argument("--json", action="store_true",
+                                  help="Accepted and ignored (output is always JSON)")
+    p_tracker_create.set_defaults(func=cmd_tracker_lifecycle, lifecycle_verb="create")
+
+    p_tracker_cf = tracker_sub.add_parser(
+        "create-first",
+        help="Create a tracker issue before any local spec (fn-134; no receipt)",
+    )
+    p_tracker_cf.add_argument("--title", required=True)
+    p_tracker_cf.add_argument("--body-file", required=True)
+    p_tracker_cf.add_argument("--retry-key", required=True,
+                              help="16-hex key from sync create-first-key")
+    p_tracker_cf.add_argument("--json", action="store_true",
+                              help="Accepted and ignored (output is always JSON)")
+    p_tracker_cf.set_defaults(func=cmd_tracker_lifecycle, lifecycle_verb="create-first")
+
+    p_tracker_pe = tracker_sub.add_parser(
+        "persist-external",
+        help="Record an MCP-performed Linear create (resolves UUID via GraphQL)",
+    )
+    p_tracker_pe.add_argument("spec_id", help="Spec ID")
+    p_tracker_pe.add_argument("--identifier", required=True,
+                              help="Display identifier returned by MCP (e.g. WOR-17)")
+    p_tracker_pe.add_argument("--id", dest="durable_id", default=None,
+                              help="Durable UUID when already known")
+    p_tracker_pe.add_argument("--url", default=None)
+    p_tracker_pe.add_argument("--source", required=True, choices=["mcp"],
+                              help="Must be mcp (MCP is create/discovery only)")
+    p_tracker_pe.add_argument("--event", default=None)
+    p_tracker_pe.add_argument("--json", action="store_true",
+                              help="Accepted and ignored (output is always JSON)")
+    p_tracker_pe.set_defaults(func=cmd_tracker_lifecycle,
+                              lifecycle_verb="persist-external")
 
     p_sync = subparsers.add_parser(
         "sync", help="Tracker sync plumbing (config / state / enumerate / receipt)"

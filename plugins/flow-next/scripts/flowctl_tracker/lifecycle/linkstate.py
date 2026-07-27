@@ -1,0 +1,134 @@
+"""linkState enum + legacy migration + UUID completion helper (fn-140.2)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Union
+
+from ..executor import execute as default_execute
+from ..types import ErrorClass, TrackerError
+from .helpers import (Execute, LINK_STATES, Result, collision, default_tracker,
+                      dict_, load_spec, now_iso, read_config, tracker_type,
+                      write_tracker_block)
+
+
+def derive_link_state(tracker_block: Any) -> str:
+    """LEGACY MIGRATION read. Explicit linkState wins; else migrate."""
+    block = dict_(tracker_block)
+    explicit = block.get("linkState")
+    if isinstance(explicit, str) and explicit in LINK_STATES:
+        return explicit
+    durable = block.get("id")
+    ident = block.get("identifier")
+    if durable is not None and str(durable).strip() != "":
+        return "linked"
+    if ident is not None and str(ident).strip() != "":
+        return "identifier_only"
+    return "unlinked"
+
+
+def require_durable(tracker_block: Any) -> Union[str, TrackerError]:
+    """Messages distinguish identifier_only from unlinked."""
+    block = dict_(tracker_block)
+    state = derive_link_state(block)
+    if state == "linked":
+        durable = block.get("id")
+        if isinstance(durable, str) and durable.strip():
+            return durable.strip()
+        if durable is not None and str(durable).strip():
+            return str(durable)
+        return TrackerError(ErrorClass.UNRESOLVED,
+                            "linkState is linked but tracker.id is empty",
+                            subtype="durable")
+    if state == "identifier_only":
+        return TrackerError(
+            ErrorClass.UNRESOLVED,
+            "tracker linkState is identifier_only (display identifier present, "
+            "durable id missing); run `flowctl tracker sync <spec-id> "
+            "--op reconcile` to complete the UUID",
+            subtype="identifier_only",
+        )
+    return TrackerError(
+        ErrorClass.UNRESOLVED,
+        "tracker is unlinked (no durable id and no display identifier)",
+        subtype="unlinked",
+    )
+
+
+def resolve_linear_uuid(execute: Execute, identifier: str
+                        ) -> Union[dict, TrackerError]:
+    """GraphQL issue(id:) → {id, identifier, url}. Never fabricates a UUID."""
+    from ..wire import _gql  # noqa: PLC0415
+    data = _gql(execute, "lifecycle-resolve-uuid",
+                "query($id: String!) { issue(id: $id) { id identifier url } }",
+                {"id": identifier}, idempotent=True)
+    if isinstance(data, TrackerError):
+        return data
+    issue = data.get("issue")
+    if issue is None:
+        return TrackerError(ErrorClass.NOT_FOUND,
+                            f"linear issue {identifier!r} not found",
+                            subtype="issue")
+    if not isinstance(issue, dict) or not isinstance(issue.get("id"), str) or not issue["id"]:
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "GraphQL issue carries no durable id",
+                            subtype="malformed_body")
+    return {
+        "id": issue["id"],
+        "identifier": issue.get("identifier") or identifier,
+        "url": issue.get("url"),
+    }
+
+
+def complete_identifier_only(flow_dir, spec_id: str, *,
+                             execute: Execute = default_execute) -> Result:
+    """Resolve UUID via GraphQL; atomically set id + linkState linked.
+
+    Helper for the .7 `tracker sync --op reconcile` facade — NOT a CLI verb.
+    """
+    flow_dir = Path(flow_dir)
+    config = read_config(flow_dir)
+    if tracker_type(config) != "linear":
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            "complete_identifier_only requires tracker.type=linear",
+                            subtype="provider")
+    loaded = load_spec(flow_dir, spec_id)
+    if isinstance(loaded, TrackerError):
+        return loaded
+    path, spec_data = loaded
+    tracker = {**default_tracker(), **dict_(spec_data.get("tracker"))}
+    state = derive_link_state(tracker)
+    if state == "linked" and tracker.get("id"):
+        return {"id": tracker["id"], "identifier": tracker.get("identifier"),
+                "url": tracker.get("url"), "linkState": "linked",
+                "completed": False}
+    if state != "identifier_only":
+        return TrackerError(
+            ErrorClass.UNRESOLVED,
+            f"complete_identifier_only requires identifier_only, got {state}",
+            subtype=state,
+        )
+    identifier = tracker.get("identifier")
+    if not isinstance(identifier, str) or not identifier.strip():
+        return TrackerError(ErrorClass.UNRESOLVED,
+                            "identifier_only record has empty identifier",
+                            subtype="identifier")
+    from ..resolve_verb import bound_executor  # noqa: PLC0415
+    ex = bound_executor(config, execute)
+    resolved = resolve_linear_uuid(ex, identifier.strip())
+    if isinstance(resolved, TrackerError):
+        return resolved
+    hit = collision(flow_dir, resolved["id"], except_spec=spec_id)
+    if hit:
+        return hit
+    tracker["id"] = resolved["id"]
+    tracker["identifier"] = resolved["identifier"]
+    if resolved.get("url"):
+        tracker["url"] = resolved["url"]
+    tracker["linkState"] = "linked"
+    tracker["lastSyncedAt"] = now_iso()
+    err = write_tracker_block(path, spec_data, tracker)
+    if err:
+        return err
+    return {"id": tracker["id"], "identifier": tracker["identifier"],
+            "url": tracker.get("url"), "linkState": "linked", "completed": True}

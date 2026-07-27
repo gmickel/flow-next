@@ -174,6 +174,9 @@ sync set-last-synced
 sync set-merge-base
 sync set-tracker-id
 tracker resolve
+tracker create
+tracker create-first
+tracker persist-external
 tracker wire read
 tracker wire update
 tracker wire comment-add

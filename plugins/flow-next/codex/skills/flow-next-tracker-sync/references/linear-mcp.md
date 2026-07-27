@@ -11,6 +11,17 @@ The MCP tool surface is host-agent-visible: the agent calls the tools directly
 **literally** (real newlines, no `\n` escape sequences — the server's own
 instruction).
 
+**MCP is restricted to CREATE and DISCOVERY (fn-140 R5).** Every other
+operation — status, comments, labels, body sync, relations — requires the
+GraphQL rung, where flowctl's deterministic verbs run. After an MCP-performed
+create, hand the result to `flowctl tracker persist-external <spec-id>
+--identifier <KEY-N> --source mcp` — MCP returns the display identifier only,
+never the durable UUID (see line ~100), so flowctl resolves the UUID via
+GraphQL (or records an explicitly-marked `identifier_only` link state that a
+later `tracker sync --op reconcile` completes). Do not assume any wider
+"persist an arbitrary external operation" contract exists; it does not, by
+design.
+
 ## Tool-name pin (verified — re-verify at build; MCP tool names drift)
 
 > **CLAUDE.md-style breadcrumb.** Linear's official MCP server uses **upsert
