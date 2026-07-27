@@ -20,7 +20,7 @@ from . import (
 
 
 
-def _issue_out(raw: dict, *, parent_identity: str = "validated") -> dict:
+def _issue_out(raw: dict, *, parent_identity: str = "not_available") -> dict:
     fields = raw.get("fields") if isinstance(raw.get("fields"), dict) else {}
     return {
         "id": str(raw.get("id")),
@@ -108,7 +108,9 @@ def update(config: dict, locator: dict, execute: Execute, *,
     # POST-update state, not the stale pre-update body.
     prior = parent.get("fields") if isinstance(parent.get("fields"), dict) else {}
     parent["fields"] = {**prior, **fields}
-    return _issue_out(parent, parent_identity="validated")
+    # 204 carries no body: response-side parent identity is NOT available on
+    # this synthesized post-state - the pre-mutation gate is the protection.
+    return _issue_out(parent, parent_identity="not_available")
 
 
 def comment_add(config: dict, locator: dict, execute: Execute, *, body: str) -> Result:

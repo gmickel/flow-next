@@ -398,7 +398,9 @@ class AllVerbsAllProviders(unittest.TestCase):
                 out = W.dispatch("update", cfg, locator=locator, title="N",
                                  execute=fake_execute(responses))
                 self.assertNotIsInstance(out, TrackerError)
-                self.assertEqual(out["parent_identity"], "validated")
+                # Jira PUT is a 204: no response-side identity to validate.
+                expected = "not_available" if provider == "jira" else "validated"
+                self.assertEqual(out["parent_identity"], expected)
 
     def test_comment_add_all(self) -> None:
         cases = [
@@ -906,3 +908,30 @@ class GitlabCommentListAggregateHonesty(unittest.TestCase):
         self.assertEqual(len(out["comments"]), 1)
         self.assertEqual(out["comments"][0]["parent_identity"], "not_available")
         self.assertEqual(out["parent_identity"], "not_available")
+
+
+class JiraSyntheticResponsesAreHonest(unittest.TestCase):
+    """Jira PUT verbs get a 204: the synthesized post-state carries NO
+    response-side parent identity - saying validated there was a fake check
+    (the pre-mutation gate is the real protection and already ran)."""
+
+    def _run(self, verb: str, **kw):
+        ex = fake_execute({"wire-parent-read": ok(JR_ISSUE),
+                           f"wire-{verb}": empty()})
+        out = W.dispatch(verb, jr_cfg(), locator=loc(JR_ID, "SCRUM-1"),
+                         execute=ex, **kw)
+        self.assertNotIsInstance(out, TrackerError)
+        return out
+
+    def test_update_label_assign_report_not_available(self) -> None:
+        self.assertEqual(self._run("update", title="t")["parent_identity"],
+                         "not_available")
+        self.assertEqual(self._run("label", add=["x"])["parent_identity"],
+                         "not_available")
+        self.assertEqual(self._run("assign", add=["acct-123456789012345678901"])
+                         ["parent_identity"], "not_available")
+
+    def test_read_still_validates_on_its_response(self) -> None:
+        ex = fake_execute({"wire-read": ok(JR_ISSUE)})
+        out = W.dispatch("read", jr_cfg(), locator=loc(JR_ID, "SCRUM-1"), execute=ex)
+        self.assertEqual(out["parent_identity"], "validated")

@@ -78,7 +78,7 @@
     },
     {
       "path": "flowctl_tracker/wire/jira.py",
-      "sha256": "daf64f2ab34580c48ad546f8737f2c261b6307b84edbf522a0ade71dbbf0a54a"
+      "sha256": "0b7f81e8346dc23f1477c4186faa45140e155dc55d7fdf46333a481e7836006d"
     },
     {
       "path": "flowctl_tracker/wire/linear.py",
