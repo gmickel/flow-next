@@ -593,3 +593,38 @@ class CreateFirstStorageIsSecuredBeforeRemoteMutation(unittest.TestCase):
             self.assertIsInstance(out, TrackerError)
             self.assertEqual(len(ex.calls), 0, "abort BEFORE remote mutation")
             self.assertEqual(victim.read_text(encoding="utf-8"), "precious")
+
+
+class GitignoreRuleSemanticsNotSubstrings(unittest.TestCase):
+    def _run_create_first(self, gitignore_text: str) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            flow.mkdir()
+            (flow / "config.json").write_text(json.dumps(gh_cfg()), encoding="utf-8")
+            (flow / ".gitignore").write_text(gitignore_text, encoding="utf-8")
+            key = L.compute_create_first_key("github", "T", "B")
+            ex = fake_execute({"lifecycle-create": ok({
+                "id": 1, "node_id": GH_NODE, "number": 42,
+                "html_url": "https://github.com/o/r/issues/42"})})
+            out = L.create_first(flow, title="T", body="B",
+                                 retry_key=key, execute=ex)
+            assert not isinstance(out, TrackerError), out
+            return (flow / ".gitignore").read_text(encoding="utf-8")
+
+    def test_commented_rule_is_not_an_active_rule(self) -> None:
+        gi = self._run_create_first("# create-first/\n")
+        self.assertTrue(L.verbs._create_first_rule_active(gi),
+                        "an ACTIVE rule must exist after the call")
+        self.assertIn("\ncreate-first/", "\n" + gi.replace("# create-first/", ""))
+
+    def test_negated_rule_is_re_secured_by_appending_last(self) -> None:
+        gi = self._run_create_first("create-first/\n!create-first/\n")
+        self.assertTrue(L.verbs._create_first_rule_active(gi),
+                        "last-match-wins: the appended rule beats the negation")
+
+    def test_active_rule_variants_are_recognized(self) -> None:
+        for text in ("create-first/\n", "/create-first/\n", "create-first\n"):
+            self.assertTrue(L.verbs._create_first_rule_active(text), repr(text))
+        for text in ("# create-first/\n", "!create-first/\n",
+                     "create-first/\n!create-first/\n", ""):
+            self.assertFalse(L.verbs._create_first_rule_active(text), repr(text))

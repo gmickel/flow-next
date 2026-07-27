@@ -82,6 +82,20 @@ def compute_create_first_key(tracker_type_name: str, title: str, body: str) -> s
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def _create_first_rule_active(gitignore_text: str) -> bool:
+    """Real gitignore semantics, not a substring: `# create-first/` is a
+    comment (reproduced committable), and a later `!create-first/` negates an
+    earlier rule. Last matching line wins, exactly like git."""
+    active = False
+    for raw in gitignore_text.splitlines():
+        line = raw.strip()
+        if line in ("create-first/", "/create-first/", "create-first"):
+            active = True
+        elif line in ("!create-first/", "!/create-first/", "!create-first"):
+            active = False
+    return active
+
+
 def _ensure_create_first_ignored(flow_dir: Path):
     """fn-134 cross-checkout safety: a COMMITTED recovery record makes another
     checkout resume onto someone else's issue. Repos initialized before the
@@ -99,7 +113,7 @@ def _ensure_create_first_ignored(flow_dir: Path):
         return TrackerError(ErrorClass.TRANSPORT,
                             f"cannot read .flow/.gitignore: {exc}",
                             subtype="gitignore")
-    if "create-first/" in existing:
+    if _create_first_rule_active(existing):
         return None
     try:
         # Appended BELOW flowctl's managed block: init's reconciliation
