@@ -156,11 +156,17 @@ def _commit_paired_base(flow_dir: Path, spec_id: str, *,
 
 def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               tracker_body: Optional[str] = None,
+              tracker_snapshot_body: Optional[str] = None,
               direction: str = "push",
               event: Optional[str] = None,
               execute: Execute = default_execute,
               write_receipt: bool = True) -> Result:
-    """Write (optional) + readback + paired merge base. Never raises."""
+    """Write (optional) + readback + paired merge base. Never raises.
+
+    ``tracker_snapshot_body`` is honored ONLY for ``direction="pull"``: when
+    set, skip the parent read and persist that body as the tracker half (the
+    caller already ran the durable-validated parent gate).
+    """
     flow_dir = Path(flow_dir)
     if not spec_id:
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -196,10 +202,19 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
     from ..wire import parent_read  # noqa: PLC0415
     ex = bound_executor(config, execute)
 
-    parent = parent_read(provider, config, locator, ex, op="sync-body-parent-read")
-    if isinstance(parent, TrackerError):
-        return parent
-    current_body = _raw_body(provider, parent)
+    # Pull + caller-supplied snapshot: reuse the facade wire-read body so a
+    # concurrent tracker edit cannot desync the returned body from mergeBase.
+    if direction == "pull" and tracker_snapshot_body is not None:
+        if isinstance(tracker_snapshot_body, str):
+            current_body = tracker_snapshot_body
+        else:
+            current_body = str(tracker_snapshot_body)
+    else:
+        parent = parent_read(provider, config, locator, ex,
+                             op="sync-body-parent-read")
+        if isinstance(parent, TrackerError):
+            return parent
+        current_body = _raw_body(provider, parent)
 
     if direction == "pull":
         committed = _commit_paired_base(

@@ -150,9 +150,22 @@ def op_pull(flow_dir: Path, spec_id: str, *, event: str,
             tracker_id=durable, transport=provider,
         )
 
+    # Pair the returned wire body with the stored mergeBaseTracker: pass the
+    # already-validated read into sync_body so it does not re-read the parent.
+    snapshot = ""
+    if isinstance(read_out, dict):
+        raw = read_out.get("body")
+        if raw is None:
+            snapshot = ""
+        elif isinstance(raw, str):
+            snapshot = raw
+        else:
+            snapshot = str(raw)
+
     body_out = sync_body(
         flow_dir, spec_id, flow_file_body=flow_body, direction="pull",
         event=event, execute=execute, write_receipt=False,
+        tracker_snapshot_body=snapshot,
     )
     if isinstance(body_out, TrackerError):
         return fail_result(
