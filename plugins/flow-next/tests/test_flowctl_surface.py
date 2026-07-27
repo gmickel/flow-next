@@ -174,6 +174,15 @@ sync set-last-synced
 sync set-merge-base
 sync set-tracker-id
 tracker resolve
+tracker wire read
+tracker wire update
+tracker wire comment-add
+tracker wire comment-list
+tracker wire comment-update
+tracker wire comment-delete
+tracker wire label
+tracker wire assign
+tracker wire list-open
 task create
 task reset
 task set-acceptance

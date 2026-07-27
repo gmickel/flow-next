@@ -23844,6 +23844,43 @@ def cmd_tracker_resolve(args: argparse.Namespace) -> None:
     sys.exit(code)
 
 
+def cmd_tracker_wire(args: argparse.Namespace) -> None:
+    """`flowctl tracker wire <verb>` (fn-140.1) - locator-addressed wire verbs.
+
+    Thin shell over `flowctl_tracker.wire`: parse args, call the verb layer,
+    print the result envelope, exit with its code. Never raises across the
+    verb boundary - TrackerError maps to the envelope at this edge only.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    try:
+        from flowctl_tracker import wire as tracker_wire  # noqa: PLC0415
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import wire as tracker_wire  # noqa: PLC0415
+        except ImportError:
+            error_exit(
+                "flowctl_tracker package is not installed alongside flowctl.py; "
+                "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+                use_json=getattr(args, "json", False))
+    payload, code = tracker_wire.run(
+        get_flow_dir(),
+        args.wire_verb,
+        locator=getattr(args, "locator", None),
+        title=getattr(args, "title", None),
+        body_file=getattr(args, "body_file", None),
+        comment_id=getattr(args, "comment_id", None),
+        add=getattr(args, "add", None),
+        remove=getattr(args, "remove", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
 def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
     """Atomic pre-spec recovery records for tracker-sync `create-first`.
 
@@ -31132,6 +31169,80 @@ def main() -> None:
     p_tracker_resolve.add_argument("--json", action="store_true",
                                    help="Accepted and ignored (output is always JSON)")
     p_tracker_resolve.set_defaults(func=cmd_tracker_resolve)
+
+    # wire verbs (fn-140.1) — locator-addressed, no local state / no receipt.
+    p_tracker_wire = tracker_sub.add_parser(
+        "wire",
+        help="Locator-addressed wire verbs (read/update/comment/label/assign/list-open)",
+    )
+    wire_sub = p_tracker_wire.add_subparsers(dest="wire_verb", required=True)
+
+    def _wire_locator(p: argparse.ArgumentParser) -> None:
+        p.add_argument(
+            "--locator", required=True,
+            help='JSON locator {"durable":"<id>","display":"<#N|project#iid|KEY-N>"}',
+        )
+
+    def _wire_json(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--json", action="store_true",
+                       help="Accepted and ignored (output is always JSON)")
+
+    p_wire_read = wire_sub.add_parser("read", help="Fetch one issue by locator")
+    _wire_locator(p_wire_read)
+    _wire_json(p_wire_read)
+    p_wire_read.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_update = wire_sub.add_parser("update", help="Update title/body by locator")
+    _wire_locator(p_wire_update)
+    p_wire_update.add_argument("--title", default=None)
+    p_wire_update.add_argument("--body-file", default=None)
+    _wire_json(p_wire_update)
+    p_wire_update.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_cadd = wire_sub.add_parser("comment-add", help="Add a comment")
+    _wire_locator(p_wire_cadd)
+    p_wire_cadd.add_argument("--body-file", required=True)
+    _wire_json(p_wire_cadd)
+    p_wire_cadd.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_clist = wire_sub.add_parser("comment-list", help="List comments")
+    _wire_locator(p_wire_clist)
+    _wire_json(p_wire_clist)
+    p_wire_clist.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_cupd = wire_sub.add_parser("comment-update",
+                                     help="Update a comment (requires parent locator)")
+    _wire_locator(p_wire_cupd)
+    p_wire_cupd.add_argument("comment_id", help="Provider comment id")
+    p_wire_cupd.add_argument("--body-file", required=True)
+    _wire_json(p_wire_cupd)
+    p_wire_cupd.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_cdel = wire_sub.add_parser("comment-delete",
+                                     help="Delete a comment (requires parent locator)")
+    _wire_locator(p_wire_cdel)
+    p_wire_cdel.add_argument("comment_id", help="Provider comment id")
+    _wire_json(p_wire_cdel)
+    p_wire_cdel.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_label = wire_sub.add_parser("label", help="Add/remove labels")
+    _wire_locator(p_wire_label)
+    p_wire_label.add_argument("--add", action="append", default=[])
+    p_wire_label.add_argument("--remove", action="append", default=[])
+    _wire_json(p_wire_label)
+    p_wire_label.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_assign = wire_sub.add_parser("assign", help="Add/remove assignees")
+    _wire_locator(p_wire_assign)
+    p_wire_assign.add_argument("--add", action="append", default=[])
+    p_wire_assign.add_argument("--remove", action="append", default=[])
+    _wire_json(p_wire_assign)
+    p_wire_assign.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_list = wire_sub.add_parser("list-open",
+                                     help="List open issues (no locator)")
+    _wire_json(p_wire_list)
+    p_wire_list.set_defaults(func=cmd_tracker_wire)
 
     p_sync = subparsers.add_parser(
         "sync", help="Tracker sync plumbing (config / state / enumerate / receipt)"
