@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -98,6 +99,31 @@ PROMPT_HASHES = {
     # Condensation of validate-pass.md, NOT a copy of it (#118).
     "VALIDATOR_TEMPLATE_FALLBACK":
         "558ab25ab09ade0e315d924e72615c76f4ac8c9348cf60cfbfd761896664a36c",
+    # Injected INTO the cursor reviewer prompt when the diff or body is too
+    # large for argv. Reviewer-facing instructions, so: prompt text.
+    "_CURSOR_DIFF_TRUNC_MARKER":
+        "a8a988166e6c67d2813750be1fdd0c88bcae5acb6082e68ee44082356bcf9b26",
+    "_CURSOR_DIFF_OMITTED_MARKER":
+        "eaca7619b45629e1db6dac60bb1042718baff9c7ea85f317116848e62def44e7",
+    "_CURSOR_PROMPT_TRUNC_MARKER":
+        "623c116989917678074c110eb51c5e37bfe966bdcf09ad222b7801202ca5f740",
+    # Lands in the receipt `note` field and on stdout; agents read receipts.
+    "HOST_JUDGES_NOTE":
+        "47b75b60635754b4267077dc782a7b026af6dce3669619c4ffca6ec920c5d878",
+}
+
+# Module-level strings the discovery heuristic matches that are NOT prompt text.
+# Every entry needs a reason - this list is how a non-prompt opts out, and it is
+# the only way to keep the heuristic wide without it crying wolf.
+NOT_PROMPT_TEXT = {
+    # Relative filesystem paths, not prose. If one changes, the template simply
+    # fails to load and the loader/extraction tests catch it.
+    "IMPL_REVIEW_PROMPT_TEMPLATE_REL",
+    "STANDALONE_REVIEW_PROMPT_TEMPLATE_REL",
+    "PLAN_REVIEW_PROMPT_TEMPLATE_REL",
+    "COMPLETION_REVIEW_PROMPT_TEMPLATE_REL",
+    "VALIDATOR_TEMPLATE_REL",
+    "DEEP_PASSES_TEMPLATE_REL",
 }
 
 # Condensations of the deep-passes.md blocks, NOT copies of them (#118).
@@ -124,6 +150,14 @@ TEMPLATE_HASHES = {
         "9c64c2962b1a38c82f8f26d5d756be215d4a1816ae60f2a5c1955e94c71a5315",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
         "c93c500f3399c0ce1bc59afe4ba09476be04281336d98aa26ee4cea6ca4aac3d",
+    # Rendered by ralph.sh each autonomous loop - production prompts, and the
+    # ones an unattended run depends on most.
+    "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_plan.md":
+        "04683af76d3bf20bb5bb722ec1bc7aca0f3ba0841afcedc1cec2aa4061f7d72f",
+    "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_work.md":
+        "ee541d3a1b17b45e732abe45353d629af50460804fe92245c2e4f0a9c70e0f3c",
+    "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_completion.md":
+        "21731b3b8ead8c761061cddfbf1739ca1bfcdf2223692d82196d37ec89af2371",
 }
 
 
@@ -150,20 +184,34 @@ class TestEmbeddedPromptsPinned(unittest.TestCase):
     def test_no_unpinned_prompt_constant_appears(self) -> None:
         """A new prompt constant must be pinned too, or this file rots.
 
-        Without this, someone adds PROMPT_V2 next year, it is covered by
-        nothing, and the tripwire quietly protects only the old ones.
+        The first version of this check matched only names ending in
+        ``_FALLBACK`` / ``_BLOCK`` / ``_TEMPLATE``, and review caught that it
+        therefore ignored ``_CURSOR_*_MARKER`` - prompt text injected into the
+        cursor reviewer prompt - while the module docstring claimed full
+        coverage. A naming convention is not a guarantee.
+
+        So the heuristic is deliberately WIDE and anything it catches must be
+        either pinned or listed in NOT_PROMPT_TEXT with a reason. Adding a
+        prompt-bearing constant under any new naming style now fails here
+        rather than sliding in unwatched.
         """
+        keywords = (
+            "PROMPT", "MARKER", "TEMPLATE", "BLOCK", "RUBRIC", "INSTRUCTION",
+            "GUIDANCE", "NOTE", "HINT", "BANNER", "PREAMBLE", "FALLBACK",
+        )
         found = {
             n for n in dir(flowctl)
-            if n.isupper()
-            and n.endswith(("_FALLBACK", "_BLOCK", "_TEMPLATE"))
+            if re.match(r"^_?[A-Z][A-Z0-9_]*$", n)
             and isinstance(getattr(flowctl, n), str)
+            and len(getattr(flowctl, n)) >= 25
+            and any(k in n for k in keywords)
         }
-        unpinned = found - set(PROMPT_HASHES)
+        unaccounted = found - set(PROMPT_HASHES) - NOT_PROMPT_TEXT
         self.assertEqual(
-            unpinned, set(),
-            f"new prompt constant(s) {sorted(unpinned)} are not pinned - add them "
-            f"to PROMPT_HASHES so a refactor cannot rewrite them silently.",
+            unaccounted, set(),
+            f"prompt-bearing constant(s) {sorted(unaccounted)} are neither "
+            f"pinned in PROMPT_HASHES nor declared in NOT_PROMPT_TEXT. Pin it "
+            f"if agents read it; declare it (with a reason) if they do not.",
         )
 
 
