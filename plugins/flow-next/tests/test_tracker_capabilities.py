@@ -610,3 +610,75 @@ class Round1HostFixes(unittest.TestCase):
                              "default NOT re-created - no mutation issued")
             sink = flow / "review-deferred" / "tracker-relate.md"
             self.assertIn("removed", sink.read_text(encoding="utf-8"))
+
+
+class Round2HostFixes(unittest.TestCase):
+    def test_jira_relate_probe_and_create(self) -> None:
+        """The probe signature bug made EVERY jira relate raise TypeError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": "10042", "identifier": "SCRUM-1", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": "10043", "identifier": "SCRUM-2", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, jr_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            probe = ok({"fields": {"issuelinks": []}})
+            ex = fake_execute({"relate-list": [probe], "relate-create": ok(None)})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "applied")
+            self.assertEqual(out["form"], "blocks")
+            # Idempotency: ledger + remote-present -> noop, no create.
+            present = ok({"fields": {"issuelinks": [
+                {"type": {"name": "Blocks"},
+                 "inwardIssue": {"id": "10042"},
+                 "outwardIssue": {"id": "10043"}}]}})
+            ex2 = fake_execute({"relate-list": [present]})
+            again = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex2)
+            self.assertEqual(again["kind"], "noop")
+
+    def test_concurrent_relates_lose_no_ledger_entry(self) -> None:
+        """Barrier-driven: two relates to different deps race; both entries
+        must survive (serialized by the shared .flow writer lock)."""
+        import threading
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            # third spec as a second dep target
+            c_id = "cccccccc-1111-2222-3333-444444444444"
+            (flow / "specs" / "fn-3-dep2.json").write_text(json.dumps({
+                "id": "fn-3-dep2", "status": "open",
+                "tracker": {"id": c_id, "identifier": "WOR-19", "url": "u",
+                            "linkState": "linked", "depRelations": []}}),
+                encoding="utf-8")
+            barrier = threading.Barrier(2)
+            results = {}
+
+            def go(dep, uuid):
+                empty = ok({"data": {"issue": {"id": LN_UUID,
+                            "relations": {"nodes": []},
+                            "inverseRelations": {"nodes": []}}}})
+                create = ok({"data": {"issueRelationCreate": {
+                    "success": True, "issueRelation": {"id": f"rel-{dep}"}}}})
+
+                def execute(request):
+                    if request.op == "relate-list":
+                        barrier.wait(timeout=10)  # both probe pre-write state
+                        return empty
+                    return create
+                results[dep] = R.relate(flow, "fn-1-demo", blocked_by=dep,
+                                        execute=execute)
+
+            t1 = threading.Thread(target=go, args=("fn-2-dep", LN_UUID_B))
+            t2 = threading.Thread(target=go, args=("fn-3-dep2", c_id))
+            t1.start(); t2.start(); t1.join(); t2.join()
+            for dep, out in results.items():
+                self.assertNotIsInstance(out, TrackerError, (dep, out))
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            keys = {e["dep_spec"] for e in spec["tracker"]["depRelations"]}
+            self.assertEqual(keys, {"fn-2-dep", "fn-3-dep2"},
+                             "a lost update dropped a ledger entry")

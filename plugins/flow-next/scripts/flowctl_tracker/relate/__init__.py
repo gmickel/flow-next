@@ -223,22 +223,28 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
 
     degraded = out.get("degraded")
 
-    # Applied: RELOAD the spec and merge the ledger before persisting -
-    # a concurrent relate's read-modify-write must not lose this entry (the
-    # last atomic replace would otherwise drop the other edge and misclassify
-    # it as foreign on the next run).
-    reloaded = load_spec(flow_dir, spec_id)
-    if isinstance(reloaded, TrackerError):
-        return reloaded
-    path_a, spec_a = reloaded
-    tracker_a = {**default_tracker(), **dict_(spec_a.get("tracker"))}
-    tracker_a = ledger_append(
-        tracker_a, key=key, dep_spec=blocked_by,
-        from_tracker_id=from_id, to_tracker_id=to_id,
-    )
-    werr = write_tracker_block(path_a, spec_a, tracker_a)
-    if werr:
-        return werr
+    # Applied: SERIALIZE the reload+append+persist under the shared .flow
+    # writer lock - reload alone narrowed but did not close the lost-update
+    # window (two relates could still reload the same pre-write state and the
+    # second atomic replace dropped the first edge, which the next run then
+    # misclassified as foreign).
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            reloaded = load_spec(flow_dir, spec_id)
+            if isinstance(reloaded, TrackerError):
+                return reloaded
+            path_a, spec_a = reloaded
+            tracker_a = {**default_tracker(), **dict_(spec_a.get("tracker"))}
+            tracker_a = ledger_append(
+                tracker_a, key=key, dep_spec=blocked_by,
+                from_tracker_id=from_id, to_tracker_id=to_id,
+            )
+            werr = write_tracker_block(path_a, spec_a, tracker_a)
+            if werr:
+                return werr
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
     # GitHub's sub_issues form is a HIERARCHY PROXY, never a blocked-by (R15).
     form = out.get("form")
     if form == "sub_issues":

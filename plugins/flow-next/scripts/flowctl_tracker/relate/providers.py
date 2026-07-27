@@ -295,9 +295,8 @@ def linear_probe(config, execute, *, from_id, to_id, **_kw):
     return _linear_edge_exists(execute, from_id, to_id)
 
 
-def jira_probe(config, execute, *, from_id, to_id, from_display, to_display, **_kw):
-    return _jira_edge_exists(config, execute, from_id=from_id, to_id=to_id,
-                             from_display=from_display, to_display=to_display)
+def jira_probe(config, execute, *, from_id, to_id, **_kw):
+    return _jira_edge_exists(config, execute, from_id=from_id, to_id=to_id)
 
 
 def gitlab_probe_pair(config, execute, *, from_display, to_display, **_kw):
