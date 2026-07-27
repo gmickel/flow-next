@@ -86,7 +86,7 @@
     },
     {
       "path": "flowctl_tracker/status/policy.py",
-      "sha256": "7b7884879dc12a0cb893ffd6d1d45d8a6f4b7b0cbcc7221bd5df25cb916d5b4f"
+      "sha256": "0877ccdec82db0569b08b0a92eda57b95dae7056c6f674c7e1b8e0fb9645e4bd"
     },
     {
       "path": "flowctl_tracker/status/providers.py",

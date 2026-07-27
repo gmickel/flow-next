@@ -265,17 +265,18 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
                      "both_sides": {"flow": flow_norm, "tracker": tracker_norm}},
         )
 
-    # ── TRACKER-TERMINAL WINS: fold into LOCAL state (no tracker write).
-    #    Evaluated before the merge-gate refusal - a PM closing the issue is
-    #    authoritative for closure, and deadlock (terminal x in_progress) was
-    #    already caught above, so this is the calm branch. ──
-    if tracker_norm in TERMINAL and flow_norm != ACTIVE_IN_PROGRESS:
-        return Decision("apply_local", target_slot=tracker_norm,
-                        details={"who": "tracker-terminal"})
+    # ── ALREADY IN AGREEMENT: a synchronized pair is a no-op BEFORE any
+    #    folding - re-writing it would advance lastSyncedAt and emit a receipt
+    #    for a sync that did not happen (R6 no-op invariant). ──
+    if flow_norm == tracker_norm:
+        return Decision("noop", target_slot=tracker_norm,
+                        details={"who": "already-agree"})
 
     # ── CLOSED-UNMERGED / AMBIGUOUS / PROBE-ERROR — genuinely ambiguous
     #    evidence is a CONFLICT for the skill's recovery surface (R7), never
-    #    a successful defer envelope. ──
+    #    a successful defer envelope. Evaluated BEFORE tracker-terminal
+    #    folding: non-clean merge evidence must reach a human even when the
+    #    tracker side happens to read terminal. ──
     if pr_evidence in NEEDS_HUMAN_EVIDENCE and (
         requested_to == "done" or flow_norm == "in_review"
     ):
@@ -284,6 +285,15 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
             details={"flow": flow_norm, "tracker": tracker_norm,
                      "pr_evidence": pr_evidence, "requested": requested_to},
         )
+
+    # ── TRACKER-TERMINAL WINS: fold into LOCAL state (no tracker write).
+    #    After the agreement no-op and the evidence conflicts; deadlock
+    #    (terminal x in_progress) was caught above, so this branch is a REAL
+    #    local disagreement with clean evidence - a PM closing the issue is
+    #    authoritative for closure. ──
+    if tracker_norm in TERMINAL and flow_norm != ACTIVE_IN_PROGRESS:
+        return Decision("apply_local", target_slot=tracker_norm,
+                        details={"who": "tracker-terminal"})
 
     # Merge-evidence gate: --to done is refused unless flow_norm is terminal
     if requested_to == "done" and flow_norm not in TERMINAL:

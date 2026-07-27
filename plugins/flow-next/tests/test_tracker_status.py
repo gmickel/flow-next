@@ -674,3 +674,20 @@ class Round1HostFixes(unittest.TestCase):
             self.assertEqual(write["degraded"]["kind"], "status_labels_inconsistent")
             self.assertIn({"op": "add", "label": "status:done", "error": "boom"},
                           write["degraded"]["failures"])
+
+
+class Round2Ordering(unittest.TestCase):
+    def test_terminal_agreement_is_a_noop_never_a_refold(self) -> None:
+        d = decide("done", None, "done", "done", "merged")
+        self.assertEqual(d.kind, "noop")
+
+    def test_ambiguous_evidence_beats_tracker_terminal_fold(self) -> None:
+        for ev in ("ambiguous", "closed-unmerged", "probe-error"):
+            with self.subTest(evidence=ev):
+                d = decide("done", None, "in_review", "done", ev)
+                self.assertEqual(d.kind, "conflict")
+                self.assertEqual(d.reason, ev)
+
+    def test_clean_disagreement_still_folds(self) -> None:
+        d = decide("todo", None, "todo", "done", "none")
+        self.assertEqual(d.kind, "apply_local")
