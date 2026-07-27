@@ -265,17 +265,10 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
                      "both_sides": {"flow": flow_norm, "tracker": tracker_norm}},
         )
 
-    # ── ALREADY IN AGREEMENT: a synchronized pair is a no-op BEFORE any
-    #    folding - re-writing it would advance lastSyncedAt and emit a receipt
-    #    for a sync that did not happen (R6 no-op invariant). ──
-    if flow_norm == tracker_norm:
-        return Decision("noop", target_slot=tracker_norm,
-                        details={"who": "already-agree"})
-
     # ── CLOSED-UNMERGED / AMBIGUOUS / PROBE-ERROR — genuinely ambiguous
     #    evidence is a CONFLICT for the skill's recovery surface (R7), never
-    #    a successful defer envelope. Evaluated BEFORE tracker-terminal
-    #    folding: non-clean merge evidence must reach a human even when the
+    #    a successful defer envelope. Evaluated BEFORE the equality
+    #    no-op AND the terminal fold: non-clean merge evidence must reach a human even when the
     #    tracker side happens to read terminal. ──
     if pr_evidence in NEEDS_HUMAN_EVIDENCE and (
         requested_to == "done" or flow_norm == "in_review"
@@ -285,6 +278,13 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
             details={"flow": flow_norm, "tracker": tracker_norm,
                      "pr_evidence": pr_evidence, "requested": requested_to},
         )
+
+    # ── ALREADY IN AGREEMENT: a synchronized pair is a no-op BEFORE any
+    #    folding - re-writing it would advance lastSyncedAt and emit a receipt
+    #    for a sync that did not happen (R6 no-op invariant). ──
+    if flow_norm == tracker_norm:
+        return Decision("noop", target_slot=tracker_norm,
+                        details={"who": "already-agree"})
 
     # ── TRACKER-TERMINAL WINS: fold into LOCAL state (no tracker write).
     #    After the agreement no-op and the evidence conflicts; deadlock

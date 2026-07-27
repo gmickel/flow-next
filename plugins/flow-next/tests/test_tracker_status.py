@@ -691,3 +691,18 @@ class Round2Ordering(unittest.TestCase):
     def test_clean_disagreement_still_folds(self) -> None:
         d = decide("todo", None, "todo", "done", "none")
         self.assertEqual(d.kind, "apply_local")
+
+
+class Round3Ordering(unittest.TestCase):
+    def test_equality_does_not_mask_evidence_conflicts(self) -> None:
+        """flow==tracker==in_review with non-clean evidence and --to done must
+        still surface the conflict - equality evaluates AFTER evidence."""
+        for ev in ("ambiguous", "closed-unmerged", "probe-error"):
+            with self.subTest(evidence=ev):
+                d = decide("done", None, "in_review", "in_review", ev)
+                self.assertEqual(d.kind, "conflict")
+                self.assertEqual(d.reason, ev)
+
+    def test_clean_equality_still_noops(self) -> None:
+        d = decide("in_review", None, "in_review", "in_review", "open")
+        self.assertEqual(d.kind, "noop")
