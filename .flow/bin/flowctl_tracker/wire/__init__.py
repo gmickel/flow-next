@@ -39,17 +39,17 @@ from .. import envelope
 from ..executor import execute as default_execute
 from ..types import ErrorClass, Request, Response, TrackerError
 
-#: Verbs this module owns. `attach` / `attach-get` are task .4.
+#: Verbs this module owns. `attach` / `attach-get` delegate to attach/ (fn-140.4).
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
-    "comment-delete", "label", "assign", "list-open",
+    "comment-delete", "label", "assign", "list-open", "attach", "attach-get",
 )
 WRITE_VERBS = frozenset({
     "update", "comment-add", "comment-update", "comment-delete", "label", "assign",
+    "attach",
 })
-#: Verbs that require a parent locator (comment-update/delete always; others too
-#: except list-open). Kept explicit so the CLI and the dispatcher share one set.
-LOCATOR_VERBS = frozenset(v for v in WIRE_VERBS if v != "list-open")
+#: Verbs that require a parent locator. attach-get and list-open are context-free.
+LOCATOR_VERBS = frozenset(v for v in WIRE_VERBS if v not in ("list-open", "attach-get"))
 
 _ACTIVE = frozenset({"github", "gitlab", "linear", "jira"})
 LINEAR_GQL = "https://api.linear.app/graphql"
@@ -396,6 +396,9 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
              title: Optional[str] = None, body: Optional[str] = None,
              comment_id: Optional[str] = None,
              add: Optional[list] = None, remove: Optional[list] = None,
+             file_path: Optional[str] = None,
+             attachment_id: Optional[str] = None,
+             out_path: Optional[str] = None,
              execute: Execute = default_execute) -> Result:
     """Run one wire verb. Returns data dict or TrackerError — never raises."""
     if verb not in WIRE_VERBS:
@@ -404,6 +407,18 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
     provider = _tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
+
+    # attach / attach-get live in the attach package (capability gates, R9).
+    if verb in ("attach", "attach-get"):
+        from .. import attach as attach_mod  # noqa: PLC0415
+        if verb == "attach":
+            if not file_path:
+                return TrackerError(ErrorClass.INVALID_INPUT,
+                                    "attach requires --file", subtype="file")
+            return attach_mod.attach(config, locator, file_path=file_path,
+                                     execute=execute)
+        return attach_mod.attach_get(config, attachment_id=attachment_id or "",
+                                     out_path=out_path or "", execute=execute)
 
     add = list(add or [])
     remove = list(remove or [])
@@ -467,6 +482,8 @@ def _read_config(flow_dir) -> dict:
 def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None,
         body_file: Optional[str] = None, comment_id: Optional[str] = None,
         add: Optional[list] = None, remove: Optional[list] = None,
+        file_path: Optional[str] = None, attachment_id: Optional[str] = None,
+        out_path: Optional[str] = None,
         execute: Execute = default_execute) -> tuple[str, int]:
     """CLI entry: return (stdout payload, exit code) — the single result envelope."""
     config = _read_config(flow_dir)
@@ -492,7 +509,9 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
     out = dispatch(verb, config, locator=locator, title=title, body=body,
-                   comment_id=comment_id, add=add, remove=remove, execute=ex)
+                   comment_id=comment_id, add=add, remove=remove,
+                   file_path=file_path, attachment_id=attachment_id,
+                   out_path=out_path, execute=ex)
     if isinstance(out, TrackerError):
         if out.cls is ErrorClass.INACTIVE:
             return envelope.inactive()

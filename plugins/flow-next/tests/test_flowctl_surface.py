@@ -178,6 +178,7 @@ tracker create
 tracker create-first
 tracker persist-external
 tracker status
+tracker relate
 tracker wire read
 tracker wire update
 tracker wire comment-add
@@ -187,6 +188,8 @@ tracker wire comment-delete
 tracker wire label
 tracker wire assign
 tracker wire list-open
+tracker wire attach
+tracker wire attach-get
 task create
 task reset
 task set-acceptance

@@ -23897,6 +23897,9 @@ def cmd_tracker_wire(args: argparse.Namespace) -> None:
         comment_id=getattr(args, "comment_id", None),
         add=getattr(args, "add", None),
         remove=getattr(args, "remove", None),
+        file_path=getattr(args, "file", None),
+        attachment_id=getattr(args, "attachment_id", None),
+        out_path=getattr(args, "out", None),
     )
     print(payload)
     sys.exit(code)
@@ -23987,6 +23990,47 @@ def cmd_tracker_status(args: argparse.Namespace) -> None:
         spec_id=getattr(args, "spec_id", None),
         to=getattr(args, "to", None),
         reason=getattr(args, "reason", None),
+        event=getattr(args, "event", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
+def _import_tracker_relate():
+    """Guarded import matching cmd_tracker_status / cmd_tracker_wire."""
+    try:
+        from flowctl_tracker import relate as tracker_relate  # noqa: PLC0415
+        return tracker_relate
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import relate as tracker_relate  # noqa: PLC0415
+            return tracker_relate
+        except ImportError:
+            return None
+
+
+def cmd_tracker_relate(args: argparse.Namespace) -> None:
+    """`flowctl tracker relate <spec-id> --blocked-by <other>` (fn-140.4).
+
+    Thin envelope shell over `flowctl_tracker.relate`. Writes depRelations
+    ledger + event-tagged receipt; never clobbers a foreign edge.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_relate = _import_tracker_relate()
+    if tracker_relate is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_relate.run(
+        get_flow_dir(),
+        spec_id=getattr(args, "spec_id", None),
+        blocked_by=getattr(args, "blocked_by", None),
         event=getattr(args, "event", None),
     )
     print(payload)
@@ -31285,7 +31329,7 @@ def main() -> None:
     # wire verbs (fn-140.1) — locator-addressed, no local state / no receipt.
     p_tracker_wire = tracker_sub.add_parser(
         "wire",
-        help="Locator-addressed wire verbs (read/update/comment/label/assign/list-open)",
+        help="Locator-addressed wire verbs (read/update/comment/label/assign/attach/list-open)",
     )
     wire_sub = p_tracker_wire.add_subparsers(dest="wire_verb", required=True)
 
@@ -31356,6 +31400,23 @@ def main() -> None:
     _wire_json(p_wire_list)
     p_wire_list.set_defaults(func=cmd_tracker_wire)
 
+    p_wire_attach = wire_sub.add_parser(
+        "attach", help="Upload an attachment (capability-gated; fn-140.4)")
+    _wire_locator(p_wire_attach)
+    p_wire_attach.add_argument("--file", required=True,
+                               help="Local file to upload")
+    _wire_json(p_wire_attach)
+    p_wire_attach.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_aget = wire_sub.add_parser(
+        "attach-get",
+        help="Download an attachment by id (no locator; fn-140.4)")
+    p_wire_aget.add_argument("attachment_id", help="Provider attachment id")
+    p_wire_aget.add_argument("--out", required=True,
+                             help="Local path to write retrieved bytes")
+    _wire_json(p_wire_aget)
+    p_wire_aget.set_defaults(func=cmd_tracker_wire)
+
     # lifecycle verbs (fn-140.2) — create / create-first / persist-external.
     # No `tracker reconcile` CLI: UUID completion is complete_identifier_only,
     # invoked by the .7 facade's `tracker sync --op reconcile`.
@@ -31423,6 +31484,23 @@ def main() -> None:
     p_tracker_status.add_argument("--json", action="store_true",
                                   help="Accepted and ignored (output is always JSON)")
     p_tracker_status.set_defaults(func=cmd_tracker_status)
+
+    # relate verb (fn-140.4) - depRelations ledger + blocked-by projection.
+    p_tracker_relate = tracker_sub.add_parser(
+        "relate",
+        help="Project a blocked-by relation between two linked specs "
+             "(depRelations ledger; fn-64 contract)",
+    )
+    p_tracker_relate.add_argument("spec_id", help="Spec ID (the blocked issue)")
+    p_tracker_relate.add_argument(
+        "--blocked-by", required=True, dest="blocked_by",
+        help="Spec ID of the blocker",
+    )
+    p_tracker_relate.add_argument("--event", default=None,
+                                  help="perEvent key stamped on the sync receipt")
+    p_tracker_relate.add_argument("--json", action="store_true",
+                                  help="Accepted and ignored (output is always JSON)")
+    p_tracker_relate.set_defaults(func=cmd_tracker_relate)
 
     p_sync = subparsers.add_parser(
         "sync", help="Tracker sync plumbing (config / state / enumerate / receipt)"

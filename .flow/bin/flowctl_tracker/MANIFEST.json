@@ -2,11 +2,19 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "47892eb788297397f64aa9fe2c6e17d3c96b040322de4d4777d293732c314534"
+      "sha256": "2a31922ae68e8856409b742729e315d8d455e609ff61ef1766305ff94fb54f4b"
     },
     {
       "path": "flowctl_tracker/__init__.py",
       "sha256": "21ac29eb50e4222bc741261a5a24e412eaf61de2a268eb29e9231119f3ded691"
+    },
+    {
+      "path": "flowctl_tracker/attach/__init__.py",
+      "sha256": "3d056a08841e695a7412dc158f6bbcba87cf65eb500e0bbaf26d54bc13f881d4"
+    },
+    {
+      "path": "flowctl_tracker/attach/providers.py",
+      "sha256": "3d7b8a2a8fcf8c714b7ee0dafa9af45f434a3a93d449666eca0d1182fbcdbcb0"
     },
     {
       "path": "flowctl_tracker/classify.py",
@@ -69,6 +77,18 @@
       "sha256": "f049938c14c41617690c7fb8285cdea281684a83c83ecaae0ccfe89f31cb5331"
     },
     {
+      "path": "flowctl_tracker/relate/__init__.py",
+      "sha256": "915233b7551fbf8c29f006afce57f34afb1d82f05d4001b3e12d4574b6ad7f5a"
+    },
+    {
+      "path": "flowctl_tracker/relate/ledger.py",
+      "sha256": "c8b1f96db8b5f51dabe3b0bcd78ff903a901502cf87778bdc56031b670d68da0"
+    },
+    {
+      "path": "flowctl_tracker/relate/providers.py",
+      "sha256": "ffc20725d6c7981a827f0013565c6cdcfc433fae9c8c0a3136e1ba8dd20e062d"
+    },
+    {
       "path": "flowctl_tracker/resolve_verb.py",
       "sha256": "95ac59474cbc2c125e43a6bcf14137a8b162cb1993a7487d65ece9ffc5f5409c"
     },
@@ -102,7 +122,7 @@
     },
     {
       "path": "flowctl_tracker/wire/__init__.py",
-      "sha256": "5b8e31d27a6d67661305071fcfb68558ca1bc7ee7d6ceb2c18ef2cc89423eaff"
+      "sha256": "ac0047ea5276762df37213d87af8932cfadc99694df26e1228b63c1335fb3dd0"
     },
     {
       "path": "flowctl_tracker/wire/github.py",
@@ -114,11 +134,11 @@
     },
     {
       "path": "flowctl_tracker/wire/jira.py",
-      "sha256": "0b7f81e8346dc23f1477c4186faa45140e155dc55d7fdf46333a481e7836006d"
+      "sha256": "dab6402265203dc5da878ed7213cebebc03ad756e336b16a5532688ab2e5e4e7"
     },
     {
       "path": "flowctl_tracker/wire/linear.py",
-      "sha256": "f4023da1e43674adae2903b1f252e2bbecd5ce8bb194314bf077a2f141f074a4"
+      "sha256": "9c6dd0cf1be53bc4b11ccac38b0d8b8c1304efcf44b36da245229f4c97620413"
     }
   ],
   "generated_by": "scripts/gen_tracker_manifest.py",

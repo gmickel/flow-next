@@ -277,7 +277,8 @@ def label(config: dict, locator: dict, execute: Execute, *,
     if not add and not remove:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "label requires --add and/or --remove", subtype="label")
-    label_ids = _dict(dest.get("labelIds"))
+    label_ids = dict(_dict(dest.get("labelIds")))
+    team_id = dest.get("teamId")
     current = []
     labels = parent.get("labels")
     nodes = (labels.get("nodes") if isinstance(labels, dict) else labels) or []
@@ -285,12 +286,39 @@ def label(config: dict, locator: dict, execute: Execute, *,
         if isinstance(n, dict) and n.get("id"):
             current.append(n["id"])
     current_set = set(current)
+    created: list[str] = []
     for name in add:
-        lid = label_ids.get(str(name).lower())
+        key = str(name).lower()
+        lid = label_ids.get(key)
         if not lid:
-            return TrackerError(ErrorClass.INVALID_INPUT,
-                                f"unknown linear label {name!r}; resolve labels "
-                                "or create it first", subtype="label")
+            # R15: unknown Linear label AUTO-CREATES (matches GitHub/GitLab
+            # create-on-demand). issueLabelCreate then attach via labelIds.
+            if not team_id:
+                return TrackerError(ErrorClass.UNRESOLVED,
+                                    "linear teamId required to auto-create label",
+                                    subtype="destination")
+            created_data = _gql(
+                execute, "wire-label-create",
+                "mutation($input: IssueLabelCreateInput!) { "
+                "issueLabelCreate(input: $input) { success "
+                "issueLabel { id name } } }",
+                {"input": {"name": str(name), "teamId": team_id}},
+            )
+            if isinstance(created_data, TrackerError):
+                return created_data
+            payload = created_data.get("issueLabelCreate")
+            if not isinstance(payload, dict) or payload.get("success") is not True:
+                return TrackerError(ErrorClass.TRANSPORT,
+                                    "linear issueLabelCreate failed",
+                                    subtype="mutation_failed")
+            lab = payload.get("issueLabel") if isinstance(payload.get("issueLabel"), dict) else {}
+            lid = lab.get("id")
+            if not isinstance(lid, str) or not lid:
+                return TrackerError(ErrorClass.TRANSPORT,
+                                    "linear issueLabelCreate returned no id",
+                                    subtype="malformed_body")
+            label_ids[key] = lid
+            created.append(str(name))
         current_set.add(lid)
     for name in remove:
         lid = label_ids.get(str(name).lower())
@@ -315,7 +343,10 @@ def label(config: dict, locator: dict, execute: Execute, *,
     err = _check_durable("linear", locator, issue)
     if err:
         return err
-    return _issue_out(issue)
+    out = _issue_out(issue)
+    if created:
+        out["labels_created"] = created
+    return out
 
 
 def assign(config: dict, locator: dict, execute: Execute, *,
@@ -326,16 +357,21 @@ def assign(config: dict, locator: dict, execute: Execute, *,
     if not add and not remove:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "assign requires --add and/or --remove", subtype="assign")
-    # Single-assignee: last --add wins; --remove clears when it matches.
+    # Single-assignee: last --add REPLACES; report prior in degraded (R15).
+    previous = None
+    current = parent.get("assignee") if isinstance(parent.get("assignee"), dict) else None
+    current_id = current.get("id") if current else None
     assignee_id = None
     if add:
         assignee_id = add[-1]
+        if current_id and current_id != assignee_id:
+            previous = current_id
     elif remove:
-        current = parent.get("assignee") if isinstance(parent.get("assignee"), dict) else None
-        if current and current.get("id") in remove:
+        if current_id in remove:
             assignee_id = None
+            previous = current_id
         else:
-            assignee_id = current.get("id") if current else None
+            assignee_id = current_id
     data = _gql(execute, "wire-assign",
                 "mutation($id: String!, $input: IssueUpdateInput!) { "
                 "issueUpdate(id: $id, input: $input) { success "
@@ -354,7 +390,14 @@ def assign(config: dict, locator: dict, execute: Execute, *,
     err = _check_durable("linear", locator, issue)
     if err:
         return err
-    return _issue_out(issue)
+    out = _issue_out(issue)
+    if previous is not None and add:
+        out["degraded"] = {
+            "kind": "assignee_replaced",
+            "previous": previous,
+            "applied": assignee_id,
+        }
+    return out
 
 
 def list_open(config: dict, execute: Execute) -> Result:

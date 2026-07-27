@@ -1,0 +1,93 @@
+"""depRelations ledger helpers + flow:deps marker constants (fn-140.4 / fn-64).
+
+Edge-key semantics match flowctl._dep_relation_key: sha256 of the directed
+(from_tracker_id \\x00 to_tracker_id) pair, truncated to 16 hex chars.
+
+The <!-- flow:deps --> marker is importable for .5 body hashing (exclusion is a
+HASHING concern there - this module does not hash bodies).
+"""
+
+from __future__ import annotations
+
+import hashlib
+from typing import Any, Optional
+
+from ..lifecycle.helpers import dict_, now_iso
+from ..types import TrackerError
+
+#: Provenance fence for GitHub fenced fallback / GitLab dual-write body block.
+#: Importable by sync-body (.5); do not strip or rewrite here.
+FLOW_DEPS_OPEN = "<!-- flow:deps -->"
+FLOW_DEPS_CLOSE = "<!-- /flow:deps -->"
+
+
+def dep_relation_key(from_tracker_id: str, to_tracker_id: str) -> str:
+    """Opaque stable edge key - same semantics as flowctl._dep_relation_key."""
+    return hashlib.sha256(
+        f"{from_tracker_id}\x00{to_tracker_id}".encode("utf-8")
+    ).hexdigest()[:16]
+
+
+def ledger_has(tracker: dict, key: str) -> bool:
+    for entry in tracker.get("depRelations") or []:
+        if isinstance(entry, dict) and entry.get("key") == key:
+            return True
+    return False
+
+
+def ledger_append(tracker: dict, *, key: str, dep_spec: str,
+                  from_tracker_id: str, to_tracker_id: str,
+                  rel_type: str = "blocks", source: str = "flow") -> dict:
+    """Idempotent append. Returns the (possibly unchanged) tracker block."""
+    ledger = list(tracker.get("depRelations") or [])
+    for entry in ledger:
+        if isinstance(entry, dict) and entry.get("key") == key:
+            tracker = dict(tracker)
+            tracker["depRelations"] = ledger
+            return tracker
+    ledger.append({
+        "key": key,
+        "dep_spec": dep_spec,
+        "from_tracker_id": from_tracker_id,
+        "to_tracker_id": to_tracker_id,
+        "type": rel_type,
+        "source": source,
+        "updatedAt": now_iso(),
+    })
+    tracker = dict(tracker)
+    tracker["depRelations"] = ledger
+    return tracker
+
+
+def blocker_completed(status: Any) -> bool:
+    """Completed-blocker rule: local dep-spec status done/closed is NOT projected."""
+    if not isinstance(status, str):
+        return False
+    return status.strip().lower() in {"done", "closed"}
+
+
+def require_linked_pair(self_tracker: dict, other_tracker: dict, *,
+                       self_id: str, other_id: str
+                       ) -> Optional[TrackerError]:
+    """Both sides must be durable-linked; identifier_only/unlinked → unresolved."""
+    from ..lifecycle.linkstate import require_durable  # noqa: PLC0415
+    a = require_durable(self_tracker)
+    if isinstance(a, TrackerError):
+        return TrackerError(
+            a.cls, f"spec {self_id}: {a.message}", subtype=a.subtype,
+            details=a.details)
+    b = require_durable(other_tracker)
+    if isinstance(b, TrackerError):
+        return TrackerError(
+            b.cls, f"spec {other_id}: {b.message}", subtype=b.subtype,
+            details=b.details)
+    return None
+
+
+def caps_of(config: dict) -> dict:
+    caps = dict_(dict_(dict_(config.get("tracker")).get("resolved")).get("capabilities"))
+    if caps:
+        return caps
+    from ..resolved_cache import STATIC_CAPABILITIES  # noqa: PLC0415
+    t = dict_(config.get("tracker")).get("type")
+    return dict(STATIC_CAPABILITIES.get(t) or {})

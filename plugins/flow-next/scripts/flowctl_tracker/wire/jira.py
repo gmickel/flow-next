@@ -260,22 +260,35 @@ def assign(config: dict, locator: dict, execute: Execute, *,
     base = _jira_base(config, dest)
     if isinstance(base, TrackerError):
         return base
-    # Single-assignee: --add sets accountId/name; --remove with no add clears.
+    fields = parent.get("fields") if isinstance(parent.get("fields"), dict) else {}
+    prior = fields.get("assignee") if isinstance(fields.get("assignee"), dict) else None
+    previous = None
+    if prior:
+        previous = prior.get("accountId") or prior.get("name")
+    # Single-assignee: last --add REPLACES; report prior in degraded (R15).
     if add:
         # Cloud prefers accountId; DC may use name. Pass through as accountId when
         # it looks like one, else as name.
         user = add[-1]
         assignee = {"accountId": user} if len(user) > 20 or "-" in user else {"name": user}
+        applied = user
     else:
         assignee = None
+        applied = None
     data = _jira(execute, "wire-assign", "PUT",
                  f"{base}/rest/api/2/issue/{quote(str(locator['durable']), safe='')}",
                  body={"fields": {"assignee": assignee}})
     if isinstance(data, TrackerError):
         return data
-    fields = parent.get("fields") if isinstance(parent.get("fields"), dict) else {}
     parent["fields"] = {**fields, "assignee": assignee}
-    return _issue_out(parent)
+    out = _issue_out(parent)
+    if add and previous is not None and previous != applied:
+        out["degraded"] = {
+            "kind": "assignee_replaced",
+            "previous": previous,
+            "applied": applied,
+        }
+    return out
 
 
 def list_open(config: dict, execute: Execute) -> Result:
