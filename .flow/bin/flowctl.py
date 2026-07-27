@@ -6562,6 +6562,13 @@ COMPLETION_REVIEW_PROMPT_TEMPLATE_REL = (
 )
 
 IMPL_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+
+**You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
+`flowctl <backend>` review command, or a nested agent/backend to perform this
+review: this prompt already reached you through that machinery, and nesting it
+fails inside the sandbox (app-server init) and can only self-review. Read the
+diff and the repository yourself and produce the verdict in this session.
+
 ## Context Gathering
 
 This review includes:
@@ -6653,6 +6660,13 @@ Do NOT skip this tag. The automation depends on it.
 """
 
 STANDALONE_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: base_branch, context_guidance, focus_section, diff_summary, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+
+**You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
+`flowctl <backend>` review command, or a nested agent/backend to perform this
+review: this prompt already reached you through that machinery, and nesting it
+fails inside the sandbox (app-server init) and can only self-review. Read the
+diff and the repository yourself and produce the verdict in this session.
+
 # Implementation Review: Branch Changes vs {base_branch}
 
 Review all changes on the current branch compared to {base_branch}.
@@ -6816,6 +6830,13 @@ Do NOT skip this tag. The automation depends on it.
 """
 
 COMPLETION_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+
+**You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
+`flowctl <backend>` review command, or a nested agent/backend to perform this
+review: this prompt already reached you through that machinery, and nesting it
+fails inside the sandbox (app-server init) and can only self-review. Read the
+diff and the repository yourself and produce the verdict in this session.
+
 ## Context Gathering
 
 This review includes:

@@ -11,7 +11,8 @@
   ],
   "id": "fn-140-tracker-determinism-b-verb-surface",
   "impl_review_rounds": {
-    "fn-140-tracker-determinism-b-verb-surface.1": 0
+    "fn-140-tracker-determinism-b-verb-surface.1": 0,
+    "fn-140-tracker-determinism-b-verb-surface.2": 0
   },
   "next_task": 1,
   "plan_review_rounds": 2,
@@ -395,11 +396,181 @@
       "task": "fn-140-tracker-determinism-b-verb-surface.1",
       "timestamp": "2026-07-27T11:47:15.052292Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "dispatch_error",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "a373cada18fc31a0916e65305ff6296a21df1f1e3d36f224ec8a2f28c44ed0cb",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:19:51.068290Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "nonzero_exit",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:20:05.089190Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "timeout",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "2dd04a2410fa854d289044c4708c76323fb396062e09c512c9dc0f154d6b8b68",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:20:33.598576Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "dispatch_error",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "a373cada18fc31a0916e65305ff6296a21df1f1e3d36f224ec8a2f28c44ed0cb",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:21:49.235007Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "nonzero_exit",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:22:06.079373Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "timeout",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "7374184acc33afb9797a6b33303be35e09a015415db308ca1607880c1b801bb0",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:22:28.173277Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "dispatch_error",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "a373cada18fc31a0916e65305ff6296a21df1f1e3d36f224ec8a2f28c44ed0cb",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:23:35.396584Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "nonzero_exit",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:23:59.298358Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "timeout",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "2d8049150fddbd946e5955507b6bd7bb46d4b0556ae14c77e32639528a49cd17",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:24:12.505850Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "dispatch_error",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "a373cada18fc31a0916e65305ff6296a21df1f1e3d36f224ec8a2f28c44ed0cb",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:25:20.943695Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "nonzero_exit",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:25:31.388810Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "nonzero_exit",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:25:47.509218Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "timeout",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "11b073847d35cc6bb6238b19c5b4dd846dfa7547bb7293126ef4180dda87e800",
+      "round_consumed": false,
+      "scope": "impl:fn-140-tracker-determinism-b-verb-surface.2",
+      "task": "fn-140-tracker-determinism-b-verb-surface.2",
+      "timestamp": "2026-07-27T12:25:56.036741Z",
+      "verdict": null
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
     "impl:fn-140-tracker-determinism-b-verb-surface.1": 0,
+    "impl:fn-140-tracker-determinism-b-verb-surface.2": 13,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-140-tracker-determinism-b-verb-surface.md",
@@ -416,5 +587,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-27T11:47:15.053044Z"
+  "updated_at": "2026-07-27T12:25:56.036809Z"
 }
