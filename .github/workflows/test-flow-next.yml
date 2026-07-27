@@ -19,8 +19,12 @@ on:
       - ".cursor-plugin/**"
       # fn-119 parallel unit-suite entrypoint
       - "scripts/run_tests_parallel.py"
-      # Ruff gate config (chore/ruff-gate)
+      # Ruff gate: config, plus every path `ruff check .` actually lints.
+      # These must stay in step - a filter narrower than the lint scope
+      # lets a violation land without the gate ever running (#244 review).
       - "ruff.toml"
+      - "scripts/**.py"
+      - "agent_docs/**.py"
   pull_request:
     branches: [main]
     paths:
@@ -34,8 +38,12 @@ on:
       - "scripts/ci/verify_cursor_install.py"
       - ".cursor-plugin/**"
       - "scripts/run_tests_parallel.py"
-      # Ruff gate config (chore/ruff-gate)
+      # Ruff gate: config, plus every path `ruff check .` actually lints.
+      # These must stay in step - a filter narrower than the lint scope
+      # lets a violation land without the gate ever running (#244 review).
       - "ruff.toml"
+      - "scripts/**.py"
+      - "agent_docs/**.py"
   workflow_dispatch:
     inputs:
       shuffle:
