@@ -177,6 +177,7 @@ tracker resolve
 tracker create
 tracker create-first
 tracker persist-external
+tracker status
 tracker wire read
 tracker wire update
 tracker wire comment-add

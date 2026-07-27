@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "1fd1bad6bdd7cd1cb15999133e5572ef1c2bc7ffc459aa3bc0289a02b27735a8"
+      "sha256": "47892eb788297397f64aa9fe2c6e17d3c96b040322de4d4777d293732c314534"
     },
     {
       "path": "flowctl_tracker/__init__.py",
@@ -79,6 +79,22 @@
     {
       "path": "flowctl_tracker/states.py",
       "sha256": "133ccf527af6918cadb392592c252c1db544354701668030e54ad4737cbe5515"
+    },
+    {
+      "path": "flowctl_tracker/status/__init__.py",
+      "sha256": "a074ed529e1e8d6c1990f0b85477189ff60afe423c1255982dd208f53c61801c"
+    },
+    {
+      "path": "flowctl_tracker/status/policy.py",
+      "sha256": "226b5821835e03a5ae84568245a5a2eae569908048d539b452f58ab16cdb8521"
+    },
+    {
+      "path": "flowctl_tracker/status/providers.py",
+      "sha256": "9733df2e6568f92e6bf950bda2cb15ab6ac9af80335597b297b45154f5efa553"
+    },
+    {
+      "path": "flowctl_tracker/status/verb.py",
+      "sha256": "187349e6ee435c96ca12397f1c36db9c07a1c2508fd20d37c97befca46d3aaa0"
     },
     {
       "path": "flowctl_tracker/types.py",

@@ -23951,6 +23951,48 @@ def cmd_tracker_lifecycle(args: argparse.Namespace) -> None:
     sys.exit(code)
 
 
+def _import_tracker_status():
+    """Guarded import matching cmd_tracker_lifecycle / cmd_tracker_wire."""
+    try:
+        from flowctl_tracker import status as tracker_status  # noqa: PLC0415
+        return tracker_status
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import status as tracker_status  # noqa: PLC0415
+            return tracker_status
+        except ImportError:
+            return None
+
+
+def cmd_tracker_status(args: argparse.Namespace) -> None:
+    """`flowctl tracker status <spec-id> --to <slot>` (fn-140.3).
+
+    Thin envelope shell over `flowctl_tracker.status`. `--to` is a request;
+    fn-66's merge-evidence gate + who-wins ladder decide the outcome.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_status = _import_tracker_status()
+    if tracker_status is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_status.run(
+        get_flow_dir(),
+        spec_id=getattr(args, "spec_id", None),
+        to=getattr(args, "to", None),
+        reason=getattr(args, "reason", None),
+        event=getattr(args, "event", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
 def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
     """Atomic pre-spec recovery records for tracker-sync `create-first`.
 
@@ -31359,6 +31401,28 @@ def main() -> None:
                               help="Accepted and ignored (output is always JSON)")
     p_tracker_pe.set_defaults(func=cmd_tracker_lifecycle,
                               lifecycle_verb="persist-external")
+
+    # status verb (fn-140.3) — merge-evidence gate + who-wins ladder.
+    p_tracker_status = tracker_sub.add_parser(
+        "status",
+        help="Reconcile tracker status for a linked spec (--to is a request; "
+             "fn-66 merge-evidence gate decides)",
+    )
+    p_tracker_status.add_argument("spec_id", help="Spec ID")
+    p_tracker_status.add_argument(
+        "--to", required=True,
+        choices=["backlog", "todo", "in_progress", "in_review", "done", "cancelled"],
+        help="Requested normalized slot (not an authority — the gate decides)",
+    )
+    p_tracker_status.add_argument(
+        "--reason", default=None,
+        help="GitHub state_reason: completed|not_planned|duplicate|reopened",
+    )
+    p_tracker_status.add_argument("--event", default=None,
+                                  help="perEvent key stamped on the sync receipt")
+    p_tracker_status.add_argument("--json", action="store_true",
+                                  help="Accepted and ignored (output is always JSON)")
+    p_tracker_status.set_defaults(func=cmd_tracker_status)
 
     p_sync = subparsers.add_parser(
         "sync", help="Tracker sync plumbing (config / state / enumerate / receipt)"
