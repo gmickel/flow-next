@@ -118,7 +118,7 @@
     },
     {
       "path": "flowctl_tracker/syncbody/__init__.py",
-      "sha256": "93c84eaa21ecce6275c26df3a2d3ea9ecb4c48715d7fb8a5fee8e0cbe2df99e5"
+      "sha256": "88f15f5871d9effd8d42c94b53a17f7d40547372b9e66a857c928b87e06bff6c"
     },
     {
       "path": "flowctl_tracker/types.py",

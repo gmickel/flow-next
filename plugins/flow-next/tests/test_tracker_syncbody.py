@@ -613,3 +613,52 @@ class RunEnvelope(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Round1ClassifierFixes(unittest.TestCase):
+    """Three-value no-op classification (codex round 1)."""
+
+    def test_approved_tracker_body_is_never_suppressed_by_the_echo_fence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(flow, gh_cfg(), tracker={
+                "id": GH_NODE, "identifier": "#42", "url": "u",
+                "linkState": "linked",
+                "mergeBaseFlow": "LOCAL", "mergeBaseTracker": "REMOTE",
+                "baseHashFlow": "x", "baseHashTracker": "y"})
+            parent = ok(_gh_issue("REMOTE"))
+            update = ok(_gh_issue("APPROVED NEW TRACKER"))
+            read = ok(_gh_issue("APPROVED NEW TRACKER"))
+            ex = fake_execute({"sync-body-parent-read": parent,
+                               "wire-parent-read": ok(_gh_issue("REMOTE")),
+                               "wire-update": update,
+                               "wire-read": read})
+            out = SB.sync_body(flow, "fn-1-demo", flow_file_body="LOCAL",
+                              tracker_body="APPROVED NEW TRACKER", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "pushed",
+                             "an explicitly approved tracker body MUST write")
+            ops = [c.op for c in ex.calls]
+            self.assertIn("wire-update", ops)
+
+    def test_flow_side_change_with_unchanged_tracker_recommits_the_base(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(flow, gh_cfg(), tracker={
+                "id": GH_NODE, "identifier": "#42", "url": "u",
+                "linkState": "linked",
+                "mergeBaseFlow": "OLD LOCAL", "mergeBaseTracker": "REMOTE",
+                "baseHashFlow": "x", "baseHashTracker": "y"})
+            # Outgoing equals current tracker (no write needed), but the FLOW
+            # body moved: the paired base must advance without a mutation.
+            parent = ok(_gh_issue("REMOTE"))
+            ex = fake_execute({"sync-body-parent-read": parent})
+            out = SB.sync_body(flow, "fn-1-demo", flow_file_body="NEW LOCAL",
+                              tracker_body="REMOTE", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "seeded")
+            self.assertEqual(out["side_written"], "none")
+            self.assertEqual(out["mergeBaseFlow"], "NEW LOCAL")
+            saved = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            self.assertEqual(saved["tracker"]["mergeBaseFlow"], "NEW LOCAL")
+            self.assertEqual([c.op for c in ex.calls], ["sync-body-parent-read"])

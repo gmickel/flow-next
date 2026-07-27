@@ -236,19 +236,33 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
     outgoing_src = tracker_body if tracker_body is not None else flow_file_body
     outgoing = _carry_deps_forward(outgoing_src, current_body)
 
-    # No-op when (a) outgoing matches current at the hash boundary, OR (b) both
-    # sides still equal the paired base (echo fence). (b) is what keeps Linear's
-    # rewrite from looking like instant flow/tracker divergence on the next push:
-    # sent != rewritten, but flow==mergeBaseFlow and readback==mergeBaseTracker.
+    # No-write classification considers ALL THREE values (flow body, current
+    # tracker body, and any explicitly supplied tracker body):
+    #   * matches_current - the outgoing body already equals the tracker at
+    #     the hash boundary: nothing to write.
+    #   * echo fence - ONLY when no explicit tracker body was supplied: the
+    #     flow side equals mergeBaseFlow and the tracker equals
+    #     mergeBaseTracker, so Linear's rewrite of the last push must not look
+    #     like divergence. An explicitly supplied --tracker-body-file is a
+    #     newly APPROVED reconcile result and must never be suppressed by it.
+    has_base = _has_paired_base(tracker)
     matches_current = (
         trackerBodyForMerge(outgoing) == trackerBodyForMerge(current_body))
-    matches_base = (
-        _has_paired_base(tracker)
+    echo_fence = (
+        tracker_body is None
+        and has_base
         and flow_file_body == tracker.get("mergeBaseFlow")
         and trackerBodyForMerge(current_body) == tracker.get("mergeBaseTracker"))
-    if matches_current or matches_base:
-        # No tracker write beyond the parent read.
-        if _has_paired_base(tracker):
+    if matches_current or echo_fence:
+        # No tracker write beyond the parent read. But the FLOW half may have
+        # moved: a base whose mergeBaseFlow no longer equals the local body
+        # must be re-committed (no mutation) or every later flow-side diff
+        # against it is false.
+        flow_unchanged = (
+            has_base
+            and flow_file_body == tracker.get("mergeBaseFlow")
+            and trackerBodyForMerge(current_body) == tracker.get("mergeBaseTracker"))
+        if flow_unchanged:
             return {
                 "kind": "noop",
                 "direction": "push",
