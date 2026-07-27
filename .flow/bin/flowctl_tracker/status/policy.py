@@ -127,7 +127,7 @@ def merge_evidence(config: dict, spec_data: dict, execute: Execute) -> str:
 
 
 def _classify_pr_rows(rows: list) -> str:
-    merged = open_ = closed = 0
+    merged = open_ = closed = draft = 0
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -135,17 +135,28 @@ def _classify_pr_rows(rows: list) -> str:
         if state == "MERGED":
             merged += 1
         elif state == "OPEN":
-            open_ += 1
+            # Drafts are not clean open evidence - counted separately so a
+            # draft-only branch classifies ambiguous per status-sync.md.
+            if row.get("isDraft"):
+                draft += 1
+            else:
+                open_ += 1
         elif state == "CLOSED":
             closed += 1
     # Canonical buckets, status-sync.md verbatim: BOTH an open AND a
-    # closed-unmerged PR is explicitly named ambiguous (a host "recreate-PR"
-    # simplification was reverted here - the doc decides, not intuition).
+    # closed-unmerged PR is explicitly named ambiguous, as is "a draft-only
+    # result where no clear merge/open/closed signal dominates" (a host
+    # "recreate-PR" simplification was reverted here - the doc decides, not
+    # intuition).
     if merged >= 1:
         return "merged"
     if open_ >= 1 and closed == 0:
         return "open"
     if open_ >= 1 and closed >= 1:
+        return "ambiguous"
+    if draft >= 1:
+        # Draft-only (possibly alongside closed rows): no clear signal
+        # dominates - ambiguous, never clean open or closed-unmerged.
         return "ambiguous"
     if closed >= 1:
         return "closed-unmerged"

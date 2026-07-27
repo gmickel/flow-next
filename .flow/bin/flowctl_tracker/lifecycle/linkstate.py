@@ -10,8 +10,8 @@ from ..types import ErrorClass, TrackerError
 # derive_link_state lives in helpers (merged_tracker needs it below the
 # defaults); re-exported here because this module is its public home.
 from .helpers import (Execute, Result, collision, derive_link_state, dict_,
-                      load_spec, merged_tracker, now_iso, read_config,
-                      tracker_type, write_tracker_block)
+                      load_spec, locked_tracker_write, merged_tracker,
+                      now_iso, read_config, tracker_type)
 
 
 def require_durable(tracker_block: Any) -> Union[str, TrackerError]:
@@ -82,7 +82,7 @@ def complete_identifier_only(flow_dir, spec_id: str, *,
     loaded = load_spec(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
-    path, spec_data = loaded
+    _path, spec_data = loaded
     tracker = merged_tracker(spec_data)
     state = derive_link_state(tracker)
     if state == "linked" and tracker.get("id"):
@@ -108,14 +108,23 @@ def complete_identifier_only(flow_dir, spec_id: str, *,
     hit = collision(flow_dir, resolved["id"], except_spec=spec_id)
     if hit:
         return hit
-    tracker["id"] = resolved["id"]
-    tracker["identifier"] = resolved["identifier"]
+    link_fields = {
+        "id": resolved["id"],
+        "identifier": resolved["identifier"],
+        "linkState": "linked",
+        "lastSyncedAt": now_iso(),
+    }
     if resolved.get("url"):
-        tracker["url"] = resolved["url"]
-    tracker["linkState"] = "linked"
-    tracker["lastSyncedAt"] = now_iso()
-    err = write_tracker_block(path, spec_data, tracker)
-    if err:
-        return err
-    return {"id": tracker["id"], "identifier": tracker["identifier"],
-            "url": tracker.get("url"), "linkState": "linked", "completed": True}
+        link_fields["url"] = resolved["url"]
+    # Persist ONLY the link-owned fields onto a spec RELOADED under the shared
+    # writer lock - the pre-resolve snapshot must never be replayed wholesale
+    # (a concurrent flowctl update to the same spec landing while the GraphQL
+    # request was in flight would be silently erased; create/persist_external
+    # follow the same reload-merge rule).
+    persisted = locked_tracker_write(
+        flow_dir, spec_id, lambda t: {**t, **link_fields})
+    if isinstance(persisted, TrackerError):
+        return persisted
+    return {"id": persisted["id"], "identifier": persisted["identifier"],
+            "url": persisted.get("url"), "linkState": "linked",
+            "completed": True}

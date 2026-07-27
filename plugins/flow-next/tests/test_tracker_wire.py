@@ -854,6 +854,7 @@ class LinearLabelReusesParentLabels(unittest.TestCase):
     def test_truly_unknown_label_still_auto_creates(self) -> None:
         ex = fake_execute({
             "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-label-team-lookup": gql_team_labels([]),
             "wire-label-create": ok({"data": {"issueLabelCreate": {
                 "success": True,
                 "issueLabel": {"id": "lbl-new", "name": "brand-new"}}}}),
@@ -864,6 +865,91 @@ class LinearLabelReusesParentLabels(unittest.TestCase):
         self.assertNotIsInstance(out, TrackerError, msg=repr(out))
         self.assertEqual(out.get("labels_created"), ["brand-new"])
         self.assertIn("wire-label-create", [c.op for c in ex.calls])
+
+
+def gql_team_labels(nodes, has_next=False) -> Response:
+    return ok({"data": {"team": {"labels": {
+        "nodes": nodes,
+        "pageInfo": {"hasNextPage": has_next, "endCursor": None}}}}})
+
+
+class LinearLabelResolvesFromTeamBeforeCreate(unittest.TestCase):
+    """A label auto-created while updating issue A lives on the TEAM but on
+    neither the pinned config labelIds nor issue B's parent read; adding it to
+    issue B must resolve via a live team-labels query, and only a team read
+    proving absence may fall through to issueLabelCreate."""
+
+    def test_label_from_another_issue_resolves_via_team_query(self) -> None:
+        # "urgent" (lbl-9) was auto-created for issue A; issue B's parent read
+        # does not carry it and the config does not pin it.
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-label-team-lookup": gql_team_labels(
+                [{"id": "lbl-9", "name": "urgent"}]),
+            "wire-label": ok({"data": {"issueUpdate": {
+                "success": True, "issue": LN_ISSUE}}})})
+        out = W.dispatch("label", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         add=["urgent"], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        ops = [c.op for c in ex.calls]
+        self.assertNotIn("wire-label-create", ops,
+                         "existing team label must be attached, never recreated")
+        self.assertNotIn("labels_created", out)
+        label_call = next(c for c in ex.calls if c.op == "wire-label")
+        body = json.loads(label_call.body)
+        self.assertIn("lbl-9", body["variables"]["input"]["labelIds"])
+
+    def test_team_match_is_case_insensitive(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-label-team-lookup": gql_team_labels(
+                [{"id": "lbl-9", "name": "Urgent"}]),
+            "wire-label": ok({"data": {"issueUpdate": {
+                "success": True, "issue": LN_ISSUE}}})})
+        out = W.dispatch("label", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         add=["urgent"], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        self.assertNotIn("wire-label-create", [c.op for c in ex.calls])
+        self.assertNotIn("labels_created", out)
+
+    def test_truncated_team_listing_does_not_create(self) -> None:
+        # Name-filtered yet hasNextPage: the match could sit on an unread
+        # page. Unproven absence is never absence - refuse to create.
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-label-team-lookup": gql_team_labels([], has_next=True)})
+        out = W.dispatch("label", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         add=["urgent"], execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "truncated")
+        self.assertNotIn("wire-label-create", [c.op for c in ex.calls])
+
+    def test_malformed_team_listing_does_not_create(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-label-team-lookup": ok({"data": {"team": None}})})
+        out = W.dispatch("label", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         add=["urgent"], execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "malformed_body")
+        self.assertNotIn("wire-label-create", [c.op for c in ex.calls])
+
+    def test_parent_fold_still_short_circuits_the_team_query(self) -> None:
+        # Wave-4 economy holds: a label already on THIS issue resolves from
+        # the parent read with no team lookup at all.
+        issue = dict(LN_ISSUE, labels={"nodes": [
+            {"id": "lbl-9", "name": "urgent"}]})
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(issue),
+            "wire-label": ok({"data": {"issueUpdate": {
+                "success": True, "issue": issue}}})})
+        out = W.dispatch("label", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         add=["urgent"], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        self.assertEqual([c.op for c in ex.calls],
+                         ["wire-parent-read", "wire-label"])
 
 
 GH_COMMENT = {"id": 1, "body": "hi", "html_url": "https://github.com/c/1"}

@@ -277,6 +277,38 @@ class MergeEvidence(unittest.TestCase):
                 got = merge_evidence(gh_cfg(), {"branch_name": "b"}, ex)
                 self.assertEqual(got, want)
 
+    def test_draft_only_is_ambiguous_not_clean_open(self) -> None:
+        """status-sync.md names a draft-only probe result ambiguous - the
+        classifier must use the isDraft field it requests, never report a
+        draft-only branch as clean open evidence (which would advance the
+        tracker to In Review)."""
+        cases = [
+            ([{"state": "OPEN", "isDraft": True}], "ambiguous"),
+            # draft alongside closed: still no clean dominant signal
+            ([{"state": "OPEN", "isDraft": True}, {"state": "CLOSED"}],
+             "ambiguous"),
+            # a real (non-draft) open PR still dominates a draft sibling
+            ([{"state": "OPEN", "isDraft": True},
+              {"state": "OPEN", "isDraft": False}], "open"),
+            # merged always wins, drafts irrelevant
+            ([{"state": "OPEN", "isDraft": True}, {"state": "MERGED"}],
+             "merged"),
+            # explicit isDraft: false keeps classifying as clean open
+            ([{"state": "OPEN", "isDraft": False}], "open"),
+        ]
+        for rows, want in cases:
+            with self.subTest(rows=rows, want=want):
+                ex = fake_execute({"merge-evidence": ok(rows)})
+                got = merge_evidence(gh_cfg(), {"branch_name": "b"}, ex)
+                self.assertEqual(got, want)
+
+    def test_draft_only_decision_surfaces_ambiguity(self) -> None:
+        """Draft-only evidence routes through the ambiguous conflict path
+        (NEEDS_HUMAN surface), never a clean in_review apply."""
+        d = decide("done", None, "in_review", "in_progress", "ambiguous")
+        self.assertEqual(d.kind, "conflict")
+        self.assertEqual(d.reason, "ambiguous")
+
     def test_missing_branch_is_probe_error(self) -> None:
         ex = fake_execute({})
         self.assertEqual(merge_evidence(gh_cfg(), {}, ex), "probe-error")

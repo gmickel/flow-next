@@ -266,6 +266,48 @@ def comment_delete(config: dict, locator: dict, execute: Execute, *,
     return {"deleted": comment_id, "parent_identity": "not_available"}
 
 
+def _team_label_lookup(execute: Execute, team_id: str, name: str
+                       ) -> Union[Optional[str], TrackerError]:
+    """Resolve `name` against the team's LIVE label connection.
+
+    A label auto-created while updating a DIFFERENT issue exists on the team
+    but appears in neither the pinned config labelIds nor this issue's parent
+    read; creating again would fail (name already exists) or duplicate. The
+    server-side name filter (`eqIgnoreCase` - label names are case-insensitively
+    unique per team) avoids pagination entirely, but the connection shape is
+    still validated: unproven absence is never absence, so a malformed or
+    truncated listing returns a TrackerError instead of falling through to
+    issueLabelCreate.
+    """
+    data = _gql(execute, "wire-label-team-lookup",
+                "query($teamId: String!, $name: String!) { team(id: $teamId) { "
+                "labels(filter: { name: { eqIgnoreCase: $name } }, first: 50) "
+                "{ nodes { id name } pageInfo { hasNextPage endCursor } } } }",
+                {"teamId": team_id, "name": name}, idempotent=True)
+    if isinstance(data, TrackerError):
+        return data
+    team = data.get("team")
+    conn = team.get("labels") if isinstance(team, dict) else None
+    nodes = conn.get("nodes") if isinstance(conn, dict) else None
+    if not isinstance(nodes, list):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear team labels connection is malformed",
+                            subtype="malformed_body")
+    for n in nodes:
+        if (isinstance(n, dict) and isinstance(n.get("id"), str) and n["id"]
+                and isinstance(n.get("name"), str)
+                and n["name"].lower() == name.lower()):
+            return n["id"]
+    if _dict(conn.get("pageInfo")).get("hasNextPage"):
+        # Name-filtered yet truncated: the match could sit on an unread page,
+        # so absence is unproven and auto-create must not proceed.
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear team labels listing is truncated; "
+                            "cannot prove label absence before create",
+                            subtype="truncated")
+    return None
+
+
 def label(config: dict, locator: dict, execute: Execute, *,
           add: list[str], remove: list[str]) -> Result:
     parent = _require_parent(config, locator, execute)
@@ -304,6 +346,16 @@ def label(config: dict, locator: dict, execute: Execute, *,
                 return TrackerError(ErrorClass.UNRESOLVED,
                                     "linear teamId required to auto-create label",
                                     subtype="destination")
+            # The parent-read fold above only covers labels already on THIS
+            # issue; a label auto-created via another issue is still unknown
+            # here. Prove absence against the team's live labels first.
+            found = _team_label_lookup(execute, team_id, str(name))
+            if isinstance(found, TrackerError):
+                return found
+            if found:
+                label_ids[key] = found
+                current_set.add(found)
+                continue
             created_data = _gql(
                 execute, "wire-label-create",
                 "mutation($input: IssueLabelCreateInput!) { "

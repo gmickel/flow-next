@@ -548,6 +548,9 @@ class LinearLabelAutoCreate(unittest.TestCase):
                   "labels": {"nodes": [{"id": "lbl-1", "name": "bug"}]}}
         ex = fake_execute({
             "wire-parent-read": ok({"data": {"issue": parent}}),
+            "wire-label-team-lookup": ok({"data": {"team": {"labels": {
+                "nodes": [],
+                "pageInfo": {"hasNextPage": False, "endCursor": None}}}}}),
             "wire-label-create": ok({"data": {"issueLabelCreate": {
                 "success": True,
                 "issueLabel": {"id": "lbl-new", "name": "urgent"}}}}),
@@ -1179,5 +1182,58 @@ class GithubRelateProbeDrain(unittest.TestCase):
         ex = fake_execute({"wire-relate-probe": [ok([{"number": 7}])]})
         out = RP.github_probe(gh_cfg(), ex, from_display="#42",
                               to_display="#43")
+        self.assertIs(out, False)
+        self.assertEqual(len(ex.calls), 1)
+
+
+class GitlabRelateProbeDrain(unittest.TestCase):
+    """PR #246 review wave 5: the GitLab issue-links probe drains EVERY page
+    to the shared wire cap - a single-page probe would falsely report a
+    later-page link absent (false human-removal queue on a ledgered edge /
+    duplicate create attempt on an unledgered one)."""
+
+    @staticmethod
+    def _full_page(start: int) -> list:
+        return [{"iid": start + i, "link_type": "is_blocked_by"}
+                for i in range(W._PAGE_SIZE)]
+
+    def test_link_on_second_page_is_found(self) -> None:
+        page1 = ok(self._full_page(1000))
+        page2 = ok([{"iid": 999, "link_type": "relates_to"},
+                    {"iid": 13, "link_type": "is_blocked_by"}])
+        ex = fake_execute({"relate-list": [page1, page2]})
+        out = RP.gitlab_probe_pair(gl_cfg(), ex, from_display="g/p#12",
+                                   to_display="g/p#13")
+        self.assertIs(out, True)
+        self.assertEqual([c.op for c in ex.calls],
+                         ["relate-list", "relate-list"],
+                         "drain issues a second page request")
+        first = ex.calls[0]
+        argv = list(first.url_or_argv)
+        self.assertIn(f"per_page={W._PAGE_SIZE}", argv[-1])
+        self.assertIn("page=1", argv[-1])
+
+    def test_truncated_at_cap_does_not_report_absence(self) -> None:
+        counter = {"n": 0}
+
+        def endless(_request):
+            counter["n"] += 1
+            return ok(self._full_page(counter["n"] * 1000))
+
+        ex = fake_execute({"relate-list": endless})
+        out = RP.gitlab_probe_pair(gl_cfg(), ex, from_display="g/p#12",
+                                   to_display="g/p#13")
+        self.assertIsInstance(out, TrackerError,
+                              "a probe that cannot prove absence must not "
+                              "report absence")
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "truncated")
+        self.assertEqual(len(ex.calls), W._MAX_PAGES)
+
+    def test_single_short_page_absence_still_reports_false(self) -> None:
+        ex = fake_execute({"relate-list": [ok(
+            [{"iid": 7, "link_type": "is_blocked_by"}])]})
+        out = RP.gitlab_probe_pair(gl_cfg(), ex, from_display="g/p#12",
+                                   to_display="g/p#13")
         self.assertIs(out, False)
         self.assertEqual(len(ex.calls), 1)

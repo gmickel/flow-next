@@ -15,36 +15,10 @@ from ..types import ErrorClass, TrackerError
 from .helpers import (CREATE_FIRST_KEY_RE, Execute, Result, atomic_write_json,
                       leaf_is_safe,
                       collision, load_spec, merged_tracker, now_iso,
-                      read_config, tracker_type, write_sync_receipt,
-                      write_tracker_block)
+                      read_config, tracker_type, write_sync_receipt)
+from .helpers import locked_tracker_write as _locked_tracker_write
 from .linkstate import derive_link_state, resolve_linear_uuid
 from .providers import provider_create
-
-
-def _locked_tracker_write(flow_dir: Path, spec_id: str, mutate) -> Result:
-    """Reload + mutate + persist the tracker block, SERIALIZED under the
-    shared .flow writer lock (same pattern as relate._ledger_write and
-    status._persist_applied_state). The spec snapshot loaded before the
-    provider request must never be written back wholesale - that silently
-    erases a concurrent update to the same spec. `mutate` receives the
-    RELOADED merged tracker block and returns the block to persist; it must
-    touch only tracker-owned fields. Returns the persisted tracker block, or
-    a TrackerError - never raises."""
-    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
-    try:
-        with config_lock(flow_dir):
-            reloaded = load_spec(flow_dir, spec_id)
-            if isinstance(reloaded, TrackerError):
-                return reloaded
-            path, spec = reloaded
-            tracker = merged_tracker(spec)
-            tracker = mutate(tracker)
-            werr = write_tracker_block(path, spec, tracker)
-            if werr:
-                return werr
-            return tracker
-    except ConfigLockTimeout as exc:
-        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
 
 
 def create(flow_dir, spec_id: str, *, title: str, body: str,

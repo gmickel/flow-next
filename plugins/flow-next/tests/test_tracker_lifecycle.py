@@ -691,7 +691,9 @@ class CreateLinkWriteFailureCarriesCreatedIdentity(unittest.TestCase):
             boom = TrackerError(ErrorClass.TRANSPORT,
                                 "atomic write failed: disk full",
                                 subtype="write")
-            with mock.patch.object(L.verbs, "write_tracker_block",
+            # The persist path runs through helpers.locked_tracker_write,
+            # which resolves write_tracker_block in the helpers namespace.
+            with mock.patch.object(L.helpers, "write_tracker_block",
                                    return_value=boom):
                 out = L.create(flow, "fn-1-demo", title="T", body="B",
                                execute=ex)
@@ -759,6 +761,40 @@ class Round5PersistIntegrity(unittest.TestCase):
                              "persist must reload, never replay the stale snapshot")
             self.assertEqual(saved["tracker"]["id"], LN_UUID)
             self.assertEqual(saved["tracker"]["linkState"], "linked")
+
+    def test_complete_identifier_only_does_not_erase_concurrent_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, ln_cfg(),
+                               tracker={"id": None, "identifier": "WOR-17",
+                                        "url": None, "lastSyncedAt": None,
+                                        "linkState": "identifier_only",
+                                        "depRelations": []})
+
+            def concurrent_resolve(req):
+                # Another command updates the same spec while the GraphQL
+                # UUID resolve is in flight (after the snapshot load,
+                # before the persist).
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["title"] = "CONCURRENT"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                return ok({"data": {"issue": {
+                    "id": LN_UUID, "identifier": "WOR-17",
+                    "url": "https://linear.app/x/issue/WOR-17"}}})
+
+            ex = fake_execute({"lifecycle-resolve-uuid": concurrent_resolve})
+            out = L.complete_identifier_only(flow, "fn-1-demo", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["linkState"], "linked")
+            self.assertTrue(out["completed"])
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["title"], "CONCURRENT",
+                             "persist must reload, never replay the stale snapshot")
+            self.assertEqual(saved["tracker"]["id"], LN_UUID)
+            self.assertEqual(saved["tracker"]["linkState"], "linked")
+            self.assertEqual(saved["tracker"]["identifier"], "WOR-17")
+            self.assertEqual(saved["tracker"]["url"],
+                             "https://linear.app/x/issue/WOR-17")
 
     def test_persist_external_degraded_write_preserves_concurrent_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

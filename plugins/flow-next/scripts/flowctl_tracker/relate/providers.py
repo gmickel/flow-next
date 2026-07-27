@@ -25,6 +25,7 @@ from ..wire import (
     _gl_project,
     _gql,
     _gh_repo,
+    _rest_drain,
     _jira,
     _jira_base,
 )
@@ -197,21 +198,25 @@ def jira_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
 # ---------------------------------------------------------------------------
 
 def _gitlab_links(config: dict, execute: Execute, *, iid: int
-                  ) -> Union[list, TrackerError]:
+                  ) -> Union[tuple, TrackerError]:
+    """Drain issue links to the shared wire cap. Returns (links, truncated).
+
+    Mirror of the GitHub sub_issues probe drain (fn-64 read-before-write): a
+    single-page probe would report a later-page link ABSENT, falsely queueing
+    a ledgered edge as a human removal (or duplicating the create on an
+    unledgered one). Truncation is unproven absence, never absence.
+    """
     dest = _destination(config)
     if isinstance(dest, TrackerError):
         return dest
     pid = _gl_project(dest)
     if isinstance(pid, TrackerError):
         return pid
-    data = _cli(execute, "gitlab", config, "relate-list", "GET",
-                f"projects/{pid}/issues/{iid}/links", idempotent=True)
-    if isinstance(data, TrackerError):
-        return data
-    if not isinstance(data, list):
-        return TrackerError(ErrorClass.TRANSPORT, "gitlab links is not a list",
-                            subtype="malformed_body")
-    return data
+    drained = _rest_drain(lambda page: _cli(
+        execute, "gitlab", config, "relate-list", "GET",
+        f"projects/{pid}/issues/{iid}/links"
+        f"?per_page={_PAGE_SIZE}&page={page}", idempotent=True))
+    return drained
 
 
 def _gitlab_pair_present(links: list, *, target_iid: int,
@@ -378,17 +383,26 @@ def gitlab_probe_pair(config, execute, *, from_display, to_display, **_kw):
     target_iid = _gitlab_iid(to_display)
     if isinstance(target_iid, TrackerError):
         return target_iid
-    links = _gitlab_links(config, execute, iid=self_iid)
-    if isinstance(links, TrackerError):
-        return links
+    drained = _gitlab_links(config, execute, iid=self_iid)
+    if isinstance(drained, TrackerError):
+        return drained
+    links, truncated = drained
     # link_type is expressed relative to the QUERIED issue (from):
     # "is_blocked_by" is the requested edge (from blocked by target);
     # "blocks" is the REVERSE direction (from blocks target) and must NOT
     # match - a reverse edge is not the requested one. "relates_to" stays:
     # it is flow's own degraded projection form on tiers without blockedBy
     # (symmetric, direction-free).
-    return _gitlab_pair_present(links, target_iid=target_iid,
-                                link_types={"is_blocked_by", "relates_to"})
+    if _gitlab_pair_present(links, target_iid=target_iid,
+                            link_types={"is_blocked_by", "relates_to"}):
+        return True
+    if truncated:
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab issue link pages truncated at drain cap; edge absence "
+            "unproven",
+            subtype="truncated")
+    return False
 
 
 def github_probe(config, execute, *, from_display, to_display, **_kw):
