@@ -542,3 +542,54 @@ class Round1Fixes(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["degraded"]["kind"], "identifier_only")
             self.assertEqual(out["degraded"]["reason"], "transport")
+
+
+class CreateFirstStorageIsSecuredBeforeRemoteMutation(unittest.TestCase):
+    def test_missing_gitignore_pattern_is_added_before_create(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            flow.mkdir()
+            (flow / "config.json").write_text(json.dumps(gh_cfg()), encoding="utf-8")
+            (flow / ".gitignore").write_text("receipts/\n", encoding="utf-8")
+            key = L.compute_create_first_key("github", "T", "B")
+            ex = fake_execute({"lifecycle-create": ok({
+                "id": 1, "node_id": GH_NODE, "number": 42,
+                "html_url": "https://github.com/o/r/issues/42"})})
+            out = L.create_first(flow, title="T", body="B",
+                                 retry_key=key, execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            gi = (flow / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn("create-first/", gi)
+            self.assertIn("receipts/", gi, "existing patterns preserved")
+
+    def test_existing_pattern_is_not_duplicated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            flow.mkdir()
+            (flow / "config.json").write_text(json.dumps(gh_cfg()), encoding="utf-8")
+            (flow / ".gitignore").write_text("create-first/\n", encoding="utf-8")
+            key = L.compute_create_first_key("github", "T", "B")
+            ex = fake_execute({"lifecycle-create": ok({
+                "id": 1, "node_id": GH_NODE, "number": 42,
+                "html_url": "https://github.com/o/r/issues/42"})})
+            L.create_first(flow, title="T", body="B", retry_key=key, execute=ex)
+            gi = (flow / ".gitignore").read_text(encoding="utf-8")
+            self.assertEqual(gi.count("create-first/"), 1)
+
+    def test_symlinked_gitignore_aborts_before_any_remote_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            flow.mkdir()
+            (flow / "config.json").write_text(json.dumps(gh_cfg()), encoding="utf-8")
+            victim = Path(tmp) / "victim.txt"
+            victim.write_text("precious", encoding="utf-8")
+            try:
+                (flow / ".gitignore").symlink_to(victim)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks unavailable")
+            ex = fake_execute({})  # any remote call would AssertionError
+            out = L.create_first(flow, title="T", body="B",
+                                 retry_key="a" * 16, execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(len(ex.calls), 0, "abort BEFORE remote mutation")
+            self.assertEqual(victim.read_text(encoding="utf-8"), "precious")

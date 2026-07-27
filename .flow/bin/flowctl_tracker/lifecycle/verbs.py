@@ -82,6 +82,40 @@ def compute_create_first_key(tracker_type_name: str, title: str, body: str) -> s
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def _ensure_create_first_ignored(flow_dir: Path):
+    """fn-134 cross-checkout safety: a COMMITTED recovery record makes another
+    checkout resume onto someone else's issue. Repos initialized before the
+    managed `create-first/` ignore pattern existed can commit it silently, so
+    the verb secures storage BEFORE any remote mutation - and aborts when it
+    cannot (a symlinked .gitignore is never written through).
+    """
+    gi = flow_dir / ".gitignore"
+    unsafe = leaf_is_safe(flow_dir, gi)
+    if unsafe:
+        return unsafe
+    try:
+        existing = gi.read_text(encoding="utf-8") if gi.is_file() else ""
+    except OSError as exc:
+        return TrackerError(ErrorClass.TRANSPORT,
+                            f"cannot read .flow/.gitignore: {exc}",
+                            subtype="gitignore")
+    if "create-first/" in existing:
+        return None
+    try:
+        # Appended BELOW flowctl's managed block: init's reconciliation
+        # preserves user patterns after the footer, so this survives upgrades.
+        with open(gi, "a", encoding="utf-8") as f:
+            if existing and not existing.endswith("\n"):
+                f.write("\n")
+            f.write("create-first/\n")
+    except OSError as exc:
+        return TrackerError(ErrorClass.TRANSPORT,
+                            f"cannot secure .flow/.gitignore: {exc}; refusing "
+                            "to create before storage is safe",
+                            subtype="gitignore")
+    return None
+
+
 def create_first(flow_dir, *, title: str, body: str, retry_key: str,
                  execute: Execute = default_execute) -> Result:
     """NO spec, NO receipt. Recovery record is the retry-dedupe guarantee."""
@@ -98,6 +132,9 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
     unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
     if unsafe:
         return unsafe
+    secured = _ensure_create_first_ignored(flow_dir)
+    if secured is not None:
+        return secured
     if rec_path.is_file():
         try:
             prior = json.loads(rec_path.read_text(encoding="utf-8"))
