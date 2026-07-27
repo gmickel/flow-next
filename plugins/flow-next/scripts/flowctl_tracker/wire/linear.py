@@ -282,9 +282,16 @@ def label(config: dict, locator: dict, execute: Execute, *,
     current = []
     labels = parent.get("labels")
     nodes = (labels.get("nodes") if isinstance(labels, dict) else labels) or []
+    # Label names are case-insensitively unique per Linear team; the resolved
+    # labelIds map is keyed lowercased (providers/linear.py). Fold the labels
+    # the parent read just returned into the lookup so a label auto-created by
+    # an earlier invocation (present on the issue but absent from the pinned
+    # config) resolves to its live id instead of a second issueLabelCreate.
     for n in nodes:
         if isinstance(n, dict) and n.get("id"):
             current.append(n["id"])
+            if isinstance(n.get("name"), str) and n["name"]:
+                label_ids.setdefault(n["name"].lower(), n["id"])
     current_set = set(current)
     created: list[str] = []
     for name in add:

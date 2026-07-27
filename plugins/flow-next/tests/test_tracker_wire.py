@@ -751,6 +751,121 @@ class JiraAssignRemovePreservesUnrelatedAssignee(unittest.TestCase):
         self.assertNotIn("degraded", out)
 
 
+class JiraAssignFieldFollowsPersistedAuthScheme(unittest.TestCase):
+    """accountId vs name is a DEPLOYMENT decision (perTracker.authScheme),
+    never an identifier-shape heuristic: a valid DC username like `john-doe`
+    must go out as `name`, not be misclassified as a Cloud account id."""
+
+    def _cfg(self, scheme) -> dict:
+        cfg = jr_cfg()
+        if scheme is not None:
+            cfg["tracker"]["perTracker"]["authScheme"] = scheme
+        return cfg
+
+    def _assign_body(self, cfg, user) -> dict:
+        ex = fake_execute({"wire-parent-read": ok(JR_ISSUE),
+                           "wire-assign": empty()})
+        out = W.dispatch("assign", cfg, locator=loc(JR_ID, "SCRUM-1"),
+                         add=[user], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        assign_call = next(c for c in ex.calls if c.op == "wire-assign")
+        return json.loads(assign_call.body)
+
+    def test_dc_hyphenated_username_goes_out_as_name(self) -> None:
+        body = self._assign_body(self._cfg("bearer-pat"), "john-doe")
+        self.assertEqual(body["fields"]["assignee"], {"name": "john-doe"})
+
+    def test_dc_long_username_goes_out_as_name(self) -> None:
+        body = self._assign_body(self._cfg("bearer-pat"),
+                                 "a.very.long.directory.username")
+        self.assertEqual(body["fields"]["assignee"],
+                         {"name": "a.very.long.directory.username"})
+
+    def test_cloud_scheme_sends_account_id(self) -> None:
+        body = self._assign_body(self._cfg("cloud-basic"), "short")
+        self.assertEqual(body["fields"]["assignee"], {"accountId": "short"})
+
+    def test_absent_scheme_defaults_to_cloud_account_id(self) -> None:
+        # Mirrors credentials.resolve(): every non-"bearer-pat" authScheme
+        # (including absent) takes the Cloud path.
+        body = self._assign_body(self._cfg(None), "john-doe")
+        self.assertEqual(body["fields"]["assignee"], {"accountId": "john-doe"})
+
+
+class LinearLabelReusesParentLabels(unittest.TestCase):
+    """An auto-created label lives on the issue but not in the pinned config
+    labelIds; a later `label --add <same-name>` must resolve its id from the
+    parent read instead of running issueLabelCreate again."""
+
+    def test_add_existing_parent_label_skips_create(self) -> None:
+        # "urgent" is on the issue (returned by the parent read) but absent
+        # from ln_cfg()'s labelIds map.
+        issue = dict(LN_ISSUE, labels={"nodes": [
+            {"id": "lbl-1", "name": "bug"},
+            {"id": "lbl-9", "name": "urgent"}]})
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(issue),
+            "wire-label": ok({"data": {"issueUpdate": {
+                "success": True, "issue": issue}}})})
+        out = W.dispatch("label", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         add=["urgent"], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        self.assertEqual([c.op for c in ex.calls],
+                         ["wire-parent-read", "wire-label"])
+        self.assertNotIn("labels_created", out)
+        label_call = next(c for c in ex.calls if c.op == "wire-label")
+        body = json.loads(label_call.body)
+        self.assertIn("lbl-9", body["variables"]["input"]["labelIds"])
+
+    def test_parent_label_name_matches_case_insensitively(self) -> None:
+        # Linear label names are case-insensitively unique per team; the
+        # pinned map is keyed lowercased, so the live-read fold must be too.
+        issue = dict(LN_ISSUE, labels={"nodes": [
+            {"id": "lbl-9", "name": "Urgent"}]})
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(issue),
+            "wire-label": ok({"data": {"issueUpdate": {
+                "success": True, "issue": issue}}})})
+        out = W.dispatch("label", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         add=["urgent"], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        self.assertEqual([c.op for c in ex.calls],
+                         ["wire-parent-read", "wire-label"])
+        self.assertNotIn("labels_created", out)
+
+    def test_remove_resolves_id_from_parent_labels(self) -> None:
+        # Removing an auto-created label (absent from config) must find its
+        # id via the parent read and drop it from labelIds.
+        issue = dict(LN_ISSUE, labels={"nodes": [
+            {"id": "lbl-1", "name": "bug"},
+            {"id": "lbl-9", "name": "urgent"}]})
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(issue),
+            "wire-label": ok({"data": {"issueUpdate": {
+                "success": True, "issue": issue}}})})
+        out = W.dispatch("label", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         remove=["urgent"], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        label_call = next(c for c in ex.calls if c.op == "wire-label")
+        body = json.loads(label_call.body)
+        self.assertNotIn("lbl-9", body["variables"]["input"]["labelIds"])
+        self.assertIn("lbl-1", body["variables"]["input"]["labelIds"])
+
+    def test_truly_unknown_label_still_auto_creates(self) -> None:
+        ex = fake_execute({
+            "wire-parent-read": gql_issue(LN_ISSUE),
+            "wire-label-create": ok({"data": {"issueLabelCreate": {
+                "success": True,
+                "issueLabel": {"id": "lbl-new", "name": "brand-new"}}}}),
+            "wire-label": ok({"data": {"issueUpdate": {
+                "success": True, "issue": LN_ISSUE}}})})
+        out = W.dispatch("label", ln_cfg(), locator=loc(LN_UUID, "WOR-17"),
+                         add=["brand-new"], execute=ex)
+        self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+        self.assertEqual(out.get("labels_created"), ["brand-new"])
+        self.assertIn("wire-label-create", [c.op for c in ex.calls])
+
+
 GH_COMMENT = {"id": 1, "body": "hi", "html_url": "https://github.com/c/1"}
 
 

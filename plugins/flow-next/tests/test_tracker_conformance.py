@@ -921,51 +921,97 @@ class FullVerbSurfaceGuard(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class PreCreateWindowOpen(unittest.TestCase):
-    """Accepted gap: create succeeds, record write fails -> retry duplicates."""
+    """Documents the create-first record window AFTER the PR #246 claim fix.
 
-    def test_retry_after_interrupted_record_creates_second_issue(self) -> None:
+    An OBSERVED finalize failure (create landed, record write errored) no
+    longer duplicates on retry: the pending claim stays on disk and the retry
+    refuses (create_in_flight) while the error carries the created identity.
+    The remaining ACCEPTED gap is the hard-crash window - a dead run's stale
+    claim is reclaimed and the retry creates a second issue, exactly the
+    pre-record window that existed before claims."""
+
+    def _make_ex(self, created: dict):
+        def responses_for(_req=None):
+            created["n"] += 1
+            node = f"I_node_{created['n']}"
+            return ok({
+                "id": created["n"], "node_id": node,
+                "number": created["n"],
+                "html_url": f"https://github.com/o/r/issues/{created['n']}",
+            })
+        return fake_execute({"lifecycle-create": responses_for})
+
+    def test_observed_finalize_failure_refuses_retry_with_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             _write_config(flow, gh_cfg())
             key = L.compute_create_first_key("github", "T", "B")
             created = {"n": 0}
+            rec_path = flow / "create-first" / f"{key}.json"
 
-            def make_ex():
-                def responses_for(_req=None):
-                    created["n"] += 1
-                    node = f"I_node_{created['n']}"
-                    return ok({
-                        "id": created["n"], "node_id": node,
-                        "number": created["n"],
-                        "html_url": f"https://github.com/o/r/issues/{created['n']}",
-                    })
-                return fake_execute({"lifecycle-create": responses_for})
+            from flowctl_tracker.lifecycle import verbs as verbs_mod
+            real_write = verbs_mod.atomic_write_json
 
-            # First attempt: provider create lands, recovery record write fails.
+            def fail_finalize(path, data):
+                # The claim write goes through; only the FINAL record (the one
+                # carrying the created id) dies.
+                if isinstance(data, dict) and data.get("id"):
+                    return TrackerError(ErrorClass.TRANSPORT,
+                                        "simulated die after create",
+                                        subtype="write")
+                return real_write(path, data)
+
             with mock.patch(
                 "flowctl_tracker.lifecycle.verbs.atomic_write_json",
-                return_value=TrackerError(ErrorClass.TRANSPORT,
-                                          "simulated die after create",
-                                          subtype="write"),
+                side_effect=fail_finalize,
             ):
                 first = L.create_first(flow, title="T", body="B",
-                                       retry_key=key, execute=make_ex())
+                                       retry_key=key,
+                                       execute=self._make_ex(created))
             self.assertIsInstance(first, TrackerError)
             self.assertEqual(created["n"], 1)
-            self.assertFalse(
-                (flow / "create-first" / f"{key}.json").is_file(),
-                "recovery record must be absent (the open window)",
-            )
+            # The error carries the created identity so the caller can link
+            # the existing issue instead of waiting out the stale window.
+            details = first.details or {}
+            self.assertEqual(details.get("completed_steps"), ["create"])
+            self.assertEqual(details.get("id"), "I_node_1")
+            claim = json.loads(rec_path.read_text(encoding="utf-8"))
+            self.assertEqual(claim.get("status"), "pending",
+                             "claim survives an observed finalize failure")
 
-            # Retry same key: DOCUMENTS the gap - a SECOND issue is created.
+            # Retry same key: REFUSES instead of creating a duplicate.
             second = L.create_first(flow, title="T", body="B",
-                                    retry_key=key, execute=make_ex())
-            self.assertNotIsInstance(second, TrackerError)
-            self.assertEqual(created["n"], 2,
-                             "accepted gap: retry after open pre-create window "
-                             "creates a duplicate issue (does not assert closed)")
-            self.assertEqual(second["id"], "I_node_2")
-            self.assertFalse(second["retried"])
+                                    retry_key=key, execute=self._make_ex(created))
+            self.assertIsInstance(second, TrackerError)
+            self.assertIs(second.cls, ErrorClass.CONFLICT)
+            self.assertEqual(second.subtype, "create_in_flight")
+            self.assertEqual(created["n"], 1, "no second remote create")
+
+    def test_crash_window_retry_after_stale_claim_duplicates(self) -> None:
+        import socket
+        import time as time_mod
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_config(flow, gh_cfg())
+            key = L.compute_create_first_key("github", "T", "B")
+            rec_path = flow / "create-first" / f"{key}.json"
+            rec_path.parent.mkdir(parents=True)
+            # A hard crash between provider create and finalize leaves a
+            # pending claim from a dead pid and NO recorded id.
+            rec_path.write_text(json.dumps({
+                "retryKey": key, "status": "pending", "pid": 0,
+                "host": socket.gethostname(),
+                "claimedAt": time_mod.time() - 999,
+                "title": "T", "transport": "github"}), encoding="utf-8")
+            created = {"n": 0}
+            out = L.create_first(flow, title="T", body="B",
+                                 retry_key=key, execute=self._make_ex(created))
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(created["n"], 1,
+                             "accepted gap: the crash window stays open - the "
+                             "stale claim is reclaimed and a second issue is "
+                             "created (does not assert closed)")
+            self.assertFalse(out["retried"])
 
 
 class PostWriteReadbackFailureAllFour(unittest.TestCase):

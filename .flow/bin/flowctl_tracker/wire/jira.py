@@ -275,10 +275,15 @@ def assign(config: dict, locator: dict, execute: Execute, *,
         previous = prior.get("accountId") or prior.get("name")
     # Single-assignee: last --add REPLACES; report prior in degraded (R15).
     if add:
-        # Cloud prefers accountId; DC may use name. Pass through as accountId when
-        # it looks like one, else as name.
+        # Cloud assigns by accountId; DC/Server assigns by name. Select the
+        # field from the PERSISTED deployment shape (perTracker.authScheme,
+        # decided once at the discovery ceremony) - never from the shape of
+        # the identifier itself, which misclassifies valid DC usernames like
+        # `john-doe`. Absent authScheme means cloud-basic, matching how
+        # credentials.resolve() treats every non-"bearer-pat" value.
+        scheme = _dict(_dict(config.get("tracker")).get("perTracker")).get("authScheme")
         user = add[-1]
-        assignee = {"accountId": user} if len(user) > 20 or "-" in user else {"name": user}
+        assignee = {"name": user} if scheme == "bearer-pat" else {"accountId": user}
         applied = user
     else:
         # Remove-only: clear the single assignee ONLY when the current identity

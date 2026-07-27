@@ -394,7 +394,8 @@ def gitlab_probe_pair(config, execute, *, from_display, to_display, **_kw):
 def github_probe(config, execute, *, from_display, to_display, **_kw):
     # Direction matches github_set: the PARENT is the BLOCKER (to_display);
     # the blocked issue (from_display) appears among its sub_issues.
-    from ..wire import _cli, _destination, _gh_repo, _github_number  # noqa: PLC0415
+    from ..wire import (_cli, _destination, _gh_repo,  # noqa: PLC0415
+                        _github_number, _rest_drain)
     dest = _destination(config)
     if isinstance(dest, TrackerError):
         return dest
@@ -407,13 +408,26 @@ def github_probe(config, execute, *, from_display, to_display, **_kw):
     child = _github_number(from_display)
     if isinstance(child, TrackerError):
         return child
-    subs = _cli(execute, "github", config, "wire-relate-probe", "GET",
-                f"repos/{repo}/issues/{parent}/sub_issues", idempotent=True)
-    if isinstance(subs, TrackerError):
-        return subs
-    if not isinstance(subs, list):
-        return False
-    return any(isinstance(x, dict) and x.get("number") == child for x in subs)
+    # Drain every page to the shared wire cap (fn-64 read-before-write): a
+    # single-page probe would report a later-page child ABSENT, falsely
+    # queueing a ledgered edge as a human removal (or duplicating the create
+    # on an unledgered one). Truncation is unproven absence, never absence.
+    drained = _rest_drain(lambda page: _cli(
+        execute, "github", config, "wire-relate-probe", "GET",
+        f"repos/{repo}/issues/{parent}/sub_issues"
+        f"?per_page={_PAGE_SIZE}&page={page}", idempotent=True))
+    if isinstance(drained, TrackerError):
+        return drained
+    subs, truncated = drained
+    if any(isinstance(x, dict) and x.get("number") == child for x in subs):
+        return True
+    if truncated:
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "github sub_issues pages truncated at drain cap; edge absence "
+            "unproven",
+            subtype="truncated")
+    return False
 
 
 PROBES = {

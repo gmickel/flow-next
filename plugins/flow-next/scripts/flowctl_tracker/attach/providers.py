@@ -245,12 +245,24 @@ def _linear_download(config: dict, execute: Execute, *, attachment_id: str,
     # LINEAR API KEY, so the origin MUST be a trusted Linear asset host - an
     # arbitrary URL here is a credential-exfiltration primitive.
     from urllib.parse import urlparse  # noqa: PLC0415
-    parsed = urlparse(str(attachment_id))
-    if parsed.scheme != "https" or (parsed.hostname or "").lower() not in _LINEAR_ASSET_HOSTS:
+    try:
+        # urlparse / .hostname raise ValueError on malformed input (e.g.
+        # "https://["). Fail CLOSED: reject as untrusted, never bypass.
+        parsed = urlparse(str(attachment_id))
+        scheme = parsed.scheme
+        hostname = parsed.hostname
+    except ValueError:
         return TrackerError(
             ErrorClass.INVALID_INPUT,
             f"linear attach-get only retrieves from trusted Linear asset hosts "
-            f"{_LINEAR_ASSET_HOSTS} over https; got {parsed.hostname!r}",
+            f"{_LINEAR_ASSET_HOSTS} over https; attachment id is not a "
+            f"parseable URL",
+            subtype="untrusted_origin")
+    if scheme != "https" or (hostname or "").lower() not in _LINEAR_ASSET_HOSTS:
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"linear attach-get only retrieves from trusted Linear asset hosts "
+            f"{_LINEAR_ASSET_HOSTS} over https; got {hostname!r}",
             subtype="untrusted_origin")
     result = execute(Request(
         provider="linear", op="wire-attach-get", method="GET",

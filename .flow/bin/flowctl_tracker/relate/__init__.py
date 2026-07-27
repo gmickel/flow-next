@@ -94,6 +94,46 @@ def _ledger_write(flow_dir: Path, spec_id: str, mutate) -> Result:
         return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
 
 
+def _ledger_claim(flow_dir: Path, spec_id: str, *, key: str, dep_spec: str,
+                  from_id: str, to_id: str) -> Result:
+    """CLAIM the edge by inserting the pending entry under the shared .flow
+    writer lock. Re-checks the RELOADED ledger inside the lock: an entry that
+    appeared since the pre-classification snapshot belongs to a live
+    concurrent relate invocation, so THIS invocation must not proceed to the
+    provider mutation (only the inserter mutates - otherwise both workers
+    probe the edge as absent and both create). Stale interrupted-run pending
+    entries never reach this path: they existed at snapshot time and take the
+    repair/retry classification branches instead. Returns the persisted
+    tracker block on a successful claim, or a TrackerError - never raises."""
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            reloaded = load_spec(flow_dir, spec_id)
+            if isinstance(reloaded, TrackerError):
+                return reloaded
+            path, spec = reloaded
+            tracker = merged_tracker(spec)
+            if ledger_entry(tracker, key) is not None:
+                return TrackerError(
+                    ErrorClass.CONFLICT,
+                    f"a concurrent relate invocation claimed the blocked-by "
+                    f"edge to {dep_spec} first; no mutation performed by this "
+                    "invocation - re-run relate after it completes to verify "
+                    "or heal the ledger",
+                    subtype="concurrent_claim",
+                    details={"recoverable": True, "key": key})
+            tracker = ledger_append(
+                tracker, key=key, dep_spec=dep_spec,
+                from_tracker_id=from_id, to_tracker_id=to_id,
+                status="pending")
+            werr = write_tracker_block(path, spec, tracker)
+            if werr:
+                return werr
+            return tracker
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
+
+
 def _locator(tracker: dict) -> Result:
     durable = tracker.get("id")
     display = tracker.get("identifier")
@@ -282,15 +322,15 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
     # entry makes the next run retry-the-create; if the finalize fails after
     # a successful create, the pending entry keeps the edge OURS so the next
     # run repairs the ledger instead of queueing a false foreign collision.
+    # The pending write is a CLAIM: if another live invocation inserted the
+    # entry between our snapshot and the locked write, this invocation backs
+    # off (CONFLICT/concurrent_claim) instead of issuing a duplicate create.
     if entry is None:
-        appended = _ledger_write(
-            flow_dir, spec_id,
-            lambda t: ledger_append(
-                t, key=key, dep_spec=blocked_by,
-                from_tracker_id=from_id, to_tracker_id=to_id,
-                status="pending"))
-        if isinstance(appended, TrackerError):
-            return appended
+        claimed = _ledger_claim(
+            flow_dir, spec_id, key=key, dep_spec=blocked_by,
+            from_id=from_id, to_id=to_id)
+        if isinstance(claimed, TrackerError):
+            return claimed
 
     if provider == "gitlab":
         source = caps.get("_source") if isinstance(caps.get("_source"), dict) else {}

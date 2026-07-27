@@ -706,3 +706,177 @@ class CreateLinkWriteFailureCarriesCreatedIdentity(unittest.TestCase):
             # The spec really is still unlinked, and no receipt was written.
             self.assertEqual(spec_path.read_text(encoding="utf-8"), before)
             self.assertEqual(_receipts(flow), [])
+
+
+class Round5PersistIntegrity(unittest.TestCase):
+    """PR #246 review: reload-under-lock persistence for create and
+    persist-external. The pre-request spec snapshot must never be replayed
+    wholesale - a concurrent flowctl update to the same spec landing while
+    the provider request is in flight would be silently erased."""
+
+    def test_create_link_write_does_not_erase_concurrent_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, gh_cfg())
+
+            def concurrent_create(req):
+                # Another command updates the same spec while create() is
+                # mid-flight (after its snapshot load, before its persist).
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["title"] = "CONCURRENT"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                return ok({"id": 1, "node_id": GH_NODE, "number": 42,
+                           "html_url": "https://github.com/o/r/issues/42"})
+
+            ex = fake_execute({"lifecycle-create": concurrent_create})
+            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["title"], "CONCURRENT",
+                             "persist must reload, never replay the stale snapshot")
+            self.assertEqual(saved["tracker"]["id"], GH_NODE)
+            self.assertEqual(saved["tracker"]["linkState"], "linked")
+
+    def test_persist_external_does_not_erase_concurrent_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, ln_cfg())
+
+            def concurrent_resolve(req):
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["title"] = "CONCURRENT"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                return ok({"data": {"issue": {
+                    "id": LN_UUID, "identifier": "WOR-17",
+                    "url": "https://linear.app/x/issue/WOR-17"}}})
+
+            ex = fake_execute({"lifecycle-resolve-uuid": concurrent_resolve})
+            out = L.persist_external(flow, "fn-1-demo", identifier="WOR-17",
+                                     source="mcp", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["title"], "CONCURRENT",
+                             "persist must reload, never replay the stale snapshot")
+            self.assertEqual(saved["tracker"]["id"], LN_UUID)
+            self.assertEqual(saved["tracker"]["linkState"], "linked")
+
+    def test_persist_external_degraded_write_preserves_concurrent_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, ln_cfg())
+
+            def concurrent_then_down(req):
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["title"] = "CONCURRENT"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                return TrackerError(ErrorClass.TRANSPORT, "unreachable")
+
+            ex = fake_execute({"lifecycle-resolve-uuid": concurrent_then_down})
+            out = L.persist_external(flow, "fn-1-demo", identifier="WOR-17",
+                                     url="https://linear.app/x/issue/WOR-17",
+                                     source="mcp", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["linkState"], "identifier_only")
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["title"], "CONCURRENT")
+            self.assertEqual(saved["tracker"]["identifier"], "WOR-17")
+            self.assertEqual(saved["tracker"]["linkState"], "identifier_only")
+
+
+class CreateFirstClaimSerialization(unittest.TestCase):
+    """PR #246 review: two concurrent create-first calls with the same retry
+    key could both observe the record absent and both run provider_create -
+    two remote issues, the last record write hiding the first. The retry key
+    is claimed under the shared writer lock before the remote create."""
+
+    def _flow(self, tmp: str) -> Path:
+        flow = Path(tmp) / ".flow"
+        flow.mkdir()
+        (flow / "config.json").write_text(json.dumps(gh_cfg()), encoding="utf-8")
+        return flow
+
+    def test_concurrent_same_key_refused_single_remote_create(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = self._flow(tmp)
+            key = L.compute_create_first_key("github", "T", "B")
+            rec_path = flow / "create-first" / f"{key}.json"
+            inner: dict = {}
+
+            def racing_create(req):
+                # The claim must be durable BEFORE the remote create...
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                self.assertEqual(claim.get("status"), "pending")
+                # ...so a second worker racing in while the create is in
+                # flight refuses instead of creating a duplicate.
+                inner["out"] = L.create_first(
+                    flow, title="T", body="B", retry_key=key,
+                    execute=fake_execute({}))  # any create would AssertionError
+                return ok({"id": 1, "node_id": GH_NODE, "number": 42,
+                           "html_url": "https://github.com/o/r/issues/42"})
+
+            ex = fake_execute({"lifecycle-create": racing_create})
+            out = L.create_first(flow, title="T", body="B",
+                                 retry_key=key, execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertFalse(out["retried"])
+            self.assertEqual(len(ex.calls), 1, "exactly ONE remote create")
+
+            raced = inner["out"]
+            self.assertIsInstance(raced, TrackerError)
+            self.assertIs(raced.cls, ErrorClass.CONFLICT)
+            self.assertEqual(raced.subtype, "create_in_flight")
+            self.assertTrue(raced.auto_retryable)
+            self.assertEqual((raced.details or {}).get("retryKey"), key)
+
+            # After the winner finalizes, a retry reuses its recorded issue.
+            third = L.create_first(flow, title="T", body="B",
+                                   retry_key=key, execute=fake_execute({}))
+            self.assertEqual(third["id"], GH_NODE)
+            self.assertTrue(third["retried"])
+
+    def test_stale_claim_from_dead_pid_is_reclaimed(self) -> None:
+        import socket
+        import time
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = self._flow(tmp)
+            key = L.compute_create_first_key("github", "T", "B")
+            rec_path = flow / "create-first" / f"{key}.json"
+            rec_path.parent.mkdir(parents=True)
+            # pid 0 is never alive; claimedAt is past the stale window.
+            rec_path.write_text(json.dumps({
+                "retryKey": key, "status": "pending", "pid": 0,
+                "host": socket.gethostname(),
+                "claimedAt": time.time() - 999,
+                "title": "T", "transport": "github"}), encoding="utf-8")
+            ex = fake_execute({"lifecycle-create": ok({
+                "id": 1, "node_id": GH_NODE, "number": 42,
+                "html_url": "https://github.com/o/r/issues/42"})})
+            out = L.create_first(flow, title="T", body="B",
+                                 retry_key=key, execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertFalse(out["retried"])
+            saved = json.loads(rec_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["id"], GH_NODE, "record finalized")
+            self.assertNotIn("status", saved)
+
+    def test_observed_create_failure_releases_the_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = self._flow(tmp)
+            key = L.compute_create_first_key("github", "T", "B")
+            rec_path = flow / "create-first" / f"{key}.json"
+            ex = fake_execute({"lifecycle-create": TrackerError(
+                ErrorClass.TRANSPORT, "boom")})
+            out = L.create_first(flow, title="T", body="B",
+                                 retry_key=key, execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.TRANSPORT)
+            self.assertFalse(rec_path.exists(),
+                             "claim released on OBSERVED failure so a retry "
+                             "may create again")
+            ex2 = fake_execute({"lifecycle-create": ok({
+                "id": 1, "node_id": GH_NODE, "number": 42,
+                "html_url": "https://github.com/o/r/issues/42"})})
+            retry = L.create_first(flow, title="T", body="B",
+                                   retry_key=key, execute=ex2)
+            self.assertNotIsInstance(retry, TrackerError)
+            self.assertFalse(retry["retried"])

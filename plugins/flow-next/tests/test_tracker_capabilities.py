@@ -645,6 +645,33 @@ class Round1HostFixes(unittest.TestCase):
                     self.assertEqual(out.subtype, "untrusted_origin")
             self.assertEqual(ex.calls, [], "no request may leave the process")
 
+    def test_linear_attach_get_malformed_url_rejected_without_raising(self) -> None:
+        """urlparse raises ValueError on input like "https://["; wire.run has
+        no exception guard, so the reject must happen at the validation
+        boundary and fail CLOSED - structured invalid-input envelope, never a
+        traceback, never an allowlist bypass."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_pair(flow, ln_cfg())
+            from flowctl_tracker import attach as A
+            cfg = json.loads((flow / "config.json").read_text())
+            ex = fake_execute({})  # any request would AssertionError
+            # Direct validation boundary: TrackerError, not ValueError.
+            out = A.attach_get(cfg, attachment_id="https://[",
+                               out_path=str(flow / "out.bin"), execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+            self.assertEqual(out.subtype, "untrusted_origin")
+            # Unguarded wire.run route: structured envelope, no exception.
+            payload, code = W.run(flow, "attach-get",
+                                  attachment_id="https://[",
+                                  out_path=str(flow / "out.bin"), execute=ex)
+            env = json.loads(payload)
+            self.assertFalse(env["success"])
+            self.assertEqual(env["class"], "invalid_input")
+            self.assertNotEqual(code, 0)
+            self.assertEqual(ex.calls, [], "no request may leave the process")
+
     def test_multipart_boundary_never_collides_with_payload(self) -> None:
         from flowctl_tracker.attach import providers as AP
         evil = b"x" * 10
@@ -1001,3 +1028,156 @@ class GitlabProbeDirection(unittest.TestCase):
             sink = flow / "review-deferred" / "tracker-relate.md"
             self.assertFalse(sink.exists(),
                              "no false foreign collision queued")
+
+
+class RelatePendingClaim(unittest.TestCase):
+    """PR #246 review wave 4: the pending write is a CLAIM. Two relates of
+    the SAME pair racing past the absent-probe must not both reach the
+    provider create - only the invocation that inserts the pending entry
+    mutates; the other backs off as CONFLICT/concurrent_claim."""
+
+    def test_concurrent_same_pair_relates_create_once(self) -> None:
+        import threading
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            barrier = threading.Barrier(2)
+            results = {}
+            creates = []
+            creates_lock = threading.Lock()
+
+            def go(worker: str) -> None:
+                empty = ok({"data": {"issue": {"id": LN_UUID,
+                            "relations": {"nodes": []},
+                            "inverseRelations": {"nodes": []}}}})
+                created = ok({"data": {"issueRelationCreate": {
+                    "success": True, "issueRelation": {"id": "rel-1"}}}})
+
+                def execute(request):
+                    if request.op == "relate-list":
+                        # BOTH workers probe the edge as absent before either
+                        # reaches the claim - the exact reviewed race.
+                        barrier.wait(timeout=10)
+                        return empty
+                    if request.op == "relate-create":
+                        with creates_lock:
+                            creates.append(worker)
+                        return created
+                    raise AssertionError(f"unexpected op {request.op!r}")
+                results[worker] = R.relate(flow, "fn-1-demo",
+                                           blocked_by="fn-2-dep",
+                                           execute=execute)
+
+            t1 = threading.Thread(target=go, args=("w1",))
+            t2 = threading.Thread(target=go, args=("w2",))
+            t1.start(); t2.start(); t1.join(); t2.join()
+
+            self.assertEqual(len(creates), 1,
+                             "exactly ONE worker may perform the provider "
+                             f"create; got {creates}")
+            winners = [w for w, out in results.items()
+                       if not isinstance(out, TrackerError)]
+            losers = [out for out in results.values()
+                      if isinstance(out, TrackerError)]
+            self.assertEqual(len(winners), 1, repr(results))
+            self.assertEqual(results[winners[0]]["kind"], "applied")
+            self.assertEqual(len(losers), 1)
+            self.assertIs(losers[0].cls, ErrorClass.CONFLICT)
+            self.assertEqual(losers[0].subtype, "concurrent_claim")
+            self.assertTrue((losers[0].details or {}).get("recoverable"))
+            # Ledger converged on ONE finalized entry - no duplicate, no
+            # orphaned pending marker.
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertNotIn("status", entries[0])
+            self.assertFalse(
+                (flow / "review-deferred" / "tracker-relate.md").exists(),
+                "a live concurrent claim is not a human-review collision")
+
+    def test_stale_pending_entry_still_repairs_not_backs_off(self) -> None:
+        # Interrupted-run repair semantics preserved: a pending entry that
+        # existed at snapshot time takes the repair path (finalize, no
+        # mutation) - the claim back-off applies only to entries that
+        # appeared AFTER the snapshot.
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            key = R.dep_relation_key(LN_UUID, LN_UUID_B)
+            a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                    "linkState": "linked",
+                    "depRelations": [{"key": key, "dep_spec": "fn-2-dep",
+                                      "from_tracker_id": LN_UUID,
+                                      "to_tracker_id": LN_UUID_B,
+                                      "type": "blocks", "source": "flow",
+                                      "status": "pending",
+                                      "updatedAt": "2026-01-01T00:00:00Z"}]}
+            b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            present = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": [
+                    {"type": "blocks", "issue": {"id": LN_UUID_B}}]},
+            }}})
+            ex = fake_execute({"relate-list": [present]})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "applied")
+            self.assertEqual(out["reason"], "ledger_repaired")
+            self.assertEqual([c.op for c in ex.calls], ["relate-list"],
+                             "repair issues no mutation")
+
+
+class GithubRelateProbeDrain(unittest.TestCase):
+    """PR #246 review wave 4: the sub_issues probe drains EVERY page to the
+    shared wire cap - a single-page probe would falsely report a later-page
+    child absent (false human-removal queue / duplicate create attempt)."""
+
+    @staticmethod
+    def _full_page(start: int) -> list:
+        return [{"number": start + i} for i in range(W._PAGE_SIZE)]
+
+    def test_child_on_second_page_is_found(self) -> None:
+        page1 = ok(self._full_page(1000))
+        page2 = ok([{"number": 999}, {"number": 42}])
+        ex = fake_execute({"wire-relate-probe": [page1, page2]})
+        out = RP.github_probe(gh_cfg(), ex, from_display="#42",
+                              to_display="#43")
+        self.assertIs(out, True)
+        self.assertEqual([c.op for c in ex.calls],
+                         ["wire-relate-probe", "wire-relate-probe"],
+                         "drain issues a second page request")
+        first = ex.calls[0]
+        argv = list(first.url_or_argv)
+        self.assertIn(f"per_page={W._PAGE_SIZE}", argv[-1])
+        self.assertIn("page=1", argv[-1])
+
+    def test_truncated_at_cap_does_not_report_absence(self) -> None:
+        counter = {"n": 0}
+
+        def endless(_request):
+            counter["n"] += 1
+            return ok(self._full_page(counter["n"] * 1000))
+
+        ex = fake_execute({"wire-relate-probe": endless})
+        out = RP.github_probe(gh_cfg(), ex, from_display="#42",
+                              to_display="#43")
+        self.assertIsInstance(out, TrackerError,
+                              "a probe that cannot prove absence must not "
+                              "report absence")
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "truncated")
+        self.assertEqual(len(ex.calls), W._MAX_PAGES)
+
+    def test_single_short_page_absence_still_reports_false(self) -> None:
+        ex = fake_execute({"wire-relate-probe": [ok([{"number": 7}])]})
+        out = RP.github_probe(gh_cfg(), ex, from_display="#42",
+                              to_display="#43")
+        self.assertIs(out, False)
+        self.assertEqual(len(ex.calls), 1)

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import socket
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -16,6 +19,32 @@ from .helpers import (CREATE_FIRST_KEY_RE, Execute, Result, atomic_write_json,
                       write_tracker_block)
 from .linkstate import derive_link_state, resolve_linear_uuid
 from .providers import provider_create
+
+
+def _locked_tracker_write(flow_dir: Path, spec_id: str, mutate) -> Result:
+    """Reload + mutate + persist the tracker block, SERIALIZED under the
+    shared .flow writer lock (same pattern as relate._ledger_write and
+    status._persist_applied_state). The spec snapshot loaded before the
+    provider request must never be written back wholesale - that silently
+    erases a concurrent update to the same spec. `mutate` receives the
+    RELOADED merged tracker block and returns the block to persist; it must
+    touch only tracker-owned fields. Returns the persisted tracker block, or
+    a TrackerError - never raises."""
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            reloaded = load_spec(flow_dir, spec_id)
+            if isinstance(reloaded, TrackerError):
+                return reloaded
+            path, spec = reloaded
+            tracker = merged_tracker(spec)
+            tracker = mutate(tracker)
+            werr = write_tracker_block(path, spec, tracker)
+            if werr:
+                return werr
+            return tracker
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
 
 
 def create(flow_dir, spec_id: str, *, title: str, body: str,
@@ -48,15 +77,21 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
     hit = collision(flow_dir, created["id"], except_spec=spec_id)
     if hit:
         return hit
-    tracker.update({
+    link_fields = {
         "id": created["id"],
         "identifier": created["identifier"],
         "url": created.get("url"),
         "linkState": "linked",
         "lastSyncedAt": now_iso(),
-    })
-    err = write_tracker_block(path, spec_data, tracker)
-    if err:
+    }
+    # Persist ONLY the link-owned fields onto a spec RELOADED under the shared
+    # writer lock - the pre-create snapshot must never be replayed wholesale
+    # (a concurrent flowctl update to the same spec landed while the provider
+    # request was in flight would be silently erased; status/relate/sync-body
+    # follow the same reload-merge rule).
+    err = _locked_tracker_write(
+        flow_dir, spec_id, lambda t: {**t, **link_fields})
+    if isinstance(err, TrackerError):
         # The issue exists but the spec is still unlinked - a bare failure
         # here reads as "nothing happened" and a retry would create a
         # duplicate (the crash window itself stays open by spec decision;
@@ -144,6 +179,49 @@ def _ensure_create_first_ignored(flow_dir: Path):
     return None
 
 
+def _claim_is_stale(claim: dict, rec_path: Path) -> bool:
+    """config_lock's owner rules applied to a pending create-first claim: a
+    claim older than STALE_OWNER_S whose pid is dead ON THIS HOST is a crashed
+    run's leftover and reclaimable. Another host's pid space is unknowable
+    (shared/network checkout) - fail closed, exactly like the config lock."""
+    from ..config_lock import STALE_OWNER_S, _pid_alive  # noqa: PLC0415
+    now = time.time()
+    try:
+        claimed_at = float(claim["claimedAt"])
+        pid = int(claim["pid"])
+        host = str(claim["host"])
+    except (KeyError, TypeError, ValueError):
+        # Truncated/corrupt claim: fall back to file age (mirror config_lock's
+        # ownerless-directory rule) - refusing forever would wedge the key.
+        try:
+            return (now - rec_path.stat().st_mtime) > STALE_OWNER_S
+        except OSError:
+            return False
+    if (now - claimed_at) <= STALE_OWNER_S:
+        return False
+    if host != socket.gethostname():
+        return False
+    return not _pid_alive(pid)
+
+
+def _release_claim(rec_path: Path) -> None:
+    """Best-effort removal of OUR pending claim after an OBSERVED create
+    failure, restoring the record-absent state so a retry may create again.
+    Safe without the lock: while a live claim exists, every other process
+    refuses (create_in_flight) rather than touch the record path."""
+    try:
+        cur = json.loads(rec_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if (isinstance(cur, dict) and cur.get("status") == "pending"
+            and cur.get("pid") == os.getpid()
+            and cur.get("host") == socket.gethostname()):
+        try:
+            rec_path.unlink()
+        except OSError:
+            pass
+
+
 def create_first(flow_dir, *, title: str, body: str, retry_key: str,
                  execute: Execute = default_execute) -> Result:
     """NO spec, NO receipt. Recovery record is the retry-dedupe guarantee."""
@@ -163,18 +241,58 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
     secured = _ensure_create_first_ignored(flow_dir)
     if secured is not None:
         return secured
-    if rec_path.is_file():
-        try:
-            prior = json.loads(rec_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            prior = None
-        if isinstance(prior, dict) and prior.get("id"):
-            return {"id": prior["id"], "identifier": prior.get("identifier"),
-                    "url": prior.get("url"), "retried": True}
+    # Two concurrent create-first calls with the same retry key could both
+    # observe the record absent and both run provider_create - two remote
+    # issues, the last record write hiding the first. The retry key is CLAIMED
+    # under the shared writer lock BEFORE the remote create (relate's
+    # two-phase ledger pattern: intent lands durably first, the network call
+    # runs OUTSIDE the lock). While OUR live claim exists no other process
+    # writes the record path, so the finalize/release below need no lock.
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            if rec_path.is_file():
+                try:
+                    prior = json.loads(rec_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    prior = None
+                if isinstance(prior, dict) and prior.get("id"):
+                    return {"id": prior["id"],
+                            "identifier": prior.get("identifier"),
+                            "url": prior.get("url"), "retried": True}
+                if (isinstance(prior, dict)
+                        and prior.get("status") == "pending"
+                        and not _claim_is_stale(prior, rec_path)):
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        f"create-first for retry key {retry_key!r} is already "
+                        "in flight in another process; retry after it "
+                        "finishes to reuse its recorded issue",
+                        subtype="create_in_flight",
+                        details={"retryKey": retry_key,
+                                 "claim": {"pid": prior.get("pid"),
+                                           "host": prior.get("host"),
+                                           "claimedAt": prior.get("claimedAt")}},
+                        auto_retryable=True)
+                # A STALE pending claim (crashed run) is reclaimed by
+                # overwriting it with OUR claim below. The duplicate window
+                # this reopens (crash after the remote create landed but
+                # before the record write) is exactly the pre-record window
+                # that existed before claims - no new exposure.
+            claim = {"retryKey": retry_key, "status": "pending",
+                     "pid": os.getpid(), "host": socket.gethostname(),
+                     "claimedAt": time.time(), "title": title,
+                     "transport": provider}
+            cerr = atomic_write_json(rec_path, claim)
+            if cerr:
+                return cerr
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
     created = provider_create(config, ex, title=title, body=body)
     if isinstance(created, TrackerError):
+        _release_claim(rec_path)
         return created
     record = {
         "retryKey": retry_key,
@@ -187,7 +305,19 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
     }
     err = atomic_write_json(rec_path, record)
     if err:
-        return err
+        # The issue exists but the claim is still pending - a bare failure
+        # would leave retries refusing (create_in_flight) until the claim
+        # goes stale, with the created identity lost. TrackerError is frozen:
+        # rebuild with the completed-steps detail so the caller can link the
+        # existing issue instead of waiting out the stale window.
+        import dataclasses  # noqa: PLC0415
+        return dataclasses.replace(err, details={
+            **(err.details or {}),
+            "completed_steps": ["create"],
+            "id": created["id"],
+            "identifier": created["identifier"],
+            "url": created.get("url"),
+            "retryKey": retry_key})
     return {"id": created["id"], "identifier": created["identifier"],
             "url": created.get("url"), "retried": False}
 
@@ -308,9 +438,17 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
         if hit:
             return hit
 
-    err = write_tracker_block(path, spec_data, tracker)
-    if err:
-        return err
+    # Persist ONLY the link-owned fields onto a spec RELOADED under the shared
+    # writer lock - the snapshot loaded before the UUID resolve/verify request
+    # must never be replayed wholesale (a concurrent flowctl update to the
+    # same spec landed while GraphQL was in flight would be silently erased;
+    # status/relate/sync-body follow the same reload-merge rule).
+    owned = {key: tracker.get(key)
+             for key in ("id", "identifier", "url", "linkState", "lastSyncedAt")}
+    persisted = _locked_tracker_write(
+        flow_dir, spec_id, lambda t: {**t, **owned})
+    if isinstance(persisted, TrackerError):
+        return persisted
 
     note = None
     status = "pushed"
