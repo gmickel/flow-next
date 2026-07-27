@@ -15,6 +15,9 @@ Every other detail is in a focused file you should consult when relevant — see
 - `jq` and `gh` are required for review-subsystem and PR plumbing.
 - Package manager: pick one and stay with it per project. `pnpm` for the TUI.
 - Pre-commit / lint: `biome` is the source of truth for the TUI; flowctl uses pure-stdlib Python.
+- **Python lint: `ruff`, pinned.** Run `uvx ruff@0.16.0 check .` before opening a PR — CI runs the same pinned version and will fail the build otherwise. No install step; `uvx` fetches it. **Keep the pin in step** with `.github/workflows/test-flow-next.yml`: ruff 0.16 moved its default rule set from 59 to 413, so an unpinned upgrade is an unannounced CI break.
+  - `ruff.toml` is correctness-only (pyflakes, bugbear, pylint errors, a few bug-pattern/security rules) and documents why each notable rule is *excluded*. Style rules are deliberately out of scope. **Do not add a rule to make a diff pass, and do not remove one to make a diff pass** — if a rule is wrong for this repo, say so in the config next to the exclusion, with the evidence.
+  - Never `--fix` into `.flow/` or `plugins/flow-next/codex/`; both are generated copies and are excluded for that reason. `--unsafe-fixes` is not used.
 
 ## Architecture: agentic vs deterministic (READ BEFORE PLANNING NEW FEATURES)
 
@@ -168,7 +171,9 @@ This project uses Flow-Next. Use `.flow/bin/flowctl` for ALL task tracking. Do N
 
 Then `/flow-next:plan <spec-id>`.
 
-**Spec Quick commands (this repo):** list FOCUSED suites for the feature's files (e.g. `cd plugins/flow-next/tests && python3 -m unittest test_config_snapshot test_task_create_files -q`). That is what workers baseline and verify per task. The FULL suite runs ONCE at the final gate (work Phase 4 / completion review): `python3 scripts/run_tests_parallel.py` (serial fallback `--serial`). Do not put the full discover/parallel command on every task's Quick commands.
+**Spec Quick commands (this repo):** list FOCUSED suites for the feature's files (e.g. `cd plugins/flow-next/tests && python3 -m unittest test_config_snapshot test_task_create_files -q`). That is what workers baseline and verify per task. The FULL suite runs ONCE at the final gate (work Phase 4 / completion review): `python3 scripts/run_tests_parallel.py` (serial fallback `--serial`) **plus `uvx ruff@0.16.0 check .`** — both must be green before a PR. Do not put the full discover/parallel command on every task's Quick commands.
+
+**When a change touches `flowctl.py` or `flowctl_tracker/`**, the final gate also needs the propagation the tests check for you only after the fact: copy to `.flow/bin/`, `python3 scripts/gen_tracker_manifest.py`, then `./scripts/sync-codex.sh` twice (idempotency). Skipping any of these fails `test_tracker_distribution` rather than producing a useful error.
 
 `.flow/memory/` - categorized learnings from past work (`bug/<category>/`, `knowledge/<category>/`; YAML frontmatter: track, category, module, tags, status). Search via `.flow/bin/flowctl memory search <q>` - relevant when implementing or debugging in modules with documented prior art.
 
