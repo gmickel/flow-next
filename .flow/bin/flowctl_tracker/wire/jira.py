@@ -14,6 +14,8 @@ from . import (
     _dict,
     _jira,
     _jira_base,
+    _jira_issue_key,
+    _jira_project_key,
     _MAX_PAGES,
     _PAGE_SIZE,
 )
@@ -48,10 +50,16 @@ def parent_read(config: dict, locator: dict, execute: Execute, *,
     # (project moves renumber it), so key->id comparison is the check that
     # actually catches a move; reading by durable would compare durable to
     # itself and always pass. Mutations still address by durable (immutable).
+    #
+    # Display grammar accepts DC custom keys (underscores, >10 chars), e.g.
+    # MY_LONG_PROJECT_KEY-7. UNVERIFIED on live Jira Data Center (Cloud cannot
+    # reproduce custom keys - fn-140 R17); verified against prose only.
     base = _jira_base(config, dest)
     if isinstance(base, TrackerError):
         return base
-    key = locator["display"]
+    key = _jira_issue_key(locator["display"])
+    if isinstance(key, TrackerError):
+        return key
     data = _jira(execute, op, "GET",
                  f"{base}/rest/api/2/issue/{quote(str(key), safe='')}"
                  f"?fields=summary,description,status,priority,labels,assignee,updated",
@@ -298,10 +306,16 @@ def list_open(config: dict, execute: Execute) -> Result:
     base = _jira_base(config, dest)
     if isinstance(base, TrackerError):
         return base
-    key = dest.get("projectKey") or _dict(_dict(config.get("tracker")).get("perTracker")).get("projectKey")
-    if not key:
+    raw_key = dest.get("projectKey") or _dict(_dict(config.get("tracker")).get("perTracker")).get("projectKey")
+    if not raw_key:
         return TrackerError(ErrorClass.UNRESOLVED, "jira projectKey is not resolved",
                             subtype="destination")
+    # Sanitize before JQL interpolation. Grammar allows DC underscores / long
+    # keys (^[A-Z][A-Z0-9_]+$). UNVERIFIED on live Jira Data Center (Cloud cannot
+    # reproduce custom keys - fn-140 R17); verified against prose only.
+    key = _jira_project_key(str(raw_key))
+    if isinstance(key, TrackerError):
+        return key
     jql = f"project = {key} AND resolution = Unresolved ORDER BY updated DESC"
     # apiVersion 2 (pinned): classic /search with offset pagination, drained.
     collected: list = []

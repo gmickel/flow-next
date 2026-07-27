@@ -97,7 +97,7 @@ def create_linear(config: dict, execute: Execute, *, title: str, body: str
 
 def create_jira(config: dict, execute: Execute, *, title: str, body: str
                 ) -> Result:
-    from ..wire import _jira, _jira_base  # noqa: PLC0415
+    from ..wire import _jira, _jira_base, _jira_issue_key  # noqa: PLC0415
     dest = destination(config)
     if isinstance(dest, TrackerError):
         return dest
@@ -124,7 +124,13 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str
         return TrackerError(ErrorClass.TRANSPORT,
                             "jira create missing id/key",
                             subtype="malformed_body")
-    key = raw["key"]
+    # Persist the server key verbatim, including DC custom keys
+    # (MY_LONG_PROJECT_KEY-7: underscores, >10 chars). UNVERIFIED on live Jira
+    # Data Center (Cloud cannot reproduce custom keys - fn-140 R17); verified
+    # against prose only.
+    key = _jira_issue_key(str(raw["key"]))
+    if isinstance(key, TrackerError):
+        return key
     return {"id": str(raw["id"]), "identifier": key,
             "url": f"{base}/browse/{key}"}
 

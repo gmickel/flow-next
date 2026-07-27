@@ -33,11 +33,19 @@ Per-provider verb bodies live in `wire/{github,gitlab,linear,jira}.py`.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Callable, Optional, Union
 
 from .. import envelope
 from ..executor import execute as default_execute
 from ..types import ErrorClass, Request, Response, TrackerError
+
+#: Jira project / issue-key grammars from jira.md (listOpenIssues JQL safety).
+#: Underscores and keys longer than Cloud's 10-char alnum cap are intentional:
+#: Data Center admins can configure them. Cloud cannot reproduce that shape.
+#: UNVERIFIED on live Jira Data Center (Cloud cannot reproduce custom keys - fn-140 R17); verified against prose only.
+_JIRA_PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+$")
+_JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
 
 #: Verbs this module owns. `attach` / `attach-get` delegate to attach/ (fn-140.4).
 WIRE_VERBS = (
@@ -121,6 +129,36 @@ def _gitlab_iid(display: str) -> Union[int, TrackerError]:
                             f"gitlab display must be <project>#<iid>, got {display!r}",
                             subtype="display")
     return int(part)
+
+
+def _jira_issue_key(display: str) -> Union[str, TrackerError]:
+    """Parse a Jira issue display key (PROJ-1 or DC custom MY_LONG_PROJECT_KEY-7).
+
+    UNVERIFIED on live Jira Data Center (Cloud cannot reproduce custom keys - fn-140 R17); verified against prose only.
+    """
+    s = (display or "").strip()
+    if not _JIRA_ISSUE_KEY_RE.fullmatch(s):
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"jira display must be KEY-N (A-Z / digits / underscore), got {display!r}",
+            subtype="display",
+        )
+    return s
+
+
+def _jira_project_key(key: str) -> Union[str, TrackerError]:
+    """Validate a Jira projectKey before JQL interpolation (injection-safe).
+
+    UNVERIFIED on live Jira Data Center (Cloud cannot reproduce custom keys - fn-140 R17); verified against prose only.
+    """
+    s = (key or "").strip() if isinstance(key, str) else ""
+    if not _JIRA_PROJECT_KEY_RE.fullmatch(s):
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"jira projectKey {key!r} is not a Jira key (expected ^[A-Z][A-Z0-9_]+$)",
+            subtype="project_key",
+        )
+    return s
 
 
 # ---------------------------------------------------------------------------

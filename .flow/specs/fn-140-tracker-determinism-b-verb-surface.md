@@ -149,6 +149,7 @@ Every item measured live on 2026-07-26:
 - **GitHub `GET /issues` returns pull requests too** - filter on the `pull_request` key.
 - **GitHub sub-issues exist** (`POST /issues/{n}/sub_issues`) - hierarchy, not blocked-by.
 - **Jira Cloud cannot reproduce custom project keys** (`MY_PROJECT`, >10 chars); Cloud enforces uppercase-alphanumeric max-10. That path is implemented from prose and marked unverified.
+- **UNVERIFIED on live Jira Data Center (Cloud cannot reproduce custom keys - fn-140 R17); verified against prose only.** The DC custom-key path (`MY_LONG_PROJECT_KEY-7`: underscores, project key >10 chars) is wired through locator display parsing, lifecycle persist, list-open JQL sanitize, and status addressing.
 
 ## Acceptance Criteria
 <!-- scope: both -->
