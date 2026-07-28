@@ -832,7 +832,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-140-tracker-determinism-b-verb-surface.md",
-  "status": "open",
+  "status": "done",
   "title": "Tracker determinism B: verb surface, capabilities, body fidelity",
   "tracker": {
     "baseHashFlow": null,
@@ -845,5 +845,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-27T16:45:44.896933Z"
+  "updated_at": "2026-07-28T20:45:57.279069Z"
 }
