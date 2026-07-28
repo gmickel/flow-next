@@ -62,19 +62,24 @@ def validate_to_reason(requested_to: Any, reason: Optional[str]
             f"invalid --reason {reason!r}; allowed: {sorted(GITHUB_REASONS)}",
             subtype="reason",
         )
-    # reason/slot pairing: reopened only with non-terminal; close reasons with done
+    # Reason/slot pairing follows the normalized read surface. GitHub reports
+    # not_planned as cancelled, while completed/duplicate normalize to done.
     if reason == "reopened" and requested_to == "done":
         return TrackerError(
             ErrorClass.INVALID_INPUT,
             "--reason reopened is not valid with --to done",
             subtype="reason",
         )
-    if reason in {"completed", "not_planned", "duplicate"} and requested_to not in {
-        "done", "cancelled",
-    }:
+    if reason == "not_planned" and requested_to != "cancelled":
         return TrackerError(
             ErrorClass.INVALID_INPUT,
-            f"--reason {reason!r} requires --to done (or cancelled surface)",
+            "--reason 'not_planned' requires --to cancelled",
+            subtype="reason",
+        )
+    if reason in {"completed", "duplicate"} and requested_to != "done":
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"--reason {reason!r} requires --to done",
             subtype="reason",
         )
     return None

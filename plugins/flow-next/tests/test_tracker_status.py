@@ -241,6 +241,17 @@ class DecideLadder(unittest.TestCase):
         self.assertEqual(d.kind, "defer")
         self.assertEqual(d.reason, "cancelled-family")
 
+    def test_not_planned_reason_rejected_for_done(self) -> None:
+        d = decide("done", "not_planned", "done", "in_review", "merged")
+        self.assertEqual(d.kind, "invalid_input")
+
+    def test_done_reasons_rejected_for_cancelled(self) -> None:
+        for reason in ("completed", "duplicate"):
+            with self.subTest(reason=reason):
+                d = decide(
+                    "cancelled", reason, "done", "in_review", "merged")
+                self.assertEqual(d.kind, "invalid_input")
+
     def test_garbage_reason_invalid_input(self) -> None:
         d = decide("done", "garbage", "done", "in_review", "merged")
         self.assertEqual(d.kind, "invalid_input")
@@ -374,6 +385,18 @@ class StatusVerbGate(unittest.TestCase):
             ex = fake_execute({})  # any network op would AssertionError
             out = S.status(flow, "fn-1-demo", to="done", reason="garbage",
                            execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+            self.assertEqual(len(ex.calls), 0)
+
+    def test_not_planned_done_invalid_before_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, gh_cfg())
+            ex = fake_execute({})  # any network op would AssertionError
+            out = S.status(
+                flow, "fn-1-demo", to="done", reason="not_planned",
+                execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
             self.assertEqual(len(ex.calls), 0)
