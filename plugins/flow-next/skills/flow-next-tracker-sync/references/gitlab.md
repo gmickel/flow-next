@@ -268,7 +268,8 @@ GitLab by a human who didn't touch the label):
 
 | GitLab native (`state` + `closed_at`) | `status:` label present? | normalized | who-wins ([status-sync.md](status-sync.md)) |
 |---|---|---|---|
-| `opened` | `status:<x>` | use the label's `<x>` (`in-progress` / `in-review` / `planned` / `backlog`) | per fn-52.5 |
+| `opened` | active `status:<x>` | use the label's `<x>` (`in-progress` / `in-review` / `planned` / `backlog`) | per fn-52.5 |
+| `opened` | stale terminal `status:done` / `status:verified` / cancelled-family label | `in-progress` (native open records the manual reopen) | flow wins |
 | `opened` | none | `in-progress` (best-effort default for an open issue) | flow wins |
 | `closed` | `status:done` / `status:verified` | use the label's `<x>` (so `verified` vs `done` is recoverable) | tracker wins |
 | `closed` | none | `done` (GitLab has no close-reason; a reasonless close is treated as completed) | tracker wins |
@@ -333,8 +334,9 @@ owns the procedure):
   spec), never an error and never a warn/noop.
 - Only an **unresolvable config** warns: the configured label missing from the
   *project's* label namespace (`GET /projects/:id/labels?search=<readyState>` —
-  compare names case-insensitively for the exact match) ⇒ warn `noop` receipt, flag
-  untouched, sync continues.
+  drain bounded pages and compare names case-insensitively for the exact match)
+  ⇒ warn `noop` receipt, flag untouched, sync continues. A capped scan is
+  unproven absence and leaves readiness untouched.
 - **One-way pull:** the adapter never adds/removes the readiness label from the flow
   side — readiness is projected tracker → local only, and it is independent of the
   single-valued `status:*` namespace above (a `ready` label coexists with any

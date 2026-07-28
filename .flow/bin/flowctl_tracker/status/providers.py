@@ -111,8 +111,11 @@ def _norm_github(parent: dict) -> Union[str, TrackerError]:
     labeled = _slot_from_status_label(parent.get("labels"))
     if isinstance(labeled, TrackerError):
         return labeled
-    if labeled == "cancelled":
-        return "cancelled"
+    # Native OPEN is authoritative over a stale terminal label. A manual
+    # reopen must not be normalized back to done/cancelled by the label left
+    # behind from the earlier close.
+    if labeled in TERMINAL or labeled == "cancelled":
+        return "in_progress"
     if labeled:
         return labeled
     return "in_progress"  # open + no status: label
@@ -138,8 +141,10 @@ def _norm_gitlab(parent: dict) -> Union[str, TrackerError]:
     labeled = _slot_from_status_label(parent.get("labels"))
     if isinstance(labeled, TrackerError):
         return labeled
-    if labeled == "cancelled":
-        return "cancelled"
+    # Native opened is authoritative over a stale terminal label, matching
+    # GitHub's manual-reopen contract above.
+    if labeled in TERMINAL or labeled == "cancelled":
+        return "in_progress"
     if labeled:
         return labeled
     return "in_progress"
@@ -310,7 +315,8 @@ def _apply_github(config, locator, parent, execute, *, target_slot, close_reason
     add = _cli(execute, "github", config, "status-label-add", "POST",
                f"repos/{repo}/issues/{number}/labels",
                body={"labels": [label]})
-    if isinstance(add, TrackerError):
+    add_failed = isinstance(add, TrackerError)
+    if add_failed:
         label_failures.append({"op": "add", "label": label, "error": add.message})
     # Read back and verify the single-valued invariant actually holds.
     labels_degraded = None
@@ -321,9 +327,79 @@ def _apply_github(config, locator, parent, execute, *, target_slot, close_reason
                    if isinstance(x, dict) and isinstance(x.get("name"), str)
                    and x["name"].startswith("status:")]
         if present != [label]:
-            labels_degraded = {"kind": "status_labels_inconsistent",
-                               "expected": [label], "present": present,
-                               "failures": label_failures}
+            if add_failed:
+                # The target label did not land. Preserve the earlier
+                # partial-success contract; cleanup cannot manufacture the
+                # requested target.
+                labels_degraded = {
+                    "kind": "status_labels_inconsistent",
+                    "expected": [label], "present": present,
+                    "failures": label_failures,
+                }
+            else:
+                # A successful add plus a failed/stale remove leaves an
+                # ambiguous namespace. Make one bounded cleanup pass over
+                # every unexpected status label, then verify once more.
+                # Never advance durable success while readback still proves
+                # multiple status labels.
+                for unexpected in [x for x in present if x != label]:
+                    repaired = _cli(
+                        execute, "github", config, "status-label-rm", "DELETE",
+                        f"repos/{repo}/issues/{number}/labels/"
+                        f"{quote(unexpected, safe='')}",
+                        idempotent=False)
+                    if isinstance(repaired, TrackerError):
+                        label_failures.append({
+                            "op": "repair-remove", "label": unexpected,
+                            "error": repaired.message})
+                repaired_readback = _cli(
+                    execute, "github", config, "status-label-readback", "GET",
+                    f"repos/{repo}/issues/{number}/labels", idempotent=True)
+                if isinstance(repaired_readback, list):
+                    repaired_present = [
+                        x.get("name") for x in repaired_readback
+                        if isinstance(x, dict)
+                        and isinstance(x.get("name"), str)
+                        and x["name"].startswith("status:")
+                    ]
+                    if repaired_present == [label]:
+                        present = repaired_present
+                        label_failures = []
+                    else:
+                        return TrackerError(
+                            ErrorClass.CONFLICT,
+                            "github state change landed but status labels "
+                            "remain ambiguous after bounded repair",
+                            subtype="status_labels_partial",
+                            details={
+                                "completed_steps": ["state", "label-add"],
+                                "target": target_slot,
+                                "expected": [label],
+                                "present": repaired_present,
+                                "failures": label_failures,
+                            },
+                            auto_retryable=True,
+                        )
+                else:
+                    detail = (
+                        repaired_readback.message
+                        if isinstance(repaired_readback, TrackerError)
+                        else "unexpected repair readback shape")
+                    return TrackerError(
+                        ErrorClass.TRANSPORT,
+                        "github state change landed but status-label repair "
+                        "could not be verified",
+                        subtype="status_labels_partial",
+                        details={
+                            "completed_steps": ["state", "label-add"],
+                            "target": target_slot,
+                            "expected": [label],
+                            "present": present,
+                            "failures": label_failures
+                            + [{"op": "repair-readback", "error": detail}],
+                        },
+                        auto_retryable=True,
+                    )
     else:
         # Readback failed or returned an unusable shape: the invariant is
         # unverifiable even when every label op above succeeded.

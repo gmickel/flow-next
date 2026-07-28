@@ -283,6 +283,8 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 },
                 0,
                 "ship",
+                0,
+                False,
             ),
             (
                 "capped-needs-work",
@@ -295,6 +297,8 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 },
                 4,
                 "needs_work",
+                0,
+                False,
             ),
             (
                 "refunded-transport-failure",
@@ -310,6 +314,8 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 },
                 0,
                 None,
+                0,
+                True,
             ),
             (
                 "non-capped-needs-work",
@@ -322,6 +328,20 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 },
                 0,
                 None,
+                0,
+                False,
+            ),
+            (
+                "terminal-status-write-failure",
+                {
+                    "attempts": [{"outcome": "verdict", "verdict": "SHIP"}],
+                    "review_rounds": 0,
+                    "review_rounds_cap": 4,
+                },
+                0,
+                "ship",
+                2,
+                True,
             ),
         )
 
@@ -335,6 +355,10 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 "elif [[ \"$1 $2\" == "
                 "\"spec set-completion-review-status\" ]]; then\n"
                 "  printf '%s\\n' \"$*\" >> \"$STATUS_LOG\"\n"
+                "  if [[ \"${STATUS_EXIT:-0}\" -ne 0 ]]; then\n"
+                "    printf '%s\\n' 'status write failed'\n"
+                "    exit \"$STATUS_EXIT\"\n"
+                "  fi\n"
                 "else\n"
                 "  exit 9\n"
                 "fi\n",
@@ -342,7 +366,14 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             )
             flowctl_stub.chmod(0o755)
 
-            for name, payload, expected_exit, expected_status in cases:
+            for (
+                name,
+                payload,
+                expected_exit,
+                expected_status,
+                status_exit,
+                expects_retry,
+            ) in cases:
                 with self.subTest(name=name):
                     status_log = temp / f"{name}.log"
                     env = os.environ.copy()
@@ -352,6 +383,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                             "SPEC_ID": "fn-1",
                             "ATTEMPTS_PAYLOAD": json.dumps(payload),
                             "STATUS_LOG": str(status_log),
+                            "STATUS_EXIT": str(status_exit),
                         }
                     )
                     result = subprocess.run(
@@ -378,6 +410,53 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                         self.assertIn(
                             f"--status {expected_status} --json", writes[0]
                         )
+                    self.assertEqual(
+                        "<promise>RETRY</promise>" in result.stdout,
+                        expects_retry,
+                    )
+
+    def test_rp_recorder_failure_cannot_be_swallowed_by_verdict_echo(self) -> None:
+        rp = _read("flow-next-spec-completion-review/workflow-rp.md")
+        block = _bash_fence_after(
+            rp, "Redirect the review response to the literal response file"
+        )
+        self.assertIn('RECORD_EXIT=$?', block)
+        self.assertLess(block.index('RECORD_EXIT=$?'), block.index('echo "VERDICT='))
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            flowctl_stub = temp / "flowctl-stub"
+            flowctl_stub.write_text(
+                "#!/usr/bin/env bash\n"
+                "if [[ \"$1 $2\" == \"rp chat-send\" ]]; then\n"
+                "  printf '%s\\n' '<verdict>SHIP</verdict>'\n"
+                "elif [[ \"$1 $2\" == \"review-rounds record\" ]]; then\n"
+                "  printf '%s\\n' 'recorder failed'\n"
+                "  exit 5\n"
+                "else\n"
+                "  exit 9\n"
+                "fi\n",
+                encoding="utf-8",
+            )
+            flowctl_stub.chmod(0o755)
+            env = os.environ.copy()
+            env.update(
+                {
+                    "FLOWCTL": str(flowctl_stub),
+                    "SPEC_ID": "fn-1",
+                    "TMPDIR": str(temp),
+                }
+            )
+            result = subprocess.run(
+                ["bash", "-c", block],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 5)
+            self.assertIn("recorder failed", result.stdout)
+            self.assertNotIn("VERDICT=", result.stdout)
 
     def test_host_completion_uses_shared_cap_attempt_lifecycle(self) -> None:
         host = _read("flow-next-spec-completion-review/workflow-host.md")

@@ -700,6 +700,9 @@ wrote Done for ungated projects. Regression guard for Thread B.
  `conflictTiebreak`; `always-ask` queues in Ralph, prompts interactively.
 - **State advances only on a successful reconcile.** A `setStatus` error, an
  unmapped state surfaced, or a queued deadlock does NOT advance `lastSyncedAt`.
+- **Native open records a manual reopen.** On GitHub and GitLab, a lone stale
+ terminal `status:*` label cannot override the provider's open state. An
+ ambiguous multi-label namespace still fails closed.
 - **Readiness projection is one-way pull** (`tracker.readyState` → local `ready`
  flag, fn-58): change-only receipts, stale config warns + leaves the flag
  untouched, and readiness is never written back to the tracker.

@@ -244,8 +244,14 @@ elif [[ "$VERDICT" == "NEEDS_WORK" \
 fi
 
 if [[ -n "$TERMINAL_STATUS" ]]; then
- $FLOWCTL spec set-completion-review-status "$SPEC_ID" \
- --status "$TERMINAL_STATUS" --json
+ TERMINAL_WRITE_JSON="$($FLOWCTL spec set-completion-review-status "$SPEC_ID" \
+ --status "$TERMINAL_STATUS" --json)"
+ TERMINAL_WRITE_EXIT=$?
+ printf '%s\n' "$TERMINAL_WRITE_JSON"
+ if [[ "$TERMINAL_WRITE_EXIT" -ne 0 ]]; then
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
 fi
 
 # The capped status write above MUST complete before this terminal.

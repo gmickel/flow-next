@@ -254,9 +254,14 @@ VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
  | sed -E 's#</?verdict>##g')"
 
 if [[ -n "$TASK_ID" ]]; then
- $FLOWCTL review-rounds record "${TASK_ID%.*}" --kind impl \
+ RECORD_JSON="$($FLOWCTL review-rounds record "${TASK_ID%.*}" --kind impl \
  --review-type impl --task "$TASK_ID" --backend rp \
- --output-file "$RESPONSE_FILE" --exit-code "$RP_EXIT" --json
+ --output-file "$RESPONSE_FILE" --exit-code "$RP_EXIT" --json)"
+ RECORD_EXIT=$?
+ printf '%s\n' "$RECORD_JSON"
+ if [[ "$RECORD_EXIT" -ne 0 ]]; then
+ exit "$RECORD_EXIT"
+ fi
 fi
 
 if [[ -z "$VERDICT" ]]; then
@@ -272,7 +277,8 @@ echo "VERDICT=$VERDICT"
 The `record` call refunds no-verdict reservations and logs the failure. After
 more than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive failures it exits
 5 / `TRANSPORT_UNHEALTHY`: stop for backend repair, never reset the review
-counter.
+counter. A failed task-scoped recorder must terminate this fence; no later
+verdict, receipt, status, or fix-loop command may swallow its exit.
 
 **Single-entry rule:** after this block, Read the response file ONCE (Read tool, literal path). That render IS the findings context — it feeds parsing and the fix loop. Do NOT `echo`/`cat` the response; verdict and receipt tallies grep the file directly.
 
@@ -481,8 +487,9 @@ If verdict is NEEDS_WORK:
 
  Re-extract the verdict from the response file (same grep as Phase 3), call
  the same task-scoped `review-rounds record ... --review-type impl` command
- with the captured `rp chat-send` exit code, then Read the file once for the
- next round's findings.
+ with the captured `rp chat-send` exit code, capture and check `RECORD_EXIT`
+ exactly as in Phase 3, then Read the file once for the next round's findings.
+ A nonzero recorder exit stops the round before any verdict/control path.
 7. **Repeat** until Ship
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.

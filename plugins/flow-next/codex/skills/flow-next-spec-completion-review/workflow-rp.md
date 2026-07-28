@@ -388,9 +388,14 @@ VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
  | tail -n 1 \
  | sed -E 's#</?verdict>##g')"
 
-$FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
  --review-type completion --backend rp --output-file "$RESPONSE_FILE" \
- --exit-code "$RP_EXIT" --json
+ --exit-code "$RP_EXIT" --json)"
+RECORD_EXIT=$?
+printf '%s\n' "$RECORD_JSON"
+if [[ "$RECORD_EXIT" -ne 0 ]]; then
+ exit "$RECORD_EXIT"
+fi
 
 if [[ -z "$VERDICT" ]]; then
  echo "No verdict tag found in response"
@@ -406,7 +411,9 @@ echo "VERDICT=$VERDICT"
 The `record` call refunds no-verdict reservations and logs the failure. After
 more than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive failures it exits
 5 / `TRANSPORT_UNHEALTHY`: stop for backend repair, never reset the review
-counter.
+counter. No command may follow a failed recorder and make that Bash fence
+successful. Only `RECORD_EXIT=0` proves this dispatch was appended as the latest
+durable completion attempt consumed by the shared terminal owner.
 
 **Single-entry rule:** after this block, Read the response file ONCE (Read tool, literal path). That render IS the gaps context — it feeds parsing and the fix loop. Do NOT `echo`/`cat` the response; verdict and receipt tallies grep the file directly.
 
@@ -615,8 +622,10 @@ If verdict is NEEDS_WORK:
 
  Re-extract the verdict from the response file (same grep as Phase 3), call
  the same `review-rounds record ... --review-type completion` command with
- the captured `rp chat-send` exit code, then Read the file once for the next
- round's gaps.
+ the captured `rp chat-send` exit code, capture and check `RECORD_EXIT`
+ exactly as in Phase 3, then Read the file once for the next round's gaps.
+ A nonzero recorder exit stops that round immediately; never echo a verdict
+ or continue to the shared status owner afterward.
 7. **Repeat** until SHIP
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.

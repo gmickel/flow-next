@@ -128,7 +128,8 @@ edited directly on GitHub by a human who didn't touch the label):
 
 | GitHub native (`state` / `stateReason`) | `status:` label present? | normalized | who-wins ([status-sync.md](status-sync.md)) |
 |---|---|---|---|
-| `OPEN` | `status:<x>` | use the label's `<x>` (`in-progress` / `in-review` / `planned` / `backlog`) | per fn-52.5 |
+| `OPEN` | active `status:<x>` | use the label's `<x>` (`in-progress` / `in-review` / `planned` / `backlog`) | per fn-52.5 |
+| `OPEN` | stale terminal `status:done` / `status:verified` / cancelled-family label | `in-progress` (native open records the manual reopen) | flow wins |
 | `OPEN` | none | `in-progress` (best-effort default for an open issue) | flow wins |
 | `CLOSED` / `COMPLETED` | (label ignored — native is authoritative for closed) | `done` | tracker wins |
 | `CLOSED` / `NOT_PLANNED` | — | `wontfix` (or `deferred` via config) — **surface, never auto-apply** | surface to user |
@@ -171,6 +172,12 @@ status:in-review --remove-label status:in-progress`). Create the label set once 
 config time (`gh label create status:in-progress …` — optional; GitHub auto-allows
 unknown labels on `--add-label` only if they already exist, so pre-create them or
 tolerate the "label not found" by creating on demand).
+
+After separate remove/add operations, read back the namespace. If the target
+label landed alongside an old status label, make one bounded cleanup and
+readback pass. Persistent ambiguity is a retryable partial result with the
+landed state recorded; it does not advance `lastSyncedAt` or write a success
+receipt.
 
 ### Readiness label (`tracker.readyState` — fn-58 R3/R4)
 

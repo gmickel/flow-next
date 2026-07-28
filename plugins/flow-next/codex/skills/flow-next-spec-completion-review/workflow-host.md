@@ -68,13 +68,20 @@ finalize the reservation through the shared attempt recorder:
 ```bash
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.md"
 # Write the exact reviewer output to RESPONSE_FILE; do not reinterpret it.
-$FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
- --review-type completion --backend host --output-file "$RESPONSE_FILE" --json
+RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+ --review-type completion --backend host --output-file "$RESPONSE_FILE" --json)"
+RECORD_EXIT=$?
+printf '%s\n' "$RECORD_JSON"
+if [[ "$RECORD_EXIT" -ne 0 ]]; then
+ exit "$RECORD_EXIT"
+fi
 ```
 
 A malformed/missing verdict is a transport failure: the recorder refunds the
 reservation and may stop with exit 5 / `TRANSPORT_UNHEALTHY`. Never turn it into
 `NEEDS_WORK`, and never write completion status for that path.
+Only continue after `RECORD_EXIT=0`: that successful finalize appends this
+dispatch as the latest durable completion attempt consumed by the shared owner.
 
 ## Step 3: Receipt
 
