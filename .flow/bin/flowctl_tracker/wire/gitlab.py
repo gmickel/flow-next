@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Optional
+from urllib.parse import urlencode
 
 from ..types import ErrorClass, TrackerError
 from . import (
@@ -16,6 +17,7 @@ from . import (
     _gl_project,
     _gitlab_iid,
     _PAGE_SIZE,
+    _ready_state,
     _rest_drain,
 )
 
@@ -310,6 +312,9 @@ def assign(config: dict, locator: dict, execute: Execute, *,
 
 
 def list_open(config: dict, execute: Execute) -> Result:
+    ready_state = _ready_state(config)
+    if ready_state is None:
+        return {"issues": [], "truncated": False}
     dest = _destination(config)
     if isinstance(dest, TrackerError):
         return dest
@@ -317,9 +322,14 @@ def list_open(config: dict, execute: Execute) -> Result:
     if isinstance(pid, TrackerError):
         return pid
     # GitLab states are opened/closed (not open/closed).
+    qs = urlencode({
+        "state": "opened",
+        "labels": ready_state,
+        "per_page": _PAGE_SIZE,
+    })
     drained = _rest_drain(lambda page: _cli(
         execute, "gitlab", config, "wire-list-open", "GET",
-        f"projects/{pid}/issues?state=opened&per_page={_PAGE_SIZE}&page={page}",
+        f"projects/{pid}/issues?{qs}&page={page}",
         idempotent=True))
     if isinstance(drained, TrackerError):
         return drained

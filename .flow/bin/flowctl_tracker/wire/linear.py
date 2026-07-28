@@ -15,6 +15,7 @@ from . import (
     _gql,
     _gql_connection_drain,
     _PAGE_SIZE,
+    _ready_state,
 )
 
 
@@ -460,11 +461,14 @@ def assign(config: dict, locator: dict, execute: Execute, *,
 
 
 def list_open(config: dict, execute: Execute) -> Result:
+    ready_state = _ready_state(config)
+    if ready_state is None:
+        return {"issues": [], "truncated": False}
     dest = _destination(config)
     if isinstance(dest, TrackerError):
         return dest
     team_id = dest.get("teamId")
-    filt: dict = {"state": {"type": {"nin": ["completed", "canceled"]}}}
+    filt: dict = {"state": {"name": {"eqIgnoreCase": ready_state}}}
     if team_id:
         filt["team"] = {"id": {"eq": team_id}}
 

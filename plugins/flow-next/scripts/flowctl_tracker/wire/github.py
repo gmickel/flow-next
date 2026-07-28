@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from ..types import ErrorClass, TrackerError
 from . import (
@@ -17,6 +17,7 @@ from . import (
     _gh_repo,
     _github_number,
     _PAGE_SIZE,
+    _ready_state,
     _rest_drain,
 )
 
@@ -306,15 +307,23 @@ def assign(config: dict, locator: dict, execute: Execute, *,
 
 
 def list_open(config: dict, execute: Execute) -> Result:
+    ready_state = _ready_state(config)
+    if ready_state is None:
+        return {"issues": [], "truncated": False}
     dest = _destination(config)
     if isinstance(dest, TrackerError):
         return dest
     repo = _gh_repo(dest)
     if isinstance(repo, TrackerError):
         return repo
+    qs = urlencode({
+        "state": "open",
+        "labels": ready_state,
+        "per_page": _PAGE_SIZE,
+    })
     drained = _rest_drain(lambda page: _cli(
         execute, "github", config, "wire-list-open", "GET",
-        f"repos/{repo}/issues?state=open&per_page={_PAGE_SIZE}&page={page}",
+        f"repos/{repo}/issues?{qs}&page={page}",
         idempotent=True))
     if isinstance(drained, TrackerError):
         return drained

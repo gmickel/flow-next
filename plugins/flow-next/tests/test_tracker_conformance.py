@@ -15,6 +15,7 @@ import time
 import unittest
 from pathlib import Path
 from unittest import mock
+from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -69,6 +70,15 @@ def loc(durable: str, display: str) -> dict:
     return {"durable": durable, "display": display}
 
 
+def cli_endpoint(request) -> str:
+    argv = list(request.url_or_argv)
+    if len(argv) >= 2 and argv[-2:] == ["--input", "-"]:
+        argv = argv[:-2]
+    if len(argv) >= 2 and argv[-2] == "-H":
+        argv = argv[:-2]
+    return argv[-1]
+
+
 def gql_issue(issue) -> Response:
     return ok({"data": {"issue": issue}})
 
@@ -109,11 +119,13 @@ ATTACH_BYTES = b"hello-attach-conformance"
 
 def gh_cfg() -> dict:
     return {"tracker": {"type": "github",
+                        "readyState": "Ready",
                         "resolved": {"destination": {"owner": "o", "repo": "r"}}}}
 
 
 def gl_cfg() -> dict:
     return {"tracker": {"type": "gitlab",
+                        "readyState": "Ready",
                         "perTracker": {"project": "g/p", "host": "gitlab.com"},
                         "resolved": {"destination": {
                             "projectId": 1, "projectPath": "g/p",
@@ -125,6 +137,7 @@ def gl_cfg() -> dict:
 
 def ln_cfg() -> dict:
     return {"tracker": {"type": "linear",
+                        "readyState": "Ready",
                         "perTracker": {"teamId": "team-1"},
                         "resolved": {"destination": {
                             "teamId": "team-1", "teamKey": "WOR",
@@ -137,6 +150,7 @@ def ln_cfg() -> dict:
 
 def jr_cfg(*, project_key: str = "SCRUM", status_ids=None) -> dict:
     return {"tracker": {"type": "jira",
+                        "readyState": "Ready for Work",
                         "perTracker": {"baseUrl": "https://ex.atlassian.net",
                                        "projectKey": project_key},
                         "resolved": {"destination": {
@@ -479,6 +493,50 @@ class ConformanceMatrix(unittest.TestCase):
                 self._matrix_case(provider, cfg, None, responses,
                                   verb="list-open", kwargs={},
                                   expect_durable=durable)
+
+    def test_list_open_exact_ready_lane_all_four(self) -> None:
+        cases = [
+            ("github", gh_cfg(), ok([GH_ISSUE])),
+            ("gitlab", gl_cfg(), ok([GL_ISSUE])),
+            ("linear", ln_cfg(), ok({"data": {"issues": {
+                "nodes": [LN_ISSUE]}}})),
+            ("jira", jr_cfg(), ok({"issues": [JR_ISSUE]})),
+        ]
+        for provider, cfg, response in cases:
+            with self.subTest(provider=provider):
+                ex = fake_execute({"wire-list-open": response})
+                out = W.dispatch("list-open", cfg, execute=ex)
+                self.assertNotIsInstance(out, TrackerError)
+                request = ex.calls[0]
+                if provider in ("github", "gitlab"):
+                    params = parse_qs(urlparse(cli_endpoint(request)).query)
+                    self.assertEqual(params["labels"], ["Ready"])
+                elif provider == "linear":
+                    variables = json.loads(request.body)["variables"]
+                    self.assertEqual(
+                        variables["filter"]["state"],
+                        {"name": {"eqIgnoreCase": "Ready"}},
+                    )
+                else:
+                    params = parse_qs(urlparse(str(request.url_or_argv)).query)
+                    self.assertEqual(
+                        params["jql"],
+                        ['project = SCRUM AND status = "Ready for Work"'],
+                    )
+
+    def test_list_open_unset_ready_lane_is_noop_all_four(self) -> None:
+        for provider, cfg in (
+            ("github", gh_cfg()),
+            ("gitlab", gl_cfg()),
+            ("linear", ln_cfg()),
+            ("jira", jr_cfg()),
+        ):
+            with self.subTest(provider=provider):
+                cfg["tracker"]["readyState"] = " "
+                ex = fake_execute({})
+                out = W.dispatch("list-open", cfg, execute=ex)
+                self.assertEqual(out, {"issues": [], "truncated": False})
+                self.assertEqual(ex.calls, [])
 
     def test_attach_all_four_github_asserts_gate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

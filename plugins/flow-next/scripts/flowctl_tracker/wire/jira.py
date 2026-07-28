@@ -18,6 +18,7 @@ from . import (
     _jira_project_key,
     _MAX_PAGES,
     _PAGE_SIZE,
+    _ready_state,
 )
 
 
@@ -322,6 +323,9 @@ def assign(config: dict, locator: dict, execute: Execute, *,
 
 
 def list_open(config: dict, execute: Execute) -> Result:
+    ready_state = _ready_state(config)
+    if ready_state is None:
+        return {"issues": [], "truncated": False}
     dest = _destination(config)
     if isinstance(dest, TrackerError):
         return dest
@@ -338,14 +342,53 @@ def list_open(config: dict, execute: Execute) -> Result:
     key = _jira_project_key(str(raw_key))
     if isinstance(key, TrackerError):
         return key
-    jql = f"project = {key} AND resolution = Unresolved ORDER BY updated DESC"
-    # apiVersion 2 (pinned): classic /search with offset pagination, drained.
+    escaped_state = ready_state.replace("\\", "\\\\").replace('"', '\\"')
+    jql = f'project = {key} AND status = "{escaped_state}"'
+
     collected: list = []
     truncated = False
+    fields = ["summary", "description", "status", "priority", "labels", "updated"]
+    if str(dest.get("apiVersion")) == "3":
+        next_page = None
+        seen = set()
+        for _ in range(_MAX_PAGES):
+            body = {"jql": jql, "maxResults": _PAGE_SIZE, "fields": fields}
+            if next_page is not None:
+                body["nextPageToken"] = next_page
+            data = _jira(execute, "wire-list-open", "POST",
+                         f"{base}/rest/api/3/search/jql", body=body,
+                         idempotent=True)
+            if isinstance(data, TrackerError):
+                return data
+            if not isinstance(data, dict):
+                return TrackerError(ErrorClass.TRANSPORT, "jira search is not an object",
+                                    subtype="malformed_body")
+            issues = data.get("issues") or []
+            if not isinstance(issues, list):
+                return TrackerError(ErrorClass.TRANSPORT,
+                                    "jira search.issues is not a list",
+                                    subtype="malformed_body")
+            collected.extend(i for i in issues if isinstance(i, dict))
+            if data.get("isLast") is not False:
+                break
+            token = data.get("nextPageToken")
+            if not isinstance(token, str) or not token or token in seen:
+                return TrackerError(ErrorClass.TRANSPORT,
+                                    "jira search cursor made no progress",
+                                    subtype="malformed_body")
+            seen.add(token)
+            next_page = token
+        else:
+            truncated = True
+        return {"issues": [_issue_out(i, parent_identity="not_available")
+                           for i in collected],
+                "truncated": truncated}
+
+    # Data Center / Server v2 retains classic offset pagination.
     start_at = 0
     for _ in range(_MAX_PAGES):
         qs = urlencode({"jql": jql, "startAt": start_at, "maxResults": _PAGE_SIZE,
-                        "fields": "summary,description,status,priority,labels,updated"})
+                        "fields": ",".join(fields)})
         data = _jira(execute, "wire-list-open", "GET",
                      f"{base}/rest/api/2/search?{qs}", idempotent=True)
         if isinstance(data, TrackerError):

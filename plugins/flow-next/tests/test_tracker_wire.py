@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -89,11 +90,13 @@ JR_ISSUE = {"id": JR_ID, "key": "SCRUM-1",
 
 def gh_cfg() -> dict:
     return {"tracker": {"type": "github",
+                        "readyState": "Ready",
                         "resolved": {"destination": {"owner": "o", "repo": "r"}}}}
 
 
 def gl_cfg() -> dict:
     return {"tracker": {"type": "gitlab",
+                        "readyState": "Ready",
                         "perTracker": {"project": "g/p", "host": "gitlab.com"},
                         "resolved": {"destination": {
                             "projectId": 1, "projectPath": "g/p",
@@ -102,6 +105,7 @@ def gl_cfg() -> dict:
 
 def ln_cfg() -> dict:
     return {"tracker": {"type": "linear",
+                        "readyState": "Ready",
                         "perTracker": {"teamId": "team-1"},
                         "resolved": {"destination": {
                             "teamId": "team-1", "teamKey": "WOR",
@@ -111,6 +115,7 @@ def ln_cfg() -> dict:
 
 def jr_cfg() -> dict:
     return {"tracker": {"type": "jira",
+                        "readyState": "Ready for Work",
                         "perTracker": {"baseUrl": "https://ex.atlassian.net",
                                        "projectKey": "SCRUM"},
                         "resolved": {"destination": {
@@ -343,16 +348,106 @@ class ListOpen(unittest.TestCase):
         endpoint = cli_endpoint(ex.calls[0])
         self.assertIn("state=opened", endpoint)
 
+    def test_ready_state_unset_is_transport_free_noop_for_all_providers(self) -> None:
+        for name, cfg in (
+            ("github", gh_cfg()),
+            ("gitlab", gl_cfg()),
+            ("linear", ln_cfg()),
+            ("jira", jr_cfg()),
+        ):
+            with self.subTest(provider=name):
+                del cfg["tracker"]["readyState"]
+                ex = fake_execute({})
+                out = W.dispatch("list-open", cfg, execute=ex)
+                self.assertEqual(out, {"issues": [], "truncated": False})
+                self.assertEqual(ex.calls, [])
+
+    def test_github_and_gitlab_filter_the_exact_ready_label(self) -> None:
+        for cfg, response in (
+            (gh_cfg(), ok([GH_ISSUE])),
+            (gl_cfg(), ok([GL_ISSUE])),
+        ):
+            cfg["tracker"]["readyState"] = "Ready & Queued"
+            ex = fake_execute({"wire-list-open": response})
+            W.dispatch("list-open", cfg, execute=ex)
+            params = parse_qs(urlparse(cli_endpoint(ex.calls[0])).query)
+            self.assertEqual(params["labels"], ["Ready & Queued"])
+
     def test_linear_list_open(self) -> None:
         ex = fake_execute({"wire-list-open": ok({"data": {"issues": {
             "nodes": [LN_ISSUE]}}})})
         out = W.dispatch("list-open", ln_cfg(), execute=ex)
         self.assertEqual(out["issues"][0]["id"], LN_UUID)
+        variables = json.loads(ex.calls[0].body)["variables"]
+        self.assertEqual(
+            variables["filter"]["state"],
+            {"name": {"eqIgnoreCase": "Ready"}},
+        )
+        self.assertNotIn("type", variables["filter"]["state"])
 
     def test_jira_list_open(self) -> None:
         ex = fake_execute({"wire-list-open": ok({"issues": [JR_ISSUE]})})
         out = W.dispatch("list-open", jr_cfg(), execute=ex)
         self.assertEqual(out["issues"][0]["id"], JR_ID)
+        request = ex.calls[0]
+        self.assertEqual(request.method, "GET")
+        self.assertIn("/rest/api/2/search?", str(request.url_or_argv))
+        params = parse_qs(urlparse(str(request.url_or_argv)).query)
+        self.assertEqual(
+            params["jql"],
+            ['project = SCRUM AND status = "Ready for Work"'],
+        )
+
+    def test_jira_jql_escapes_ready_state_and_rejects_invalid_project(self) -> None:
+        cfg = jr_cfg()
+        cfg["tracker"]["readyState"] = 'Ready \\\\ "Now"'
+        ex = fake_execute({"wire-list-open": ok({"issues": []})})
+        W.dispatch("list-open", cfg, execute=ex)
+        params = parse_qs(urlparse(str(ex.calls[0].url_or_argv)).query)
+        self.assertEqual(
+            params["jql"],
+            ['project = SCRUM AND status = "Ready \\\\\\\\ \\"Now\\""'],
+        )
+
+        cfg["tracker"]["resolved"]["destination"]["projectKey"] = 'SCRUM" OR 1=1'
+        bad_ex = fake_execute({})
+        out = W.dispatch("list-open", cfg, execute=bad_ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+        self.assertEqual(bad_ex.calls, [])
+
+    def test_jira_cloud_list_open_uses_cursor_search(self) -> None:
+        cfg = jr_cfg()
+        cfg["tracker"]["resolved"]["destination"]["apiVersion"] = 3
+        first = {"issues": [JR_ISSUE], "isLast": False, "nextPageToken": "next-1"}
+        last = {"issues": [dict(JR_ISSUE, id="10043")], "isLast": True}
+        ex = fake_execute({"wire-list-open": [ok(first), ok(last)]})
+        out = W.dispatch("list-open", cfg, execute=ex)
+
+        self.assertEqual(len(out["issues"]), 2)
+        self.assertFalse(out["truncated"])
+        self.assertEqual([call.method for call in ex.calls], ["POST", "POST"])
+        self.assertTrue(all(str(call.url_or_argv).endswith(
+            "/rest/api/3/search/jql") for call in ex.calls))
+        first_body = json.loads(ex.calls[0].body)
+        second_body = json.loads(ex.calls[1].body)
+        self.assertNotIn("nextPageToken", first_body)
+        self.assertEqual(second_body["nextPageToken"], "next-1")
+        self.assertEqual(
+            first_body["jql"],
+            'project = SCRUM AND status = "Ready for Work"',
+        )
+
+    def test_jira_cloud_cursor_without_progress_is_tracker_error(self) -> None:
+        cfg = jr_cfg()
+        cfg["tracker"]["resolved"]["destination"]["apiVersion"] = 3
+        ex = fake_execute({"wire-list-open": ok({
+            "issues": [], "isLast": False, "nextPageToken": "",
+        })})
+        out = W.dispatch("list-open", cfg, execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "malformed_body")
 
 
 # ---------------------------------------------------------------------------
@@ -1011,6 +1106,14 @@ class PaginationIsDrainedNeverSilentlyCapped(unittest.TestCase):
         self.assertNotIsInstance(out, TrackerError)
         self.assertEqual(len(out["issues"]), W._PAGE_SIZE + 1)
         self.assertFalse(out["truncated"])
+        self.assertEqual([call.method for call in ex.calls], ["GET", "GET"])
+        self.assertTrue(all("/rest/api/2/search?" in str(call.url_or_argv)
+                            for call in ex.calls))
+        starts = [
+            parse_qs(urlparse(str(call.url_or_argv)).query)["startAt"][0]
+            for call in ex.calls
+        ]
+        self.assertEqual(starts, ["0", str(W._PAGE_SIZE)])
 
     def test_cap_is_reported_never_silent(self) -> None:
         from unittest import mock

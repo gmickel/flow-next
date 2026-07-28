@@ -89,6 +89,14 @@ def _destination(config: dict) -> Union[dict, TrackerError]:
     return dest
 
 
+def _ready_state(config: dict) -> Optional[str]:
+    value = _dict(config.get("tracker")).get("readyState")
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value or None
+
+
 def parse_locator(raw: Any) -> Union[dict, TrackerError]:
     """Accept a dict or a JSON string → `{durable, display}` both non-empty str."""
     if isinstance(raw, str):
