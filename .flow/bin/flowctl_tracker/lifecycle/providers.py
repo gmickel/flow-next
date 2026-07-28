@@ -28,8 +28,12 @@ def create_github(config: dict, execute: Execute, *, title: str, body: str
         return TrackerError(ErrorClass.TRANSPORT,
                             "github create missing node_id/number",
                             subtype="malformed_body")
+    acknowledged = raw.get("body")
+    if not isinstance(acknowledged, str):
+        acknowledged = body
     return {"id": durable, "identifier": f"#{number}",
-            "url": raw.get("html_url") or raw.get("url")}
+            "url": raw.get("html_url") or raw.get("url"),
+            "bodyWritten": acknowledged}
 
 
 def create_gitlab(config: dict, execute: Execute, *, title: str, body: str
@@ -62,7 +66,11 @@ def create_gitlab(config: dict, execute: Execute, *, title: str, body: str
     else:
         path = dest.get("projectPath")
         ident = f"{path}#{iid}" if isinstance(path, str) and path else f"#{iid}"
-    return {"id": durable, "identifier": ident, "url": raw.get("web_url")}
+    acknowledged = raw.get("description")
+    if not isinstance(acknowledged, str):
+        acknowledged = body
+    return {"id": durable, "identifier": ident, "url": raw.get("web_url"),
+            "bodyWritten": acknowledged}
 
 
 def create_linear(config: dict, execute: Execute, *, title: str, body: str
@@ -78,7 +86,8 @@ def create_linear(config: dict, execute: Execute, *, title: str, body: str
                             subtype="destination")
     data = _gql(execute, "lifecycle-create",
                 "mutation($input: IssueCreateInput!) { "
-                "issueCreate(input: $input) { success issue { id identifier url } } }",
+                "issueCreate(input: $input) { success "
+                "issue { id identifier url description } } }",
                 {"input": {"teamId": team_id, "title": title, "description": body}})
     if isinstance(data, TrackerError):
         return data
@@ -91,8 +100,11 @@ def create_linear(config: dict, execute: Execute, *, title: str, body: str
         return TrackerError(ErrorClass.TRANSPORT,
                             "linear issueCreate missing issue.id",
                             subtype="malformed_body")
+    acknowledged = issue.get("description")
+    if not isinstance(acknowledged, str):
+        acknowledged = body
     return {"id": issue["id"], "identifier": issue.get("identifier"),
-            "url": issue.get("url")}
+            "url": issue.get("url"), "bodyWritten": acknowledged}
 
 
 def create_jira(config: dict, execute: Execute, *, title: str, body: str
@@ -110,6 +122,11 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str
         return TrackerError(ErrorClass.UNRESOLVED,
                             "jira destination missing projectId/issueTypeId",
                             subtype="destination")
+    # fn-140 R16 intentionally pins Jira Cloud and DC body operations to v2:
+    # resolved_cache migrates perTracker apiVersion 3 -> 2 and destination
+    # resolution emits 2. This avoids an ADF boundary in the deterministic
+    # verb surface and gives byte-identical plain-string round trips.
+    #
     # Jira rejects fields omitted from the selected issue type's CREATE
     # screen. Include Description by default, but omit it when createmeta
     # positively reports a non-empty field map without `description`.
@@ -158,8 +175,14 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str
     if isinstance(key, TrackerError):
         return key
     out = {"id": str(raw["id"]), "identifier": key,
-           "url": f"{base}/browse/{key}"}
+           "url": f"{base}/browse/{key}",
+           # The paired-base seed must describe what CREATE actually wrote,
+           # not what the caller asked to write. When Description is absent
+           # from the create screen, the local body remains a pending change
+           # for the following sync-body push.
+           "bodyWritten": body if description_settable else ""}
     if not description_settable:
+        out["seedFlowBody"] = ""
         out["degraded"] = {
             "kind": "jira_create_field_omitted",
             "field": "description",

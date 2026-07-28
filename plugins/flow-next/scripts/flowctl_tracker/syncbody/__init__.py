@@ -416,6 +416,21 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
             return malformed
 
     if direction == "pull":
+        if (expected_tracker_body is not None
+                and trackerBodyForMerge(current_body)
+                != trackerBodyForMerge(expected_tracker_body)):
+            return TrackerError(
+                ErrorClass.CONFLICT,
+                "tracker body changed after the creating mutation; refusing "
+                "to adopt the later readback as synchronized",
+                subtype="readback_diverged",
+                details={
+                    "writtenHash": _content_hash(
+                        trackerBodyForMerge(expected_tracker_body)),
+                    "readbackHash": _content_hash(
+                        trackerBodyForMerge(current_body)),
+                },
+            )
         committed = _commit_paired_base(
             flow_dir, spec_id, locator=locator,
             flow_file_body=flow_file_body,
@@ -557,6 +572,30 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         readback_body = ""
     elif not isinstance(readback_body, str):
         readback_body = str(readback_body)
+
+    updated_body = updated.get("body") if isinstance(updated, dict) else None
+    if updated_body is None:
+        updated_body = ""
+    elif not isinstance(updated_body, str):
+        updated_body = str(updated_body)
+    if trackerBodyForMerge(updated_body) != trackerBodyForMerge(readback_body):
+        # The mutation response is the server's acknowledgement of OUR write.
+        # A different immediate readback means another remote edit won after
+        # that acknowledgement. Never absorb it into the paired ancestor:
+        # retain the prior base so the next pass surfaces real divergence.
+        return TrackerError(
+            ErrorClass.CONFLICT,
+            "tracker body changed after wire update; refusing to adopt the "
+            "later readback as synchronized",
+            subtype="readback_diverged",
+            details={
+                "completed_steps": ["wire-update", "wire-read"],
+                "writtenHash": _content_hash(
+                    trackerBodyForMerge(updated_body)),
+                "readbackHash": _content_hash(
+                    trackerBodyForMerge(readback_body)),
+            },
+        )
 
     committed = _commit_paired_base(
         flow_dir, spec_id, locator=locator,

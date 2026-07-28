@@ -177,9 +177,15 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
     # reflect one real sync point. Import locally to avoid the intentional
     # lifecycle.verbs <-> syncbody module dependency at import time.
     from ..syncbody import sync_body  # noqa: PLC0415
+    seed_flow_body = (
+        created.get("seedFlowBody")
+        if "seedFlowBody" in created
+        else (body if flow_body is None else flow_body)
+    )
     seeded = sync_body(
         flow_dir, spec_id,
-        flow_file_body=body if flow_body is None else flow_body,
+        flow_file_body=seed_flow_body,
+        expected_tracker_body=created.get("bodyWritten"),
         direction="pull", event=event, execute=execute, write_receipt=False,
     )
     if isinstance(seeded, TrackerError):

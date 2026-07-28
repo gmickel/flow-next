@@ -405,6 +405,48 @@ class PartialFailure(unittest.TestCase):
             self.assertEqual(saved["baseHashTracker"], sha(prior_tracker))
             self.assertEqual(saved["lastSyncedAt"], "OLD")
 
+    def test_changed_readback_is_not_adopted_as_the_paired_base(self) -> None:
+        prior_flow = "PRIOR FLOW\n"
+        prior_tracker = "PRIOR TRACKER"
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(
+                flow, gh_cfg(),
+                tracker={
+                    "id": GH_NODE, "identifier": "#42", "url": "https://x",
+                    "lastSyncedAt": "OLD", "depRelations": [],
+                    "linkState": "linked",
+                    "mergeBaseFlow": prior_flow,
+                    "mergeBaseTracker": prior_tracker,
+                    "baseHashFlow": sha(prior_flow),
+                    "baseHashTracker": sha(prior_tracker),
+                })
+            ex = fake_execute({
+                "sync-body-parent-read": ok(_gh_issue("old remote")),
+                "wire-parent-read": ok(_gh_issue("old remote")),
+                "wire-update": ok(_gh_issue("our acknowledged write")),
+                "wire-read": ok(_gh_issue("concurrent human edit")),
+            })
+            out = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body="NEW FLOW\n",
+                direction="push", execute=ex)
+
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "readback_diverged")
+            self.assertEqual(
+                out.details.get("completed_steps"),
+                ["wire-update", "wire-read"])
+            self.assertNotEqual(
+                out.details.get("writtenHash"),
+                out.details.get("readbackHash"))
+            saved = _saved(flow)["tracker"]
+            self.assertEqual(saved["mergeBaseFlow"], prior_flow)
+            self.assertEqual(saved["mergeBaseTracker"], prior_tracker)
+            self.assertEqual(saved["baseHashFlow"], sha(prior_flow))
+            self.assertEqual(saved["baseHashTracker"], sha(prior_tracker))
+            self.assertEqual(saved["lastSyncedAt"], "OLD")
+
 
 # ---------------------------------------------------------------------------
 # Paired snapshot invariant

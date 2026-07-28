@@ -157,6 +157,7 @@ class CreateReceiptSemantics(unittest.TestCase):
                 "lifecycle-create": ok({
                     "id": 1, "node_id": GH_NODE, "number": 42,
                     "html_url": "https://github.com/o/r/issues/42",
+                    "body": "stored\n\n",
                 }),
                 "sync-body-parent-read": _readback("github", "stored\n\n"),
             })
@@ -347,10 +348,28 @@ class JiraCreateScreenFields(unittest.TestCase):
                  "reason": "not_on_create_screen"})
             saved = json.loads(
                 (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
-            self.assertEqual(saved["mergeBaseFlow"], "B")
+            self.assertEqual(saved["mergeBaseFlow"], "")
             self.assertEqual(saved["mergeBaseTracker"], "")
             self.assertEqual(
                 _receipts(flow)[0]["degraded"], out["degraded"])
+
+            follow_up = fake_execute({
+                "sync-body-parent-read": _readback("jira", ""),
+                "wire-parent-read": _readback("jira", ""),
+                "wire-update": ok(None),
+                "wire-read": _readback("jira", "B"),
+            })
+            pushed = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body="B",
+                direction="push", execute=follow_up)
+            self.assertNotIsInstance(pushed, TrackerError, pushed)
+            self.assertEqual(pushed["kind"], "pushed")
+            self.assertEqual(
+                [call.op for call in follow_up.calls].count("wire-update"), 1)
+            saved = json.loads(
+                (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
+            self.assertEqual(saved["mergeBaseFlow"], "B")
+            self.assertEqual(saved["mergeBaseTracker"], "B")
 
     def test_includes_description_when_createmeta_is_unresolved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -444,6 +463,7 @@ class ProviderCreateShapes(unittest.TestCase):
                 "lifecycle-create": ok({
                     "id": 999, "node_id": GH_NODE, "number": 42,
                     "html_url": "https://github.com/o/r/issues/42",
+                    "body": stored,
                 }),
                 "sync-body-parent-read": _readback("github", stored),
             })
@@ -468,6 +488,7 @@ class ProviderCreateShapes(unittest.TestCase):
                     "id": GL_ID, "iid": 12,
                     "web_url": "https://gitlab.com/g/p/-/issues/12",
                     "references": {"full": "g/p#12"},
+                    "description": stored,
                 }),
                 "sync-body-parent-read": _readback("gitlab", stored),
             })
@@ -503,7 +524,8 @@ class ProviderCreateShapes(unittest.TestCase):
                     "data": {"issueCreate": {
                         "success": True,
                         "issue": {"id": LN_UUID, "identifier": "WOR-17",
-                                  "url": "https://linear.app/x/issue/WOR-17"},
+                                  "url": "https://linear.app/x/issue/WOR-17",
+                                  "description": stored},
                     }},
                 }),
                 "sync-body-parent-read": _readback("linear", stored),
@@ -523,7 +545,7 @@ class ProviderCreateShapes(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             _write_flow(flow, jr_cfg())
-            stored = "jira stored"
+            stored = "B"
             ex = fake_execute({
                 "lifecycle-create": ok({
                     "id": JR_ID, "key": "SCRUM-1",
@@ -545,6 +567,34 @@ class ProviderCreateShapes(unittest.TestCase):
             payload = json.loads(create.body.decode())
             self.assertEqual(payload["fields"]["project"]["id"], "10000")
             self.assertEqual(payload["fields"]["issuetype"]["id"], "10001")
+
+    def test_create_readback_changed_after_ack_keeps_base_unseeded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, gh_cfg())
+            ex = fake_execute({
+                "lifecycle-create": ok({
+                    "id": 999, "node_id": GH_NODE, "number": 42,
+                    "html_url": "https://github.com/o/r/issues/42",
+                    "body": "B",
+                }),
+                "sync-body-parent-read": _readback(
+                    "github", "concurrent human edit"),
+            })
+
+            out = L.create(
+                flow, "fn-1-demo", title="T", body="B",
+                event="capture", execute=ex)
+
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "readback_diverged")
+            self.assertEqual(
+                out.details["completed_steps"], ["create", "link"])
+            saved = json.loads(path.read_text())["tracker"]
+            self.assertEqual(saved["id"], GH_NODE)
+            self.assertIsNone(saved.get("mergeBaseFlow"))
+            self.assertIsNone(saved.get("mergeBaseTracker"))
 
     def test_all_providers_readback_failure_keeps_link_but_no_base(self) -> None:
         cases = [
