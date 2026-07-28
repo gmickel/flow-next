@@ -338,8 +338,21 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
 
     prior_synced = tracker.get("lastSyncedAt")
 
-    if decision.kind == "noop":
-        return {
+    def noop_result(*, noop_reason: Optional[str] = None) -> Result:
+        # A prior applied run may have landed its state/base but failed only
+        # while writing the lifecycle receipt. Re-emit event evidence from
+        # the converged retry without mutating or advancing lastSyncedAt.
+        if write_receipt:
+            rerr = write_sync_receipt(
+                flow_dir, spec_id=spec_id, status="noop",
+                tracker_id=durable, event=event, transport=provider,
+                note=(
+                    f"status already converged ({noop_reason})"
+                    if noop_reason else "status already converged"),
+            )
+            if rerr:
+                return rerr
+        result = {
             "kind": "noop",
             "to": to,
             "flow": flow_norm,
@@ -347,6 +360,12 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
             "pr_evidence": pr_evidence,
             "lastSyncedAt": prior_synced,
         }
+        if noop_reason:
+            result["reason"] = noop_reason
+        return result
+
+    if decision.kind == "noop":
+        return noop_result()
 
     if decision.kind == "apply_local":
         # Convergence: the fold writes RAW spec.status=done. When a
@@ -359,13 +378,7 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
         # no lastSyncedAt advance (the residual review gate is derived
         # state, not sync work).
         if spec_data.get("status") == "done":
-            return {
-                "kind": "noop",
-                "reason": "already_folded",
-                "to": to, "flow": flow_norm, "tracker": tracker_norm,
-                "pr_evidence": pr_evidence,
-                "lastSyncedAt": prior_synced,
-            }
+            return noop_result(noop_reason="already_folded")
         # Tracker-terminal wins: fold into the LOCAL spec (status + lastSyncedAt),
         # never issue a tracker mutation. A PM closing the issue is authoritative.
         persisted = _persist_applied_state(
@@ -465,14 +478,8 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
         }
 
     if isinstance(written, dict) and written.get("noop"):
-        return {
-            "kind": "noop",
-            "to": to,
-            "flow": flow_norm,
-            "tracker": tracker_norm,
-            "pr_evidence": pr_evidence,
-            "lastSyncedAt": prior_synced,
-        }
+        return noop_result(noop_reason=str(
+            written.get("reason") or "provider_already_current"))
 
     # Applied — advance lastSyncedAt + receipt.
     persisted = _persist_applied_state(

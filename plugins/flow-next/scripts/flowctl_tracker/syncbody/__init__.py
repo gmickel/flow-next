@@ -506,6 +506,13 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
             and flow_file_body == tracker.get("mergeBaseFlow")
             and trackerBodyForMerge(current_body) == tracker.get("mergeBaseTracker"))
         if flow_unchanged:
+            if write_receipt:
+                rerr = write_sync_receipt(
+                    flow_dir, spec_id=spec_id, status="noop",
+                    tracker_id=durable, event=event, transport=provider,
+                    note="sync-body already converged")
+                if rerr:
+                    return rerr
             return {
                 "kind": "noop",
                 "direction": "push",

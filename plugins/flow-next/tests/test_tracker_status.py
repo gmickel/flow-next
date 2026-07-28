@@ -502,11 +502,16 @@ class StatusVerbGate(unittest.TestCase):
                     state="open", labels=["status:in_progress"])),
                 "merge-evidence": ok([]),
             })
-            out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+            out = S.status(
+                flow, "fn-1-demo", to="in_progress",
+                event="work.firstClaim", execute=ex)
             self.assertEqual(out["kind"], "noop")
             saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
             self.assertEqual(saved["lastSyncedAt"], "OLD")
-            self.assertEqual(_receipts(flow), [])
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "noop")
+            self.assertEqual(receipts[0]["event"], "work.firstClaim")
 
     def test_defer_writes_receipt_without_advancing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1609,13 +1614,19 @@ class AliasedStateIdWriteNoop(unittest.TestCase):
                     "fields": {"status": {"id": "2"}},
                 }),
             })
-            out = S.status(flow, "fn-1-demo", to="in_review", execute=ex)
+            out = S.status(
+                flow, "fn-1-demo", to="in_review",
+                event="makePr", execute=ex)
             self.assertNotIsInstance(out, TrackerError, msg=repr(out))
             self.assertEqual(out["kind"], "noop")
             self.assertFalse(any(c.op in {"status-set", "status-transitions"}
                                  for c in ex.calls))
             saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
             self.assertEqual(saved["lastSyncedAt"], "OLD")
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "noop")
+            self.assertEqual(receipts[0]["event"], "makePr")
 
 
 class EffectiveReviewBackendPrecedence(unittest.TestCase):
@@ -1680,11 +1691,16 @@ class TerminalFoldConverges(unittest.TestCase):
                     state_reason="completed")),
                 "merge-evidence": ok([{"state": "MERGED", "number": 1}]),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(
+                flow, "fn-1-demo", to="done",
+                event="work.done", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["kind"], "noop")
             self.assertEqual(out["reason"], "already_folded")
             saved = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(saved["status"], "done")
             self.assertEqual(saved["tracker"]["lastSyncedAt"], "PRIOR-FOLD")
-            self.assertEqual(_receipts(flow), [])
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "noop")
+            self.assertEqual(receipts[0]["event"], "work.done")

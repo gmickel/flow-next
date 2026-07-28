@@ -230,7 +230,7 @@ class NoOpReconcile(unittest.TestCase):
                     })
                     out = SB.sync_body(
                         flow, "fn-1-demo", flow_file_body=FLOW_BODY,
-                        direction="push", execute=ex)
+                        direction="push", event="work.done", execute=ex)
                     self.assertEqual(out["kind"], "noop")
                     self.assertEqual(out["side_written"], "none")
                     write_ops = [c for c in ex.calls if c.op == "wire-update"]
@@ -239,6 +239,10 @@ class NoOpReconcile(unittest.TestCase):
                     saved = _saved(flow)["tracker"]
                     self.assertEqual(saved["lastSyncedAt"], "2020-01-01T00:00:00Z")
                     self.assertEqual(saved["mergeBaseFlow"], FLOW_BODY)
+                    receipts = _receipts(flow)
+                    self.assertEqual(len(receipts), 1)
+                    self.assertEqual(receipts[0]["status"], "noop")
+                    self.assertEqual(receipts[0]["event"], "work.done")
 
 
 # ---------------------------------------------------------------------------

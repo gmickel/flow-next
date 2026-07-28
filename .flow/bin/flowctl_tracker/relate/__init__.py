@@ -684,6 +684,12 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
                     "degraded": None,
                     "depRelations": tracker_a.get("depRelations") or [],
                 }
+        rerr = write_sync_receipt(
+            flow_dir, spec_id=spec_id, status="noop",
+            tracker_id=from_id, event=event, transport=provider,
+            note=f"blocked-by {blocked_by} already recorded")
+        if rerr:
+            return rerr
         return {
             "kind": "noop",
             "reason": "already_recorded",
@@ -757,10 +763,10 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
                  "(interrupted earlier run; edge already on tracker)")
         if rerr:
             # Same partial-success shape as the applied path below: the edge
-            # is on the tracker and the ledger is now finalized, so a retry
-            # no-ops (already_recorded) and never re-attempts the receipt.
-            # Preserve the completed steps + edge identity on the frozen
-            # error. Nothing is rolled back.
+            # is on the tracker and the ledger is now finalized. Preserve the
+            # completed steps + edge identity on the frozen error; a retry
+            # converges through already_recorded and recreates the receipt.
+            # Nothing is rolled back.
             import dataclasses  # noqa: PLC0415
             return dataclasses.replace(rerr, details={
                 **(rerr.details or {}),
@@ -915,10 +921,10 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
     )
     if rerr:
         # The remote relation EXISTS and the ledger is finalized - a bare
-        # failure here reads as "nothing happened", yet a retry takes the
-        # in_ledger+remote no-op path and never re-attempts the receipt,
-        # leaving the mutation with no partial-success evidence. TrackerError
-        # is frozen: rebuild with the completed-steps detail + edge identity
+        # failure here reads as "nothing happened". A retry takes the
+        # in_ledger+remote no-op path and recreates the receipt, while this
+        # error still carries partial-success evidence. TrackerError is
+        # frozen: rebuild with the completed-steps detail + edge identity
         # (mirrors lifecycle's create/persist-external receipt-failure
         # branches). Nothing is rolled back.
         import dataclasses  # noqa: PLC0415

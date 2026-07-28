@@ -2054,9 +2054,9 @@ class RelatePendingClaim(unittest.TestCase):
 class RelateReceiptFailurePreservesEvidence(unittest.TestCase):
     """PR #246 review wave 8: create + finalize succeeded but the receipt
     write failed. A bare error read as "nothing happened", yet a retry takes
-    the in_ledger+remote no-op path and never re-attempts the receipt - the
-    error must carry the completed steps + edge identity (mirrors
-    lifecycle's create/persist-external receipt-failure decoration)."""
+    the in_ledger+remote no-op path. The error must carry completed steps +
+    edge identity, and the converged retry must recreate event evidence
+    (mirrors lifecycle's create/persist-external receipt handling)."""
 
     def _pair(self, flow: Path) -> None:
         a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
@@ -2084,7 +2084,7 @@ class RelateReceiptFailurePreservesEvidence(unittest.TestCase):
             with mock.patch.object(R, "write_sync_receipt",
                                    return_value=boom):
                 out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
-                               execute=ex)
+                               event="work.done", execute=ex)
             self.assertIsInstance(out, TrackerError, msg=repr(out))
             self.assertIs(out.cls, ErrorClass.TRANSPORT)
             details = out.details or {}
@@ -2099,6 +2099,28 @@ class RelateReceiptFailurePreservesEvidence(unittest.TestCase):
             entries = spec["tracker"]["depRelations"]
             self.assertEqual(len(entries), 1)
             self.assertNotIn("status", entries[0])
+
+            present = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": [
+                    {"type": "blocks", "issue": {"id": LN_UUID_B}}]},
+            }}})
+            retry = fake_execute({"relate-list": [present]})
+            again = R.relate(
+                flow, "fn-1-demo", blocked_by="fn-2-dep",
+                event="work.done", execute=retry)
+            self.assertNotIsInstance(again, TrackerError, msg=repr(again))
+            self.assertEqual(again["kind"], "noop")
+            self.assertEqual(again["reason"], "already_recorded")
+            self.assertEqual([call.op for call in retry.calls],
+                             ["relate-list"])
+            receipts = [
+                receipt for receipt in _receipts(flow)
+                if receipt.get("event") == "work.done"
+            ]
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "noop")
 
     def test_repair_receipt_failure_carries_completed_steps(self) -> None:
         # Same partial-success shape on the repair path: the edge is on the
