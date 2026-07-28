@@ -285,6 +285,106 @@ def apply_status(provider: str, config: dict, locator: dict, parent: dict,
                         subtype="provider")
 
 
+def github_status_label(target_slot: str, *,
+                        use_verified_label: bool = False) -> str:
+    return ("status:verified"
+            if target_slot == "done" and use_verified_label
+            else _LABEL.get(target_slot, f"status:{target_slot}"))
+
+
+def github_status_labels_match(parent: dict, *, target_slot: str,
+                               use_verified_label: bool = False) -> bool:
+    labels = _status_labels(parent.get("labels"))
+    if len(labels) != 1:
+        return False
+    if use_verified_label:
+        return labels[0] == "status:verified"
+    return _recognized_slot(labels[0]) == target_slot
+
+
+def repair_github_status_labels(config: dict, locator: dict, parent: dict,
+                                execute: Execute, *, target_slot: str,
+                                use_verified_label: bool = False) -> Result:
+    """Repair only GitHub's status-label namespace, never native state.
+
+    The status verb calls this only after the ordinary merge-evidence and
+    decision policy prove a noop target. Failures remain retryable because a
+    later invocation re-evaluates label consistency even when normalization
+    succeeds from native state.
+    """
+    from ..wire import _cli, _destination, _gh_repo, _github_number  # noqa: PLC0415
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    number = _github_number(locator["display"])
+    repo = _gh_repo(dest)
+    if isinstance(number, TrackerError):
+        return number
+    if isinstance(repo, TrackerError):
+        return repo
+
+    label = github_status_label(
+        target_slot, use_verified_label=use_verified_label)
+    failures: list[dict] = []
+    for old in [x for x in _status_labels(parent.get("labels"))
+                if x != label]:
+        removed = _cli(
+            execute, "github", config, "status-label-rm", "DELETE",
+            f"repos/{repo}/issues/{number}/labels/{quote(old, safe='')}",
+            idempotent=False)
+        if isinstance(removed, TrackerError):
+            failures.append({
+                "op": "repair-remove", "label": old,
+                "error": removed.message})
+    added = _cli(
+        execute, "github", config, "status-label-add", "POST",
+        f"repos/{repo}/issues/{number}/labels", body={"labels": [label]})
+    if isinstance(added, TrackerError):
+        failures.append({
+            "op": "repair-add", "label": label, "error": added.message})
+
+    readback = _cli(
+        execute, "github", config, "status-label-readback", "GET",
+        f"repos/{repo}/issues/{number}/labels", idempotent=True)
+    if isinstance(readback, list):
+        present = [
+            x.get("name") for x in readback
+            if isinstance(x, dict) and isinstance(x.get("name"), str)
+            and x["name"].startswith("status:")
+        ]
+        if present == [label]:
+            return {
+                "applied": target_slot,
+                "label": label,
+                "completed_steps": ["labels"],
+                "repair": "labels-only",
+                "degraded": None,
+            }
+        error_class = ErrorClass.CONFLICT
+        detail = None
+    else:
+        present = _status_labels(parent.get("labels"))
+        error_class = ErrorClass.TRANSPORT
+        detail = (readback.message if isinstance(readback, TrackerError)
+                  else "unexpected repair readback shape")
+    if detail:
+        failures.append({"op": "repair-readback", "error": detail})
+    return TrackerError(
+        error_class,
+        "github status-label repair did not converge",
+        subtype="status_labels_partial",
+        details={
+            "completed_steps": ([] if isinstance(added, TrackerError)
+                                else ["label-add"]),
+            "target": target_slot,
+            "expected": [label],
+            "present": present,
+            "failures": failures,
+        },
+        auto_retryable=True,
+    )
+
+
 def _apply_github(config, locator, parent, execute, *, target_slot, close_reason,
                   use_verified_label) -> Result:
     from ..wire import _cli, _destination, _gh_repo, _github_number  # noqa: PLC0415
@@ -297,8 +397,8 @@ def _apply_github(config, locator, parent, execute, *, target_slot, close_reason
         return number
     if isinstance(repo, TrackerError):
         return repo
-    label = ("status:verified" if (target_slot == "done" and use_verified_label)
-             else _LABEL.get(target_slot, f"status:{target_slot}"))
+    label = github_status_label(
+        target_slot, use_verified_label=use_verified_label)
     remove = [x for x in _status_labels(parent.get("labels")) if x != label]
     # Native open/close
     if target_slot in TERMINAL:

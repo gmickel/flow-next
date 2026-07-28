@@ -262,7 +262,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
     def test_shared_status_owner_rehydrates_durable_terminal_state(self) -> None:
         root = _read("flow-next-spec-completion-review/SKILL.md")
         block = _bash_fence_after(
-            root, "## Step 3: Record the terminal verdict exactly once"
+            root, "### Step 0.5: Resume terminal status persistence before dispatch"
         )
         self.assertIn(
             '$FLOWCTL review-rounds attempts "$SPEC_ID"', block
@@ -315,7 +315,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 0,
                 None,
                 0,
-                True,
+                False,
             ),
             (
                 "non-capped-needs-work",
@@ -343,6 +343,30 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 2,
                 True,
             ),
+            (
+                "newer-manual-reset-wins",
+                {
+                    "attempts": [{"outcome": "verdict", "verdict": "SHIP"}],
+                    "review_rounds": 0,
+                    "review_rounds_cap": 4,
+                },
+                0,
+                None,
+                0,
+                False,
+            ),
+            (
+                "already-persisted-ship-does-not-dispatch",
+                {
+                    "attempts": [{"outcome": "verdict", "verdict": "SHIP"}],
+                    "review_rounds": 0,
+                    "review_rounds_cap": 4,
+                },
+                0,
+                None,
+                0,
+                False,
+            ),
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -352,6 +376,8 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 "if [[ \"$1 $2\" == \"review-rounds attempts\" ]]; then\n"
                 "  printf '%s\\n' \"$ATTEMPTS_PAYLOAD\"\n"
+                "elif [[ \"$1\" == \"show\" ]]; then\n"
+                "  printf '%s\\n' \"$SPEC_STATE_PAYLOAD\"\n"
                 "elif [[ \"$1 $2\" == "
                 "\"spec set-completion-review-status\" ]]; then\n"
                 "  printf '%s\\n' \"$*\" >> \"$STATUS_LOG\"\n"
@@ -375,6 +401,22 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 expects_retry,
             ) in cases:
                 with self.subTest(name=name):
+                    payload["attempts"][-1]["timestamp"] = (
+                        "2026-07-29T10:00:00.000002Z"
+                    )
+                    spec_state = {
+                        "completion_review_status": "unknown",
+                        "completion_reviewed_at": "2026-07-29T09:00:00Z",
+                    }
+                    if name == "newer-manual-reset-wins":
+                        spec_state["completion_reviewed_at"] = (
+                            "2026-07-29T11:00:00Z"
+                        )
+                    elif name == "already-persisted-ship-does-not-dispatch":
+                        spec_state["completion_review_status"] = "ship"
+                        spec_state["completion_reviewed_at"] = (
+                            "2026-07-29T10:00:00.000003Z"
+                        )
                     status_log = temp / f"{name}.log"
                     env = os.environ.copy()
                     env.update(
@@ -382,6 +424,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                             "FLOWCTL": str(flowctl_stub),
                             "SPEC_ID": "fn-1",
                             "ATTEMPTS_PAYLOAD": json.dumps(payload),
+                            "SPEC_STATE_PAYLOAD": json.dumps(spec_state),
                             "STATUS_LOG": str(status_log),
                             "STATUS_EXIT": str(status_exit),
                         }

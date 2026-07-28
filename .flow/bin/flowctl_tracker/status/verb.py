@@ -28,6 +28,7 @@ from ..types import ErrorClass, TrackerError
 from .policy import (Decision, decide, decision_as_error, flow_to_normalized,
                      merge_evidence, validate_to_reason)
 from .providers import (apply_status, enrich_linear_parent, github_native_status,
+                        github_status_labels_match, repair_github_status_labels,
                         tracker_norm_from_parent)
 
 
@@ -346,10 +347,7 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
             if repair_decision.kind == "noop" and native_norm == to:
                 tracker_norm = native_norm
                 repair_retry = True
-                decision = Decision(
-                    "apply", target_slot=native_norm,
-                    reason="status-label-repair",
-                    close_reason=repair_decision.close_reason)
+                decision = repair_decision
             elif (repair_decision.kind == "apply"
                   and repair_decision.target_slot):
                 tracker_norm = native_norm
@@ -364,6 +362,27 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
     err = decision_as_error(decision)
     if err:
         return err
+
+    verified_target = decision.target_slot or to
+    use_verified = (
+        verified_target == "done"
+        and str(spec_data.get("completion_review_status") or "") == "ship"
+        and pr_evidence == "merged"
+    )
+    label_only_repair = False
+    if (provider == "github" and decision.kind == "noop"
+            and github_native_status(parent) == to
+            and not github_status_labels_match(
+                parent, target_slot=to,
+                use_verified_label=use_verified)):
+        # Native state + flow policy + requested target already agree. Repair
+        # only the reduced-fidelity label namespace; replaying PATCH state
+        # here could overwrite an authoritative close reason such as
+        # `duplicate`. Promoting to APPLY ensures repaired convergence earns
+        # lastSyncedAt and a receipt.
+        decision = Decision(
+            "apply", target_slot=to, reason="status-label-repair")
+        label_only_repair = True
 
     prior_synced = tracker.get("lastSyncedAt")
 
@@ -467,17 +486,18 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"unhandled decision kind {decision.kind!r}",
                             subtype="decision")
-    use_verified = (
-        decision.target_slot == "done"
-        and str(spec_data.get("completion_review_status") or "") == "ship"
-        and pr_evidence == "merged"
-    )
-    written = apply_status(
-        provider, config, locator, parent, ex,
-        target_slot=decision.target_slot,
-        close_reason=decision.close_reason or reason,
-        use_verified_label=use_verified,
-    )
+    if label_only_repair:
+        written = repair_github_status_labels(
+            config, locator, parent, ex,
+            target_slot=decision.target_slot,
+            use_verified_label=use_verified)
+    else:
+        written = apply_status(
+            provider, config, locator, parent, ex,
+            target_slot=decision.target_slot,
+            close_reason=decision.close_reason or reason,
+            use_verified_label=use_verified,
+        )
     if isinstance(written, TrackerError):
         return written
 

@@ -935,8 +935,6 @@ class Round1HostFixes(unittest.TestCase):
                     labels=["status:in_review", "status:done"],
                     state_reason="completed")),
                 "merge-evidence": ok([{"state": "MERGED"}]),
-                "status-set": ok({"node_id": GH_NODE, "number": 42,
-                                  "state": "closed"}),
                 "status-label-rm": empty_ok(),
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": ok([{"name": "status:done"}]),
@@ -953,9 +951,106 @@ class Round1HostFixes(unittest.TestCase):
             self.assertEqual(receipts[0]["status"], "updated")
             self.assertEqual(
                 [c.op for c in retry_ex.calls],
-                ["status-parent-read", "merge-evidence", "status-set",
-                 "status-label-rm", "status-label-add",
-                 "status-label-readback"])
+                ["status-parent-read", "merge-evidence", "status-label-rm",
+                 "status-label-add", "status-label-readback"])
+
+    def test_retry_label_repair_preserves_duplicate_close_reason(self) -> None:
+        """A safe noop retry repairs labels only. It must not replay PATCH
+        state and overwrite GitHub's authoritative duplicate close reason."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed",
+                    labels=["status:in_review", "status:done"],
+                    state_reason="duplicate")),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": ok([{"name": "status:done"}]),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["kind"], "applied")
+            self.assertEqual(out["write"]["repair"], "labels-only")
+            self.assertFalse(any(c.op == "status-set" for c in ex.calls))
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow)[0]["status"], "updated")
+
+    def test_missing_target_partial_is_repaired_on_next_invocation(self) -> None:
+        """Bounded cleanup can leave no target label. The next invocation
+        detects the missing label despite successful native normalization and
+        converges through the same policy-gated label-only repair."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+            first = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed"}),
+                "status-label-rm": [
+                    TrackerError(ErrorClass.TRANSPORT, "remove boom"),
+                    empty_ok(),
+                ],
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": [
+                    ok([{"name": "status:in_review"},
+                        {"name": "status:done"}]),
+                    ok([]),
+                ],
+            })
+            partial = S.status(
+                flow, "fn-1-demo", to="done", execute=first)
+            self.assertIsInstance(partial, TrackerError)
+            self.assertEqual(partial.subtype, "status_labels_partial")
+            self.assertTrue(partial.auto_retryable)
+            self.assertEqual(
+                json.loads(path.read_text(encoding="utf-8"))["tracker"][
+                    "lastSyncedAt"],
+                "OLD")
+            self.assertEqual(_receipts(flow), [])
+
+            second = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed", labels=[],
+                    state_reason="completed")),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": ok([{"name": "status:done"}]),
+            })
+            repaired = S.status(
+                flow, "fn-1-demo", to="done", execute=second)
+            self.assertNotIsInstance(repaired, TrackerError, repaired)
+            self.assertEqual(repaired["kind"], "applied")
+            self.assertEqual(repaired["write"]["repair"], "labels-only")
+            self.assertFalse(any(c.op == "status-set" for c in second.calls))
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow)[0]["status"], "updated")
 
     def test_readback_failure_is_degraded_even_when_label_ops_succeed(self) -> None:
         """A failed label readback must surface as degraded evidence even when
