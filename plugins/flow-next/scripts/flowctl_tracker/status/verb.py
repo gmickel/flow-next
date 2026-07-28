@@ -27,7 +27,8 @@ from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
 from ..types import ErrorClass, TrackerError
 from .policy import (Decision, decide, decision_as_error, flow_to_normalized,
                      merge_evidence, validate_to_reason)
-from .providers import (apply_status, enrich_linear_parent,
+from .providers import (apply_status, enrich_linear_parent, github_native_status,
+                        github_status_labels_match, repair_github_status_labels,
                         tracker_norm_from_parent)
 
 
@@ -316,10 +317,6 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
     if isinstance(dest, TrackerError):
         return dest
 
-    tracker_norm = tracker_norm_from_parent(provider, parent, dest)
-    if isinstance(tracker_norm, TrackerError):
-        return tracker_norm
-
     # PR evidence belongs to the source Git checkout, not the configured
     # tracker transport. In particular, Jira DC sslVerify=false is valid for
     # Jira HTTP but cannot be applied to the independent gh CLI route.
@@ -331,10 +328,61 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
         tasks=tasks,
     )
 
-    decision: Decision = decide(to, reason, flow_norm, tracker_norm, pr_evidence)
+    tracker_norm = tracker_norm_from_parent(provider, parent, dest)
+    repair_retry = False
+    if isinstance(tracker_norm, TrackerError):
+        # A prior GitHub write may have landed native state + target label but
+        # failed to remove the old label even after its bounded repair. On a
+        # later invocation normalization sees an ambiguous namespace before
+        # the ordinary decision ladder. Recover only when native state,
+        # requested target, merge evidence, and the policy all prove the
+        # requested transition is already the intended state. Then replay the
+        # idempotent provider write as an APPLY so repaired convergence earns
+        # lastSyncedAt + receipt instead of being mistaken for a noop.
+        if (provider == "github"
+                and tracker_norm.subtype == "ambiguous-status-labels"):
+            native_norm = github_native_status(parent)
+            repair_decision = decide(
+                to, reason, flow_norm, native_norm, pr_evidence)
+            if repair_decision.kind == "noop" and native_norm == to:
+                tracker_norm = native_norm
+                repair_retry = True
+                decision = repair_decision
+            elif (repair_decision.kind == "apply"
+                  and repair_decision.target_slot):
+                tracker_norm = native_norm
+                repair_retry = True
+                decision = repair_decision
+            else:
+                return tracker_norm
+        else:
+            return tracker_norm
+    if not repair_retry:
+        decision = decide(to, reason, flow_norm, tracker_norm, pr_evidence)
     err = decision_as_error(decision)
     if err:
         return err
+
+    verified_target = decision.target_slot or to
+    use_verified = (
+        verified_target == "done"
+        and str(spec_data.get("completion_review_status") or "") == "ship"
+        and pr_evidence == "merged"
+    )
+    label_only_repair = False
+    if (provider == "github" and decision.kind == "noop"
+            and github_native_status(parent) == to
+            and not github_status_labels_match(
+                parent, target_slot=to,
+                use_verified_label=use_verified)):
+        # Native state + flow policy + requested target already agree. Repair
+        # only the reduced-fidelity label namespace; replaying PATCH state
+        # here could overwrite an authoritative close reason such as
+        # `duplicate`. Promoting to APPLY ensures repaired convergence earns
+        # lastSyncedAt and a receipt.
+        decision = Decision(
+            "apply", target_slot=to, reason="status-label-repair")
+        label_only_repair = True
 
     prior_synced = tracker.get("lastSyncedAt")
 
@@ -438,17 +486,18 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"unhandled decision kind {decision.kind!r}",
                             subtype="decision")
-    use_verified = (
-        decision.target_slot == "done"
-        and str(spec_data.get("completion_review_status") or "") == "ship"
-        and pr_evidence == "merged"
-    )
-    written = apply_status(
-        provider, config, locator, parent, ex,
-        target_slot=decision.target_slot,
-        close_reason=decision.close_reason or reason,
-        use_verified_label=use_verified,
-    )
+    if label_only_repair:
+        written = repair_github_status_labels(
+            config, locator, parent, ex,
+            target_slot=decision.target_slot,
+            use_verified_label=use_verified)
+    else:
+        written = apply_status(
+            provider, config, locator, parent, ex,
+            target_slot=decision.target_slot,
+            close_reason=decision.close_reason or reason,
+            use_verified_label=use_verified,
+        )
     if isinstance(written, TrackerError):
         return written
 

@@ -1748,6 +1748,51 @@ class ReadinessProjection(unittest.TestCase):
                 saved = json.loads(path.read_text(encoding="utf-8"))
                 self.assertFalse(saved["ready"])
 
+    def test_gitlab_false_projection_finds_ready_state_on_later_page(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            config = gl_cfg()
+            config["tracker"]["readyState"] = "Ready"
+            path = _write_flow(
+                flow, config,
+                tracker=_linked(id=str(GL_ID), identifier="g/p#12"))
+            spec = json.loads(path.read_text(encoding="utf-8"))
+            spec["ready"] = True
+            path.write_text(json.dumps(spec), encoding="utf-8")
+            issue = W.dispatch(
+                "read", config,
+                locator={"durable": str(GL_ID), "display": "g/p#12"},
+                execute=fake_execute({
+                    "wire-read": _parent_resp(
+                        "gitlab", _gl_issue(FLOW_BODY))}))
+            self.assertNotIsInstance(issue, TrackerError)
+            first_page = [{"name": f"other-{index}"} for index in range(100)]
+            ex = fake_execute({
+                "facade-readiness-exists": [
+                    ok(first_page),
+                    ok([{"name": "Ready"}]),
+                ],
+            })
+
+            out = F.ops.project_readiness(
+                flow, SPEC_ID, issue=issue, config=config,
+                provider="gitlab",
+                locator={"durable": str(GL_ID), "display": "g/p#12"},
+                execute=ex,
+            )
+
+            self.assertEqual(out["kind"], "updated", out)
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertFalse(saved["ready"])
+            requests = [
+                request for request in ex.calls
+                if request.op == "facade-readiness-exists"
+            ]
+            self.assertEqual(len(requests), 2)
+            self.assertIn("per_page=100&page=1", requests[0].url_or_argv[-1])
+            self.assertIn("per_page=100&page=2", requests[1].url_or_argv[-1])
+
 
 # ---------------------------------------------------------------------------
 # Pull: wire read inside the claimed sync-body transaction (PR #246 review)

@@ -145,15 +145,23 @@ RP_EXIT=$?
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
   | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
   | tail -n 1 | sed -E 's#</?verdict>##g')"
-$FLOWCTL review-rounds record "$SPEC_ID" --kind plan --review-type plan \
-  --backend rp --output-file "$RESPONSE_FILE" --exit-code "$RP_EXIT" --json
+RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+  --review-type plan --backend rp --output-file "$RESPONSE_FILE" \
+  --exit-code "$RP_EXIT" --json)"
+RECORD_EXIT=$?
+printf '%s\n' "$RECORD_JSON"
+if [[ "$RECORD_EXIT" -ne 0 ]]; then
+  exit "$RECORD_EXIT"
+fi
 ```
 
 If no verdict exists, the `record` call refunds the reservation and durably
 records the transport failure; output `<promise>RETRY</promise>` and stop.
 After more than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive failures it
 exits 5 / `TRANSPORT_UNHEALTHY`: stop for backend repair, never reset the review
-counter. Read the response file once for findings; do not echo/cat it.
+counter. A failed recorder must terminate this fence; no later verdict,
+receipt, status, or fix-loop command may swallow its exit. Read the response
+file once for findings; do not echo/cat it.
 
 ## Phase 4: Receipt and Status
 
@@ -185,8 +193,9 @@ Only after the current spec and affected task specs are updated:
    `--new-chat`; require the same verdict grammar.
 5. Overwrite the same response file, parse the verdict, call the same
    `review-rounds record ... --review-type plan` command with the captured
-   `rp chat-send` exit code, then read the response once and update
-   receipt/status.
+   `rp chat-send` exit code, capture and check `RECORD_EXIT` exactly as in the
+   first dispatch, then read the response once and update receipt/status.
+   A nonzero recorder exit stops the round before any verdict/control path.
 
 ## Anti-patterns
 

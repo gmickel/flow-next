@@ -788,8 +788,8 @@ class SpecVerbStatusAllFour(unittest.TestCase):
                 "merge-evidence": ok([]),
                 "status-set": ok(dict(gh_parent, state="open")),
                 "status-label-rm": empty(),
-                "status-label-add": ok([{"name": "status:in_progress"}]),
-                "status-label-readback": ok([{"name": "status:in_progress"}]),
+                "status-label-add": ok([{"name": "status:in-progress"}]),
+                "status-label-readback": ok([{"name": "status:in-progress"}]),
             }),
             ("gitlab", gl_cfg(), str(GL_ID), "g/p#12", {
                 "status-parent-read": ok(gl_parent),

@@ -132,6 +132,152 @@ Parse $ARGUMENTS for:
 - `--review=<backend>` → backend override
 - Remaining args → focus areas
 
+### Step 0.5: Resume terminal status persistence before dispatch
+
+Run this checkpoint after parsing `SPEC_ID` and **before** loading or dispatching
+any backend. Run the same checkpoint again immediately after host/rp records a
+verdict. It recovers a terminal status write that failed after the verdict round
+was durably consumed, without reserving or dispatching another review.
+This shared step is the sole writer for host and rp terminal status.
+
+```bash
+if ! TERMINAL_REVIEW_JSON="$($FLOWCTL review-rounds attempts "$SPEC_ID" \
+  --kind plan --review-type completion --json)" \
+  || ! SPEC_STATE_JSON="$($FLOWCTL show "$SPEC_ID" --json)"; then
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
+
+LATEST_OUTCOME="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.attempts[-1].outcome // ""')"
+VERDICT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.attempts[-1].verdict // ""')"
+ATTEMPT_BACKEND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.attempts[-1].backend // ""')"
+ATTEMPT_AT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.attempts[-1].timestamp // ""')"
+REVIEW_ROUND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.review_rounds // 0')"
+REVIEW_CAP="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.review_rounds_cap // 0')"
+CURRENT_STATUS="$(printf '%s' "$SPEC_STATE_JSON" \
+  | jq -r '.completion_review_status // "unknown"')"
+CURRENT_REVIEWED_AT="$(printf '%s' "$SPEC_STATE_JSON" \
+  | jq -r '.completion_reviewed_at // ""')"
+
+TERMINAL_STATUS=""
+TERMINAL_EXIT=0
+if [[ "$LATEST_OUTCOME" == "verdict" && "$VERDICT" == "SHIP" ]]; then
+  TERMINAL_STATUS="ship"
+elif [[ "$LATEST_OUTCOME" == "verdict" \
+  && "$VERDICT" == "NEEDS_WORK" \
+  && "$REVIEW_CAP" -gt 0 \
+  && "$REVIEW_ROUND" -ge "$REVIEW_CAP" ]]; then
+  TERMINAL_STATUS="needs_work"
+  TERMINAL_EXIT=4
+fi
+
+# A matching status means the terminal already persisted. A newer terminal
+# attempt means persistence is pending. A newer completion_reviewed_at is an
+# explicit later status decision (for example `unknown` to request re-review);
+# honor it instead of resurrecting the old verdict.
+if [[ -n "$TERMINAL_STATUS" \
+  && ( "$CURRENT_STATUS" == "$TERMINAL_STATUS" \
+    || ( -n "$ATTEMPT_AT" \
+      && ( -z "$CURRENT_REVIEWED_AT" \
+        || "$ATTEMPT_AT" > "$CURRENT_REVIEWED_AT" ) ) ) ]]; then
+  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}"
+  RECEIPT_RECOVERY="$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
+
+  # A recovery payload belongs to exactly one durable attempt. Remove an older
+  # attempt's artifact before deciding whether this attempt requires a receipt;
+  # otherwise an optional RP receipt can become spuriously mandatory.
+  if [[ -f "$RECEIPT_RECOVERY" ]] \
+    && ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+      --arg mode "$ATTEMPT_BACKEND" --arg attempt_at "$ATTEMPT_AT" \
+      '.type == "completion_review"
+       and .id == $id
+       and .verdict == $verdict
+       and .mode == $mode
+       and .attempt_timestamp == $attempt_at' \
+      "$RECEIPT_RECOVERY" >/dev/null 2>&1; then
+    if ! rm -f "$RECEIPT_RECOVERY"; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
+  fi
+
+  RECEIPT_REQUIRED=false
+  # Bind evidence requirements to the durable attempt being resumed, never
+  # the backend selected for this invocation (which may have changed).
+  case "$ATTEMPT_BACKEND" in
+    codex|copilot|cursor|host) RECEIPT_REQUIRED=true ;;
+    rp)
+      [[ "$VERDICT" == "SHIP" \
+        && ( -n "${REVIEW_RECEIPT_PATH:-}" || -f "$RECEIPT_RECOVERY" ) ]] \
+        && RECEIPT_REQUIRED=true
+      ;;
+  esac
+
+  # Every receipt-owning backend preserves the complete payload here before
+  # writing the caller-selected path. Restore it before status so a transient
+  # receipt-path failure never consumes another review or loses Ralph evidence.
+  if [[ -f "$RECEIPT_RECOVERY" ]]; then
+    if ! mkdir -p "$(dirname "$RECEIPT_PATH")" \
+      || ! cp "$RECEIPT_RECOVERY" "$RECEIPT_PATH"; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
+    if ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+      --arg mode "$ATTEMPT_BACKEND" --arg attempt_at "$ATTEMPT_AT" \
+      '.type == "completion_review"
+       and .id == $id
+       and .verdict == $verdict
+       and .mode == $mode
+       and .attempt_timestamp == $attempt_at' \
+      "$RECEIPT_PATH" >/dev/null; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
+  fi
+
+  if [[ "$RECEIPT_REQUIRED" == true ]] \
+    && ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+      --arg mode "$ATTEMPT_BACKEND" --arg attempt_at "$ATTEMPT_AT" \
+      '.type == "completion_review"
+       and .id == $id
+       and .verdict == $verdict
+       and .mode == $mode
+       and .attempt_timestamp == $attempt_at' \
+      "$RECEIPT_PATH" >/dev/null 2>&1; then
+    echo "<promise>RETRY</promise>"
+    exit 0
+  fi
+
+  if [[ "$CURRENT_STATUS" != "$TERMINAL_STATUS" ]]; then
+    TERMINAL_WRITE_JSON="$($FLOWCTL spec set-completion-review-status "$SPEC_ID" \
+      --status "$TERMINAL_STATUS" --json)"
+    TERMINAL_WRITE_EXIT=$?
+    printf '%s\n' "$TERMINAL_WRITE_JSON"
+    if [[ "$TERMINAL_WRITE_EXIT" -ne 0 ]]; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
+  fi
+  if ! rm -f "$RECEIPT_RECOVERY"; then
+    echo "<promise>RETRY</promise>"
+    exit 0
+  fi
+
+  if [[ "$TERMINAL_EXIT" -eq 4 ]]; then
+    echo "ESCALATE: completion-review did not converge in ${REVIEW_CAP} verdict rounds"
+    exit 4
+  fi
+  echo "VERDICT=SHIP"
+  exit 0
+fi
+```
+
 ### Step 1: Load Backend Workflow
 
 1. `$BACKEND` was already resolved by workflow-common.md Phase 0 (Preamble) — do NOT re-run it.
@@ -206,54 +352,12 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 `flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.** The standalone command remains for rp and for repairing a missed write:
 
-```bash
-# This shared step is the sole writer for host and rp. Skip the entire block
-# when codex/copilot/cursor already wrote status in its handler. Shell
-# variables from earlier tool calls are not workflow state: rehydrate the
-# latest completion attempt and live cap counters from the durable recorder.
-if ! TERMINAL_REVIEW_JSON="$($FLOWCTL review-rounds attempts "$SPEC_ID" \
-  --kind plan --review-type completion --json)"; then
-  echo "<promise>RETRY</promise>"
-  exit 0
-fi
-
-LATEST_OUTCOME="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.attempts[-1].outcome // ""')"
-VERDICT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.attempts[-1].verdict // ""')"
-REVIEW_ROUND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.review_rounds // 0')"
-REVIEW_CAP="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.review_rounds_cap // 0')"
-
-# A refunded/malformed attempt is non-terminal. The selected backend workflow
-# normally stops before this step; keep the shared owner fail-closed if reached.
-if [[ "$LATEST_OUTCOME" != "verdict" \
-  || ! "$VERDICT" =~ ^(SHIP|NEEDS_WORK)$ ]]; then
-  echo "<promise>RETRY</promise>"
-  exit 0
-fi
-
-TERMINAL_STATUS=""
-if [[ "$VERDICT" == "SHIP" ]]; then
-  TERMINAL_STATUS="ship"
-elif [[ "$VERDICT" == "NEEDS_WORK" \
-  && "$REVIEW_CAP" -gt 0 \
-  && "$REVIEW_ROUND" -ge "$REVIEW_CAP" ]]; then
-  TERMINAL_STATUS="needs_work"
-fi
-
-if [[ -n "$TERMINAL_STATUS" ]]; then
-  $FLOWCTL spec set-completion-review-status "$SPEC_ID" \
-    --status "$TERMINAL_STATUS" --json
-fi
-
-# The capped status write above MUST complete before this terminal.
-if [[ "$TERMINAL_STATUS" == "needs_work" ]]; then
-  echo "ESCALATE: completion-review did not converge in ${REVIEW_CAP} verdict rounds"
-  exit 4
-fi
-```
+For host/rp, execute the Step 0.5 checkpoint again now. The just-recorded
+terminal attempt is newer than the stored status, so that shared checkpoint is
+the sole writer and emits the terminal only after persistence succeeds.
+Codex/copilot/cursor handlers already self-write status; their next invocation
+also runs Step 0.5 first, so a handler-side write failure recovers without
+another reviewer dispatch.
 
 For host and rp, write once on BOTH terminal paths (SHIP and capped-NEEDS_WORK).
 The capped write happens immediately after the final verdict is recorded and

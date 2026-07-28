@@ -852,6 +852,206 @@ class Round1HostFixes(unittest.TestCase):
             self.assertIn({"op": "add", "label": "status:done", "error": "boom"},
                           write["degraded"]["failures"])
 
+    def test_remove_failure_is_repaired_before_durable_success(self) -> None:
+        """A failed remove plus successful add first proves two status labels.
+        One bounded cleanup/readback repairs the namespace before success."""
+        ex = fake_execute({
+            "status-set": ok({"node_id": GH_NODE, "number": 42,
+                              "state": "closed"}),
+            "status-label-rm": [
+                TrackerError(ErrorClass.TRANSPORT, "remove boom"),
+                empty_ok(),
+            ],
+            "status-label-add": ok([{"name": "status:done"}]),
+            "status-label-readback": [
+                ok([{"name": "status:in_review"},
+                    {"name": "status:done"}]),
+                ok([{"name": "status:done"}]),
+            ],
+        })
+        out = apply_status(
+            "github", gh_cfg(),
+            {"durable": GH_NODE, "display": "#42"},
+            _gh_parent(state="open", labels=["status:in_review"]),
+            ex, target_slot="done")
+        self.assertNotIsInstance(out, TrackerError)
+        self.assertEqual(out["completed_steps"], ["state", "labels"])
+        self.assertIsNone(out["degraded"])
+        self.assertEqual(
+            [c.op for c in ex.calls],
+            ["status-set", "status-label-rm", "status-label-add",
+             "status-label-readback", "status-label-rm",
+             "status-label-readback"])
+
+    def test_unrepaired_remove_failure_does_not_advance_last_synced(self) -> None:
+        """A second invocation safely repairs the partial namespace.
+
+        The first bounded cleanup still leaves two labels, returns landed
+        partial evidence, and persists no durable success. The retry proves
+        the requested terminal state through native state + merge policy,
+        replays the idempotent write, and converges without manual cleanup.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+            ambiguous = ok([{"name": "status:in_review"},
+                            {"name": "status:done"}])
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed"}),
+                "status-label-rm": [
+                    TrackerError(ErrorClass.TRANSPORT, "remove boom"),
+                    TrackerError(ErrorClass.TRANSPORT, "repair boom"),
+                ],
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": [ambiguous, ambiguous],
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "status_labels_partial")
+            self.assertTrue(out.auto_retryable)
+            self.assertEqual((out.details or {}).get("completed_steps"),
+                             ["state", "label-add"])
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow), [])
+
+            retry_ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed",
+                    labels=["status:in_review", "status:done"],
+                    state_reason="completed")),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": ok([{"name": "status:done"}]),
+            })
+            retry = S.status(
+                flow, "fn-1-demo", to="done", execute=retry_ex)
+            self.assertNotIsInstance(retry, TrackerError, retry)
+            self.assertEqual(retry["kind"], "applied")
+            self.assertEqual(retry["applied"], "done")
+            repaired = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertNotEqual(repaired["lastSyncedAt"], "OLD")
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "updated")
+            self.assertEqual(
+                [c.op for c in retry_ex.calls],
+                ["status-parent-read", "merge-evidence", "status-label-rm",
+                 "status-label-add", "status-label-readback"])
+
+    def test_retry_label_repair_preserves_duplicate_close_reason(self) -> None:
+        """A safe noop retry repairs labels only. It must not replay PATCH
+        state and overwrite GitHub's authoritative duplicate close reason."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed",
+                    labels=["status:in_review", "status:done"],
+                    state_reason="duplicate")),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": ok([{"name": "status:done"}]),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["kind"], "applied")
+            self.assertEqual(out["write"]["repair"], "labels-only")
+            self.assertFalse(any(c.op == "status-set" for c in ex.calls))
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow)[0]["status"], "updated")
+
+    def test_missing_target_partial_is_repaired_on_next_invocation(self) -> None:
+        """Bounded cleanup can leave no target label. The next invocation
+        detects the missing label despite successful native normalization and
+        converges through the same policy-gated label-only repair."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+            first = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed"}),
+                "status-label-rm": [
+                    TrackerError(ErrorClass.TRANSPORT, "remove boom"),
+                    empty_ok(),
+                ],
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": [
+                    ok([{"name": "status:in_review"},
+                        {"name": "status:done"}]),
+                    ok([]),
+                ],
+            })
+            partial = S.status(
+                flow, "fn-1-demo", to="done", execute=first)
+            self.assertIsInstance(partial, TrackerError)
+            self.assertEqual(partial.subtype, "status_labels_partial")
+            self.assertTrue(partial.auto_retryable)
+            self.assertEqual(
+                json.loads(path.read_text(encoding="utf-8"))["tracker"][
+                    "lastSyncedAt"],
+                "OLD")
+            self.assertEqual(_receipts(flow), [])
+
+            second = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed", labels=[],
+                    state_reason="completed")),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": ok([{"name": "status:done"}]),
+            })
+            repaired = S.status(
+                flow, "fn-1-demo", to="done", execute=second)
+            self.assertNotIsInstance(repaired, TrackerError, repaired)
+            self.assertEqual(repaired["kind"], "applied")
+            self.assertEqual(repaired["write"]["repair"], "labels-only")
+            self.assertFalse(any(c.op == "status-set" for c in second.calls))
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow)[0]["status"], "updated")
+
     def test_readback_failure_is_degraded_even_when_label_ops_succeed(self) -> None:
         """A failed label readback must surface as degraded evidence even when
         every preceding label op succeeded - the single-valued invariant is
@@ -1214,6 +1414,18 @@ class AmbiguousStatusLabels(unittest.TestCase):
             "gitlab", {"state": "opened", "labels": ["status:todo"]}, {})
         self.assertEqual(out, "todo")
 
+    def test_native_open_wins_over_stale_terminal_label(self) -> None:
+        for provider, parent in (
+            ("github", _gh_parent(state="open", labels=["status:done"])),
+            ("github", _gh_parent(state="open", labels=["status:wontfix"])),
+            ("gitlab", {"state": "opened", "labels": ["status:done"]}),
+            ("gitlab", {"state": "opened", "labels": ["status:deferred"]}),
+        ):
+            with self.subTest(provider=provider, parent=parent):
+                self.assertEqual(
+                    tracker_norm_from_parent(provider, parent, {}),
+                    "in_progress")
+
     def test_unrecognized_extra_status_labels_are_ignored(self) -> None:
         out = tracker_norm_from_parent(
             "github",
@@ -1222,11 +1434,10 @@ class AmbiguousStatusLabels(unittest.TestCase):
             {})
         self.assertEqual(out, "in_review")
 
-    def test_no_silent_noop_when_first_label_matches_derived(self) -> None:
-        """Mirror of test_last_synced_advanced_only_on_applied with one extra
-        recognized label AFTER the matching one: first-match used to make
-        tracker_norm == flow_norm == requested → noop, permanently leaving
-        the single-valued namespace inconsistent. Must surface instead."""
+    def test_ambiguous_labels_repaired_when_native_flow_request_agree(
+            self) -> None:
+        """Native state, derived flow, and requested target jointly prove a
+        safe repair target, so ambiguity is repaired instead of silent noop."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             path = _write_flow(
@@ -1239,12 +1450,71 @@ class AmbiguousStatusLabels(unittest.TestCase):
                 "status-parent-read": ok(_gh_parent(
                     state="open",
                     labels=["status:in_progress", "status:in_review"])),
+                "merge-evidence": ok([]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "open"}),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:in-progress"}]),
+                "status-label-readback": ok([
+                    {"name": "status:in-progress"}]),
             })
             out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["kind"], "applied")
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow)[0]["status"], "updated")
+
+    def test_ambiguous_repair_refused_when_merge_gate_is_not_clean(self) -> None:
+        """Native/request agreement alone is insufficient: failed merge
+        evidence keeps the ordinary conflict surface and emits no mutation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            )
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed",
+                    labels=["status:in_review", "status:done"],
+                    state_reason="completed")),
+                "merge-evidence": TrackerError(
+                    ErrorClass.TRANSPORT, "probe unavailable"),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
             self.assertIsInstance(out, TrackerError)
-            self.assertIs(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(out.subtype, "ambiguous-status-labels")
-            # No mutation, no lastSyncedAt advance, no receipt.
+            self.assertFalse(any(c.op == "status-set" for c in ex.calls))
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow), [])
+
+    def test_ambiguous_cancelled_state_is_never_auto_repaired(self) -> None:
+        """The retry path preserves cancelled-family human confirmation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            )
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed",
+                    labels=["status:wontfix", "status:done"],
+                    state_reason="not_planned")),
+                "merge-evidence": ok([]),
+            })
+            out = S.status(
+                flow, "fn-1-demo", to="cancelled",
+                reason="not_planned", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "ambiguous-status-labels")
             self.assertFalse(any(c.op == "status-set" for c in ex.calls))
             saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
             self.assertEqual(saved["lastSyncedAt"], "OLD")

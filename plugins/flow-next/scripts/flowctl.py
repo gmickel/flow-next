@@ -25070,6 +25070,15 @@ def stamp_ralph_iteration(receipt: dict) -> None:
     except ValueError:
         pass
 
+
+def _completion_review_receipt_recovery_path(review_id: str) -> Path:
+    return (
+        get_flow_dir()
+        / "tmp"
+        / f"completion-review-receipt-recovery-{review_id}.json"
+    )
+
+
 def _write_backend_review_receipt(
     receipt_path: str,
     *,
@@ -25108,6 +25117,28 @@ def _write_backend_review_receipt(
     receipt_data["spec"] = str(resolved_spec)
     receipt_data["timestamp"] = now_iso()
     receipt_data["review"] = review_text
+    if review_type == "completion_review":
+        flow_dir = get_flow_dir()
+        spec_path = find_spec_json_path(flow_dir, review_id)
+        if spec_path.exists():
+            spec_data = normalize_epic(
+                load_json_or_exit(
+                    spec_path, f"Spec {review_id}", use_json=False
+                )
+            )
+            attempts = _review_attempt_summary(
+                spec_data,
+                "plan",
+                None,
+                review_type="completion",
+            )["attempts"]
+            latest = attempts[-1] if attempts else {}
+            if (
+                latest.get("backend") == backend
+                and latest.get("verdict") == verdict
+                and isinstance(latest.get("timestamp"), str)
+            ):
+                receipt_data["attempt_timestamp"] = latest["timestamp"]
     stamp_ralph_iteration(receipt_data)
     if focus:
         receipt_data["focus"] = focus
@@ -25118,9 +25149,17 @@ def _write_backend_review_receipt(
         receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
     if unaddressed_rids is not None:
         receipt_data["unaddressed"] = unaddressed_rids
-    Path(receipt_path).write_text(
-        json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
-    )
+    content = json.dumps(receipt_data, indent=2) + "\n"
+    recovery_path: Optional[Path] = None
+    if review_type == "completion_review":
+        # The verdict attempt is already durable by this point. Preserve the
+        # complete receipt payload in a repo-local ignored file before writing
+        # an explicit/autonomous receipt path that may fail transiently. The
+        # skill's pre-dispatch checkpoint restores this payload without
+        # consuming or dispatching another review round.
+        recovery_path = _completion_review_receipt_recovery_path(review_id)
+        atomic_write(recovery_path, content)
+    atomic_write(Path(receipt_path), content)
 
 
 
@@ -26039,10 +26078,6 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     if verdict == "SHIP":
         reset_review_cap(epic_id, "plan")
 
-    written_status = _self_write_review_status(
-        epic_id, "completion", verdict, use_json=args.json
-    )
-
     # Preserve session_id for continuity (avoid clobbering on resumed sessions).
     session_id_to_write = returned_session_id or session_id
 
@@ -26070,6 +26105,15 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             classification_counts=classification_counts,
             unaddressed_rids=unaddressed_rids,
         )
+
+    # Receipt evidence must land before terminal status. If receipt persistence
+    # fails, the recovery payload above remains and status stays non-terminal;
+    # the skill restores the receipt and status before any later dispatch.
+    written_status = _self_write_review_status(
+        epic_id, "completion", verdict, use_json=args.json
+    )
+    if written_status is not None and receipt_path:
+        _completion_review_receipt_recovery_path(epic_id).unlink(missing_ok=True)
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
 

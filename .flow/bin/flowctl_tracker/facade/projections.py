@@ -10,8 +10,8 @@ from ..config_lock import ConfigLockTimeout, config_lock
 from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
                                  load_spec, merged_tracker, now_iso)
 from ..types import ErrorClass, TrackerError
-from ..wire import (_destination, _gh_repo, _gl_project, _jira, _jira_base,
-                    github, gitlab, linear)
+from ..wire import (_PAGE_SIZE, _destination, _gh_repo, _gl_project, _jira,
+                    _jira_base, _rest_drain, github, gitlab, linear)
 
 
 def _norm(value: Any) -> str:
@@ -95,22 +95,36 @@ def _config_exists(provider: str, config: dict, ready_state: str,
         project = _gl_project(dest)
         if isinstance(project, TrackerError):
             return project
-        query = urlencode({"search": ready_state})
-        out = gitlab._cli(  # noqa: SLF001 - same package transport primitive
-            execute, "gitlab", config, "facade-readiness-exists", "GET",
-            f"projects/{project}/labels?{query}", idempotent=True,
-        )
-        if isinstance(out, TrackerError):
-            return out
-        if not isinstance(out, list):
-            return TrackerError(
-                ErrorClass.TRANSPORT, "gitlab labels response is malformed",
-                subtype="readiness_shape")
-        return any(
+        def fetch_labels_page(page: int) -> Result:
+            query = urlencode({
+                'search': ready_state,
+                'per_page': _PAGE_SIZE,
+                'page': page,
+            })
+            return gitlab._cli(  # noqa: SLF001 - package transport primitive
+                execute, "gitlab", config, "facade-readiness-exists", "GET",
+                f"projects/{project}/labels?{query}", idempotent=True,
+            )
+
+        drained = _rest_drain(fetch_labels_page)
+        if isinstance(drained, TrackerError):
+            return drained
+        labels, truncated = drained
+        exists = any(
             isinstance(label, dict)
             and _norm(label.get("name")) == _norm(ready_state)
-            for label in out
+            for label in labels
         )
+        if exists:
+            return True
+        if truncated:
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "gitlab labels pages truncated at drain cap; readyState "
+                "absence unproven",
+                subtype="readiness_truncated",
+            )
+        return False
 
     if provider == "linear":
         team_id = dest.get("teamId")

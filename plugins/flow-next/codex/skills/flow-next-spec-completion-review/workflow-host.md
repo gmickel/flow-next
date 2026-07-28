@@ -68,13 +68,20 @@ finalize the reservation through the shared attempt recorder:
 ```bash
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.md"
 # Write the exact reviewer output to RESPONSE_FILE; do not reinterpret it.
-$FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
- --review-type completion --backend host --output-file "$RESPONSE_FILE" --json
+RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+ --review-type completion --backend host --output-file "$RESPONSE_FILE" --json)"
+RECORD_EXIT=$?
+printf '%s\n' "$RECORD_JSON"
+if [[ "$RECORD_EXIT" -ne 0 ]]; then
+ exit "$RECORD_EXIT"
+fi
 ```
 
 A malformed/missing verdict is a transport failure: the recorder refunds the
 reservation and may stop with exit 5 / `TRANSPORT_UNHEALTHY`. Never turn it into
 `NEEDS_WORK`, and never write completion status for that path.
+Only continue after `RECORD_EXIT=0`: that successful finalize appends this
+dispatch as the latest durable completion attempt consumed by the shared owner.
 
 ## Step 3: Receipt
 
@@ -84,7 +91,7 @@ Receipt path (same contract as the subprocess backends — spec-scoped default; 
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt${SPEC_ID:+-${SPEC_ID}}.json}"
 ```
 
-Write:
+Build this payload once:
 
 ```json
 {
@@ -96,9 +103,22 @@ Write:
  "spec": "host",
  "session_id": null,
  "review": "<full reviewer output text - findings + verdict>",
- "timestamp": "<ISO-8601>"
+ "timestamp": "<ISO-8601>",
+ "attempt_timestamp": "<.attempts[-1].timestamp from RECORD_JSON>"
 }
 ```
+
+Persist it in this order:
+
+1. Write the complete JSON payload to
+ `$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json`
+ first (create the parent directory).
+2. Copy that exact file to `$RECEIPT_PATH`; validate `type`, `id`, and `verdict`
+ there with `jq`.
+3. Leave the recovery file in place after receipt validation. SKILL.md's
+ shared checkpoint deletes it only after terminal status persists.
+ On any write/copy/validation failure, leave recovery in place, output
+ `<promise>RETRY</promise>`, and stop before terminal status.
 
 `session_id` is literal `null` — host re-reviews are always fresh subagents; `null` distinguishes by-design non-resumability from an incomplete receipt. Shape stays compatible with existing consumers.
 

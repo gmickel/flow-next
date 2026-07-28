@@ -25,6 +25,8 @@ import importlib.util
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -50,6 +52,29 @@ def _load_flowctl() -> Any:
 
 
 flowctl = _load_flowctl()
+
+REPO = Path(__file__).resolve().parents[3]
+SKILLS = REPO / "plugins" / "flow-next" / "skills"
+
+
+def _bash_fence_after(text: str, marker: str) -> str:
+    marker_at = text.index(marker)
+    fence_at = text.index("```bash\n", marker_at) + len("```bash\n")
+    return text[fence_at:text.index("\n```", fence_at)]
+
+
+def _bash_executable() -> str:
+    """Return the POSIX shell CI uses, avoiding the Windows WSL launcher."""
+    if os.name == "nt":
+        git = shutil.which("git")
+        if git:
+            git_bash = Path(git).resolve().parent.parent / "bin" / "bash.exe"
+            if git_bash.is_file():
+                return str(git_bash)
+    bash = shutil.which("bash")
+    if bash:
+        return bash
+    raise RuntimeError("bash executable not found")
 
 
 # ------------------------- R4: convergence ratchet -------------------------
@@ -979,6 +1004,90 @@ class TestReviewRoundsCliAliasCanonicalization(unittest.TestCase):
         rounds = data["impl_review_rounds"]
         self.assertEqual(list(rounds.keys()), [self.task_id])
         self.assertEqual(rounds[self.task_id], 2)
+
+
+class TestRpRecorderFailureFences(unittest.TestCase):
+    """A recorder failure cannot be hidden by later verdict/control commands."""
+
+    def _stub(self, temp: Path) -> Path:
+        path = temp / "flowctl-stub"
+        path.write_text(
+            "#!/usr/bin/env bash\n"
+            "if [[ \"$1 $2\" == \"rp chat-send\" ]]; then\n"
+            "  printf '%s\\n' '<verdict>SHIP</verdict>'\n"
+            "elif [[ \"$1 $2\" == \"review-rounds record\" ]]; then\n"
+            "  printf '%s\\n' 'recorder failed'\n"
+            "  exit 5\n"
+            "else\n"
+            "  exit 9\n"
+            "fi\n",
+            encoding="utf-8",
+        )
+        path.chmod(0o755)
+        return path
+
+    def _run_fence(
+        self, relative: str, marker: str, *, task_id: str = ""
+    ) -> subprocess.CompletedProcess[str]:
+        text = (SKILLS / relative).read_text(encoding="utf-8")
+        block = _bash_fence_after(text, marker)
+        block = (
+            block.replace("<spec-id>", "fn-1")
+            .replace("<task-id-or-branch-slug>", "fn-1-1")
+            .replace("<suffix>", "test")
+        )
+        self.assertIn("RECORD_EXIT=$?", block)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            env = os.environ.copy()
+            env.update(
+                {
+                    "FLOWCTL": self._stub(temp).as_posix(),
+                    "SPEC_ID": "fn-1",
+                    "TASK_ID": task_id,
+                    "BRANCH": "test-branch",
+                    "TMPDIR": temp.as_posix(),
+                }
+            )
+            return subprocess.run(
+                [_bash_executable(), "-c", block],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+    def test_plan_rp_recorder_failure_stops_the_dispatch_fence(self):
+        result = self._run_fence(
+            "flow-next-plan-review/workflow-rp.md",
+            "Otherwise run one blocking",
+        )
+        self.assertEqual(
+            result.returncode, 5, result.stdout + result.stderr
+        )
+        self.assertIn("recorder failed", result.stdout)
+
+    def test_impl_rp_recorder_failure_precedes_verdict_echo(self):
+        result = self._run_fence(
+            "flow-next-impl-review/workflow-rp.md",
+            "Redirect the review response to the literal response file",
+            task_id="fn-1.1",
+        )
+        self.assertEqual(
+            result.returncode, 5, result.stdout + result.stderr
+        )
+        self.assertIn("recorder failed", result.stdout)
+        self.assertNotIn("VERDICT=", result.stdout)
+
+    def test_impl_standalone_review_keeps_no_recorder_path(self):
+        result = self._run_fence(
+            "flow-next-impl-review/workflow-rp.md",
+            "Redirect the review response to the literal response file",
+        )
+        self.assertEqual(
+            result.returncode, 0, result.stdout + result.stderr
+        )
+        self.assertIn("VERDICT=SHIP", result.stdout)
 
 
 if __name__ == "__main__":
