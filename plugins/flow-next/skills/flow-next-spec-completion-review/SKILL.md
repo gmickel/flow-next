@@ -208,11 +208,37 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 ```bash
 # This shared step is the sole writer for host and rp. Skip the entire block
-# when codex/copilot/cursor already wrote status in its handler.
+# when codex/copilot/cursor already wrote status in its handler. Shell
+# variables from earlier tool calls are not workflow state: rehydrate the
+# latest completion attempt and live cap counters from the durable recorder.
+if ! TERMINAL_REVIEW_JSON="$($FLOWCTL review-rounds attempts "$SPEC_ID" \
+  --kind plan --review-type completion --json)"; then
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
+
+LATEST_OUTCOME="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.attempts[-1].outcome // ""')"
+VERDICT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.attempts[-1].verdict // ""')"
+REVIEW_ROUND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.review_rounds // 0')"
+REVIEW_CAP="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.review_rounds_cap // 0')"
+
+# A refunded/malformed attempt is non-terminal. The selected backend workflow
+# normally stops before this step; keep the shared owner fail-closed if reached.
+if [[ "$LATEST_OUTCOME" != "verdict" \
+  || ! "$VERDICT" =~ ^(SHIP|NEEDS_WORK)$ ]]; then
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
+
 TERMINAL_STATUS=""
 if [[ "$VERDICT" == "SHIP" ]]; then
   TERMINAL_STATUS="ship"
 elif [[ "$VERDICT" == "NEEDS_WORK" \
+  && "$REVIEW_CAP" -gt 0 \
   && "$REVIEW_ROUND" -ge "$REVIEW_CAP" ]]; then
   TERMINAL_STATUS="needs_work"
 fi

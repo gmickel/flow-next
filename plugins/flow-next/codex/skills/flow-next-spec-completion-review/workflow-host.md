@@ -104,8 +104,10 @@ Write:
 
 ## Step 4: Continue through the shared fix loop and status owner
 
-Carry the verdict directly into SKILL.md's shared Fix Loop in this same skill
-run. This host workflow never writes terminal completion status.
+Continue into SKILL.md's shared Fix Loop in this same skill run. The shared
+terminal owner re-reads the latest completion verdict and cap counters from
+`review-rounds attempts`; it never relies on shell variables surviving a tool
+call. This host workflow never writes terminal completion status.
 
 - `SHIP`: continue immediately to SKILL.md Step 3, the sole host status owner.
 - `NEEDS_WORK`: parse every valid gap, fix the implementation, run the relevant

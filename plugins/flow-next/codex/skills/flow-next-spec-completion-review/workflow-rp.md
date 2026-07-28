@@ -359,8 +359,11 @@ REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
 REVIEW_CAP="$(printf '%s' "$ROUND_JSON" | jq -r '.cap')"
 ```
 
-Retain `REVIEW_ROUND` / `REVIEW_CAP` as workflow state for the shared terminal
-branch after the verdict is recorded.
+Use `REVIEW_ROUND` / `REVIEW_CAP` for this invocation's immediate fix-loop
+branching. After the verdict is recorded, the shared terminal owner re-reads
+the latest completion attempt and live cap counters from
+`review-rounds attempts`; it never relies on these shell variables surviving a
+prompt turn.
 
 At the cap this refuses with an `ESCALATE:` marker + exit 4. That is NOT a
 retryable error: do NOT dispatch the review or invent a completion verdict.

@@ -12,6 +12,10 @@ Pins live in the AGENTS.md model-routing section.
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -50,6 +54,12 @@ def _read(relative: str) -> str:
 
 def _section(text: str, start: str, end: str) -> str:
     return text.split(start, 1)[1].split(end, 1)[0]
+
+
+def _bash_fence_after(text: str, marker: str) -> str:
+    marker_at = text.index(marker)
+    fence_at = text.index("```bash\n", marker_at) + len("```bash\n")
+    return text[fence_at:text.index("\n```", fence_at)]
 
 
 class TestHostBackendRegistry(unittest.TestCase):
@@ -233,6 +243,126 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             "verdict is\nnon-terminal for completion status",
             root,
         )
+
+    def test_shared_status_owner_rehydrates_durable_terminal_state(self) -> None:
+        root = _read("flow-next-spec-completion-review/SKILL.md")
+        block = _bash_fence_after(
+            root, "## Step 3: Record the terminal verdict exactly once"
+        )
+        self.assertIn(
+            '$FLOWCTL review-rounds attempts "$SPEC_ID"', block
+        )
+        self.assertIn("--review-type completion --json", block)
+        self.assertLess(
+            block.index("$FLOWCTL review-rounds attempts"),
+            block.index("$FLOWCTL spec set-completion-review-status"),
+        )
+
+        cases = (
+            (
+                "ship-after-counter-reset",
+                {
+                    "attempts": [{"outcome": "verdict", "verdict": "SHIP"}],
+                    "review_rounds": 0,
+                    "review_rounds_cap": 4,
+                },
+                0,
+                "ship",
+            ),
+            (
+                "capped-needs-work",
+                {
+                    "attempts": [
+                        {"outcome": "verdict", "verdict": "NEEDS_WORK"}
+                    ],
+                    "review_rounds": 4,
+                    "review_rounds_cap": 4,
+                },
+                4,
+                "needs_work",
+            ),
+            (
+                "refunded-transport-failure",
+                {
+                    "attempts": [
+                        {
+                            "outcome": "transport_failure",
+                            "verdict": None,
+                        }
+                    ],
+                    "review_rounds": 3,
+                    "review_rounds_cap": 4,
+                },
+                0,
+                None,
+            ),
+            (
+                "non-capped-needs-work",
+                {
+                    "attempts": [
+                        {"outcome": "verdict", "verdict": "NEEDS_WORK"}
+                    ],
+                    "review_rounds": 3,
+                    "review_rounds_cap": 4,
+                },
+                0,
+                None,
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            flowctl_stub = temp / "flowctl-stub"
+            flowctl_stub.write_text(
+                "#!/usr/bin/env bash\n"
+                "if [[ \"$1 $2\" == \"review-rounds attempts\" ]]; then\n"
+                "  printf '%s\\n' \"$ATTEMPTS_PAYLOAD\"\n"
+                "elif [[ \"$1 $2\" == "
+                "\"spec set-completion-review-status\" ]]; then\n"
+                "  printf '%s\\n' \"$*\" >> \"$STATUS_LOG\"\n"
+                "else\n"
+                "  exit 9\n"
+                "fi\n",
+                encoding="utf-8",
+            )
+            flowctl_stub.chmod(0o755)
+
+            for name, payload, expected_exit, expected_status in cases:
+                with self.subTest(name=name):
+                    status_log = temp / f"{name}.log"
+                    env = os.environ.copy()
+                    env.update(
+                        {
+                            "FLOWCTL": str(flowctl_stub),
+                            "SPEC_ID": "fn-1",
+                            "ATTEMPTS_PAYLOAD": json.dumps(payload),
+                            "STATUS_LOG": str(status_log),
+                        }
+                    )
+                    result = subprocess.run(
+                        ["bash", "-c", block],
+                        env=env,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertEqual(
+                        result.returncode,
+                        expected_exit,
+                        result.stdout + result.stderr,
+                    )
+                    writes = (
+                        status_log.read_text(encoding="utf-8").splitlines()
+                        if status_log.exists()
+                        else []
+                    )
+                    if expected_status is None:
+                        self.assertEqual(writes, [])
+                    else:
+                        self.assertEqual(len(writes), 1)
+                        self.assertIn(
+                            f"--status {expected_status} --json", writes[0]
+                        )
 
     def test_host_completion_uses_shared_cap_attempt_lifecycle(self) -> None:
         host = _read("flow-next-spec-completion-review/workflow-host.md")
