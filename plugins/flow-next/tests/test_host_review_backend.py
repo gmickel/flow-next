@@ -420,6 +420,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         block = _bash_fence_after(
             rp, "Redirect the review response to the literal response file"
         )
+        block = block.replace("<spec-id>", "fn-1").replace("<suffix>", "test")
         self.assertIn('RECORD_EXIT=$?', block)
         self.assertLess(block.index('RECORD_EXIT=$?'), block.index('echo "VERDICT='))
 
@@ -442,19 +443,21 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             env = os.environ.copy()
             env.update(
                 {
-                    "FLOWCTL": str(flowctl_stub),
+                    "FLOWCTL": flowctl_stub.as_posix(),
                     "SPEC_ID": "fn-1",
-                    "TMPDIR": str(temp),
+                    "TMPDIR": temp.as_posix(),
                 }
             )
             result = subprocess.run(
-                ["bash", "-c", block],
+                [_bash_executable(), "-c", block],
                 env=env,
                 text=True,
                 capture_output=True,
                 check=False,
             )
-            self.assertEqual(result.returncode, 5)
+            self.assertEqual(
+                result.returncode, 5, result.stdout + result.stderr
+            )
             self.assertIn("recorder failed", result.stdout)
             self.assertNotIn("VERDICT=", result.stdout)
 

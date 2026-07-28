@@ -1016,17 +1016,22 @@ class TestRpRecorderFailureFences(unittest.TestCase):
     ) -> subprocess.CompletedProcess[str]:
         text = (SKILLS / relative).read_text(encoding="utf-8")
         block = _bash_fence_after(text, marker)
+        block = (
+            block.replace("<spec-id>", "fn-1")
+            .replace("<task-id-or-branch-slug>", "fn-1-1")
+            .replace("<suffix>", "test")
+        )
         self.assertIn("RECORD_EXIT=$?", block)
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             env = os.environ.copy()
             env.update(
                 {
-                    "FLOWCTL": str(self._stub(temp)),
+                    "FLOWCTL": self._stub(temp).as_posix(),
                     "SPEC_ID": "fn-1",
                     "TASK_ID": task_id,
                     "BRANCH": "test-branch",
-                    "TMPDIR": str(temp),
+                    "TMPDIR": temp.as_posix(),
                 }
             )
             return subprocess.run(
@@ -1042,7 +1047,9 @@ class TestRpRecorderFailureFences(unittest.TestCase):
             "flow-next-plan-review/workflow-rp.md",
             "Otherwise run one blocking",
         )
-        self.assertEqual(result.returncode, 5)
+        self.assertEqual(
+            result.returncode, 5, result.stdout + result.stderr
+        )
         self.assertIn("recorder failed", result.stdout)
 
     def test_impl_rp_recorder_failure_precedes_verdict_echo(self):
@@ -1051,7 +1058,9 @@ class TestRpRecorderFailureFences(unittest.TestCase):
             "Redirect the review response to the literal response file",
             task_id="fn-1.1",
         )
-        self.assertEqual(result.returncode, 5)
+        self.assertEqual(
+            result.returncode, 5, result.stdout + result.stderr
+        )
         self.assertIn("recorder failed", result.stdout)
         self.assertNotIn("VERDICT=", result.stdout)
 
@@ -1060,7 +1069,9 @@ class TestRpRecorderFailureFences(unittest.TestCase):
             "flow-next-impl-review/workflow-rp.md",
             "Redirect the review response to the literal response file",
         )
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            result.returncode, 0, result.stdout + result.stderr
+        )
         self.assertIn("VERDICT=SHIP", result.stdout)
 
 
