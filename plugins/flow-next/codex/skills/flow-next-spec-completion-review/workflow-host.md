@@ -69,21 +69,21 @@ Write:
 
 `session_id` is literal `null` — host re-reviews are always fresh subagents; `null` distinguishes by-design non-resumability from an incomplete receipt. Shape stays compatible with existing consumers.
 
-## Step 4: Status write
+## Step 4: Continue through the shared fix loop and status owner
 
-Host has no handler-owned status write. After the terminal verdict (or when SKILL.md's fix loop exits), ensure completion status is recorded per SKILL.md Step 3 (`flowctl spec set-completion-review-status`) when the caller expects it — or write status here if this skill is the sole owner of the terminal path for host:
+Carry the verdict directly into SKILL.md's shared Fix Loop in this same skill
+run. This host workflow never writes terminal completion status.
 
-```bash
-# On SHIP / capped NEEDS_WORK as applicable (caller may also write — do not double-conflicting writes)
-$FLOWCTL spec set-completion-review-status "$SPEC_ID" --status ship --json # on SHIP
-$FLOWCTL spec set-completion-review-status "$SPEC_ID" --status needs_work --json # on NEEDS_WORK at cap
-```
-
-Prefer a single write: if SKILL.md Step 3 always runs after return, skip duplicate writes here and only return the verdict.
-
-## Step 5: Return verdict
-
-Return the verdict to SKILL.md's shared Fix Loop. On NEEDS_WORK re-review: **new** subagent every cycle (same pin rules; include prior findings).
+- `SHIP`: continue immediately to SKILL.md Step 3, the sole host status owner.
+- `NEEDS_WORK`: parse every valid gap, fix the implementation, run the relevant
+ tests/lints, and commit the fixes before re-review. Then repeat Steps 1–3
+ with a **new** read-only subagent, the same cross-family rules, and prior
+ findings in its prompt. Continue until `SHIP` or the deterministic round cap;
+ a capped `NEEDS_WORK` then continues to SKILL.md Step 3.
+- `NEEDS_HUMAN`, dispatch failure, malformed verdict, receipt failure, or retry
+ outcome: stop without writing completion status. Dispatch/transport failures
+ output `<promise>RETRY</promise>`; never self-issue a verdict or switch
+ backends.
 
 ## Anti-patterns (Host backend)
 
@@ -93,3 +93,4 @@ Return the verdict to SKILL.md's shared Fix Loop. On NEEDS_WORK re-review: **new
 - **Putting a model on the backend string** (`host:opus`) — rejected by flowctl; pins live in AGENTS.md
 - **Calling a non-existent `flowctl host` command**
 - **Fabricating resume/session ids** for host receipts
+- **Writing completion status here** instead of continuing to the shared owner
