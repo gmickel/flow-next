@@ -8,12 +8,46 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-145-opus-5-autonomous-seam-retune",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-145-opus-5-autonomous-seam-retune.1": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "timeout",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "a10f7a34153a556bdb7502656de031976e2dbd2485b9c5c35c8b720cff315be1",
+      "round_consumed": false,
+      "scope": "impl:fn-145-opus-5-autonomous-seam-retune.1",
+      "task": "fn-145-opus-5-autonomous-seam-retune.1",
+      "timestamp": "2026-07-28T08:46:06.738482Z",
+      "verdict": null
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "timeout",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "a10f7a34153a556bdb7502656de031976e2dbd2485b9c5c35c8b720cff315be1",
+      "round_consumed": false,
+      "scope": "impl:fn-145-opus-5-autonomous-seam-retune.1",
+      "task": "fn-145-opus-5-autonomous-seam-retune.1",
+      "timestamp": "2026-07-28T08:46:13.921682Z",
+      "verdict": null
+    }
+  ],
+  "review_pending_rounds": {},
+  "review_transport_failures": {
+    "impl:fn-145-opus-5-autonomous-seam-retune.1": 2
+  },
   "spec_path": ".flow/specs/fn-145-opus-5-autonomous-seam-retune.md",
   "status": "open",
   "title": "Opus 5 autonomous seam retune",
@@ -28,5 +62,5 @@
     "mergeBaseTracker": "flow-next spec fn-145-opus-5-autonomous-seam-retune\n\nApply three narrow prompt changes: explicit same-session continuation at inline\nskill seams; full autonomous-marker coverage at Work's delegation-consent gate;\nhost-review mechanics loaded only after selecting the host backend. Preserve\ngenuine terminal boundaries, interactive consent, receipts, status ownership,\nand cross-platform mirror parity.\n\nFull canonical spec: `.flow/specs/fn-145-opus-5-autonomous-seam-retune.md`.\n",
     "url": "https://linear.app/gmickel/issue/FLOW-68"
   },
-  "updated_at": "2026-07-28T08:23:32.013695Z"
+  "updated_at": "2026-07-28T08:46:13.921857Z"
 }
