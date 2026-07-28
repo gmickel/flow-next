@@ -850,7 +850,8 @@ class PersistExternalReceiptFailureCarriesLinkedIdentity(unittest.TestCase):
             with mock.patch.object(verbs, "write_sync_receipt",
                                    return_value=boom):
                 out = L.persist_external(flow, "fn-1-demo", identifier="WOR-17",
-                                         source="mcp", execute=ex)
+                                         source="mcp", event="work.done",
+                                         execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.TRANSPORT)
             details = out.details or {}
@@ -862,6 +863,16 @@ class PersistExternalReceiptFailureCarriesLinkedIdentity(unittest.TestCase):
             saved = json.loads(spec_path.read_text(encoding="utf-8"))["tracker"]
             self.assertEqual(saved["id"], LN_UUID)
             self.assertEqual(saved["linkState"], "linked")
+
+            retry = L.persist_external(
+                flow, "fn-1-demo", identifier="WOR-17", source="mcp",
+                event="work.done", execute=fake_execute({}))
+            self.assertNotIsInstance(retry, TrackerError)
+            self.assertTrue(retry["idempotent"])
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["event"], "work.done")
+            self.assertEqual(receipts[0]["tracker_id"], LN_UUID)
 
 
 class Round5PersistIntegrity(unittest.TestCase):

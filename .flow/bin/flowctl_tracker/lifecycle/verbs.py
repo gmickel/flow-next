@@ -570,6 +570,12 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
                 f"--id {durable_id!r} does not match the linked durable "
                 f"{tracker.get('id')!r} for {identifier!r}",
                 subtype="durable_mismatch")
+        rerr = write_sync_receipt(
+            flow_dir, spec_id=spec_id, status="pushed",
+            tracker_id=tracker.get("id"), event=event, transport="mcp",
+        )
+        if rerr:
+            return rerr
         return {"id": tracker.get("id"), "identifier": tracker.get("identifier"),
                 "url": tracker.get("url"), "linkState": "linked",
                 "idempotent": True}
