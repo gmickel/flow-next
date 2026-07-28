@@ -171,7 +171,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     steps: dict[str, Any] = {}
 
     created = create_if_unlinked(
-        flow_dir, spec_id, title=title, body=flow_body, config=config,
+        flow_dir, spec_id, title=title, body=flow_body, flow_body=flow_body,
+        config=config,
         event=event, execute=execute, completed=completed, statuses=statuses,
     )
     if isinstance(created, TrackerError):
@@ -388,7 +389,25 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
-    _path, _spec, tracker = loaded
+    _path, spec_data, tracker = loaded
+    title = str(spec_data.get("title") or spec_id)
+
+    # Reconcile is also a first-touch lifecycle operation. Establish the
+    # durable identity and paired ancestor before any require_durable/read
+    # step; otherwise an unlinked spec fails without reaching the provider.
+    created = create_if_unlinked(
+        flow_dir, spec_id, title=title, body=tracker_body,
+        flow_body=flow_body, config=config, event=event, execute=execute,
+        completed=completed, statuses=statuses,
+    )
+    if isinstance(created, TrackerError):
+        return _fail_if_evidence(
+            created, completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            transport=provider,
+        )
+    steps["create"] = created
+
     if link_state_of(tracker) == "identifier_only":
         done = complete_identifier_only(flow_dir, spec_id, execute=execute)
         if isinstance(done, TrackerError):
@@ -682,7 +701,8 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
     steps: dict[str, Any] = {}
 
     created = create_if_unlinked(
-        flow_dir, spec_id, title=title, body=create_body, config=config,
+        flow_dir, spec_id, title=title, body=create_body,
+        flow_body=create_body, config=config,
         event=event, execute=execute, completed=completed, statuses=statuses,
     )
     if isinstance(created, TrackerError):
@@ -703,6 +723,29 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
             transport=provider,
         )
     _path, _spec, tracker = loaded
+
+    # MCP create continuation persists the durable identity outside this
+    # facade, so create_if_unlinked correctly no-ops on the retry but no body
+    # ancestor exists yet. A comment must repair that explicit baseless state
+    # before list/add; otherwise a later reconcile can overwrite an intervening
+    # tracker edit through the no-base bootstrap.
+    if (tracker.get("mergeBaseFlow") is None
+            or tracker.get("mergeBaseTracker") is None):
+        seeded = sync_body(
+            flow_dir, spec_id, flow_file_body=create_body, direction="pull",
+            event=event, execute=execute, write_receipt=False,
+        )
+        if isinstance(seeded, TrackerError):
+            return fail_result(
+                seeded, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=tracker.get("id"), transport=provider,
+            )
+        if "paired-base" not in completed:
+            completed.append("paired-base")
+            statuses.append(step_status_from_sync_body(seeded))
+        steps["paired_base"] = seeded
+
     durable = require_durable(tracker)
     if isinstance(durable, TrackerError):
         return _fail_if_evidence(

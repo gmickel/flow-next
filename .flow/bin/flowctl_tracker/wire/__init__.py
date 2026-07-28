@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 from .. import envelope
@@ -523,7 +524,6 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
 
 
 def _read_config(flow_dir) -> dict:
-    from pathlib import Path
     try:
         data = json.loads((Path(flow_dir) / "config.json").read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
@@ -549,7 +549,6 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
 
     body = None
     if body_file is not None:
-        from pathlib import Path
         try:
             body = Path(body_file).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
@@ -560,22 +559,39 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
     # Bind transport policy for the real executor; injected fakes pass through.
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
+    body_claim = None
+    if verb == "update" and body is not None:
+        claimed_locator = parse_locator(locator)
+        if isinstance(claimed_locator, TrackerError):
+            return envelope.failure(claimed_locator)
+        from ..lifecycle.verbs import (  # noqa: PLC0415
+            _claim_body_mutation, _release_claim,
+        )
+        body_claim = _claim_body_mutation(
+            Path(flow_dir), _tracker_type(config) or "", claimed_locator,
+            operation="wire-update")
+        if isinstance(body_claim, TrackerError):
+            return envelope.failure(body_claim)
     # Never-raises boundary: a provider that returns syntactically valid JSON
     # with an unexpected field shape (e.g. gitlab `labels: 1`) can raise deep
     # inside an adapter (`list(raw.get("labels"))` -> TypeError). The promise
     # of this entry point is the structured envelope, never a traceback.
     try:
-        out = dispatch(verb, config, locator=locator, title=title, body=body,
-                       comment_id=comment_id, add=add, remove=remove,
-                       file_path=file_path, attachment_id=attachment_id,
-                       out_path=out_path, execute=ex)
-    except Exception as exc:  # noqa: BLE001 - envelope boundary
-        out = TrackerError(
-            ErrorClass.TRANSPORT,
-            f"provider adapter failed on malformed response shape: "
-            f"{type(exc).__name__}: {exc}",
-            subtype="malformed_body",
-            details={"subtype": "malformed_body", "verb": verb})
+        try:
+            out = dispatch(verb, config, locator=locator, title=title, body=body,
+                           comment_id=comment_id, add=add, remove=remove,
+                           file_path=file_path, attachment_id=attachment_id,
+                           out_path=out_path, execute=ex)
+        except Exception as exc:  # noqa: BLE001 - envelope boundary
+            out = TrackerError(
+                ErrorClass.TRANSPORT,
+                f"provider adapter failed on malformed response shape: "
+                f"{type(exc).__name__}: {exc}",
+                subtype="malformed_body",
+                details={"subtype": "malformed_body", "verb": verb})
+    finally:
+        if body_claim is not None:
+            _release_claim(body_claim)
     if isinstance(out, TrackerError):
         if out.cls is ErrorClass.INACTIVE:
             return envelope.inactive()

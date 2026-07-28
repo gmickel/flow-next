@@ -72,11 +72,17 @@ def fail_result(err: TrackerError, *, completed: list,
 
 
 def create_if_unlinked(flow_dir: Path, spec_id: str, *, title: str, body: str,
+                       flow_body: str,
                        config: dict, event: str, execute: Execute,
                        completed: list, statuses: list) -> Result:
-    """No-op when linked/identifier_only; create when unlinked.
+    """No-op when linked/identifier_only; create + seed when unlinked.
 
     MCP rung + unlinked → external_action_required (no tracker request).
+
+    A landed create is not complete until a fresh server readback seeds both
+    merge-base halves atomically. In particular, comment-first and
+    reconcile-first have no later body write that can safely establish the
+    ancestor before a tracker-side edit occurs.
     """
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
@@ -101,11 +107,12 @@ def create_if_unlinked(flow_dir: Path, spec_id: str, *, title: str, body: str,
 
     out = lifecycle_create(
         flow_dir, spec_id, title=title, body=body, event=event,
-        execute=execute, write_receipt=False,
+        flow_body=flow_body, execute=execute, write_receipt=False,
     )
     if isinstance(out, TrackerError):
         return out
     completed.append("create")
+    completed.append("paired-base")
     statuses.append("pushed")
     return {"kind": "created", **out}
 

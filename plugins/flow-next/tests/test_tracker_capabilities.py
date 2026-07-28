@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from flowctl_tracker import relate as R  # noqa: E402
+from flowctl_tracker import syncbody as SB  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
 from flowctl_tracker.relate import providers as RP  # noqa: E402
 from flowctl_tracker.classify import classify  # noqa: E402
@@ -564,6 +565,12 @@ class GitlabRelateDependencyBody(unittest.TestCase):
                              dep_relation_key(GL_ID, GL_ID_B))
             self.assertEqual((out.details or {}).get("from"), "fn-1-demo")
             self.assertEqual((out.details or {}).get("to"), "fn-2-dep")
+            self.assertEqual(
+                list((flow / "create-first").glob("body-*.json")), [],
+                "GitLab body claim releases on the body-write failure path")
+            self.assertEqual(
+                list((flow / "create-first").glob("relate-*.json")), [],
+                "identity claims also release on the body-write failure path")
             spec = json.loads(
                 (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))
             entry = spec["tracker"]["depRelations"][0]
@@ -637,6 +644,161 @@ class GitlabRelateDependencyBody(unittest.TestCase):
         self.assertNotIsInstance(updated, TrackerError)
         self.assertIn("**Blocked by:** g/p#3, g/p#13, g/p#14", updated)
         self.assertTrue(updated.startswith("Intro\n\n"))
+
+
+class GitlabBodyMutationSerialization(unittest.TestCase):
+    """GitLab relate and sync-body both replace the whole description.
+
+    Their identity claims remain independent; the shared body claim prevents
+    either stale read from overwriting the other operation's later write.
+    """
+
+    @staticmethod
+    def _pair(flow: Path) -> None:
+        a_tr = {"id": GL_ID, "identifier": "g/p#12", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        b_tr = {"id": GL_ID_B, "identifier": "g/p#13", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, gl_cfg(blocked_by=False, plan="free"),
+                    a_tracker=a_tr, b_tracker=b_tr)
+
+    @staticmethod
+    def _parents(description: str):
+        return [
+            ok({"id": int(GL_ID), "iid": 12, "description": description}),
+            ok({"id": int(GL_ID_B), "iid": 13, "description": "dep"}),
+        ]
+
+    def test_sync_body_owner_refuses_relate_then_retry_preserves_new_body(self) -> None:
+        """Old race: relate PUT landed, then sync-body's stale PUT deleted deps."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            nested = {}
+
+            def sync_parent_read(_request):
+                blocked_ex = fake_execute({})
+                nested["blocked"] = R.relate(
+                    flow, "fn-1-demo", blocked_by="fn-2-dep",
+                    execute=blocked_ex)
+                nested["blocked_calls"] = list(blocked_ex.calls)
+                return ok({"id": int(GL_ID), "iid": 12,
+                           "description": "Old body"})
+
+            sync_ex = fake_execute({
+                "sync-body-parent-read": sync_parent_read,
+                "wire-parent-read": ok({
+                    "id": int(GL_ID), "iid": 12, "description": "Old body"}),
+                "wire-update": gitlab_body_echo,
+                "wire-read": ok({
+                    "id": int(GL_ID), "iid": 12, "description": "New body"}),
+            })
+            synced = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body="New body", execute=sync_ex)
+            self.assertNotIsInstance(synced, TrackerError, msg=repr(synced))
+            self.assertEqual(synced["kind"], "pushed")
+            blocked = nested["blocked"]
+            self.assertIsInstance(blocked, TrackerError)
+            self.assertEqual(blocked.subtype, "body_mutation_in_flight")
+            self.assertTrue(blocked.auto_retryable)
+            self.assertEqual(nested["blocked_calls"], [])
+            self.assertEqual(
+                list((flow / "create-first").glob("body-*.json")), [])
+            self.assertEqual(
+                list((flow / "create-first").glob("relate-*.json")), [],
+                "failed body-claim acquisition releases both relate claims")
+
+            captured = {}
+
+            def capture_body(request):
+                captured["body"] = json.loads(
+                    request.body.decode())["description"]
+                return gitlab_body_echo(request)
+
+            retry_ex = fake_execute({
+                "relate-parent-read": self._parents("New body"),
+                "relate-list": ok([]),
+                "relate-create": ok({"id": 1, "link_type": "relates_to"}),
+                "relate-body-read": ok({
+                    "id": int(GL_ID), "iid": 12,
+                    "description": "New body"}),
+                "relate-body-write": capture_body,
+            })
+            retried = R.relate(
+                flow, "fn-1-demo", blocked_by="fn-2-dep", execute=retry_ex)
+            self.assertNotIsInstance(retried, TrackerError, msg=repr(retried))
+            self.assertTrue(captured["body"].startswith("New body\n\n"))
+            self.assertIn(FLOW_DEPS_OPEN, captured["body"])
+            self.assertIn("**Blocked by:** g/p#13", captured["body"])
+
+    def test_relate_owner_refuses_sync_body_then_retry_carries_deps(self) -> None:
+        """Old reverse race: relate's stale PUT restored the pre-sync body."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            nested = {}
+            related_body = {}
+
+            def relate_body_read(_request):
+                blocked_ex = fake_execute({})
+                nested["blocked"] = SB.sync_body(
+                    flow, "fn-1-demo", flow_file_body="New body",
+                    execute=blocked_ex)
+                nested["blocked_calls"] = list(blocked_ex.calls)
+                return ok({"id": int(GL_ID), "iid": 12,
+                           "description": "Old body"})
+
+            def capture_relate_body(request):
+                related_body["body"] = json.loads(
+                    request.body.decode())["description"]
+                return gitlab_body_echo(request)
+
+            relate_ex = fake_execute({
+                "relate-parent-read": self._parents("Old body"),
+                "relate-list": ok([]),
+                "relate-create": ok({"id": 1, "link_type": "relates_to"}),
+                "relate-body-read": relate_body_read,
+                "relate-body-write": capture_relate_body,
+            })
+            related = R.relate(
+                flow, "fn-1-demo", blocked_by="fn-2-dep",
+                execute=relate_ex)
+            self.assertNotIsInstance(related, TrackerError, msg=repr(related))
+            blocked = nested["blocked"]
+            self.assertIsInstance(blocked, TrackerError)
+            self.assertEqual(blocked.subtype, "body_mutation_in_flight")
+            self.assertTrue(blocked.auto_retryable)
+            self.assertEqual(nested["blocked_calls"], [])
+            self.assertFalse(
+                (flow / "create-first" / "syncbody-fn-1-demo.json").exists(),
+                "failed body-claim acquisition releases sync-body claim")
+            self.assertIn(FLOW_DEPS_OPEN, related_body["body"])
+
+            pushed = {}
+
+            def capture_sync_body(request):
+                pushed["body"] = json.loads(
+                    request.body.decode())["description"]
+                return gitlab_body_echo(request)
+
+            sync_ex = fake_execute({
+                "sync-body-parent-read": ok({
+                    "id": int(GL_ID), "iid": 12,
+                    "description": related_body["body"]}),
+                "wire-parent-read": ok({
+                    "id": int(GL_ID), "iid": 12,
+                    "description": related_body["body"]}),
+                "wire-update": capture_sync_body,
+                "wire-read": lambda _request: ok({
+                    "id": int(GL_ID), "iid": 12,
+                    "description": pushed["body"]}),
+            })
+            retried = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body="New body", execute=sync_ex)
+            self.assertNotIsInstance(retried, TrackerError, msg=repr(retried))
+            self.assertTrue(pushed["body"].startswith("New body\n\n"))
+            self.assertIn(FLOW_DEPS_OPEN, pushed["body"])
+            self.assertIn("**Blocked by:** g/p#13", pushed["body"])
 
 
 class GithubSubIssuesHierarchy(unittest.TestCase):

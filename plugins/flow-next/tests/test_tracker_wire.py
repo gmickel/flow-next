@@ -776,6 +776,26 @@ class EnvelopeRun(unittest.TestCase):
             self.assertFalse(json.loads(payload)["success"])
             self.assertEqual(json.loads(payload)["class"], "conflict")
 
+    def test_body_update_failure_releases_resource_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            (flow / "config.json").write_text(
+                json.dumps(gh_cfg()), encoding="utf-8")
+            body = flow / "body.md"
+            body.write_text("replacement", encoding="utf-8")
+            failure = TrackerError(
+                ErrorClass.TRANSPORT, "read failed", subtype="timeout",
+                auto_retryable=True)
+            payload, code = W.run(
+                flow, "update",
+                locator=json.dumps(loc(GH_NODE, "#42")),
+                body_file=str(body),
+                execute=fake_execute({"wire-parent-read": failure}))
+            self.assertNotEqual(code, 0)
+            self.assertFalse(json.loads(payload)["success"])
+            self.assertEqual(
+                list((flow / "create-first").glob("body-*.json")), [])
+
 
 if __name__ == "__main__":
     unittest.main()

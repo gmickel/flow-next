@@ -38,6 +38,11 @@ def fake_execute(responses: dict):
     def execute(request):
         calls.append(request)
         if request.op not in responses:
+            if (request.op == "sync-body-parent-read"
+                    and "wire-comment-list" in responses):
+                # Linked comment fixtures use a stable parent unless they
+                # explicitly inject the new baseless-seed readback/failure.
+                return ok(_gh_issue(FLOW_BODY))
             raise AssertionError(f"unexpected op {request.op!r}; have {sorted(responses)}")
         out = responses[request.op]
         if isinstance(out, list):
@@ -303,7 +308,13 @@ class InputMatrix(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, gh_cfg(), tracker=_linked())
+            _write_flow(
+                flow, gh_cfg(),
+                tracker=_linked(
+                    mergeBaseFlow=FLOW_BODY,
+                    mergeBaseTracker=FLOW_BODY.rstrip("\n"),
+                ),
+            )
             for op, kwargs, needle in cases:
                 ex = fake_execute({})
                 out = F.sync(flow, SPEC_ID, op=op, event="work.done",
@@ -358,8 +369,14 @@ class PushFacade(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["op"], "push")
             self.assertIn("create", out["completed_steps"])
+            self.assertIn("paired-base", out["completed_steps"])
             self.assertIn("sync-body", out["completed_steps"])
             self.assertIn("status", out["completed_steps"])
+            self.assertEqual(
+                [c.op for c in ex.calls].count("lifecycle-create"), 1)
+            self.assertFalse(
+                any(c.op == "wire-update" for c in ex.calls),
+                "the requested push must reuse the create-time body")
             receipts = _receipts(flow)
             self.assertEqual(len(receipts), 1, receipts)
             self.assertEqual(receipts[0]["event"], "work.firstClaim")
@@ -368,6 +385,11 @@ class PushFacade(unittest.TestCase):
                 (flow / "specs" / f"{SPEC_ID}.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["tracker"]["id"], GH_NODE)
             self.assertEqual(saved["tracker"]["linkState"], "linked")
+            self.assertEqual(saved["tracker"]["mergeBaseFlow"], FLOW_BODY)
+            self.assertEqual(
+                saved["tracker"]["mergeBaseTracker"],
+                SB.trackerBodyForMerge(FLOW_BODY))
+            self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
 
     def test_push_linked_is_idempotent_no_second_create(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -414,6 +436,184 @@ class PushFacade(unittest.TestCase):
             self.assertEqual(receipts[0]["status"], "errored")
             self.assertEqual(receipts[0]["event"], "work.done")
             self.assertNotEqual(code, 0)
+
+
+# ---------------------------------------------------------------------------
+# Create-if-unlinked: fresh readback + paired-base seed before requested op
+# ---------------------------------------------------------------------------
+
+class CreateIfUnlinkedSeed(unittest.TestCase):
+    def _create_response(self) -> Response:
+        return ok({
+            "id": 1, "node_id": GH_NODE, "number": 42,
+            "html_url": "https://github.com/o/r/issues/42",
+        })
+
+    def test_reconcile_unlinked_creates_seeds_then_reconciles_without_update(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg())  # unlinked
+            ff = _flow_file(root)
+            bf = _body_file(root, FLOW_BODY)
+            issue = _gh_issue(FLOW_BODY)
+            ex = fake_execute({
+                "lifecycle-create": self._create_response(),
+                **_status_noop_responses("github", issue),
+            })
+
+            out = F.sync(
+                flow, SPEC_ID, op="reconcile", event="plan",
+                flow_file=ff, body_file=bf, execute=ex)
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["op"], "reconcile")
+            for step in ("create", "paired-base", "wire-read",
+                         "sync-body", "status"):
+                self.assertIn(step, out["completed_steps"])
+            self.assertEqual(
+                [c.op for c in ex.calls].count("lifecycle-create"), 1)
+            self.assertFalse(
+                any(c.op == "wire-update" for c in ex.calls),
+                "create + readback seed must not trigger a duplicate body write")
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json")
+                .read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["mergeBaseFlow"], FLOW_BODY)
+            self.assertEqual(
+                saved["mergeBaseTracker"], SB.trackerBodyForMerge(FLOW_BODY))
+            self.assertIsNotNone(saved["lastSyncedAt"])
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["event"], "plan")
+            self.assertEqual(receipts[0]["tracker_id"], GH_NODE)
+
+    def test_comment_unlinked_seeds_from_normalized_stored_body_before_post(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg())  # unlinked
+            bf = _body_file(
+                root, "evidence=abc1234\n**done** - shipped.\n")
+            stored = f"{FLOW_BODY.rstrip()}\n\n"
+            posted: list[str] = []
+
+            def capture_add(req):
+                posted.append(json.loads(req.body)["body"])
+                return ok({"id": 99, "body": posted[-1],
+                           "html_url": "https://x/c/99"})
+
+            ex = fake_execute({
+                "lifecycle-create": self._create_response(),
+                "sync-body-parent-read": ok(_gh_issue(stored)),
+                "wire-parent-read": ok(_gh_issue(stored)),
+                "wire-comment-list": ok([]),
+                "wire-comment-add": capture_add,
+            })
+
+            out = F.sync(
+                flow, SPEC_ID, op="comment", event="work.done",
+                body_file=bf, execute=ex)
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertTrue(out["posted"])
+            self.assertEqual(len(posted), 1)
+            self.assertEqual(
+                [c.op for c in ex.calls].count("lifecycle-create"), 1)
+            self.assertFalse(any(c.op == "wire-update" for c in ex.calls))
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json")
+                .read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["mergeBaseFlow"], FLOW_BODY)
+            self.assertEqual(
+                saved["mergeBaseTracker"], SB.trackerBodyForMerge(stored))
+            self.assertNotEqual(saved["mergeBaseTracker"], stored)
+            self.assertIsNotNone(saved["lastSyncedAt"])
+            calls = [c.op for c in ex.calls]
+            self.assertLess(
+                calls.index("sync-body-parent-read"),
+                calls.index("wire-comment-add"))
+
+    def test_comment_create_readback_failure_is_partial_and_never_posts(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg())  # unlinked
+            bf = _body_file(
+                root, "evidence=abc1234\n**done** - shipped.\n")
+            ex = fake_execute({
+                "lifecycle-create": self._create_response(),
+                "sync-body-parent-read": TrackerError(
+                    ErrorClass.TRANSPORT, "readback boom",
+                    subtype="readback"),
+            })
+
+            out = F.sync(
+                flow, SPEC_ID, op="comment", event="work.done",
+                body_file=bf, execute=ex)
+
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "readback")
+            self.assertEqual(
+                out.details["completed_steps"], ["create", "link"])
+            self.assertFalse(
+                any(c.op in ("wire-comment-list", "wire-comment-add")
+                    for c in ex.calls))
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json")
+                .read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["id"], GH_NODE)
+            self.assertIsNone(saved["mergeBaseFlow"])
+            self.assertIsNone(saved["mergeBaseTracker"])
+            self.assertIsNone(saved["lastSyncedAt"])
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "errored")
+            self.assertEqual(receipts[0]["tracker_id"], GH_NODE)
+            self.assertEqual(
+                receipts[0]["details"]["completed_steps"], ["create", "link"])
+
+    def test_reconcile_create_base_commit_failure_stops_before_requested_op(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg())  # unlinked
+            ff = _flow_file(root)
+            bf = _body_file(root, FLOW_BODY)
+            ex = fake_execute({
+                "lifecycle-create": self._create_response(),
+                "sync-body-parent-read": ok(_gh_issue(FLOW_BODY)),
+            })
+            boom = TrackerError(
+                ErrorClass.TRANSPORT, "paired base write boom",
+                subtype="paired_base")
+
+            with mock.patch.object(SB, "_commit_paired_base",
+                                   return_value=boom):
+                out = F.sync(
+                    flow, SPEC_ID, op="reconcile", event="plan",
+                    flow_file=ff, body_file=bf, execute=ex)
+
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "paired_base")
+            self.assertEqual(
+                out.details["completed_steps"], ["create", "link"])
+            self.assertFalse(any(c.op == "wire-read" for c in ex.calls))
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json")
+                .read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["id"], GH_NODE)
+            self.assertIsNone(saved["mergeBaseFlow"])
+            self.assertIsNone(saved["mergeBaseTracker"])
+            self.assertIsNone(saved["lastSyncedAt"])
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "errored")
+            self.assertEqual(receipts[0]["tracker_id"], GH_NODE)
 
 
 # ---------------------------------------------------------------------------
@@ -903,6 +1103,54 @@ class McpRung(unittest.TestCase):
             self.assertIs(out.cls, ErrorClass.EXTERNAL_ACTION_REQUIRED)
             self.assertEqual(ex.calls, [])
 
+    def test_persist_external_then_comment_seeds_baseless_link_before_post(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, ln_cfg(preferred="graphql"))  # unlinked
+            issue = _ln_issue("* stored normalized body\n")
+            resolver = ok({"data": {"issue": issue}})
+            with mock.patch.dict(
+                    os.environ, {"LINEAR_API_KEY": "lin_test"}, clear=False):
+                persisted = LV.persist_external(
+                    flow, SPEC_ID, identifier="WOR-17",
+                    durable_id=LN_UUID, url=issue["url"], source="mcp",
+                    execute=fake_execute({"lifecycle-resolve-uuid": resolver}),
+                    event="work.done")
+            self.assertNotIsInstance(persisted, TrackerError, persisted)
+            path = flow / "specs" / f"{SPEC_ID}.json"
+            before = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertIsNone(before["mergeBaseFlow"])
+            self.assertIsNone(before["mergeBaseTracker"])
+
+            bf = _body_file(
+                root, "evidence=abc1234\n**done** - shipped.\n")
+            ex = fake_execute({
+                "sync-body-parent-read": _parent_resp("linear", issue),
+                "wire-parent-read": _parent_resp("linear", issue),
+                "wire-comment-list": _comment_list_empty("linear"),
+                "wire-comment-add": _comment_add_resp("linear", "unused"),
+            })
+            with mock.patch.dict(
+                    os.environ, {"LINEAR_API_KEY": "lin_test"}, clear=False):
+                out = F.sync(
+                    flow, SPEC_ID, op="comment", event="work.done",
+                    body_file=bf, execute=ex)
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertTrue(out["posted"])
+            calls = [c.op for c in ex.calls]
+            self.assertLess(
+                calls.index("sync-body-parent-read"),
+                calls.index("wire-comment-list"))
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["mergeBaseFlow"], FLOW_BODY)
+            self.assertEqual(
+                saved["mergeBaseTracker"],
+                SB.trackerBodyForMerge(issue["description"]))
+            self.assertIsNotNone(saved["lastSyncedAt"])
+
 
 # ---------------------------------------------------------------------------
 # Reconcile completes identifier_only
@@ -1233,7 +1481,13 @@ class CommentIdentityGuard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             flow = root / ".flow"
-            _write_flow(flow, gh_cfg(), tracker=_linked())
+            _write_flow(
+                flow, gh_cfg(),
+                tracker=_linked(
+                    mergeBaseFlow=FLOW_BODY,
+                    mergeBaseTracker=FLOW_BODY.rstrip("\n"),
+                ),
+            )
             bf = _body_file(root, "evidence=abc1234\n**done** - shipped.\n")
 
             def repoint(_flow: Path) -> None:
@@ -1448,6 +1702,7 @@ class FacadeOuterClaim(unittest.TestCase):
 
             ex = fake_execute({
                 "lifecycle-create": create_response,
+                "sync-body-parent-read": ok(_gh_issue(FLOW_BODY)),
                 "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
                 "wire-comment-list": ok([]),
                 "wire-comment-add": capture_add,

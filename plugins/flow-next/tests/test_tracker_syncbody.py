@@ -17,6 +17,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from flowctl_tracker import syncbody as SB  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
+from flowctl_tracker.lifecycle.verbs import (  # noqa: E402
+    _claim_body_mutation, _release_claim,
+)
 from flowctl_tracker.relate.ledger import FLOW_DEPS_CLOSE, FLOW_DEPS_OPEN  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
 
@@ -782,6 +785,240 @@ class SyncBodyClaimSerialization(unittest.TestCase):
             receipts = _receipts(flow)
             self.assertEqual(len(receipts), 1, "still one receipt per verb")
             self.assertEqual(receipts[0]["status"], "pushed")
+
+
+class GitlabBodyMutationClaimLifecycle(unittest.TestCase):
+    def test_same_durable_aliased_by_two_specs_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            tracker = _seeded_tracker(
+                str(GL_ID), "g/p#12", body_for_base=FLOW_BODY)
+            _write_flow(flow, gl_cfg(), spec_id="fn-1-demo", tracker=tracker)
+            _write_flow(flow, gl_cfg(), spec_id="fn-2-alias", tracker=tracker)
+            held = _claim_body_mutation(
+                flow, "gitlab",
+                {"durable": str(GL_ID), "display": "g/p#12"},
+                operation="relate", spec_id="fn-1-demo")
+            self.assertIsInstance(held, Path, msg=repr(held))
+            try:
+                ex = fake_execute({})
+                out = SB.sync_body(
+                    flow, "fn-2-alias", flow_file_body=FLOW_BODY, execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.subtype, "body_mutation_in_flight")
+                self.assertEqual(ex.calls, [])
+                self.assertEqual(
+                    (out.details or {}).get("resource", {}).get("durable"),
+                    str(GL_ID))
+            finally:
+                _release_claim(held)
+
+    def test_sync_body_excludes_direct_wire_body_update_on_all_providers(self) -> None:
+        for provider, cfg_fn, durable, display, _issue_fn, parent_resp in PROVIDERS:
+            with self.subTest(provider=provider), tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp)
+                _write_flow(
+                    flow, cfg_fn(),
+                    tracker=_seeded_tracker(
+                        durable, display, body_for_base=FLOW_BODY))
+                direct_body = flow / "direct.md"
+                direct_body.write_text("Direct wire edit", encoding="utf-8")
+                nested = {}
+
+                def parent_read(
+                    _request,
+                    *,
+                    claimed_flow=flow,
+                    claimed_durable=durable,
+                    claimed_display=display,
+                    claimed_body=direct_body,
+                    claimed_nested=nested,
+                    claimed_parent_resp=parent_resp,
+                ):
+                    direct_ex = fake_execute({})
+                    payload, code = W.run(
+                        claimed_flow, "update",
+                        locator=json.dumps({
+                            "durable": claimed_durable,
+                            "display": claimed_display,
+                        }),
+                        body_file=str(claimed_body), execute=direct_ex)
+                    claimed_nested["payload"] = json.loads(payload)
+                    claimed_nested["code"] = code
+                    claimed_nested["calls"] = list(direct_ex.calls)
+                    return claimed_parent_resp(FLOW_BODY)
+
+                out = SB.sync_body(
+                    flow, "fn-1-demo", flow_file_body=FLOW_BODY,
+                    execute=fake_execute({
+                        "sync-body-parent-read": parent_read,
+                    }))
+                self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+                self.assertEqual(out["kind"], "noop")
+                self.assertNotEqual(nested["code"], 0)
+                self.assertEqual(nested["payload"]["class"], "conflict")
+                self.assertIn("body mutation", nested["payload"]["error"])
+                self.assertEqual(
+                    nested["payload"]["details"]["resource"]["durable"],
+                    durable)
+                self.assertEqual(nested["calls"], [])
+                self.assertEqual(
+                    list((flow / "create-first").glob("body-*.json")), [])
+
+    def test_pull_excludes_direct_wire_update_before_snapshot_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(
+                flow, gh_cfg(),
+                tracker=_seeded_tracker(
+                    GH_NODE, "#42", body_for_base="Old remote"))
+            direct_body = flow / "direct.md"
+            direct_body.write_text("Concurrent remote edit", encoding="utf-8")
+            nested = {}
+
+            def pull_parent_read(_request):
+                direct_ex = fake_execute({})
+                payload, code = W.run(
+                    flow, "update",
+                    locator=json.dumps({
+                        "durable": GH_NODE, "display": "#42"}),
+                    body_file=str(direct_body), execute=direct_ex)
+                nested["payload"] = json.loads(payload)
+                nested["code"] = code
+                nested["calls"] = list(direct_ex.calls)
+                return ok(_gh_issue("Snapshot body"))
+
+            out = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body=FLOW_BODY,
+                direction="pull",
+                execute=fake_execute({
+                    "sync-body-parent-read": pull_parent_read,
+                }))
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "pulled")
+            self.assertEqual(out["mergeBaseTracker"], "Snapshot body")
+            self.assertNotEqual(nested["code"], 0)
+            self.assertEqual(nested["payload"]["class"], "conflict")
+            self.assertEqual(nested["calls"], [])
+            self.assertEqual(
+                list((flow / "create-first").glob("body-*.json")), [])
+
+    def test_stale_body_claim_is_reclaimed_and_released(self) -> None:
+        import socket
+        import time
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(
+                flow, gl_cfg(),
+                tracker={
+                    "id": str(GL_ID), "identifier": "g/p#12", "url": "u",
+                    "linkState": "linked",
+                    "mergeBaseFlow": FLOW_BODY,
+                    "mergeBaseTracker": SB.trackerBodyForMerge(FLOW_BODY),
+                    "baseHashFlow": sha(FLOW_BODY),
+                    "baseHashTracker": sha(
+                        SB.trackerBodyForMerge(FLOW_BODY)),
+                })
+            rec_path = _claim_body_mutation(
+                flow, "gitlab",
+                {"durable": str(GL_ID), "display": "g/p#12"},
+                operation="relate", spec_id="fn-1-demo")
+            self.assertIsInstance(rec_path, Path, msg=repr(rec_path))
+            claim = json.loads(rec_path.read_text(encoding="utf-8"))
+            claim.update({
+                "pid": 0, "host": socket.gethostname(),
+                "claimedAt": time.time() - 999,
+            })
+            rec_path.write_text(json.dumps(claim), encoding="utf-8")
+            ex = fake_execute({
+                "sync-body-parent-read": ok(_gl_issue(FLOW_BODY)),
+            })
+            out = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body=FLOW_BODY, execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "noop")
+            self.assertFalse(rec_path.exists(),
+                             "reclaimed body claim releases after completion")
+
+    def test_sync_body_error_releases_body_and_identity_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(
+                flow, gl_cfg(),
+                tracker={"id": str(GL_ID), "identifier": "g/p#12",
+                         "linkState": "linked"})
+            failure = TrackerError(
+                ErrorClass.TRANSPORT, "read failed", subtype="timeout",
+                auto_retryable=True)
+            out = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body="New", execute=fake_execute({
+                    "sync-body-parent-read": failure,
+                }))
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(
+                list((flow / "create-first").glob("body-*.json")), [])
+            self.assertFalse(
+                (flow / "create-first" / "syncbody-fn-1-demo.json").exists())
+
+    def test_claim_is_resource_scoped_so_other_gitlab_issue_proceeds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            base = {
+                "id": str(GL_ID), "identifier": "g/p#12", "url": "u",
+                "linkState": "linked", "mergeBaseFlow": FLOW_BODY,
+                "mergeBaseTracker": SB.trackerBodyForMerge(FLOW_BODY),
+                "baseHashFlow": sha(FLOW_BODY),
+                "baseHashTracker": sha(SB.trackerBodyForMerge(FLOW_BODY)),
+            }
+            _write_flow(flow, gl_cfg(), spec_id="fn-1-demo", tracker=base)
+            _write_flow(flow, gl_cfg(), spec_id="fn-2-other", tracker={
+                **base, "id": "84817010", "identifier": "g/p#13"})
+            held = _claim_body_mutation(
+                flow, "gitlab",
+                {"durable": str(GL_ID), "display": "g/p#12"},
+                operation="relate", spec_id="fn-1-demo")
+            self.assertIsInstance(held, Path, msg=repr(held))
+            try:
+                out = SB.sync_body(
+                    flow, "fn-2-other", flow_file_body=FLOW_BODY,
+                    execute=fake_execute({
+                        "sync-body-parent-read": ok({
+                            "id": 84817010, "iid": 13,
+                            "description": FLOW_BODY}),
+                    }))
+                self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+                self.assertEqual(out["kind"], "noop")
+            finally:
+                _release_claim(held)
+
+    def test_non_gitlab_sync_body_ignores_gitlab_body_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(
+                flow, gh_cfg(),
+                tracker={
+                    "id": GH_NODE, "identifier": "#42", "url": "u",
+                    "linkState": "linked", "mergeBaseFlow": FLOW_BODY,
+                    "mergeBaseTracker": SB.trackerBodyForMerge(FLOW_BODY),
+                    "baseHashFlow": sha(FLOW_BODY),
+                    "baseHashTracker": sha(
+                        SB.trackerBodyForMerge(FLOW_BODY)),
+                })
+            held = _claim_body_mutation(
+                flow, "gitlab",
+                {"durable": GH_NODE, "display": "#42"},
+                operation="relate", spec_id="fn-1-demo")
+            self.assertIsInstance(held, Path, msg=repr(held))
+            try:
+                out = SB.sync_body(
+                    flow, "fn-1-demo", flow_file_body=FLOW_BODY,
+                    execute=fake_execute({
+                        "sync-body-parent-read": ok(_gh_issue(FLOW_BODY)),
+                    }))
+                self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+                self.assertEqual(out["kind"], "noop")
+            finally:
+                _release_claim(held)
 
 
 # ---------------------------------------------------------------------------

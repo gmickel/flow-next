@@ -667,7 +667,12 @@ class SpecVerbCreateAllFour(unittest.TestCase):
                     tempfile.TemporaryDirectory() as tmp:
                 flow = Path(tmp) / ".flow"
                 path = _write_flow(flow, cfg_fn(), tracker=_unlinked())
-                ex = fake_execute({"lifecycle-create": resp})
+                parent_resp = next(
+                    case[4] for case in PROVIDERS if case[0] == provider)
+                ex = fake_execute({
+                    "lifecycle-create": resp,
+                    "sync-body-parent-read": parent_resp("B"),
+                })
                 out = L.create(flow, "fn-1-demo", title="T", body="B",
                                execute=ex)
                 self.assertNotIsInstance(out, TrackerError,
@@ -1441,6 +1446,15 @@ class JiraDcCustomKey(unittest.TestCase):
             })
             ex = fake_execute({
                 "lifecycle-create": ok({"id": DC_ID, "key": DC_KEY}),
+                "sync-body-parent-read": ok({
+                    "id": DC_ID,
+                    "key": DC_KEY,
+                    "fields": {
+                        "summary": "T",
+                        "description": "B",
+                        "labels": [],
+                    },
+                }),
             })
             out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
             self.assertNotIsInstance(out, TrackerError)

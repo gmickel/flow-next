@@ -12,7 +12,9 @@ any mutation: ledger+remote noop, ledger+missing = human removal collision
 
 GitLab writes the <!-- flow:deps --> direction/provenance twin with every
 native or degraded link and repairs it before finalizing an interrupted
-create. Hash exclusion remains sync-body's concern.
+create. Its whole-description read/replace is serialized with GitLab
+sync-body and direct wire pushes by their shared remote-resource claim. Hash
+exclusion remains sync-body's concern.
 
 GitHub: native sub_issues is a HIERARCHY PROXY reported only in the structured
 degraded field - never presented as a blocked-by relation; body-block
@@ -34,7 +36,8 @@ from ..lifecycle.helpers import (ACTIVE, Execute, Result, dict_, load_spec,
                                  merged_tracker, read_config, tracker_type,
                                  write_sync_receipt, write_tracker_block,
                                  atomic_write_json, leaf_is_safe)
-from ..lifecycle.verbs import _ensure_create_first_ignored, _release_claim
+from ..lifecycle.verbs import (_claim_body_mutation,
+                               _ensure_create_first_ignored, _release_claim)
 from ..types import ErrorClass, TrackerError
 from . import providers as P
 from .ledger import (blocker_completed, caps_of, claim_owner,
@@ -519,11 +522,33 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
     claimed = _claim_relate_pair(flow_dir, spec_id, blocked_by, provider)
     if isinstance(claimed, TrackerError):
         return claimed
+    body_claim = None
+    if provider == "gitlab":
+        claimed_spec = load_spec(flow_dir, spec_id)
+        if isinstance(claimed_spec, TrackerError):
+            for rec_path in claimed:
+                _release_claim(rec_path)
+            return claimed_spec
+        _claimed_path, claimed_data = claimed_spec
+        claimed_locator = _locator(merged_tracker(claimed_data))
+        if isinstance(claimed_locator, TrackerError):
+            for rec_path in claimed:
+                _release_claim(rec_path)
+            return claimed_locator
+        body_claim = _claim_body_mutation(
+            flow_dir, provider, claimed_locator, operation="relate",
+            spec_id=spec_id)
+        if isinstance(body_claim, TrackerError):
+            for rec_path in claimed:
+                _release_claim(rec_path)
+            return body_claim
     try:
         return _relate_txn(
             flow_dir, spec_id, blocked_by=blocked_by, event=event,
             execute=execute)
     finally:
+        if body_claim is not None:
+            _release_claim(body_claim)
         for rec_path in claimed:
             _release_claim(rec_path)
 

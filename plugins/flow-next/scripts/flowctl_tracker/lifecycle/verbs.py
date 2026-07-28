@@ -88,10 +88,11 @@ def _claim_spec_create(flow_dir: Path, spec_id: str, rec_path: Path,
 
 
 def create(flow_dir, spec_id: str, *, title: str, body: str,
+           flow_body: Optional[str] = None,
            event: Optional[str] = None,
            execute: Execute = default_execute,
            write_receipt: bool = True) -> Result:
-    """Spec exists → provider create → atomic tracker block + sync receipt."""
+    """Create, link, fresh-read, seed the paired base, then write one receipt."""
     flow_dir = Path(flow_dir)
     config = read_config(flow_dir)
     provider = tracker_type(config)
@@ -124,7 +125,6 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
         "identifier": created["identifier"],
         "url": created.get("url"),
         "linkState": "linked",
-        "lastSyncedAt": now_iso(),
     }
 
     def _link(t: dict):
@@ -152,7 +152,6 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
     # inside the same critical section (check-then-lock was a race).
     err = _locked_tracker_write(
         flow_dir, spec_id, _link, collision_id=created["id"])
-    _release_claim(rec_path)
     if isinstance(err, TrackerError):
         # The issue exists but the spec is still unlinked - a bare failure
         # here reads as "nothing happened" and a retry would create a
@@ -161,12 +160,52 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
         # hand). TrackerError is frozen: rebuild with the completed-steps
         # detail so the caller can link the existing issue instead.
         import dataclasses  # noqa: PLC0415
-        return dataclasses.replace(err, details={
+        failed = dataclasses.replace(err, details={
             **(err.details or {}),
             "completed_steps": ["create"],
             "id": created["id"],
             "identifier": created["identifier"],
             "url": created.get("url")})
+        _release_claim(rec_path)
+        return failed
+
+    # A durable link is not a completed create lifecycle until both base forms
+    # reflect one real sync point. Import locally to avoid the intentional
+    # lifecycle.verbs <-> syncbody module dependency at import time.
+    from ..syncbody import sync_body  # noqa: PLC0415
+    seeded = sync_body(
+        flow_dir, spec_id,
+        flow_file_body=body if flow_body is None else flow_body,
+        direction="pull", event=event, execute=execute, write_receipt=False,
+    )
+    if isinstance(seeded, TrackerError):
+        import dataclasses  # noqa: PLC0415
+        details = {
+            **(seeded.details or {}),
+            "completed_steps": ["create", "link"],
+            "id": created["id"],
+            "identifier": created["identifier"],
+            "url": created.get("url"),
+        }
+        failed = dataclasses.replace(seeded, details=details)
+        if write_receipt:
+            rerr = write_sync_receipt(
+                flow_dir, spec_id=spec_id, status="errored",
+                tracker_id=created["id"], event=event, transport=provider,
+                note="create linked; paired-base seed failed",
+                details=details,
+            )
+            if rerr is not None:
+                details["receipt_status"] = "unwritten"
+                details["receipt_write_failed"] = {
+                    "class": rerr.cls.value,
+                    "subtype": rerr.subtype,
+                    "message": rerr.message,
+                }
+                failed = dataclasses.replace(failed, details=details)
+        _release_claim(rec_path)
+        return failed
+
     if write_receipt:
         err = write_sync_receipt(
             flow_dir, spec_id=spec_id, status="pushed",
@@ -177,13 +216,18 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
             # would read as "nothing happened" and invite a duplicating retry.
             # TrackerError is frozen: rebuild with the completed-steps detail.
             import dataclasses  # noqa: PLC0415
-            return dataclasses.replace(err, details={
+            failed = dataclasses.replace(err, details={
                 **(err.details or {}),
-                "completed_steps": ["create", "link"],
+                "completed_steps": ["create", "link", "paired-base"],
                 "id": created["id"],
                 "identifier": created["identifier"]})
-    return {"id": created["id"], "identifier": created["identifier"],
-            "url": created.get("url"), "linkState": "linked"}
+            _release_claim(rec_path)
+            return failed
+    result = {"id": created["id"], "identifier": created["identifier"],
+              "url": created.get("url"), "linkState": "linked",
+              "paired_base": seeded}
+    _release_claim(rec_path)
+    return result
 
 
 def compute_create_first_key(tracker_type_name: str, title: str, body: str) -> str:
@@ -264,6 +308,98 @@ def _claim_is_stale(claim: dict, rec_path: Path) -> bool:
     if host != socket.gethostname():
         return False
     return not _pid_alive(pid)
+
+
+def _claim_body_mutation(flow_dir: Path, provider: str, locator: dict, *,
+                         operation: str,
+                         spec_id: Optional[str] = None) -> Path | TrackerError:
+    """Serialize whole issue-body read/replace transactions per remote issue.
+
+    ``sync-body``, direct wire body updates, and GitLab ``relate`` can all read
+    the current body and later replace it wholesale. Their operation/identity
+    claims have different purposes and deliberately do not exclude one another,
+    so none protects this shared remote resource. Key by provider + durable id,
+    not spec id: two force-aliased specs targeting one issue must serialize,
+    while unrelated issues remain concurrent.
+
+    The claim is additive: spec-aware callers retain their existing claims,
+    then take this one before the first relevant remote read and hold it through
+    readback/finalization. It is fail-fast (never waits while holding another
+    claim) and uses the same stale-owner rules as every create-first claim.
+    """
+    durable = locator.get("durable") if isinstance(locator, dict) else None
+    display = locator.get("display") if isinstance(locator, dict) else None
+    if not isinstance(durable, str) or not durable.strip():
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "body mutation claim requires locator.durable",
+            subtype="locator",
+        )
+    durable = durable.strip()
+    resource_hash = hashlib.sha256(
+        f"{provider}\0{durable}".encode("utf-8")).hexdigest()
+    rec_path = flow_dir / "create-first" / f"body-{resource_hash}.json"
+    unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
+    if unsafe:
+        return unsafe
+    secured = _ensure_create_first_ignored(flow_dir)
+    if secured is not None:
+        return secured
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            if rec_path.is_file():
+                try:
+                    prior = json.loads(rec_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    prior = None
+                if (isinstance(prior, dict)
+                        and prior.get("status") == "pending"
+                        and not _claim_is_stale(prior, rec_path)):
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        f"{provider} body mutation for issue "
+                        f"{(display or durable)!r} is already in flight; retry "
+                        "after it finishes",
+                        subtype="body_mutation_in_flight",
+                        details={
+                            "specId": spec_id,
+                            "resource": {
+                                "provider": provider,
+                                "durable": durable,
+                                "display": display,
+                            },
+                            "claim": {
+                                "operation": prior.get("operation"),
+                                "pid": prior.get("pid"),
+                                "host": prior.get("host"),
+                                "claimedAt": prior.get("claimedAt"),
+                            },
+                        },
+                        auto_retryable=True,
+                    )
+            claim = {
+                "specId": spec_id,
+                "status": "pending",
+                "op": "body-mutation",
+                "operation": operation,
+                "resource": {
+                    "provider": provider,
+                    "durable": durable,
+                    "display": display,
+                },
+                "pid": os.getpid(),
+                "host": socket.gethostname(),
+                "claimedAt": time.time(),
+                "transport": provider,
+            }
+            cerr = atomic_write_json(rec_path, claim)
+            if cerr:
+                return cerr
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc),
+                            subtype="lock_timeout")
+    return rec_path
 
 
 def _release_claim(rec_path: Path) -> None:

@@ -10,6 +10,9 @@ create-first claim (`syncbody-<spec-id>.json`) taken BEFORE any tracker I/O -
 without it two overlapping invocations each finish their write/readback and
 the OLDER one can acquire config_lock last, overwriting the newer paired base
 with a stale pair (tracker holds body B, mergeBaseTracker records body A).
+Every transaction additionally takes a provider + durable-issue keyed body claim,
+shared with direct wire body updates and GitLab `relate`, because these paths
+must not change the remote body between sync-body's read and paired-base commit.
 
 <!-- flow:deps --> is stripped at the hash boundary (R10 half deferred from
 .4) and carried forward on every push write so a full-body update cannot
@@ -35,8 +38,8 @@ from ..lifecycle.helpers import (ACTIVE, Execute, Result, atomic_write_json,
                                  tracker_type, write_sync_receipt,
                                  write_tracker_block)
 from ..lifecycle.linkstate import require_durable
-from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
-                               _release_claim)
+from ..lifecycle.verbs import (_claim_body_mutation, _claim_is_stale,
+                               _ensure_create_first_ignored, _release_claim)
 from ..relate.ledger import FLOW_DEPS_CLOSE, FLOW_DEPS_OPEN
 from ..types import ErrorClass, TrackerError
 
@@ -295,6 +298,21 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
                                direction=direction)
     if claimed is not None:
         return claimed
+    claimed_spec = load_spec(flow_dir, spec_id)
+    if isinstance(claimed_spec, TrackerError):
+        _release_claim(rec_path)
+        return claimed_spec
+    _claimed_path, claimed_data = claimed_spec
+    claimed_locator = _locator(merged_tracker(claimed_data))
+    if isinstance(claimed_locator, TrackerError):
+        _release_claim(rec_path)
+        return claimed_locator
+    body_claim = _claim_body_mutation(
+        flow_dir, provider, claimed_locator,
+        operation=f"sync-body-{direction}", spec_id=spec_id)
+    if isinstance(body_claim, TrackerError):
+        _release_claim(rec_path)
+        return body_claim
     try:
         return _sync_body_txn(
             flow_dir, spec_id, config=config, provider=provider,
@@ -303,6 +321,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
             tracker_read=tracker_read, direction=direction,
             event=event, execute=execute, write_receipt=write_receipt)
     finally:
+        _release_claim(body_claim)
         _release_claim(rec_path)
 
 
