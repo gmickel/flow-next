@@ -21,10 +21,17 @@ from .linkstate import derive_link_state, resolve_linear_uuid
 from .providers import provider_create
 
 
-def _claim_spec_create(flow_dir: Path, spec_id: str, rec_path: Path,
-                       provider: str, title: str) -> Optional[TrackerError]:
-    """Reserve an unlinked spec under the shared writer lock BEFORE the
-    provider create (create-first's claim pattern, keyed on the spec id).
+def _claim_spec_operation(flow_dir: Path, spec_id: str, rec_path: Path,
+                          provider: str, *, operation: str,
+                          require_unlinked: bool,
+                          title: Optional[str] = None
+                          ) -> Optional[TrackerError]:
+    """Reserve a spec identity operation under the shared writer lock.
+
+    Create requires an unlinked spec. Persist-external also uses this same
+    spec-keyed claim but permits an idempotent linked state, holding the claim
+    through its receipt so relink/clear cannot split persistence from evidence.
+
     Two concurrent creates against the same unlinked spec could both pass the
     unlocked linkState check and both reach the provider mutation - two
     remote issues, the later link write orphaning the first. Under the lock:
@@ -47,7 +54,7 @@ def _claim_spec_create(flow_dir: Path, spec_id: str, rec_path: Path,
                 return reloaded
             _path, spec_data = reloaded
             state = derive_link_state(merged_tracker(spec_data))
-            if state != "unlinked":
+            if require_unlinked and state != "unlinked":
                 return TrackerError(
                     ErrorClass.CONFLICT,
                     f"spec {spec_id!r} is already linked "
@@ -64,9 +71,12 @@ def _claim_spec_create(flow_dir: Path, spec_id: str, rec_path: Path,
                         and not _claim_is_stale(prior, rec_path)):
                     return TrackerError(
                         ErrorClass.CONFLICT,
-                        f"create for spec {spec_id!r} is already in flight "
+                        f"{prior.get('op') or operation} for spec "
+                        f"{spec_id!r} is already in flight "
                         "in another process; retry after it finishes",
-                        subtype="create_in_flight",
+                        subtype=("create_in_flight"
+                                 if operation == "create"
+                                 else "spec_operation_in_flight"),
                         details={"specId": spec_id,
                                  "claim": {"pid": prior.get("pid"),
                                            "host": prior.get("host"),
@@ -76,6 +86,7 @@ def _claim_spec_create(flow_dir: Path, spec_id: str, rec_path: Path,
                 # overwriting it with OUR claim below - same rule as
                 # create_first.
             claim = {"specId": spec_id, "status": "pending",
+                     "op": operation,
                      "pid": os.getpid(), "host": socket.gethostname(),
                      "claimedAt": time.time(), "title": title,
                      "transport": provider}
@@ -85,6 +96,13 @@ def _claim_spec_create(flow_dir: Path, spec_id: str, rec_path: Path,
     except ConfigLockTimeout as exc:
         return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
     return None
+
+
+def _claim_spec_create(flow_dir: Path, spec_id: str, rec_path: Path,
+                       provider: str, title: str) -> Optional[TrackerError]:
+    return _claim_spec_operation(
+        flow_dir, spec_id, rec_path, provider,
+        operation="create", require_unlinked=True, title=title)
 
 
 def create(flow_dir, spec_id: str, *, title: str, body: str,
@@ -557,7 +575,7 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
                      source: str,
                      execute: Execute = default_execute,
                      event: Optional[str] = None) -> Result:
-    """Record an MCP-performed create. source must be mcp; provider=linear."""
+    """Record an MCP create while holding the spec identity through receipt."""
     flow_dir = Path(flow_dir)
     if source != "mcp":
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -572,6 +590,28 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "persist-external requires tracker.type=linear",
                             subtype="provider")
+    rec_path = flow_dir / "create-first" / f"spec-{spec_id}.json"
+    claimed = _claim_spec_operation(
+        flow_dir, spec_id, rec_path, "linear",
+        operation="persist-external", require_unlinked=False)
+    if claimed is not None:
+        return claimed
+    try:
+        return _persist_external_claimed(
+            flow_dir, spec_id, identifier=identifier,
+            durable_id=durable_id, url=url, execute=execute, event=event)
+    finally:
+        _release_claim(rec_path)
+
+
+def _persist_external_claimed(flow_dir: Path, spec_id: str, *,
+                              identifier: str,
+                              durable_id: Optional[str],
+                              url: Optional[str],
+                              execute: Execute,
+                              event: Optional[str]) -> Result:
+    """Claimed persist transaction; caller owns the spec claim."""
+    config = read_config(flow_dir)
     loaded = load_spec(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded

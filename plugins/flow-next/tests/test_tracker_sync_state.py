@@ -392,6 +392,39 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         on_disk = json.loads(spec_path.read_text(encoding="utf-8"))
         self.assertEqual(on_disk["tracker"]["id"], "uuid-locked-relink")
 
+    def test_clear_excluded_by_held_config_lock(self) -> None:
+        import threading
+
+        from flowctl_tracker.config_lock import config_lock
+
+        spec_id = self._create_spec("Locked clear")
+        self._set_id(spec_id, "uuid-locked-clear", identifier="WOR-88")
+        flow_dir = self.tmpdir / ".flow"
+        spec_path = self.flowctl.find_spec_json_path(flow_dir, spec_id)
+        started = threading.Event()
+        done = threading.Event()
+
+        def clear() -> None:
+            started.set()
+            try:
+                self._call(func=self.flowctl.cmd_sync_clear, id=spec_id)
+            finally:
+                done.set()
+
+        thread = threading.Thread(target=clear, daemon=True)
+        with config_lock(flow_dir):
+            thread.start()
+            self.assertTrue(started.wait(5))
+            done.wait(0.5)
+            on_disk = json.loads(spec_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                on_disk["tracker"]["id"], "uuid-locked-clear",
+                "sync clear wrote while the config lock was held",
+            )
+        self.assertTrue(done.wait(15), "sync clear never completed after release")
+        thread.join(5)
+        self.assertIsNone(self._state(spec_id)["id"])
+
     # --- PR #246: relink honors live per-spec operation claims --------------
     # The tracker verbs (create / sync-body / status) serialize their whole
     # read -> provider mutation -> persist transactions via per-spec claims
@@ -428,6 +461,25 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         rec.unlink()
         self._set_id(spec_id, "uuid-after-release")
         self.assertEqual(self._state(spec_id)["id"], "uuid-after-release")
+
+    def test_relink_and_clear_refused_while_live_persist_claim(self) -> None:
+        import time
+
+        spec_id = self._create_spec("Claim-guarded persist")
+        self._set_id(spec_id, "uuid-original", identifier="WOR-77")
+        rec = self._write_claim(
+            f"spec-{spec_id}.json", pid=os.getpid(),
+            claimed_at=time.time(), op="persist-external")
+
+        with self.assertRaises(SystemExit):
+            self._set_id(spec_id, "uuid-relinked", identifier="WOR-77")
+        with self.assertRaises(SystemExit):
+            self._call(func=self.flowctl.cmd_sync_clear, id=spec_id)
+        self.assertEqual(self._state(spec_id)["id"], "uuid-original")
+
+        rec.unlink()
+        cleared = self._call(func=self.flowctl.cmd_sync_clear, id=spec_id)
+        self.assertIsNone(cleared["tracker"]["id"])
 
     def test_relink_refused_while_live_syncbody_claim(self) -> None:
         import time

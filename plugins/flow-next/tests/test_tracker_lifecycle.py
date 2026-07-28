@@ -1174,6 +1174,45 @@ class Round5PersistIntegrity(unittest.TestCase):
             self.assertEqual(saved["tracker"]["identifier"], "WOR-17")
             self.assertEqual(saved["tracker"]["linkState"], "identifier_only")
 
+    def test_persist_external_holds_spec_claim_through_receipt_and_retry(
+            self) -> None:
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, ln_cfg())
+            rec_path = flow / "create-first" / "spec-fn-1-demo.json"
+            seen: list[str] = []
+
+            def receipt(*_args, **_kwargs):
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                self.assertEqual(claim["status"], "pending")
+                self.assertEqual(claim["op"], "persist-external")
+                seen.append(claim["op"])
+                return None
+
+            ex = fake_execute({
+                "lifecycle-resolve-uuid": gql_issue(
+                    {"id": LN_UUID, "identifier": "WOR-17",
+                     "url": "https://linear.app/x/issue/WOR-17"}),
+            })
+            with mock.patch.object(L.verbs, "write_sync_receipt",
+                                   side_effect=receipt):
+                first = L.persist_external(
+                    flow, "fn-1-demo", identifier="WOR-17",
+                    source="mcp", execute=ex, event="capture")
+                self.assertNotIsInstance(first, TrackerError, first)
+                self.assertFalse(rec_path.exists())
+
+                retry = L.persist_external(
+                    flow, "fn-1-demo", identifier="WOR-17",
+                    source="mcp", execute=fake_execute({}), event="capture")
+                self.assertNotIsInstance(retry, TrackerError, retry)
+                self.assertTrue(retry["idempotent"])
+                self.assertFalse(rec_path.exists())
+
+            self.assertEqual(seen, ["persist-external", "persist-external"])
+
 
 class CreateFirstClaimSerialization(unittest.TestCase):
     """PR #246 review: two concurrent create-first calls with the same retry

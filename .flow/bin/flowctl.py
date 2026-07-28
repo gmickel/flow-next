@@ -23244,7 +23244,8 @@ def _live_spec_operation_claim(flow_dir: Path, spec_id: str) -> Optional[dict]:
 
     PR #246: the tracker verbs serialize their whole read/provider-mutation/
     persist transactions via per-spec claims under `.flow/create-first/`
-    (create: `spec-<id>.json`, sync-body: `syncbody-<id>.json`, status:
+    (create/persist-external: `spec-<id>.json`, sync-body:
+    `syncbody-<id>.json`, status:
     `status-<id>.json`, facade sequences: `facade-<id>.json` - the outer
     claim the push/reconcile/comment facades hold ACROSS their steps, since the
     per-step claims leave relinkable gaps between steps). The relink writer
@@ -23495,9 +23496,26 @@ def cmd_sync_clear(args: argparse.Namespace) -> None:
     if not is_spec_id(args.id):
         error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
-    spec_data["tracker"] = default_spec_tracker_state()
-    _write_sync_state(spec_json_path, spec_data)
+    flow_dir = get_flow_dir()
+    try:
+        with _shared_config_lock(flow_dir):
+            spec_json_path, spec_data = _resolve_sync_spec(args)
+            live = _live_spec_operation_claim(flow_dir, args.id)
+            if live is not None:
+                error_exit(
+                    f"spec {args.id} has a tracker {live['op']} operation in "
+                    f"flight (claim {live['file']}, pid {live['pid']} on "
+                    f"{live['host']}); refusing to unlink while it holds the "
+                    "claim; retry after the operation finishes",
+                    use_json=args.json,
+                )
+            spec_data["tracker"] = default_spec_tracker_state()
+            _write_sync_state(spec_json_path, spec_data)
+    except TimeoutError as exc:
+        error_exit(
+            f"could not acquire the config writer lock for sync clear: {exc}",
+            use_json=args.json,
+        )
 
     if args.json:
         json_output({"id": args.id, "tracker": spec_data["tracker"], "message": "unlinked"})
