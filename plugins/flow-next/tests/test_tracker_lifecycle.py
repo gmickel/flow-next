@@ -1452,6 +1452,44 @@ class Round6CreateSpecClaimSerialization(unittest.TestCase):
             self.assertIs(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(out.subtype, "already_linked")
 
+    def test_unexpected_jira_adapter_raise_releases_create_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, jr_cfg())
+            body_file = Path(tmp) / "body.md"
+            body_file.write_text("B", encoding="utf-8")
+            payload, code = L.run(
+                flow, "create", spec_id="fn-1-demo", title="T",
+                body_file=str(body_file),
+                execute=fake_execute({
+                    "lifecycle-create-meta": ok({"projects": 1}),
+                }))
+
+            self.assertNotEqual(code, 0)
+            self.assertFalse(json.loads(payload)["success"])
+            self.assertFalse(
+                (flow / "create-first" / "spec-fn-1-demo.json").exists())
+
+    def test_unexpected_jira_adapter_raise_releases_create_first_claim(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, jr_cfg())
+            body_file = Path(tmp) / "body.md"
+            body_file.write_text("B", encoding="utf-8")
+            retry_key = L.compute_create_first_key("jira", "T", "B")
+            payload, code = L.run(
+                flow, "create-first", title="T",
+                body_file=str(body_file), retry_key=retry_key,
+                execute=fake_execute({
+                    "lifecycle-create-meta": ok({"projects": 1}),
+                }))
+
+            self.assertNotEqual(code, 0)
+            self.assertFalse(json.loads(payload)["success"])
+            self.assertFalse(
+                (flow / "create-first" / f"{retry_key}.json").exists())
+
 
 class Round6LockedCollisionScan(unittest.TestCase):
     """PR #246 review: the durable-collision scan ran OUTSIDE the writer

@@ -266,6 +266,21 @@ class DecideLadder(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class MergeEvidence(unittest.TestCase):
+    def test_out_of_tree_issue_repo_never_redirects_pr_probe(self) -> None:
+        cfg = gh_cfg()
+        cfg["tracker"]["resolved"]["destination"] = {
+            "owner": "other-owner",
+            "repo": "out-of-tree-issues",
+        }
+        ex = fake_execute({"merge-evidence": ok([])})
+
+        self.assertEqual(
+            merge_evidence(cfg, {"branch_name": "feature-branch"}, ex),
+            "none")
+        argv = list(ex.calls[0].url_or_argv)
+        self.assertNotIn("-R", argv)
+        self.assertEqual(argv[:3], ["gh", "pr", "list"])
+
     def test_classifies_buckets(self) -> None:
         cases = [
             ([{"state": "MERGED"}], "merged"),

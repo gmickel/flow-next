@@ -105,11 +105,11 @@ def _claim_spec_create(flow_dir: Path, spec_id: str, rec_path: Path,
         operation="create", require_unlinked=True, title=title)
 
 
-def create(flow_dir, spec_id: str, *, title: str, body: str,
-           flow_body: Optional[str] = None,
-           event: Optional[str] = None,
-           execute: Execute = default_execute,
-           write_receipt: bool = True) -> Result:
+def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
+                        flow_body: Optional[str] = None,
+                        event: Optional[str] = None,
+                        execute: Execute = default_execute,
+                        write_receipt: bool = True) -> Result:
     """Create, link, fresh-read, seed the paired base, then write one receipt."""
     flow_dir = Path(flow_dir)
     config = read_config(flow_dir)
@@ -266,6 +266,29 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
         result["degraded"] = created["degraded"]
     _release_claim(rec_path)
     return result
+
+
+def create(flow_dir, spec_id: str, *, title: str, body: str,
+           flow_body: Optional[str] = None,
+           event: Optional[str] = None,
+           execute: Execute = default_execute,
+           write_receipt: bool = True) -> Result:
+    """Create transaction with exception-safe release of its spec claim."""
+    flow_dir = Path(flow_dir)
+    rec_path = flow_dir / "create-first" / f"spec-{spec_id}.json"
+    completed = False
+    try:
+        result = _create_transaction(
+            flow_dir, spec_id, title=title, body=body, flow_body=flow_body,
+            event=event, execute=execute, write_receipt=write_receipt)
+        completed = True
+        return result
+    finally:
+        # Normal branches release themselves. Only an unexpected raise can
+        # strand OUR claim; a normal create_in_flight result may describe a
+        # same-process nested contender and must not delete the winner's claim.
+        if not completed:
+            _release_claim(rec_path)
 
 
 def compute_create_first_key(tracker_type_name: str, title: str, body: str) -> str:
@@ -458,8 +481,9 @@ def _release_claim(rec_path: Path) -> None:
             pass
 
 
-def create_first(flow_dir, *, title: str, body: str, retry_key: str,
-                 execute: Execute = default_execute) -> Result:
+def _create_first_transaction(flow_dir, *, title: str, body: str,
+                              retry_key: str,
+                              execute: Execute = default_execute) -> Result:
     """NO spec, NO receipt. Recovery record is the retry-dedupe guarantee."""
     flow_dir = Path(flow_dir)
     if not CREATE_FIRST_KEY_RE.fullmatch(retry_key or ""):
@@ -568,6 +592,26 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
     if created.get("degraded") is not None:
         out["degraded"] = created["degraded"]
     return out
+
+
+def create_first(flow_dir, *, title: str, body: str, retry_key: str,
+                 execute: Execute = default_execute) -> Result:
+    """Create-first with cleanup only when an exception aborts finalization."""
+    flow_dir = Path(flow_dir)
+    rec_path = flow_dir / "create-first" / f"{retry_key}.json"
+    completed = False
+    try:
+        result = _create_first_transaction(
+            flow_dir, title=title, body=body, retry_key=retry_key,
+            execute=execute)
+        completed = True
+        return result
+    finally:
+        # A normal success replaces the pending claim with the durable retry
+        # record and must retain it. Normal error paths release themselves.
+        # Only an unexpected raise needs this final escape-hatch cleanup.
+        if not completed:
+            _release_claim(rec_path)
 
 
 def persist_external(flow_dir, spec_id: str, *, identifier: str,

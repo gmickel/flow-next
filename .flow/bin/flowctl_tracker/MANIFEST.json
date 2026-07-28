@@ -70,7 +70,7 @@
     },
     {
       "path": "flowctl_tracker/lifecycle/verbs.py",
-      "sha256": "3e7baceb3d71a3448bc9536b6694b14bf2e9495b3be94489607b9cddc09cdf5a"
+      "sha256": "4b0300543616bab87a45c0505a050e1058964eed7dacea26e39911e5c5ec6152"
     },
     {
       "path": "flowctl_tracker/providers/__init__.py",
@@ -122,7 +122,7 @@
     },
     {
       "path": "flowctl_tracker/status/policy.py",
-      "sha256": "8d1a0cebd3dbef0343931eaa4b9d55ebf636cc5a3f2c341a07ee40c1e425e355"
+      "sha256": "c09035b03f65083f55dde0a39dba5730841c4d171f373a650c974bcafc13e0fe"
     },
     {
       "path": "flowctl_tracker/status/providers.py",

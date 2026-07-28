@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..types import ErrorClass, Request, Response, TrackerError
-from ..lifecycle.helpers import Execute, dict_
+from ..lifecycle.helpers import Execute
 
 #: CLI vocabulary (fn-139).
 SLOTS = frozenset({"backlog", "todo", "in_progress", "in_review", "done", "cancelled"})
@@ -94,16 +94,11 @@ def merge_evidence(config: dict, spec_data: dict, execute: Execute) -> str:
     if not isinstance(branch, str) or not branch.strip():
         return "probe-error"
     branch = branch.strip()
-    # Prefer -R when github destination is known (out-of-tree / unambiguous).
-    dest = dict_(dict_(dict_(config.get("tracker")).get("resolved")).get("destination"))
-    owner, repo = dest.get("owner"), dest.get("repo")
-    if isinstance(owner, str) and isinstance(repo, str) and owner and repo:
-        argv = ["gh", "-R", f"{owner}/{repo}", "pr", "list",
-                "--head", branch, "--state", "all",
-                "--json", "url,state,number,isDraft"]
-    else:
-        argv = ["gh", "pr", "list", "--head", branch, "--state", "all",
-                "--json", "url,state,number,isDraft"]
+    # Run in the current Git checkout and let gh resolve THAT repository.
+    # tracker.perTracker.repo may intentionally point at an out-of-tree issue
+    # repository; PR merge evidence belongs to the code repository instead.
+    argv = ["gh", "pr", "list", "--head", branch, "--state", "all",
+            "--json", "url,state,number,isDraft"]
     result = execute(Request(
         provider="github", op="merge-evidence", method="GET",
         url_or_argv=argv, idempotent=True,
