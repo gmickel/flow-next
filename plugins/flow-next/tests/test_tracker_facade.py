@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -1317,6 +1318,210 @@ class CommentIdentityGuard(unittest.TestCase):
             self.assertEqual(
                 list((flow / "create-first").glob("comment-*.json")), [],
                 "claim released on the refusal path")
+
+
+# ---------------------------------------------------------------------------
+# Outer facade claim: one tracker identity across all push/reconcile steps
+# ---------------------------------------------------------------------------
+
+class FacadeOuterClaim(unittest.TestCase):
+    """PR #246 review: the inner step claims (syncbody-<id>, status-<id>)
+    each cover only their own step, so `sync set-tracker-id` could relink the
+    spec BETWEEN op_push's body and status steps - the body lands on the old
+    issue, the status step targets the new one, and the receipt reloads only
+    the new id, presenting the split mutations as one push. The facades now
+    hold an OUTER spec-identity claim (`facade-<spec-id>`, distinct from
+    every inner key so nesting cannot self-refuse) across the whole
+    sequence, and flowctl's relink scan honors it."""
+
+    NEW_UUID = "I_kwDORelinked99"
+
+    def _spec_tracker_id(self, flow: Path) -> str | None:
+        spec = json.loads(
+            (flow / "specs" / f"{SPEC_ID}.json").read_text(encoding="utf-8"))
+        return spec["tracker"]["id"]
+
+    def _relink_cli(self, root: Path) -> "subprocess.CompletedProcess":
+        flowctl_py = ROOT / "scripts" / "flowctl.py"
+        return subprocess.run(
+            [sys.executable, str(flowctl_py), "sync", "set-tracker-id",
+             SPEC_ID, self.NEW_UUID, "--json"],
+            cwd=root, capture_output=True, text=True, check=False)
+
+    def test_push_relink_between_body_and_status_refused_one_identity(self) -> None:
+        """A real `flowctl sync set-tracker-id` fired in the gap between the
+        sync-body step and the status step refuses while the facade claim is
+        live; the whole push completes against ONE identity (the receipt and
+        the on-disk link never split). After the push releases the claim,
+        the same relink succeeds - the refusal is retryable."""
+        from flowctl_tracker.facade import ops as OPS
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(
+                mergeBaseFlow=FLOW_BODY,
+                mergeBaseTracker=FLOW_BODY.rstrip("\n"),
+            ))
+            ff = _flow_file(root)
+            rec_path = flow / "create-first" / f"facade-{SPEC_ID}.json"
+            seen: dict = {}
+
+            orig_run_status = OPS.run_status
+
+            def relink_then_status(*args, **kwargs):
+                # BETWEEN steps: sync-body released its inner claim, status
+                # has not taken its own yet. Only the facade claim is live.
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                self.assertEqual(claim.get("status"), "pending")
+                self.assertEqual(claim.get("op"), "facade-push")
+                self.assertFalse(
+                    (flow / "create-first" / f"syncbody-{SPEC_ID}.json").exists())
+                self.assertFalse(
+                    (flow / "create-first" / f"status-{SPEC_ID}.json").exists())
+                seen["relink"] = self._relink_cli(root)
+                seen["id_in_gap"] = self._spec_tracker_id(flow)
+                return orig_run_status(*args, **kwargs)
+
+            ex = fake_execute(_noop_push_responses(FLOW_BODY))
+            with mock.patch.object(OPS, "run_status",
+                                   side_effect=relink_then_status):
+                out = F.sync(flow, SPEC_ID, op="push", event="work.done",
+                             flow_file=ff, execute=ex)
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            proc = seen["relink"]
+            self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertIn("in flight", proc.stdout + proc.stderr)
+            self.assertIn(f"facade-{SPEC_ID}.json", proc.stdout + proc.stderr)
+            # The relink never landed inside the sequence: ONE identity.
+            self.assertEqual(seen["id_in_gap"], GH_NODE)
+            self.assertEqual(out["tracker_id"], GH_NODE)
+            self.assertEqual(self._spec_tracker_id(flow), GH_NODE)
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["tracker_id"], GH_NODE)
+            # Claim released on completion; the refused relink now succeeds.
+            self.assertFalse(rec_path.exists(), "facade claim released")
+            proc2 = self._relink_cli(root)
+            self.assertEqual(proc2.returncode, 0, proc2.stdout + proc2.stderr)
+            self.assertEqual(self._spec_tracker_id(flow), self.NEW_UUID)
+
+    def test_push_nested_inner_claims_coexist_no_self_deadlock(self) -> None:
+        """The inner step claims use DIFFERENT keys, so a normal push runs
+        with the facade claim AND the step claim pending simultaneously -
+        nesting cannot self-refuse - and everything is released on exit."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(
+                mergeBaseFlow="PRIOR\n", mergeBaseTracker="PRIOR",
+            ))
+            ff = _flow_file(root, "NEW BODY\n")
+            facade_rec = flow / "create-first" / f"facade-{SPEC_ID}.json"
+            seen: dict = {}
+
+            def assert_nested_syncbody(req):
+                facade = json.loads(facade_rec.read_text(encoding="utf-8"))
+                inner = json.loads(
+                    (flow / "create-first" / f"syncbody-{SPEC_ID}.json")
+                    .read_text(encoding="utf-8"))
+                seen["syncbody_nested"] = (facade.get("status"),
+                                           inner.get("status"))
+                return ok(_gh_issue("old"))
+
+            def assert_nested_status(req):
+                facade = json.loads(facade_rec.read_text(encoding="utf-8"))
+                inner = json.loads(
+                    (flow / "create-first" / f"status-{SPEC_ID}.json")
+                    .read_text(encoding="utf-8"))
+                seen["status_nested"] = (facade.get("status"),
+                                         inner.get("status"))
+                return ok(_gh_issue("NEW BODY\n"))
+
+            written = _gh_issue("NEW BODY\n")
+            ex = fake_execute({
+                "sync-body-parent-read": assert_nested_syncbody,
+                "wire-parent-read": ok(_gh_issue("old")),
+                "wire-update": ok(written),
+                "wire-read": ok(written),
+                "status-parent-read": assert_nested_status,
+                "merge-evidence": ok([]),
+            })
+            out = F.sync(flow, SPEC_ID, op="push", event="work.done",
+                         flow_file=ff, execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(seen["syncbody_nested"], ("pending", "pending"))
+            self.assertEqual(seen["status_nested"], ("pending", "pending"))
+            leftover = sorted(
+                p.name for p in (flow / "create-first").glob("*.json"))
+            self.assertEqual(leftover, [], "all claims released")
+
+    def test_concurrent_push_refused_facade_in_flight(self) -> None:
+        """A second push racing in while the facade claim is live backs off
+        with structured CONFLICT before ANY wire call; the winner completes
+        and writes the single receipt."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(
+                mergeBaseFlow=FLOW_BODY,
+                mergeBaseTracker=FLOW_BODY.rstrip("\n"),
+            ))
+            ff = _flow_file(root)
+            inner: dict = {}
+
+            def racing_push(req):
+                inner["ex"] = fake_execute({})
+                inner["out"] = F.sync(flow, SPEC_ID, op="push",
+                                      event="work.done", flow_file=ff,
+                                      execute=inner["ex"])
+                return ok(_gh_issue(FLOW_BODY))
+
+            responses = _noop_push_responses(FLOW_BODY)
+            responses["sync-body-parent-read"] = racing_push
+            ex = fake_execute(responses)
+            out = F.sync(flow, SPEC_ID, op="push", event="work.done",
+                         flow_file=ff, execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            raced = inner["out"]
+            self.assertIsInstance(raced, TrackerError)
+            self.assertIs(raced.cls, ErrorClass.CONFLICT)
+            self.assertEqual(raced.subtype, "facade_in_flight")
+            self.assertTrue(raced.auto_retryable)
+            self.assertEqual(inner["ex"].calls, [],
+                             "loser backs off before any wire call")
+            # Loser landed nothing -> receipt-less; winner wrote exactly one.
+            self.assertEqual(len(_receipts(flow)), 1)
+
+    def test_reconcile_holds_facade_claim_across_steps(self) -> None:
+        """op_reconcile has the same multi-step gap (wire-read -> sync-body
+        -> status) and holds the same outer claim across it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(
+                mergeBaseFlow=FLOW_BODY,
+                mergeBaseTracker=FLOW_BODY.rstrip("\n"),
+            ))
+            ff = _flow_file(root)
+            bf = _body_file(root, FLOW_BODY)
+            rec_path = flow / "create-first" / f"facade-{SPEC_ID}.json"
+            seen: dict = {}
+
+            def assert_claimed_read(req):
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                seen["claim"] = (claim.get("status"), claim.get("op"))
+                return ok(_gh_issue(FLOW_BODY))
+
+            responses = _noop_push_responses(FLOW_BODY)
+            responses["wire-read"] = assert_claimed_read
+            ex = fake_execute(responses)
+            out = F.sync(flow, SPEC_ID, op="reconcile", event="plan",
+                         flow_file=ff, body_file=bf, execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(seen["claim"], ("pending", "facade-reconcile"))
+            self.assertFalse(rec_path.exists(), "facade claim released")
+            self.assertEqual(len(_receipts(flow)), 1)
 
 
 # ---------------------------------------------------------------------------

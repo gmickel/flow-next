@@ -1365,3 +1365,115 @@ class StatusClaimSerialization(unittest.TestCase):
             self.assertEqual(out["kind"], "noop")
             self.assertFalse(rec_path.exists(),
                              "reclaimed claim released after the run")
+
+
+class AliasedStateIdWriteNoop(unittest.TestCase):
+    """Aliased in_progress/in_review + open PR: the read side resolves the
+    shared id to in_progress (earliest slot), the gate requests in_review,
+    and the target state id equals the one already on the issue. Writing it
+    would report "applied" and advance lastSyncedAt on EVERY sync - the
+    repeat loop. The writer must detect the identical native id and no-op."""
+
+    ALIASED = {"todo": "s-todo", "in_progress": "s-shared",
+               "in_review": "s-shared", "done": "s-done"}
+
+    def _flow(self, tmp: str) -> Path:
+        flow = Path(tmp) / ".flow"
+        _write_flow(
+            flow, ln_cfg(state_ids=dict(self.ALIASED)),
+            tracker={"id": LN_UUID, "identifier": "WOR-1", "url": "u",
+                     "lastSyncedAt": "OLD", "linkState": "linked"},
+            tasks=[{"status": "in_progress"}],
+        )
+        return flow
+
+    def _responses(self, current_state: dict) -> dict:
+        return {
+            "status-parent-read": ok({"data": {
+                "issue": {"id": LN_UUID, "identifier": "WOR-1",
+                          "title": "t", "description": "", "url": "u",
+                          "updatedAt": "t", "labels": {"nodes": []},
+                          "assignee": None},
+            }}),
+            "status-state-read": ok({"data": {
+                "issue": {"id": LN_UUID, "state": current_state},
+            }}),
+            "merge-evidence": ok([{"state": "OPEN"}]),
+        }
+
+    def test_identical_native_id_noops_and_never_advances(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = self._flow(tmp)
+            path = flow / "specs" / "fn-1-demo.json"
+            state = {"id": "s-shared", "name": "In Progress",
+                     "type": "started"}
+            # Two consecutive syncs: the repeat loop the finding describes
+            # would mutate + advance lastSyncedAt on each. Both must no-op.
+            for attempt in (1, 2):
+                ex = fake_execute(self._responses(state))
+                out = S.status(flow, "fn-1-demo", to="in_review", execute=ex)
+                self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+                self.assertEqual(out["kind"], "noop",
+                                 msg=f"sync {attempt}: {out!r}")
+                self.assertEqual(out["lastSyncedAt"], "OLD")
+                self.assertFalse(
+                    any(c.op == "status-set" for c in ex.calls),
+                    msg=f"sync {attempt} issued a provider mutation")
+                saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+                self.assertEqual(saved["lastSyncedAt"], "OLD",
+                                 msg=f"sync {attempt} advanced lastSyncedAt")
+
+    def test_different_native_id_still_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = self._flow(tmp)
+            path = flow / "specs" / "fn-1-demo.json"
+            variables = []
+
+            def capture(req):
+                variables.append(json.loads(req.body).get("variables"))
+                return ok({"data": {"issueUpdate": {
+                    "success": True, "issue": {"id": LN_UUID}}}})
+
+            responses = self._responses(
+                {"id": "s-todo", "name": "Todo", "type": "unstarted"})
+            responses["status-set"] = capture
+            ex = fake_execute(responses)
+            out = S.status(flow, "fn-1-demo", to="in_review", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "applied")
+            self.assertEqual(variables[0]["stateId"], "s-shared")
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
+
+    def test_jira_parity_identical_status_id_noops(self) -> None:
+        """Pin the Jira already-current check this fix mirrors: aliased
+        statusIds + issue already on the shared id -> noop, no transition
+        lookup, no POST, no lastSyncedAt advance."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, jr_cfg(status_ids={"todo": "1", "in_progress": "2",
+                                         "in_review": "2", "done": "4"}),
+                tracker={"id": JR_ID, "identifier": "SCRUM-1", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tasks=[{"status": "in_progress"}],
+            )
+            ex = fake_execute({
+                "status-parent-read": ok({
+                    "id": JR_ID, "key": "SCRUM-1",
+                    "fields": {"status": {
+                        "id": "2", "name": "In Progress",
+                        "statusCategory": {"key": "indeterminate"}}},
+                }),
+                "merge-evidence": ok([{"state": "OPEN"}]),
+                "status-current": ok({
+                    "fields": {"status": {"id": "2"}},
+                }),
+            })
+            out = S.status(flow, "fn-1-demo", to="in_review", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "noop")
+            self.assertFalse(any(c.op in {"status-set", "status-transitions"}
+                                 for c in ex.calls))
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["lastSyncedAt"], "OLD")

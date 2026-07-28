@@ -441,6 +441,22 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         self._set_id(spec_id, "uuid-after-sb")
         self.assertEqual(self._state(spec_id)["id"], "uuid-after-sb")
 
+    def test_relink_refused_while_live_facade_claim(self) -> None:
+        """The push/reconcile facades hold an OUTER claim (facade-<id>.json)
+        across their whole multi-step sequence - the per-step claims leave
+        gaps between steps where a relink could split one push across two
+        issues. set-tracker-id must honor the facade key too."""
+        import time
+        spec_id = self._create_spec("Claim-guarded relink facade")
+        rec = self._write_claim(f"facade-{spec_id}.json", pid=os.getpid(),
+                                claimed_at=time.time(), op="facade-push")
+        with self.assertRaises(SystemExit):
+            self._set_id(spec_id, "uuid-blocked-facade")
+        self.assertIsNone(self._state(spec_id)["id"])
+        rec.unlink()
+        self._set_id(spec_id, "uuid-after-facade")
+        self.assertEqual(self._state(spec_id)["id"], "uuid-after-facade")
+
     def test_stale_dead_pid_claim_does_not_block_relink(self) -> None:
         import time
         spec_id = self._create_spec("Stale claim relink")

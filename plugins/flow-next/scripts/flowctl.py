@@ -23245,7 +23245,10 @@ def _live_spec_operation_claim(flow_dir: Path, spec_id: str) -> Optional[dict]:
     PR #246: the tracker verbs serialize their whole read/provider-mutation/
     persist transactions via per-spec claims under `.flow/create-first/`
     (create: `spec-<id>.json`, sync-body: `syncbody-<id>.json`, status:
-    `status-<id>.json`). The relink writer must HONOR those claims - each
+    `status-<id>.json`, facade sequences: `facade-<id>.json` - the outer
+    claim the push/reconcile facades hold ACROSS their steps, since the
+    per-step claims leave relinkable gaps between steps). The relink writer
+    must HONOR those claims - each
     verb's locked identity recheck can only detect a repoint after the remote
     mutation has already landed on the old issue; it cannot undo it. Refusing
     the relink while a live claim exists makes the exclusion claim-based
@@ -23272,7 +23275,7 @@ def _live_spec_operation_claim(flow_dir: Path, spec_id: str) -> Optional[dict]:
         except ImportError:
             return None
     for prefix, op in (("spec", "create"), ("syncbody", "sync-body"),
-                       ("status", "status")):
+                       ("status", "status"), ("facade", "facade")):
         rec_path = flow_dir / "create-first" / f"{prefix}-{spec_id}.json"
         if not rec_path.is_file():
             continue

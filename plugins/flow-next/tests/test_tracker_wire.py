@@ -1240,3 +1240,27 @@ class GitlabSelfHostedHostname(unittest.TestCase):
         argv = list(ex.calls[0].url_or_argv)
         i = argv.index("--hostname")
         self.assertEqual(argv[i + 1], "gitlab.localhost")
+
+
+class DispatchEnvelopeBoundary(unittest.TestCase):
+    """run() never leaks a traceback: an adapter exception on a malformed but
+    syntactically-valid provider payload becomes the structured envelope."""
+
+    def test_malformed_labels_shape_is_enveloped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            (flow / "config.json").write_text(json.dumps(gl_cfg()),
+                                              encoding="utf-8")
+            # gitlab issue with labels: 1 - list(1) raises TypeError inside
+            # the adapter; run() must return the failure envelope, not raise.
+            ex = fake_execute({"wire-read": ok(dict(GL_ISSUE, labels=1))})
+            payload, code = W.run(
+                flow, "read",
+                locator=json.dumps(loc(str(GL_ID), "g/p#12")), execute=ex)
+            data = json.loads(payload)
+            self.assertFalse(data["success"])
+            self.assertEqual(data["class"], "transport")
+            self.assertEqual(data.get("subtype")
+                             or (data.get("details") or {}).get("subtype"),
+                             "malformed_body")
+            self.assertNotEqual(code, 0)

@@ -58,6 +58,72 @@ def _fail_if_evidence(err: TrackerError, *, completed: list, statuses: list,
     )
 
 
+def _facade_claim_path(flow_dir: Path, spec_id: str) -> Path:
+    return Path(flow_dir) / "create-first" / f"facade-{spec_id}.json"
+
+
+def _claim_facade(flow_dir: Path, spec_id: str, rec_path: Path,
+                  provider: str, *, op: str) -> Optional[TrackerError]:
+    """Reserve the WHOLE multi-step facade sequence under one spec-identity
+    claim taken BEFORE the first step and released only when the sequence
+    finishes. The inner per-step claims (`spec-<id>`, `syncbody-<id>`,
+    `status-<id>`) each cover only their own step; BETWEEN steps no claim is
+    live, so `sync set-tracker-id` - which honors live per-spec claims -
+    could relink the spec after sync_body() returned but before run_status()
+    acquired its claim. The body would then land on the OLD issue while the
+    status step targets the NEW one, and the final receipt (which reloads the
+    link) would record only the new id, presenting the split mutations as one
+    successful push. This outer claim, keyed `facade-<spec-id>` (distinct
+    from every inner key, so the nested step claims cannot self-refuse and
+    config_lock is never held across steps), keeps the relink out of the
+    entire sequence: flowctl's relink scan includes the facade key. Under the
+    lock: a live claim from another process refuses (facade_in_flight,
+    retryable), a stale claim (dead pid on this host past the stale window,
+    _claim_is_stale's owner rules) is reclaimed by overwriting, and OUR
+    pending claim lands durably before any remote I/O."""
+    flow_dir = Path(flow_dir)
+    unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
+    if unsafe:
+        return unsafe
+    secured = _ensure_create_first_ignored(flow_dir)
+    if secured is not None:
+        return secured
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            if rec_path.is_file():
+                try:
+                    prior = json.loads(rec_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    prior = None
+                if (isinstance(prior, dict)
+                        and prior.get("status") == "pending"
+                        and not _claim_is_stale(prior, rec_path)):
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        f"a tracker facade operation for spec {spec_id!r} is "
+                        "already in flight in another process; retry after "
+                        "it finishes",
+                        subtype="facade_in_flight",
+                        details={"specId": spec_id,
+                                 "claim": {"pid": prior.get("pid"),
+                                           "host": prior.get("host"),
+                                           "claimedAt": prior.get("claimedAt")}},
+                        auto_retryable=True)
+                # A STALE pending claim (crashed run) is reclaimed by
+                # overwriting it with OURS - same rule as create-first.
+            claim = {"specId": spec_id, "status": "pending", "op": op,
+                     "pid": os.getpid(), "host": socket.gethostname(),
+                     "claimedAt": time.time(), "transport": provider}
+            cerr = atomic_write_json(rec_path, claim)
+            if cerr:
+                return cerr
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc),
+                            subtype="lock_timeout")
+    return None
+
+
 def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, event: str,
             execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
@@ -69,6 +135,28 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, event: str,
     if isinstance(flow_body, TrackerError):
         return flow_body
 
+    # One spec-identity claim across the whole create -> sync-body -> status
+    # -> receipt sequence, so a relink cannot split the push across two
+    # issues in a between-steps gap (see _claim_facade).
+    rec_path = _facade_claim_path(flow_dir, spec_id)
+    claimed = _claim_facade(flow_dir, spec_id, rec_path, provider,
+                            op="facade-push")
+    if claimed is not None:
+        # Nothing landed: claim refusals stay receipt-less.
+        return claimed
+    try:
+        return _push_sequence(
+            flow_dir, spec_id, flow_body=flow_body, config=config,
+            provider=provider, event=event, execute=execute)
+    finally:
+        # Release on every exit: the aggregate receipt, not the claim file,
+        # is the durable record of what landed.
+        _release_claim(rec_path)
+
+
+def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
+                   config: dict, provider: str, event: str,
+                   execute: Execute) -> Result:
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
@@ -268,6 +356,27 @@ def op_reconcile(flow_dir: Path, spec_id: str, *, flow_file: str,
     if isinstance(tracker_body, TrackerError):
         return tracker_body
 
+    # Same multi-step gap as op_push (identifier-only completion ->
+    # wire-read -> sync-body -> status -> receipt): hold ONE spec-identity
+    # claim across the whole sequence so a relink cannot split it across two
+    # issues between steps (see _claim_facade).
+    rec_path = _facade_claim_path(flow_dir, spec_id)
+    claimed = _claim_facade(flow_dir, spec_id, rec_path, provider,
+                            op="facade-reconcile")
+    if claimed is not None:
+        # Nothing landed: claim refusals stay receipt-less.
+        return claimed
+    try:
+        return _reconcile_sequence(
+            flow_dir, spec_id, flow_body=flow_body, tracker_body=tracker_body,
+            config=config, provider=provider, event=event, execute=execute)
+    finally:
+        _release_claim(rec_path)
+
+
+def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
+                        tracker_body: str, config: dict, provider: str,
+                        event: str, execute: Execute) -> Result:
     completed: list = []
     statuses: list = []
     steps: dict[str, Any] = {}

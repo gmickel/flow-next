@@ -259,7 +259,8 @@ def apply_status(provider: str, config: dict, locator: dict, parent: dict,
                              target_slot=target_slot,
                              use_verified_label=use_verified_label)
     if provider == "linear":
-        return _apply_linear(config, locator, execute, target_slot=target_slot)
+        return _apply_linear(config, locator, parent, execute,
+                             target_slot=target_slot)
     if provider == "jira":
         return _apply_jira(config, locator, execute, target_slot=target_slot)
     return TrackerError(ErrorClass.INVALID_INPUT, f"unknown provider {provider!r}",
@@ -371,7 +372,7 @@ def _apply_gitlab(config, locator, parent, execute, *, target_slot,
             "state": state, "label": label}
 
 
-def _apply_linear(config, locator, execute, *, target_slot) -> Result:
+def _apply_linear(config, locator, parent, execute, *, target_slot) -> Result:
     from ..wire import _gql  # noqa: PLC0415
     dest = destination(config)
     if isinstance(dest, TrackerError):
@@ -384,6 +385,18 @@ def _apply_linear(config, locator, execute, *, target_slot) -> Result:
             f"destination.stateIds missing slot {target_slot!r}",
             subtype="stateIds",
         )
+    # Already-current? Mirror the Jira writer's check. A sanctioned aliased
+    # map (e.g. in_progress/in_review sharing one live state) reads back as
+    # the EARLIEST slot, so the gate can request the exact state id the issue
+    # already carries; writing it would report "applied", advance
+    # lastSyncedAt, and repeat on every subsequent sync. The verb layer maps
+    # a write-noop to kind=noop (no lastSyncedAt advance), which is honest:
+    # the native state already satisfies the request. Parent is enriched with
+    # state before apply (enrich_linear_parent); missing state falls through
+    # to the mutation, never raises.
+    cur_id = dict_(dict_(parent).get("state")).get("id")
+    if cur_id is not None and str(cur_id) == str(state_id):
+        return {"noop": True, "applied": target_slot, "stateId": str(state_id)}
     data = _gql(execute, "status-set",
                 "mutation($id: String!, $stateId: String!) { "
                 "issueUpdate(id: $id, input: { stateId: $stateId }) "

@@ -552,10 +552,22 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
     # Bind transport policy for the real executor; injected fakes pass through.
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
-    out = dispatch(verb, config, locator=locator, title=title, body=body,
-                   comment_id=comment_id, add=add, remove=remove,
-                   file_path=file_path, attachment_id=attachment_id,
-                   out_path=out_path, execute=ex)
+    # Never-raises boundary: a provider that returns syntactically valid JSON
+    # with an unexpected field shape (e.g. gitlab `labels: 1`) can raise deep
+    # inside an adapter (`list(raw.get("labels"))` -> TypeError). The promise
+    # of this entry point is the structured envelope, never a traceback.
+    try:
+        out = dispatch(verb, config, locator=locator, title=title, body=body,
+                       comment_id=comment_id, add=add, remove=remove,
+                       file_path=file_path, attachment_id=attachment_id,
+                       out_path=out_path, execute=ex)
+    except Exception as exc:  # noqa: BLE001 - envelope boundary
+        out = TrackerError(
+            ErrorClass.TRANSPORT,
+            f"provider adapter failed on malformed response shape: "
+            f"{type(exc).__name__}: {exc}",
+            subtype="malformed_body",
+            details={"subtype": "malformed_body", "verb": verb})
     if isinstance(out, TrackerError):
         if out.cls is ErrorClass.INACTIVE:
             return envelope.inactive()
