@@ -621,7 +621,11 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             "def _backend_completion_review(",
             "def cmd_codex_impl_review(",
         )
-        self.assertIn("completion-review-receipt-recovery-", writer)
+        self.assertIn("completion-review-receipt-recovery-", source)
+        self.assertIn(
+            "_completion_review_receipt_recovery_path(review_id)", writer
+        )
+        self.assertNotIn("recovery_path.unlink", writer)
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         recovery = "completion-review-receipt-recovery-${SPEC_ID}.json"
@@ -633,6 +637,12 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         self.assertLess(
             completion.index("_write_backend_review_receipt("),
             completion.index("_self_write_review_status("),
+        )
+        self.assertLess(
+            completion.index("_self_write_review_status("),
+            completion.index(
+                "_completion_review_receipt_recovery_path(epic_id).unlink"
+            ),
         )
 
     def test_rp_recorder_failure_cannot_be_swallowed_by_verdict_echo(self) -> None:

@@ -25070,6 +25070,15 @@ def stamp_ralph_iteration(receipt: dict) -> None:
     except ValueError:
         pass
 
+
+def _completion_review_receipt_recovery_path(review_id: str) -> Path:
+    return (
+        get_flow_dir()
+        / "tmp"
+        / f"completion-review-receipt-recovery-{review_id}.json"
+    )
+
+
 def _write_backend_review_receipt(
     receipt_path: str,
     *,
@@ -25126,15 +25135,9 @@ def _write_backend_review_receipt(
         # an explicit/autonomous receipt path that may fail transiently. The
         # skill's pre-dispatch checkpoint restores this payload without
         # consuming or dispatching another review round.
-        recovery_path = (
-            get_flow_dir()
-            / "tmp"
-            / f"completion-review-receipt-recovery-{review_id}.json"
-        )
+        recovery_path = _completion_review_receipt_recovery_path(review_id)
         atomic_write(recovery_path, content)
     atomic_write(Path(receipt_path), content)
-    if recovery_path is not None:
-        recovery_path.unlink(missing_ok=True)
 
 
 
@@ -26087,6 +26090,8 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     written_status = _self_write_review_status(
         epic_id, "completion", verdict, use_json=args.json
     )
+    if written_status is not None and receipt_path:
+        _completion_review_receipt_recovery_path(epic_id).unlink(missing_ok=True)
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
 

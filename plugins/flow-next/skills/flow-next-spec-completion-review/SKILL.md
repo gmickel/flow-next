@@ -207,20 +207,23 @@ if [[ -n "$TERMINAL_STATUS" \
     mkdir -p "$(dirname "$RECEIPT_PATH")"
     cp "$RECEIPT_RECOVERY" "$RECEIPT_PATH"
     if ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+      --arg mode "$ATTEMPT_BACKEND" \
       '.type == "completion_review"
        and .id == $id
-       and .verdict == $verdict' "$RECEIPT_PATH" >/dev/null; then
+       and .verdict == $verdict
+       and .mode == $mode' "$RECEIPT_PATH" >/dev/null; then
       echo "<promise>RETRY</promise>"
       exit 0
     fi
-    rm "$RECEIPT_RECOVERY"
   fi
 
   if [[ "$RECEIPT_REQUIRED" == true ]] \
     && ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+      --arg mode "$ATTEMPT_BACKEND" \
       '.type == "completion_review"
        and .id == $id
-       and .verdict == $verdict' "$RECEIPT_PATH" >/dev/null 2>&1; then
+       and .verdict == $verdict
+       and .mode == $mode' "$RECEIPT_PATH" >/dev/null 2>&1; then
     echo "<promise>RETRY</promise>"
     exit 0
   fi
@@ -235,6 +238,7 @@ if [[ -n "$TERMINAL_STATUS" \
       exit 0
     fi
   fi
+  rm -f "$RECEIPT_RECOVERY"
 
   if [[ "$TERMINAL_EXIT" -eq 4 ]]; then
     echo "ESCALATE: completion-review did not converge in ${REVIEW_CAP} verdict rounds"

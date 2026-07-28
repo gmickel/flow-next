@@ -500,7 +500,6 @@ EOF
     echo "<promise>RETRY</promise>"
     exit 0
   fi
-  rm "$RECEIPT_RECOVERY"
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```

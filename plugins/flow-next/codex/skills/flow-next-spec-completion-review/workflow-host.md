@@ -114,7 +114,8 @@ Persist it in this order:
  first (create the parent directory).
 2. Copy that exact file to `$RECEIPT_PATH`; validate `type`, `id`, and `verdict`
  there with `jq`.
-3. Delete the recovery file only after the selected receipt path validates.
+3. Leave the recovery file in place after receipt validation. SKILL.md's
+ shared checkpoint deletes it only after terminal status persists.
  On any write/copy/validation failure, leave recovery in place, output
  `<promise>RETRY</promise>`, and stop before terminal status.
 
