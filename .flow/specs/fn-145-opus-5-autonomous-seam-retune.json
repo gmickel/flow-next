@@ -76,7 +76,7 @@
     "impl:fn-145-opus-5-autonomous-seam-retune.1": 2
   },
   "spec_path": ".flow/specs/fn-145-opus-5-autonomous-seam-retune.md",
-  "status": "open",
+  "status": "done",
   "title": "Opus 5 autonomous seam retune",
   "tracker": {
     "baseHashFlow": "df120bff104f800f5ef87c2d822b197b309714ccf268c100f556a38593e291f6",
@@ -89,5 +89,5 @@
     "mergeBaseTracker": "flow-next spec fn-145-opus-5-autonomous-seam-retune\n\nApply three narrow prompt changes: explicit same-session continuation at inline\nskill seams; full autonomous-marker coverage at Work's delegation-consent gate;\nhost-review mechanics loaded only after selecting the host backend. Preserve\ngenuine terminal boundaries, interactive consent, receipts, status ownership,\nand cross-platform mirror parity.\n\nFull canonical spec: `.flow/specs/fn-145-opus-5-autonomous-seam-retune.md`.\n",
     "url": "https://linear.app/gmickel/issue/FLOW-68"
   },
-  "updated_at": "2026-07-28T09:41:36.835072Z"
+  "updated_at": "2026-07-28T12:31:08.171688Z"
 }
