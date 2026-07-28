@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "54131e2d72e429d9c9366892d4d530df52e39184f6cb1e8d178aa8d33920cd15"
+      "sha256": "81529dd01557fdc8b895510f51c266ad9de008dec10566d9c95e1016868d6285"
     },
     {
       "path": "flowctl_tracker/__init__.py",
@@ -38,15 +38,19 @@
     },
     {
       "path": "flowctl_tracker/facade/__init__.py",
-      "sha256": "d302ac35af4f0a39f14b8771bb4c1e5665ba64255e50081f1829855dc0d053b5"
+      "sha256": "4d6db8de3c12e7e1f96429a9d6d0cb257e832a46fc1eb51edec2ac252c2930b4"
     },
     {
       "path": "flowctl_tracker/facade/helpers.py",
-      "sha256": "62636f5c697b2e865624de946b56b80a02faf1c791270a7b36756297c83b2a89"
+      "sha256": "c72882e5cf7c05b981da5c77431b8e073225bd0878b79b810b9e8ee6f6371e79"
     },
     {
       "path": "flowctl_tracker/facade/ops.py",
-      "sha256": "b746d2329f5b3b8762eddc8a8da1d787e913ab75dd8a6a11961930c10b1da1f5"
+      "sha256": "262217958b0d3e83c04a9b9525553df00af572b8b29086b90d3749a17ad36023"
+    },
+    {
+      "path": "flowctl_tracker/facade/projections.py",
+      "sha256": "61e019bba76a88c070cc82c7ebccb830e09333382cac7857e4f351601ac5f36f"
     },
     {
       "path": "flowctl_tracker/facade/steps.py",
@@ -94,7 +98,7 @@
     },
     {
       "path": "flowctl_tracker/relate/__init__.py",
-      "sha256": "34cb253a466e172572ebee55e48096b79b9e6746f83d6c79fff13571be626692"
+      "sha256": "50f9e9ad36d0e4796a4f45eef9e1149a35a73df72c385b009469bad757f4ae36"
     },
     {
       "path": "flowctl_tracker/relate/ledger.py",
@@ -154,11 +158,11 @@
     },
     {
       "path": "flowctl_tracker/wire/jira.py",
-      "sha256": "9a84f771fb621daa5ba9cbc96f836737be4114d97564a3f536c05ef534117f3a"
+      "sha256": "aee030dee859b2e46069f81a8ad62d5adb411ba1f8f789df054a439c768d59ee"
     },
     {
       "path": "flowctl_tracker/wire/linear.py",
-      "sha256": "f6a117edc36e67a41bfbd074e8506691f964f8f2af92e11717450e5ab08f9285"
+      "sha256": "b76d4abe148a3aaab342e0b46ffea4d2ed3872026f46dc672798da23c5db96ae"
     }
   ],
   "generated_by": "scripts/gen_tracker_manifest.py",

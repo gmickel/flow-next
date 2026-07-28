@@ -24271,6 +24271,8 @@ def cmd_tracker_facade(args: argparse.Namespace) -> None:
         event=getattr(args, "event", None),
         flow_file=getattr(args, "flow_file", None),
         body_file=getattr(args, "body_file", None),
+        comments_file=getattr(args, "comments_file", None),
+        source_body_file=getattr(args, "source_body_file", None),
     )
     print(payload)
     sys.exit(code)
@@ -31784,13 +31786,24 @@ def main() -> None:
     )
     p_tracker_sync.add_argument(
         "--flow-file", default=None, dest="flow_file",
-        help="Exact local flow-form body (required for push/reconcile; "
-             "forbidden for pull/comment); becomes mergeBaseFlow",
+        help="Exact final local flow-form body (required for push/pull/reconcile; "
+             "forbidden for comment); becomes mergeBaseFlow",
     )
     p_tracker_sync.add_argument(
         "--body-file", default=None, dest="body_file",
-        help="Tracker-rendered body for push/reconcile, or comment text "
-             "(required for push/reconcile/comment; forbidden for pull)",
+        help="Tracker-rendered body for push/reconcile, exact tracker snapshot "
+             "used to produce a pull fold, or comment text (required)",
+    )
+    p_tracker_sync.add_argument(
+        "--comments-file", default=None, dest="comments_file",
+        help="JSON array from the normalized comment-list snapshot used to "
+             "produce a pull/reconcile fold (required for pull/reconcile; "
+             "forbidden for push/comment)",
+    )
+    p_tracker_sync.add_argument(
+        "--source-body-file", default=None, dest="source_body_file",
+        help="Exact tracker body snapshot used to prepare a reconcile merge "
+             "(required for reconcile; forbidden for other ops)",
     )
     p_tracker_sync.add_argument("--json", action="store_true",
                                 help="Accepted and ignored (output is always JSON)")

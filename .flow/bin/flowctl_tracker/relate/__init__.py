@@ -500,9 +500,18 @@ def _claim_relate_pair(flow_dir: Path, spec_id: str, blocked_by: str,
     return claim_paths
 
 
+def _write_relate_receipt(enabled: bool, flow_dir: Path, **kwargs
+                          ) -> Optional[TrackerError]:
+    """Let facade composition suppress granular receipts."""
+    if not enabled:
+        return None
+    return write_sync_receipt(flow_dir, **kwargs)
+
+
 def relate(flow_dir, spec_id: str, *, blocked_by: str,
            event: Optional[str] = None,
-           execute: Execute = default_execute) -> Result:
+           execute: Execute = default_execute,
+           write_receipt: bool = True) -> Result:
     """Project A is-blocked-by B. Never raises across the boundary."""
     flow_dir = Path(flow_dir)
     if not spec_id or not blocked_by:
@@ -545,7 +554,7 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
     try:
         return _relate_txn(
             flow_dir, spec_id, blocked_by=blocked_by, event=event,
-            execute=execute)
+            execute=execute, write_receipt=write_receipt)
     finally:
         if body_claim is not None:
             _release_claim(body_claim)
@@ -554,7 +563,8 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
 
 
 def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
-                event: Optional[str], execute: Execute) -> Result:
+                event: Optional[str], execute: Execute,
+                write_receipt: bool) -> Result:
     """Run probe, mutation, and finalize while both spec claims are live."""
     config = read_config(flow_dir)
     provider = tracker_type(config)
@@ -608,7 +618,8 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
                 reason="set tracker.perTracker.blocksLinkType, then retry")
             if qerr:
                 return qerr
-            rerr = write_sync_receipt(
+            rerr = _write_relate_receipt(
+                write_receipt,
                 flow_dir, spec_id=spec_id, status="queued",
                 tracker_id=from_id, event=event, transport=provider,
                 note="no Jira blocks link type; relation deferred")
@@ -663,7 +674,8 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
             if isinstance(body_out, TrackerError):
                 return body_out
             if body_out.get("written"):
-                rerr = write_sync_receipt(
+                rerr = _write_relate_receipt(
+                    write_receipt,
                     flow_dir, spec_id=spec_id, status="pushed",
                     tracker_id=from_id, event=event, transport=provider,
                     note=f"repaired dependency body block for {blocked_by}")
@@ -684,7 +696,8 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
                     "degraded": None,
                     "depRelations": tracker_a.get("depRelations") or [],
                 }
-        rerr = write_sync_receipt(
+        rerr = _write_relate_receipt(
+            write_receipt,
             flow_dir, spec_id=spec_id, status="noop",
             tracker_id=from_id, event=event, transport=provider,
             note=f"blocked-by {blocked_by} already recorded")
@@ -712,7 +725,8 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
             reason="human-removal collision; default NOT re-created")
         if qerr:
             return qerr
-        rerr = write_sync_receipt(
+        rerr = _write_relate_receipt(
+            write_receipt,
             flow_dir, spec_id=spec_id, status="queued",
             tracker_id=from_id, event=event, transport=provider,
             note="human-removal collision queued; edge not re-created")
@@ -756,7 +770,8 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
                     "to": blocked_by})
             return finalized
         tracker_a = finalized
-        rerr = write_sync_receipt(
+        rerr = _write_relate_receipt(
+            write_receipt,
             flow_dir, spec_id=spec_id, status="pushed",
             tracker_id=from_id, event=event, transport=provider,
             note=f"ledger finalized for flow-created blocked-by {blocked_by} "
@@ -799,7 +814,8 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
             reason="foreign-edge collision; never clobbered")
         if qerr:
             return qerr
-        rerr = write_sync_receipt(
+        rerr = _write_relate_receipt(
+            write_receipt,
             flow_dir, spec_id=spec_id, status="queued",
             tracker_id=from_id, event=event, transport=provider,
             note="foreign edge present; never-clobber collision queued")
@@ -913,7 +929,8 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
         note = f"hierarchy proxy recorded for {blocked_by} via sub_issues"
     else:
         note = f"projected blocked-by {blocked_by} via {form}"
-    rerr = write_sync_receipt(
+    rerr = _write_relate_receipt(
+        write_receipt,
         flow_dir, spec_id=spec_id, status="pushed",
         tracker_id=from_id, event=event, transport=provider,
         note=note,

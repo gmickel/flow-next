@@ -41,6 +41,11 @@ def _issue_out(raw: dict, *, parent_identity: str = "validated") -> dict:
         "body": raw.get("description"),
         "url": raw.get("url"),
         "labels": names,
+        "status": (
+            {"raw": raw["state"].get("name"),
+             "type": raw["state"].get("type")}
+            if isinstance(raw.get("state"), dict) else None
+        ),
         "raw": raw,
         "parent_identity": parent_identity,
     }
@@ -60,6 +65,7 @@ def parent_read(config: dict, locator: dict, execute: Execute, *,
     data = _gql(execute, op,
                 "query($id: String!) { issue(id: $id) { id identifier title "
                 "description url updatedAt "
+                "state { id name type } "
                 "labels { nodes { id name } } "
                 "assignee { id name } } }",
                 {"id": locator["display"]}, idempotent=True)

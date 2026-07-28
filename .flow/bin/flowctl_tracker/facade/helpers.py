@@ -18,10 +18,26 @@ OPS = frozenset({"push", "pull", "reconcile", "comment"})
 
 # required / forbidden input names (flow_file / body_file) per op — epic table.
 OP_INPUTS = {
-    "push": {"require": frozenset({"flow_file", "body_file"}), "forbid": frozenset()},
-    "pull": {"require": frozenset(), "forbid": frozenset({"flow_file"})},
-    "reconcile": {"require": frozenset({"flow_file", "body_file"}), "forbid": frozenset()},
-    "comment": {"require": frozenset({"body_file"}), "forbid": frozenset({"flow_file"})},
+    "push": {
+        "require": frozenset({"flow_file", "body_file"}),
+        "forbid": frozenset({"comments_file", "source_body_file"}),
+    },
+    "pull": {
+        "require": frozenset({"flow_file", "body_file", "comments_file"}),
+        "forbid": frozenset({"source_body_file"}),
+    },
+    "reconcile": {
+        "require": frozenset({
+            "flow_file", "body_file", "comments_file", "source_body_file",
+        }),
+        "forbid": frozenset(),
+    },
+    "comment": {
+        "require": frozenset({"body_file"}),
+        "forbid": frozenset({
+            "flow_file", "comments_file", "source_body_file",
+        }),
+    },
 }
 
 # Aggregate receipt status severity — higher = worse.
@@ -73,7 +89,9 @@ def marker_component_error(name: str, value: Any) -> Optional[TrackerError]:
 
 
 def validate_inputs(op: str, *, flow_file: Optional[str],
-                    body_file: Optional[str], event: Optional[str]
+                    body_file: Optional[str], comments_file: Optional[str],
+                    source_body_file: Optional[str],
+                    event: Optional[str]
                     ) -> Optional[TrackerError]:
     if op not in OPS:
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -91,15 +109,17 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
     present = {
         "flow_file": flow_file is not None,
         "body_file": body_file is not None,
+        "comments_file": comments_file is not None,
+        "source_body_file": source_body_file is not None,
     }
-    for name in rules["forbid"]:
+    for name in sorted(rules["forbid"]):
         if present[name]:
             return TrackerError(
                 ErrorClass.INVALID_INPUT,
                 f"--op {op} forbids --{name.replace('_', '-')}",
                 subtype="args",
             )
-    for name in rules["require"]:
+    for name in sorted(rules["require"]):
         if not present[name]:
             return TrackerError(
                 ErrorClass.INVALID_INPUT,
@@ -118,6 +138,70 @@ def read_text_file(path: Optional[str], *, label: str) -> Result:
     except (OSError, UnicodeDecodeError) as exc:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"cannot read {label}: {exc}", subtype=label)
+
+
+def read_comments_file(path: Optional[str]) -> Result:
+    """Read the agent-approved normalized comment snapshot."""
+    raw = read_text_file(path, label="--comments-file")
+    if isinstance(raw, TrackerError):
+        return raw
+    try:
+        value = json.loads(raw)
+    except (ValueError, TypeError) as exc:
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"--comments-file is not valid JSON: {exc}",
+            subtype="comments_file",
+        )
+    if not isinstance(value, list):
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "--comments-file must contain a JSON array",
+            subtype="comments_file",
+        )
+    return value
+
+
+def comments_snapshot(comments: Any) -> Result:
+    """Stable fields whose change invalidates an agent-produced comment fold."""
+    if not isinstance(comments, list):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "normalized comments response is not an array",
+            subtype="comments_shape",
+        )
+    out = []
+    for comment in comments:
+        if not isinstance(comment, dict):
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "normalized comment is not an object",
+                subtype="comments_shape",
+            )
+        out.append({
+            "id": comment.get("id"),
+            "body": comment.get("body"),
+            "parent_identity": comment.get("parent_identity"),
+        })
+    return out
+
+
+def live_comments_snapshot(payload: Any) -> Result:
+    """Reject incomplete live listings before validating an agent fold."""
+    if not isinstance(payload, dict):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "normalized comment-list response is not an object",
+            subtype="comments_shape",
+        )
+    if payload.get("truncated"):
+        return TrackerError(
+            ErrorClass.CAPABILITY,
+            "tracker comment listing is truncated; refusing to commit an "
+            "incomplete local fold",
+            subtype="comments_truncated",
+        )
+    return comments_snapshot(payload.get("comments"))
 
 
 def local_spec_md(flow_dir: Path, spec_id: str) -> Result:
@@ -317,6 +401,11 @@ def collect_degraded(*parts: Any) -> Optional[dict]:
     NESTED write payload: the status verb reports label degradation under
     result["write"]["degraded"], which the top-level check silently lost."""
     for p in parts:
+        if isinstance(p, list):
+            nested = collect_degraded(*p)
+            if nested:
+                return nested
+            continue
         if not isinstance(p, dict):
             continue
         if p.get("degraded"):
@@ -324,4 +413,14 @@ def collect_degraded(*parts: Any) -> Optional[dict]:
         write = p.get("write")
         if isinstance(write, dict) and write.get("degraded"):
             return write["degraded"]
+        for key in ("relations", "steps"):
+            nested = p.get(key)
+            if isinstance(nested, dict):
+                found = collect_degraded(*nested.values())
+            elif isinstance(nested, list):
+                found = collect_degraded(*nested)
+            else:
+                found = None
+            if found:
+                return found
     return None

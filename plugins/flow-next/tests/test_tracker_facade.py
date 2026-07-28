@@ -39,6 +39,16 @@ def fake_execute(responses: dict):
         calls.append(request)
         if request.op == "lifecycle-create-meta" and request.op not in responses:
             return ok({})
+        if request.op == "wire-comment-list" and request.op not in responses:
+            return _comment_list_empty(request.provider)
+        if request.op == "merge-evidence" and request.op not in responses:
+            return ok([])
+        if (request.op == "status-parent-read"
+                and request.op not in responses
+                and "wire-read" in responses
+                and not isinstance(responses["wire-read"], list)):
+            prior = responses["wire-read"]
+            return prior(request) if callable(prior) else prior
         if request.op not in responses:
             if (request.op == "sync-body-parent-read"
                     and "wire-comment-list" in responses):
@@ -195,6 +205,18 @@ def _body_file(tmp: Path, body: str) -> str:
     return str(p)
 
 
+def _source_body_file(tmp: Path, body: str) -> str:
+    p = tmp / "source-body.md"
+    p.write_text(body, encoding="utf-8")
+    return str(p)
+
+
+def _comments_file(tmp: Path, comments: list | None = None) -> str:
+    p = tmp / "comments.json"
+    p.write_text(json.dumps(comments or []), encoding="utf-8")
+    return str(p)
+
+
 # Shared parent-read responses for a no-op push (body already matches + status agree).
 def _noop_push_responses(body: str = FLOW_BODY) -> dict:
     parent = _gh_issue(body)
@@ -305,7 +327,9 @@ def _status_noop_responses(provider: str, issue: dict) -> dict:
 class InputMatrix(unittest.TestCase):
     def test_forbidden_inputs_invalid_before_any_request(self) -> None:
         cases = [
-            ("pull", {"flow_file": "x"}, "flow-file"),
+            ("push", {
+                "flow_file": "x", "body_file": "x", "comments_file": "x",
+            }, "comments-file"),
             ("comment", {"flow_file": "x"}, "flow-file"),
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -351,7 +375,13 @@ class InputMatrix(unittest.TestCase):
             out3 = F.sync(flow, SPEC_ID, op="reconcile", event="work.done",
                           flow_file="x", execute=ex)
             self.assertIsInstance(out3, TrackerError)
-            self.assertIn("body-file", out3.message)
+            self.assertIn("requires", out3.message)
+
+            out4 = F.sync(
+                flow, SPEC_ID, op="pull", event="work.done",
+                flow_file="x", body_file="x", execute=ex)
+            self.assertIsInstance(out4, TrackerError)
+            self.assertIn("comments-file", out4.message)
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +522,63 @@ class PushFacade(unittest.TestCase):
 # Create-if-unlinked: fresh readback + paired-base seed before requested op
 # ---------------------------------------------------------------------------
 
+class DependencyProjection(unittest.TestCase):
+    def test_push_and_reconcile_project_dependencies_without_receipt_stacking(
+            self) -> None:
+        dep_id = "fn-2-dependency"
+        for op in ("push", "reconcile"):
+            with self.subTest(op=op), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                flow = root / ".flow"
+                _write_flow(
+                    flow, gh_cfg(), tracker=_linked(
+                        mergeBaseFlow=FLOW_BODY,
+                        mergeBaseTracker=FLOW_BODY.rstrip("\n")))
+                _write_flow(
+                    flow, gh_cfg(), spec_id=dep_id,
+                    tracker=_linked(
+                        id="I_dep", identifier="#43",
+                        mergeBaseFlow=FLOW_BODY,
+                        mergeBaseTracker=FLOW_BODY.rstrip("\n")))
+                path = flow / "specs" / f"{SPEC_ID}.json"
+                spec = json.loads(path.read_text(encoding="utf-8"))
+                spec["depends_on_epics"] = [dep_id]
+                path.write_text(json.dumps(spec), encoding="utf-8")
+                ff = _flow_file(root)
+                bf = _body_file(root, FLOW_BODY)
+                responses = _noop_push_responses(FLOW_BODY)
+                responses["wire-read"] = ok(_gh_issue(FLOW_BODY))
+                ex = fake_execute(responses)
+                calls = []
+
+                def projected(*args, calls=calls, **kwargs):
+                    calls.append((args, kwargs))
+                    return {
+                        "kind": "applied",
+                        "form": "dependency",
+                        "degraded": None,
+                    }
+
+                kwargs = {
+                    "flow_file": ff,
+                    "body_file": bf,
+                }
+                if op == "reconcile":
+                    kwargs["comments_file"] = _comments_file(root)
+                    kwargs["source_body_file"] = bf
+                with mock.patch.object(F.ops, "relate",
+                                       side_effect=projected):
+                    out = F.sync(
+                        flow, SPEC_ID, op=op, event="plan",
+                        execute=ex, **kwargs)
+                self.assertNotIsInstance(out, TrackerError, out)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(calls[0][1]["blocked_by"], dep_id)
+                self.assertFalse(calls[0][1]["write_receipt"])
+                self.assertIn(f"relation:{dep_id}", out["completed_steps"])
+                self.assertEqual(len(_receipts(flow)), 1)
+
+
 class CreateIfUnlinkedSeed(unittest.TestCase):
     def _create_response(self) -> Response:
         return ok({
@@ -507,6 +594,7 @@ class CreateIfUnlinkedSeed(unittest.TestCase):
             _write_flow(flow, gh_cfg())  # unlinked
             ff = _flow_file(root)
             bf = _body_file(root, FLOW_BODY)
+            cf = _comments_file(root)
             issue = _gh_issue(FLOW_BODY)
             ex = fake_execute({
                 "lifecycle-create": self._create_response(),
@@ -515,7 +603,8 @@ class CreateIfUnlinkedSeed(unittest.TestCase):
 
             out = F.sync(
                 flow, SPEC_ID, op="reconcile", event="plan",
-                flow_file=ff, body_file=bf, execute=ex)
+                flow_file=ff, body_file=bf, comments_file=cf,
+                source_body_file=bf, execute=ex)
 
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(out["op"], "reconcile")
@@ -707,6 +796,7 @@ class CreateIfUnlinkedSeed(unittest.TestCase):
             _write_flow(flow, gh_cfg())  # unlinked
             ff = _flow_file(root)
             bf = _body_file(root, FLOW_BODY)
+            cf = _comments_file(root)
             ex = fake_execute({
                 "lifecycle-create": self._create_response(),
                 "sync-body-parent-read": ok(_gh_issue(FLOW_BODY)),
@@ -719,7 +809,8 @@ class CreateIfUnlinkedSeed(unittest.TestCase):
                                    return_value=boom):
                 out = F.sync(
                     flow, SPEC_ID, op="reconcile", event="plan",
-                    flow_file=ff, body_file=bf, execute=ex)
+                    flow_file=ff, body_file=bf, comments_file=cf,
+                    source_body_file=bf, execute=ex)
 
             self.assertIsInstance(out, TrackerError)
             self.assertEqual(out.subtype, "paired_base")
@@ -1293,6 +1384,7 @@ class ReconcileFacade(unittest.TestCase):
             })
             ff = _flow_file(root)
             bf = _body_file(root, FLOW_BODY)
+            cf = _comments_file(root)
             issue = {
                 "id": LN_UUID, "identifier": "WOR-17", "title": "Demo",
                 "description": FLOW_BODY,
@@ -1322,7 +1414,9 @@ class ReconcileFacade(unittest.TestCase):
             })
             with mock.patch.dict(os.environ, {"LINEAR_API_KEY": "lin_test"}):
                 out = F.sync(flow, SPEC_ID, op="reconcile", event="plan",
-                             flow_file=ff, body_file=bf, execute=ex)
+                             flow_file=ff, body_file=bf,
+                             comments_file=cf, source_body_file=bf,
+                             execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertIn("complete-identifier-only", out["completed_steps"])
             saved = json.loads(
@@ -1337,6 +1431,73 @@ class ReconcileFacade(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class PullAndStructural(unittest.TestCase):
+    def test_pull_commits_agent_final_flow_form_and_comment_snapshot(self) -> None:
+        final_flow = "## Goal\nFolded tracker changes and comments.\n"
+        tracker_source = "remote tracker form\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(
+                flow, gh_cfg(), tracker=_linked(), spec_md=final_flow)
+            expected_comments = [{
+                "id": 99,
+                "body": "PM note",
+                "parent_identity": "not_available",
+            }]
+            ex = fake_execute({
+                "wire-read": ok(_gh_issue(tracker_source)),
+                "wire-comment-list": _comment_list_with("github", "PM note"),
+            })
+
+            def status_noop(*args, completed, statuses, **kwargs):
+                completed.append("status")
+                statuses.append("noop")
+                return {"kind": "noop"}
+
+            with mock.patch.object(F.ops, "run_status",
+                                   side_effect=status_noop):
+                out = F.sync(
+                    flow, SPEC_ID, op="pull", event="interview",
+                    flow_file=_flow_file(root, final_flow),
+                    body_file=_body_file(root, tracker_source),
+                    comments_file=_comments_file(root, expected_comments),
+                    execute=ex,
+                )
+            self.assertNotIsInstance(out, TrackerError, out)
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["tracker"]["mergeBaseFlow"], final_flow)
+            self.assertEqual(
+                saved["tracker"]["mergeBaseTracker"],
+                SB.trackerBodyForMerge(tracker_source))
+            self.assertIn("comments", out["completed_steps"])
+            self.assertIn("status", out["completed_steps"])
+
+    def test_pull_rejects_comment_snapshot_race_before_base_commit(self) -> None:
+        tracker_source = "remote tracker form\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(), spec_md=FLOW_BODY)
+            ex = fake_execute({
+                "wire-read": ok(_gh_issue(tracker_source)),
+                "wire-comment-list": _comment_list_with(
+                    "github", "new comment after fold"),
+            })
+            out = F.sync(
+                flow, SPEC_ID, op="pull", event="interview",
+                flow_file=_flow_file(root),
+                body_file=_body_file(root, tracker_source),
+                comments_file=_comments_file(root),
+                execute=ex,
+            )
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "comments_changed")
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json").read_text(encoding="utf-8"))
+            self.assertIsNone(saved["tracker"]["mergeBaseFlow"])
+            self.assertIsNone(saved["tracker"]["mergeBaseTracker"])
+
     def test_pull_snapshots_without_tracker_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1348,6 +1509,9 @@ class PullAndStructural(unittest.TestCase):
                 "wire-read": ok(parent),
             })
             out = F.sync(flow, SPEC_ID, op="pull", event="interview",
+                         flow_file=_flow_file(root),
+                         body_file=_body_file(root, "tracker side body"),
+                         comments_file=_comments_file(root),
                          execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["op"], "pull")
@@ -1374,6 +1538,9 @@ class PullAndStructural(unittest.TestCase):
                 "sync-body-parent-read": ok(_gh_issue(body_b)),
             })
             out = F.sync(flow, SPEC_ID, op="pull", event="interview",
+                         flow_file=_flow_file(root),
+                         body_file=_body_file(root, body_a),
+                         comments_file=_comments_file(root),
                          execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             read_ops = [c.op for c in ex.calls
@@ -1425,6 +1592,112 @@ class PullAndStructural(unittest.TestCase):
             self.assertEqual(out.details.get("normalized"), "durable")
 
 
+class ReadinessProjection(unittest.TestCase):
+    def test_pull_projects_ready_true_for_every_adapter(self) -> None:
+        jira_ready = _jr_issue(FLOW_BODY)
+        jira_ready["fields"]["status"] = {
+            "id": "2", "name": "Ready for Work",
+            "statusCategory": {"key": "new"},
+        }
+        cases = [
+            ("github", gh_cfg, GH_NODE, "#42",
+             _gh_issue(FLOW_BODY, labels=[{"name": "Ready"}])),
+            ("gitlab", gl_cfg, str(GL_ID), "g/p#12",
+             {**_gl_issue(FLOW_BODY), "labels": ["Ready"]}),
+            ("linear", ln_cfg, LN_UUID, "WOR-17",
+             {**_ln_issue(FLOW_BODY),
+              "state": {"id": "s-ready", "name": "Ready",
+                        "type": "unstarted"}}),
+            ("jira", jr_cfg, JR_ID, "SCRUM-1", jira_ready),
+        ]
+
+        def status_noop(*args, completed, statuses, **kwargs):
+            completed.append("status")
+            statuses.append("noop")
+            return {"kind": "noop"}
+
+        for provider, cfg_fn, durable, display, issue in cases:
+            with self.subTest(provider=provider), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                flow = root / ".flow"
+                config = cfg_fn()
+                config["tracker"]["readyState"] = (
+                    "Ready for Work" if provider == "jira" else "Ready")
+                _write_flow(
+                    flow, config,
+                    tracker=_linked(id=durable, identifier=display),
+                    spec_md=FLOW_BODY,
+                )
+                ex = fake_execute({
+                    "wire-read": _parent_resp(provider, issue),
+                })
+                with mock.patch.object(
+                        F.ops, "run_status", side_effect=status_noop):
+                    out = F.sync(
+                        flow, SPEC_ID, op="pull", event="interview",
+                        flow_file=_flow_file(root),
+                        body_file=_body_file(root, FLOW_BODY),
+                        comments_file=_comments_file(root),
+                        execute=ex,
+                    )
+                self.assertNotIsInstance(out, TrackerError, out)
+                saved = json.loads(
+                    (flow / "specs" / f"{SPEC_ID}.json")
+                    .read_text(encoding="utf-8"))
+                self.assertTrue(saved["ready"])
+                self.assertEqual(out["readiness"]["kind"], "updated")
+
+    def test_false_projection_proves_ready_state_still_exists(self) -> None:
+        cases = [
+            ("github", gh_cfg(), _gh_issue(FLOW_BODY),
+             ok({"name": "Ready"})),
+            ("gitlab", gl_cfg(), _gl_issue(FLOW_BODY),
+             ok([{"name": "Ready"}])),
+            ("linear", ln_cfg(), _ln_issue(FLOW_BODY),
+             ok({"data": {"workflowStates": {
+                 "nodes": [{"name": "Ready"}],
+                 "pageInfo": {"hasNextPage": False},
+             }}})),
+            ("jira", jr_cfg(), _jr_issue(FLOW_BODY),
+             ok([{"statuses": [{"name": "Ready for Work"}]}])),
+        ]
+        for provider, config, raw_issue, exists_response in cases:
+            with self.subTest(provider=provider), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                flow = root / ".flow"
+                config["tracker"]["readyState"] = (
+                    "Ready for Work" if provider == "jira" else "Ready")
+                durable, display = {
+                    "github": (GH_NODE, "#42"),
+                    "gitlab": (str(GL_ID), "g/p#12"),
+                    "linear": (LN_UUID, "WOR-17"),
+                    "jira": (JR_ID, "SCRUM-1"),
+                }[provider]
+                path = _write_flow(
+                    flow, config,
+                    tracker=_linked(id=durable, identifier=display))
+                spec = json.loads(path.read_text(encoding="utf-8"))
+                spec["ready"] = True
+                path.write_text(json.dumps(spec), encoding="utf-8")
+                issue = W.dispatch(
+                    "read", config,
+                    locator={"durable": durable, "display": display},
+                    execute=fake_execute({
+                        "wire-read": _parent_resp(provider, raw_issue)}))
+                self.assertNotIsInstance(issue, TrackerError)
+                ex = fake_execute({
+                    "facade-readiness-exists": exists_response})
+                out = F.ops.project_readiness(
+                    flow, SPEC_ID, issue=issue, config=config,
+                    provider=provider,
+                    locator={"durable": durable, "display": display},
+                    execute=ex,
+                )
+                self.assertEqual(out["kind"], "updated", out)
+                saved = json.loads(path.read_text(encoding="utf-8"))
+                self.assertFalse(saved["ready"])
+
+
 # ---------------------------------------------------------------------------
 # Pull: wire read inside the claimed sync-body transaction (PR #246 review)
 # ---------------------------------------------------------------------------
@@ -1462,6 +1735,9 @@ class PullReadInsideClaim(unittest.TestCase):
             flow = root / ".flow"
             _write_flow(flow, gh_cfg(), tracker=_linked(), spec_md=FLOW_BODY)
             rec_path = flow / "create-first" / f"syncbody-{SPEC_ID}.json"
+            ff = _flow_file(root)
+            bf = _body_file(root, "remote edit body\n")
+            cf = _comments_file(root)
             inner: dict = {}
 
             def racing_read(req):
@@ -1476,11 +1752,17 @@ class PullReadInsideClaim(unittest.TestCase):
                 inner["ex"] = fake_execute({})
                 inner["out"] = F.sync(flow, SPEC_ID, op="pull",
                                       event="interview",
+                                      flow_file=ff, body_file=bf,
+                                      comments_file=cf,
                                       execute=inner["ex"])
                 return ok(_gh_issue("remote edit body\n"))
 
-            ex = fake_execute({"wire-read": racing_read})
+            ex = fake_execute({
+                "wire-read": racing_read,
+                "status-parent-read": ok(_gh_issue("remote edit body\n")),
+            })
             out = F.sync(flow, SPEC_ID, op="pull", event="interview",
+                         flow_file=ff, body_file=bf, comments_file=cf,
                          execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             expected = SB.trackerBodyForMerge("remote edit body\n")
@@ -1515,6 +1797,9 @@ class PullReadInsideClaim(unittest.TestCase):
 
             ex = fake_execute({"wire-read": repoint_then_read})
             out = F.sync(flow, SPEC_ID, op="pull", event="interview",
+                         flow_file=_flow_file(root),
+                         body_file=_body_file(root, "OLD ISSUE BODY\n"),
+                         comments_file=_comments_file(root),
                          execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.CONFLICT)
@@ -1569,6 +1854,9 @@ class PullReadInsideClaim(unittest.TestCase):
             with mock.patch.object(SB, "_claim_sync_body",
                                    side_effect=claim_then_repoint):
                 out = F.sync(flow, SPEC_ID, op="pull", event="interview",
+                             flow_file=_flow_file(root),
+                             body_file=_body_file(root, "NEW ISSUE BODY\n"),
+                             comments_file=_comments_file(root),
                              execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(out["tracker_id"], self.NEW_ID)
@@ -1606,7 +1894,10 @@ class PullReadInsideClaim(unittest.TestCase):
                     F.ops, "write_aggregate_receipt",
                     side_effect=inspect_claim):
                 out = F.sync(
-                    flow, SPEC_ID, op="pull", event="interview", execute=ex)
+                    flow, SPEC_ID, op="pull", event="interview",
+                    flow_file=_flow_file(root),
+                    body_file=_body_file(root, "remote edit body\n"),
+                    comments_file=_comments_file(root), execute=ex)
 
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(observed["claim"]["op"], "facade-pull")
@@ -1981,6 +2272,7 @@ class FacadeOuterClaim(unittest.TestCase):
             ))
             ff = _flow_file(root)
             bf = _body_file(root, FLOW_BODY)
+            cf = _comments_file(root)
             rec_path = flow / "create-first" / f"facade-{SPEC_ID}.json"
             seen: dict = {}
 
@@ -1993,7 +2285,9 @@ class FacadeOuterClaim(unittest.TestCase):
             responses["wire-read"] = assert_claimed_read
             ex = fake_execute(responses)
             out = F.sync(flow, SPEC_ID, op="reconcile", event="plan",
-                         flow_file=ff, body_file=bf, execute=ex)
+                         flow_file=ff, body_file=bf,
+                         comments_file=cf, source_body_file=bf,
+                         execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(seen["claim"], ("pending", "facade-reconcile"))
             self.assertFalse(rec_path.exists(), "facade claim released")
@@ -2010,13 +2304,17 @@ class FacadeOuterClaim(unittest.TestCase):
             _write_flow(flow, gh_cfg(), tracker=_linked())
             ff = _flow_file(root)
             bf = _body_file(root, merged)
+            cf = _comments_file(root)
+            source = _source_body_file(root, initial)
             ex = fake_execute({
                 "wire-read": ok(_gh_issue(initial)),
                 "sync-body-parent-read": ok(_gh_issue(concurrent)),
             })
 
             out = F.sync(flow, SPEC_ID, op="reconcile", event="plan",
-                         flow_file=ff, body_file=bf, execute=ex)
+                         flow_file=ff, body_file=bf,
+                         comments_file=cf, source_body_file=source,
+                         execute=ex)
 
             self.assertIsInstance(out, TrackerError, msg=repr(out))
             self.assertIs(out.cls, ErrorClass.CONFLICT)
@@ -2024,7 +2322,8 @@ class FacadeOuterClaim(unittest.TestCase):
             self.assertTrue(out.auto_retryable)
             self.assertEqual(
                 [c.op for c in ex.calls],
-                ["wire-read", "sync-body-parent-read"],
+                ["wire-read", "wire-comment-list",
+                 "sync-body-parent-read"],
                 "the changed body is detected before the tracker update",
             )
             self.assertFalse(any(c.op == "wire-update" for c in ex.calls))
@@ -2115,15 +2414,20 @@ class FacadeMatrix(unittest.TestCase):
             elif op == "pull":
                 remote = "tracker-side body for pull\n"
                 issue = mk_issue(remote)
-                ex = fake_execute({
+                responses = {
+                    **_status_noop_responses(provider, issue),
                     "wire-read": _parent_resp(provider, issue),
                     # Poisoned second read must never fire.
                     "sync-body-parent-read": _parent_resp(
                         provider, mk_issue("POISON")),
-                })
+                }
+                ex = fake_execute(responses)
                 with mock.patch.dict(os.environ, env, clear=False):
                     payload, code = F.run(
                         flow, spec_id=SPEC_ID, op="pull", event="interview",
+                        flow_file=_flow_file(root, FLOW_BODY),
+                        body_file=_body_file(root, remote),
+                        comments_file=_comments_file(root),
                         execute=ex)
                 data = json.loads(payload)
                 self.assertTrue(data["success"], data)
@@ -2145,6 +2449,7 @@ class FacadeMatrix(unittest.TestCase):
             elif op == "reconcile":
                 ff = _flow_file(root, FLOW_BODY)
                 bf = _body_file(root, FLOW_BODY)
+                cf = _comments_file(root)
                 # No prior base: seed both halves from matching tracker body.
                 path = flow / "specs" / f"{SPEC_ID}.json"
                 spec = json.loads(path.read_text(encoding="utf-8"))
@@ -2157,7 +2462,9 @@ class FacadeMatrix(unittest.TestCase):
                 with mock.patch.dict(os.environ, env, clear=False):
                     payload, code = F.run(
                         flow, spec_id=SPEC_ID, op="reconcile", event="plan",
-                        flow_file=ff, body_file=bf, execute=ex)
+                        flow_file=ff, body_file=bf,
+                        comments_file=cf, source_body_file=bf,
+                        execute=ex)
                 data = json.loads(payload)
                 self.assertTrue(data["success"], data)
                 self.assertEqual(code, 0)

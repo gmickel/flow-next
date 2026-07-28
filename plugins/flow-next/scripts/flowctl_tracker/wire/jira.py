@@ -32,6 +32,15 @@ def _issue_out(raw: dict, *, parent_identity: str = "not_available") -> dict:
         "body": fields.get("description"),
         "url": None,
         "labels": list(fields.get("labels") or []),
+        "status": (
+            {"raw": fields["status"].get("name"),
+             "type": (
+                 fields["status"].get("statusCategory", {}).get("key")
+                 if isinstance(fields["status"].get("statusCategory"), dict)
+                 else None
+             )}
+            if isinstance(fields.get("status"), dict) else None
+        ),
         "raw": raw,
         "parent_identity": parent_identity,
     }

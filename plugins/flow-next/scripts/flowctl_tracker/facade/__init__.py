@@ -23,11 +23,15 @@ __all__ = ["run", "sync"]
 
 def sync(flow_dir, spec_id: str, *, op: str, event: str,
          flow_file: Optional[str] = None, body_file: Optional[str] = None,
+         comments_file: Optional[str] = None,
+         source_body_file: Optional[str] = None,
          execute: Execute = default_execute):
     """Compose one facade op. Returns data dict or TrackerError — never raises."""
     flow_dir = Path(flow_dir)
-    bad = validate_inputs(op, flow_file=flow_file, body_file=body_file,
-                          event=event)
+    bad = validate_inputs(
+        op, flow_file=flow_file, body_file=body_file,
+        comments_file=comments_file, source_body_file=source_body_file,
+        event=event)
     if bad:
         return bad
 
@@ -41,11 +45,16 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
                 flow_dir, spec_id, flow_file=flow_file or "",
                 body_file=body_file or "", event=event, execute=execute)
         if op == "pull":
-            return op_pull(flow_dir, spec_id, event=event, execute=execute)
+            return op_pull(
+                flow_dir, spec_id, flow_file=flow_file or "",
+                body_file=body_file or "", comments_file=comments_file or "",
+                event=event, execute=execute)
         if op == "reconcile":
             return op_reconcile(
                 flow_dir, spec_id, flow_file=flow_file or "",
-                body_file=body_file or "", event=event, execute=execute)
+                body_file=body_file or "", comments_file=comments_file or "",
+                source_body_file=source_body_file or "",
+                event=event, execute=execute)
         if op == "comment":
             return op_comment(
                 flow_dir, spec_id, body_file=body_file or "",
@@ -84,6 +93,8 @@ def _partial_failure(err: TrackerError) -> tuple[str, int]:
 def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
         event: Optional[str] = None, flow_file: Optional[str] = None,
         body_file: Optional[str] = None,
+        comments_file: Optional[str] = None,
+        source_body_file: Optional[str] = None,
         execute: Execute = default_execute) -> tuple[str, int]:
     """Thin envelope shell — never raises across the boundary."""
     config = read_config(flow_dir)
@@ -102,7 +113,9 @@ def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
             subtype="args"))
 
     out = sync(flow_dir, spec_id, op=op, event=event or "",
-               flow_file=flow_file, body_file=body_file, execute=execute)
+               flow_file=flow_file, body_file=body_file,
+               comments_file=comments_file,
+               source_body_file=source_body_file, execute=execute)
     if isinstance(out, TrackerError):
         if out.cls is ErrorClass.INACTIVE:
             return envelope.inactive()
