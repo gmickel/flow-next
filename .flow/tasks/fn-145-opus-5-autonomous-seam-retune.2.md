@@ -56,9 +56,8 @@ not silently suppress an otherwise interactive consent flow.
 
 
 ## Done summary
-TBD
-
+Implemented a shared exact autonomy predicate for every Codex-delegation consent and per-task ask site. Ralph, receipt, `FLOW_AUTONOMOUS=1`, and parsed `mode:autonomous` now suppress questions; absent consent continues standard Work without config writes, while interactive and persisted-consent behavior remains unchanged.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b1c8c90650394ec7671e718df9b2db40c0fd109a
+- Tests: cd plugins/flow-next/tests && python3 -m unittest -q test_codex_delegation_gates test_work_reached_path_routes (42 passed), git diff --check (passed)
 - PRs:
