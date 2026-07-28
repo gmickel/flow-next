@@ -39,19 +39,15 @@ If `REVIEW_RECEIPT_PATH` is set or `FLOW_RALPH=1`:
 
 ## Autonomous Mode (questions off, no receipt obligations)
 
-Before any gate, parse and strip autonomy:
+Before gates, treat this host-expanded block as literal prompt data, never shell:
 
-```bash
-AUTONOMOUS=0; WORK_ARGS=""
-for ARG in $ARGUMENTS; do
- case "$ARG" in
- mode:autonomous) AUTONOMOUS=1 ;;
- *) WORK_ARGS="${WORK_ARGS:+$WORK_ARGS }$ARG" ;;
- esac
-done
-[[ "${FLOW_AUTONOMOUS:-}" == "1" ]] && AUTONOMOUS=1
-export AUTONOMOUS
-```
+<work-arguments>
+$ARGUMENTS
+</work-arguments>
+
+Strip standalone whitespace token `mode:autonomous` into `WORK_ARGS`; preserve
+all else verbatim (spaces/quotes/globs). Set/export `AUTONOMOUS=1` if found or
+`FLOW_AUTONOMOUS=1`; otherwise set/export `AUTONOMOUS=0`.
 
 Continue with `WORK_ARGS`; carry the exported marker into later shell fragments.
 If `AUTONOMOUS=1`:

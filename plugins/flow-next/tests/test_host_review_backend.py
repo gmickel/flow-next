@@ -186,23 +186,25 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 "tests/lints",
                 "commit the fixes before re-review",
                 "<promise>RETRY</promise>",
-                "Continue until `SHIP` or the deterministic round cap",
             ):
                 self.assertIn(
                     required.lower(),
                     host_lower,
                     f"{skill}: incomplete host workflow",
                 )
+            self.assertIn("deterministic round cap", host_lower)
             self.assertNotIn("Return the verdict", host)
 
     def test_completion_status_has_one_shared_owner(self) -> None:
         root = _read("flow-next-spec-completion-review/SKILL.md")
         host = _read("flow-next-spec-completion-review/workflow-host.md")
+        rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         work = _read("flow-next-work/phases.md")
         pilot = _read("flow-next-pilot/workflow.md")
         command = "$FLOWCTL spec set-completion-review-status"
-        self.assertEqual(root.count(command), 2, "shared owner needs both terminal writes")
+        self.assertEqual(root.count(command), 1, "shared owner must issue one status write")
         self.assertNotIn(command, host, "selected host workflow must never write status")
+        self.assertNotIn(command, rp, "selected rp workflow must never write status")
         self.assertNotIn(command, work, "work caller must never repeat the status write")
         self.assertIn("This shared step is the sole writer for host and rp", root)
         self.assertIn("never write completion status", root)
@@ -215,3 +217,38 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             pilot,
         )
         self.assertNotIn("or write status here", host)
+
+    def test_capped_completion_status_precedes_exit(self) -> None:
+        root = _read("flow-next-spec-completion-review/SKILL.md")
+        write_at = root.index("$FLOWCTL spec set-completion-review-status")
+        terminal_at = root.index(
+            'echo "ESCALATE: completion-review did not converge',
+            write_at,
+        )
+        exit_at = root.index("exit 4", terminal_at)
+        self.assertLess(write_at, terminal_at)
+        self.assertLess(terminal_at, exit_at)
+        self.assertIn(
+            "An exit-4 cap refusal before this run has delivered a completion "
+            "verdict is\nnon-terminal for completion status",
+            root,
+        )
+
+    def test_host_completion_uses_shared_cap_attempt_lifecycle(self) -> None:
+        host = _read("flow-next-spec-completion-review/workflow-host.md")
+        self.assertIn(
+            '$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json',
+            host,
+        )
+        self.assertIn(
+            '$FLOWCTL review-rounds record "$SPEC_ID" --kind plan',
+            host,
+        )
+        self.assertIn("--review-type completion --backend host", host)
+        self.assertIn(
+            '$FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json',
+            host,
+        )
+        self.assertIn("(`REVIEW_ROUND == REVIEW_CAP`)", host)
+        self.assertIn("<verdict>SHIP</verdict>", host)
+        self.assertIn("<verdict>NEEDS_WORK</verdict>", host)

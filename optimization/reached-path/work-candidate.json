@@ -11,7 +11,7 @@
     "result": "OK: work inputs match B1 (4 files)"
   },
   "prompt_hashes": {
-    "plugins/flow-next/skills/flow-next-work/SKILL.md": "6180a319dbf7f5a265b83a1d6bdd25f22152480ed15195492a2d70b4e710f425",
+    "plugins/flow-next/skills/flow-next-work/SKILL.md": "c6b319c27827270f4bb5eeb9a7d71c96d0312266a485b31de6efc3a20702e6dd",
     "plugins/flow-next/skills/flow-next-work/phases.md": "b0b9da2933e7f55708bc345e5b15af916a711fc08ce0904fcf1f2a4e521b6b24",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "1e72fe556e16476e2a71da32536792703a69cfc7dd5f65a4215ce595f4445858",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "9853594ad12db98edafc83780b266f5f7cc95a1090acade3a178c890e1d43a3b",
@@ -21,13 +21,13 @@
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
       "baseline_reached_path_chars": 51330,
-      "candidate_reached_path_chars": 51279,
+      "candidate_reached_path_chars": 51328,
       "reduction_chars": 3730,
       "reduction_percent": 6.86
     },
     "delegation_active_path": {
       "baseline_reached_path_chars": 102426,
-      "candidate_reached_path_chars": 102375,
+      "candidate_reached_path_chars": 102424,
       "reduction_chars": 427,
       "reduction_percent": 0.42
     },
@@ -77,6 +77,12 @@
         "date": "2026-07-28",
         "reason": "The direct mode:autonomous token now executes a top-level parser that exports AUTONOMOUS=1 before delegation consent and strips the token from downstream Work input.",
         "baseline_note": "Executable parser proof adds 123 characters to both paths. Default and delegation-active paths remain 51 characters below their rebased ratchet baselines."
+      },
+      {
+        "spec": "fn-145-pr-review-literal-arguments",
+        "date": "2026-07-28",
+        "reason": "Host-expanded Work arguments now stay literal prompt data while the standalone mode:autonomous token is stripped agentically, preventing shell glob expansion and word splitting.",
+        "baseline_note": "The literal-data contract adds 49 characters to both paths and leaves a 2-character margin below the rebased ratchet baselines."
       }
     ]
   },

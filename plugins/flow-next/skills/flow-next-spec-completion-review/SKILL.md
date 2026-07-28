@@ -156,12 +156,25 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 **CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use AskUserQuestion in this loop.**
 
 **MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
-flowctl reserves a round before dispatch. Verdict-bearing attempts consume it;
-no-verdict transport failures are recorded and refunded. At
-`${MAX_REVIEW_ITERATIONS:-4}` verdict rounds, stop with `ESCALATE:` + exit 4.
-More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive transport failures
-stop separately with `TRANSPORT_UNHEALTHY` + exit 5; never reset the verdict
-counter for transport health.
+The codex/copilot/cursor handlers reserve a round before dispatch; the selected
+rp/host workflows call the same `review-rounds` reserve/record surface.
+Verdict-bearing attempts consume the reservation; no-verdict transport failures
+are recorded and refunded.
+
+When a delivered `NEEDS_WORK` consumes round
+`${MAX_REVIEW_ITERATIONS:-4}`, it is the terminal capped verdict:
+
+- codex/copilot/cursor already self-wrote `needs_work` while handling that
+  verdict; do not duplicate it.
+- host/rp continue to Step 3 immediately, write `needs_work` exactly once, then
+  emit `ESCALATE:` and exit 4. Do not attempt another reserve/dispatch first.
+
+An exit-4 cap refusal before this run has delivered a completion verdict is
+non-terminal for completion status: surface `ESCALATE:` / `NEEDS_HUMAN` and do
+not invent a `needs_work` write. More than
+`${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive transport failures stop
+separately with `TRANSPORT_UNHEALTHY` + exit 5; never write completion status or
+reset the verdict counter for transport health.
 
 **ANTI-PATTERN (never do either):** (1) a delivered verdict is never a
 transport failure. Once flowctl parses `VERDICT=...` the round is consumed and
@@ -183,7 +196,9 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
    - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
      re-review path.
    - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
-5. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap above breaks the loop (escalate with surviving gaps)
+5. **Repeat** until `<verdict>SHIP</verdict>` — or a delivered `NEEDS_WORK`
+   consumes the final round. On that final host/rp verdict, run Step 3 before
+   the cap terminal; never rely on a later step after exit 4.
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
 
@@ -192,13 +207,30 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 `flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.** The standalone command remains for rp and for repairing a missed write:
 
 ```bash
-# Final verdict resolved to SHIP → ship; NEEDS_WORK at the iteration cap → needs_work.
-# This shared step is the sole writer for host and rp. Skip when the backend
-# handler already wrote status (codex/copilot/cursor).
-$FLOWCTL spec set-completion-review-status "$SPEC_ID" --status ship --json        # on SHIP
-$FLOWCTL spec set-completion-review-status "$SPEC_ID" --status needs_work --json  # on NEEDS_WORK at cap
+# This shared step is the sole writer for host and rp. Skip the entire block
+# when codex/copilot/cursor already wrote status in its handler.
+TERMINAL_STATUS=""
+if [[ "$VERDICT" == "SHIP" ]]; then
+  TERMINAL_STATUS="ship"
+elif [[ "$VERDICT" == "NEEDS_WORK" \
+  && "$REVIEW_ROUND" -ge "$REVIEW_CAP" ]]; then
+  TERMINAL_STATUS="needs_work"
+fi
+
+if [[ -n "$TERMINAL_STATUS" ]]; then
+  $FLOWCTL spec set-completion-review-status "$SPEC_ID" \
+    --status "$TERMINAL_STATUS" --json
+fi
+
+# The capped status write above MUST complete before this terminal.
+if [[ "$TERMINAL_STATUS" == "needs_work" ]]; then
+  echo "ESCALATE: completion-review did not converge in ${REVIEW_CAP} verdict rounds"
+  exit 4
+fi
 ```
 
 For host and rp, write once on BOTH terminal paths (SHIP and capped-NEEDS_WORK).
+The capped write happens immediately after the final verdict is recorded and
+before `ESCALATE:` / exit 4; no later control flow is assumed.
 `NEEDS_HUMAN`, transport failure, malformed verdict, and retry outcomes are
 non-terminal and never write completion status.

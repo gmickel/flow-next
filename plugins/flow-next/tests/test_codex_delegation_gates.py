@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -83,20 +84,94 @@ def _extract_bash_func(text: str, func_name: str) -> str:
     raise AssertionError(f"unbalanced braces extracting {func_name!r}")
 
 
-def _extract_bash_block_after(text: str, heading: str) -> str:
-    """Extract the first fenced bash block after a stable heading."""
-    start = text.find(heading)
+def _extract_work_argument_block(text: str) -> str:
+    """Return the host-substitution slot, which must remain outside shell."""
+    start_marker = "<work-arguments>\n"
+    end_marker = "\n</work-arguments>"
+    start = text.find(start_marker)
     if start == -1:
-        raise AssertionError(f"heading {heading!r} not found")
-    region = text[start:]
-    fence_start = region.find("```bash")
-    if fence_start == -1:
-        raise AssertionError(f"bash fence not found after {heading!r}")
-    body_start = region.find("\n", fence_start) + 1
-    body_end = region.find("```", body_start)
-    if body_start == 0 or body_end == -1:
-        raise AssertionError(f"unterminated bash fence after {heading!r}")
-    return region[body_start:body_end]
+        raise AssertionError("literal work-arguments block not found")
+    start += len(start_marker)
+    end = text.find(end_marker, start)
+    if end == -1:
+        raise AssertionError("literal work-arguments block is unterminated")
+    return text[start:end]
+
+
+def _strip_standalone_autonomous_token(raw: str) -> tuple[int, str]:
+    """Executable oracle for the prompt's literal, whitespace-token contract."""
+    pattern = re.compile(r"(?<!\S)mode:autonomous(?!\S)")
+    matches = list(pattern.finditer(raw))
+    result = raw
+    for match in reversed(matches):
+        start, end = match.span()
+        if end < len(result) and result[end].isspace():
+            end += 1
+        elif start > 0 and result[start - 1].isspace():
+            start -= 1
+        result = result[:start] + result[end:]
+    return (1 if matches else 0), result
+
+
+class WorkArgumentLiteralContract(unittest.TestCase):
+    """The host expands raw skill arguments once; Work must keep them out of shell."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.skills = {
+            "canonical": SKILL_MD.read_text(encoding="utf-8"),
+            "codex": CODEX_SKILL_MD.read_text(encoding="utf-8"),
+        }
+
+    def test_argument_placeholder_is_literal_data_not_shell_input(self) -> None:
+        for label, skill in self.skills.items():
+            with self.subTest(host=label):
+                self.assertEqual(_extract_work_argument_block(skill), "$ARGUMENTS")
+                autonomy = skill.split(
+                    "## Autonomous Mode (questions off, no receipt obligations)", 1
+                )[1].split("## Input", 1)[0]
+                self.assertNotIn("for ARG in $ARGUMENTS", autonomy)
+                self.assertIn("literal prompt data", autonomy)
+                self.assertIn("never shell", autonomy)
+                self.assertIn("preserve\nall else verbatim", autonomy)
+                self.assertIn("spaces/quotes/globs", autonomy)
+
+    def test_glob_and_spaces_survive_host_substitution_and_strip(self) -> None:
+        cases = (
+            (
+                "handle *.md files mode:autonomous",
+                1,
+                "handle *.md files",
+            ),
+            (
+                '"handle *.md files" mode:autonomous',
+                1,
+                '"handle *.md files"',
+            ),
+            (
+                "preserve  repeated spaces and [abc]*.md",
+                0,
+                "preserve  repeated spaces and [abc]*.md",
+            ),
+            (
+                "mode:autonomous handle *.md files",
+                1,
+                "handle *.md files",
+            ),
+        )
+        for label, skill in self.skills.items():
+            for raw, expected_mode, expected_args in cases:
+                with self.subTest(host=label, raw=raw):
+                    rendered = skill.replace("$ARGUMENTS", raw)
+                    self.assertEqual(_extract_work_argument_block(rendered), raw)
+                    self.assertEqual(
+                        _strip_standalone_autonomous_token(raw),
+                        (expected_mode, expected_args),
+                    )
+
+    def test_embedded_autonomy_text_is_not_a_mode_token(self) -> None:
+        raw = "document mode:autonomous-like behavior in *.md"
+        self.assertEqual(_strip_standalone_autonomous_token(raw), (0, raw))
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash required to execute gate predicates")
@@ -127,17 +202,13 @@ class CodexDelegationGateExecution(unittest.TestCase):
             .replace("\r\n", "\n")
             .replace("\r", "\n")
         )
-        cls.autonomous_parser = _extract_bash_block_after(
-            skill_text, "## Autonomous Mode (questions off, no receipt obligations)"
-        )
+        cls.skill_text = skill_text
         codex_skill_text = (
             CODEX_SKILL_MD.read_text(encoding="utf-8")
             .replace("\r\n", "\n")
             .replace("\r", "\n")
         )
-        cls.codex_autonomous_parser = _extract_bash_block_after(
-            codex_skill_text, "## Autonomous Mode (questions off, no receipt obligations)"
-        )
+        cls.codex_skill_text = codex_skill_text
         cls.platform_fn = _extract_bash_func(cls.ref_text, "platform_gate_ok")
         cls.recursion_fn = _extract_bash_func(cls.ref_text, "not_inside_codex_sandbox")
         cls.ref_headless_fn = _extract_bash_func(
@@ -334,16 +405,20 @@ class CodexDelegationGateExecution(unittest.TestCase):
         self.assertEqual(self.selection_headless_fn, self.ref_headless_fn)
 
     def test_direct_autonomous_token_materializes_marker_before_consent(self) -> None:
-        for label, parser in (
-            ("canonical", self.autonomous_parser),
-            ("codex", self.codex_autonomous_parser),
+        for label, skill in (
+            ("canonical", self.skill_text),
+            ("codex", self.codex_skill_text),
         ):
             with self.subTest(host=label):
+                mode, work_args = _strip_standalone_autonomous_token(
+                    "fn-145 mode:autonomous delegate:codex"
+                )
+                self.assertIn("Set/export `AUTONOMOUS=1`", skill)
                 proc = self._run_script(
                     "\n".join(
                         (
-                            "ARGUMENTS='fn-145 mode:autonomous delegate:codex'",
-                            parser,
+                            f"AUTONOMOUS={mode}",
+                            f"WORK_ARGS={work_args!r}",
                             self.selection_headless_fn,
                             '[ "$AUTONOMOUS" = "1" ]',
                             '[ "$WORK_ARGS" = "fn-145 delegate:codex" ]',
@@ -360,11 +435,14 @@ class CodexDelegationGateExecution(unittest.TestCase):
                 )
 
     def test_interactive_parse_preserves_consent_question_path(self) -> None:
+        mode, work_args = _strip_standalone_autonomous_token(
+            "fn-145 delegate:codex"
+        )
         proc = self._run_script(
             "\n".join(
                 (
-                    "ARGUMENTS='fn-145 delegate:codex'",
-                    self.autonomous_parser,
+                    f"AUTONOMOUS={mode}",
+                    f"WORK_ARGS={work_args!r}",
                     self.selection_headless_fn,
                     '[ "$AUTONOMOUS" = "0" ]',
                     '[ "$WORK_ARGS" = "fn-145 delegate:codex" ]',
@@ -380,11 +458,16 @@ class CodexDelegationGateExecution(unittest.TestCase):
         )
 
     def test_flow_autonomous_env_materializes_same_marker(self) -> None:
+        mode, work_args = _strip_standalone_autonomous_token(
+            "fn-145 delegate:codex"
+        )
         proc = self._run_script(
             "\n".join(
                 (
-                    "ARGUMENTS='fn-145 delegate:codex'",
-                    self.autonomous_parser,
+                    f"AUTONOMOUS={mode}",
+                    f"WORK_ARGS={work_args!r}",
+                    '[[ "${FLOW_AUTONOMOUS:-}" == "1" ]] && AUTONOMOUS=1',
+                    "export AUTONOMOUS",
                     self.selection_headless_fn,
                     '[ "$AUTONOMOUS" = "1" ]',
                     "delegation_headless",

@@ -24,6 +24,24 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 
 ## Step 2: Dispatch read-only reviewer subagent
 
+Before **every** host dispatch, including the first, reserve the shared
+spec-scoped completion-review round:
+
+```bash
+ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
+ROUND_EXIT=$?
+if [[ "$ROUND_EXIT" -ne 0 ]]; then
+  printf '%s\n' "$ROUND_JSON"
+  exit "$ROUND_EXIT"
+fi
+REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
+REVIEW_CAP="$(printf '%s' "$ROUND_JSON" | jq -r '.cap')"
+```
+
+Exit 4 / `ESCALATE:` before a reviewer runs means no completion verdict was
+delivered in this run. Stop without writing completion status; autonomous
+callers surface `NEEDS_HUMAN`.
+
 Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
 
 | Host | How to pin |
@@ -39,9 +57,24 @@ Give the subagent:
 - Task list + evidence that work claims done
 - Diff / implementation surfaces to check compliance (not code-quality taste — that is impl-review)
 - Prior findings for convergence (on re-review)
-- Required verdict tags: `SHIP` / `NEEDS_WORK`
+- Required exact verdict tags: `<verdict>SHIP</verdict>` /
+  `<verdict>NEEDS_WORK</verdict>`
 
 Wait for the subagent result (blocking — do not background).
+
+Write the exact reviewer result to a spec-scoped temporary response file, then
+finalize the reservation through the shared attempt recorder:
+
+```bash
+RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.md"
+# Write the exact reviewer output to RESPONSE_FILE; do not reinterpret it.
+$FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+  --review-type completion --backend host --output-file "$RESPONSE_FILE" --json
+```
+
+A malformed/missing verdict is a transport failure: the recorder refunds the
+reservation and may stop with exit 5 / `TRANSPORT_UNHEALTHY`. Never turn it into
+`NEEDS_WORK`, and never write completion status for that path.
 
 ## Step 3: Receipt
 
@@ -78,8 +111,13 @@ run. This host workflow never writes terminal completion status.
 - `NEEDS_WORK`: parse every valid gap, fix the implementation, run the relevant
   tests/lints, and commit the fixes before re-review. Then repeat Steps 1–3
   with a **new** read-only subagent, the same cross-family rules, and prior
-  findings in its prompt. Continue until `SHIP` or the deterministic round cap;
-  a capped `NEEDS_WORK` then continues to SKILL.md Step 3.
+  findings in its prompt. At the deterministic round cap
+  (`REVIEW_ROUND == REVIEW_CAP`), do not start another fix/re-review cycle:
+  continue immediately to SKILL.md Step 3, write terminal `needs_work` there
+  exactly once, then emit `ESCALATE:` and exit 4.
+- After `SHIP`, reset the shared plan counter, then continue immediately to
+  SKILL.md Step 3 for the sole `ship` status write:
+  `$FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json`.
 - `NEEDS_HUMAN`, dispatch failure, malformed verdict, receipt failure, or retry
   outcome: stop without writing completion status. Dispatch/transport failures
   output `<promise>RETRY</promise>`; never self-issue a verdict or switch
