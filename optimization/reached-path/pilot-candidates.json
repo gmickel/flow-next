@@ -48,7 +48,7 @@
         "strict backlog route requires a top-to-bottom direct-reference read",
         "backlog reference retains ASKED and dry-run-only TRIAGED grammar",
         "workflow status-owner prose changed while action-site safety, strikes, receipts, failures, tracker dispatch, and terminals remain regression-covered",
-        "qa-stage reference hash unchanged from B1"
+        "qa-stage gate remains conditional and fail-open; the reference computes freshness while workflow.md retains classification ownership"
       ],
       "discard_reason": null
     }
