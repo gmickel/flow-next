@@ -57,9 +57,11 @@ terminal outcomes or broaden the wording sweep into machine-readable contracts.
 
 
 ## Done summary
-TBD
-
+Replaced false same-session control-transfer wording in Pilot, Work, and Plan
+Review with explicit read, execute, and continue instructions. Preserved
+default-off/fail-open gates and genuine terminal verdicts. Added canonical and
+Codex mirror prose/reached-path regression coverage.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d58e69f0
+- Tests: cd plugins/flow-next/tests && python3 -m unittest -q test_pilot_backlog_mirror_safety test_skill_prose_diet test_work_reached_path_routes test_prompt_text_pinned (98 passed, worker), fresh read-only host quality review (SHIP; 57 focused tests passed)
 - PRs:
