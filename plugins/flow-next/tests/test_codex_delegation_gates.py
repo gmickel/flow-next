@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -29,17 +30,30 @@ import unittest
 # gate's `env | grep` actually run. A bare custom env strips those and breaks
 # bash on Windows (every gate test fails rc=1). `OPENCODE_*` is matched by prefix.
 _GATE_ENV_KEYS = (
+    "AUTONOMOUS",
     "CLAUDECODE",
     "CODEX_SANDBOX",
     "CODEX_SANDBOX_NETWORK_DISABLED",
     "DROID_PLUGIN_ROOT",
+    "FLOW_AUTONOMOUS",
+    "FLOW_RALPH",
     "OPENCODE",
+    "REVIEW_RECEIPT_PATH",
 )
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 WORK_SKILL = REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-work"
 SKILL_MD = WORK_SKILL / "SKILL.md"
+CODEX_SKILL_MD = (
+    REPO_ROOT
+    / "plugins"
+    / "flow-next"
+    / "codex"
+    / "skills"
+    / "flow-next-work"
+    / "SKILL.md"
+)
 PHASES_MD = WORK_SKILL / "phases.md"
 REFERENCE_MD = WORK_SKILL / "references" / "codex-delegation.md"
 SELECTION_MD = WORK_SKILL / "references" / "codex-delegation-selection.md"
@@ -70,6 +84,96 @@ def _extract_bash_func(text: str, func_name: str) -> str:
     raise AssertionError(f"unbalanced braces extracting {func_name!r}")
 
 
+def _extract_work_argument_block(text: str) -> str:
+    """Return the host-substitution slot, which must remain outside shell."""
+    start_marker = "<work-arguments>\n"
+    end_marker = "\n</work-arguments>"
+    start = text.find(start_marker)
+    if start == -1:
+        raise AssertionError("literal work-arguments block not found")
+    start += len(start_marker)
+    end = text.find(end_marker, start)
+    if end == -1:
+        raise AssertionError("literal work-arguments block is unterminated")
+    return text[start:end]
+
+
+def _strip_standalone_autonomous_token(raw: str) -> tuple[int, str]:
+    """Executable oracle for the prompt's literal, whitespace-token contract."""
+    pattern = re.compile(r"(?<!\S)mode:autonomous(?!\S)")
+    matches = list(pattern.finditer(raw))
+    result = raw
+    for match in reversed(matches):
+        start, end = match.span()
+        if end < len(result) and result[end].isspace():
+            end += 1
+        elif start > 0 and result[start - 1].isspace():
+            start -= 1
+        result = result[:start] + result[end:]
+    return (1 if matches else 0), result
+
+
+class WorkArgumentLiteralContract(unittest.TestCase):
+    """The host expands raw skill arguments once; Work must keep them out of shell."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.skills = {
+            "canonical": SKILL_MD.read_text(encoding="utf-8"),
+            "codex": CODEX_SKILL_MD.read_text(encoding="utf-8"),
+        }
+
+    def test_argument_placeholder_is_literal_data_not_shell_input(self) -> None:
+        for label, skill in self.skills.items():
+            with self.subTest(host=label):
+                self.assertEqual(_extract_work_argument_block(skill), "$ARGUMENTS")
+                autonomy = skill.split(
+                    "## Autonomous Mode (questions off, no receipt obligations)", 1
+                )[1].split("## Input", 1)[0]
+                self.assertNotIn("for ARG in $ARGUMENTS", autonomy)
+                self.assertIn("literal prompt data", autonomy)
+                self.assertIn("never shell", autonomy)
+                self.assertIn("preserve\nall else verbatim", autonomy)
+                self.assertIn("spaces/quotes/globs", autonomy)
+
+    def test_glob_and_spaces_survive_host_substitution_and_strip(self) -> None:
+        cases = (
+            (
+                "handle *.md files mode:autonomous",
+                1,
+                "handle *.md files",
+            ),
+            (
+                '"handle *.md files" mode:autonomous',
+                1,
+                '"handle *.md files"',
+            ),
+            (
+                "preserve  repeated spaces and [abc]*.md",
+                0,
+                "preserve  repeated spaces and [abc]*.md",
+            ),
+            (
+                "mode:autonomous handle *.md files",
+                1,
+                "handle *.md files",
+            ),
+        )
+        for label, skill in self.skills.items():
+            for raw, expected_mode, expected_args in cases:
+                with self.subTest(host=label, raw=raw):
+                    rendered = skill.replace("$ARGUMENTS", raw)
+                    self.assertEqual(_extract_work_argument_block(rendered), raw)
+                    self.assertEqual(
+                        _strip_standalone_autonomous_token(raw),
+                        (expected_mode, expected_args),
+                    )
+
+    def test_embedded_autonomy_text_is_not_a_mode_token(self) -> None:
+        raw = "document mode:autonomous-like behavior in *.md"
+        self.assertEqual(_strip_standalone_autonomous_token(raw), (0, raw))
+
+
 @unittest.skipUnless(shutil.which("bash"), "bash required to execute gate predicates")
 @unittest.skipIf(
     sys.platform == "win32",
@@ -93,8 +197,31 @@ class CodexDelegationGateExecution(unittest.TestCase):
             .replace("\r\n", "\n")
             .replace("\r", "\n")
         )
+        skill_text = (
+            SKILL_MD.read_text(encoding="utf-8")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+        )
+        cls.skill_text = skill_text
+        codex_skill_text = (
+            CODEX_SKILL_MD.read_text(encoding="utf-8")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+        )
+        cls.codex_skill_text = codex_skill_text
         cls.platform_fn = _extract_bash_func(cls.ref_text, "platform_gate_ok")
         cls.recursion_fn = _extract_bash_func(cls.ref_text, "not_inside_codex_sandbox")
+        cls.ref_headless_fn = _extract_bash_func(
+            cls.ref_text, "delegation_headless"
+        )
+        selection_text = (
+            SELECTION_MD.read_text(encoding="utf-8")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+        )
+        cls.selection_headless_fn = _extract_bash_func(
+            selection_text, "delegation_headless"
+        )
         # The cheap Phase 0 host short-circuit lives in phases.md/SKILL.md (it must
         # resolve delegation OFF on a non-Claude host BEFORE the reference is read,
         # so it cannot live in the reference itself). Extract + execute the shipped
@@ -106,9 +233,8 @@ class CodexDelegationGateExecution(unittest.TestCase):
         )
         cls.host_fn = _extract_bash_func(phases_text, "host_is_claude_code")
 
-    def _run(self, func_def: str, call: str, env: dict) -> int:
-        """Source the extracted function, call it, return its exit code."""
-        script = f"set -u\n{func_def}\n{call}\n"
+    def _run_script(self, script: str, env: dict) -> subprocess.CompletedProcess[str]:
+        """Run shipped shell text under a controlled gate-relevant environment."""
         # Start from a clean env so only the keys we set are present.
         # Inherit the OS env (PATH for bash + env/grep; SYSTEMROOT/WINDIR on
         # Windows Git-bash) but scrub every gate-relevant key first, then apply
@@ -120,13 +246,16 @@ class CodexDelegationGateExecution(unittest.TestCase):
             if k not in _GATE_ENV_KEYS and not k.startswith("OPENCODE_")
         }
         full_env.update(env)
-        proc = subprocess.run(
-            ["bash", "-c", script],
+        return subprocess.run(
+            ["bash", "-c", f"set -u\n{script}\n"],
             env=full_env,
             capture_output=True,
             text=True,
         )
-        return proc.returncode
+
+    def _run(self, func_def: str, call: str, env: dict) -> int:
+        """Source the extracted function, call it, return its exit code."""
+        return self._run_script(f"{func_def}\n{call}", env).returncode
 
     # ── Platform gate (rc 0 = eligible) ────────────────────────────────────
 
@@ -270,6 +399,126 @@ class CodexDelegationGateExecution(unittest.TestCase):
             rc, 0, "CODEX_SANDBOX_NETWORK_DISABLED set must trip the recursion guard"
         )
 
+    # ── Consent/ask marker family (rc 0 = no-question path) ────────────────
+
+    def test_consent_ask_sites_share_the_exact_headless_predicate(self) -> None:
+        self.assertEqual(self.selection_headless_fn, self.ref_headless_fn)
+
+    def test_direct_autonomous_token_materializes_marker_before_consent(self) -> None:
+        for label, skill in (
+            ("canonical", self.skill_text),
+            ("codex", self.codex_skill_text),
+        ):
+            with self.subTest(host=label):
+                mode, work_args = _strip_standalone_autonomous_token(
+                    "fn-145 mode:autonomous delegate:codex"
+                )
+                self.assertIn("Set/export `AUTONOMOUS=1`", skill)
+                proc = self._run_script(
+                    "\n".join(
+                        (
+                            f"AUTONOMOUS={mode}",
+                            f"WORK_ARGS={work_args!r}",
+                            self.selection_headless_fn,
+                            '[ "$AUTONOMOUS" = "1" ]',
+                            '[ "$WORK_ARGS" = "fn-145 delegate:codex" ]',
+                            "bash -c 'test \"$AUTONOMOUS\" = 1'",
+                            "delegation_headless",
+                        )
+                    ),
+                    {},
+                )
+                self.assertEqual(
+                    proc.returncode,
+                    0,
+                    f"{label} direct token must suppress consent: {proc.stderr}",
+                )
+
+    def test_interactive_parse_preserves_consent_question_path(self) -> None:
+        mode, work_args = _strip_standalone_autonomous_token(
+            "fn-145 delegate:codex"
+        )
+        proc = self._run_script(
+            "\n".join(
+                (
+                    f"AUTONOMOUS={mode}",
+                    f"WORK_ARGS={work_args!r}",
+                    self.selection_headless_fn,
+                    '[ "$AUTONOMOUS" = "0" ]',
+                    '[ "$WORK_ARGS" = "fn-145 delegate:codex" ]',
+                    "! delegation_headless",
+                )
+            ),
+            {},
+        )
+        self.assertEqual(
+            proc.returncode,
+            0,
+            f"ordinary direct invocation must remain interactive: {proc.stderr}",
+        )
+
+    def test_flow_autonomous_env_materializes_same_marker(self) -> None:
+        mode, work_args = _strip_standalone_autonomous_token(
+            "fn-145 delegate:codex"
+        )
+        proc = self._run_script(
+            "\n".join(
+                (
+                    f"AUTONOMOUS={mode}",
+                    f"WORK_ARGS={work_args!r}",
+                    '[[ "${FLOW_AUTONOMOUS:-}" == "1" ]] && AUTONOMOUS=1',
+                    "export AUTONOMOUS",
+                    self.selection_headless_fn,
+                    '[ "$AUTONOMOUS" = "1" ]',
+                    "delegation_headless",
+                )
+            ),
+            {"FLOW_AUTONOMOUS": "1"},
+        )
+        self.assertEqual(
+            proc.returncode,
+            0,
+            f"FLOW_AUTONOMOUS must reach the same no-question path: {proc.stderr}",
+        )
+
+    def test_each_autonomous_marker_suppresses_consent_questions(self) -> None:
+        cases = (
+            ("ralph", {"FLOW_RALPH": "1"}),
+            ("receipt", {"REVIEW_RECEIPT_PATH": "/tmp/review-receipt.json"}),
+            ("autonomous_env", {"FLOW_AUTONOMOUS": "1"}),
+            ("parsed_autonomous_token", {"AUTONOMOUS": "1"}),
+        )
+        for label, env in cases:
+            with self.subTest(marker=label):
+                rc = self._run(
+                    self.selection_headless_fn, "delegation_headless", env
+                )
+                self.assertEqual(rc, 0, f"{label} must select the no-question path")
+
+    def test_empty_or_zero_flags_remain_interactive(self) -> None:
+        cases = (
+            ("no_markers", {}),
+            ("empty_markers", {
+                "FLOW_RALPH": "",
+                "REVIEW_RECEIPT_PATH": "",
+                "FLOW_AUTONOMOUS": "",
+                "AUTONOMOUS": "",
+            }),
+            ("zero_flags", {
+                "FLOW_RALPH": "0",
+                "FLOW_AUTONOMOUS": "0",
+                "AUTONOMOUS": "0",
+            }),
+        )
+        for label, env in cases:
+            with self.subTest(marker=label):
+                rc = self._run(
+                    self.selection_headless_fn, "delegation_headless", env
+                )
+                self.assertNotEqual(
+                    rc, 0, f"{label} must preserve interactive consent"
+                )
+
 
 class CodexDelegationProseContract(unittest.TestCase):
     """Lock the progressive-disclosure + disambiguation prose contract."""
@@ -389,15 +638,27 @@ class CodexDelegationProseContract(unittest.TestCase):
                 self.assertIn(mode, self.ref)
         self.assertIn("CODEX_SANDBOX_NETWORK_DISABLED", self.ref)
 
-    def test_headless_ralph_consent_rule_documented(self) -> None:
-        # Headless proceeds only if consent already granted; no AskUserQuestion.
-        self.assertRegex(self.ref, r"Headless.*Ralph|FLOW_RALPH|REVIEW_RECEIPT_PATH")
-        self.assertRegex(self.ref, r"silently off|stays.*off|delegation.*off")
+    def test_full_headless_consent_rule_documented_at_every_ask_site(self) -> None:
+        # Every consent/per-task ask site shares the complete marker family.
+        for source in (self.selection, self.ref):
+            with self.subTest(source="selection" if source is self.selection else "active"):
+                for marker in (
+                    "FLOW_RALPH",
+                    "REVIEW_RECEIPT_PATH",
+                    "FLOW_AUTONOMOUS",
+                    "AUTONOMOUS",
+                    "mode:autonomous",
+                ):
+                    self.assertIn(marker, source)
+                self.assertIn("delegation_headless", source)
+                self.assertRegex(source, r"standard (?:in-session )?Work")
+                self.assertRegex(source, r"no config write|Do not write")
 
     def test_delegate_decision_semantics_documented(self) -> None:
         self.assertIn("work.delegateDecision", self.ref)
         self.assertIn("auto", self.ref)
         self.assertIn("ask", self.ref)
+        self.assertIn("delegation_headless", self.ref)
 
 
 if __name__ == "__main__":

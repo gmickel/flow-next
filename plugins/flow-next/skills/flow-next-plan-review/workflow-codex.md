@@ -31,8 +31,8 @@ Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`. The handler owns
 `plan_review_status`, `plan_reviewed_at`, cumulative rounds, and receipt writes.
 Receipt session continuity must remain mode `codex`.
 
-Return the verdict to SKILL.md's shared fix loop. A re-review repeats this same
-fence after the spec/task updates.
+Carry the verdict directly into SKILL.md's shared Fix Loop. A re-review repeats
+this same fence after the spec/task updates.
 
 ## Anti-patterns
 

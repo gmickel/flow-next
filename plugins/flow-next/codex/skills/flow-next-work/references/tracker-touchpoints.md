@@ -1,8 +1,8 @@
 # work tracker touchpoints (gated reference)
 
-> **Loaded only when a phases.md tracker gate prints its `GATE ACTIVE — STOP`
-> sentinel** (bridge active, or the gate's probe/parse errored — fail open). A
-> default (bridge-inactive) run never reads this file. Phase 5's end-of-run
+> **Loaded only when a phases.md tracker gate prints its active
+> read/execute/continue sentinel** (bridge active, or the gate's probe/parse
+> errored — fail open). A default (bridge-inactive) run never reads this file. Phase 5's end-of-run
 > `sync check` + retro-fire + the mandatory four-state `Tracker sync:` summary
 > slot are NOT here — they stay inline in phases.md Phase 5 and run on EVERY run.
 
@@ -82,7 +82,7 @@ Dispatch mode: when the resolved op is `comment`, the spec is already linked, an
 
 ## Completion review
 
-phases.md **3g — SHIP → verdict comment, NEVER terminal Done (fn-66).** Runs only when the tracker bridge is active AND `completionReview` is opted in, immediately after the caller sets `completion_review_status=ship`. Hooked **at the caller** (not inside the review skill) because that is where `completion_review_status=ship` lands. **Local completion review is NOT merge evidence** — `Done` is reserved for a `MERGED` PR (fn-66 status-sync `flowToNormalized`), so this touchpoint is **comment-shaped only**: it posts the verdict + R-ID coverage and at most leaves the issue at `In Review` (if an open PR exists). It NEVER pushes `Done`/`verified`:
+phases.md **3g — SHIP → verdict comment, NEVER terminal Done (fn-66).** Runs only when the tracker bridge is active AND `completionReview` is opted in, immediately after the completion-review skill returns with its terminal status already written. The status owner stays inside the review skill; this caller-owned touchpoint exists only to project the verdict evidence. **Local completion review is NOT merge evidence** — `Done` is reserved for a `MERGED` PR (fn-66 status-sync `flowToNormalized`), so this touchpoint is **comment-shaped only**: it posts the verdict + R-ID coverage and at most leaves the issue at `In Review` (if an open PR exists). It NEVER pushes `Done`/`verified`:
 
 ```bash
 LEAF="$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')" # read the leaf ONCE (shared gating predicate — Bridge overview above)

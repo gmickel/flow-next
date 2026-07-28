@@ -162,9 +162,14 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             "backlog-only grammar must not stay always-loaded in SKILL.md",
         )
         self.assertIn(
-            "STOP and read [references/backlog-mode.md]",
+            "read [references/backlog-mode.md]",
             self.pilot_skill,
             "the selected backlog route must require the direct reference",
+        )
+        self.assertIn(
+            "execute its backlog-only setup, then continue with `workflow.md` Phase 1",
+            self.pilot_skill,
+            "the selected backlog route must explicitly continue into the workflow",
         )
         self.assertIn(
             "PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN>",
@@ -211,6 +216,32 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         )
         self.assertEqual(digest(self.pilot_workflow), measured["workflow_hash"])
         self.assertEqual(digest(self.pilot_qa), measured["qa_reference_hash"])
+        self.assertIn(
+            "qa-stage gate remains conditional and fail-open; the reference "
+            "computes freshness while workflow.md retains classification ownership",
+            candidate["oracles"],
+        )
+        self.assertIn(
+            '`pipeline.qa == "on"`, or the gate\'s probe/parse errored — fail',
+            self.pilot_qa,
+            "the QA reference must retain conditional, fail-open activation",
+        )
+        self.assertIn(
+            "how to compute `QA_FRESH`",
+            self.pilot_qa,
+            "the QA reference must retain freshness-computation ownership",
+        )
+        self.assertIn(
+            "the **consumption stays\n> inline in `workflow.md`**",
+            self.pilot_qa,
+            "workflow.md must retain QA classification-consumption ownership",
+        )
+        self.assertIn(
+            "No PR exists: classify `qa` when `QA_STAGE_ENABLED=1` "
+            "**and** `QA_FRESH=0`",
+            self.pilot_workflow,
+            "workflow.md must still own the QA-stage classification decision",
+        )
 
         ready_chars = len(normalized(self.pilot_skill)) + len(
             normalized(self.pilot_workflow)

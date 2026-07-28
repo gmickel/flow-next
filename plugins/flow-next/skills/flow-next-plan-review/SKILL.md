@@ -85,8 +85,9 @@ Format: `<flow-spec-id> [focus areas] [--review=<mode>]`
 1. Execute [workflow.md](workflow.md) Phase 0.
 2. If it returns for `none` or `export`, stop. Do not read a backend file.
 3. Read exactly the selected `workflow-<backend>.md`.
-4. Execute one backend dispatch and return its verdict here.
-5. Apply the shared Fix Loop below.
+4. Execute one backend dispatch and carry its verdict directly into the shared
+   Fix Loop below.
+5. Continue in that loop until its terminal contract is satisfied.
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
 

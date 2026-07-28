@@ -308,11 +308,11 @@ QA_GATE="$(jq -r '.value.pipeline.qa' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || ACT
 [ "$QA_GATE" = "on" ] && ACTIVE=1
 [ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1   # ONLY the literal `on` activates — never bool true / typos
 if [ "$ACTIVE" = "1" ]; then
-  echo "GATE ACTIVE — STOP. Read references/qa-stage.md#qa-stage-freshness-probe before continuing."
+  echo "GATE ACTIVE — read and execute references/qa-stage.md#qa-stage-freshness-probe, then continue with Phase 2 classification."
 fi   # default branch: bare no-op — NO link, NO read path
 ```
 
-When the sentinel prints, STOP and Read [references/qa-stage.md](references/qa-stage.md) before any further step — it holds the QA-stage freshness probe (R1b) that computes `QA_FRESH` (and resolves `BRANCH_NAME`). The classification rows below and the all-done PR probe's no-PR branch consume `QA_STAGE_ENABLED` / `QA_FRESH` unchanged; on a default tick the gate is silent, the flow continues as written, and the reference is never read.
+When the sentinel prints, read [references/qa-stage.md](references/qa-stage.md), execute its QA-stage freshness probe (R1b) to compute `QA_FRESH` (and resolve `BRANCH_NAME`), then continue with the Phase 2 classification below. The classification rows and the all-done PR probe's no-PR branch consume `QA_STAGE_ENABLED` / `QA_FRESH` unchanged; on a default tick the gate is silent, the flow continues as written, and the reference is never read.
 
 Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 
@@ -410,7 +410,7 @@ Dispatch exactly one existing stage skill (slash-command invocation), with `mode
 - `qa`: `/flow-next:qa <spec-id> mode:autonomous` — the QA skill derives scenarios from the spec, reads work's evidence, drives the **local running app**, and writes the `qa_verdict` receipt. `mode:autonomous` suppresses all prompts (the QA skill's Autonomous-mode gate) so the loop can't hang on a question prompt. Pilot dispatches the existing skill and never re-implements its logic; routing on the resulting `qa_outcome` is Phase 5.
 - `make-pr`: `/flow-next:make-pr <spec-id> mode:autonomous`
 
-Setter convention call-out: plan-review sets `plan_review_status` itself in its workflow Phase 4, and pilot only re-reads the field. Completion review is reached through work's Phase 3g; work invokes spec-completion-review, then the caller sets `completion_review_status=ship`. Pilot must not dispatch completion review directly.
+Setter convention call-out: plan-review sets `plan_review_status` itself in its workflow Phase 4, and pilot only re-reads the field. Completion review is reached through work's Phase 3g; the spec-completion-review skill writes terminal `completion_review_status` through its backend-aware shared owner, and Work only handles its caller-owned tracker projection afterward. Pilot must not dispatch completion review directly.
 
 If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity that needs a person, stop with `NEEDS_HUMAN`. Do not cleanup, reset claims, or record a strike.
 

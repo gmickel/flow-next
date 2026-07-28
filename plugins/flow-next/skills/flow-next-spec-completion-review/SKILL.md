@@ -63,7 +63,8 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 - **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.5`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
 - **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, or `--spec copilot:claude-opus-4.5:xhigh`.
 - **cursor** — Cursor CLI (`cursor-agent`, cross-platform); reaches `gpt-5.5-high` (1M-ctx default), the `gpt-5.3-codex` family, `composer-2.5`, and `claude-opus-4-8-thinking-high` via a Cursor subscription. `FLOW_CURSOR_MODEL` env var, or `--spec cursor:gpt-5.5-high`. Cursor folds reasoning effort into the model name — **no effort field**.
-- **host** — Host-native fresh-context reviewer subagent (fn-123 R5). Non-executable selection sentinel: no subprocess, no `flowctl host` command. Model pins live in the AGENTS.md model-routing section, never on the backend string — bare `host` only; `host:<model>` is rejected.
+- **host** — Bare-only non-executable selection sentinel; selected mechanics
+  live in [workflow-host.md](workflow-host.md).
 
 **Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`, `cursor:gpt-5.5-high` (cursor takes model only — no `:effort`), `host` (bare only). Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 
@@ -94,15 +95,9 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 4. Parse verdict from command output
 
 **For host backend (fn-123 R5 / fn-126):**
-1. **DO NOT REVIEW COMPLETION YOURSELF** — you coordinate; a fresh-context host-native subagent reviews (see [workflow-host.md](workflow-host.md))
-2. Dispatch a **read-only** reviewer subagent pinned to a **cross-family** model slug from AGENTS.md model-routing:
-   - **Claude Code**: native `model` param + tool-enforced read-only
-   - **Cursor**: in-prompt slug pin + tool-enforced read-only
-   - **Grok**: in-prompt / host model pin + tool-enforced read-only; single-native-family (`grok-4.5`) fails closed unless the writer is non-Grok (cross-family via bridges); receipt `mode: "host"` + actual model + `session_id: null`
-   - **Elsewhere**: generic fresh-context reviewer with host-dependent note
-3. Record actual reviewer model + `"mode": "host"` in the receipt
-4. **Every re-review is a fresh subagent** — no context reuse, no fabricated resume ids
-5. **Fail closed on missing cross-family pin:** interactive → ask user explicitly; autonomous → `NEEDS_HUMAN` (never silent same-family self-review)
+`host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
+The review must use a fresh, tool-enforced read-only reviewer from a different
+model family and fail closed when no cross-family pin is available.
 
 **For all backends:**
 - If `REVIEW_RECEIPT_PATH` set: write receipt after SHIP verdict (RP writes manually after fix loop; codex writes automatically via `--receipt`)
@@ -115,7 +110,6 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 - Self-declaring SHIP without actual backend verdict
 - Mixing backends mid-review (stick to one)
 - Skipping review silently (must inform user and exit cleanly when backend is "none")
-- Silent same-family self-review under `host` when no cross-family pin is available
 
 ## Input
 
@@ -162,12 +156,25 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 **CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use AskUserQuestion in this loop.**
 
 **MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
-flowctl reserves a round before dispatch. Verdict-bearing attempts consume it;
-no-verdict transport failures are recorded and refunded. At
-`${MAX_REVIEW_ITERATIONS:-4}` verdict rounds, stop with `ESCALATE:` + exit 4.
-More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive transport failures
-stop separately with `TRANSPORT_UNHEALTHY` + exit 5; never reset the verdict
-counter for transport health.
+The codex/copilot/cursor handlers reserve a round before dispatch; the selected
+rp/host workflows call the same `review-rounds` reserve/record surface.
+Verdict-bearing attempts consume the reservation; no-verdict transport failures
+are recorded and refunded.
+
+When a delivered `NEEDS_WORK` consumes round
+`${MAX_REVIEW_ITERATIONS:-4}`, it is the terminal capped verdict:
+
+- codex/copilot/cursor already self-wrote `needs_work` while handling that
+  verdict; do not duplicate it.
+- host/rp continue to Step 3 immediately, write `needs_work` exactly once, then
+  emit `ESCALATE:` and exit 4. Do not attempt another reserve/dispatch first.
+
+An exit-4 cap refusal before this run has delivered a completion verdict is
+non-terminal for completion status: surface `ESCALATE:` / `NEEDS_HUMAN` and do
+not invent a `needs_work` write. More than
+`${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive transport failures stop
+separately with `TRANSPORT_UNHEALTHY` + exit 5; never write completion status or
+reset the verdict counter for transport health.
 
 **ANTI-PATTERN (never do either):** (1) a delivered verdict is never a
 transport failure. Once flowctl parses `VERDICT=...` the round is consumed and
@@ -186,21 +193,70 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
    - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
-   - **Host**: Spawn a **fresh** read-only reviewer subagent (same cross-family pin rules; never reuse prior subagent context; update receipt `mode: "host"` + actual model)
+   - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
+     re-review path.
    - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
-5. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap above breaks the loop (escalate with surviving gaps)
+5. **Repeat** until `<verdict>SHIP</verdict>` — or a delivered `NEEDS_WORK`
+   consumes the final round. On that final host/rp verdict, run Step 3 before
+   the cap terminal; never rely on a later step after exit 4.
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
 
-## Step 3: Record the verdict (MANDATORY for rp / repair; handler-owned otherwise)
+## Step 3: Record the terminal verdict exactly once
 
 `flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.** The standalone command remains for rp and for repairing a missed write:
 
 ```bash
-# Final verdict resolved to SHIP → ship; NEEDS_WORK at the iteration cap → needs_work.
-# Skip when the backend handler already wrote status (codex/copilot/cursor).
-$FLOWCTL spec set-completion-review-status "$SPEC_ID" --status ship --json        # on SHIP
-$FLOWCTL spec set-completion-review-status "$SPEC_ID" --status needs_work --json  # on NEEDS_WORK at cap
+# This shared step is the sole writer for host and rp. Skip the entire block
+# when codex/copilot/cursor already wrote status in its handler. Shell
+# variables from earlier tool calls are not workflow state: rehydrate the
+# latest completion attempt and live cap counters from the durable recorder.
+if ! TERMINAL_REVIEW_JSON="$($FLOWCTL review-rounds attempts "$SPEC_ID" \
+  --kind plan --review-type completion --json)"; then
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
+
+LATEST_OUTCOME="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.attempts[-1].outcome // ""')"
+VERDICT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.attempts[-1].verdict // ""')"
+REVIEW_ROUND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.review_rounds // 0')"
+REVIEW_CAP="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.review_rounds_cap // 0')"
+
+# A refunded/malformed attempt is non-terminal. The selected backend workflow
+# normally stops before this step; keep the shared owner fail-closed if reached.
+if [[ "$LATEST_OUTCOME" != "verdict" \
+  || ! "$VERDICT" =~ ^(SHIP|NEEDS_WORK)$ ]]; then
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
+
+TERMINAL_STATUS=""
+if [[ "$VERDICT" == "SHIP" ]]; then
+  TERMINAL_STATUS="ship"
+elif [[ "$VERDICT" == "NEEDS_WORK" \
+  && "$REVIEW_CAP" -gt 0 \
+  && "$REVIEW_ROUND" -ge "$REVIEW_CAP" ]]; then
+  TERMINAL_STATUS="needs_work"
+fi
+
+if [[ -n "$TERMINAL_STATUS" ]]; then
+  $FLOWCTL spec set-completion-review-status "$SPEC_ID" \
+    --status "$TERMINAL_STATUS" --json
+fi
+
+# The capped status write above MUST complete before this terminal.
+if [[ "$TERMINAL_STATUS" == "needs_work" ]]; then
+  echo "ESCALATE: completion-review did not converge in ${REVIEW_CAP} verdict rounds"
+  exit 4
+fi
 ```
 
-On rp (or if the JSON payload lacks `plan_review_status`/`completion_review_status`), write on BOTH terminal paths (SHIP and capped-NEEDS_WORK).
+For host and rp, write once on BOTH terminal paths (SHIP and capped-NEEDS_WORK).
+The capped write happens immediately after the final verdict is recorded and
+before `ESCALATE:` / exit 4; no later control flow is assumed.
+`NEEDS_HUMAN`, transport failure, malformed verdict, and retry outcomes are
+non-terminal and never write completion status.

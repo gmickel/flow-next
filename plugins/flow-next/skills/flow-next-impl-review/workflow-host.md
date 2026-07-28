@@ -79,9 +79,21 @@ When `--deep` / `--validate` / `--interactive` flags are set, run the gated phas
 
 Never silently drop a required gate without a note.
 
-## Step 5: Return verdict
+## Step 5: Continue through the shared fix loop
 
-Return the verdict to SKILL.md's shared Fix Loop. On NEEDS_WORK re-review: **new** subagent every cycle (same pin rules; include prior findings in the new prompt).
+Carry the verdict directly into SKILL.md's shared Fix Loop in this same skill
+run.
+
+- `SHIP`: complete the review contract.
+- `MAJOR_RETHINK`: continue into the shared `BLOCKED: DESIGN_CONFLICT`
+  terminal; do not patch the design.
+- `NEEDS_WORK`: parse every valid finding, fix the code, run the relevant
+  tests/lints, and commit the fixes before re-review. Then repeat Steps 1–4
+  with a **new** read-only subagent, the same cross-family rules, and the prior
+  findings in its prompt. Continue until `SHIP` or the deterministic round cap.
+- Dispatch, malformed-verdict, or receipt failure: output
+  `<promise>RETRY</promise>` and stop. Never self-issue a verdict or switch
+  backends.
 
 ## Anti-patterns (Host backend)
 

@@ -93,11 +93,12 @@ the same `ASK`/error behavior; never guess a backend.
 ## Common Terminal Contract
 
 - `SHIP` → latest status/receipt says ship; reset the cumulative counter where
- the backend does not already do so; return `SHIP`.
-- `NEEDS_WORK` → latest status/receipt says needs_work; return to SKILL.md's one
- shared fix loop.
-- `MAJOR_RETHINK` → latest status/receipt says needs_work; return immediately
- for typed design-conflict escalation.
+ the backend does not already do so; continue into SKILL.md's shared Fix Loop,
+ which completes on `SHIP`.
+- `NEEDS_WORK` → latest status/receipt says needs_work; continue immediately
+ into SKILL.md's shared Fix Loop.
+- `MAJOR_RETHINK` → latest status/receipt says needs_work; continue immediately
+ to SKILL.md's typed design-conflict escalation.
 - Backend unavailable/transport/no verdict → `<promise>RETRY</promise>` and
  stop. Flowctl records and refunds the reserved round; never manually reset
  the verdict counter. Exit 5 / `TRANSPORT_UNHEALTHY` stops automatic retries.

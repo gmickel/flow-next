@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Changed
+
+- **Autonomous skill seams now continue explicitly instead of reading like terminal handoffs.** Pilot and Work forced-reference gates, review backend returns, and post-task dispatches direct the host to continue the same invocation. Work recognizes all four headless-autonomy markers before delegation consent, while interactive consent still asks and persists normally. Plan Review keeps host-only mechanics cold until the host backend is selected. Genuine terminal verdicts, receipts, sandbox authority, and non-host backend behavior are unchanged.
+
 ### Fixed
 
 - **`--validate` silently stopped reading `validate-pass.md` (regression from 3.4.x).** The fn-112 prompt-to-template extraction deleted the `VALIDATOR_TEMPLATE_REL` constant but left its use site in `load_validator_template()`. The lookup raised `NameError` straight into a bare `except Exception: pass`, so the repo-root branch never resolved and copy-mode installs fell through to the embedded condensed fallback. Review at the time caught the sibling `VALIDATOR_TEMPLATE_FALLBACK` deletion and restored it; this one went unnoticed. The constant is restored, so copy-mode installs read the full on-disk prompt again, exactly as they did before the extraction. Plugin-mode installs were never affected. No prompt text changed.

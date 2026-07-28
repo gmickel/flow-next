@@ -29,8 +29,8 @@ Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`. The handler owns
 status, cumulative rounds, and receipt writes. The receipt retains the resolved
 `model`, `effort`, round-trippable `spec`, and Copilot `session_id`.
 
-Return the verdict to SKILL.md's shared fix loop. A cross-backend receipt never
-resumes a Copilot session.
+Carry the verdict directly into SKILL.md's shared Fix Loop. A cross-backend
+receipt never resumes a Copilot session.
 
 ## Anti-patterns
 

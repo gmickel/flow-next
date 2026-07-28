@@ -82,7 +82,7 @@ $FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json
 ```
 
 Exit 4 / `ESCALATE:` means do not dispatch. On `SHIP`, reset plan rounds.
-Return the verdict to SKILL.md's shared fix loop.
+Carry the verdict directly into SKILL.md's shared Fix Loop.
 
 ## Anti-patterns
 
