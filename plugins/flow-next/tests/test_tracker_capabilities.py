@@ -71,6 +71,11 @@ JR_ID_B = "10043"
 PAYLOAD = b"hello-attach-bytes-fn140"
 
 
+def gitlab_body_echo(request) -> Response:
+    description = json.loads(request.body.decode())["description"]
+    return ok({"id": int(GL_ID), "iid": 12, "description": description})
+
+
 def gh_cfg(**extra) -> dict:
     caps = {"attachments": False, "blockedBy": False, "subIssues": True,
             "deleteIssue": False}
@@ -486,10 +491,15 @@ class GitlabRelateDegrade(unittest.TestCase):
             _write_pair(flow, gl_cfg(blocked_by=False, plan="free"),
                         a_tracker=a_tr, b_tracker=b_tr)
             ex = fake_execute({
-                "relate-parent-read": [ok({"id": int(GL_ID), "iid": 12}),
+                "relate-parent-read": [ok({"id": int(GL_ID), "iid": 12,
+                                           "description": "Stale snapshot"}),
                                        ok({"id": int(GL_ID_B), "iid": 13})],
                 "relate-list": ok([]),
                 "relate-create": ok({"id": 1, "link_type": "relates_to"}),
+                "relate-body-read": ok({
+                    "id": int(GL_ID), "iid": 12,
+                    "description": "Existing body"}),
+                "relate-body-write": gitlab_body_echo,
             })
             out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
             self.assertEqual(out["kind"], "applied")
@@ -500,6 +510,133 @@ class GitlabRelateDegrade(unittest.TestCase):
             create = next(c for c in ex.calls if c.op == "relate-create")
             body = json.loads(create.body.decode())
             self.assertEqual(body["link_type"], "relates_to")
+            update = next(c for c in ex.calls if c.op == "relate-body-write")
+            description = json.loads(update.body.decode())["description"]
+            self.assertTrue(description.startswith("Existing body\n\n"))
+            self.assertNotIn("Stale snapshot", description)
+            self.assertIn(FLOW_DEPS_OPEN, description)
+            self.assertIn("**Blocked by:** g/p#13", description)
+            self.assertIn(FLOW_DEPS_CLOSE, description)
+
+
+class GitlabRelateDependencyBody(unittest.TestCase):
+    """GitLab relation projection is link + fenced direction/provenance body."""
+
+    @staticmethod
+    def _pair(flow: Path, *, entry=None) -> None:
+        a_tr = {"id": GL_ID, "identifier": "g/p#12", "url": "u",
+                "depRelations": [entry] if entry else [], "linkState": "linked"}
+        b_tr = {"id": GL_ID_B, "identifier": "g/p#13", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, gl_cfg(blocked_by=False, plan="free"),
+                    a_tracker=a_tr, b_tracker=b_tr)
+
+    @staticmethod
+    def _parents(description: str):
+        return [
+            ok({"id": int(GL_ID), "iid": 12, "description": description}),
+            ok({"id": int(GL_ID_B), "iid": 13, "description": "dep"}),
+        ]
+
+    def test_block_write_failure_preserves_landed_link_and_retry_repairs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            failure = TrackerError(
+                ErrorClass.TRANSPORT, "body update timed out",
+                subtype="timeout", auto_retryable=True)
+            first = fake_execute({
+                "relate-parent-read": self._parents("Human body"),
+                "relate-list": ok([]),
+                "relate-create": ok({"id": 1, "link_type": "relates_to"}),
+                "relate-body-read": ok({
+                    "id": int(GL_ID), "iid": 12,
+                    "description": "Human body"}),
+                "relate-body-write": failure,
+            })
+            out = R.relate(
+                flow, "fn-1-demo", blocked_by="fn-2-dep", execute=first)
+            self.assertIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual((out.details or {}).get("completed_steps"),
+                             ["relate-create"])
+            self.assertTrue((out.details or {}).get("recoverable"))
+            self.assertEqual((out.details or {}).get("key"),
+                             dep_relation_key(GL_ID, GL_ID_B))
+            self.assertEqual((out.details or {}).get("from"), "fn-1-demo")
+            self.assertEqual((out.details or {}).get("to"), "fn-2-dep")
+            spec = json.loads(
+                (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))
+            entry = spec["tracker"]["depRelations"][0]
+            self.assertEqual(entry["status"], "pending",
+                             "landed link keeps ownership claim for repair")
+
+            retry = fake_execute({
+                "relate-parent-read": self._parents("Human body"),
+                "relate-list": ok([
+                    {"iid": 13, "link_type": "relates_to"}]),
+                "relate-body-read": ok({
+                    "id": int(GL_ID), "iid": 12,
+                    "description": "Human body"}),
+                "relate-body-write": gitlab_body_echo,
+            })
+            again = R.relate(
+                flow, "fn-1-demo", blocked_by="fn-2-dep", execute=retry)
+            self.assertNotIsInstance(again, TrackerError, msg=repr(again))
+            self.assertEqual(again["reason"], "ledger_repaired")
+            self.assertEqual(
+                [call.op for call in retry.calls],
+                ["relate-parent-read", "relate-parent-read", "relate-list",
+                 "relate-body-read", "relate-body-write"],
+                "retry repairs the body and finalizes without another link POST")
+            spec = json.loads(
+                (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))
+            self.assertNotIn("status", spec["tracker"]["depRelations"][0])
+
+    def test_applied_legacy_link_repairs_missing_block_instead_of_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            key = dep_relation_key(GL_ID, GL_ID_B)
+            self._pair(flow, entry={
+                "key": key,
+                "dep_spec": "fn-2-dep",
+                "from_tracker_id": GL_ID,
+                "to_tracker_id": GL_ID_B,
+                "type": "blocks",
+                "source": "flow",
+            })
+            ex = fake_execute({
+                "relate-parent-read": self._parents("Keep this text"),
+                "relate-list": ok([
+                    {"iid": 13, "link_type": "relates_to"}]),
+                "relate-body-read": ok({
+                    "id": int(GL_ID), "iid": 12,
+                    "description": "Keep this text"}),
+                "relate-body-write": gitlab_body_echo,
+            })
+            out = R.relate(
+                flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "applied")
+            self.assertEqual(out["reason"], "deps_block_repaired")
+            self.assertNotIn("relate-create", [call.op for call in ex.calls])
+            update = next(call for call in ex.calls
+                          if call.op == "relate-body-write")
+            description = json.loads(update.body.decode())["description"]
+            self.assertTrue(description.startswith("Keep this text\n\n"))
+            self.assertIn("**Blocked by:** g/p#13", description)
+
+    def test_existing_fence_dedups_exact_ref_and_preserves_other_refs(self) -> None:
+        body = (
+            "Intro\n\n"
+            f"{FLOW_DEPS_OPEN}\n"
+            "**Blocked by:** g/p#3, g/p#13\n"
+            f"{FLOW_DEPS_CLOSE}\n"
+        )
+        self.assertEqual(RP._gitlab_deps_body(body, "g/p#13"), body)
+        updated = RP._gitlab_deps_body(body, "g/p#14")
+        self.assertNotIsInstance(updated, TrackerError)
+        self.assertIn("**Blocked by:** g/p#3, g/p#13, g/p#14", updated)
+        self.assertTrue(updated.startswith("Intro\n\n"))
 
 
 class GithubSubIssuesHierarchy(unittest.TestCase):
@@ -1346,10 +1483,14 @@ class GitlabProbeDirection(unittest.TestCase):
                     "depRelations": [], "linkState": "linked"}
             _write_pair(flow, gl_cfg(), a_tracker=a_tr, b_tracker=b_tr)
             ex = fake_execute({
-                "relate-parent-read": [ok({"id": int(GL_ID), "iid": 12}),
+                "relate-parent-read": [ok({"id": int(GL_ID), "iid": 12,
+                                           "description": "B"}),
                                        ok({"id": int(GL_ID_B), "iid": 13})],
                 "relate-list": ok([{"iid": 13, "link_type": "blocks"}]),
                 "relate-create": ok({"id": 2, "link_type": "is_blocked_by"}),
+                "relate-body-read": ok({
+                    "id": int(GL_ID), "iid": 12, "description": "B"}),
+                "relate-body-write": gitlab_body_echo,
             })
             out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
                            execute=ex)

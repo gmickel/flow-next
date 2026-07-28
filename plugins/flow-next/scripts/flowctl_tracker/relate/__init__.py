@@ -10,9 +10,9 @@ any mutation: ledger+remote noop, ledger+missing = human removal collision
 (queued, default NOT re-created), unledgered+remote = foreign-edge collision
 (queued), neither = create.
 
-<!-- flow:deps --> body writing / hashing is task .5 - marker constants live
-in relate.ledger for import (the spec's flow:deps-exclusion R-ID completes
-there, where body hashing exists).
+GitLab writes the <!-- flow:deps --> direction/provenance twin with every
+native or degraded link and repairs it before finalizing an interrupted
+create. Hash exclusion remains sync-body's concern.
 
 GitHub: native sub_issues is a HIERARCHY PROXY reported only in the structured
 degraded field - never presented as a blocked-by relation; body-block
@@ -119,6 +119,8 @@ def _create_failure_not_landed(err: TrackerError) -> bool:
     may exist) except the subtypes above - ambiguous failures must keep the
     pending entry so the repair path can finalize against the remote probe
     on retry instead of duplicating the create."""
+    if "relate-create" in ((err.details or {}).get("completed_steps") or []):
+        return False
     if err.cls is not ErrorClass.TRANSPORT:
         return True
     return err.subtype in _TRANSPORT_NOT_LANDED
@@ -582,8 +584,8 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
     # validate display -> durable for BOTH ends BEFORE any probe or mutation
     # (wire write-verb parity), so a moved, repointed, or stale identifier
     # aborts instead of inspecting or relating unrelated issues.
-    verr = P.display_durable_guard(provider, config, ex,
-                                   locators=(loc_a, loc_b))
+    verr = P.display_durable_guard(
+        provider, config, ex, locators=(loc_a, loc_b))
     if verr:
         return verr
 
@@ -600,6 +602,34 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
     in_ledger = entry is not None and not pending
 
     if in_ledger and remote:
+        if provider == "gitlab":
+            body_out = P.gitlab_ensure_deps_block(
+                config, ex, from_id=from_id,
+                from_display=loc_a["display"], to_display=loc_b["display"])
+            if isinstance(body_out, TrackerError):
+                return body_out
+            if body_out.get("written"):
+                rerr = write_sync_receipt(
+                    flow_dir, spec_id=spec_id, status="pushed",
+                    tracker_id=from_id, event=event, transport=provider,
+                    note=f"repaired dependency body block for {blocked_by}")
+                if rerr:
+                    import dataclasses  # noqa: PLC0415
+                    return dataclasses.replace(rerr, details={
+                        **(rerr.details or {}),
+                        "completed_steps": ["relate-body-write"],
+                        "key": key,
+                        "from": spec_id,
+                        "to": blocked_by})
+                return {
+                    "kind": "applied",
+                    "reason": "deps_block_repaired",
+                    "from": spec_id, "to": blocked_by, "key": key,
+                    "form": entry.get("form"),
+                    "completed_blocker": completed_blocker,
+                    "degraded": None,
+                    "depRelations": tracker_a.get("depRelations") or [],
+                }
         return {
             "kind": "noop",
             "reason": "already_recorded",
@@ -636,17 +666,34 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
         }
 
     if pending and remote:
+        body_repaired = False
+        if provider == "gitlab":
+            body_out = P.gitlab_ensure_deps_block(
+                config, ex, from_id=from_id,
+                from_display=loc_a["display"], to_display=loc_b["display"])
+            if isinstance(body_out, TrackerError):
+                return body_out
+            body_repaired = bool(body_out.get("written"))
         # OUR interrupted create: the provider mutation succeeded on an earlier
         # run but the finalize did not land. Repair the ledger - no provider
         # mutation, no collision queue. Guarded finalize (wave-13, repair
         # shape): a relink landing after the pair load / during the remote
         # probe must not finalize the old-ID pending entry onto the newly
-        # linked spec - refuse with CONFLICT/relinked carrying NO mutation
-        # evidence (the remote edge predates this run).
+        # linked spec - refuse with CONFLICT/relinked. The remote edge predates
+        # this run; only a body repair performed above is carried as mutation
+        # evidence.
         finalized = _ledger_finalize_guarded(
             flow_dir, spec_id, blocked_by, key=key,
             from_id=from_id, to_id=to_id, repair=True)
         if isinstance(finalized, TrackerError):
+            if body_repaired:
+                import dataclasses  # noqa: PLC0415
+                return dataclasses.replace(finalized, details={
+                    **(finalized.details or {}),
+                    "completed_steps": ["relate-body-write"],
+                    "key": key,
+                    "from": spec_id,
+                    "to": blocked_by})
             return finalized
         tracker_a = finalized
         rerr = write_sync_receipt(
@@ -663,7 +710,9 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
             import dataclasses  # noqa: PLC0415
             return dataclasses.replace(rerr, details={
                 **(rerr.details or {}),
-                "completed_steps": ["ledger-finalize"],
+                "completed_steps": (
+                    ["relate-body-write", "ledger-finalize"]
+                    if body_repaired else ["ledger-finalize"]),
                 "key": key,
                 "from": spec_id,
                 "to": blocked_by})
@@ -757,6 +806,14 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
         # the repair path finalizes it against the probe on retry.
         if _create_failure_not_landed(out):
             _ledger_release(flow_dir, spec_id, key=key)
+        if (out.details or {}).get("completed_steps"):
+            import dataclasses  # noqa: PLC0415
+            out = dataclasses.replace(out, details={
+                **(out.details or {}),
+                "key": key,
+                "from": spec_id,
+                "to": blocked_by,
+            })
         return out
 
     degraded = out.get("degraded")

@@ -1,7 +1,7 @@
 """Per-provider blocked-by projection (fn-140.4).
 
-GitHub body-block writing is deferred to task .5 (sync-body). This module
-implements the native sub_issues call + structured degraded hierarchy
+GitLab projects both the issue link and flow-owned dependency body block.
+GitHub implements the native sub_issues call + structured degraded hierarchy
 reporting only - never presents sub_issues as blocked-by.
 
 Direction (fn-64): A is-blocked-by B ⇔ from=A to=B type=blocks.
@@ -9,6 +9,7 @@ Direction (fn-64): A is-blocked-by B ⇔ from=A to=B type=blocks.
 
 from __future__ import annotations
 
+import re
 from typing import Optional, Union
 from urllib.parse import quote
 
@@ -18,6 +19,7 @@ from ..wire import (
     _PAGE_SIZE,
     Execute,
     Result,
+    _check_durable,
     _cli,
     _destination,
     _github_number,
@@ -29,6 +31,7 @@ from ..wire import (
     _jira,
     _jira_base,
 )
+from .ledger import FLOW_DEPS_CLOSE, FLOW_DEPS_OPEN
 
 # ---------------------------------------------------------------------------
 # Linear
@@ -262,6 +265,113 @@ def display_durable_guard(provider: str, config: dict, execute: Execute, *,
     return None
 
 
+_FLOW_DEPS_RE = re.compile(
+    re.escape(FLOW_DEPS_OPEN) + r".*?" + re.escape(FLOW_DEPS_CLOSE),
+    re.DOTALL,
+)
+_BLOCKED_BY_RE = re.compile(r"(?m)^\*\*Blocked by:\*\*[ \t]*(.*)$")
+
+
+def _gitlab_deps_body(description: object, blocker_ref: str
+                      ) -> Union[str, TrackerError]:
+    """Add one exact blocker ref inside flow's fenced dependency block."""
+    if description is None:
+        text = ""
+    elif isinstance(description, str):
+        text = description
+    else:
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab issue description is not text",
+            subtype="malformed_body")
+    opens = text.count(FLOW_DEPS_OPEN)
+    closes = text.count(FLOW_DEPS_CLOSE)
+    if opens != closes or opens > 1:
+        return TrackerError(
+            ErrorClass.CONFLICT,
+            "gitlab flow:deps block is malformed; refusing to rewrite issue body",
+            subtype="deps_block")
+    match = _FLOW_DEPS_RE.search(text)
+    if match is None:
+        prefix = text.rstrip("\n")
+        block = (
+            f"{FLOW_DEPS_OPEN}\n"
+            f"**Blocked by:** {blocker_ref}\n"
+            f"{FLOW_DEPS_CLOSE}"
+        )
+        return f"{prefix}\n\n{block}" if prefix else block
+
+    region = match.group(0)
+    blocked = _BLOCKED_BY_RE.search(region)
+    if blocked is not None:
+        refs = [ref.strip() for ref in blocked.group(1).split(",") if ref.strip()]
+        if blocker_ref in refs:
+            return text
+        replacement = f"**Blocked by:** {', '.join([*refs, blocker_ref])}"
+        updated_region = (
+            region[:blocked.start()] + replacement + region[blocked.end():])
+    else:
+        updated_region = region.replace(
+            FLOW_DEPS_CLOSE, f"**Blocked by:** {blocker_ref}\n{FLOW_DEPS_CLOSE}",
+            1)
+    return text[:match.start()] + updated_region + text[match.end():]
+
+
+def gitlab_ensure_deps_block(config: dict, execute: Execute, *,
+                             from_id: str, from_display: str,
+                             to_display: str) -> Result:
+    """Idempotently write GitLab's direction/provenance body twin."""
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    pid = _gl_project(dest)
+    iid = _gitlab_iid(from_display)
+    if isinstance(pid, TrackerError):
+        return pid
+    if isinstance(iid, TrackerError):
+        return iid
+    locator = {"durable": from_id, "display": from_display}
+    parent = _cli(
+        execute, "gitlab", config, "relate-body-read", "GET",
+        f"projects/{pid}/issues/{iid}", idempotent=True)
+    if isinstance(parent, TrackerError):
+        return parent
+    if not isinstance(parent, dict):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab dependency body read returned no object",
+            subtype="malformed_body")
+    err = _check_durable("gitlab", locator, parent)
+    if err:
+        return err
+    current = parent.get("description")
+    body = _gitlab_deps_body(current, to_display)
+    if isinstance(body, TrackerError):
+        return body
+    current = "" if current is None else current
+    if body == current:
+        return {"written": False, "body": body}
+    data = _cli(
+        execute, "gitlab", config, "relate-body-write", "PUT",
+        f"projects/{pid}/issues/{iid}", body={"description": body})
+    if isinstance(data, TrackerError):
+        return data
+    if not isinstance(data, dict):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab dependency body update returned no object",
+            subtype="malformed_body")
+    err = _check_durable("gitlab", locator, data)
+    if err:
+        return err
+    if data.get("description") != body:
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab dependency body readback did not match requested body",
+            subtype="readback_mismatch")
+    return {"written": True, "body": body}
+
+
 def gitlab_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
                from_display: str, to_display: str, blocked_by: bool,
                plan: Optional[str]) -> Result:
@@ -302,6 +412,17 @@ def gitlab_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
                 f"projects/{pid}/issues/{from_iid}/links", body=body)
     if isinstance(data, TrackerError):
         return data
+    body_out = gitlab_ensure_deps_block(
+        config, execute, from_id=from_id, from_display=from_display,
+        to_display=to_display)
+    if isinstance(body_out, TrackerError):
+        import dataclasses  # noqa: PLC0415
+        return dataclasses.replace(body_out, details={
+            **(body_out.details or {}),
+            "recoverable": True,
+            "completed_steps": ["relate-create"],
+            "form": form,
+        })
     out = {"projected": True, "already": False, "form": form}
     if degraded:
         out["degraded"] = degraded

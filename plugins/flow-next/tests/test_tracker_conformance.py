@@ -117,6 +117,11 @@ FLOW_BODY = "## Goal\nShip it.\n"
 ATTACH_BYTES = b"hello-attach-conformance"
 
 
+def gitlab_body_echo(request) -> Response:
+    description = json.loads(request.body.decode())["description"]
+    return ok({**GL_ISSUE, "description": description})
+
+
 def gh_cfg() -> dict:
     return {"tracker": {"type": "github",
                         "readyState": "Ready",
@@ -863,10 +868,12 @@ class SpecVerbRelateAllFour(unittest.TestCase):
              {"id": str(GL_ID), "identifier": "g/p#12"},
              {"id": str(GL_ID + 1), "identifier": "g/p#13"},
              {"relate-parent-read": [
-                 ok({"id": GL_ID, "iid": 12}),
+                 ok({"id": GL_ID, "iid": 12, "description": "B"}),
                  ok({"id": GL_ID + 1, "iid": 13})],
               "relate-list": ok([]),
-              "relate-create": ok({"id": 1, "link_type": "relates_to"})},
+              "relate-create": ok({"id": 1, "link_type": "relates_to"}),
+              "relate-body-read": ok(GL_ISSUE),
+              "relate-body-write": gitlab_body_echo},
              "relates_to"),  # gl_cfg pins blockedBy False (free tier)
             ("linear", ln_cfg(),
              {"id": LN_UUID, "identifier": "WOR-17"},
