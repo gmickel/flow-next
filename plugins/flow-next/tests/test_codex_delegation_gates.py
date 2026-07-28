@@ -29,11 +29,15 @@ import unittest
 # gate's `env | grep` actually run. A bare custom env strips those and breaks
 # bash on Windows (every gate test fails rc=1). `OPENCODE_*` is matched by prefix.
 _GATE_ENV_KEYS = (
+    "AUTONOMOUS",
     "CLAUDECODE",
     "CODEX_SANDBOX",
     "CODEX_SANDBOX_NETWORK_DISABLED",
     "DROID_PLUGIN_ROOT",
+    "FLOW_AUTONOMOUS",
+    "FLOW_RALPH",
     "OPENCODE",
+    "REVIEW_RECEIPT_PATH",
 )
 
 
@@ -95,6 +99,17 @@ class CodexDelegationGateExecution(unittest.TestCase):
         )
         cls.platform_fn = _extract_bash_func(cls.ref_text, "platform_gate_ok")
         cls.recursion_fn = _extract_bash_func(cls.ref_text, "not_inside_codex_sandbox")
+        cls.ref_headless_fn = _extract_bash_func(
+            cls.ref_text, "delegation_headless"
+        )
+        selection_text = (
+            SELECTION_MD.read_text(encoding="utf-8")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+        )
+        cls.selection_headless_fn = _extract_bash_func(
+            selection_text, "delegation_headless"
+        )
         # The cheap Phase 0 host short-circuit lives in phases.md/SKILL.md (it must
         # resolve delegation OFF on a non-Claude host BEFORE the reference is read,
         # so it cannot live in the reference itself). Extract + execute the shipped
@@ -270,6 +285,49 @@ class CodexDelegationGateExecution(unittest.TestCase):
             rc, 0, "CODEX_SANDBOX_NETWORK_DISABLED set must trip the recursion guard"
         )
 
+    # ── Consent/ask marker family (rc 0 = no-question path) ────────────────
+
+    def test_consent_ask_sites_share_the_exact_headless_predicate(self) -> None:
+        self.assertEqual(self.selection_headless_fn, self.ref_headless_fn)
+
+    def test_each_autonomous_marker_suppresses_consent_questions(self) -> None:
+        cases = (
+            ("ralph", {"FLOW_RALPH": "1"}),
+            ("receipt", {"REVIEW_RECEIPT_PATH": "/tmp/review-receipt.json"}),
+            ("autonomous_env", {"FLOW_AUTONOMOUS": "1"}),
+            ("parsed_autonomous_token", {"AUTONOMOUS": "1"}),
+        )
+        for label, env in cases:
+            with self.subTest(marker=label):
+                rc = self._run(
+                    self.selection_headless_fn, "delegation_headless", env
+                )
+                self.assertEqual(rc, 0, f"{label} must select the no-question path")
+
+    def test_empty_or_zero_flags_remain_interactive(self) -> None:
+        cases = (
+            ("no_markers", {}),
+            ("empty_markers", {
+                "FLOW_RALPH": "",
+                "REVIEW_RECEIPT_PATH": "",
+                "FLOW_AUTONOMOUS": "",
+                "AUTONOMOUS": "",
+            }),
+            ("zero_flags", {
+                "FLOW_RALPH": "0",
+                "FLOW_AUTONOMOUS": "0",
+                "AUTONOMOUS": "0",
+            }),
+        )
+        for label, env in cases:
+            with self.subTest(marker=label):
+                rc = self._run(
+                    self.selection_headless_fn, "delegation_headless", env
+                )
+                self.assertNotEqual(
+                    rc, 0, f"{label} must preserve interactive consent"
+                )
+
 
 class CodexDelegationProseContract(unittest.TestCase):
     """Lock the progressive-disclosure + disambiguation prose contract."""
@@ -389,15 +447,27 @@ class CodexDelegationProseContract(unittest.TestCase):
                 self.assertIn(mode, self.ref)
         self.assertIn("CODEX_SANDBOX_NETWORK_DISABLED", self.ref)
 
-    def test_headless_ralph_consent_rule_documented(self) -> None:
-        # Headless proceeds only if consent already granted; no AskUserQuestion.
-        self.assertRegex(self.ref, r"Headless.*Ralph|FLOW_RALPH|REVIEW_RECEIPT_PATH")
-        self.assertRegex(self.ref, r"silently off|stays.*off|delegation.*off")
+    def test_full_headless_consent_rule_documented_at_every_ask_site(self) -> None:
+        # Every consent/per-task ask site shares the complete marker family.
+        for source in (self.selection, self.ref):
+            with self.subTest(source="selection" if source is self.selection else "active"):
+                for marker in (
+                    "FLOW_RALPH",
+                    "REVIEW_RECEIPT_PATH",
+                    "FLOW_AUTONOMOUS",
+                    "AUTONOMOUS",
+                    "mode:autonomous",
+                ):
+                    self.assertIn(marker, source)
+                self.assertIn("delegation_headless", source)
+                self.assertRegex(source, r"standard (?:in-session )?Work")
+                self.assertRegex(source, r"no config write|Do not write")
 
     def test_delegate_decision_semantics_documented(self) -> None:
         self.assertIn("work.delegateDecision", self.ref)
         self.assertIn("auto", self.ref)
         self.assertIn("ask", self.ref)
+        self.assertIn("delegation_headless", self.ref)
 
 
 if __name__ == "__main__":

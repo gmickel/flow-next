@@ -98,7 +98,13 @@ class WorkReachedPathRoutes(unittest.TestCase):
         arms = self.evidence["trace_arms"]
         self.assertIn("fixtures/b1/work", arms["baseline"])
         self.assertEqual(arms["candidate"], "route_traces below")
-        self.assertEqual(arms["observable_behavior_delta"], [])
+        self.assertEqual(
+            arms["observable_behavior_delta"],
+            [
+                "FLOW_AUTONOMOUS=1 and parsed mode:autonomous now suppress "
+                "delegation consent asks exactly like Ralph and review-receipt markers"
+            ],
+        )
         routes = {row["id"]: row for row in self.evidence["route_traces"]}
         required = {
             "serial",
@@ -150,12 +156,27 @@ class WorkReachedPathRoutes(unittest.TestCase):
             "non-scratch `.flow/` integrity",
             "scoped rollback",
             "Host circuit breaker",
-            "Ralph-safe",
+            "Autonomous-safe",
         ):
             with self.subTest(contract=contract):
                 self.assertIn(contract, self.delegation)
         self.assertNotIn("<patterns>", self.delegation)
         self.assertNotIn("<approach>", self.delegation)
+
+    def test_autonomous_consent_routes_cover_the_full_marker_family(self) -> None:
+        for source in (self.selection, self.delegation):
+            for marker in (
+                'FLOW_RALPH:-}" = "1"',
+                "REVIEW_RECEIPT_PATH:-",
+                'FLOW_AUTONOMOUS:-}" = "1"',
+                'AUTONOMOUS:-}" = "1"',
+                "mode:autonomous",
+            ):
+                with self.subTest(source=source[:20], marker=marker):
+                    self.assertIn(marker, source)
+            self.assertIn("delegation_headless", source)
+            self.assertIn("standard Work", source)
+            self.assertRegex(source, r"no config write|Do not write")
 
     def test_common_work_lifecycle_and_no_forbidden_gate_regrowth(self) -> None:
         for contract in (

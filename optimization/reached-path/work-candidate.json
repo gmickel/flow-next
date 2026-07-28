@@ -13,8 +13,8 @@
   "prompt_hashes": {
     "plugins/flow-next/skills/flow-next-work/SKILL.md": "183ee42b09cae59459dfa83ec10cec66eb1711ef7e6b47bc479346dd9976c88d",
     "plugins/flow-next/skills/flow-next-work/phases.md": "a73176915edc4760e25d011cb3c3ad4c5449680c5712d9b09edc43126624fe2c",
-    "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "80a8a31e025b6bacbb45023f33b2f1184a7ae06265364acc1598cb49fe1efb4f",
-    "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "26d5ff37bfb9805e8f5c90a62f66425f2e2fd78ae9ab1614b0e8b1a7a01c4955",
+    "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "1e72fe556e16476e2a71da32536792703a69cfc7dd5f65a4215ce595f4445858",
+    "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "9853594ad12db98edafc83780b266f5f7cc95a1090acade3a178c890e1d43a3b",
     "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "89d60a08eea0f27c58fb71196e0b5a5a72c28d2b2f86e67e4da8bcce1a9204c6"
   },
   "metrics": {
@@ -26,8 +26,8 @@
       "reduction_percent": 6.86
     },
     "delegation_active_path": {
-      "baseline_reached_path_chars": 101126,
-      "candidate_reached_path_chars": 101097,
+      "baseline_reached_path_chars": 102426,
+      "candidate_reached_path_chars": 102397,
       "reduction_chars": 427,
       "reduction_percent": 0.42
     },
@@ -59,13 +59,21 @@
           },
           "follow_up": "Worth revisiting: this ratchet compares live files to a past optimization's number, so ANY later content addition to those files trips it. A freeze-at-experiment-time comparison would separate 'the optimization broke' from 'new content landed'."
         }
+      },
+      {
+        "spec": "fn-145",
+        "date": "2026-07-28",
+        "reason": "Delegation consent now carries an executable four-marker autonomy predicate at the cold selection gate and active-reference defense-in-depth ask site.",
+        "baseline_note": "Default Work path is unchanged. The delegation-only path grows by 1300 characters; its 29-character ratchet margin is rebased and preserved."
       }
     ]
   },
   "trace_arms": {
     "baseline": "optimization/reached-path/fixtures/b1/work/*.json",
     "candidate": "route_traces below",
-    "observable_behavior_delta": []
+    "observable_behavior_delta": [
+      "FLOW_AUTONOMOUS=1 and parsed mode:autonomous now suppress delegation consent asks exactly like Ralph and review-receipt markers"
+    ]
   },
   "route_traces": [
     {
