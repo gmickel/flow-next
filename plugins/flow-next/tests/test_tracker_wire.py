@@ -55,6 +55,8 @@ def cli_endpoint(request) -> str:
     argv = list(request.url_or_argv)
     if len(argv) >= 2 and argv[-2:] == ["--input", "-"]:
         argv = argv[:-2]
+    if len(argv) >= 2 and argv[-2] == "-H":
+        argv = argv[:-2]
     return argv[-1]
 
 
@@ -1181,3 +1183,33 @@ class JiraSyntheticResponsesAreHonest(unittest.TestCase):
         ex = fake_execute({"wire-read": ok(JR_ISSUE)})
         out = W.dispatch("read", jr_cfg(), locator=loc(JR_ID, "SCRUM-1"), execute=ex)
         self.assertEqual(out["parent_identity"], "validated")
+
+
+class GitlabCliJsonContentType(unittest.TestCase):
+    """glab api sends NO Content-Type with --input (measured live 2026-07-28:
+    GitLab replies 415 "provided content-type '' is not supported" on every
+    JSON mutation). The argv builder must inject the header for glab bodies;
+    gh api defaults to JSON already and needs nothing."""
+
+    def _mutation_argvs(self, cfg, locator, responses):
+        ex = fake_execute(responses)
+        W.dispatch("update", cfg, locator=locator, title="t2", execute=ex)
+        return [list(c.url_or_argv) for c in ex.calls if c.body is not None]
+
+    def test_gitlab_body_requests_carry_json_content_type(self) -> None:
+        argvs = self._mutation_argvs(
+            gl_cfg(), loc(str(GL_ID), "g/p#12"),
+            {"wire-parent-read": ok(GL_ISSUE), "wire-update": ok(GL_ISSUE)})
+        self.assertTrue(argvs, "expected at least one body-carrying request")
+        for argv in argvs:
+            i = argv.index("-H")
+            self.assertEqual(argv[i + 1], "Content-Type: application/json")
+            self.assertEqual(argv[-2:], ["--input", "-"])
+
+    def test_github_body_requests_stay_headerless(self) -> None:
+        argvs = self._mutation_argvs(
+            gh_cfg(), loc(GH_NODE, "#42"),
+            {"wire-parent-read": ok(GH_ISSUE), "wire-update": ok(GH_ISSUE)})
+        self.assertTrue(argvs, "expected at least one body-carrying request")
+        for argv in argvs:
+            self.assertNotIn("-H", argv)

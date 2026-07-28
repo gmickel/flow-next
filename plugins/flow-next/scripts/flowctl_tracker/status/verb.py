@@ -9,6 +9,8 @@ advancing lastSyncedAt.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -34,18 +36,52 @@ def _completion_review_configured(config: dict) -> bool:
     return True
 
 
+def _state_dir(flow_dir: Path) -> Path:
+    """Mirror flowctl's get_state_dir: FLOW_STATE_DIR env, then the git
+    common-dir (shared across worktrees), then .flow/state for non-git."""
+    env = os.environ.get("FLOW_STATE_DIR")
+    if env:
+        return Path(env).resolve()
+    try:
+        result = subprocess.run(  # noqa: S603 - fixed argv, shell=False
+            ["git", "rev-parse", "--git-common-dir", "--path-format=absolute"],
+            capture_output=True, text=True, encoding="utf-8", check=True,
+            cwd=flow_dir.parent,
+        )
+        return Path(result.stdout.strip()) / "flow-state"
+    except (subprocess.CalledProcessError, OSError):
+        return flow_dir / "state"
+
+
 def _load_tasks(flow_dir: Path, spec_id: str) -> list:
+    """Task definitions overlaid with runtime state. Since the fn-111 storage
+    split, .flow/tasks/<id>.json is the DEFINITION (status is the scaffold
+    value); the live status (claimed/in_progress/done) lives in the runtime
+    store at <state-dir>/tasks/<id>.state.json. Reading only the definition
+    made every started spec normalize as todo (measured live 2026-07-28)."""
     tasks_dir = flow_dir / "tasks"
     if not tasks_dir.is_dir():
         return []
+    runtime_dir = _state_dir(flow_dir) / "tasks"
     out = []
     for path in sorted(tasks_dir.glob(f"{spec_id}.*.json")):
+        if path.name.endswith(".state.json"):
+            continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if isinstance(data, dict):
-            out.append({"id": data.get("id"), "status": data.get("status") or "todo"})
+        if not isinstance(data, dict):
+            continue
+        status = data.get("status") or "todo"
+        state_path = runtime_dir / f"{path.name[:-len('.json')]}.state.json"
+        try:
+            runtime = json.loads(state_path.read_text(encoding="utf-8"))
+            if isinstance(runtime, dict) and runtime.get("status"):
+                status = runtime["status"]
+        except (OSError, ValueError):
+            pass
+        out.append({"id": data.get("id"), "status": status})
     return out
 
 

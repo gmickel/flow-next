@@ -186,6 +186,11 @@ def _cli_argv(provider: str, config: dict, method: str, endpoint: str,
         argv += ["--method", method.upper()]
     argv.append(endpoint)
     if body is not None:
+        if provider != "github":
+            # glab api sends NO Content-Type with --input (measured live:
+            # GitLab replies 415 "provided content-type '' is not supported"
+            # on every JSON mutation); gh api defaults to JSON already.
+            argv += ["-H", "Content-Type: application/json"]
         argv += ["--input", "-"]
     return argv
 

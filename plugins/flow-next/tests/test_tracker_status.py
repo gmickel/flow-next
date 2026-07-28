@@ -1105,3 +1105,59 @@ class AmbiguousStatusLabels(unittest.TestCase):
             saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
             self.assertEqual(saved["lastSyncedAt"], "OLD")
             self.assertEqual(_receipts(flow), [])
+
+
+class LoadTasksMergesRuntimeState(unittest.TestCase):
+    """Live smoke 2026-07-28: since the fn-111 storage split the task
+    DEFINITION (.flow/tasks/<id>.json) keeps its scaffold status while the
+    live status (claimed/in_progress/done) lives in the runtime store at
+    <state-dir>/tasks/<id>.state.json. _load_tasks must overlay it, or every
+    started spec normalizes as todo and the tracker never advances."""
+
+    def _flow_with_task(self, tmp: Path) -> Path:
+        flow = tmp / ".flow"
+        (flow / "tasks").mkdir(parents=True)
+        (flow / "tasks" / "fn-1.1.json").write_text(
+            json.dumps({"id": "fn-1.1", "status": "todo", "spec": "fn-1"}),
+            encoding="utf-8")
+        return flow
+
+    def test_runtime_state_overlays_definition_status(self) -> None:
+        import os
+        from flowctl_tracker.status import verb as V
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            flow = self._flow_with_task(tmp_path)
+            state = tmp_path / "state" / "tasks"
+            state.mkdir(parents=True)
+            (state / "fn-1.1.state.json").write_text(
+                json.dumps({"status": "in_progress",
+                            "assignee": "smoke", "claimed_at": "t"}),
+                encoding="utf-8")
+            old = os.environ.get("FLOW_STATE_DIR")
+            os.environ["FLOW_STATE_DIR"] = str(tmp_path / "state")
+            try:
+                tasks = V._load_tasks(flow, "fn-1")
+            finally:
+                if old is None:
+                    os.environ.pop("FLOW_STATE_DIR", None)
+                else:
+                    os.environ["FLOW_STATE_DIR"] = old
+            self.assertEqual(tasks, [{"id": "fn-1.1", "status": "in_progress"}])
+
+    def test_definition_status_still_read_without_runtime_state(self) -> None:
+        import os
+        from flowctl_tracker.status import verb as V
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            flow = self._flow_with_task(tmp_path)
+            old = os.environ.get("FLOW_STATE_DIR")
+            os.environ["FLOW_STATE_DIR"] = str(tmp_path / "state-missing")
+            try:
+                tasks = V._load_tasks(flow, "fn-1")
+            finally:
+                if old is None:
+                    os.environ.pop("FLOW_STATE_DIR", None)
+                else:
+                    os.environ["FLOW_STATE_DIR"] = old
+            self.assertEqual(tasks, [{"id": "fn-1.1", "status": "todo"}])
