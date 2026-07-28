@@ -1,8 +1,8 @@
 # QA stage — freshness probe (gated reference)
 
-> **Loaded only when Phase 2's QA gate prints its `GATE ACTIVE — STOP` sentinel**
-> (`pipeline.qa == "on"`, or the gate's probe/parse errored — fail open). A default
-> tick (`pipeline.qa` off/unset) never reads this file. Contract: this file states
+> **Loaded only when Phase 2's QA gate prints its active read/execute/continue
+> sentinel** (`pipeline.qa == "on"`, or the gate's probe/parse errored — fail
+> open). A default tick (`pipeline.qa` off/unset) never reads this file. Contract: this file states
 > how to compute `QA_FRESH` (and resolve `BRANCH_NAME`); the **consumption stays
 > inline in `workflow.md`** — the Phase 2 classification rows and the all-done PR
 > probe's no-PR branch read `QA_STAGE_ENABLED` / `QA_FRESH` there, unchanged, and

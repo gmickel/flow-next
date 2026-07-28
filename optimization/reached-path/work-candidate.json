@@ -11,23 +11,23 @@
     "result": "OK: work inputs match B1 (4 files)"
   },
   "prompt_hashes": {
-    "plugins/flow-next/skills/flow-next-work/SKILL.md": "72c2ff6ad06711c12190599e9b3d3d3776212c8546a5dcbf65f7e3ada5b5fa53",
-    "plugins/flow-next/skills/flow-next-work/phases.md": "42b7da82421a40d7d28981c6a966e446554e9f3cb66969ba29a29d3aa3cd886a",
+    "plugins/flow-next/skills/flow-next-work/SKILL.md": "183ee42b09cae59459dfa83ec10cec66eb1711ef7e6b47bc479346dd9976c88d",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "a73176915edc4760e25d011cb3c3ad4c5449680c5712d9b09edc43126624fe2c",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "80a8a31e025b6bacbb45023f33b2f1184a7ae06265364acc1598cb49fe1efb4f",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "26d5ff37bfb9805e8f5c90a62f66425f2e2fd78ae9ab1614b0e8b1a7a01c4955",
-    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "657e0f2a5a6dd1f25e28317c0df61d836c2d78abe63e53ab5d94fe5b93d678ac"
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "89d60a08eea0f27c58fb71196e0b5a5a72c28d2b2f86e67e4da8bcce1a9204c6"
   },
   "metrics": {
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
       "baseline_reached_path_chars": 51330,
-      "candidate_reached_path_chars": 51329,
+      "candidate_reached_path_chars": 51301,
       "reduction_chars": 3730,
       "reduction_percent": 6.86
     },
     "delegation_active_path": {
       "baseline_reached_path_chars": 101126,
-      "candidate_reached_path_chars": 101125,
+      "candidate_reached_path_chars": 101097,
       "reduction_chars": 427,
       "reduction_percent": 0.42
     },

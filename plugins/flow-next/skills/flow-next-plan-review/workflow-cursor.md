@@ -30,8 +30,8 @@ status, cumulative rounds, and receipt writes. Cursor invokes
 `cursor-agent -p --output-format json --trust --mode ask` in the repo root; the
 reviewer is read-only. The receipt has no effort key.
 
-Return the verdict to SKILL.md's shared fix loop. The first call omits a resume
-id; only a persisted same-mode `session_id` enables continuation.
+Carry the verdict directly into SKILL.md's shared Fix Loop. The first call
+omits a resume id; only a persisted same-mode `session_id` enables continuation.
 
 ## Anti-patterns
 

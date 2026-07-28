@@ -307,11 +307,11 @@ QA_GATE="$(jq -r '.value.pipeline.qa' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || ACT
 [ "$QA_GATE" = "on" ] && ACTIVE=1
 [ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1 # ONLY the literal `on` activates — never bool true / typos
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/qa-stage.md#qa-stage-freshness-probe before continuing."
+ echo "GATE ACTIVE — read and execute references/qa-stage.md#qa-stage-freshness-probe, then continue with Phase 2 classification."
 fi # default branch: bare no-op — NO link, NO read path
 ```
 
-When the sentinel prints, STOP and Read [references/qa-stage.md](references/qa-stage.md) before any further step — it holds the QA-stage freshness probe (R1b) that computes `QA_FRESH` (and resolves `BRANCH_NAME`). The classification rows below and the all-done PR probe's no-PR branch consume `QA_STAGE_ENABLED` / `QA_FRESH` unchanged; on a default tick the gate is silent, the flow continues as written, and the reference is never read.
+When the sentinel prints, read [references/qa-stage.md](references/qa-stage.md), execute its QA-stage freshness probe (R1b) to compute `QA_FRESH` (and resolve `BRANCH_NAME`), then continue with the Phase 2 classification below. The classification rows and the all-done PR probe's no-PR branch consume `QA_STAGE_ENABLED` / `QA_FRESH` unchanged; on a default tick the gate is silent, the flow continues as written, and the reference is never read.
 
 Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 

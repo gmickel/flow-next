@@ -125,12 +125,12 @@ fi
 
 ## Phase 1.5: Select the Codex-delegation path (ONLY when requested)
 
-**Skip unless `delegation_requested=true`.** When requested, **STOP and read
+**Skip unless `delegation_requested=true`.** When requested, **read
 [references/codex-delegation-selection.md](references/codex-delegation-selection.md)
-top to bottom**. It owns the exact ordered gates, consent ceremony, clean-tree
-check, and terminal routing. A failed or declined selection continues standard
-mode without loading active-only machinery. Only a passing selection loads
-`references/codex-delegation.md`.
+top to bottom, execute its exact ordered gates, consent ceremony, clean-tree
+check, and terminal routing, then continue with Phase 2**. A failed or declined
+selection continues standard mode without loading active-only machinery.
+Only a passing selection loads `references/codex-delegation.md`.
 
 ## Phase 2: Apply Branch Choice
 
@@ -219,11 +219,11 @@ if [ "$ACTIVE" = "0" ]; then
  [ "$VAL" = "true" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/tracker-touchpoints.md#first-claim before continuing."
+ echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#first-claim, then continue with Phase 3c."
 fi # default branch: bare no-op — NO link, NO read path
 ```
 
-When the sentinel prints, STOP and Read [references/tracker-touchpoints.md](references/tracker-touchpoints.md) before any further step — its `First claim` section holds this touchpoint's `work.firstClaim` leaf check + dispatch (best-effort; never blocks the worker). When the gate is silent (bridge inactive), continue — nothing fires here.
+When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `First claim` section (`work.firstClaim` leaf check + best-effort dispatch), then continue with Phase 3c. When the gate is silent (bridge inactive), continue — nothing fires here.
 
 ### 3c. Run Worker Agent(s)
 
@@ -380,11 +380,11 @@ if [ "$ACTIVE" = "0" ]; then
  [ "$VAL" = "true" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/tracker-touchpoints.md#task-done before continuing."
+ echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#task-done, then continue with Phase 3d.2."
 fi # default branch: bare no-op — NO link, NO read path
 ```
 
-When the sentinel prints, STOP and Read [references/tracker-touchpoints.md](references/tracker-touchpoints.md) before any further step — its `Task done` section holds this touchpoint's `work.done` leaf check + dispatch (best-effort; never blocks the work loop). When the gate is silent (bridge inactive), continue — nothing fires here.
+When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Task done` section (`work.done` leaf check + best-effort dispatch), then continue with Phase 3d.2. When the gate is silent (bridge inactive), continue — nothing fires here.
 
 #### 3d.2 Delegated worker signal (ONLY when `delegation_active`)
 
@@ -494,11 +494,11 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
  [ "$VAL" = "true" ] && ACTIVE=1
  fi
  if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/tracker-touchpoints.md#completion-review before continuing."
+ echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#completion-review, then continue with Phase 4."
  fi # default branch: bare no-op — NO link, NO read path
  ```
 
- When the sentinel prints, STOP and Read [references/tracker-touchpoints.md](references/tracker-touchpoints.md) before any further step — its `Completion review` section holds this touchpoint's `completionReview` leaf check + the comment-shaped dispatch (verdict + R-ID coverage; never a terminal `Done`/`verified` push — land.merged is the SOLE Done driver). When the gate is silent (bridge inactive), continue — nothing fires here.
+ When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Completion review` section (`completionReview` leaf check + comment-shaped verdict/R-ID-coverage dispatch), then continue with Phase 4. The dispatch never sends terminal `Done`/`verified` — `land.merged` is the SOLE Done driver. When the gate is silent (bridge inactive), continue — nothing fires here.
  - Go to Phase 4 (Quality)
 
 **Note:** The spec-completion-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review — and (when opted in) posts the verdict / R-ID-coverage comment to the linked tracker issue here. It does **NOT** flip the issue to `Done`/`verified` (fn-66: that is gated on a `MERGED` PR and driven solely by `land.merged`). The review skill (`flow-next-spec-completion-review`) is NOT edited; the touchpoint lives at this caller.

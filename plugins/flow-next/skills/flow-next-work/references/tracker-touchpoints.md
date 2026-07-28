@@ -1,8 +1,8 @@
 # work tracker touchpoints (gated reference)
 
-> **Loaded only when a phases.md tracker gate prints its `GATE ACTIVE — STOP`
-> sentinel** (bridge active, or the gate's probe/parse errored — fail open). A
-> default (bridge-inactive) run never reads this file. Phase 5's end-of-run
+> **Loaded only when a phases.md tracker gate prints its active
+> read/execute/continue sentinel** (bridge active, or the gate's probe/parse
+> errored — fail open). A default (bridge-inactive) run never reads this file. Phase 5's end-of-run
 > `sync check` + retro-fire + the mandatory four-state `Tracker sync:` summary
 > slot are NOT here — they stay inline in phases.md Phase 5 and run on EVERY run.
 

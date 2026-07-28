@@ -30,13 +30,13 @@
         "qa_reference_hash": "8f6119464248d3edb4ca821521e664fe2760589b4aa745745b6c73b5370d2d9f"
       },
       "candidate": {
-        "ready_reached_path_chars": 61293,
-        "backlog_reached_path_chars": 90135,
-        "skill_chars": 14056,
-        "skill_hash": "357a630e43c6e478b1012b04d79b1890efb1cb5b9773a274b6bfd3e92ebc3575",
+        "ready_reached_path_chars": 61390,
+        "backlog_reached_path_chars": 90232,
+        "skill_chars": 14114,
+        "skill_hash": "dff26009381d5e7343ea9dbe7268a0bb9a074f864cf6c9739c0ed830128069a3",
         "backlog_reference_hash": "bb52dcdff8597a927ee856142f6429a1608c98789f2d7f8269eac6c028d07855",
-        "workflow_hash": "c32fc5221193cc64ffab22e321a6b8ff522032d67d9cca8d2fad9a54e049ac61",
-        "qa_reference_hash": "8f6119464248d3edb4ca821521e664fe2760589b4aa745745b6c73b5370d2d9f"
+        "workflow_hash": "15d5c8a19e999ad1ed24302df3c6990f7be1d840f92b65b0b7b90fabdf5fdb31",
+        "qa_reference_hash": "f9d8178edff045d0f6a201df4a5a0ecbfba9cc74378cf7d27f936ae220691cef"
       },
       "improvement": {
         "ready_reached_path_chars": -2009,

@@ -70,7 +70,12 @@ class WorkReachedPathRoutes(unittest.TestCase):
             self.assertGreater(row["reduction_chars"], 0)
 
     def test_requested_path_loads_exact_selection_before_active_reference(self) -> None:
-        self.assertIn("STOP and read", self.phases)
+        self.assertNotIn("STOP and read", self.phases)
+        self.assertIn(
+            "execute its exact ordered gates, consent ceremony, clean-tree\n"
+            "check, and terminal routing, then continue with Phase 2",
+            self.phases,
+        )
         self.assertIn("codex-delegation-selection.md", self.phases)
         for contract in (
             "platform_gate_ok()",

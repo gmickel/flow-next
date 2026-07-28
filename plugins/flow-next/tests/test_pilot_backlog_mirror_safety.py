@@ -162,9 +162,14 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             "backlog-only grammar must not stay always-loaded in SKILL.md",
         )
         self.assertIn(
-            "STOP and read [references/backlog-mode.md]",
+            "read [references/backlog-mode.md]",
             self.pilot_skill,
             "the selected backlog route must require the direct reference",
+        )
+        self.assertIn(
+            "execute its backlog-only setup, then continue with `workflow.md` Phase 1",
+            self.pilot_skill,
+            "the selected backlog route must explicitly continue into the workflow",
         )
         self.assertIn(
             "PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN>",
