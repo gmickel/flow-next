@@ -7,10 +7,10 @@ All notable changes to the flow-next.
 ### Added
 
 - **Deterministic tracker verb surface** (`flowctl tracker ...`, fn-140, spec B of the tracker-determinism batch). The tracker-sync prose workflows now have a deterministic Python backend in `flowctl_tracker/`: locator-addressed wire verbs (`read`/`update`/`comment`/`label`/`assign`/`attach`/`list-open`), lifecycle verbs (`create`, `create-first`, `persist-external`), `status` (fn-66 merge-evidence gate decides; `--to` is a request), `relate` (two-phase depRelations ledger, additive-only), `sync-body` (server readback is the canonical tracker half; paired merge base committed atomically), and the `sync` facade (`push|pull|reconcile|comment` as one unit with create-if-unlinked, marker dedup, and one aggregate receipt). All four adapters (GitHub, GitLab, Linear, Jira) run behind a never-raises boundary with structured `degraded` evidence, honest pagination (`truncated`, never silent absence), per-spec operation claims under the shared writer lock, and identity guards that refuse to persist across a mid-flight relink. Verified by a cross-adapter conformance matrix with fault injection plus a live smoke against all four trackers.
+
 ### Changed
 
 - **Autonomous skill seams now continue explicitly instead of reading like terminal handoffs.** Pilot and Work forced-reference gates, review backend returns, and post-task dispatches direct the host to continue the same invocation. Work recognizes all four headless-autonomy markers before delegation consent, while interactive consent still asks and persists normally. Plan Review keeps host-only mechanics cold until the host backend is selected. Genuine terminal verdicts, receipts, sandbox authority, and non-host backend behavior are unchanged.
->>>>>>> origin/main
 
 ### Fixed
 
