@@ -40,6 +40,17 @@ BackendSpec = flowctl.BackendSpec
 BACKEND_REGISTRY = flowctl.BACKEND_REGISTRY
 MODEL_ROLE_BACKENDS = flowctl.MODEL_ROLE_BACKENDS
 
+REPO = Path(__file__).resolve().parents[3]
+SKILLS = REPO / "plugins" / "flow-next" / "skills"
+
+
+def _read(relative: str) -> str:
+    return (SKILLS / relative).read_text(encoding="utf-8")
+
+
+def _section(text: str, start: str, end: str) -> str:
+    return text.split(start, 1)[1].split(end, 1)[0]
+
 
 class TestHostBackendRegistry(unittest.TestCase):
     """host is registered but non-executable (no model axis, not role-mappable)."""
@@ -119,3 +130,79 @@ class TestHostLenientResolution(unittest.TestCase):
             spec = flowctl.parse_backend_spec_lenient("rp:not-a-model", warn=True)
         self.assertIsNotNone(spec, "legacy lenience for non-host backends must not change")
         self.assertEqual(spec.backend, "rp")
+
+
+class TestHostReviewWorkflowRouting(unittest.TestCase):
+    """Host mechanics stay behind the selected reference and own no status."""
+
+    REVIEW_SKILLS = (
+        "flow-next-impl-review",
+        "flow-next-spec-completion-review",
+    )
+    NON_HOST_BACKENDS = ("codex", "copilot", "cursor", "rp")
+    HOST_ONLY_MECHANICS = (
+        "NEEDS_HUMAN: host review needs a cross-family model pin",
+        "`disallowedTools: Edit, Write, Task`",
+        '"mode": "host"',
+        '"session_id": null',
+    )
+
+    def test_root_host_surface_is_only_router_and_safety_invariant(self) -> None:
+        for skill in self.REVIEW_SKILLS:
+            root = _read(f"{skill}/SKILL.md")
+            host = _section(
+                root,
+                "**For host backend (fn-123 R5 / fn-126):**",
+                "**For all backends:**",
+            )
+            self.assertIn("[workflow-host.md](workflow-host.md)", host)
+            self.assertIn("fresh, tool-enforced read-only reviewer", host)
+            self.assertIn("different\nmodel family", host)
+            self.assertIn("fail closed", host)
+            for mechanic in self.HOST_ONLY_MECHANICS:
+                self.assertNotIn(mechanic, host, f"{skill}: host mechanics leaked into root")
+
+    def test_non_host_reached_paths_keep_host_mechanics_cold(self) -> None:
+        for skill in self.REVIEW_SKILLS:
+            root = _read(f"{skill}/SKILL.md")
+            common = _read(f"{skill}/workflow-common.md")
+            for backend in self.NON_HOST_BACKENDS:
+                reached = root + common + _read(f"{skill}/workflow-{backend}.md")
+                for mechanic in self.HOST_ONLY_MECHANICS:
+                    self.assertNotIn(
+                        mechanic,
+                        reached,
+                        f"{skill}/{backend}: loaded host-only mechanic {mechanic!r}",
+                    )
+
+    def test_selected_host_workflows_are_self_contained(self) -> None:
+        for skill in self.REVIEW_SKILLS:
+            host = _read(f"{skill}/workflow-host.md")
+            for mechanic in self.HOST_ONLY_MECHANICS:
+                self.assertIn(mechanic, host, f"{skill}: missing {mechanic!r}")
+            host_lower = host.lower()
+            for required in (
+                "prior findings",
+                "tests/lints",
+                "commit the fixes before re-review",
+                "<promise>RETRY</promise>",
+                "Continue until `SHIP` or the deterministic round cap",
+            ):
+                self.assertIn(
+                    required.lower(),
+                    host_lower,
+                    f"{skill}: incomplete host workflow",
+                )
+            self.assertNotIn("Return the verdict", host)
+
+    def test_completion_status_has_one_shared_owner(self) -> None:
+        root = _read("flow-next-spec-completion-review/SKILL.md")
+        host = _read("flow-next-spec-completion-review/workflow-host.md")
+        command = "$FLOWCTL spec set-completion-review-status"
+        self.assertEqual(root.count(command), 2, "shared owner needs both terminal writes")
+        self.assertNotIn(command, host, "selected host workflow must never write status")
+        self.assertIn("This shared step is the sole writer for host and rp", root)
+        self.assertIn("never write completion status", root)
+        self.assertIn("This host workflow never writes terminal completion status", host)
+        self.assertIn("stop without writing completion status", host)
+        self.assertNotIn("or write status here", host)

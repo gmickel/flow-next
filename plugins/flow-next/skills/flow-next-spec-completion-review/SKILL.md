@@ -63,7 +63,8 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 - **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.5`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
 - **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, or `--spec copilot:claude-opus-4.5:xhigh`.
 - **cursor** — Cursor CLI (`cursor-agent`, cross-platform); reaches `gpt-5.5-high` (1M-ctx default), the `gpt-5.3-codex` family, `composer-2.5`, and `claude-opus-4-8-thinking-high` via a Cursor subscription. `FLOW_CURSOR_MODEL` env var, or `--spec cursor:gpt-5.5-high`. Cursor folds reasoning effort into the model name — **no effort field**.
-- **host** — Host-native fresh-context reviewer subagent (fn-123 R5). Non-executable selection sentinel: no subprocess, no `flowctl host` command. Model pins live in the AGENTS.md model-routing section, never on the backend string — bare `host` only; `host:<model>` is rejected.
+- **host** — Bare-only non-executable selection sentinel; selected mechanics
+  live in [workflow-host.md](workflow-host.md).
 
 **Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`, `cursor:gpt-5.5-high` (cursor takes model only — no `:effort`), `host` (bare only). Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 
@@ -94,15 +95,9 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 4. Parse verdict from command output
 
 **For host backend (fn-123 R5 / fn-126):**
-1. **DO NOT REVIEW COMPLETION YOURSELF** — you coordinate; a fresh-context host-native subagent reviews (see [workflow-host.md](workflow-host.md))
-2. Dispatch a **read-only** reviewer subagent pinned to a **cross-family** model slug from AGENTS.md model-routing:
-   - **Claude Code**: native `model` param + tool-enforced read-only
-   - **Cursor**: in-prompt slug pin + tool-enforced read-only
-   - **Grok**: in-prompt / host model pin + tool-enforced read-only; single-native-family (`grok-4.5`) fails closed unless the writer is non-Grok (cross-family via bridges); receipt `mode: "host"` + actual model + `session_id: null`
-   - **Elsewhere**: generic fresh-context reviewer with host-dependent note
-3. Record actual reviewer model + `"mode": "host"` in the receipt
-4. **Every re-review is a fresh subagent** — no context reuse, no fabricated resume ids
-5. **Fail closed on missing cross-family pin:** interactive → ask user explicitly; autonomous → `NEEDS_HUMAN` (never silent same-family self-review)
+`host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
+The review must use a fresh, tool-enforced read-only reviewer from a different
+model family and fail closed when no cross-family pin is available.
 
 **For all backends:**
 - If `REVIEW_RECEIPT_PATH` set: write receipt after SHIP verdict (RP writes manually after fix loop; codex writes automatically via `--receipt`)
@@ -115,7 +110,6 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 - Self-declaring SHIP without actual backend verdict
 - Mixing backends mid-review (stick to one)
 - Skipping review silently (must inform user and exit cleanly when backend is "none")
-- Silent same-family self-review under `host` when no cross-family pin is available
 
 ## Input
 
@@ -186,21 +180,25 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
    - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
-   - **Host**: Spawn a **fresh** read-only reviewer subagent (same cross-family pin rules; never reuse prior subagent context; update receipt `mode: "host"` + actual model)
+   - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
+     re-review path.
    - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
 5. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap above breaks the loop (escalate with surviving gaps)
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
 
-## Step 3: Record the verdict (MANDATORY for rp / repair; handler-owned otherwise)
+## Step 3: Record the terminal verdict exactly once
 
 `flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.** The standalone command remains for rp and for repairing a missed write:
 
 ```bash
 # Final verdict resolved to SHIP → ship; NEEDS_WORK at the iteration cap → needs_work.
-# Skip when the backend handler already wrote status (codex/copilot/cursor).
+# This shared step is the sole writer for host and rp. Skip when the backend
+# handler already wrote status (codex/copilot/cursor).
 $FLOWCTL spec set-completion-review-status "$SPEC_ID" --status ship --json        # on SHIP
 $FLOWCTL spec set-completion-review-status "$SPEC_ID" --status needs_work --json  # on NEEDS_WORK at cap
 ```
 
-On rp (or if the JSON payload lacks `plan_review_status`/`completion_review_status`), write on BOTH terminal paths (SHIP and capped-NEEDS_WORK).
+For host and rp, write once on BOTH terminal paths (SHIP and capped-NEEDS_WORK).
+`NEEDS_HUMAN`, transport failure, malformed verdict, and retry outcomes are
+non-terminal and never write completion status.
