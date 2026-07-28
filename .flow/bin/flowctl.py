@@ -853,7 +853,7 @@ def get_state_dir() -> Path:
     # 2. Git common-dir (shared across worktrees)
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir", "--path-format=absolute"],
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
             capture_output=True,
             text=True, encoding="utf-8",
             check=True,
@@ -23239,6 +23239,55 @@ def cmd_sync_get_state(args: argparse.Namespace) -> None:
             print(f"  {key}: {val if val is not None else '(unset)'}")
 
 
+def _live_spec_operation_claim(flow_dir: Path, spec_id: str) -> Optional[dict]:
+    """First LIVE spec-keyed tracker operation claim for ``spec_id``, or None.
+
+    PR #246: the tracker verbs serialize their whole read/provider-mutation/
+    persist transactions via per-spec claims under `.flow/create-first/`
+    (create: `spec-<id>.json`, sync-body: `syncbody-<id>.json`, status:
+    `status-<id>.json`). The relink writer must HONOR those claims - each
+    verb's locked identity recheck can only detect a repoint after the remote
+    mutation has already landed on the old issue; it cannot undo it. Refusing
+    the relink while a live claim exists makes the exclusion claim-based
+    rather than detect-after-the-fact.
+
+    Staleness follows flowctl_tracker's owner rules (`_claim_is_stale`): a
+    claim within the stale window is live; past the window a dead pid on THIS
+    host is a crashed run's leftover and is ignored (NOT reclaimed - releasing
+    is the owning verb's job); another host's pid space is unknowable, so its
+    claims stay live (fail closed). Comment claims are keyed by marker hash,
+    not spec id, and are out of scope here. Older `.flow/bin` copies without
+    the tracker package have no claim writers either, so the guarded import
+    degrades to no check - exactly their current semantics.
+    """
+    try:
+        from flowctl_tracker.lifecycle.verbs import _claim_is_stale
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if not (here / "flowctl_tracker").is_dir():
+            return None
+        sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker.lifecycle.verbs import _claim_is_stale
+        except ImportError:
+            return None
+    for prefix, op in (("spec", "create"), ("syncbody", "sync-body"),
+                       ("status", "status")):
+        rec_path = flow_dir / "create-first" / f"{prefix}-{spec_id}.json"
+        if not rec_path.is_file():
+            continue
+        try:
+            claim = json.loads(rec_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (isinstance(claim, dict)
+                and claim.get("status") == "pending"
+                and not _claim_is_stale(claim, rec_path)):
+            return {"op": claim.get("op") or op, "file": rec_path.name,
+                    "pid": claim.get("pid"), "host": claim.get("host")}
+    return None
+
+
 def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
     """Link a spec to a tracker issue (UUID id + display identifier + url) (R4)."""
     if not ensure_flow_exists():
@@ -23287,6 +23336,22 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
     try:
         with _shared_config_lock(flow_dir):
             spec_json_path, spec_data = _resolve_sync_spec(args)
+
+            # PR #246: honor LIVE per-spec operation claims (create/sync-body/
+            # status). A verb's identity recheck can only detect a relink
+            # AFTER its provider mutation landed on the old issue; refusing
+            # here keeps the relink out of the whole claimed window. The
+            # operation is short-lived and releases its claim on completion -
+            # this refusal is retryable.
+            live = _live_spec_operation_claim(flow_dir, args.id)
+            if live is not None:
+                error_exit(
+                    f"spec {args.id} has a tracker {live['op']} operation in "
+                    f"flight (claim {live['file']}, pid {live['pid']} on "
+                    f"{live['host']}); refusing to relink while it holds the "
+                    "claim; retry after the operation finishes",
+                    use_json=args.json,
+                )
 
             # Collision guard (R5): refuse to link two specs to one tracker
             # UUID unless forced (re-link of the same spec is always fine).

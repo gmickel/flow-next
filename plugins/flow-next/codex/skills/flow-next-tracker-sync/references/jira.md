@@ -342,9 +342,10 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
  + (if $wl == 1 then { labels: [$lbl] } else {} end)) }')
 # DESC_SETTABLE=0 (rare custom create screen omitting Description) ⇒ create WITHOUT a body;
 # the spec body then projects on the next push/reconcile via writeIssue UPDATE (the EDIT
-# screen usually exposes Description even when the CREATE screen doesn't). Surface a one-line
-# degrade note on the receipt so the empty first-create body is never silently mistaken for
-# a sync gap.
+# screen usually exposes Description even when the CREATE screen doesn't). Record the
+# degradation in the receipt's STRUCTURED `degraded` field (never as a prose sentence in
+# the note - the epic's contract) so the empty first-create body is never silently mistaken
+# for a sync gap.
 # CRITICAL — DO NOT seed the create-time merge base from the rendered spec body when
 # DESC_SETTABLE=0: the issue body is EMPTY, so a base snapshotted as the full spec body
 # makes the next reconcile read Jira's empty description as a tracker-side DELETION/conflict

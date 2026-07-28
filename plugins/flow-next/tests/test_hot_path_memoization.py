@@ -89,10 +89,11 @@ def _failing_subprocess(module):
 
 def _git_state_dir(cwd: Path) -> Path:
     """The value production's success branch computes for ``cwd`` — the exact
-    same git invocation, so expectations track real git output (relative
-    ``.git`` at a standalone toplevel, absolute inside a linked worktree)."""
+    same git invocation, so expectations track real git output (PR #246
+    wave-14 P1: --path-format must PRECEDE --git-common-dir to apply, so the
+    output is now always absolute)."""
     out = subprocess.run(
-        ["git", "rev-parse", "--git-common-dir", "--path-format=absolute"],
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
         cwd=cwd,
         capture_output=True,
         text=True,

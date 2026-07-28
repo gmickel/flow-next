@@ -226,14 +226,16 @@ class PersistExternal(unittest.TestCase):
             self.assertEqual(L.derive_link_state(saved), "identifier_only")
             receipts = _receipts(flow)
             self.assertEqual(len(receipts), 1)
+            # Epic contract: degradation is EXCLUSIVELY the structured field -
+            # the note never carries a degradation sentence.
             note = receipts[0]["note"] or ""
-            # Round-1 finding 5: degradation is the STRUCTURED field; the note
-            # stays informational.
-            self.assertIn("identifier_only", note)
-            self.assertIn("WOR-17", note)
-            self.assertIn("https://linear.app/x/issue/WOR-17", note)
-            self.assertEqual((receipts[0].get("degraded") or {}).get("kind"),
-                             "identifier_only")
+            self.assertNotIn("identifier_only", note)
+            self.assertNotIn("degraded", note.lower())
+            degraded = receipts[0].get("degraded") or {}
+            self.assertEqual(degraded.get("kind"), "identifier_only")
+            self.assertEqual(degraded.get("identifier"), "WOR-17")
+            self.assertEqual(degraded.get("url"),
+                             "https://linear.app/x/issue/WOR-17")
 
     def test_non_mcp_source_is_invalid_input(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -1161,3 +1161,207 @@ class LoadTasksMergesRuntimeState(unittest.TestCase):
                 else:
                     os.environ["FLOW_STATE_DIR"] = old
             self.assertEqual(tasks, [{"id": "fn-1.1", "status": "todo"}])
+
+
+class StateDirAbsoluteFromSubdir(unittest.TestCase):
+    """PR #246 wave-14 P1: --path-format modifies only options AFTER it, so
+    a trailing --path-format=absolute returned a cwd-relative ".git". The
+    resolved state dir must be absolute regardless of the caller's cwd."""
+
+    def test_state_dir_is_absolute(self) -> None:
+        import os
+        import subprocess as sp
+        from flowctl_tracker.status import verb as V
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            (repo / ".flow").mkdir(parents=True)
+            sp.run(["git", "init", "-q", str(repo)], check=True)
+            old = os.environ.pop("FLOW_STATE_DIR", None)
+            try:
+                out = V._state_dir(repo / ".flow")
+            finally:
+                if old is not None:
+                    os.environ["FLOW_STATE_DIR"] = old
+            self.assertTrue(out.is_absolute(), out)
+            self.assertEqual(out, (repo / ".git" / "flow-state").resolve())
+
+
+class AliasedStateIdReads(unittest.TestCase):
+    """PR #246 wave-14 P2: non-injective slot->id maps (sanctioned aliasing
+    via --select) must read deterministically. The reverse map picks the
+    EARLIEST aliased slot in the canonical progression order, never dict
+    key order, so JSON serialization order cannot flip the normalized slot
+    and drive a different merge-gate decision."""
+
+    def _linear_dest(self, state_ids: dict) -> dict:
+        return {"stateIds": state_ids}
+
+    def test_linear_alias_reads_earliest_slot_both_orders(self) -> None:
+        parent = {"state": {"id": "s-shared", "name": "In Progress",
+                            "type": "started"}}
+        order_a = {"todo": "s-todo", "in_progress": "s-shared",
+                   "in_review": "s-shared", "done": "s-done"}
+        order_b = {"done": "s-done", "in_review": "s-shared",
+                   "in_progress": "s-shared", "todo": "s-todo"}
+        for ids in (order_a, order_b):
+            out = tracker_norm_from_parent(
+                "linear", parent, self._linear_dest(ids))
+            self.assertEqual(out, "in_progress", msg=repr(ids))
+
+    def test_linear_single_id_map_unchanged(self) -> None:
+        parent = {"state": {"id": "s-rev", "name": "In Review",
+                            "type": "started"}}
+        ids = {"todo": "s-todo", "in_progress": "s-ip",
+               "in_review": "s-rev", "done": "s-done"}
+        out = tracker_norm_from_parent("linear", parent,
+                                       self._linear_dest(ids))
+        self.assertEqual(out, "in_review")
+
+    def test_linear_done_cancelled_alias_reads_done(self) -> None:
+        # done precedes cancelled in the canonical progression order.
+        parent = {"state": {"id": "s-term", "name": "Closed",
+                            "type": "completed"}}
+        for ids in (
+            {"done": "s-term", "cancelled": "s-term"},
+            {"cancelled": "s-term", "done": "s-term"},
+        ):
+            out = tracker_norm_from_parent(
+                "linear", parent, self._linear_dest(ids))
+            self.assertEqual(out, "done", msg=repr(ids))
+
+    def test_jira_alias_reads_earliest_slot_both_orders(self) -> None:
+        parent = {"fields": {"status": {
+            "id": "71", "name": "Working",
+            "statusCategory": {"key": "indeterminate"},
+        }}}
+        order_a = {"todo": "11", "in_progress": "71",
+                   "in_review": "71", "done": "31"}
+        order_b = {"done": "31", "in_review": "71",
+                   "in_progress": "71", "todo": "11"}
+        for ids in (order_a, order_b):
+            out = tracker_norm_from_parent("jira", parent,
+                                           {"statusIds": ids})
+            self.assertEqual(out, "in_progress", msg=repr(ids))
+
+    def test_jira_single_id_map_unchanged(self) -> None:
+        parent = {"fields": {"status": {
+            "id": "41", "name": "In Review",
+            "statusCategory": {"key": "indeterminate"},
+        }}}
+        ids = {"todo": "11", "in_progress": "21", "in_review": "41",
+               "done": "31"}
+        out = tracker_norm_from_parent("jira", parent, {"statusIds": ids})
+        self.assertEqual(out, "in_review")
+
+    def test_write_direction_alias_still_sanctioned(self) -> None:
+        # validate_select keeps permitting an id outside the slot's natural
+        # pool (the alias feature); the read-side fix must not touch it.
+        from flowctl_tracker.states import validate_select
+        live = {"s-ip": {"id": "s-ip", "name": "In Progress"}}
+        pools = {"in_review": []}
+        self.assertIsNone(validate_select("in_review", "s-ip", pools, live))
+
+
+class StatusClaimSerialization(unittest.TestCase):
+    """PR #246 review: relinks must be excluded across the status verb's
+    WHOLE window (initial reads -> provider mutation -> locked persistence),
+    not merely detected afterwards by _persist_applied_state. The verb now
+    takes a per-spec create-first claim (status-<spec-id>.json, syncbody's
+    pattern) before any spec read or tracker I/O; `sync set-tracker-id`
+    honors it, and a concurrent status invocation for the same spec backs
+    off with CONFLICT/status_in_flight instead of double-mutating."""
+
+    def test_concurrent_status_loser_conflicts_one_provider_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+            # Ungated completion review so merged -> done -> apply.
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+            rec_path = flow / "create-first" / "status-fn-1-demo.json"
+            inner: dict = {}
+
+            def racing_parent_read(req):
+                # The claim must be durable BEFORE the parent read...
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                self.assertEqual(claim.get("status"), "pending")
+                self.assertEqual(claim.get("op"), "status")
+                self.assertEqual(claim.get("specId"), "fn-1-demo")
+                # ...so a second invocation racing in mid-transaction refuses
+                # with structured CONFLICT before ANY tracker I/O (the empty
+                # executor would AssertionError on any wire call) instead of
+                # issuing a second provider mutation.
+                inner["out"] = S.status(flow, "fn-1-demo", to="done",
+                                        execute=fake_execute({}))
+                return ok(_gh_parent(state="open",
+                                     labels=["status:in_review"]))
+
+            ex = fake_execute({
+                "status-parent-read": racing_parent_read,
+                "merge-evidence": ok([{"state": "MERGED", "number": 1}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed",
+                                  "state_reason": "completed"}),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": ok([{"name": "status:done"}]),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "applied")
+
+            raced = inner["out"]
+            self.assertIsInstance(raced, TrackerError)
+            self.assertIs(raced.cls, ErrorClass.CONFLICT)
+            self.assertEqual(raced.subtype, "status_in_flight")
+            self.assertTrue(raced.auto_retryable)
+            self.assertEqual((raced.details or {}).get("specId"), "fn-1-demo")
+            # Exactly ONE provider mutation landed across both invocations.
+            self.assertEqual(
+                sum(1 for c in ex.calls if c.op == "status-set"), 1)
+            self.assertFalse(rec_path.exists(),
+                             "claim released after the transaction finished")
+
+    def test_stale_dead_pid_claim_is_reclaimed(self) -> None:
+        import os
+        import socket
+        import time
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(
+                flow, gh_cfg(),
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tasks=[{"status": "in_progress"}],
+            )
+            rec_path = flow / "create-first" / "status-fn-1-demo.json"
+            rec_path.parent.mkdir(parents=True)
+            # pid 0 is never alive; claimedAt is past the stale window.
+            rec_path.write_text(json.dumps({
+                "specId": "fn-1-demo", "status": "pending", "op": "status",
+                "to": "in_progress", "pid": 0,
+                "host": socket.gethostname(),
+                "claimedAt": time.time() - 999,
+                "transport": "github"}), encoding="utf-8")
+            self.assertNotEqual(os.getpid(), 0)
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_progress"])),
+                "merge-evidence": ok([]),
+            })
+            out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+            self.assertNotIsInstance(out, TrackerError,
+                                     "a crashed run's leftover claim must "
+                                     "not wedge the spec")
+            self.assertEqual(out["kind"], "noop")
+            self.assertFalse(rec_path.exists(),
+                             "reclaimed claim released after the run")

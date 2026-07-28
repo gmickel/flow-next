@@ -112,20 +112,27 @@ def ledger_finalize(tracker: dict, *, key: str) -> dict:
     return tracker
 
 
-def ledger_release(tracker: dict, *, key: str) -> dict:
+def ledger_release(tracker: dict, *, key: str, force: bool = False) -> dict:
     """DROP a pending entry owned by THIS process (call under the shared
     writer lock, after an OBSERVED provider create failure that definitely
     did NOT land). Restores the entry-absent state so an immediate retry -
     typically a new pid - can claim and create again instead of failing
     concurrent_claim for the full stale window. Entries that are applied,
-    missing, or owned by another process are left untouched (idempotent)."""
+    missing, or owned by another process are left untouched (idempotent).
+
+    force=True drops the pending entry regardless of its owner triple - for
+    the finalize-time identity-drift refusal ONLY (call under the lock,
+    after the drift is established): a pending entry keyed by the OLD
+    tracker ids can never be validly finalized after a relink (no future
+    run of the new pair computes its key), so it must not linger on the
+    relinked spec even when it was claimed by an earlier interrupted run."""
     me = claim_owner()
     ledger = []
     for entry in tracker.get("depRelations") or []:
         if (isinstance(entry, dict) and entry.get("key") == key
                 and entry.get("status") == "pending"
-                and entry.get("pid") == me["pid"]
-                and entry.get("host") == me["host"]):
+                and (force or (entry.get("pid") == me["pid"]
+                               and entry.get("host") == me["host"]))):
             continue
         ledger.append(entry)
     tracker = dict(tracker)

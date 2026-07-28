@@ -10,16 +10,20 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 
 from ..executor import execute as default_execute
-from ..lifecycle.helpers import (Execute, Result, dict_, load_spec,
-                                 merged_tracker, now_iso, read_config,
-                                 tracker_type, write_sync_receipt,
-                                 write_tracker_block)
+from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
+                                 leaf_is_safe, load_spec, merged_tracker,
+                                 now_iso, read_config, tracker_type,
+                                 write_sync_receipt, write_tracker_block)
 from ..lifecycle.linkstate import require_durable
+from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
+                               _release_claim)
 from ..types import ErrorClass, TrackerError
 from .policy import (Decision, decide, decision_as_error, flow_to_normalized,
                      merge_evidence, validate_to_reason)
@@ -43,8 +47,11 @@ def _state_dir(flow_dir: Path) -> Path:
     if env:
         return Path(env).resolve()
     try:
+        # --path-format modifies only the options AFTER it (PR #246 wave-14
+        # P1): trailing placement returned a cwd-relative ".git", which broke
+        # as soon as the caller's cwd differed from flow_dir.parent.
         result = subprocess.run(  # noqa: S603 - fixed argv, shell=False
-            ["git", "rev-parse", "--git-common-dir", "--path-format=absolute"],
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
             capture_output=True, text=True, encoding="utf-8", check=True,
             cwd=flow_dir.parent,
         )
@@ -156,22 +163,109 @@ def _persist_applied_state(flow_dir: Path, spec_id: str, *,
         return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
 
 
+def _claim_status(flow_dir: Path, spec_id: str, rec_path: Path,
+                  provider: str, *, to: str) -> Optional[TrackerError]:
+    """Reserve the spec's status transaction under the shared writer lock
+    BEFORE the parent read / PR probe / provider mutation (syncbody's claim
+    pattern, keyed on the spec id). The identity guard in
+    _persist_applied_state can only DETECT a relink after the provider
+    mutation has landed on the old issue; the claim makes the whole window
+    exclusive instead: `sync set-tracker-id` honors live per-spec claims and
+    refuses to relink while one exists, so a repoint can no longer land
+    between the initial reads and the locked persistence. Under the lock: a
+    live claim from another process refuses (status_in_flight, retryable), a
+    stale claim (dead pid on this host past the stale window,
+    _claim_is_stale's owner rules) is reclaimed by overwriting, and OUR
+    pending claim lands durably before any remote I/O. The claim is always
+    released when the invocation finishes (success or failure): the spec's
+    tracker block, not the claim file, is the durable record."""
+    unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
+    if unsafe:
+        return unsafe
+    secured = _ensure_create_first_ignored(flow_dir)
+    if secured is not None:
+        return secured
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            if rec_path.is_file():
+                try:
+                    prior = json.loads(rec_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    prior = None
+                if (isinstance(prior, dict)
+                        and prior.get("status") == "pending"
+                        and not _claim_is_stale(prior, rec_path)):
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        f"status for spec {spec_id!r} is already in flight "
+                        "in another process; retry after it finishes",
+                        subtype="status_in_flight",
+                        details={"specId": spec_id,
+                                 "claim": {"pid": prior.get("pid"),
+                                           "host": prior.get("host"),
+                                           "claimedAt": prior.get("claimedAt")}},
+                        auto_retryable=True)
+                # A STALE pending claim (crashed run) is reclaimed by
+                # overwriting it with OURS - same rule as create-first.
+            claim = {"specId": spec_id, "status": "pending",
+                     "op": "status", "to": to,
+                     "pid": os.getpid(), "host": socket.gethostname(),
+                     "claimedAt": time.time(), "transport": provider}
+            cerr = atomic_write_json(rec_path, claim)
+            if cerr:
+                return cerr
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc),
+                            subtype="lock_timeout")
+    return None
+
+
 def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
            event: Optional[str] = None,
            execute: Execute = default_execute,
            write_receipt: bool = True) -> Result:
-    """Spec-aware status verb. Never raises across the boundary."""
+    """Spec-aware status verb. Never raises across the boundary.
+
+    Serialized per spec via a create-first claim (`status-<spec-id>.json`)
+    taken before any spec read or tracker I/O; a live foreign claim refuses
+    with structured CONFLICT (status_in_flight, retryable). The same claim is
+    honored by `sync set-tracker-id`, so a relink cannot land anywhere inside
+    the claimed window.
+    """
     flow_dir = Path(flow_dir)
     # Validate --to/--reason BEFORE any mutation / network (garbage reason).
     bad = validate_to_reason(to, reason)
     if bad:
         return bad
+    if not spec_id:
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            "status requires <spec-id>", subtype="args")
 
     config = read_config(flow_dir)
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
 
+    rec_path = flow_dir / "create-first" / f"status-{spec_id}.json"
+    claimed = _claim_status(flow_dir, spec_id, rec_path, provider, to=to)
+    if claimed is not None:
+        return claimed
+    try:
+        return _status_txn(
+            flow_dir, spec_id, config=config, provider=provider,
+            to=to, reason=reason, event=event, execute=execute,
+            write_receipt=write_receipt)
+    finally:
+        _release_claim(rec_path)
+
+
+def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
+                to: str, reason: Optional[str], event: Optional[str],
+                execute: Execute, write_receipt: bool) -> Result:
+    """The claimed transaction body: spec loaded AFTER the claim, so every
+    read (spec snapshot, parent, PR evidence) and the provider mutation run
+    inside the relink-excluded window."""
     loaded = load_spec(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded

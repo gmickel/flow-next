@@ -527,6 +527,18 @@ class GithubSubIssuesHierarchy(unittest.TestCase):
             self.assertEqual(out["degraded"]["form"], "sub_issues")
             self.assertNotIn("blocked-by", out["form"])
             self.assertIn("never blocked-by", out["degraded"]["note"])
+            # Epic contract: the receipt note never carries a degradation
+            # sentence - degradation lives exclusively in the structured
+            # `degraded` field. The note stays a neutral record of what
+            # landed (and never presents sub_issues as blocked-by, R15).
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            note = receipts[0]["note"] or ""
+            self.assertNotIn("degraded", note.lower())
+            self.assertNotIn("blocked-by", note)
+            self.assertIn("sub_issues", note)
+            self.assertEqual(receipts[0]["degraded"]["kind"], "hierarchy")
+            self.assertEqual(receipts[0]["degraded"]["form"], "sub_issues")
             create = next(c for c in ex.calls if c.op == "relate-create")
             # Parent is the BLOCKER (#43); child is the blocked (#42).
             argv = list(create.url_or_argv)
@@ -1786,3 +1798,120 @@ class JiraSetDirection(unittest.TestCase):
             self.assertEqual(body["outwardIssue"], {"id": JR_ID},
                              "blocked (from) must be outwardIssue")
             self.assertEqual(body["type"], {"name": "Blocks"})
+
+
+class RelateRepairRelinkGuard(unittest.TestCase):
+    """PR #246 review: the REPAIR branch (pending entry + edge already on the
+    tracker from an interrupted earlier run) must finalize through the same
+    identity-rechecking guard as the create path. A relink landing during the
+    remote probe must NOT finalize the old-ID pending entry onto the newly
+    linked spec. Unlike the create path, THIS invocation performed no
+    provider mutation - the refusal must carry NO completed_steps (the
+    remote edge predates this run)."""
+
+    NEW_UUID = "99999999-8888-7777-6666-555555555555"
+
+    def _pair_with_pending(self, flow: Path) -> str:
+        key = R.dep_relation_key(LN_UUID, LN_UUID_B)
+        a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                "linkState": "linked",
+                "depRelations": [{"key": key, "dep_spec": "fn-2-dep",
+                                  "from_tracker_id": LN_UUID,
+                                  "to_tracker_id": LN_UUID_B,
+                                  "type": "blocks", "source": "flow",
+                                  "status": "pending",
+                                  "updatedAt": "2026-01-01T00:00:00Z"}]}
+        b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+        return key
+
+    def _probe_present_and_relink(self, flow: Path, relink_spec: str):
+        # Injection hook on the PROBE response: the pending entry existed at
+        # snapshot time and the edge is already on the tracker (interrupted
+        # earlier create), so the repair branch finalizes with no mutation.
+        # The relink lands during the probe - after the pair load, before the
+        # finalize re-acquires the lock: the window the guard must close.
+        body = {"data": {"issue": {
+            "id": LN_UUID,
+            "relations": {"nodes": []},
+            "inverseRelations": {"nodes": [
+                {"type": "blocks", "issue": {"id": LN_UUID_B}}]},
+        }}}
+
+        def hook(request):
+            RelateRelinkGuard._relink(flow, relink_spec, self.NEW_UUID)
+            return ok(body)
+        return hook
+
+    def _run(self, flow: Path, relink_spec: str):
+        ex = fake_execute(
+            {"relate-list": [self._probe_present_and_relink(flow,
+                                                            relink_spec)]})
+        out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
+        return out, ex
+
+    def _assert_refused(self, flow: Path, out, ex) -> None:
+        self.assertIsInstance(out, TrackerError, msg=repr(out))
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "relinked")
+        details = out.details or {}
+        # HONEST evidence shape: no provider mutation was performed by this
+        # invocation - the remote edge predates this run, so the refusal must
+        # not claim relate-create as a completed step.
+        self.assertNotIn("completed_steps", details,
+                         "repair refusal must carry no mutation evidence")
+        self.assertEqual(details.get("key"),
+                         dep_relation_key(LN_UUID, LN_UUID_B))
+        self.assertEqual(details.get("from"), "fn-1-demo")
+        self.assertEqual(details.get("to"), "fn-2-dep")
+        self.assertIs(details.get("recoverable"), False)
+        self.assertEqual([c.op for c in ex.calls], ["relate-list"],
+                         "probe only - the repair path issues no mutation")
+        # The old-ID pending entry must NOT be finalized onto the relinked
+        # spec: the stale-identity claim is removed, never applied.
+        spec = json.loads(
+            (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))
+        self.assertEqual(spec["tracker"].get("depRelations") or [], [],
+                         "old-ID entry neither finalized nor left pending")
+
+    def test_blocked_spec_relinked_during_repair_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair_with_pending(flow)
+            out, ex = self._run(flow, "fn-1-demo")
+            self._assert_refused(flow, out, ex)
+
+    def test_blocker_spec_relinked_during_repair_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair_with_pending(flow)
+            out, ex = self._run(flow, "fn-2-dep")
+            self._assert_refused(flow, out, ex)
+
+    def test_normal_repair_still_finalizes(self) -> None:
+        # No relink: pending + remote-present still repairs the ledger with
+        # no mutation, exactly the wave-1 semantics.
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair_with_pending(flow)
+            present = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": [
+                    {"type": "blocks", "issue": {"id": LN_UUID_B}}]},
+            }}})
+            ex = fake_execute({"relate-list": [present]})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "applied")
+            self.assertEqual(out["reason"], "ledger_repaired")
+            self.assertEqual([c.op for c in ex.calls], ["relate-list"],
+                             "repair issues no mutation")
+            spec = json.loads(
+                (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertNotIn("status", entries[0],
+                             "entry finalized (claim fields dropped)")

@@ -532,15 +532,12 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
     if isinstance(persisted, TrackerError):
         return persisted
 
-    note = None
-    status = "pushed"
-    if degraded is not None:
-        note = (f"identifier_only: UUID resolution degraded for "
-                f"identifier={identifier} url={resolved_url}")
-        status = "updated"
+    # Degradation context lives EXCLUSIVELY in the structured `degraded`
+    # field (epic contract: never a sentence in `note`).
+    status = "pushed" if degraded is None else "updated"
     err = write_sync_receipt(
         flow_dir, spec_id=spec_id, status=status,
-        tracker_id=resolved_id, event=event, transport="mcp", note=note,
+        tracker_id=resolved_id, event=event, transport="mcp",
         degraded=degraded,
     )
     if err:

@@ -392,6 +392,79 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         on_disk = json.loads(spec_path.read_text(encoding="utf-8"))
         self.assertEqual(on_disk["tracker"]["id"], "uuid-locked-relink")
 
+    # --- PR #246: relink honors live per-spec operation claims --------------
+    # The tracker verbs (create / sync-body / status) serialize their whole
+    # read -> provider mutation -> persist transactions via per-spec claims
+    # under .flow/create-first/. Each verb's locked identity recheck can only
+    # DETECT a relink after the remote mutation landed on the old issue;
+    # set-tracker-id must therefore refuse while a live claim exists so the
+    # relink cannot land anywhere inside the claimed window.
+
+    def _write_claim(self, name: str, *, pid: int, claimed_at: float,
+                     op: str, host: str | None = None) -> Path:
+        import socket
+        import time as _time
+        rec = self.tmpdir / ".flow" / "create-first" / name
+        rec.parent.mkdir(exist_ok=True)
+        rec.write_text(json.dumps({
+            "specId": name.split("-", 1)[1].rsplit(".json", 1)[0],
+            "status": "pending", "op": op, "pid": pid,
+            "host": host or socket.gethostname(),
+            "claimedAt": claimed_at if claimed_at else _time.time(),
+            "transport": "github"}), encoding="utf-8")
+        return rec
+
+    def test_relink_refused_while_live_status_claim(self) -> None:
+        import time
+        spec_id = self._create_spec("Claim-guarded relink status")
+        rec = self._write_claim(f"status-{spec_id}.json", pid=os.getpid(),
+                                claimed_at=time.time(), op="status")
+        with self.assertRaises(SystemExit):
+            self._set_id(spec_id, "uuid-blocked")
+        # Nothing landed while the claim was live.
+        self.assertIsNone(self._state(spec_id)["id"])
+        # The relink is retryable: once the operation releases its claim,
+        # the same call succeeds.
+        rec.unlink()
+        self._set_id(spec_id, "uuid-after-release")
+        self.assertEqual(self._state(spec_id)["id"], "uuid-after-release")
+
+    def test_relink_refused_while_live_syncbody_claim(self) -> None:
+        import time
+        spec_id = self._create_spec("Claim-guarded relink syncbody")
+        rec = self._write_claim(f"syncbody-{spec_id}.json", pid=os.getpid(),
+                                claimed_at=time.time(), op="sync-body")
+        with self.assertRaises(SystemExit):
+            self._set_id(spec_id, "uuid-blocked-sb")
+        self.assertIsNone(self._state(spec_id)["id"])
+        rec.unlink()
+        self._set_id(spec_id, "uuid-after-sb")
+        self.assertEqual(self._state(spec_id)["id"], "uuid-after-sb")
+
+    def test_stale_dead_pid_claim_does_not_block_relink(self) -> None:
+        import time
+        spec_id = self._create_spec("Stale claim relink")
+        # pid 0 is never alive; claimedAt is past the stale window -> the
+        # crashed run's leftover must not wedge relinking.
+        rec = self._write_claim(f"status-{spec_id}.json", pid=0,
+                                claimed_at=time.time() - 999, op="status")
+        self._set_id(spec_id, "uuid-past-stale")
+        self.assertEqual(self._state(spec_id)["id"], "uuid-past-stale")
+        # NOT reclaimed: releasing is the owning verb's job, never relink's.
+        self.assertTrue(rec.exists())
+
+    def test_other_host_claim_fails_closed(self) -> None:
+        import time
+        spec_id = self._create_spec("Foreign host claim relink")
+        # Another host's pid space is unknowable (shared/network checkout):
+        # even past the stale window the claim stays live for the relink.
+        self._write_claim(f"syncbody-{spec_id}.json", pid=0,
+                          claimed_at=time.time() - 999, op="sync-body",
+                          host="some-other-host.invalid")
+        with self.assertRaises(SystemExit):
+            self._set_id(spec_id, "uuid-foreign")
+        self.assertIsNone(self._state(spec_id)["id"])
+
 
 class TrackerDepRelationsTestCase(unittest.TestCase):
     """fn-64: depRelations ledger + list/set-dep-relation plumbing."""

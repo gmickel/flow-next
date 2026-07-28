@@ -145,6 +145,41 @@ def _norm_gitlab(parent: dict) -> Union[str, TrackerError]:
     return "in_progress"
 
 
+# Canonical progression order for READ-side disambiguation of aliased maps.
+_READ_ORDER = ("backlog", "todo", "in_progress", "in_review", "done", "cancelled")
+
+
+def _reverse_state_map(ids: dict) -> dict:
+    """Invert a slot->id map deterministically for the read direction.
+
+    validate_select (states.py) sanctions ALIASING: one live state id may
+    serve multiple slots (e.g. in_review sharing in_progress's state on teams
+    without a review column). The write direction is per-slot and unaffected,
+    but inverting with a plain comprehension makes the read direction depend
+    on JSON key order: the same issue could normalize as in_progress or
+    in_review from serialization alone and flip the merge-gate decision
+    (terminal x in_progress deadlocks; terminal x in_review applies).
+
+    A duplicate id is therefore resolved to the EARLIEST aliased slot in the
+    canonical progression order, not by dict order: the least-advanced
+    reading never over-claims progress, and a terminal-vs-aliased pair routes
+    through the deadlock conflict surface instead of an order-dependent
+    silent apply. Erroring instead would make sanctioned aliases unreadable.
+    """
+    reverse: dict = {}
+    for slot in _READ_ORDER:
+        v = ids.get(slot)
+        if v is not None and str(v) not in reverse:
+            reverse[str(v)] = slot
+    # Defensive: keys outside the canonical vocabulary still invert, in
+    # sorted-key order (deterministic), and never shadow a canonical slot.
+    for slot in sorted(k for k in ids if k not in _READ_ORDER):
+        v = ids.get(slot)
+        if v is not None and str(v) not in reverse:
+            reverse[str(v)] = slot
+    return reverse
+
+
 def _norm_linear(parent: dict, dest: dict) -> Union[str, TrackerError]:
     state = parent.get("state")
     if not isinstance(state, dict):
@@ -153,7 +188,7 @@ def _norm_linear(parent: dict, dest: dict) -> Union[str, TrackerError]:
                             subtype="malformed_body")
     sid = state.get("id")
     state_ids = dict_(dest.get("stateIds"))
-    reverse = {str(v): k for k, v in state_ids.items() if v is not None}
+    reverse = _reverse_state_map(state_ids)
     if sid is not None and str(sid) in reverse:
         slot = reverse[str(sid)]
         return slot if slot in {"backlog", "todo", "in_progress", "in_review",
@@ -186,7 +221,7 @@ def _norm_jira(parent: dict, dest: dict) -> Union[str, TrackerError]:
     status = dict_(fields.get("status"))
     sid = status.get("id")
     status_ids = dict_(dest.get("statusIds"))
-    reverse = {str(v): k for k, v in status_ids.items() if v is not None}
+    reverse = _reverse_state_map(status_ids)
     if sid is not None and str(sid) in reverse:
         return reverse[str(sid)]
     cat = dict_(status.get("statusCategory")).get("key")
