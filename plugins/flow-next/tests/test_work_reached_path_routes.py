@@ -143,6 +143,13 @@ class WorkReachedPathRoutes(unittest.TestCase):
             "autonomous-consent-granted",
         ):
             self.assertTrue(routes[route]["delegation_reference"])
+        for route in ("autonomous-consent-missing", "autonomous-consent-granted"):
+            self.assertEqual(
+                routes[route]["autonomy_source"],
+                "mode:autonomous -> AUTONOMOUS=1",
+            )
+            self.assertFalse(routes[route]["question_asked"])
+            self.assertFalse(routes[route]["config_write"])
         self.assertFalse(routes["tracker-inactive"]["tracker_reference"])
         self.assertTrue(routes["tracker-active"]["tracker_reference"])
         self.assertTrue(routes["tracker-probe-error"]["tracker_reference"])

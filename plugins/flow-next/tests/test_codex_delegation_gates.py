@@ -44,6 +44,15 @@ _GATE_ENV_KEYS = (
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 WORK_SKILL = REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-work"
 SKILL_MD = WORK_SKILL / "SKILL.md"
+CODEX_SKILL_MD = (
+    REPO_ROOT
+    / "plugins"
+    / "flow-next"
+    / "codex"
+    / "skills"
+    / "flow-next-work"
+    / "SKILL.md"
+)
 PHASES_MD = WORK_SKILL / "phases.md"
 REFERENCE_MD = WORK_SKILL / "references" / "codex-delegation.md"
 SELECTION_MD = WORK_SKILL / "references" / "codex-delegation-selection.md"
@@ -74,6 +83,22 @@ def _extract_bash_func(text: str, func_name: str) -> str:
     raise AssertionError(f"unbalanced braces extracting {func_name!r}")
 
 
+def _extract_bash_block_after(text: str, heading: str) -> str:
+    """Extract the first fenced bash block after a stable heading."""
+    start = text.find(heading)
+    if start == -1:
+        raise AssertionError(f"heading {heading!r} not found")
+    region = text[start:]
+    fence_start = region.find("```bash")
+    if fence_start == -1:
+        raise AssertionError(f"bash fence not found after {heading!r}")
+    body_start = region.find("\n", fence_start) + 1
+    body_end = region.find("```", body_start)
+    if body_start == 0 or body_end == -1:
+        raise AssertionError(f"unterminated bash fence after {heading!r}")
+    return region[body_start:body_end]
+
+
 @unittest.skipUnless(shutil.which("bash"), "bash required to execute gate predicates")
 @unittest.skipIf(
     sys.platform == "win32",
@@ -96,6 +121,22 @@ class CodexDelegationGateExecution(unittest.TestCase):
             REFERENCE_MD.read_text(encoding="utf-8")
             .replace("\r\n", "\n")
             .replace("\r", "\n")
+        )
+        skill_text = (
+            SKILL_MD.read_text(encoding="utf-8")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+        )
+        cls.autonomous_parser = _extract_bash_block_after(
+            skill_text, "## Autonomous Mode (questions off, no receipt obligations)"
+        )
+        codex_skill_text = (
+            CODEX_SKILL_MD.read_text(encoding="utf-8")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+        )
+        cls.codex_autonomous_parser = _extract_bash_block_after(
+            codex_skill_text, "## Autonomous Mode (questions off, no receipt obligations)"
         )
         cls.platform_fn = _extract_bash_func(cls.ref_text, "platform_gate_ok")
         cls.recursion_fn = _extract_bash_func(cls.ref_text, "not_inside_codex_sandbox")
@@ -121,9 +162,8 @@ class CodexDelegationGateExecution(unittest.TestCase):
         )
         cls.host_fn = _extract_bash_func(phases_text, "host_is_claude_code")
 
-    def _run(self, func_def: str, call: str, env: dict) -> int:
-        """Source the extracted function, call it, return its exit code."""
-        script = f"set -u\n{func_def}\n{call}\n"
+    def _run_script(self, script: str, env: dict) -> subprocess.CompletedProcess[str]:
+        """Run shipped shell text under a controlled gate-relevant environment."""
         # Start from a clean env so only the keys we set are present.
         # Inherit the OS env (PATH for bash + env/grep; SYSTEMROOT/WINDIR on
         # Windows Git-bash) but scrub every gate-relevant key first, then apply
@@ -135,13 +175,16 @@ class CodexDelegationGateExecution(unittest.TestCase):
             if k not in _GATE_ENV_KEYS and not k.startswith("OPENCODE_")
         }
         full_env.update(env)
-        proc = subprocess.run(
-            ["bash", "-c", script],
+        return subprocess.run(
+            ["bash", "-c", f"set -u\n{script}\n"],
             env=full_env,
             capture_output=True,
             text=True,
         )
-        return proc.returncode
+
+    def _run(self, func_def: str, call: str, env: dict) -> int:
+        """Source the extracted function, call it, return its exit code."""
+        return self._run_script(f"{func_def}\n{call}", env).returncode
 
     # ── Platform gate (rc 0 = eligible) ────────────────────────────────────
 
@@ -289,6 +332,71 @@ class CodexDelegationGateExecution(unittest.TestCase):
 
     def test_consent_ask_sites_share_the_exact_headless_predicate(self) -> None:
         self.assertEqual(self.selection_headless_fn, self.ref_headless_fn)
+
+    def test_direct_autonomous_token_materializes_marker_before_consent(self) -> None:
+        for label, parser in (
+            ("canonical", self.autonomous_parser),
+            ("codex", self.codex_autonomous_parser),
+        ):
+            with self.subTest(host=label):
+                proc = self._run_script(
+                    "\n".join(
+                        (
+                            "ARGUMENTS='fn-145 mode:autonomous delegate:codex'",
+                            parser,
+                            self.selection_headless_fn,
+                            '[ "$AUTONOMOUS" = "1" ]',
+                            '[ "$WORK_ARGS" = "fn-145 delegate:codex" ]',
+                            "bash -c 'test \"$AUTONOMOUS\" = 1'",
+                            "delegation_headless",
+                        )
+                    ),
+                    {},
+                )
+                self.assertEqual(
+                    proc.returncode,
+                    0,
+                    f"{label} direct token must suppress consent: {proc.stderr}",
+                )
+
+    def test_interactive_parse_preserves_consent_question_path(self) -> None:
+        proc = self._run_script(
+            "\n".join(
+                (
+                    "ARGUMENTS='fn-145 delegate:codex'",
+                    self.autonomous_parser,
+                    self.selection_headless_fn,
+                    '[ "$AUTONOMOUS" = "0" ]',
+                    '[ "$WORK_ARGS" = "fn-145 delegate:codex" ]',
+                    "! delegation_headless",
+                )
+            ),
+            {},
+        )
+        self.assertEqual(
+            proc.returncode,
+            0,
+            f"ordinary direct invocation must remain interactive: {proc.stderr}",
+        )
+
+    def test_flow_autonomous_env_materializes_same_marker(self) -> None:
+        proc = self._run_script(
+            "\n".join(
+                (
+                    "ARGUMENTS='fn-145 delegate:codex'",
+                    self.autonomous_parser,
+                    self.selection_headless_fn,
+                    '[ "$AUTONOMOUS" = "1" ]',
+                    "delegation_headless",
+                )
+            ),
+            {"FLOW_AUTONOMOUS": "1"},
+        )
+        self.assertEqual(
+            proc.returncode,
+            0,
+            f"FLOW_AUTONOMOUS must reach the same no-question path: {proc.stderr}",
+        )
 
     def test_each_autonomous_marker_suppresses_consent_questions(self) -> None:
         cases = (
