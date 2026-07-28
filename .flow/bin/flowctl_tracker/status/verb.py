@@ -31,12 +31,30 @@ from .providers import (apply_status, enrich_linear_parent,
                         tracker_norm_from_parent)
 
 
-def _completion_review_configured(config: dict) -> bool:
+def _backend_off(value: str) -> bool:
+    """A backend spec is backend[:model[:effort]]; only the backend part
+    decides configured-ness."""
+    return value.split(":", 1)[0].strip().lower() in ("", "none", "off")
+
+
+def _completion_review_configured(config: dict,
+                                  spec_data: Optional[dict] = None) -> bool:
+    """Effective review backend with resolve_review_spec's precedence:
+    spec default_review > FLOW_REVIEW_BACKEND env > config review.backend.
+    Reading only the config half made a spec pinned to codex (or an env
+    override) project as review-ungated - a merged spec folded to done with
+    no shipped completion review - and vice versa."""
+    per = (spec_data or {}).get("default_review")
+    if isinstance(per, str) and per.strip():
+        return not _backend_off(per)
+    env = os.environ.get("FLOW_REVIEW_BACKEND")
+    if isinstance(env, str) and env.strip():
+        return not _backend_off(env)
     review = dict_(config.get("review")).get("backend")
     if review is None:
         return False
-    if isinstance(review, str) and review.strip().lower() in ("", "none", "off"):
-        return False
+    if isinstance(review, str):
+        return not _backend_off(review)
     return True
 
 
@@ -305,7 +323,8 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
     pr_evidence = merge_evidence(config, spec_data, ex)
     tasks = _load_tasks(flow_dir, spec_id)
     flow_norm = flow_to_normalized(
-        spec_data, pr_evidence, _completion_review_configured(config),
+        spec_data, pr_evidence,
+        _completion_review_configured(config, spec_data),
         tasks=tasks,
     )
 
@@ -327,6 +346,23 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
         }
 
     if decision.kind == "apply_local":
+        # Convergence: the fold writes RAW spec.status=done. When a
+        # completion-review backend is configured and no ship is recorded,
+        # flow_to_normalized keeps deriving in_review from that done, so the
+        # same terminal disagreement re-classifies as apply_local on every
+        # run - each pass rewriting the identical status and advancing
+        # lastSyncedAt for a sync that changed nothing. The raw local status
+        # is the honest convergence check: already folded -> noop, no write,
+        # no lastSyncedAt advance (the residual review gate is derived
+        # state, not sync work).
+        if spec_data.get("status") == "done":
+            return {
+                "kind": "noop",
+                "reason": "already_folded",
+                "to": to, "flow": flow_norm, "tracker": tracker_norm,
+                "pr_evidence": pr_evidence,
+                "lastSyncedAt": prior_synced,
+            }
         # Tracker-terminal wins: fold into the LOCAL spec (status + lastSyncedAt),
         # never issue a tracker mutation. A PM closing the issue is authoritative.
         persisted = _persist_applied_state(

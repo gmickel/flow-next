@@ -6,6 +6,7 @@ Fake transport = injected executor seam (same harness as test_tracker_lifecycle)
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from flowctl_tracker import status as S  # noqa: E402
+from flowctl_tracker.status import verb as V  # noqa: E402
 from flowctl_tracker.status.policy import (  # noqa: E402
     decide, flow_to_normalized, in_progress_wins_matches, is_deadlock,
     merge_evidence, terminal_wins_matches,
@@ -1477,3 +1479,75 @@ class AliasedStateIdWriteNoop(unittest.TestCase):
                                  for c in ex.calls))
             saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
             self.assertEqual(saved["lastSyncedAt"], "OLD")
+
+
+class EffectiveReviewBackendPrecedence(unittest.TestCase):
+    """PR #246 wave 17 P1: the projection helper honors resolve_review_spec's
+    precedence (spec default_review > FLOW_REVIEW_BACKEND > config)."""
+
+    def setUp(self) -> None:
+        self._env = os.environ.pop("FLOW_REVIEW_BACKEND", None)
+
+    def tearDown(self) -> None:
+        if self._env is not None:
+            os.environ["FLOW_REVIEW_BACKEND"] = self._env
+        else:
+            os.environ.pop("FLOW_REVIEW_BACKEND", None)
+
+    def test_spec_default_review_overrides_disabled_config(self) -> None:
+        cfg = {"review": {"backend": "none"}}
+        self.assertTrue(V._completion_review_configured(
+            cfg, {"default_review": "codex"}))
+
+    def test_spec_default_review_none_overrides_configured_backend(self) -> None:
+        cfg = {"review": {"backend": "codex"}}
+        self.assertFalse(V._completion_review_configured(
+            cfg, {"default_review": "none"}))
+
+    def test_env_overrides_config_when_spec_silent(self) -> None:
+        cfg = {"review": {"backend": "none"}}
+        os.environ["FLOW_REVIEW_BACKEND"] = "codex:gpt-5.6-sol:high"
+        self.assertTrue(V._completion_review_configured(cfg, {}))
+
+    def test_config_fallback_unchanged(self) -> None:
+        self.assertTrue(V._completion_review_configured(
+            {"review": {"backend": "codex"}}, {}))
+        self.assertFalse(V._completion_review_configured(
+            {"review": {"backend": "off"}}, {}))
+        self.assertFalse(V._completion_review_configured({}, {}))
+
+
+class TerminalFoldConverges(unittest.TestCase):
+    """PR #246 wave 17 P2: a repeated tracker-terminal fold is a noop - no
+    rewrite, no lastSyncedAt advance."""
+
+    def test_second_fold_is_noop_and_synced_not_advanced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            cfg = gh_cfg()
+            cfg["review"] = {"backend": "codex"}  # completion gated
+            path = _write_flow(
+                flow, cfg,
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "PRIOR-FOLD",
+                         "linkState": "linked"},
+            )
+            # Tracker terminal (closed completed), flow derives in_review
+            # (done + no ship + gated) -> decide says apply_local; the raw
+            # status is ALREADY done, so the verb must converge to noop.
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed", labels=["status:done"],
+                    state_reason="completed")),
+                "merge-evidence": ok([{"state": "MERGED", "number": 1}]),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "noop")
+            self.assertEqual(out["reason"], "already_folded")
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["status"], "done")
+            self.assertEqual(saved["tracker"]["lastSyncedAt"], "PRIOR-FOLD")
+            self.assertEqual(_receipts(flow), [])

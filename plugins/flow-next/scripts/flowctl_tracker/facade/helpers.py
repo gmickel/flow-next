@@ -275,13 +275,12 @@ def write_aggregate_receipt(flow_dir: Path, *, spec_id: str, event: str,
     )
 
 
-def completion_review_configured(config: dict) -> bool:
-    review = dict_(config.get("review")).get("backend")
-    if review is None:
-        return False
-    if isinstance(review, str) and review.strip().lower() in ("", "none", "off"):
-        return False
-    return True
+def completion_review_configured(config: dict,
+                                 spec_data: Optional[dict] = None) -> bool:
+    """Same effective-backend precedence as the status verb (spec
+    default_review > FLOW_REVIEW_BACKEND > config review.backend)."""
+    from ..status.verb import _completion_review_configured  # noqa: PLC0415
+    return _completion_review_configured(config, spec_data)
 
 
 def load_tasks(flow_dir: Path, spec_id: str) -> list:
@@ -304,7 +303,7 @@ def compute_status_to(flow_dir: Path, spec_id: str, config: dict,
     from ..status.policy import flow_to_normalized, merge_evidence  # noqa: PLC0415
     pr = merge_evidence(config, spec_data, execute)
     return flow_to_normalized(
-        spec_data, pr, completion_review_configured(config),
+        spec_data, pr, completion_review_configured(config, spec_data),
         tasks=load_tasks(flow_dir, spec_id),
     )
 
