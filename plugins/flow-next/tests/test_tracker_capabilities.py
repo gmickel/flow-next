@@ -733,10 +733,11 @@ class Round2HostFixes(unittest.TestCase):
             self.assertEqual(out["kind"], "applied")
             self.assertEqual(out["form"], "blocks")
             # Idempotency: ledger + remote-present -> noop, no create.
+            # GET issuelinks on blocked A carries only the OTHER issue:
+            # blocker B (10043) in inwardIssue (jira.md listIssueRelations).
             present = ok({"fields": {"issuelinks": [
                 {"type": {"name": "Blocks"},
-                 "inwardIssue": {"id": "10042"},
-                 "outwardIssue": {"id": "10043"}}]}})
+                 "inwardIssue": {"id": "10043"}}]}})
             ex2 = fake_execute({"relate-list": [present]})
             again = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex2)
             self.assertEqual(again["kind"], "noop")
@@ -1031,6 +1032,40 @@ class GitlabProbeDirection(unittest.TestCase):
             sink = flow / "review-deferred" / "tracker-relate.md"
             self.assertFalse(sink.exists(),
                              "no false foreign collision queued")
+
+
+class JiraProbeDirection(unittest.TestCase):
+    """PR #246 review: querying blocked issue A, Jira carries the blocker B
+    in inwardIssue (jira.md listIssueRelations). The old probe checked
+    outwardIssue, so a link exactly as jira_set() creates it read as absent -
+    falsely queueing a ledgered edge as a human removal (or re-creating an
+    unledgered one)."""
+
+    def _probe(self, links):
+        ex = fake_execute({"relate-list": ok({"fields": {"issuelinks": links}})})
+        return RP.jira_probe(jr_cfg(), ex, from_id=JR_ID, to_id=JR_ID_B)
+
+    def test_link_as_jira_set_created_is_found(self) -> None:
+        # jira_set posts inwardIssue=A/outwardIssue=B; GET on A then shows
+        # the blocker B in inwardIssue - the doc-correct field.
+        out = self._probe([{"type": {"name": "Blocks"},
+                            "inwardIssue": {"id": JR_ID_B}}])
+        self.assertIs(out, True,
+                      "edge jira_set created must be found by the probe")
+
+    def test_reverse_orientation_does_not_match(self) -> None:
+        # outwardIssue=B on A means "A blocks B" - the REVERSE edge; it
+        # must never satisfy an A blocked-by B probe (mirrors
+        # GitlabProbeDirection).
+        out = self._probe([{"type": {"name": "Blocks"},
+                            "outwardIssue": {"id": JR_ID_B}}])
+        self.assertIs(out, False,
+                      "A-blocks-B is the OPPOSITE of A-blocked-by-B")
+
+    def test_other_link_types_ignored(self) -> None:
+        out = self._probe([{"type": {"name": "Relates"},
+                            "inwardIssue": {"id": JR_ID_B}}])
+        self.assertIs(out, False)
 
 
 class RelatePendingClaim(unittest.TestCase):

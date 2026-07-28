@@ -710,6 +710,44 @@ class CreateLinkWriteFailureCarriesCreatedIdentity(unittest.TestCase):
             self.assertEqual(_receipts(flow), [])
 
 
+class PersistExternalReceiptFailureCarriesLinkedIdentity(unittest.TestCase):
+    """PR #246 review: the tracker block was persisted but the receipt write
+    failed -> a bare error read as "nothing happened" even though the spec is
+    already linked, and a retry took the idempotent linked return without ever
+    reporting the partial success. The error must carry the completed link
+    step plus the linked identity (mirrors create's receipt-failure branch)."""
+
+    def test_receipt_failure_error_carries_link_and_identity(self) -> None:
+        from unittest import mock
+
+        from flowctl_tracker.lifecycle import verbs
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            spec_path = _write_flow(flow, ln_cfg())
+            ex = fake_execute({"lifecycle-resolve-uuid": ok({
+                "data": {"issue": {"id": LN_UUID, "identifier": "WOR-17",
+                                   "url": "https://linear.app/x/issue/WOR-17"}},
+            })})
+            boom = TrackerError(ErrorClass.TRANSPORT,
+                                "receipt write failed: disk full",
+                                subtype="write")
+            with mock.patch.object(verbs, "write_sync_receipt",
+                                   return_value=boom):
+                out = L.persist_external(flow, "fn-1-demo", identifier="WOR-17",
+                                         source="mcp", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.TRANSPORT)
+            details = out.details or {}
+            self.assertEqual(details.get("completed_steps"), ["link"])
+            self.assertEqual(details.get("id"), LN_UUID)
+            self.assertEqual(details.get("identifier"), "WOR-17")
+            self.assertEqual(details.get("linkState"), "linked")
+            # The persisted link is NOT rolled back.
+            saved = json.loads(spec_path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["id"], LN_UUID)
+            self.assertEqual(saved["linkState"], "linked")
+
+
 class Round5PersistIntegrity(unittest.TestCase):
     """PR #246 review: reload-under-lock persistence for create and
     persist-external. The pre-request spec snapshot must never be replayed

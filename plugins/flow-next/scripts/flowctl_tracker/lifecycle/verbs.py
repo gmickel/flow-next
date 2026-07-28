@@ -544,7 +544,18 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
         degraded=degraded,
     )
     if err:
-        return err
+        # The link IS persisted - a bare failure here reads as "nothing
+        # happened", and a retry takes the state == linked idempotent return
+        # above without ever reporting the partial success. TrackerError is
+        # frozen: rebuild with the completed-steps detail so the caller holds
+        # the linked identity (mirrors the create() receipt-failure branch).
+        import dataclasses  # noqa: PLC0415
+        return dataclasses.replace(err, details={
+            **(err.details or {}),
+            "completed_steps": ["link"],
+            "id": tracker.get("id"),
+            "identifier": tracker.get("identifier"),
+            "linkState": tracker["linkState"]})
     return {"id": tracker.get("id"), "identifier": tracker.get("identifier"),
             "url": tracker.get("url"), "linkState": tracker["linkState"],
             "degraded": degraded}

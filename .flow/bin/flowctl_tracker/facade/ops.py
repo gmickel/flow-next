@@ -6,12 +6,20 @@ Internal granular calls suppress receipts; this module writes one aggregate.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+import socket
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from ..executor import execute as default_execute
-from ..lifecycle.helpers import Execute, Result, read_config, tracker_type
+from ..lifecycle.helpers import (Execute, Result, atomic_write_json,
+                                 leaf_is_safe, read_config, tracker_type)
 from ..lifecycle.linkstate import complete_identifier_only, require_durable
+from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
+                               _release_claim)
 from ..resolve_verb import bound_executor
 from ..syncbody import sync_body
 from ..types import ErrorClass, TrackerError
@@ -311,6 +319,75 @@ def op_reconcile(flow_dir: Path, spec_id: str, *, flow_file: str,
     }, statuses=statuses, completed=completed, degraded=degraded)
 
 
+def _comment_claim_path(flow_dir: Path, *, issue: str, event: str,
+                        evidence: str) -> Path:
+    """Claim record keyed on the dedup-marker identity - issue + event +
+    evidence, exactly the triple comments_have_marker matches on."""
+    payload = "\0".join([issue, event, evidence])
+    key = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+    return Path(flow_dir) / "create-first" / f"comment-{key}.json"
+
+
+def _claim_comment_marker(flow_dir: Path, spec_id: str, rec_path: Path,
+                          provider: str, *, event: str,
+                          marker: str) -> Optional[TrackerError]:
+    """Reserve the dedup marker under the shared writer lock BEFORE the
+    marker scan and comment-add (create-first's claim pattern, keyed on the
+    marker identity). Two concurrent comment facades for the same issue,
+    event and evidence could both finish the scan before either posts - the
+    providers do not make list-then-create atomic - so both would add the
+    same marked comment. Under the lock: a live claim from another process
+    refuses (comment_in_flight, retryable - after the winner posts, the
+    retry's scan sees the marker and dedups to a noop), a stale claim (dead
+    pid on this host past the stale window, _claim_is_stale's owner rules)
+    is reclaimed by overwriting, and OUR pending claim lands durably before
+    any remote read or mutation. The claim is always released when the
+    invocation finishes (success or failure): the marker on the remote
+    issue, not the claim file, is the durable dedup record."""
+    flow_dir = Path(flow_dir)
+    unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
+    if unsafe:
+        return unsafe
+    secured = _ensure_create_first_ignored(flow_dir)
+    if secured is not None:
+        return secured
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            if rec_path.is_file():
+                try:
+                    prior = json.loads(rec_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    prior = None
+                if (isinstance(prior, dict)
+                        and prior.get("status") == "pending"
+                        and not _claim_is_stale(prior, rec_path)):
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        f"comment for this marker ({event}) is already in "
+                        "flight in another process; retry after it finishes "
+                        "(the dedup scan then sees the winner's marker)",
+                        subtype="comment_in_flight",
+                        details={"specId": spec_id, "marker": marker,
+                                 "claim": {"pid": prior.get("pid"),
+                                           "host": prior.get("host"),
+                                           "claimedAt": prior.get("claimedAt")}},
+                        auto_retryable=True)
+                # A STALE pending claim (crashed run) is reclaimed by
+                # overwriting it with OURS - same rule as create-first.
+            claim = {"specId": spec_id, "status": "pending",
+                     "marker": marker, "event": event,
+                     "pid": os.getpid(), "host": socket.gethostname(),
+                     "claimedAt": time.time(), "transport": provider}
+            cerr = atomic_write_json(rec_path, claim)
+            if cerr:
+                return cerr
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc),
+                            subtype="lock_timeout")
+    return None
+
+
 def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
                execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
@@ -358,29 +435,98 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
     if isinstance(locator, TrackerError):
         return locator
 
-    ex = bound_executor(config, execute)
-    listed = wire_dispatch("comment-list", config, locator=locator, execute=ex)
-    if isinstance(listed, TrackerError):
+    # Serialize the whole list-then-create sequence behind a local marker
+    # claim taken BEFORE the scan: the providers do not make it atomic, so
+    # two concurrent facades could both prove marker absence and both post.
+    marker = format_marker(
+        issue=str(durable), spec_id=spec_id, event=event, evidence=evidence)
+    rec_path = _comment_claim_path(
+        flow_dir, issue=str(durable), event=event, evidence=evidence)
+    claimed = _claim_comment_marker(
+        flow_dir, spec_id, rec_path, provider, event=event, marker=marker)
+    if claimed is not None:
         return fail_result(
-            listed, completed=completed, statuses=statuses,
+            claimed, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
             tracker_id=durable, transport=provider,
         )
-    comments = listed.get("comments") if isinstance(listed, dict) else None
-    if not isinstance(comments, list):
-        comments = []
+    try:
+        ex = bound_executor(config, execute)
+        listed = wire_dispatch(
+            "comment-list", config, locator=locator, execute=ex)
+        if isinstance(listed, TrackerError):
+            return fail_result(
+                listed, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=durable, transport=provider,
+            )
+        comments = listed.get("comments") if isinstance(listed, dict) else None
+        if not isinstance(comments, list):
+            comments = []
 
-    marker = format_marker(
-        issue=str(durable), spec_id=spec_id, event=event, evidence=evidence)
-    if comments_have_marker(comments, issue=str(durable), event=event,
-                            evidence=evidence):
-        completed.append("comment-dedup")
-        statuses.append("noop")
+        if comments_have_marker(comments, issue=str(durable), event=event,
+                                evidence=evidence):
+            completed.append("comment-dedup")
+            statuses.append("noop")
+            receipt_status = worst_status(statuses)
+            rerr = write_aggregate_receipt(
+                flow_dir, spec_id=spec_id, event=event, status=receipt_status,
+                tracker_id=durable, transport=provider,
+                note=f"facade comment dedup ({event}/{evidence})",
+            )
+            if rerr:
+                return fail_result(
+                    rerr, completed=completed, statuses=statuses,
+                    flow_dir=flow_dir, spec_id=spec_id, event=event,
+                    tracker_id=durable, transport=provider,
+                )
+            return ok_result({
+                "op": "comment",
+                "posted": False,
+                "deduped": True,
+                "marker": marker,
+                "steps": steps,
+                "tracker_id": durable,
+            }, statuses=statuses, completed=completed)
+
+        # Marker not found - but a truncated scan proves nothing about
+        # absence. Posting here would duplicate on high-comment issues;
+        # refuse instead (same contract as relate's truncated drain:
+        # absence unproven).
+        if isinstance(listed, dict) and listed.get("truncated"):
+            return fail_result(
+                TrackerError(
+                    ErrorClass.TRANSPORT,
+                    "comment dedup scan truncated at drain cap; "
+                    "marker absence unproven, refusing to post",
+                    subtype="dedup_truncated",
+                    details={"truncated": True, "event": event,
+                             "issue": str(durable)},
+                ),
+                completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=durable, transport=provider,
+            )
+
+        posted_body = f"{marker}\n\n{comment_text}"
+        added = wire_dispatch(
+            "comment-add", config, locator=locator, body=posted_body,
+            execute=ex)
+        if isinstance(added, TrackerError):
+            return fail_result(
+                added, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=durable, transport=provider,
+            )
+        completed.append("comment-add")
+        statuses.append("updated")
+        steps["comment_add"] = added
+
         receipt_status = worst_status(statuses)
         rerr = write_aggregate_receipt(
             flow_dir, spec_id=spec_id, event=event, status=receipt_status,
             tracker_id=durable, transport=provider,
-            note=f"facade comment dedup ({event}/{evidence})",
+            note=f"facade comment ({event})",
         )
         if rerr:
             return fail_result(
@@ -388,65 +534,19 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
                 tracker_id=durable, transport=provider,
             )
+
         return ok_result({
             "op": "comment",
-            "posted": False,
-            "deduped": True,
+            "posted": True,
+            "deduped": False,
             "marker": marker,
+            "comment": added,
             "steps": steps,
             "tracker_id": durable,
         }, statuses=statuses, completed=completed)
-
-    # Marker not found - but a truncated scan proves nothing about absence.
-    # Posting here would duplicate on high-comment issues; refuse instead
-    # (same contract as relate's truncated drain: absence unproven).
-    if isinstance(listed, dict) and listed.get("truncated"):
-        return fail_result(
-            TrackerError(
-                ErrorClass.TRANSPORT,
-                "comment dedup scan truncated at drain cap; "
-                "marker absence unproven, refusing to post",
-                subtype="dedup_truncated",
-                details={"truncated": True, "event": event,
-                         "issue": str(durable)},
-            ),
-            completed=completed, statuses=statuses,
-            flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
-        )
-
-    posted_body = f"{marker}\n\n{comment_text}"
-    added = wire_dispatch(
-        "comment-add", config, locator=locator, body=posted_body, execute=ex)
-    if isinstance(added, TrackerError):
-        return fail_result(
-            added, completed=completed, statuses=statuses,
-            flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
-        )
-    completed.append("comment-add")
-    statuses.append("updated")
-    steps["comment_add"] = added
-
-    receipt_status = worst_status(statuses)
-    rerr = write_aggregate_receipt(
-        flow_dir, spec_id=spec_id, event=event, status=receipt_status,
-        tracker_id=durable, transport=provider,
-        note=f"facade comment ({event})",
-    )
-    if rerr:
-        return fail_result(
-            rerr, completed=completed, statuses=statuses,
-            flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
-        )
-
-    return ok_result({
-        "op": "comment",
-        "posted": True,
-        "deduped": False,
-        "marker": marker,
-        "comment": added,
-        "steps": steps,
-        "tracker_id": durable,
-    }, statuses=statuses, completed=completed)
+    finally:
+        # Release OUR pending claim on every exit (posted, dedup noop,
+        # refusal, transport failure): the remote marker is the durable
+        # dedup record, and a lingering claim would only force the next
+        # invocation to wait out the stale window.
+        _release_claim(rec_path)

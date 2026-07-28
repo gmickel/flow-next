@@ -159,13 +159,13 @@ def _jira_edge_exists(config: dict, execute: Execute, *, from_id: str,
         typ = link.get("type") if isinstance(link.get("type"), dict) else {}
         if str(typ.get("name") or "").lower() != "blocks":
             continue
-        # A is blocked by B: link carries outwardIssue=B (B blocks A).
-        outward = link.get("outwardIssue") if isinstance(link.get("outwardIssue"), dict) else {}
+        # Querying the blocked issue A: "A is blocked by B" carries the
+        # blocker B in inwardIssue (jira.md listIssueRelations - the entry
+        # holds outwardIssue XOR inwardIssue from A's perspective). An
+        # outwardIssue=B entry means "A blocks B" - the REVERSE edge, which
+        # must NOT match (mirrors gitlab_probe_pair direction handling).
         inward = link.get("inwardIssue") if isinstance(link.get("inwardIssue"), dict) else {}
-        if outward.get("id") is not None and str(outward.get("id")) == str(to_id):
-            return True
-        if (inward.get("id") is not None and str(inward.get("id")) == str(from_id)
-                and outward.get("id") is not None and str(outward.get("id")) == str(to_id)):
+        if inward.get("id") is not None and str(inward.get("id")) == str(to_id):
             return True
     return False
 

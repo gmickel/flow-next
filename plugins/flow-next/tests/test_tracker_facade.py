@@ -497,6 +497,111 @@ class CommentFacade(unittest.TestCase):
             receipts = _receipts(flow)
             self.assertEqual(len(receipts), 1)
             self.assertEqual(receipts[0]["status"], "errored")
+            # The marker claim is released on the refusal path too - a
+            # leftover pending claim would force the next invocation to
+            # wait out the stale window.
+            self.assertEqual(
+                list((flow / "create-first").glob("comment-*.json")), [])
+
+    def test_comment_concurrent_same_marker_single_add_loser_conflicts(self) -> None:
+        """Two workers running the comment facade for the same issue, event
+        and evidence: the marker claim is taken BEFORE the dedup scan, so a
+        second invocation arriving while the first is between its scan and
+        its comment-add backs off with a structured CONFLICT instead of
+        posting the same marked comment twice."""
+        from flowctl_tracker.facade.ops import _comment_claim_path
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            evidence = "abc1234"
+            bf = _body_file(root, f"evidence={evidence}\n**done** - shipped.\n")
+            rec_path = _comment_claim_path(
+                flow, issue=GH_NODE, event="work.done", evidence=evidence)
+            posted_bodies = []
+            inner: dict = {}
+
+            def capture_add(req):
+                posted_bodies.append(json.loads(req.body)["body"])
+                return ok({"id": 99, "body": posted_bodies[-1],
+                           "html_url": "https://x/c/99"})
+
+            def racing_list(req):
+                # The claim must be durable BEFORE the scan runs...
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                self.assertEqual(claim.get("status"), "pending")
+                # ...so a second worker racing in mid-sequence refuses
+                # instead of posting a duplicate marked comment.
+                inner["ex"] = fake_execute({})  # any wire call would raise
+                inner["out"] = F.sync(
+                    flow, SPEC_ID, op="comment", event="work.done",
+                    body_file=bf, execute=inner["ex"])
+                return ok([])
+
+            ex = fake_execute({
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-comment-list": racing_list,
+                "wire-comment-add": capture_add,
+            })
+            out = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                         body_file=bf, execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertTrue(out["posted"])
+            self.assertEqual(len(posted_bodies), 1, "exactly ONE comment-add")
+
+            raced = inner["out"]
+            self.assertIsInstance(raced, TrackerError)
+            self.assertIs(raced.cls, ErrorClass.CONFLICT)
+            self.assertEqual(raced.subtype, "comment_in_flight")
+            self.assertTrue(raced.auto_retryable)
+            self.assertEqual((raced.details or {}).get("specId"), SPEC_ID)
+            self.assertIn("claim", raced.details or {})
+            self.assertEqual(inner["ex"].calls, [],
+                             "loser backs off before any wire call")
+            # Winner released the claim on completion.
+            self.assertFalse(rec_path.exists())
+
+    def test_comment_stale_dead_pid_claim_is_reclaimed_and_posts(self) -> None:
+        """A crashed run's leftover claim (dead pid on this host, past the
+        stale window) must not wedge the marker: it is reclaimed and the
+        comment posts."""
+        import socket
+        import time
+        from flowctl_tracker.facade.ops import _comment_claim_path
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            evidence = "abc1234"
+            bf = _body_file(root, f"evidence={evidence}\n**done** - shipped.\n")
+            rec_path = _comment_claim_path(
+                flow, issue=GH_NODE, event="work.done", evidence=evidence)
+            rec_path.parent.mkdir(parents=True)
+            # pid 0 is never alive; claimedAt is past the stale window.
+            rec_path.write_text(json.dumps({
+                "specId": SPEC_ID, "status": "pending", "pid": 0,
+                "host": socket.gethostname(),
+                "claimedAt": time.time() - 999,
+                "event": "work.done", "transport": "github"}),
+                encoding="utf-8")
+            posted_bodies = []
+
+            def capture_add(req):
+                posted_bodies.append(json.loads(req.body)["body"])
+                return ok({"id": 99, "body": posted_bodies[-1],
+                           "html_url": "https://x/c/99"})
+
+            ex = fake_execute({
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-comment-list": ok([]),
+                "wire-comment-add": capture_add,
+            })
+            out = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                         body_file=bf, execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertTrue(out["posted"])
+            self.assertEqual(len(posted_bodies), 1)
+            self.assertFalse(rec_path.exists(), "reclaimed claim released")
 
 
 # ---------------------------------------------------------------------------
