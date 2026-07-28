@@ -478,10 +478,10 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 1. Invoke `/flow-next:spec-completion-review <spec-id>` skill
  - Pass `--review=<backend>` matching the work review backend
  - Skill handles rp/codex/copilot/cursor/host backend dispatch
- - Skill runs fix loop internally until SHIP verdict
+ - Skill runs its fix loop internally until SHIP and writes terminal
+ `completion_review_status` through its backend-aware shared owner
 
 2. After skill returns with SHIP:
- - Set status: `$FLOWCTL spec set-completion-review-status <spec-id> --status ship --json`
  - **Tracker sync (opt-in) — SHIP → verdict comment, NEVER terminal Done (fn-66):** runs only when the tracker bridge is active AND `completionReview` is opted in. With no tracker configured this is a no-op:
 
  ```bash
@@ -501,7 +501,12 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
  When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Completion review` section (`completionReview` leaf check + comment-shaped verdict/R-ID-coverage dispatch), then continue with Phase 4. The dispatch never sends terminal `Done`/`verified` — `land.merged` is the SOLE Done driver. When the gate is silent (bridge inactive), continue — nothing fires here.
  - Go to Phase 4 (Quality)
 
-**Note:** The spec-completion-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review — and (when opted in) posts the verdict / R-ID-coverage comment to the linked tracker issue here. It does **NOT** flip the issue to `Done`/`verified` (fn-66: that is gated on a `MERGED` PR and driven solely by `land.merged`). The review skill (`flow-next-spec-completion-review`) is NOT edited; the touchpoint lives at this caller.
+**Note:** The spec-completion-review skill owns the terminal
+`completion_review_status` write. Work never writes that status again. After
+the skill returns SHIP, Work only posts the opt-in verdict / R-ID-coverage
+comment to the linked tracker issue here. That comment does **NOT** flip the
+issue to `Done`/`verified` (fn-66: that is gated on a `MERGED` PR and driven
+solely by `land.merged`).
 
 **Fix loop behavior**: Same as impl-review. If reviewer returns NEEDS_WORK:
 1. Skill parses issues
@@ -642,7 +647,7 @@ Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
  ├─ 3e: plan-sync after the wave resolves (if enabled + downstream tasks exist)
  ├─ 3f: SPEC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
  ├─ no more tasks → 3g: check completion_review_status
- │ ├─ status != ship → invoke /flow-next:spec-completion-review → fix loop until SHIP → set status=ship
+ │ ├─ status != ship → invoke /flow-next:spec-completion-review → skill fixes, writes SHIP once, returns
  │ └─ status = ship → Phase 4
  └─ Phase 4 (quality) → Phase 5 (ship: verify → commit → sync check → retro-fire MISSING once → summary w/ Tracker sync slot)
 ```

@@ -198,11 +198,20 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
     def test_completion_status_has_one_shared_owner(self) -> None:
         root = _read("flow-next-spec-completion-review/SKILL.md")
         host = _read("flow-next-spec-completion-review/workflow-host.md")
+        work = _read("flow-next-work/phases.md")
+        pilot = _read("flow-next-pilot/workflow.md")
         command = "$FLOWCTL spec set-completion-review-status"
         self.assertEqual(root.count(command), 2, "shared owner needs both terminal writes")
         self.assertNotIn(command, host, "selected host workflow must never write status")
+        self.assertNotIn(command, work, "work caller must never repeat the status write")
         self.assertIn("This shared step is the sole writer for host and rp", root)
         self.assertIn("never write completion status", root)
         self.assertIn("This host workflow never writes terminal completion status", host)
         self.assertIn("stop without writing completion status", host)
+        self.assertIn("Work never writes that status again", work)
+        self.assertIn(
+            "the spec-completion-review skill writes terminal "
+            "`completion_review_status` through its backend-aware shared owner",
+            pilot,
+        )
         self.assertNotIn("or write status here", host)

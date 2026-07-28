@@ -12,22 +12,22 @@
   },
   "prompt_hashes": {
     "plugins/flow-next/skills/flow-next-work/SKILL.md": "183ee42b09cae59459dfa83ec10cec66eb1711ef7e6b47bc479346dd9976c88d",
-    "plugins/flow-next/skills/flow-next-work/phases.md": "a73176915edc4760e25d011cb3c3ad4c5449680c5712d9b09edc43126624fe2c",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "b0b9da2933e7f55708bc345e5b15af916a711fc08ce0904fcf1f2a4e521b6b24",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "1e72fe556e16476e2a71da32536792703a69cfc7dd5f65a4215ce595f4445858",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "9853594ad12db98edafc83780b266f5f7cc95a1090acade3a178c890e1d43a3b",
-    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "89d60a08eea0f27c58fb71196e0b5a5a72c28d2b2f86e67e4da8bcce1a9204c6"
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "9c5836ec1348f5c841e44b55ad035d1aed54a54f542980ee4568e160c4196897"
   },
   "metrics": {
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
       "baseline_reached_path_chars": 51330,
-      "candidate_reached_path_chars": 51301,
+      "candidate_reached_path_chars": 51156,
       "reduction_chars": 3730,
       "reduction_percent": 6.86
     },
     "delegation_active_path": {
       "baseline_reached_path_chars": 102426,
-      "candidate_reached_path_chars": 102397,
+      "candidate_reached_path_chars": 102252,
       "reduction_chars": 427,
       "reduction_percent": 0.42
     },
@@ -65,6 +65,12 @@
         "date": "2026-07-28",
         "reason": "Delegation consent now carries an executable four-marker autonomy predicate at the cold selection gate and active-reference defense-in-depth ask site.",
         "baseline_note": "Default Work path is unchanged. The delegation-only path grows by 1300 characters; its 29-character ratchet margin is rebased and preserved."
+      },
+      {
+        "spec": "fn-145-pr-review",
+        "date": "2026-07-28",
+        "reason": "Completion-review terminal status ownership moved fully into the review skill; Work's duplicate caller write and stale explanation were removed.",
+        "baseline_note": "Default and delegation-active Work paths both shrink by 145 characters. The tracker touchpoint hash changes for ownership accuracy but remains cold unless its gate activates."
       }
     ]
   },

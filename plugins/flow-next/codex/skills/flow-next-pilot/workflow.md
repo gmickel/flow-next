@@ -409,7 +409,7 @@ Dispatch exactly one existing stage skill (slash-command invocation), with `mode
 - `qa`: `/flow-next:qa <spec-id> mode:autonomous` — the QA skill derives scenarios from the spec, reads work's evidence, drives the **local running app**, and writes the `qa_verdict` receipt. `mode:autonomous` suppresses all prompts (the QA skill's Autonomous-mode gate) so the loop can't hang on a question prompt. Pilot dispatches the existing skill and never re-implements its logic; routing on the resulting `qa_outcome` is Phase 5.
 - `make-pr`: `/flow-next:make-pr <spec-id> mode:autonomous`
 
-Setter convention call-out: plan-review sets `plan_review_status` itself in its workflow Phase 4, and pilot only re-reads the field. Completion review is reached through work's Phase 3g; work invokes spec-completion-review, then the caller sets `completion_review_status=ship`. Pilot must not dispatch completion review directly.
+Setter convention call-out: plan-review sets `plan_review_status` itself in its workflow Phase 4, and pilot only re-reads the field. Completion review is reached through work's Phase 3g; the spec-completion-review skill writes terminal `completion_review_status` through its backend-aware shared owner, and Work only handles its caller-owned tracker projection afterward. Pilot must not dispatch completion review directly.
 
 If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity that needs a person, stop with `NEEDS_HUMAN`. Do not cleanup, reset claims, or record a strike.
 
