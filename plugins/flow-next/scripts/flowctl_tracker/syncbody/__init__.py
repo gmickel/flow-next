@@ -5,6 +5,12 @@ exact --flow-file body (comparable to the local spec); mergeBaseTracker is
 trackerBodyForMerge(readback). Both halves commit atomically under the shared
 config_lock. Partial failure leaves the prior base untouched.
 
+The WHOLE read/write/readback/commit transaction is serialized per spec via a
+create-first claim (`syncbody-<spec-id>.json`) taken BEFORE any tracker I/O -
+without it two overlapping invocations each finish their write/readback and
+the OLDER one can acquire config_lock last, overwriting the newer paired base
+with a stale pair (tracker holds body B, mergeBaseTracker records body A).
+
 <!-- flow:deps --> is stripped at the hash boundary (R10 half deferred from
 .4) and carried forward on every push write so a full-body update cannot
 self-delete the block.
@@ -13,17 +19,24 @@ self-delete the block.
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import re
+import socket
+import time
 from pathlib import Path
 from typing import Optional
 
 from .. import envelope
 from ..executor import execute as default_execute
-from ..lifecycle.helpers import (ACTIVE, Execute, Result, dict_, load_spec,
+from ..lifecycle.helpers import (ACTIVE, Execute, Result, atomic_write_json,
+                                 dict_, leaf_is_safe, load_spec,
                                  merged_tracker, now_iso, read_config,
                                  tracker_type, write_sync_receipt,
                                  write_tracker_block)
 from ..lifecycle.linkstate import require_durable
+from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
+                               _release_claim)
 from ..relate.ledger import FLOW_DEPS_CLOSE, FLOW_DEPS_OPEN
 from ..types import ErrorClass, TrackerError
 
@@ -155,6 +168,65 @@ def _commit_paired_base(flow_dir: Path, spec_id: str, *,
     }
 
 
+def _claim_sync_body(flow_dir: Path, spec_id: str, rec_path: Path,
+                     provider: str, *,
+                     direction: str) -> Optional[TrackerError]:
+    """Reserve the spec's sync-body transaction under the shared writer lock
+    BEFORE any tracker read or write (create-first's claim pattern, keyed on
+    the spec id). Two overlapping sync-body invocations for the same spec
+    each perform write/readback before committing the paired base; without a
+    claim the OLDER invocation can acquire config_lock last and overwrite the
+    newer pair with a stale one - the tracker then holds body B while
+    mergeBaseTracker records body A, so the next reconcile reports false
+    divergence or merges against the wrong base. Under the lock: a live
+    claim from another process refuses (syncbody_in_flight, retryable), a
+    stale claim (dead pid on this host past the stale window,
+    _claim_is_stale's owner rules) is reclaimed by overwriting, and OUR
+    pending claim lands durably before any remote I/O. The claim is always
+    released when the invocation finishes (success or failure): the paired
+    base in the spec, not the claim file, is the durable record."""
+    unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
+    if unsafe:
+        return unsafe
+    secured = _ensure_create_first_ignored(flow_dir)
+    if secured is not None:
+        return secured
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            if rec_path.is_file():
+                try:
+                    prior = json.loads(rec_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    prior = None
+                if (isinstance(prior, dict)
+                        and prior.get("status") == "pending"
+                        and not _claim_is_stale(prior, rec_path)):
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        f"sync-body for spec {spec_id!r} is already in "
+                        "flight in another process; retry after it finishes",
+                        subtype="syncbody_in_flight",
+                        details={"specId": spec_id,
+                                 "claim": {"pid": prior.get("pid"),
+                                           "host": prior.get("host"),
+                                           "claimedAt": prior.get("claimedAt")}},
+                        auto_retryable=True)
+                # A STALE pending claim (crashed run) is reclaimed by
+                # overwriting it with OURS - same rule as create-first.
+            claim = {"specId": spec_id, "status": "pending",
+                     "op": "sync-body", "direction": direction,
+                     "pid": os.getpid(), "host": socket.gethostname(),
+                     "claimedAt": time.time(), "transport": provider}
+            cerr = atomic_write_json(rec_path, claim)
+            if cerr:
+                return cerr
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc),
+                            subtype="lock_timeout")
+    return None
+
+
 def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               tracker_body: Optional[str] = None,
               tracker_snapshot_body: Optional[str] = None,
@@ -164,9 +236,12 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               write_receipt: bool = True) -> Result:
     """Write (optional) + readback + paired merge base. Never raises.
 
-    ``tracker_snapshot_body`` is honored ONLY for ``direction="pull"``: when
-    set, skip the parent read and persist that body as the tracker half (the
-    caller already ran the durable-validated parent gate).
+    Serialized per spec via a create-first claim taken before any tracker
+    I/O; a live foreign claim refuses with structured CONFLICT
+    (syncbody_in_flight, retryable) instead of interleaving to a mismatched
+    pair. ``tracker_snapshot_body`` is honored ONLY for ``direction="pull"``:
+    when set, skip the parent read and persist that body as the tracker half
+    (the caller already ran the durable-validated parent gate).
     """
     flow_dir = Path(flow_dir)
     if not spec_id:
@@ -184,6 +259,30 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
 
+    rec_path = flow_dir / "create-first" / f"syncbody-{spec_id}.json"
+    claimed = _claim_sync_body(flow_dir, spec_id, rec_path, provider,
+                               direction=direction)
+    if claimed is not None:
+        return claimed
+    try:
+        return _sync_body_txn(
+            flow_dir, spec_id, config=config, provider=provider,
+            flow_file_body=flow_file_body, tracker_body=tracker_body,
+            tracker_snapshot_body=tracker_snapshot_body, direction=direction,
+            event=event, execute=execute, write_receipt=write_receipt)
+    finally:
+        _release_claim(rec_path)
+
+
+def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
+                   provider: str, flow_file_body: str,
+                   tracker_body: Optional[str],
+                   tracker_snapshot_body: Optional[str],
+                   direction: str, event: Optional[str],
+                   execute: Execute, write_receipt: bool) -> Result:
+    """The claimed transaction body: spec is (re)loaded AFTER the claim so
+    the echo-fence/no-op checks see the base a just-finished sibling wrote,
+    never a pre-claim snapshot."""
     loaded = load_spec(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded

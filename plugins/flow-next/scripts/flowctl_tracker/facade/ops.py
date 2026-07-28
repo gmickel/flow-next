@@ -32,6 +32,32 @@ from .helpers import (collect_degraded, comments_have_marker, format_marker,
 from .steps import create_if_unlinked, fail_result, ok_result, run_status
 
 
+def _fail_if_evidence(err: TrackerError, *, completed: list, statuses: list,
+                      flow_dir: Path, spec_id: str, event: str,
+                      transport: str,
+                      tracker_id: Optional[str] = None) -> TrackerError:
+    """Route through fail_result whenever remote-mutation evidence exists -
+    either facade-level completed steps or verb-level completed_steps riding
+    the error's details (lifecycle_create's partial-failure shape: the issue
+    exists but the locked link write failed). A direct return there writes no
+    event-tagged aggregate receipt, so sync check reports the lifecycle event
+    missing and an automated caller may retry without durable evidence of
+    what landed. Failures with NOTHING landed (pre-flight, claim conflicts,
+    the MCP external-action instruction) stay receipt-less: there is no
+    remote mutation for a receipt to evidence."""
+    prior = (err.details or {}).get("completed_steps")
+    if not completed and not prior:
+        return err
+    if tracker_id is None:
+        tracker_id = (err.details or {}).get("id")
+    tracker_id = None if tracker_id is None else str(tracker_id)
+    return fail_result(
+        err, completed=completed, statuses=statuses,
+        flow_dir=flow_dir, spec_id=spec_id, event=event,
+        tracker_id=tracker_id, transport=transport,
+    )
+
+
 def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, event: str,
             execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
@@ -59,7 +85,11 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, event: str,
         event=event, execute=execute, completed=completed, statuses=statuses,
     )
     if isinstance(created, TrackerError):
-        return created
+        return _fail_if_evidence(
+            created, completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            transport=provider,
+        )
     steps["create"] = created
 
     body_out = sync_body(
@@ -239,21 +269,43 @@ def op_reconcile(flow_dir: Path, spec_id: str, *, flow_file: str,
     if link_state_of(tracker) == "identifier_only":
         done = complete_identifier_only(flow_dir, spec_id, execute=execute)
         if isinstance(done, TrackerError):
-            return done
+            # No remote mutation lands on this path today (read-only resolve
+            # + local link write), so this stays a direct return - but the
+            # helper keeps the receipt invariant self-enforcing should the
+            # verb ever grow partial-success evidence.
+            return _fail_if_evidence(
+                done, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                transport=provider,
+            )
         completed.append("complete-identifier-only")
         statuses.append("updated")
         steps["complete_identifier_only"] = done
 
+    # After a completed identifier_only upgrade, the reload/durable/locator
+    # failures below are partial successes - same receipt discipline.
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
-        return loaded
+        return _fail_if_evidence(
+            loaded, completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            transport=provider,
+        )
     _path, _spec, tracker = loaded
     durable = require_durable(tracker)
     if isinstance(durable, TrackerError):
-        return durable
+        return _fail_if_evidence(
+            durable, completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            transport=provider, tracker_id=tracker.get("id"),
+        )
     locator = locator_of(tracker)
     if isinstance(locator, TrackerError):
-        return locator
+        return _fail_if_evidence(
+            locator, completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            transport=provider, tracker_id=tracker.get("id"),
+        )
 
     ex = bound_executor(config, execute)
     read_out = wire_dispatch("read", config, locator=locator, execute=ex)
@@ -421,19 +473,37 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
         event=event, execute=execute, completed=completed, statuses=statuses,
     )
     if isinstance(created, TrackerError):
-        return created
+        return _fail_if_evidence(
+            created, completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            transport=provider,
+        )
     steps["create"] = created
 
+    # After a landed create, the reload/durable/locator failures below are
+    # partial successes too - the same receipt discipline applies.
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
-        return loaded
+        return _fail_if_evidence(
+            loaded, completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            transport=provider,
+        )
     _path, _spec, tracker = loaded
     durable = require_durable(tracker)
     if isinstance(durable, TrackerError):
-        return durable
+        return _fail_if_evidence(
+            durable, completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            transport=provider, tracker_id=tracker.get("id"),
+        )
     locator = locator_of(tracker)
     if isinstance(locator, TrackerError):
-        return locator
+        return _fail_if_evidence(
+            locator, completed=completed, statuses=statuses,
+            flow_dir=flow_dir, spec_id=spec_id, event=event,
+            transport=provider, tracker_id=tracker.get("id"),
+        )
 
     # Serialize the whole list-then-create sequence behind a local marker
     # claim taken BEFORE the scan: the providers do not make it atomic, so

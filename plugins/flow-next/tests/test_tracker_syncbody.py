@@ -662,3 +662,123 @@ class Round1ClassifierFixes(unittest.TestCase):
             saved = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
             self.assertEqual(saved["tracker"]["mergeBaseFlow"], "NEW LOCAL")
             self.assertEqual([c.op for c in ex.calls], ["sync-body-parent-read"])
+
+
+class SyncBodyClaimSerialization(unittest.TestCase):
+    """PR #246 review: two overlapping sync-body invocations for the same
+    spec each performed write/readback BEFORE acquiring config_lock, so the
+    older invocation could acquire the lock last and overwrite the newer
+    paired base with a stale pair (tracker holds body B, mergeBaseTracker
+    records body A -> false divergence on the next reconcile). The whole
+    transaction is now serialized by a per-spec create-first claim
+    (syncbody-<spec-id>.json) taken before any tracker I/O."""
+
+    def test_overlapping_same_spec_invocation_refuses_before_any_io(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(flow, gh_cfg(), tracker={
+                "id": GH_NODE, "identifier": "#42", "url": "u",
+                "linkState": "linked",
+                "mergeBaseFlow": "OLD LOCAL", "mergeBaseTracker": "OLD REMOTE",
+                "baseHashFlow": "x", "baseHashTracker": "y"})
+            rec_path = flow / "create-first" / "syncbody-fn-1-demo.json"
+            inner: dict = {}
+
+            def racing_parent_read(req):
+                # The claim must be durable BEFORE the parent read...
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                self.assertEqual(claim.get("status"), "pending")
+                self.assertEqual(claim.get("specId"), "fn-1-demo")
+                self.assertEqual(claim.get("op"), "sync-body")
+                # ...so a second invocation racing in mid-transaction refuses
+                # with structured CONFLICT before ANY tracker I/O (the empty
+                # executor would AssertionError on any wire call) instead of
+                # interleaving to a mismatched pair.
+                inner["out"] = SB.sync_body(
+                    flow, "fn-1-demo", flow_file_body="LOSER LOCAL",
+                    execute=fake_execute({}))
+                return ok(_gh_issue("OLD REMOTE"))
+
+            ex = fake_execute({
+                "sync-body-parent-read": racing_parent_read,
+                "wire-parent-read": ok(_gh_issue("OLD REMOTE")),
+                "wire-update": ok(_gh_issue("WINNER BODY")),
+                "wire-read": ok(_gh_issue("WINNER BODY")),
+            })
+            out = SB.sync_body(flow, "fn-1-demo",
+                               flow_file_body="WINNER BODY", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "pushed")
+
+            raced = inner["out"]
+            self.assertIsInstance(raced, TrackerError)
+            self.assertIs(raced.cls, ErrorClass.CONFLICT)
+            self.assertEqual(raced.subtype, "syncbody_in_flight")
+            self.assertTrue(raced.auto_retryable)
+            self.assertEqual((raced.details or {}).get("specId"), "fn-1-demo")
+
+            # The committed pair is the WINNER's write + readback, never a
+            # mix: mergeBaseTracker equals the readback at the hash boundary.
+            saved = _saved(flow)["tracker"]
+            self.assertEqual(saved["mergeBaseFlow"], "WINNER BODY")
+            self.assertEqual(saved["mergeBaseTracker"],
+                             SB.trackerBodyForMerge("WINNER BODY"))
+            self.assertFalse(rec_path.exists(),
+                             "claim released after the transaction finished")
+
+    def test_stale_dead_pid_claim_is_reclaimed(self) -> None:
+        import socket
+        import time
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(flow, gh_cfg(), tracker=_seeded_tracker(
+                GH_NODE, "#42", body_for_base=FLOW_BODY))
+            rec_path = flow / "create-first" / "syncbody-fn-1-demo.json"
+            rec_path.parent.mkdir(parents=True)
+            # pid 0 is never alive; claimedAt is past the stale window.
+            rec_path.write_text(json.dumps({
+                "specId": "fn-1-demo", "status": "pending",
+                "op": "sync-body", "direction": "push", "pid": 0,
+                "host": socket.gethostname(),
+                "claimedAt": time.time() - 999,
+                "transport": "github"}), encoding="utf-8")
+            ex = fake_execute({
+                "sync-body-parent-read": ok(_gh_issue(FLOW_BODY)),
+            })
+            out = SB.sync_body(flow, "fn-1-demo", flow_file_body=FLOW_BODY,
+                               direction="push", execute=ex)
+            self.assertNotIsInstance(out, TrackerError,
+                                     "a crashed run's leftover claim must "
+                                     "not wedge the spec")
+            self.assertEqual(out["kind"], "noop")
+            self.assertFalse(rec_path.exists(),
+                             "reclaimed claim released after the run")
+
+    def test_normal_single_invocation_path_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(flow, gh_cfg(), tracker={
+                "id": GH_NODE, "identifier": "#42", "url": "u",
+                "linkState": "linked",
+                "mergeBaseFlow": "OLD", "mergeBaseTracker": "OLD",
+                "baseHashFlow": "x", "baseHashTracker": "y"})
+            rec_path = flow / "create-first" / "syncbody-fn-1-demo.json"
+            ex = fake_execute({
+                "sync-body-parent-read": ok(_gh_issue("OLD")),
+                "wire-parent-read": ok(_gh_issue("OLD")),
+                "wire-update": ok(_gh_issue("NEW")),
+                "wire-read": ok(_gh_issue("NEW")),
+            })
+            out = SB.sync_body(flow, "fn-1-demo", flow_file_body="NEW",
+                               execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(out["kind"], "pushed")
+            self.assertEqual(out["side_written"], "tracker")
+            self.assertEqual([c.op for c in ex.calls],
+                             ["sync-body-parent-read", "wire-parent-read",
+                              "wire-update", "wire-read"])
+            self.assertFalse(rec_path.exists(),
+                             "claim released after a normal run")
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1, "still one receipt per verb")
+            self.assertEqual(receipts[0]["status"], "pushed")

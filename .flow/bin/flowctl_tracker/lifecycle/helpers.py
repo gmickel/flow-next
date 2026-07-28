@@ -259,7 +259,8 @@ def write_sync_receipt(flow_dir: Path, *, spec_id: str, status: str,
                        event: Optional[str] = None,
                        transport: Optional[str] = None,
                        note: Optional[str] = None,
-                       degraded: Optional[dict] = None) -> Optional[TrackerError]:
+                       degraded: Optional[dict] = None,
+                       details: Optional[dict] = None) -> Optional[TrackerError]:
     receipt = {
         "type": "sync",
         "id": spec_id,
@@ -273,6 +274,10 @@ def write_sync_receipt(flow_dir: Path, *, spec_id: str, status: str,
         "degraded": degraded,
         "timestamp": now_iso(),
     }
+    if details is not None:
+        # Partial-failure evidence is STRUCTURED too: the error's details
+        # (completed_steps, created identity) verbatim, never prose in `note`.
+        receipt["details"] = details
     runs = Path(flow_dir) / "sync-runs"
     ts_slug = receipt["timestamp"].replace(":", "").replace("-", "").replace(".", "")
     return atomic_write_json(runs / f"sync-{spec_id}-{ts_slug}.json", receipt)

@@ -46,6 +46,10 @@ def fail_result(err: TrackerError, *, completed: list,
             flow_dir, spec_id=spec_id, event=event, status=receipt_status,
             tracker_id=tracker_id, transport=transport, degraded=degraded,
             note=f"facade partial ({', '.join(merged)})",
+            # The error's structured details ride into the receipt verbatim
+            # (completed_steps, created identity) - durable evidence of what
+            # landed, so an automated retry is not flying blind.
+            details=details,
         )
     return TrackerError(
         err.cls, err.message, subtype=err.subtype,

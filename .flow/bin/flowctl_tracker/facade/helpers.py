@@ -229,12 +229,13 @@ def write_aggregate_receipt(flow_dir: Path, *, spec_id: str, event: str,
                             status: str, tracker_id: Optional[str],
                             transport: Optional[str],
                             degraded: Optional[dict] = None,
-                            note: Optional[str] = None
+                            note: Optional[str] = None,
+                            details: Optional[dict] = None
                             ) -> Optional[TrackerError]:
     return write_sync_receipt(
         flow_dir, spec_id=spec_id, status=status,
         tracker_id=tracker_id, event=event, transport=transport,
-        note=note, degraded=degraded,
+        note=note, degraded=degraded, details=details,
     )
 
 

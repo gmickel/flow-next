@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from flowctl_tracker import facade as F  # noqa: E402
 from flowctl_tracker import syncbody as SB  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
+from flowctl_tracker.lifecycle import verbs as LV  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
 
 
@@ -412,6 +413,68 @@ class PushFacade(unittest.TestCase):
             self.assertEqual(receipts[0]["status"], "errored")
             self.assertEqual(receipts[0]["event"], "work.done")
             self.assertNotEqual(code, 0)
+
+
+# ---------------------------------------------------------------------------
+# Partial create failure: create lands, locked link write fails
+# ---------------------------------------------------------------------------
+
+class PartialCreateReceipt(unittest.TestCase):
+    """lifecycle_create lands the provider issue but the locked link write
+    fails. The facade must NOT return that TrackerError bare (no receipt):
+    it must write ONE event-tagged aggregate receipt whose payload carries
+    completed_steps=["create"] plus the created identity - durable evidence
+    of what landed, so sync check sees the lifecycle event and an automated
+    retry is not flying blind."""
+
+    def _partial_create(self, *, op: str, event: str, **kw):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg())  # unlinked
+            files = {}
+            if "flow_file" in kw:
+                files["flow_file"] = _flow_file(root)
+            if "body_file" in kw:
+                files["body_file"] = _body_file(
+                    root, "evidence=abc1234\n**done** - shipped.\n")
+            ex = fake_execute({
+                "lifecycle-create": ok({
+                    "id": 1, "node_id": GH_NODE, "number": 42,
+                    "html_url": "https://github.com/o/r/issues/42",
+                }),
+            })
+            boom = TrackerError(ErrorClass.TRANSPORT, "link write boom",
+                                subtype="disk")
+            with mock.patch.object(LV, "_locked_tracker_write",
+                                   return_value=boom):
+                out = F.sync(flow, SPEC_ID, op=op, event=event,
+                             execute=ex, **files)
+            return out, _receipts(flow)
+
+    def _assert_partial_receipt(self, out, receipts, *, event: str) -> None:
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.details["completed_steps"], ["create"])
+        self.assertEqual(out.details["id"], GH_NODE)
+        self.assertEqual(len(receipts), 1, receipts)
+        receipt = receipts[0]
+        self.assertEqual(receipt["type"], "sync")
+        self.assertEqual(receipt["event"], event)
+        self.assertEqual(receipt["status"], "errored")
+        self.assertEqual(receipt["tracker_id"], GH_NODE)
+        self.assertEqual(receipt["details"]["completed_steps"], ["create"])
+        self.assertEqual(receipt["details"]["id"], GH_NODE)
+        self.assertEqual(receipt["details"]["identifier"], "#42")
+
+    def test_push_create_lands_link_write_fails_one_receipt(self) -> None:
+        out, receipts = self._partial_create(
+            op="push", event="work.firstClaim", flow_file=True)
+        self._assert_partial_receipt(out, receipts, event="work.firstClaim")
+
+    def test_comment_create_lands_link_write_fails_one_receipt(self) -> None:
+        out, receipts = self._partial_create(
+            op="comment", event="work.done", body_file=True)
+        self._assert_partial_receipt(out, receipts, event="work.done")
 
 
 # ---------------------------------------------------------------------------
