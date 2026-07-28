@@ -186,23 +186,31 @@ def normalize_comment_body(body: str) -> str:
     return _MENTION_RE.sub("", body or "")
 
 
-def marker_match(body: str, *, issue: str, event: str, evidence: str) -> bool:
+def marker_match(body: str, *, issue: str, spec: str, event: str,
+                 evidence: str) -> bool:
+    """Match on the FULL marker identity: issue + spec + event + evidence.
+    Two specs may intentionally share one issue (`sync set-tracker-id
+    --force`); ignoring the captured spec field would treat spec A's marker
+    as spec B's and silently drop B's comment as a false dedup. Markers have
+    carried spec= since the wave-1 shape, so matching on it does not orphan
+    markers already posted."""
     text = normalize_comment_body(body)
     m = _MARKER_RE.search(text)
     if not m:
         return False
     return (m.group("issue") == issue
+            and m.group("spec") == spec
             and m.group("evt") == event
             and m.group("evidence") == evidence)
 
 
-def comments_have_marker(comments: list, *, issue: str, event: str,
-                         evidence: str) -> bool:
+def comments_have_marker(comments: list, *, issue: str, spec: str,
+                         event: str, evidence: str) -> bool:
     for c in comments:
         if not isinstance(c, dict):
             continue
-        if marker_match(c.get("body") or "", issue=issue, event=event,
-                        evidence=evidence):
+        if marker_match(c.get("body") or "", issue=issue, spec=spec,
+                        event=event, evidence=evidence):
             return True
     return False
 

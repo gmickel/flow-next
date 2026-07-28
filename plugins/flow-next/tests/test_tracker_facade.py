@@ -671,7 +671,8 @@ class CommentFacade(unittest.TestCase):
             evidence = "abc1234"
             bf = _body_file(root, f"evidence={evidence}\n**done** - shipped.\n")
             rec_path = _comment_claim_path(
-                flow, issue=GH_NODE, event="work.done", evidence=evidence)
+                flow, issue=GH_NODE, spec=SPEC_ID, event="work.done",
+                evidence=evidence)
             posted_bodies = []
             inner: dict = {}
 
@@ -729,7 +730,8 @@ class CommentFacade(unittest.TestCase):
             evidence = "abc1234"
             bf = _body_file(root, f"evidence={evidence}\n**done** - shipped.\n")
             rec_path = _comment_claim_path(
-                flow, issue=GH_NODE, event="work.done", evidence=evidence)
+                flow, issue=GH_NODE, spec=SPEC_ID, event="work.done",
+                evidence=evidence)
             rec_path.parent.mkdir(parents=True)
             # pid 0 is never alive; claimedAt is past the stale window.
             rec_path.write_text(json.dumps({
@@ -842,7 +844,7 @@ class MarkerRoundTrip(unittest.TestCase):
             self.assertEqual(m.group("evt"), "work.done")
             self.assertEqual(m.group("evidence"), evidence)
             self.assertTrue(comments_have_marker(
-                [{"body": posted_bodies[0]}], issue=GH_NODE,
+                [{"body": posted_bodies[0]}], issue=GH_NODE, spec=SPEC_ID,
                 event="work.done", evidence=evidence))
 
             ex2 = fake_execute({
@@ -1599,3 +1601,109 @@ class FacadeDegradationPropagation(unittest.TestCase):
         top = {"kind": "relates_to"}
         self.assertEqual(FH.collect_degraded({"degraded": top}), top)
         self.assertIsNone(FH.collect_degraded({"kind": "noop"}, None))
+
+
+class SharedIssueSpecScopedDedup(unittest.TestCase):
+    """Two specs intentionally sharing one issue (`sync set-tracker-id
+    --force`) emitting the same event/evidence: the dedup matcher and the
+    comment claim key must include the spec, or spec B's comment is silently
+    dropped as a false dedup against spec A's marker."""
+
+    SPEC_A = SPEC_ID
+    SPEC_B = "fn-2-other"
+
+    def _flow_two_specs(self, flow: Path) -> None:
+        _write_flow(flow, gh_cfg(), spec_id=self.SPEC_A, tracker=_linked())
+        # Second spec linked to the SAME issue (config already written).
+        base = {
+            "id": GH_NODE, "identifier": "#42", "url": "https://x/42",
+            "lastSyncedAt": None, "depRelations": [], "linkState": "linked",
+            "baseHashFlow": None, "baseHashTracker": None,
+            "mergeBaseFlow": None, "mergeBaseTracker": None,
+        }
+        spec = {"id": self.SPEC_B, "title": "Other", "status": "open",
+                "branch_name": self.SPEC_B, "tracker": base}
+        (flow / "specs" / f"{self.SPEC_B}.json").write_text(
+            json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+        (flow / "specs" / f"{self.SPEC_B}.md").write_text(
+            FLOW_BODY, encoding="utf-8")
+
+    def test_second_spec_posts_despite_first_specs_marker(self) -> None:
+        """Spec A's marker for the same issue/event/evidence must NOT dedup
+        spec B's comment (no false noop, no silently omitted comment)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            self._flow_two_specs(flow)
+            evidence = "abc1234"
+            bf = _body_file(root, f"evidence={evidence}\n**done** - shipped.\n")
+            marker_a = (f"<!-- flow-next:sync issue={GH_NODE} "
+                        f"spec={self.SPEC_A} evt=work.done "
+                        f"evidence={evidence} -->")
+            posted_bodies = []
+
+            def capture_add(req):
+                posted_bodies.append(json.loads(req.body)["body"])
+                return ok({"id": 100, "body": posted_bodies[-1],
+                           "html_url": "https://x/c/100"})
+
+            ex = fake_execute({
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-comment-list": ok([{
+                    "id": 99, "body": f"{marker_a}\n\n**done** - shipped.",
+                    "html_url": "https://x/c/99",
+                }]),
+                "wire-comment-add": capture_add,
+            })
+            out = F.sync(flow, self.SPEC_B, op="comment", event="work.done",
+                         body_file=bf, execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertTrue(out["posted"], "spec B must post, not false-dedup")
+            self.assertFalse(out["deduped"])
+            self.assertEqual(len(posted_bodies), 1)
+            self.assertIn(f"spec={self.SPEC_B}", posted_bodies[0])
+
+    def test_same_spec_same_event_evidence_still_dedups_noop(self) -> None:
+        """Identity guard intact: the SAME spec's marker still dedups."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            evidence = "abc1234"
+            bf = _body_file(root, f"evidence={evidence}\n**done** - shipped.\n")
+            marker = (f"<!-- flow-next:sync issue={GH_NODE} spec={SPEC_ID} "
+                      f"evt=work.done evidence={evidence} -->")
+            ex = fake_execute({
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-comment-list": ok([{
+                    "id": 99, "body": f"{marker}\n\n**done** - shipped.",
+                    "html_url": "https://x/c/99",
+                }]),
+            })
+            out = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                         body_file=bf, execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertFalse(out["posted"])
+            self.assertTrue(out["deduped"])
+            self.assertFalse(any(c.op == "wire-comment-add" for c in ex.calls))
+
+    def test_claim_keys_differ_per_spec_and_stay_hex_safe(self) -> None:
+        """Two specs sharing issue/event/evidence get DIFFERENT claim paths
+        (concurrent claims, no false back-off); filenames stay hex-safe."""
+        from flowctl_tracker.facade.ops import _comment_claim_path
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            p_a = _comment_claim_path(
+                flow, issue=GH_NODE, spec=self.SPEC_A, event="work.done",
+                evidence="abc1234")
+            p_b = _comment_claim_path(
+                flow, issue=GH_NODE, spec=self.SPEC_B, event="work.done",
+                evidence="abc1234")
+            self.assertNotEqual(p_a, p_b)
+            for p in (p_a, p_b):
+                self.assertRegex(p.name, r"^comment-[0-9a-f]{16}\.json$")
+                self.assertEqual(p.parent, flow / "create-first")
+            # Same quadruple stays deterministic.
+            self.assertEqual(p_a, _comment_claim_path(
+                flow, issue=GH_NODE, spec=self.SPEC_A, event="work.done",
+                evidence="abc1234"))

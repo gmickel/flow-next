@@ -312,13 +312,31 @@ def _ledger_finalize_guarded(flow_dir: Path, spec_id: str, dep_spec: str, *,
             # on the repair path the entry was claimed by an earlier
             # interrupted run (different owner triple), and after the relink
             # it can never be validly finalized by anyone. Best-effort -
-            # the drift evidence below is the primary outcome either way.
+            # the drift evidence below is the primary outcome either way,
+            # but the cleanup result is reported honestly: a failed
+            # tracker-block write leaves the old-ID pending claim attached
+            # to the relinked spec, and claiming it was removed would send
+            # the operator hunting a ghost (mirrors the receipt_write_failed
+            # decoration: the failure rides alongside, structured, never
+            # masking the relink conflict).
             released = ledger_release(tracker, key=key, force=True)
             werr = write_tracker_block(path, spec, released)
-            del werr
             import dataclasses  # noqa: PLC0415
             extra: dict = {"recoverable": False, "key": key,
                            "from": spec_id, "to": dep_spec}
+            if werr is None:
+                claim_note = "pending claim removed"
+                extra["cleanup"] = {"released": True}
+            else:
+                claim_note = (
+                    "removing the pending claim FAILED - the stale old-ID "
+                    "entry is still attached to the relinked spec")
+                extra["cleanup"] = {
+                    "released": False,
+                    "error_class": werr.cls.value,
+                    "subtype": werr.subtype,
+                    "message": werr.message,
+                }
             if repair:
                 # No mutation was performed by THIS invocation: the remote
                 # edge predates this run (interrupted earlier create). No
@@ -329,7 +347,7 @@ def _ledger_finalize_guarded(flow_dir: Path, spec_id: str, dep_spec: str, *,
                     "the remote edge was being probed; the remote blocked-by "
                     "edge predates this run (no provider mutation was "
                     "performed) - the ledger was NOT finalized onto the "
-                    "relinked spec (pending claim removed); review the stale "
+                    f"relinked spec ({claim_note}); review the stale "
                     "edge between the OLD issues on the tracker")
             else:
                 message = (
@@ -337,8 +355,8 @@ def _ledger_finalize_guarded(flow_dir: Path, spec_id: str, dep_spec: str, *,
                     "while the provider mutation was in flight; the "
                     "remote blocked-by edge WAS created between the OLD "
                     "issues and cannot be un-sent - the ledger was NOT "
-                    "finalized onto the relinked spec (pending claim "
-                    "removed); review the orphan edge on the tracker")
+                    "finalized onto the relinked spec "
+                    f"({claim_note}); review the orphan edge on the tracker")
                 extra["completed_steps"] = ["relate-create"]
                 extra["form"] = form
             return dataclasses.replace(

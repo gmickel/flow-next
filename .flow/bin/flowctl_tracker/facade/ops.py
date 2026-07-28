@@ -383,11 +383,14 @@ def op_reconcile(flow_dir: Path, spec_id: str, *, flow_file: str,
     }, statuses=statuses, completed=completed, degraded=degraded)
 
 
-def _comment_claim_path(flow_dir: Path, *, issue: str, event: str,
-                        evidence: str) -> Path:
-    """Claim record keyed on the dedup-marker identity - issue + event +
-    evidence, exactly the triple comments_have_marker matches on."""
-    payload = "\0".join([issue, event, evidence])
+def _comment_claim_path(flow_dir: Path, *, issue: str, spec: str,
+                        event: str, evidence: str) -> Path:
+    """Claim record keyed on the dedup-marker identity - issue + spec +
+    event + evidence, exactly the quadruple comments_have_marker matches on.
+    Spec is part of the key so two specs sharing one issue (`sync
+    set-tracker-id --force`) can claim concurrently without false back-off;
+    the sha256 keeps the filename hex-safe regardless of the spec slug."""
+    payload = "\0".join([issue, spec, event, evidence])
     key = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
     return Path(flow_dir) / "create-first" / f"comment-{key}.json"
 
@@ -581,7 +584,8 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
     marker = format_marker(
         issue=str(durable), spec_id=spec_id, event=event, evidence=evidence)
     rec_path = _comment_claim_path(
-        flow_dir, issue=str(durable), event=event, evidence=evidence)
+        flow_dir, issue=str(durable), spec=spec_id, event=event,
+        evidence=evidence)
     claimed = _claim_comment_marker(
         flow_dir, spec_id, rec_path, provider, event=event, marker=marker)
     if claimed is not None:
@@ -619,8 +623,8 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
         if not isinstance(comments, list):
             comments = []
 
-        if comments_have_marker(comments, issue=str(durable), event=event,
-                                evidence=evidence):
+        if comments_have_marker(comments, issue=str(durable), spec=spec_id,
+                                event=event, evidence=evidence):
             completed.append("comment-dedup")
             statuses.append("noop")
             receipt_status = worst_status(statuses)

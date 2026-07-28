@@ -1140,6 +1140,9 @@ class RelateFinalizeRelinkGuard(unittest.TestCase):
         self.assertEqual(details.get("to"), "fn-2-dep")
         self.assertIs(details.get("recoverable"), False,
                       "a re-run cannot un-send the orphan edge")
+        # The cleanup write succeeded: the removal claim is backed by an
+        # explicit, symmetric marker (never asserted implicitly).
+        self.assertEqual(details.get("cleanup"), {"released": True})
         self.assertEqual([c.op for c in ex.calls],
                          ["relate-list", "relate-create"],
                          "the create WAS issued before the relink landed")
@@ -1866,6 +1869,9 @@ class RelateRepairRelinkGuard(unittest.TestCase):
         self.assertEqual(details.get("from"), "fn-1-demo")
         self.assertEqual(details.get("to"), "fn-2-dep")
         self.assertIs(details.get("recoverable"), False)
+        # The cleanup write succeeded: explicit marker, same shape as the
+        # create path.
+        self.assertEqual(details.get("cleanup"), {"released": True})
         self.assertEqual([c.op for c in ex.calls], ["relate-list"],
                          "probe only - the repair path issues no mutation")
         # The old-ID pending entry must NOT be finalized onto the relinked
@@ -1915,3 +1921,147 @@ class RelateRepairRelinkGuard(unittest.TestCase):
             self.assertEqual(len(entries), 1)
             self.assertNotIn("status", entries[0],
                              "entry finalized (claim fields dropped)")
+
+
+class RelateRelinkCleanupFailure(unittest.TestCase):
+    """PR #246 review: when drift is detected at finalize time and the
+    tracker-block write for the claim release FAILS (spec became unwritable),
+    the returned CONFLICT/relinked must keep the relink evidence as the
+    primary error AND report the cleanup failure honestly - the old-ID
+    pending entry is still attached to the relinked spec, so no field (and
+    no message text) may claim it was removed. The write failure must never
+    mask or replace the relink conflict."""
+
+    NEW_UUID = "99999999-8888-7777-6666-555555555555"
+
+    def _pair(self, flow: Path) -> None:
+        a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+
+    def _pair_with_pending(self, flow: Path) -> str:
+        key = R.dep_relation_key(LN_UUID, LN_UUID_B)
+        a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                "linkState": "linked",
+                "depRelations": [{"key": key, "dep_spec": "fn-2-dep",
+                                  "from_tracker_id": LN_UUID,
+                                  "to_tracker_id": LN_UUID_B,
+                                  "type": "blocks", "source": "flow",
+                                  "status": "pending",
+                                  "updatedAt": "2026-01-01T00:00:00Z"}]}
+        b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+        return key
+
+    def _failing_writes_after_relink(self, relinked: dict):
+        """Real write_tracker_block until the relink lands (the claim write
+        must persist normally), then every write fails - the release write
+        is the only one after the relink in these flows."""
+        real = R.write_tracker_block
+        boom = TrackerError(ErrorClass.TRANSPORT,
+                            "tracker-block write failed: read-only filesystem",
+                            subtype="write")
+
+        def fake(path, spec_data, tracker):
+            if relinked.get("done"):
+                return boom
+            return real(path, spec_data, tracker)
+        return fake
+
+    def _assert_conflict_with_cleanup_failure(self, out) -> None:
+        self.assertIsInstance(out, TrackerError, msg=repr(out))
+        # The relink conflict stays the primary error - the write failure
+        # never masks or replaces it.
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "relinked")
+        details = out.details or {}
+        self.assertEqual(details.get("key"),
+                         dep_relation_key(LN_UUID, LN_UUID_B))
+        self.assertEqual(details.get("from"), "fn-1-demo")
+        self.assertEqual(details.get("to"), "fn-2-dep")
+        self.assertIs(details.get("recoverable"), False)
+        # Structured cleanup-failure marker (receipt_write_failed shape).
+        cleanup = details.get("cleanup") or {}
+        self.assertIs(cleanup.get("released"), False,
+                      "no field may claim the pending entry was removed")
+        self.assertEqual(cleanup.get("error_class"),
+                         ErrorClass.TRANSPORT.value)
+        self.assertEqual(cleanup.get("subtype"), "write")
+        self.assertIn("read-only filesystem", cleanup.get("message") or "")
+        # And the prose must not claim removal either.
+        self.assertNotIn("pending claim removed", out.message)
+
+    def _assert_pending_still_on_disk(self, flow: Path) -> None:
+        spec = json.loads(
+            (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))
+        entries = spec["tracker"].get("depRelations") or []
+        self.assertEqual(len(entries), 1,
+                         "failed release leaves the old-ID entry on disk")
+        self.assertEqual(entries[0].get("status"), "pending")
+
+    def test_create_path_release_write_failure_reported(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            relinked: dict = {}
+            list_empty = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": []},
+            }}})
+            create_body = {"data": {"issueRelationCreate": {
+                "success": True, "issueRelation": {"id": "rel-1"}}}}
+
+            def create_hook(request):
+                RelateRelinkGuard._relink(flow, "fn-1-demo", self.NEW_UUID)
+                relinked["done"] = True
+                return ok(create_body)
+
+            ex = fake_execute({"relate-list": [list_empty],
+                               "relate-create": [create_hook]})
+            with mock.patch.object(
+                    R, "write_tracker_block",
+                    side_effect=self._failing_writes_after_relink(relinked)):
+                out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                               execute=ex)
+            self._assert_conflict_with_cleanup_failure(out)
+            details = out.details or {}
+            # Relink evidence intact: the landed remote create is still
+            # carried (wave-8 decoration).
+            self.assertEqual(details.get("completed_steps"),
+                             ["relate-create"])
+            self._assert_pending_still_on_disk(flow)
+
+    def test_repair_path_release_write_failure_reported(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair_with_pending(flow)
+            relinked: dict = {}
+            body = {"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": [
+                    {"type": "blocks", "issue": {"id": LN_UUID_B}}]},
+            }}}
+
+            def probe_hook(request):
+                RelateRelinkGuard._relink(flow, "fn-2-dep", self.NEW_UUID)
+                relinked["done"] = True
+                return ok(body)
+
+            ex = fake_execute({"relate-list": [probe_hook]})
+            with mock.patch.object(
+                    R, "write_tracker_block",
+                    side_effect=self._failing_writes_after_relink(relinked)):
+                out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                               execute=ex)
+            self._assert_conflict_with_cleanup_failure(out)
+            details = out.details or {}
+            # Repair path: no mutation was performed by this run.
+            self.assertNotIn("completed_steps", details)
+            self._assert_pending_still_on_disk(flow)
