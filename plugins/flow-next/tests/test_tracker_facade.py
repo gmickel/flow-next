@@ -667,6 +667,109 @@ class CommentFacade(unittest.TestCase):
             self.assertFalse(rec_path.exists(), "reclaimed claim released")
 
 
+class MarkerRoundTrip(unittest.TestCase):
+    """Marker fields must round-trip through _MARKER_RE (single \\S+ tokens).
+    A whitespace-embedded event/evidence posts fine once but every retry
+    fails comments_have_marker() and posts a duplicate - so such values are
+    rejected structurally BEFORE any wire call and before any claim file."""
+
+    def _no_claims(self, flow: Path) -> None:
+        cf = flow / "create-first"
+        self.assertEqual(
+            list(cf.glob("comment-*.json")) if cf.is_dir() else [], [])
+
+    def test_comment_evidence_with_whitespace_rejected_before_wire(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            bf = _body_file(root, "evidence=abc def\n**done** - shipped.\n")
+            ex = fake_execute({})  # any wire call would raise
+            out = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                         body_file=bf, execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+            self.assertEqual(out.subtype, "evidence")
+            self.assertEqual((out.details or {}).get("value"), "abc def")
+            self.assertEqual(ex.calls, [], "rejected before any wire call")
+            self._no_claims(flow)
+            self.assertEqual(_receipts(flow), [])
+
+    def test_event_with_whitespace_rejected_before_wire(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            bf = _body_file(root, "evidence=abc1234\n**done** - shipped.\n")
+            ex = fake_execute({})
+            out = F.sync(flow, SPEC_ID, op="comment", event="work done",
+                         body_file=bf, execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+            self.assertEqual(out.subtype, "event")
+            self.assertEqual(ex.calls, [], "rejected before any wire call")
+            self._no_claims(flow)
+            self.assertEqual(_receipts(flow), [])
+            # Non-comment ops share the same boundary (event is a receipt key).
+            out2 = F.sync(flow, SPEC_ID, op="pull", event="work\tdone",
+                          execute=ex)
+            self.assertIsInstance(out2, TrackerError)
+            self.assertEqual(out2.subtype, "event")
+            self.assertEqual(ex.calls, [])
+
+    def test_marker_safe_value_posts_and_dedups_on_retry(self) -> None:
+        """Round-trip: the emitted marker parses under _MARKER_RE with the
+        original field values, and the retry's scan dedups to a noop."""
+        from flowctl_tracker.facade.helpers import _MARKER_RE, comments_have_marker
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            evidence = "abc1234"
+            bf = _body_file(root, f"evidence={evidence}\n**done** - shipped.\n")
+            posted_bodies = []
+
+            def capture_add(req):
+                posted_bodies.append(json.loads(req.body)["body"])
+                return ok({"id": 99, "body": posted_bodies[-1],
+                           "html_url": "https://x/c/99"})
+
+            ex1 = fake_execute({
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-comment-list": ok([]),
+                "wire-comment-add": capture_add,
+            })
+            out1 = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                          body_file=bf, execute=ex1)
+            self.assertNotIsInstance(out1, TrackerError)
+            self.assertTrue(out1["posted"])
+            self.assertEqual(len(posted_bodies), 1)
+            m = _MARKER_RE.search(posted_bodies[0])
+            self.assertIsNotNone(m, "emitted marker must parse")
+            self.assertEqual(m.group("issue"), GH_NODE)
+            self.assertEqual(m.group("spec"), SPEC_ID)
+            self.assertEqual(m.group("evt"), "work.done")
+            self.assertEqual(m.group("evidence"), evidence)
+            self.assertTrue(comments_have_marker(
+                [{"body": posted_bodies[0]}], issue=GH_NODE,
+                event="work.done", evidence=evidence))
+
+            ex2 = fake_execute({
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-comment-list": ok([{
+                    "id": 99, "body": posted_bodies[0],
+                    "html_url": "https://x/c/99",
+                }]),
+            })
+            out2 = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                          body_file=bf, execute=ex2)
+            self.assertNotIsInstance(out2, TrackerError)
+            self.assertFalse(out2["posted"])
+            self.assertTrue(out2["deduped"])
+            self.assertFalse(
+                any(c.op == "wire-comment-add" for c in ex2.calls))
+
+
 # ---------------------------------------------------------------------------
 # MCP rung
 # ---------------------------------------------------------------------------

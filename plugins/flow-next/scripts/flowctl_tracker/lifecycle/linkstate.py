@@ -121,9 +121,27 @@ def complete_identifier_only(flow_dir, spec_id: str, *,
     # INSIDE the same critical section via collision_id: an unlocked pre-scan
     # is a check-then-lock race - two specs completing/persisting the same
     # durable id could both pass it, then both serialized writes succeed.
+    def _complete(t: dict):
+        # Re-check the link state INSIDE the lock (persist_external pattern):
+        # if the tracker identity changed while the GraphQL resolve was in
+        # flight (e.g. sync set-tracker-id wrote a durable id), an
+        # unconditional merge would silently repoint the spec to the
+        # resolution result for the OLD identifier. Refuse and persist
+        # nothing; the caller re-runs against the new state.
+        state = derive_link_state(t)
+        if state == "identifier_only" and t.get("identifier") == identifier:
+            return {**t, **link_fields}
+        return TrackerError(
+            ErrorClass.CONFLICT,
+            f"spec {spec_id!r} tracker changed while UUID resolution was in "
+            f"flight (now {state}, identifier={t.get('identifier')!r}); "
+            "refusing to overwrite; re-run reconcile against the new state",
+            subtype="unlinked" if state == "unlinked" else "already_linked",
+            details={"linkState": state, "identifier": t.get("identifier"),
+                     "id": t.get("id")})
+
     persisted = locked_tracker_write(
-        flow_dir, spec_id, lambda t: {**t, **link_fields},
-        collision_id=resolved["id"])
+        flow_dir, spec_id, _complete, collision_id=resolved["id"])
     if isinstance(persisted, TrackerError):
         return persisted
     return {"id": persisted["id"], "identifier": persisted["identifier"],

@@ -834,6 +834,46 @@ class Round5PersistIntegrity(unittest.TestCase):
             self.assertEqual(saved["tracker"]["url"],
                              "https://linear.app/x/issue/WOR-17")
 
+    def test_complete_identifier_only_refuses_concurrent_relink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, ln_cfg(),
+                               tracker={"id": None, "identifier": "WOR-17",
+                                        "url": None, "lastSyncedAt": None,
+                                        "linkState": "identifier_only",
+                                        "depRelations": []})
+
+            def concurrent_set_tracker_id(req):
+                # A concurrent `sync set-tracker-id` links the spec to a
+                # DIFFERENT durable identity while the GraphQL UUID resolve
+                # is in flight. The locked merge must re-check the reloaded
+                # block and refuse - an unconditional merge would silently
+                # repoint the spec to the resolution result for the OLD
+                # identifier.
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["tracker"] = {"id": "lin_OTHER_uuid", "identifier": "WOR-99",
+                                   "url": "https://linear.app/x/issue/WOR-99",
+                                   "linkState": "linked", "depRelations": []}
+                path.write_text(json.dumps(data), encoding="utf-8")
+                return ok({"data": {"issue": {
+                    "id": LN_UUID, "identifier": "WOR-17",
+                    "url": "https://linear.app/x/issue/WOR-17"}}})
+
+            ex = fake_execute({"lifecycle-resolve-uuid": concurrent_set_tracker_id})
+            out = L.complete_identifier_only(flow, "fn-1-demo", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "already_linked")
+            details = out.details or {}
+            self.assertEqual(details.get("linkState"), "linked")
+            self.assertEqual(details.get("identifier"), "WOR-99")
+            self.assertEqual(details.get("id"), "lin_OTHER_uuid")
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["id"], "lin_OTHER_uuid",
+                             "concurrent identity must survive untouched")
+            self.assertEqual(saved["identifier"], "WOR-99")
+            self.assertEqual(saved["linkState"], "linked")
+
     def test_persist_external_degraded_write_preserves_concurrent_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"

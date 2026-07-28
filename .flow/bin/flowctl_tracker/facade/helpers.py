@@ -48,6 +48,29 @@ _MARKER_RE = re.compile(
 # Strip Linear/GitHub mention markup before marker parse (comments-sync.md).
 _MENTION_RE = re.compile(r"<issue[^>]*>|</issue>")
 
+# One marker field: exactly what _MARKER_RE's field classes accept (\S+).
+_MARKER_FIELD_RE = re.compile(r"\S+")
+
+
+def marker_component_error(name: str, value: Any) -> Optional[TrackerError]:
+    """Reject marker components the emitted marker cannot round-trip through
+    _MARKER_RE. Marker fields are single whitespace-free tokens; a value with
+    embedded whitespace posts fine the first time, but every retry fails
+    comments_have_marker() and posts another copy - the idempotency guarantee
+    breaks silently. Reject rather than encode: the marker is a dedup
+    identity, and encoding would change the identity of markers already
+    posted by earlier flow-next versions."""
+    if isinstance(value, str) and _MARKER_FIELD_RE.fullmatch(value):
+        return None
+    return TrackerError(
+        ErrorClass.INVALID_INPUT,
+        f"{name} {value!r} cannot round-trip the sync dedup marker: marker "
+        "fields must be a single whitespace-free token (no spaces, tabs, or "
+        "newlines); pass one token, e.g. a sha or dotted event name",
+        subtype=name,
+        details={"field": name, "value": value},
+    )
+
 
 def validate_inputs(op: str, *, flow_file: Optional[str],
                     body_file: Optional[str], event: Optional[str]
@@ -59,6 +82,11 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
     if not event or not str(event).strip():
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "--event is required", subtype="event")
+    # The event is a marker field (and a receipt/claim key): reject values
+    # the emitted marker could not round-trip BEFORE any wire call.
+    bad_event = marker_component_error("event", str(event))
+    if bad_event:
+        return bad_event
     rules = OP_INPUTS[op]
     present = {
         "flow_file": flow_file is not None,

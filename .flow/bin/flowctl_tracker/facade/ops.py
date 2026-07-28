@@ -26,7 +26,7 @@ from ..types import ErrorClass, TrackerError
 from ..wire import dispatch as wire_dispatch
 from .helpers import (collect_degraded, comments_have_marker, format_marker,
                       link_state_of, load_tracker, local_spec_md, locator_of,
-                      parse_evidence, read_text_file,
+                      marker_component_error, parse_evidence, read_text_file,
                       step_status_from_sync_body, strip_evidence_line,
                       worst_status, write_aggregate_receipt)
 from .steps import create_if_unlinked, fail_result, ok_result, run_status
@@ -451,6 +451,13 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
     if isinstance(raw_body, TrackerError):
         return raw_body
     evidence = parse_evidence(raw_body)
+    # Evidence is a marker field and part of the claim key: a value the
+    # emitted marker cannot round-trip through _MARKER_RE would post once
+    # and then duplicate on every retry (the dedup scan never matches).
+    # Reject BEFORE any wire call and before the claim is taken.
+    bad_evidence = marker_component_error("evidence", evidence)
+    if bad_evidence:
+        return bad_evidence
     comment_text = strip_evidence_line(raw_body)
 
     loaded = load_tracker(flow_dir, spec_id)
