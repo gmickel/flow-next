@@ -25,7 +25,7 @@ import re
 import socket
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .. import envelope
 from ..executor import execute as default_execute
@@ -255,7 +255,7 @@ def _claim_sync_body(flow_dir: Path, spec_id: str, rec_path: Path,
 
 def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               tracker_body: Optional[str] = None,
-              tracker_snapshot_body: Optional[str] = None,
+              tracker_read: Optional[Callable[[dict], Result]] = None,
               direction: str = "push",
               event: Optional[str] = None,
               execute: Execute = default_execute,
@@ -265,9 +265,13 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
     Serialized per spec via a create-first claim taken before any tracker
     I/O; a live foreign claim refuses with structured CONFLICT
     (syncbody_in_flight, retryable) instead of interleaving to a mismatched
-    pair. ``tracker_snapshot_body`` is honored ONLY for ``direction="pull"``:
-    when set, skip the parent read and persist that body as the tracker half
-    (the caller already ran the durable-validated parent gate).
+    pair. ``tracker_read`` is honored ONLY for ``direction="pull"``: when
+    set, the transaction calls it with ITS OWN locator (loaded after the
+    claim) instead of parent_read, and persists the returned wire-read body
+    as the tracker half. The read therefore happens INSIDE the claimed
+    transaction - a snapshot captured before the claim could pair an older
+    read with a newer base, or commit the old issue's body under a
+    repointed locator.
     """
     flow_dir = Path(flow_dir)
     if not spec_id:
@@ -294,7 +298,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
         return _sync_body_txn(
             flow_dir, spec_id, config=config, provider=provider,
             flow_file_body=flow_file_body, tracker_body=tracker_body,
-            tracker_snapshot_body=tracker_snapshot_body, direction=direction,
+            tracker_read=tracker_read, direction=direction,
             event=event, execute=execute, write_receipt=write_receipt)
     finally:
         _release_claim(rec_path)
@@ -303,7 +307,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
 def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                    provider: str, flow_file_body: str,
                    tracker_body: Optional[str],
-                   tracker_snapshot_body: Optional[str],
+                   tracker_read: Optional[Callable[[dict], Result]],
                    direction: str, event: Optional[str],
                    execute: Execute, write_receipt: bool) -> Result:
     """The claimed transaction body: spec is (re)loaded AFTER the claim so
@@ -328,13 +332,23 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
     from ..wire import parent_read  # noqa: PLC0415
     ex = bound_executor(config, execute)
 
-    # Pull + caller-supplied snapshot: reuse the facade wire-read body so a
-    # concurrent tracker edit cannot desync the returned body from mergeBase.
-    if direction == "pull" and tracker_snapshot_body is not None:
-        if isinstance(tracker_snapshot_body, str):
-            current_body = tracker_snapshot_body
+    # Pull + caller-supplied reader: run the wire read HERE, inside the
+    # claimed transaction and against the transaction's own locator. The
+    # claim above and the identity guard in _commit_paired_base then cover
+    # the read too: an overlapping pull cannot pair an older read with a
+    # newer base, and a set-tracker-id repoint in the gap cannot commit the
+    # old issue's body under the new locator.
+    if direction == "pull" and tracker_read is not None:
+        read_out = tracker_read(locator)
+        if isinstance(read_out, TrackerError):
+            return read_out
+        raw = read_out.get("body") if isinstance(read_out, dict) else None
+        if raw is None:
+            current_body = ""
+        elif isinstance(raw, str):
+            current_body = raw
         else:
-            current_body = str(tracker_snapshot_body)
+            current_body = str(raw)
     else:
         parent = parent_read(provider, config, locator, ex,
                              op="sync-body-parent-read")

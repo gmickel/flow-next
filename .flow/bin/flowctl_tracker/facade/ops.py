@@ -170,42 +170,43 @@ def op_pull(flow_dir: Path, spec_id: str, *, event: str,
     if isinstance(locator, TrackerError):
         return locator
 
+    flow_body = local_spec_md(flow_dir, spec_id)
+    if isinstance(flow_body, TrackerError):
+        # Pre-flight: nothing has reached the wire yet, so no receipt.
+        return flow_body
+
     completed: list = []
     statuses: list = []
     ex = bound_executor(config, execute)
 
-    read_out = wire_dispatch("read", config, locator=locator, execute=ex)
-    if isinstance(read_out, TrackerError):
-        return read_out
-    completed.append("wire-read")
-    statuses.append("pulled")
+    # The wire read runs INSIDE sync_body's claimed transaction, against the
+    # transaction's own locator - a pre-claim read could pair an older
+    # snapshot with a newer base (two pulls overlapping a remote edit) or,
+    # after a set-tracker-id repoint in the gap, commit the old issue's body
+    # under the new locator. The successful read result threads back out
+    # through this holder so it is never re-read.
+    read_holder: dict[str, Any] = {}
 
-    flow_body = local_spec_md(flow_dir, spec_id)
-    if isinstance(flow_body, TrackerError):
-        return fail_result(
-            flow_body, completed=completed, statuses=statuses,
-            flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
-        )
-
-    # Pair the returned wire body with the stored mergeBaseTracker: pass the
-    # already-validated read into sync_body so it does not re-read the parent.
-    snapshot = ""
-    if isinstance(read_out, dict):
-        raw = read_out.get("body")
-        if raw is None:
-            snapshot = ""
-        elif isinstance(raw, str):
-            snapshot = raw
-        else:
-            snapshot = str(raw)
+    def _tracker_read(txn_locator: dict) -> Any:
+        out = wire_dispatch("read", config, locator=txn_locator, execute=ex)
+        if not isinstance(out, TrackerError):
+            read_holder["read"] = out
+        return out
 
     body_out = sync_body(
         flow_dir, spec_id, flow_file_body=flow_body, direction="pull",
         event=event, execute=execute, write_receipt=False,
-        tracker_snapshot_body=snapshot,
+        tracker_read=_tracker_read,
     )
+    read_out = read_holder.get("read")
+    if read_out is not None:
+        completed.append("wire-read")
+        statuses.append("pulled")
     if isinstance(body_out, TrackerError):
+        if read_out is None:
+            # The claim refusal, the transaction's locator failure, or the
+            # read itself failed: nothing landed, stay receipt-less.
+            return body_out
         return fail_result(
             body_out, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
@@ -440,6 +441,48 @@ def _claim_comment_marker(flow_dir: Path, spec_id: str, rec_path: Path,
     return None
 
 
+def _recheck_comment_identity(flow_dir: Path, spec_id: str,
+                              locator: dict) -> Optional[TrackerError]:
+    """Wave-11 revalidation, comment edition: the marker claim serializes
+    sibling comment facades, NOT `sync set-tracker-id`. If a relink lands
+    after this invocation loaded its locator, the dedup scan and comment-add
+    below would validate and post against the OLD issue while the spec now
+    points at a new one - and the aggregate receipt would record the old
+    tracker id. Under the shared writer lock (the same lock the link writers
+    hold), reload the tracker block and compare its durable/display identity
+    against the locator this invocation loaded; on drift refuse with
+    structured CONFLICT (identity_changed, the sibling subtype) BEFORE any
+    wire call. The claim taken above is keyed on the OLD issue id, so the
+    caller's finally releases it and no claim remains for the stale key."""
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            loaded = load_tracker(flow_dir, spec_id)
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc),
+                            subtype="lock_timeout")
+    if isinstance(loaded, TrackerError):
+        return loaded
+    _path, _spec, tracker = loaded
+    now = locator_of(tracker)
+    if isinstance(now, TrackerError) or now != locator:
+        now_id = tracker.get("id")
+        now_display = tracker.get("identifier")
+        return TrackerError(
+            ErrorClass.CONFLICT,
+            f"spec {spec_id!r} tracker identity changed while the comment "
+            f"facade was in flight (invocation loaded "
+            f"{locator.get('display')!r}/{locator.get('durable')!r}, spec "
+            f"now has {now_display!r}/{now_id!r}); refusing to post to the "
+            "old issue; re-run the comment against the new link",
+            subtype="identity_changed",
+            details={"specId": spec_id,
+                     "transaction": dict(locator),
+                     "current": {"durable": now_id,
+                                 "display": now_display}})
+    return None
+
+
 def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
                execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
@@ -528,6 +571,18 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
             tracker_id=durable, transport=provider,
         )
     try:
+        # `sync set-tracker-id` can repoint the spec between the locator
+        # load above and here; the marker claim does not coordinate with the
+        # link writer. Revalidate the spec identity before any wire call so
+        # the post (and the receipt's tracker id) never targets the old
+        # issue; the finally below releases the now-stale-keyed claim.
+        drift = _recheck_comment_identity(flow_dir, spec_id, locator)
+        if drift is not None:
+            return _fail_if_evidence(
+                drift, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                transport=provider, tracker_id=str(durable),
+            )
         ex = bound_executor(config, execute)
         listed = wire_dispatch(
             "comment-list", config, locator=locator, execute=ex)

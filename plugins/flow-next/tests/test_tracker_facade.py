@@ -1051,6 +1051,188 @@ class PullAndStructural(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Pull: wire read inside the claimed sync-body transaction (PR #246 review)
+# ---------------------------------------------------------------------------
+
+class PullReadInsideClaim(unittest.TestCase):
+    """PR #246 review: op_pull performed its tracker read BEFORE sync_body's
+    per-spec claim and injected the pre-claim snapshot. Two pulls overlapping
+    a remote edit could then commit a stale pair (the older read claims
+    last), and a set-tracker-id repoint in the gap could commit the old
+    issue's snapshot under the new locator. The read now runs INSIDE the
+    claimed transaction, so the claim and the commit identity guard cover it
+    too."""
+
+    NEW_ID = "I_kwDORepointed9"
+    NEW_DISPLAY = "#99"
+
+    def _repoint(self, flow: Path) -> None:
+        path = flow / "specs" / f"{SPEC_ID}.json"
+        spec = json.loads(path.read_text(encoding="utf-8"))
+        spec["tracker"].update({
+            "id": self.NEW_ID, "identifier": self.NEW_DISPLAY,
+            "url": "https://x/99",
+            "mergeBaseFlow": None, "mergeBaseTracker": None,
+            "baseHashFlow": None, "baseHashTracker": None,
+            "lastSyncedAt": None,
+        })
+        path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+
+    def test_pull_read_runs_under_claim_racing_pull_conflicts(self) -> None:
+        """The wire read fires only while the syncbody claim is pending, so
+        an overlapping pull backs off with structured CONFLICT before ANY
+        tracker I/O - it can never commit an older read as the newer base."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(), spec_md=FLOW_BODY)
+            rec_path = flow / "create-first" / f"syncbody-{SPEC_ID}.json"
+            inner: dict = {}
+
+            def racing_read(req):
+                # The claim must be durable BEFORE the tracker read...
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                self.assertEqual(claim.get("status"), "pending")
+                self.assertEqual(claim.get("specId"), SPEC_ID)
+                self.assertEqual(claim.get("op"), "sync-body")
+                # ...so a second pull racing in around a remote edit refuses
+                # (the empty executor would AssertionError on any wire call)
+                # instead of committing a stale snapshot last.
+                inner["ex"] = fake_execute({})
+                inner["out"] = F.sync(flow, SPEC_ID, op="pull",
+                                      event="interview",
+                                      execute=inner["ex"])
+                return ok(_gh_issue("remote edit body\n"))
+
+            ex = fake_execute({"wire-read": racing_read})
+            out = F.sync(flow, SPEC_ID, op="pull", event="interview",
+                         execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            expected = SB.trackerBodyForMerge("remote edit body\n")
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["tracker"]["mergeBaseTracker"], expected)
+
+            raced = inner["out"]
+            self.assertIsInstance(raced, TrackerError)
+            self.assertIs(raced.cls, ErrorClass.CONFLICT)
+            self.assertEqual(raced.subtype, "syncbody_in_flight")
+            self.assertTrue(raced.auto_retryable)
+            self.assertEqual(inner["ex"].calls, [],
+                             "loser backs off before any wire call")
+            # Loser landed nothing -> receipt-less; winner wrote exactly one.
+            self.assertEqual(len(_receipts(flow)), 1)
+            self.assertEqual(_receipts(flow)[0]["status"], "pulled")
+            self.assertFalse(rec_path.exists(), "claim released")
+
+    def test_pull_repoint_during_read_refuses_stale_commit(self) -> None:
+        """set-tracker-id repointing the spec while the pull's read is in
+        flight: the transaction's identity guard now covers the read too, so
+        the old issue's snapshot is never committed under the new locator."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(), spec_md=FLOW_BODY)
+
+            def repoint_then_read(req):
+                self._repoint(flow)
+                return ok(_gh_issue("OLD ISSUE BODY\n"))
+
+            ex = fake_execute({"wire-read": repoint_then_read})
+            out = F.sync(flow, SPEC_ID, op="pull", event="interview",
+                         execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "identity_changed")
+            details = out.details or {}
+            self.assertEqual(details.get("transaction"),
+                             {"durable": GH_NODE, "display": "#42"})
+            self.assertEqual(details.get("current"),
+                             {"durable": self.NEW_ID,
+                              "display": self.NEW_DISPLAY})
+            # Nothing from the old issue persisted under the new identity.
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["tracker"]["id"], self.NEW_ID)
+            self.assertIsNone(saved["tracker"]["mergeBaseFlow"])
+            self.assertIsNone(saved["tracker"]["mergeBaseTracker"])
+            # The read landed, so the refusal carries receipt evidence.
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "errored")
+            self.assertFalse(
+                (flow / "create-first" / f"syncbody-{SPEC_ID}.json").exists(),
+                "claim released after the refused run")
+
+
+# ---------------------------------------------------------------------------
+# Comment: identity revalidated after the marker claim (PR #246 review)
+# ---------------------------------------------------------------------------
+
+class CommentIdentityGuard(unittest.TestCase):
+    """PR #246 review: the comment marker claim does not coordinate with the
+    link writer, so a set-tracker-id repoint between op_comment's locator
+    load and the post let the comment land on the OLD issue (and the receipt
+    record the old id). The facade now revalidates the spec identity under
+    the shared writer lock after taking the claim, refusing with structured
+    CONFLICT (identity_changed) before any wire call."""
+
+    NEW_ID = "I_kwDORepointed9"
+    NEW_DISPLAY = "#99"
+
+    def test_comment_repoint_after_claim_refuses_before_any_wire_call(self) -> None:
+        from flowctl_tracker.facade import ops as OPS
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            bf = _body_file(root, "evidence=abc1234\n**done** - shipped.\n")
+
+            def repoint(_flow: Path) -> None:
+                path = flow / "specs" / f"{SPEC_ID}.json"
+                spec = json.loads(path.read_text(encoding="utf-8"))
+                spec["tracker"].update({
+                    "id": self.NEW_ID, "identifier": self.NEW_DISPLAY,
+                    "url": "https://x/99"})
+                path.write_text(json.dumps(spec, indent=2) + "\n",
+                                encoding="utf-8")
+
+            orig = OPS._claim_comment_marker
+
+            def claim_then_repoint(*args, **kwargs):
+                out = orig(*args, **kwargs)
+                # Relink lands AFTER the claim is durable but before the
+                # dedup scan / post would run.
+                repoint(flow)
+                return out
+
+            # Empty executor: without the guard this test dies on an
+            # unexpected wire-comment-list call against the OLD issue.
+            ex = fake_execute({})
+            with mock.patch.object(OPS, "_claim_comment_marker",
+                                   side_effect=claim_then_repoint):
+                out = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                             body_file=bf, execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "identity_changed")
+            details = out.details or {}
+            self.assertEqual(details.get("transaction"),
+                             {"durable": GH_NODE, "display": "#42"})
+            self.assertEqual(details.get("current"),
+                             {"durable": self.NEW_ID,
+                              "display": self.NEW_DISPLAY})
+            self.assertEqual(ex.calls, [],
+                             "refused before any wire call - no comment-add")
+            # The claim (keyed on the OLD issue id) is released by the
+            # facade's finally: nothing remains for the stale key.
+            self.assertEqual(
+                list((flow / "create-first").glob("comment-*.json")), [])
+            # Pre-flight refusal with nothing landed: receipt-less.
+            self.assertEqual(_receipts(flow), [])
+
+
+# ---------------------------------------------------------------------------
 # Envelope / CLI shell
 # ---------------------------------------------------------------------------
 
