@@ -1,7 +1,7 @@
 {
   "branch_name": "codex/opus5-autonomy-prose",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-07-28T09:41:36.834848Z",
   "created_at": "2026-07-28T08:15:32.458607Z",
   "default_impl": null,
   "default_review": null,
@@ -42,10 +42,37 @@
       "task": "fn-145-opus-5-autonomous-seam-retune.1",
       "timestamp": "2026-07-28T08:46:13.921682Z",
       "verdict": null
+    },
+    {
+      "backend": "cursor",
+      "counter_kind": "plan",
+      "failure_class": "nonzero_exit",
+      "kind": "completion",
+      "outcome": "transport_failure",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "round_consumed": false,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-07-28T09:34:45.100165Z",
+      "verdict": null
+    },
+    {
+      "backend": "cursor",
+      "counter_kind": "plan",
+      "failure_class": "nonzero_exit",
+      "kind": "completion",
+      "outcome": "transport_failure",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "round_consumed": false,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-07-28T09:36:12.599800Z",
+      "verdict": null
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
+    "completion": 2,
     "impl:fn-145-opus-5-autonomous-seam-retune.1": 2
   },
   "spec_path": ".flow/specs/fn-145-opus-5-autonomous-seam-retune.md",
@@ -62,5 +89,5 @@
     "mergeBaseTracker": "flow-next spec fn-145-opus-5-autonomous-seam-retune\n\nApply three narrow prompt changes: explicit same-session continuation at inline\nskill seams; full autonomous-marker coverage at Work's delegation-consent gate;\nhost-review mechanics loaded only after selecting the host backend. Preserve\ngenuine terminal boundaries, interactive consent, receipts, status ownership,\nand cross-platform mirror parity.\n\nFull canonical spec: `.flow/specs/fn-145-opus-5-autonomous-seam-retune.md`.\n",
     "url": "https://linear.app/gmickel/issue/FLOW-68"
   },
-  "updated_at": "2026-07-28T08:46:13.921857Z"
+  "updated_at": "2026-07-28T09:41:36.835072Z"
 }
