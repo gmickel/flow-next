@@ -508,6 +508,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                                 {
                                     "outcome": "verdict",
                                     "verdict": "SHIP",
+                                    "backend": "codex",
                                     "timestamp": "2026-07-29T10:00:00Z",
                                 }
                             ],
@@ -549,6 +550,60 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             self.assertEqual(missing.returncode, 0)
             self.assertIn("<promise>RETRY</promise>", missing.stdout)
             self.assertNotIn("VERDICT=SHIP", missing.stdout)
+
+            switch_env = env.copy()
+            switch_env.pop("REVIEW_RECEIPT_PATH")
+            switch_env["BACKEND"] = "codex"
+            switch_env["ATTEMPTS_PAYLOAD"] = json.dumps(
+                {
+                    "attempts": [
+                        {
+                            "outcome": "verdict",
+                            "verdict": "SHIP",
+                            "backend": "rp",
+                            "timestamp": "2026-07-29T10:00:00Z",
+                        }
+                    ],
+                    "review_rounds": 0,
+                    "review_rounds_cap": 4,
+                }
+            )
+            rp_without_receipt = subprocess.run(
+                [_bash_executable(), "-c", block],
+                cwd=temp,
+                env=switch_env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertIn("VERDICT=SHIP", rp_without_receipt.stdout)
+            self.assertNotIn("<promise>RETRY</promise>", rp_without_receipt.stdout)
+
+            switch_env["BACKEND"] = "rp"
+            switch_env["ATTEMPTS_PAYLOAD"] = json.dumps(
+                {
+                    "attempts": [
+                        {
+                            "outcome": "verdict",
+                            "verdict": "SHIP",
+                            "backend": "host",
+                            "timestamp": "2026-07-29T10:00:00Z",
+                        }
+                    ],
+                    "review_rounds": 0,
+                    "review_rounds_cap": 4,
+                }
+            )
+            host_requires_receipt = subprocess.run(
+                [_bash_executable(), "-c", block],
+                cwd=temp,
+                env=switch_env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertIn("<promise>RETRY</promise>", host_requires_receipt.stdout)
+            self.assertNotIn("VERDICT=SHIP", host_requires_receipt.stdout)
 
     def test_completion_backend_persists_recovery_and_receipt_before_status(
         self,

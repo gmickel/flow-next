@@ -152,6 +152,8 @@ LATEST_OUTCOME="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
  | jq -r '.attempts[-1].outcome // ""')"
 VERDICT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
  | jq -r '.attempts[-1].verdict // ""')"
+ATTEMPT_BACKEND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+ | jq -r '.attempts[-1].backend // ""')"
 ATTEMPT_AT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
  | jq -r '.attempts[-1].timestamp // ""')"
 REVIEW_ROUND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
@@ -187,10 +189,13 @@ if [[ -n "$TERMINAL_STATUS" \
  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}"
  RECEIPT_RECOVERY="$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
  RECEIPT_REQUIRED=false
- case "$BACKEND" in
+ # Bind evidence requirements to the durable attempt being resumed, never
+ # the backend selected for this invocation (which may have changed).
+ case "$ATTEMPT_BACKEND" in
  codex|copilot|cursor|host) RECEIPT_REQUIRED=true ;;
  rp)
- [[ "$VERDICT" == "SHIP" && -n "${REVIEW_RECEIPT_PATH:-}" ]] \
+ [[ "$VERDICT" == "SHIP" \
+ && ( -n "${REVIEW_RECEIPT_PATH:-}" || -f "$RECEIPT_RECOVERY" ) ]] \
  && RECEIPT_REQUIRED=true
  ;;
  esac
