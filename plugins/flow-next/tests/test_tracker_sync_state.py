@@ -131,6 +131,25 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         self.assertEqual(state["identifier"], "WOR-9")
         self.assertEqual(state["url"], "https://x/WOR-9")
 
+    def test_set_tracker_id_completes_identifier_only_link_state(self) -> None:
+        spec_id = self._create_spec("Complete fallback link")
+        spec_path = self.flowctl.find_spec_json_path(
+            self.tmpdir / ".flow", spec_id)
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        spec["tracker"].update({
+            "id": None,
+            "identifier": "WOR-9",
+            "linkState": "identifier_only",
+        })
+        spec_path.write_text(
+            json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+
+        self._set_id(spec_id, "uuid-beta", identifier="WOR-9")
+
+        state = self._state(spec_id)
+        self.assertEqual(state["id"], "uuid-beta")
+        self.assertEqual(state["linkState"], "linked")
+
     def test_set_last_synced_defaults_to_now(self) -> None:
         spec_id = self._create_spec("Gamma tracker state")
         res = self._call(func=self.flowctl.cmd_sync_set_last_synced, id=spec_id, at=None)

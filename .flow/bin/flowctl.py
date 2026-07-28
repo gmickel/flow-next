@@ -23380,6 +23380,10 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
 
             state = spec_data["tracker"]
             state["id"] = args.tracker_id
+            # A durable provider id completes an identifier-only MCP link.
+            # derive_link_state gives this explicit field precedence, so
+            # leaving it unchanged would keep durable-only verbs blocked.
+            state["linkState"] = "linked"
             if validated_identifier is not None:
                 # Persist the canonical stripped display form (e.g. "WOR-17").
                 state["identifier"] = validated_identifier[2]

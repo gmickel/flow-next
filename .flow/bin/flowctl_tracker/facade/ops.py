@@ -270,6 +270,27 @@ def op_pull(flow_dir: Path, spec_id: str, *, event: str,
         # Pre-flight: nothing has reached the wire yet, so no receipt.
         return flow_body
 
+    # Hold one identity claim across the inner sync-body transaction AND the
+    # aggregate receipt. Otherwise a relink can land after sync_body releases
+    # its claim but before the event receipt is written, making sync check
+    # treat old-issue work as having served the newly linked issue.
+    rec_path = _facade_claim_path(flow_dir, spec_id)
+    claimed = _claim_facade(flow_dir, spec_id, rec_path, provider,
+                            op="facade-pull")
+    if claimed is not None:
+        return claimed
+    try:
+        return _pull_sequence(
+            flow_dir, spec_id, event=event, config=config, provider=provider,
+            durable=durable, flow_body=flow_body, execute=execute)
+    finally:
+        _release_claim(rec_path)
+
+
+def _pull_sequence(flow_dir: Path, spec_id: str, *, event: str,
+                   config: dict, provider: str, durable: str, flow_body: str,
+                   execute: Execute) -> Result:
+    """Read, merge, and receipt one pull while the facade claim is live."""
     completed: list = []
     statuses: list = []
     ex = bound_executor(config, execute)

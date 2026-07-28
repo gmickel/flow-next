@@ -1443,7 +1443,7 @@ class PullReadInsideClaim(unittest.TestCase):
             raced = inner["out"]
             self.assertIsInstance(raced, TrackerError)
             self.assertIs(raced.cls, ErrorClass.CONFLICT)
-            self.assertEqual(raced.subtype, "syncbody_in_flight")
+            self.assertEqual(raced.subtype, "facade_in_flight")
             self.assertTrue(raced.auto_retryable)
             self.assertEqual(inner["ex"].calls, [],
                              "loser backs off before any wire call")
@@ -1535,6 +1535,35 @@ class PullReadInsideClaim(unittest.TestCase):
             self.assertEqual(len(receipts), 1)
             self.assertEqual(receipts[0]["status"], "pulled")
             self.assertEqual(receipts[0]["tracker_id"], self.NEW_ID)
+
+    def test_pull_holds_facade_claim_through_aggregate_receipt(self) -> None:
+        """The event receipt is part of the pull identity transaction."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(), spec_md=FLOW_BODY)
+            rec_path = flow / "create-first" / f"facade-{SPEC_ID}.json"
+            observed: dict = {}
+            original = F.ops.write_aggregate_receipt
+
+            def inspect_claim(*args, **kwargs):
+                observed["claim"] = json.loads(
+                    rec_path.read_text(encoding="utf-8"))
+                return original(*args, **kwargs)
+
+            ex = fake_execute({
+                "wire-read": ok(_gh_issue("remote edit body\n")),
+            })
+            with mock.patch.object(
+                    F.ops, "write_aggregate_receipt",
+                    side_effect=inspect_claim):
+                out = F.sync(
+                    flow, SPEC_ID, op="pull", event="interview", execute=ex)
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(observed["claim"]["op"], "facade-pull")
+            self.assertEqual(observed["claim"]["status"], "pending")
+            self.assertFalse(rec_path.exists(), "claim released after receipt")
 
 
 # ---------------------------------------------------------------------------
