@@ -177,7 +177,11 @@ After separate remove/add operations, read back the namespace. If the target
 label landed alongside an old status label, make one bounded cleanup and
 readback pass. Persistent ambiguity is a retryable partial result with the
 landed state recorded; it does not advance `lastSyncedAt` or write a success
-receipt.
+receipt. On a later invocation, the adapter uses GitHub's native open/closed
+state only as a provisional baseline, reruns the ordinary flow-state and
+merge-evidence policy, and replays the idempotent label write only when that
+policy proves the requested target safe. Otherwise it preserves the ambiguity
+for human resolution.
 
 ### Readiness label (`tracker.readyState` — fn-58 R3/R4)
 

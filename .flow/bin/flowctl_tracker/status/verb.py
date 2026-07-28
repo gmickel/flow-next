@@ -27,7 +27,7 @@ from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
 from ..types import ErrorClass, TrackerError
 from .policy import (Decision, decide, decision_as_error, flow_to_normalized,
                      merge_evidence, validate_to_reason)
-from .providers import (apply_status, enrich_linear_parent,
+from .providers import (apply_status, enrich_linear_parent, github_native_status,
                         tracker_norm_from_parent)
 
 
@@ -316,10 +316,6 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
     if isinstance(dest, TrackerError):
         return dest
 
-    tracker_norm = tracker_norm_from_parent(provider, parent, dest)
-    if isinstance(tracker_norm, TrackerError):
-        return tracker_norm
-
     # PR evidence belongs to the source Git checkout, not the configured
     # tracker transport. In particular, Jira DC sslVerify=false is valid for
     # Jira HTTP but cannot be applied to the independent gh CLI route.
@@ -331,7 +327,40 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
         tasks=tasks,
     )
 
-    decision: Decision = decide(to, reason, flow_norm, tracker_norm, pr_evidence)
+    tracker_norm = tracker_norm_from_parent(provider, parent, dest)
+    repair_retry = False
+    if isinstance(tracker_norm, TrackerError):
+        # A prior GitHub write may have landed native state + target label but
+        # failed to remove the old label even after its bounded repair. On a
+        # later invocation normalization sees an ambiguous namespace before
+        # the ordinary decision ladder. Recover only when native state,
+        # requested target, merge evidence, and the policy all prove the
+        # requested transition is already the intended state. Then replay the
+        # idempotent provider write as an APPLY so repaired convergence earns
+        # lastSyncedAt + receipt instead of being mistaken for a noop.
+        if (provider == "github"
+                and tracker_norm.subtype == "ambiguous-status-labels"):
+            native_norm = github_native_status(parent)
+            repair_decision = decide(
+                to, reason, flow_norm, native_norm, pr_evidence)
+            if repair_decision.kind == "noop" and native_norm == to:
+                tracker_norm = native_norm
+                repair_retry = True
+                decision = Decision(
+                    "apply", target_slot=native_norm,
+                    reason="status-label-repair",
+                    close_reason=repair_decision.close_reason)
+            elif (repair_decision.kind == "apply"
+                  and repair_decision.target_slot):
+                tracker_norm = native_norm
+                repair_retry = True
+                decision = repair_decision
+            else:
+                return tracker_norm
+        else:
+            return tracker_norm
+    if not repair_retry:
+        decision = decide(to, reason, flow_norm, tracker_norm, pr_evidence)
     err = decision_as_error(decision)
     if err:
         return err

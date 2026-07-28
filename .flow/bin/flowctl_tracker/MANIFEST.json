@@ -130,11 +130,11 @@
     },
     {
       "path": "flowctl_tracker/status/providers.py",
-      "sha256": "aced3ac7663ecc82b7dc6d599d05cf5434a2ac336a5709773798e79e312db68d"
+      "sha256": "1527854570d8f3f40633c2c3c385354093e167f3cbc820e0d354bb8dffe6eb69"
     },
     {
       "path": "flowctl_tracker/status/verb.py",
-      "sha256": "e3096b97d2ee7435fcc241a94410bc67fa02e26de665f5fd4d85c70683892e29"
+      "sha256": "784e914e58b8a2fc439abaa1cba7b0f3f17dc0606cf07a65777148fa8cd2823d"
     },
     {
       "path": "flowctl_tracker/syncbody/__init__.py",

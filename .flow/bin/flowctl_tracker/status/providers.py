@@ -99,14 +99,27 @@ def tracker_norm_from_parent(provider: str, parent: dict, dest: dict
                         subtype="provider")
 
 
-def _norm_github(parent: dict) -> Union[str, TrackerError]:
+def github_native_status(parent: dict) -> str:
+    """Normalize only GitHub's authoritative native state.
+
+    Used narrowly by the retry repair path when status labels are ambiguous.
+    It does not guess a label target; callers must still prove the requested
+    transition safe through merge evidence and the decision policy.
+    """
     state = str(parent.get("state") or "").upper()
     reason = parent.get("state_reason") or parent.get("stateReason")
-    reason_s = str(reason).lower() if reason else ""
     if state == "CLOSED":
-        if reason_s in {"not_planned"}:
-            return "cancelled"
-        return "done"
+        return "cancelled" if str(reason or "").lower() == "not_planned" else "done"
+    return "in_progress"
+
+
+def _norm_github(parent: dict) -> Union[str, TrackerError]:
+    state = str(parent.get("state") or "").upper()
+    if state == "CLOSED":
+        labeled = _slot_from_status_label(parent.get("labels"))
+        if isinstance(labeled, TrackerError):
+            return labeled
+        return github_native_status(parent)
     # OPEN
     labeled = _slot_from_status_label(parent.get("labels"))
     if isinstance(labeled, TrackerError):
