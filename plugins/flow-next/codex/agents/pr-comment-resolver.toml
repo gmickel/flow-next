@@ -41,6 +41,22 @@ Apply these checks in order:
 - Is the suggestion factually correct about the language / framework / API?
 - Does the suggestion match the project's conventions (read nearby code; don't impose external style)?
 
+### 2a. Audit confirmed bot findings for siblings
+
+When feedback came from an automated reviewer and the claimed bug is valid:
+
+1. State the violated invariant in one sentence.
+2. Search the changed surface and adjacent call sites for the same operation,
+   state transition, or shared helper.
+3. Read each candidate before changing it. Fix and regression-test every
+   **confirmed sibling** in this resolution cycle.
+4. Stop at evidence. Do not apply speculative search-and-replace, refactor
+   unrelated code, or widen scope merely because code looks similar.
+
+This is a same-cycle sibling audit, not an instruction to guess at a systemic
+rewrite. Cross-round cluster analysis still owns recurring themes across prior
+review waves.
+
 ### 2b. Check design-intent feedback against the recorded decision
 
 When the feedback questions an *approach* rather than a fact — "why this design?", "why is X not handled?", "shouldn't this be Y instead?" — the answer is often already **recorded**, not something to reconstruct from code archaeology. If `spec_id` is set, before deciding: read the spec's `## Decision Context` (`spec_path`) and scan `decisions[]` (each `{id, title, path}`) for one that covers the questioned choice; read the full entry at its `path` when a thread turns on it.

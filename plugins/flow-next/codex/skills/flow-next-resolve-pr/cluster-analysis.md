@@ -23,6 +23,11 @@ Single-round clustering (grouping new-only threads by theme) has too many false 
 
 First-round "one helper would fix these" opportunities are handled individually. If the same theme re-emerges a round later, the pattern triggers clustering naturally — no need to guess on the first pass.
 
+The resolver's **confirmed bot sibling audit** is narrower and runs in the same
+cycle: once a bot finding is proven valid, it checks adjacent call sites for the
+same violated invariant and fixes only confirmed siblings. That evidence-bounded
+scan does not form a cluster and does not relax this cross-round gate.
+
 ## Categorization
 
 Assign each participating item (new threads + previously-resolved threads) exactly one category from this fixed enum:

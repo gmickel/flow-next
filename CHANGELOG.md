@@ -11,6 +11,7 @@ All notable changes to the flow-next.
 ### Changed
 
 - **Autonomous skill seams now continue explicitly instead of reading like terminal handoffs.** Pilot and Work forced-reference gates, review backend returns, and post-task dispatches direct the host to continue the same invocation. Work recognizes all four headless-autonomy markers before delegation consent, while interactive consent still asks and persists normally. Plan Review keeps host-only mechanics cold until the host backend is selected. Genuine terminal verdicts, receipts, sandbox authority, and non-host backend behavior are unchanged.
+- **`/flow-next:resolve-pr` now audits confirmed bot findings for sibling instances in the same cycle.** After proving an automated-review finding valid, the resolver states the violated invariant, inspects adjacent call sites that perform the same operation/state transition/shared-helper path, and fixes plus regression-tests every confirmed sibling before returning. The scan stops at evidence — no speculative search-and-replace or unrelated refactor — and complements rather than weakens the existing cross-round cluster gate.
 
 ### Fixed
 
