@@ -37,8 +37,9 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
 
     try:
         if op == "push":
-            return op_push(flow_dir, spec_id, flow_file=flow_file or "",
-                           event=event, execute=execute)
+            return op_push(
+                flow_dir, spec_id, flow_file=flow_file or "",
+                body_file=body_file or "", event=event, execute=execute)
         if op == "pull":
             return op_pull(flow_dir, spec_id, event=event, execute=execute)
         if op == "reconcile":

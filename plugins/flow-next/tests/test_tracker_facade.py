@@ -305,7 +305,6 @@ def _status_noop_responses(provider: str, issue: dict) -> dict:
 class InputMatrix(unittest.TestCase):
     def test_forbidden_inputs_invalid_before_any_request(self) -> None:
         cases = [
-            ("push", {"body_file": "x"}, "body-file"),
             ("pull", {"flow_file": "x"}, "flow-file"),
             ("comment", {"flow_file": "x"}, "flow-file"),
         ]
@@ -335,8 +334,14 @@ class InputMatrix(unittest.TestCase):
             out = F.sync(flow, SPEC_ID, op="push", event="work.done", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
-            self.assertIn("flow-file", out.message)
+            self.assertIn("requires", out.message)
             self.assertEqual(ex.calls, [])
+
+            out_missing_tracker = F.sync(
+                flow, SPEC_ID, op="push", event="work.done",
+                flow_file="x", execute=ex)
+            self.assertIsInstance(out_missing_tracker, TrackerError)
+            self.assertIn("body-file", out_missing_tracker.message)
 
             out2 = F.sync(flow, SPEC_ID, op="comment", event="work.done",
                           execute=ex)
@@ -354,6 +359,48 @@ class InputMatrix(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class PushFacade(unittest.TestCase):
+    def test_push_keeps_flow_base_distinct_from_tracker_render(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            local_body = "## Goal\n- [ ] Flow task\n"
+            tracker_render = "Goal\n\n* Flow task\n"
+            _write_flow(
+                flow, gh_cfg(), spec_md=local_body,
+                tracker=_linked(
+                    mergeBaseFlow="PRIOR FLOW",
+                    mergeBaseTracker="PRIOR TRACKER"))
+            ff = _flow_file(root, local_body)
+            bf = _body_file(root, tracker_render)
+            writes = []
+
+            def capture_write(req):
+                writes.append(json.loads(req.body)["body"])
+                return ok(_gh_issue(tracker_render))
+
+            parent = _gh_issue("old remote")
+            written = _gh_issue(tracker_render)
+            ex = fake_execute({
+                "sync-body-parent-read": ok(parent),
+                "wire-parent-read": ok(parent),
+                "wire-update": capture_write,
+                "wire-read": ok(written),
+                "status-parent-read": ok(written),
+                "merge-evidence": ok([]),
+            })
+            out = F.sync(
+                flow, SPEC_ID, op="push", event="work.done",
+                flow_file=ff, body_file=bf, execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(writes, [tracker_render])
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json")
+                .read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["mergeBaseFlow"], local_body)
+            self.assertEqual(
+                saved["mergeBaseTracker"],
+                SB.trackerBodyForMerge(tracker_render))
+
     def test_push_unlinked_creates_then_syncs_one_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -368,7 +415,7 @@ class PushFacade(unittest.TestCase):
                 **_noop_push_responses(FLOW_BODY),
             })
             out = F.sync(flow, SPEC_ID, op="push", event="work.firstClaim",
-                         flow_file=ff, execute=ex)
+                         flow_file=ff, body_file=ff, execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["op"], "push")
             self.assertIn("create", out["completed_steps"])
@@ -405,7 +452,7 @@ class PushFacade(unittest.TestCase):
             ff = _flow_file(root)
             ex = fake_execute(_noop_push_responses(FLOW_BODY))
             out = F.sync(flow, SPEC_ID, op="push", event="work.done",
-                         flow_file=ff, execute=ex)
+                         flow_file=ff, body_file=ff, execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertFalse(any(c.op == "lifecycle-create" for c in ex.calls))
             self.assertEqual(len(_receipts(flow)), 1)
@@ -428,7 +475,7 @@ class PushFacade(unittest.TestCase):
             })
             payload, code = F.run(
                 flow, spec_id=SPEC_ID, op="push", event="work.done",
-                flow_file=ff, execute=ex)
+                flow_file=ff, body_file=ff, execute=ex)
             data = json.loads(payload)
             self.assertFalse(data["success"])
             self.assertIn("completed_steps", data["data"])
@@ -712,6 +759,7 @@ class PartialCreateReceipt(unittest.TestCase):
             files = {}
             if "flow_file" in kw:
                 files["flow_file"] = _flow_file(root)
+                files["body_file"] = files["flow_file"]
             if "body_file" in kw:
                 files["body_file"] = _body_file(
                     root, "evidence=abc1234\n**done** - shipped.\n")
@@ -801,7 +849,7 @@ class ReceiptWriteFailure(unittest.TestCase):
             with mock.patch.object(LV, "_locked_tracker_write",
                                    return_value=boom):
                 out = F.sync(flow, SPEC_ID, op="push",
-                             event="work.firstClaim", flow_file=ff,
+                             event="work.firstClaim", flow_file=ff, body_file=ff,
                              execute=ex)
             self._assert_unwritten(out, flow)
             # The original error and partial-success evidence are intact.
@@ -831,7 +879,7 @@ class ReceiptWriteFailure(unittest.TestCase):
             })
             payload, code = F.run(
                 flow, spec_id=SPEC_ID, op="push", event="work.firstClaim",
-                flow_file=ff, execute=ex)
+                flow_file=ff, body_file=ff, execute=ex)
             self.assertNotEqual(code, 0)
             data = json.loads(payload)
             self.assertFalse(data["success"])
@@ -1155,7 +1203,7 @@ class McpRung(unittest.TestCase):
             with mock.patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("LINEAR_API_KEY", None)
                 out = F.sync(flow, SPEC_ID, op="push", event="work.firstClaim",
-                             flow_file=ff, execute=ex)
+                             flow_file=ff, body_file=ff, execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.EXTERNAL_ACTION_REQUIRED)
             self.assertEqual(out.details["action"], "create")
@@ -1174,7 +1222,7 @@ class McpRung(unittest.TestCase):
             env = {k: v for k, v in os.environ.items() if k != "LINEAR_API_KEY"}
             with mock.patch.dict(os.environ, env, clear=True):
                 out = F.sync(flow, SPEC_ID, op="push", event="capture",
-                             flow_file=ff, execute=ex)
+                             flow_file=ff, body_file=ff, execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.EXTERNAL_ACTION_REQUIRED)
             self.assertEqual(ex.calls, [])
@@ -1369,7 +1417,7 @@ class PullAndStructural(unittest.TestCase):
                 "sync-body-parent-read": ok(parent_wrong),
             })
             out = F.sync(flow, SPEC_ID, op="push", event="makePr",
-                         flow_file=ff, execute=ex)
+                         flow_file=ff, body_file=ff, execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.CONFLICT)
             # Structural: class + details.candidates, not prose-only.
@@ -1745,7 +1793,7 @@ class FacadeOuterClaim(unittest.TestCase):
             with mock.patch.object(OPS, "run_status",
                                    side_effect=relink_then_status):
                 out = F.sync(flow, SPEC_ID, op="push", event="work.done",
-                             flow_file=ff, execute=ex)
+                             flow_file=ff, body_file=ff, execute=ex)
 
             self.assertNotIsInstance(out, TrackerError, out)
             proc = seen["relink"]
@@ -1875,7 +1923,7 @@ class FacadeOuterClaim(unittest.TestCase):
                 "merge-evidence": ok([]),
             })
             out = F.sync(flow, SPEC_ID, op="push", event="work.done",
-                         flow_file=ff, execute=ex)
+                         flow_file=ff, body_file=ff, execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(seen["syncbody_nested"], ("pending", "pending"))
             self.assertEqual(seen["status_nested"], ("pending", "pending"))
@@ -1901,6 +1949,7 @@ class FacadeOuterClaim(unittest.TestCase):
                 inner["ex"] = fake_execute({})
                 inner["out"] = F.sync(flow, SPEC_ID, op="push",
                                       event="work.done", flow_file=ff,
+                                      body_file=ff,
                                       execute=inner["ex"])
                 return ok(_gh_issue(FLOW_BODY))
 
@@ -1908,7 +1957,7 @@ class FacadeOuterClaim(unittest.TestCase):
             responses["sync-body-parent-read"] = racing_push
             ex = fake_execute(responses)
             out = F.sync(flow, SPEC_ID, op="push", event="work.done",
-                         flow_file=ff, execute=ex)
+                         flow_file=ff, body_file=ff, execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             raced = inner["out"]
             self.assertIsInstance(raced, TrackerError)
@@ -1998,7 +2047,7 @@ class EnvelopeShell(unittest.TestCase):
             ex = fake_execute(_noop_push_responses(FLOW_BODY))
             payload, code = F.run(
                 flow, spec_id=SPEC_ID, op="push", event="work.done",
-                flow_file=ff, execute=ex)
+                flow_file=ff, body_file=ff, execute=ex)
             self.assertEqual(code, 0)
             data = json.loads(payload)
             self.assertTrue(data["success"])
@@ -2045,7 +2094,7 @@ class FacadeMatrix(unittest.TestCase):
                 with mock.patch.dict(os.environ, env, clear=False):
                     payload, code = F.run(
                         flow, spec_id=SPEC_ID, op="push", event="work.done",
-                        flow_file=ff, execute=ex)
+                        flow_file=ff, body_file=ff, execute=ex)
                 data = json.loads(payload)
                 self.assertTrue(data["success"], data)
                 self.assertEqual(code, 0)
@@ -2208,7 +2257,7 @@ class FacadeMatrix(unittest.TestCase):
             })
             payload, code = F.run(
                 flow, spec_id=SPEC_ID, op="push", event="work.done",
-                flow_file=ff, execute=ex)
+                flow_file=ff, body_file=ff, execute=ex)
             data = json.loads(payload)
             self.assertFalse(data["success"])
             self.assertNotEqual(code, 0)

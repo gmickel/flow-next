@@ -129,8 +129,8 @@ def _claim_facade(flow_dir: Path, spec_id: str, rec_path: Path,
     return None
 
 
-def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, event: str,
-            execute: Execute = default_execute) -> Result:
+def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
+            event: str, execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
     provider = tracker_type(config)
     if provider is None:
@@ -139,6 +139,9 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, event: str,
     flow_body = read_text_file(flow_file, label="--flow-file")
     if isinstance(flow_body, TrackerError):
         return flow_body
+    tracker_body = read_text_file(body_file, label="--body-file")
+    if isinstance(tracker_body, TrackerError):
+        return tracker_body
 
     # One spec-identity claim across the whole create -> sync-body -> status
     # -> receipt sequence, so a relink cannot split the push across two
@@ -151,8 +154,9 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, event: str,
         return claimed
     try:
         return _push_sequence(
-            flow_dir, spec_id, flow_body=flow_body, config=config,
-            provider=provider, event=event, execute=execute)
+            flow_dir, spec_id, flow_body=flow_body,
+            tracker_body=tracker_body, config=config, provider=provider,
+            event=event, execute=execute)
     finally:
         # Release on every exit: the aggregate receipt, not the claim file,
         # is the durable record of what landed.
@@ -160,8 +164,8 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, event: str,
 
 
 def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
-                   config: dict, provider: str, event: str,
-                   execute: Execute) -> Result:
+                   tracker_body: str, config: dict, provider: str,
+                   event: str, execute: Execute) -> Result:
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
@@ -174,8 +178,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     steps: dict[str, Any] = {}
 
     created = create_if_unlinked(
-        flow_dir, spec_id, title=title, body=flow_body, flow_body=flow_body,
-        config=config,
+        flow_dir, spec_id, title=title, body=tracker_body,
+        flow_body=flow_body, config=config,
         event=event, execute=execute, completed=completed, statuses=statuses,
     )
     if isinstance(created, TrackerError):
@@ -189,7 +193,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
 
     body_out = sync_body(
         flow_dir, spec_id, flow_file_body=flow_body, direction="push",
-        event=event, execute=execute, write_receipt=False,
+        tracker_body=tracker_body, event=event, execute=execute,
+        write_receipt=False,
     )
     if isinstance(body_out, TrackerError):
         prior = list((body_out.details or {}).get("completed_steps") or [])

@@ -481,6 +481,33 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         self._set_id(spec_id, "uuid-after-release")
         self.assertEqual(self._state(spec_id)["id"], "uuid-after-release")
 
+    def test_legacy_state_setters_refuse_live_operation_claim(self) -> None:
+        import time
+
+        spec_id = self._create_spec("Claim-guarded legacy setters")
+        rec = self._write_claim(
+            f"status-{spec_id}.json", pid=os.getpid(),
+            claimed_at=time.time(), op="status")
+        before = self._state(spec_id)
+
+        with self.assertRaises(SystemExit):
+            self._call(
+                func=self.flowctl.cmd_sync_set_last_synced,
+                id=spec_id, at="2026-01-01T00:00:00Z")
+        with self.assertRaises(SystemExit):
+            self._call(
+                func=self.flowctl.cmd_sync_set_merge_base,
+                id=spec_id, flow="new flow", flow_file=None,
+                tracker="new tracker", tracker_file=None)
+
+        self.assertEqual(self._state(spec_id), before)
+        rec.unlink()
+        self._call(
+            func=self.flowctl.cmd_sync_set_merge_base,
+            id=spec_id, flow="new flow", flow_file=None,
+            tracker="new tracker", tracker_file=None)
+        self.assertEqual(self._state(spec_id)["mergeBaseFlow"], "new flow")
+
     def test_relink_and_clear_refused_while_live_persist_claim(self) -> None:
         import time
 
@@ -651,6 +678,28 @@ class TrackerDepRelationsTestCase(unittest.TestCase):
         self.assertTrue(entry["key"])
         self.assertNotIn("node-dep", entry["key"])
         self.assertNotIn("node-parent", entry["key"])
+
+    def test_set_dep_relation_refuses_live_operation_claim(self) -> None:
+        import socket
+        import time
+
+        parent = self._create_spec("Claim-guarded relation setter")
+        dep = self._create_spec("Claim-guarded relation dependency")
+        rec = self.tmpdir / ".flow" / "create-first" / f"status-{parent}.json"
+        rec.parent.mkdir(exist_ok=True)
+        rec.write_text(json.dumps({
+            "specId": parent, "status": "pending", "op": "status",
+            "pid": os.getpid(), "host": socket.gethostname(),
+            "claimedAt": time.time(), "transport": "github",
+        }), encoding="utf-8")
+
+        with self.assertRaises(SystemExit):
+            self._set_dep_relation(parent, dep, "node-parent", "node-dep")
+        self.assertEqual(self._state(parent)["depRelations"], [])
+
+        rec.unlink()
+        self._set_dep_relation(parent, dep, "node-parent", "node-dep")
+        self.assertEqual(len(self._state(parent)["depRelations"]), 1)
 
     def test_set_dep_relation_idempotent_no_dup(self) -> None:
         parent = self._create_spec("Parent idem")

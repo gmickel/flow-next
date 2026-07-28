@@ -18,7 +18,7 @@ OPS = frozenset({"push", "pull", "reconcile", "comment"})
 
 # required / forbidden input names (flow_file / body_file) per op — epic table.
 OP_INPUTS = {
-    "push": {"require": frozenset({"flow_file"}), "forbid": frozenset({"body_file"})},
+    "push": {"require": frozenset({"flow_file", "body_file"}), "forbid": frozenset()},
     "pull": {"require": frozenset(), "forbid": frozenset({"flow_file"})},
     "reconcile": {"require": frozenset({"flow_file", "body_file"}), "forbid": frozenset()},
     "comment": {"require": frozenset({"body_file"}), "forbid": frozenset({"flow_file"})},

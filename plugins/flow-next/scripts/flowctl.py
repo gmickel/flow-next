@@ -23299,6 +23299,42 @@ def _live_spec_operation_claim(flow_dir: Path, spec_id: str) -> Optional[dict]:
     return None
 
 
+def _locked_sync_state_update(args: argparse.Namespace, *, action: str,
+                              mutate):
+    """Reload, claim-check, and mutate one legacy tracker sidecar atomically.
+
+    Deterministic tracker transactions hold a per-spec operation claim for
+    their full read/provider-write/persist window. Legacy sync-state setters
+    must honor that inventory under the same writer lock or a stale whole-file
+    write can erase the transaction's newly committed state.
+
+    ``mutate`` receives the tracker state and returns ``False`` for a true
+    no-op; any other return value is passed back after the atomic write.
+    """
+    flow_dir = get_flow_dir()
+    try:
+        with _shared_config_lock(flow_dir):
+            spec_json_path, spec_data = _resolve_sync_spec(args)
+            live = _live_spec_operation_claim(flow_dir, args.id)
+            if live is not None:
+                error_exit(
+                    f"spec {args.id} has a tracker {live['op']} operation in "
+                    f"flight (claim {live['file']}, pid {live['pid']} on "
+                    f"{live['host']}); refusing to {action} while it holds "
+                    "the claim; retry after the operation finishes",
+                    use_json=args.json,
+                )
+            result = mutate(spec_data["tracker"])
+            if result is not False:
+                _write_sync_state(spec_json_path, spec_data)
+            return spec_data, result
+    except TimeoutError as exc:
+        error_exit(
+            f"could not acquire the config writer lock for {action}: {exc}",
+            use_json=args.json,
+        )
+
+
 def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
     """Link a spec to a tracker issue (UUID id + display identifier + url) (R4)."""
     if not ensure_flow_exists():
@@ -23415,10 +23451,14 @@ def cmd_sync_set_last_synced(args: argparse.Namespace) -> None:
     if not is_spec_id(args.id):
         error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
     ts = args.at if getattr(args, "at", None) else now_iso()
-    spec_data["tracker"]["lastSyncedAt"] = ts
-    _write_sync_state(spec_json_path, spec_data)
+
+    def mutate(state):
+        state["lastSyncedAt"] = ts
+        return True
+
+    _locked_sync_state_update(
+        args, action="set-last-synced", mutate=mutate)
 
     if args.json:
         json_output({"id": args.id, "lastSyncedAt": ts, "message": "lastSyncedAt set"})
@@ -23464,13 +23504,16 @@ def cmd_sync_set_merge_base(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
+    def mutate(state):
+        state["mergeBaseFlow"] = flow_body
+        state["baseHashFlow"] = _content_hash(flow_body)
+        state["mergeBaseTracker"] = tracker_body
+        state["baseHashTracker"] = _content_hash(tracker_body)
+        return True
+
+    spec_data, _ = _locked_sync_state_update(
+        args, action="set-merge-base", mutate=mutate)
     state = spec_data["tracker"]
-    state["mergeBaseFlow"] = flow_body
-    state["baseHashFlow"] = _content_hash(flow_body)
-    state["mergeBaseTracker"] = tracker_body
-    state["baseHashTracker"] = _content_hash(tracker_body)
-    _write_sync_state(spec_json_path, spec_data)
 
     if args.json:
         json_output(
@@ -23766,44 +23809,32 @@ def cmd_sync_set_dep_relation(args: argparse.Namespace) -> None:
     if dep_spec == args.id:
         error_exit("A spec cannot have a dependency relation to itself", use_json=args.json)
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
-    if dep_spec == args.id:  # re-check post-expand (args.id is now canonical)
-        error_exit("A spec cannot have a dependency relation to itself", use_json=args.json)
-
     rel_type = getattr(args, "type", None) or "blocks"
     source = getattr(args, "source", None) or "flow"
     key = _dep_relation_key(args.from_tracker_id, args.to_tracker_id)
 
-    state = spec_data["tracker"]
-    ledger = state.setdefault("depRelations", [])
-    for entry in ledger:
-        if entry.get("key") == key:
-            # Idempotent no-op — same directed edge already recorded.
-            if args.json:
-                json_output(
-                    {
-                        "success": True,
-                        "id": args.id,
-                        "key": key,
-                        "depRelations": ledger,
-                        "message": "dep relation already recorded",
-                    }
-                )
-            else:
-                print(f"dep relation {key} already recorded for {args.id}")
-            return
+    def mutate(state):
+        if dep_spec == args.id:  # args.id is canonical after locked resolve
+            error_exit(
+                "A spec cannot have a dependency relation to itself",
+                use_json=args.json)
+        ledger = state.setdefault("depRelations", [])
+        if any(entry.get("key") == key for entry in ledger):
+            return False
+        ledger.append({
+            "key": key,
+            "dep_spec": dep_spec,
+            "from_tracker_id": args.from_tracker_id,
+            "to_tracker_id": args.to_tracker_id,
+            "type": rel_type,
+            "source": source,
+            "updatedAt": now_iso(),
+        })
+        return True
 
-    entry = {
-        "key": key,
-        "dep_spec": dep_spec,
-        "from_tracker_id": args.from_tracker_id,
-        "to_tracker_id": args.to_tracker_id,
-        "type": rel_type,
-        "source": source,
-        "updatedAt": now_iso(),
-    }
-    ledger.append(entry)
-    _write_sync_state(spec_json_path, spec_data)
+    spec_data, changed = _locked_sync_state_update(
+        args, action="set-dep-relation", mutate=mutate)
+    ledger = spec_data["tracker"].setdefault("depRelations", [])
 
     if args.json:
         json_output(
@@ -23812,11 +23843,16 @@ def cmd_sync_set_dep_relation(args: argparse.Namespace) -> None:
                 "id": args.id,
                 "key": key,
                 "depRelations": ledger,
-                "message": f"recorded dep relation to {dep_spec}",
+                "message": (
+                    f"recorded dep relation to {dep_spec}"
+                    if changed else "dep relation already recorded"),
             }
         )
     else:
-        print(f"Recorded dep relation {key} ({args.id} → {dep_spec})")
+        if changed:
+            print(f"Recorded dep relation {key} ({args.id} → {dep_spec})")
+        else:
+            print(f"dep relation {key} already recorded for {args.id}")
 
 
 def cmd_sync_active(args: argparse.Namespace) -> None:
@@ -31748,13 +31784,13 @@ def main() -> None:
     )
     p_tracker_sync.add_argument(
         "--flow-file", default=None, dest="flow_file",
-        help="Agent-rendered local body (required for push/reconcile; "
-             "forbidden for pull/comment)",
+        help="Exact local flow-form body (required for push/reconcile; "
+             "forbidden for pull/comment); becomes mergeBaseFlow",
     )
     p_tracker_sync.add_argument(
         "--body-file", default=None, dest="body_file",
-        help="Comment text or agent-approved tracker half (required for "
-             "comment/reconcile; forbidden for push)",
+        help="Tracker-rendered body for push/reconcile, or comment text "
+             "(required for push/reconcile/comment; forbidden for pull)",
     )
     p_tracker_sync.add_argument("--json", action="store_true",
                                 help="Accepted and ignored (output is always JSON)")
