@@ -438,6 +438,12 @@ Receipt written after SHIP verdict (not on NEEDS_WORK):
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ ATTEMPT_AT="$(printf '%s' "$RECORD_JSON" \
+ | jq -r '.attempts[-1].timestamp // ""')"
+ if [[ -z "$ATTEMPT_AT" ]]; then
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
  mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
  RECEIPT_RECOVERY="$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
  mkdir -p "$(dirname "$RECEIPT_RECOVERY")"
@@ -517,10 +523,20 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
  EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
  fi
 
- if ! cat > "$RECEIPT_RECOVERY" <<EOF
-{"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts"}
+ if ! RECOVERY_TMP="$(mktemp "${RECEIPT_RECOVERY}.tmp.XXXXXX")"; then
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
+ if ! cat > "$RECOVERY_TMP" <<EOF
+{"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts","attempt_timestamp":"$ATTEMPT_AT"}
 EOF
  then
+ rm -f "$RECOVERY_TMP"
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
+ if ! mv -f "$RECOVERY_TMP" "$RECEIPT_RECOVERY"; then
+ rm -f "$RECOVERY_TMP"
  echo "<promise>RETRY</promise>"
  exit 0
  fi
@@ -528,8 +544,12 @@ EOF
  echo "<promise>RETRY</promise>"
  exit 0
  fi
- if ! jq -e --arg id "$SPEC_ID" \
- '.type == "completion_review" and .id == $id and .verdict == "SHIP"' \
+ if ! jq -e --arg id "$SPEC_ID" --arg attempt_at "$ATTEMPT_AT" \
+ '.type == "completion_review"
+ and .id == $id
+ and .verdict == "SHIP"
+ and .mode == "rp"
+ and .attempt_timestamp == $attempt_at' \
  "$REVIEW_RECEIPT_PATH" >/dev/null; then
  echo "<promise>RETRY</promise>"
  exit 0

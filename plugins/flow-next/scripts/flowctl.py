@@ -25117,6 +25117,28 @@ def _write_backend_review_receipt(
     receipt_data["spec"] = str(resolved_spec)
     receipt_data["timestamp"] = now_iso()
     receipt_data["review"] = review_text
+    if review_type == "completion_review":
+        flow_dir = get_flow_dir()
+        spec_path = find_spec_json_path(flow_dir, review_id)
+        if spec_path.exists():
+            spec_data = normalize_epic(
+                load_json_or_exit(
+                    spec_path, f"Spec {review_id}", use_json=False
+                )
+            )
+            attempts = _review_attempt_summary(
+                spec_data,
+                "plan",
+                None,
+                review_type="completion",
+            )["attempts"]
+            latest = attempts[-1] if attempts else {}
+            if (
+                latest.get("backend") == backend
+                and latest.get("verdict") == verdict
+                and isinstance(latest.get("timestamp"), str)
+            ):
+                receipt_data["attempt_timestamp"] = latest["timestamp"]
     stamp_ralph_iteration(receipt_data)
     if focus:
         receipt_data["focus"] = focus

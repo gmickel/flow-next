@@ -491,6 +491,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 "mode": "codex",
                 "verdict": "SHIP",
                 "review": "durable review",
+                "attempt_timestamp": "2026-07-29T10:00:00Z",
             }
             recovery.write_text(json.dumps(payload), encoding="utf-8")
             receipt = temp / "receipts" / "completion.json"
@@ -624,6 +625,38 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             self.assertNotIn("VERDICT=SHIP", copy_failure.stdout)
             self.assertTrue(recovery.exists())
 
+            stale_payload = dict(payload)
+            stale_payload["mode"] = "rp"
+            stale_payload["attempt_timestamp"] = "2026-07-29T08:00:00Z"
+            recovery.write_text(json.dumps(stale_payload), encoding="utf-8")
+            stale_env = switch_env.copy()
+            stale_env["BACKEND"] = "rp"
+            stale_env["ATTEMPTS_PAYLOAD"] = json.dumps(
+                {
+                    "attempts": [
+                        {
+                            "outcome": "verdict",
+                            "verdict": "SHIP",
+                            "backend": "rp",
+                            "timestamp": "2026-07-29T10:00:00Z",
+                        }
+                    ],
+                    "review_rounds": 0,
+                    "review_rounds_cap": 4,
+                }
+            )
+            stale_result = subprocess.run(
+                [_bash_executable(), "-c", block],
+                cwd=temp,
+                env=stale_env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertIn("VERDICT=SHIP", stale_result.stdout)
+            self.assertNotIn("<promise>RETRY</promise>", stale_result.stdout)
+            self.assertFalse(recovery.exists())
+
     def test_completion_backend_persists_recovery_and_receipt_before_status(
         self,
     ) -> None:
@@ -641,6 +674,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             "def cmd_codex_impl_review(",
         )
         self.assertIn("completion-review-receipt-recovery-", source)
+        self.assertIn('receipt_data["attempt_timestamp"]', writer)
         self.assertIn(
             "_completion_review_receipt_recovery_path(review_id)", writer
         )
@@ -650,10 +684,12 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         recovery = "completion-review-receipt-recovery-${SPEC_ID}.json"
         self.assertIn(recovery, host)
         self.assertIn(recovery, rp)
-        self.assertLess(rp.index('cat > "$RECEIPT_RECOVERY"'), rp.index(
+        self.assertLess(rp.index('cat > "$RECOVERY_TMP"'), rp.index(
             'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"'
         ))
-        self.assertIn('if ! cat > "$RECEIPT_RECOVERY"', rp)
+        self.assertIn('mktemp "${RECEIPT_RECOVERY}.tmp.XXXXXX"', rp)
+        self.assertIn('if ! cat > "$RECOVERY_TMP"', rp)
+        self.assertIn('mv -f "$RECOVERY_TMP" "$RECEIPT_RECOVERY"', rp)
         self.assertIn(
             'if ! cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"', rp
         )

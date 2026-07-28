@@ -188,6 +188,25 @@ if [[ -n "$TERMINAL_STATUS" \
         || "$ATTEMPT_AT" > "$CURRENT_REVIEWED_AT" ) ) ) ]]; then
   RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}"
   RECEIPT_RECOVERY="$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
+
+  # A recovery payload belongs to exactly one durable attempt. Remove an older
+  # attempt's artifact before deciding whether this attempt requires a receipt;
+  # otherwise an optional RP receipt can become spuriously mandatory.
+  if [[ -f "$RECEIPT_RECOVERY" ]] \
+    && ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+      --arg mode "$ATTEMPT_BACKEND" --arg attempt_at "$ATTEMPT_AT" \
+      '.type == "completion_review"
+       and .id == $id
+       and .verdict == $verdict
+       and .mode == $mode
+       and .attempt_timestamp == $attempt_at' \
+      "$RECEIPT_RECOVERY" >/dev/null 2>&1; then
+    if ! rm -f "$RECEIPT_RECOVERY"; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
+  fi
+
   RECEIPT_REQUIRED=false
   # Bind evidence requirements to the durable attempt being resumed, never
   # the backend selected for this invocation (which may have changed).
@@ -210,11 +229,13 @@ if [[ -n "$TERMINAL_STATUS" \
       exit 0
     fi
     if ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
-      --arg mode "$ATTEMPT_BACKEND" \
+      --arg mode "$ATTEMPT_BACKEND" --arg attempt_at "$ATTEMPT_AT" \
       '.type == "completion_review"
        and .id == $id
        and .verdict == $verdict
-       and .mode == $mode' "$RECEIPT_PATH" >/dev/null; then
+       and .mode == $mode
+       and .attempt_timestamp == $attempt_at' \
+      "$RECEIPT_PATH" >/dev/null; then
       echo "<promise>RETRY</promise>"
       exit 0
     fi
@@ -222,11 +243,13 @@ if [[ -n "$TERMINAL_STATUS" \
 
   if [[ "$RECEIPT_REQUIRED" == true ]] \
     && ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
-      --arg mode "$ATTEMPT_BACKEND" \
+      --arg mode "$ATTEMPT_BACKEND" --arg attempt_at "$ATTEMPT_AT" \
       '.type == "completion_review"
        and .id == $id
        and .verdict == $verdict
-       and .mode == $mode' "$RECEIPT_PATH" >/dev/null 2>&1; then
+       and .mode == $mode
+       and .attempt_timestamp == $attempt_at' \
+      "$RECEIPT_PATH" >/dev/null 2>&1; then
     echo "<promise>RETRY</promise>"
     exit 0
   fi

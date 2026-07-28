@@ -103,7 +103,8 @@ Build this payload once:
  "spec": "host",
  "session_id": null,
  "review": "<full reviewer output text - findings + verdict>",
- "timestamp": "<ISO-8601>"
+ "timestamp": "<ISO-8601>",
+ "attempt_timestamp": "<.attempts[-1].timestamp from RECORD_JSON>"
 }
 ```
 
