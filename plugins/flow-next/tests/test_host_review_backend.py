@@ -500,6 +500,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                     "FLOWCTL": flowctl_stub.as_posix(),
                     "SPEC_ID": "fn-1",
                     "BACKEND": "codex",
+                    "REPO_ROOT": temp.as_posix(),
                     "REVIEW_RECEIPT_PATH": receipt.as_posix(),
                     "ATTEMPTS_PAYLOAD": json.dumps(
                         {
@@ -566,6 +567,14 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             "def cmd_codex_impl_review(",
         )
         self.assertIn("completion-review-receipt-recovery-", writer)
+        host = _read("flow-next-spec-completion-review/workflow-host.md")
+        rp = _read("flow-next-spec-completion-review/workflow-rp.md")
+        recovery = "completion-review-receipt-recovery-${SPEC_ID}.json"
+        self.assertIn(recovery, host)
+        self.assertIn(recovery, rp)
+        self.assertLess(rp.index('cat > "$RECEIPT_RECOVERY"'), rp.index(
+            'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"'
+        ))
         self.assertLess(
             completion.index("_write_backend_review_receipt("),
             completion.index("_self_write_review_status("),

@@ -185,14 +185,17 @@ if [[ -n "$TERMINAL_STATUS" \
  && ( -z "$CURRENT_REVIEWED_AT" \
  || "$ATTEMPT_AT" > "$CURRENT_REVIEWED_AT" ) ) ) ]]; then
  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}"
- RECEIPT_RECOVERY=".flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
+ RECEIPT_RECOVERY="$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
  RECEIPT_REQUIRED=false
  case "$BACKEND" in
  codex|copilot|cursor|host) RECEIPT_REQUIRED=true ;;
+ rp)
+ [[ "$VERDICT" == "SHIP" && -n "${REVIEW_RECEIPT_PATH:-}" ]] \
+ && RECEIPT_REQUIRED=true
+ ;;
  esac
- [[ -n "${REVIEW_RECEIPT_PATH:-}" ]] && RECEIPT_REQUIRED=true
 
- # Subprocess backends preserve the complete receipt payload here before
+ # Every receipt-owning backend preserves the complete payload here before
  # writing the caller-selected path. Restore it before status so a transient
  # receipt-path failure never consumes another review or loses Ralph evidence.
  if [[ -f "$RECEIPT_RECOVERY" ]]; then

@@ -412,6 +412,8 @@ Receipt written after SHIP verdict (not on NEEDS_WORK):
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
+  RECEIPT_RECOVERY="$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
+  mkdir -p "$(dirname "$RECEIPT_RECOVERY")"
 
   # Same literal response file from Phase 3 (path-persistence rule — type it verbatim)
   RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
@@ -488,9 +490,17 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
     EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
   fi
 
-  cat > "$REVIEW_RECEIPT_PATH" <<EOF
+  cat > "$RECEIPT_RECOVERY" <<EOF
 {"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts"}
 EOF
+  cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"
+  if ! jq -e --arg id "$SPEC_ID" \
+    '.type == "completion_review" and .id == $id and .verdict == "SHIP"' \
+    "$REVIEW_RECEIPT_PATH" >/dev/null; then
+    echo "<promise>RETRY</promise>"
+    exit 0
+  fi
+  rm "$RECEIPT_RECOVERY"
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```

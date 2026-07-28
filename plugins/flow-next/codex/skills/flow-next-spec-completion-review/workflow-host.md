@@ -91,7 +91,7 @@ Receipt path (same contract as the subprocess backends — spec-scoped default; 
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt${SPEC_ID:+-${SPEC_ID}}.json}"
 ```
 
-Write:
+Build this payload once:
 
 ```json
 {
@@ -106,6 +106,17 @@ Write:
  "timestamp": "<ISO-8601>"
 }
 ```
+
+Persist it in this order:
+
+1. Write the complete JSON payload to
+ `$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json`
+ first (create the parent directory).
+2. Copy that exact file to `$RECEIPT_PATH`; validate `type`, `id`, and `verdict`
+ there with `jq`.
+3. Delete the recovery file only after the selected receipt path validates.
+ On any write/copy/validation failure, leave recovery in place, output
+ `<promise>RETRY</promise>`, and stop before terminal status.
 
 `session_id` is literal `null` — host re-reviews are always fresh subagents; `null` distinguishes by-design non-resumability from an incomplete receipt. Shape stays compatible with existing consumers.
 
