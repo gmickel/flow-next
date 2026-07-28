@@ -60,9 +60,10 @@ and retry outcomes must not write terminal completion status.
 
 
 ## Done summary
-TBD
+Minimized host-specific mechanics in both review root skills, keeping only bare-host routing and the fresh/read-only/cross-family fail-closed invariant. Made both selected host workflows self-contained for dispatch, receipts, fixes, fresh re-review, and failure handling; completion status now has one shared terminal owner, with focused cold-load and status-ownership coverage.
 
+Focused baseline: 102 tests passed. Focused post-change/post-commit verification: 106 tests passed. Full suite, Ruff, and Codex mirror regeneration intentionally deferred to integration task fn-145-opus-5-autonomous-seam-retune.4.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: ea5fc9274e38a0f8e9ce2653615338660a324860
+- Tests: focused six-module suite (106 passed), python3 -m unittest test_host_review_backend -q (14 passed in fresh review)
 - PRs:
