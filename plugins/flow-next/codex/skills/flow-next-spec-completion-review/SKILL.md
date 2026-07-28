@@ -184,6 +184,39 @@ if [[ -n "$TERMINAL_STATUS" \
  || ( -n "$ATTEMPT_AT" \
  && ( -z "$CURRENT_REVIEWED_AT" \
  || "$ATTEMPT_AT" > "$CURRENT_REVIEWED_AT" ) ) ) ]]; then
+ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}"
+ RECEIPT_RECOVERY=".flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
+ RECEIPT_REQUIRED=false
+ case "$BACKEND" in
+ codex|copilot|cursor|host) RECEIPT_REQUIRED=true ;;
+ esac
+ [[ -n "${REVIEW_RECEIPT_PATH:-}" ]] && RECEIPT_REQUIRED=true
+
+ # Subprocess backends preserve the complete receipt payload here before
+ # writing the caller-selected path. Restore it before status so a transient
+ # receipt-path failure never consumes another review or loses Ralph evidence.
+ if [[ -f "$RECEIPT_RECOVERY" ]]; then
+ mkdir -p "$(dirname "$RECEIPT_PATH")"
+ cp "$RECEIPT_RECOVERY" "$RECEIPT_PATH"
+ if ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+ '.type == "completion_review"
+ and .id == $id
+ and .verdict == $verdict' "$RECEIPT_PATH" >/dev/null; then
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
+ rm "$RECEIPT_RECOVERY"
+ fi
+
+ if [[ "$RECEIPT_REQUIRED" == true ]] \
+ && ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+ '.type == "completion_review"
+ and .id == $id
+ and .verdict == $verdict' "$RECEIPT_PATH" >/dev/null 2>&1; then
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
+
  if [[ "$CURRENT_STATUS" != "$TERMINAL_STATUS" ]]; then
  TERMINAL_WRITE_JSON="$($FLOWCTL spec set-completion-review-status "$SPEC_ID" \
  --status "$TERMINAL_STATUS" --json)"

@@ -458,6 +458,119 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                         expects_retry,
                     )
 
+    def test_terminal_checkpoint_restores_receipt_before_early_exit(self) -> None:
+        root = _read("flow-next-spec-completion-review/SKILL.md")
+        block = _bash_fence_after(
+            root, "### Step 0.5: Resume terminal status persistence before dispatch"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            flowctl_stub = temp / "flowctl-stub"
+            flowctl_stub.write_text(
+                "#!/usr/bin/env bash\n"
+                "if [[ \"$1 $2\" == \"review-rounds attempts\" ]]; then\n"
+                "  printf '%s\\n' \"$ATTEMPTS_PAYLOAD\"\n"
+                "elif [[ \"$1\" == \"show\" ]]; then\n"
+                "  printf '%s\\n' \"$SPEC_STATE_PAYLOAD\"\n"
+                "else\n"
+                "  exit 9\n"
+                "fi\n",
+                encoding="utf-8",
+            )
+            flowctl_stub.chmod(0o755)
+            recovery = (
+                temp
+                / ".flow"
+                / "tmp"
+                / "completion-review-receipt-recovery-fn-1.json"
+            )
+            recovery.parent.mkdir(parents=True)
+            payload = {
+                "type": "completion_review",
+                "id": "fn-1",
+                "mode": "codex",
+                "verdict": "SHIP",
+                "review": "durable review",
+            }
+            recovery.write_text(json.dumps(payload), encoding="utf-8")
+            receipt = temp / "receipts" / "completion.json"
+            env = os.environ.copy()
+            env.update(
+                {
+                    "FLOWCTL": flowctl_stub.as_posix(),
+                    "SPEC_ID": "fn-1",
+                    "BACKEND": "codex",
+                    "REVIEW_RECEIPT_PATH": receipt.as_posix(),
+                    "ATTEMPTS_PAYLOAD": json.dumps(
+                        {
+                            "attempts": [
+                                {
+                                    "outcome": "verdict",
+                                    "verdict": "SHIP",
+                                    "timestamp": "2026-07-29T10:00:00Z",
+                                }
+                            ],
+                            "review_rounds": 0,
+                            "review_rounds_cap": 4,
+                        }
+                    ),
+                    "SPEC_STATE_PAYLOAD": json.dumps(
+                        {
+                            "completion_review_status": "ship",
+                            "completion_reviewed_at": "2026-07-29T10:00:01Z",
+                        }
+                    ),
+                }
+            )
+            result = subprocess.run(
+                [_bash_executable(), "-c", block],
+                cwd=temp,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("VERDICT=SHIP", result.stdout)
+            self.assertNotIn("<promise>RETRY</promise>", result.stdout)
+            self.assertEqual(json.loads(receipt.read_text(encoding="utf-8")), payload)
+            self.assertFalse(recovery.exists())
+
+            receipt.unlink()
+            missing = subprocess.run(
+                [_bash_executable(), "-c", block],
+                cwd=temp,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(missing.returncode, 0)
+            self.assertIn("<promise>RETRY</promise>", missing.stdout)
+            self.assertNotIn("VERDICT=SHIP", missing.stdout)
+
+    def test_completion_backend_persists_recovery_and_receipt_before_status(
+        self,
+    ) -> None:
+        source = (
+            REPO / "plugins" / "flow-next" / "scripts" / "flowctl.py"
+        ).read_text(encoding="utf-8")
+        writer = _section(
+            source,
+            "def _write_backend_review_receipt(",
+            "def _self_write_review_status(",
+        )
+        completion = _section(
+            source,
+            "def _backend_completion_review(",
+            "def cmd_codex_impl_review(",
+        )
+        self.assertIn("completion-review-receipt-recovery-", writer)
+        self.assertLess(
+            completion.index("_write_backend_review_receipt("),
+            completion.index("_self_write_review_status("),
+        )
+
     def test_rp_recorder_failure_cannot_be_swallowed_by_verdict_echo(self) -> None:
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         block = _bash_fence_after(

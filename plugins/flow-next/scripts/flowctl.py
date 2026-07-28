@@ -25118,9 +25118,23 @@ def _write_backend_review_receipt(
         receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
     if unaddressed_rids is not None:
         receipt_data["unaddressed"] = unaddressed_rids
-    Path(receipt_path).write_text(
-        json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
-    )
+    content = json.dumps(receipt_data, indent=2) + "\n"
+    recovery_path: Optional[Path] = None
+    if review_type == "completion_review":
+        # The verdict attempt is already durable by this point. Preserve the
+        # complete receipt payload in a repo-local ignored file before writing
+        # an explicit/autonomous receipt path that may fail transiently. The
+        # skill's pre-dispatch checkpoint restores this payload without
+        # consuming or dispatching another review round.
+        recovery_path = (
+            get_flow_dir()
+            / "tmp"
+            / f"completion-review-receipt-recovery-{review_id}.json"
+        )
+        atomic_write(recovery_path, content)
+    atomic_write(Path(receipt_path), content)
+    if recovery_path is not None:
+        recovery_path.unlink(missing_ok=True)
 
 
 
@@ -26039,10 +26053,6 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     if verdict == "SHIP":
         reset_review_cap(epic_id, "plan")
 
-    written_status = _self_write_review_status(
-        epic_id, "completion", verdict, use_json=args.json
-    )
-
     # Preserve session_id for continuity (avoid clobbering on resumed sessions).
     session_id_to_write = returned_session_id or session_id
 
@@ -26070,6 +26080,13 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             classification_counts=classification_counts,
             unaddressed_rids=unaddressed_rids,
         )
+
+    # Receipt evidence must land before terminal status. If receipt persistence
+    # fails, the recovery payload above remains and status stays non-terminal;
+    # the skill restores the receipt and status before any later dispatch.
+    written_status = _self_write_review_status(
+        epic_id, "completion", verdict, use_json=args.json
+    )
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
 
