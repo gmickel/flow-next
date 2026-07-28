@@ -23275,11 +23275,17 @@ def _live_spec_operation_claim(flow_dir: Path, spec_id: str) -> Optional[dict]:
             from flowctl_tracker.lifecycle.verbs import _claim_is_stale
         except ImportError:
             return None
-    for prefix, op in (("spec", "create"), ("syncbody", "sync-body"),
-                       ("status", "status"), ("facade", "facade")):
-        rec_path = flow_dir / "create-first" / f"{prefix}-{spec_id}.json"
-        if not rec_path.is_file():
-            continue
+    candidates = [
+        (flow_dir / "create-first" / f"{prefix}-{spec_id}.json", op)
+        for prefix, op in (("spec", "create"), ("syncbody", "sync-body"),
+                           ("status", "status"), ("facade", "facade"))
+    ]
+    candidates.extend(
+        (path, "relate")
+        for path in sorted(
+            (flow_dir / "create-first").glob(f"relate-{spec_id}-*.json"))
+    )
+    for rec_path, op in candidates:
         try:
             claim = json.loads(rec_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):

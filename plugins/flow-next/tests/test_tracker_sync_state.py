@@ -457,6 +457,18 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         self._set_id(spec_id, "uuid-after-facade")
         self.assertEqual(self._state(spec_id)["id"], "uuid-after-facade")
 
+    def test_relink_refused_while_live_relate_claim(self) -> None:
+        import time
+        spec_id = self._create_spec("Claim-guarded relink relate")
+        rec = self._write_claim(f"relate-{spec_id}-race.json", pid=os.getpid(),
+                                claimed_at=time.time(), op="relate")
+        with self.assertRaises(SystemExit):
+            self._set_id(spec_id, "uuid-blocked-relate")
+        self.assertIsNone(self._state(spec_id)["id"])
+        rec.unlink()
+        self._set_id(spec_id, "uuid-after-relate")
+        self.assertEqual(self._state(spec_id)["id"], "uuid-after-relate")
+
     def test_stale_dead_pid_claim_does_not_block_relink(self) -> None:
         import time
         spec_id = self._create_spec("Stale claim relink")

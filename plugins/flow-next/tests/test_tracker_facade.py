@@ -1590,6 +1590,36 @@ class FacadeOuterClaim(unittest.TestCase):
             self.assertFalse(rec_path.exists(), "facade claim released")
             self.assertEqual(len(_receipts(flow)), 1)
 
+    def test_reconcile_refuses_remote_edit_after_initial_read(self) -> None:
+        """A remote edit between approval read and sync-body cannot be lost."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            initial = "initial tracker body\n"
+            concurrent = "concurrent tracker edit\n"
+            merged = "approved merged body\n"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            ff = _flow_file(root)
+            bf = _body_file(root, merged)
+            ex = fake_execute({
+                "wire-read": ok(_gh_issue(initial)),
+                "sync-body-parent-read": ok(_gh_issue(concurrent)),
+            })
+
+            out = F.sync(flow, SPEC_ID, op="reconcile", event="plan",
+                         flow_file=ff, body_file=bf, execute=ex)
+
+            self.assertIsInstance(out, TrackerError, msg=repr(out))
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "tracker_body_changed")
+            self.assertTrue(out.auto_retryable)
+            self.assertEqual(
+                [c.op for c in ex.calls],
+                ["wire-read", "sync-body-parent-read"],
+                "the changed body is detected before the tracker update",
+            )
+            self.assertFalse(any(c.op == "wire-update" for c in ex.calls))
+
 
 # ---------------------------------------------------------------------------
 # Envelope / CLI shell

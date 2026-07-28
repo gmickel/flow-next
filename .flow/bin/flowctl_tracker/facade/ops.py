@@ -441,10 +441,17 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     completed.append("wire-read")
     steps["wire_read"] = {
         "id": read_out.get("id") if isinstance(read_out, dict) else None}
+    initial_tracker_body = (
+        read_out.get("body") if isinstance(read_out, dict) else None)
+    if initial_tracker_body is None:
+        initial_tracker_body = ""
+    elif not isinstance(initial_tracker_body, str):
+        initial_tracker_body = str(initial_tracker_body)
 
     body_out = sync_body(
         flow_dir, spec_id, flow_file_body=flow_body,
         tracker_body=tracker_body, direction="push",
+        expected_tracker_body=initial_tracker_body,
         event=event, execute=execute, write_receipt=False,
     )
     if isinstance(body_out, TrackerError):

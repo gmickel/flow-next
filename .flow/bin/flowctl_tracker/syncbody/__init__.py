@@ -255,6 +255,7 @@ def _claim_sync_body(flow_dir: Path, spec_id: str, rec_path: Path,
 
 def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               tracker_body: Optional[str] = None,
+              expected_tracker_body: Optional[str] = None,
               tracker_read: Optional[Callable[[dict], Result]] = None,
               direction: str = "push",
               event: Optional[str] = None,
@@ -298,6 +299,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
         return _sync_body_txn(
             flow_dir, spec_id, config=config, provider=provider,
             flow_file_body=flow_file_body, tracker_body=tracker_body,
+            expected_tracker_body=expected_tracker_body,
             tracker_read=tracker_read, direction=direction,
             event=event, execute=execute, write_receipt=write_receipt)
     finally:
@@ -307,6 +309,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
 def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                    provider: str, flow_file_body: str,
                    tracker_body: Optional[str],
+                   expected_tracker_body: Optional[str],
                    tracker_read: Optional[Callable[[dict], Result]],
                    direction: str, event: Optional[str],
                    execute: Execute, write_receipt: bool) -> Result:
@@ -390,6 +393,18 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         }
 
     # --- push ---
+    if (expected_tracker_body is not None
+            and trackerBodyForMerge(current_body)
+            != trackerBodyForMerge(expected_tracker_body)):
+        return TrackerError(
+            ErrorClass.CONFLICT,
+            "tracker body changed after the reconcile read; refusing to "
+            "overwrite the newer remote edit; re-run reconcile",
+            subtype="tracker_body_changed",
+            details={"specId": spec_id, "recoverable": True},
+            auto_retryable=True,
+        )
+
     outgoing_src = tracker_body if tracker_body is not None else flow_file_body
     outgoing = _carry_deps_forward(outgoing_src, current_body)
 

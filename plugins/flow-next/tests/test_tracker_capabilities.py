@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -1159,6 +1160,58 @@ class RelateFinalizeRelinkGuard(unittest.TestCase):
         b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
                 "depRelations": [], "linkState": "linked"}
         _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+
+    def test_pair_claim_covers_probe_mutation_and_finalize(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            observed = []
+
+            def assert_claims(phase: str) -> None:
+                paths = sorted((flow / "create-first").glob("relate-*.json"))
+                self.assertEqual(len(paths), 2)
+                claims = [
+                    json.loads(path.read_text(encoding="utf-8"))
+                    for path in paths
+                ]
+                self.assertTrue(all(c["status"] == "pending" for c in claims))
+                self.assertTrue(all(c["op"] == "relate" for c in claims))
+                observed.append(phase)
+
+            list_empty = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": []},
+            }}})
+
+            def probe_hook(request):
+                assert_claims("probe")
+                return list_empty
+
+            def create_hook(request):
+                assert_claims("mutation")
+                return ok({"data": {"issueRelationCreate": {
+                    "success": True, "issueRelation": {"id": "rel-1"}}}})
+
+            original_finalize = R._ledger_finalize_guarded
+
+            def finalize_hook(*args, **kwargs):
+                assert_claims("finalize")
+                return original_finalize(*args, **kwargs)
+
+            ex = fake_execute({"relate-list": [probe_hook],
+                               "relate-create": [create_hook]})
+            with mock.patch.object(R, "_ledger_finalize_guarded",
+                                   side_effect=finalize_hook):
+                out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                               execute=ex)
+
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(observed, ["probe", "mutation", "finalize"])
+            self.assertEqual(
+                list((flow / "create-first").glob("relate-*.json")), [],
+                "both claims released after finalize",
+            )
 
     def _run(self, flow: Path, relink_spec: str):
         # Injection hook on the CREATE response: the relink lands after the

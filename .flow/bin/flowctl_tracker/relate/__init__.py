@@ -21,6 +21,10 @@ projection is .5's body machinery.
 
 from __future__ import annotations
 
+import os
+import socket
+import time
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -28,7 +32,9 @@ from .. import envelope
 from ..executor import execute as default_execute
 from ..lifecycle.helpers import (ACTIVE, Execute, Result, dict_, load_spec,
                                  merged_tracker, read_config, tracker_type,
-                                 write_sync_receipt, write_tracker_block)
+                                 write_sync_receipt, write_tracker_block,
+                                 atomic_write_json, leaf_is_safe)
+from ..lifecycle.verbs import _ensure_create_first_ignored, _release_claim
 from ..types import ErrorClass, TrackerError
 from . import providers as P
 from .ledger import (blocker_completed, caps_of, claim_owner,
@@ -446,6 +452,49 @@ def _locator(tracker: dict) -> Result:
     return {"durable": durable.strip(), "display": display.strip()}
 
 
+def _claim_relate_pair(flow_dir: Path, spec_id: str, blocked_by: str,
+                       provider: str) -> Result:
+    """Claim both linked specs for the complete relate transaction."""
+    token = uuid.uuid4().hex
+    claim_paths = [
+        flow_dir / "create-first" / f"relate-{sid}-{token}.json"
+        for sid in sorted((spec_id, blocked_by))
+    ]
+    for rec_path in claim_paths:
+        unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
+        if unsafe:
+            return unsafe
+    secured = _ensure_create_first_ignored(flow_dir)
+    if secured is not None:
+        return secured
+
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            owner = {
+                "status": "pending",
+                "op": "relate",
+                "pid": os.getpid(),
+                "host": socket.gethostname(),
+                "claimedAt": time.time(),
+                "transport": provider,
+                "specId": spec_id,
+                "blockedBy": blocked_by,
+            }
+            written = []
+            for rec_path in claim_paths:
+                cerr = atomic_write_json(rec_path, owner)
+                if cerr:
+                    for prior_path in written:
+                        _release_claim(prior_path)
+                    return cerr
+                written.append(rec_path)
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc),
+                            subtype="lock_timeout")
+    return claim_paths
+
+
 def relate(flow_dir, spec_id: str, *, blocked_by: str,
            event: Optional[str] = None,
            execute: Execute = default_execute) -> Result:
@@ -460,6 +509,26 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
                             "a spec cannot be blocked by itself",
                             subtype="self_edge")
 
+    config = read_config(flow_dir)
+    provider = tracker_type(config)
+    if provider is None:
+        return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
+
+    claimed = _claim_relate_pair(flow_dir, spec_id, blocked_by, provider)
+    if isinstance(claimed, TrackerError):
+        return claimed
+    try:
+        return _relate_txn(
+            flow_dir, spec_id, blocked_by=blocked_by, event=event,
+            execute=execute)
+    finally:
+        for rec_path in claimed:
+            _release_claim(rec_path)
+
+
+def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
+                event: Optional[str], execute: Execute) -> Result:
+    """Run probe, mutation, and finalize while both spec claims are live."""
     config = read_config(flow_dir)
     provider = tracker_type(config)
     if provider is None:
