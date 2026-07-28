@@ -1006,7 +1006,11 @@ Exit codes: corrupt artifact on `promote` → 3 (stderr `[ARTIFACT CORRUPT: <rea
 
 ### sync
 
-Tracker-sync plumbing for the `/flow-next:tracker-sync` bridge — atomic, deterministic helpers the skill calls. flowctl owns "set this field / enumerate / atomic-write"; the skill owns the API calls, reconciliation, and asking. Full subsystem reference: [`tracker-sync.md`](tracker-sync.md).
+Tracker-sync plumbing for the `/flow-next:tracker-sync` bridge — atomic,
+deterministic helpers and provider adapters the skill calls. flowctl owns
+transport, field writes, validation, and transaction boundaries; the skill owns
+semantic body/comment composition, conflict judgment, and asking. Full subsystem
+reference: [`tracker-sync.md`](tracker-sync.md).
 
 > **`flowctl sync` (this) is NOT `/flow-next:sync`.** `/flow-next:sync` is plan-sync (downstream task specs after drift). `flowctl sync` / `/flow-next:tracker-sync` is the external tracker bridge.
 
@@ -1039,6 +1043,36 @@ flowctl sync defer   <spec-id> --summary "..." [--suggested "..."] [--reason "..
 # Read-only lifecycle audit (fn-57) — did every triggered touchpoint fire?
 flowctl sync check <spec-id> --events <csv> --since <iso> [--json]
 ```
+
+Lifecycle callers use the composed facade rather than sequencing granular
+tracker verbs themselves:
+
+```bash
+flowctl tracker sync <spec-id> --op push --event <key> \
+  --flow-file <exact-local-flow-form> --body-file <tracker-render>
+
+flowctl tracker sync <spec-id> --op pull --event <key> \
+  --flow-file <final-local-fold-already-written> \
+  --body-file <tracker-source-snapshot> \
+  --comments-file <normalized-comment-array.json>
+
+flowctl tracker sync <spec-id> --op reconcile --event <key> \
+  --flow-file <final-local-merge-already-written> \
+  --body-file <approved-outgoing-tracker-form> \
+  --source-body-file <pre-merge-tracker-snapshot> \
+  --comments-file <normalized-comment-array.json>
+
+flowctl tracker sync <spec-id> --op comment --event <key> \
+  --body-file <comment-text>
+```
+
+Pull/reconcile inputs are deliberately separate: flowctl never authors the
+judgment-bearing fold. It re-reads the issue and comments under the facade claim,
+projects tracker-authoritative readiness, verifies the supplied snapshots and
+on-disk final Flow form, then commits the paired base. Reconcile and push also
+project the current spec title to the native issue title and project
+`depends_on_epics`; internal `sync-body`, status, and relation receipts are
+suppressed so each invocation emits one aggregate event receipt.
 
 - **`set-tracker-id`** stores the durable UUID dedupe key + display `--identifier` (`WOR-17`) + url. `--force` overrides the dup-tracker-id collision guard.
 - **`set-merge-base`** is a **paired-snapshot** writer: `--flow`/`--flow-file` AND `--tracker`/`--tracker-file` must come **together** (a partial one-sided write is rejected so the 3-way base never pins one half to a stale sync point).

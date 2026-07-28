@@ -64,7 +64,8 @@ flowctl tracker sync-body        <spec-id> --flow-file F [--tracker-body-file T]
 The granular verbs above are the **mechanism**. Callers do not compose them: a touchpoint today says "push this spec" and gets create-if-unlinked, body orchestration, status, comment markers, dedup, receipts and event tagging as one unit. Exposing only granular verbs would push that orchestration into every calling skill as prose - which is the problem this batch exists to remove, and would make spec C's behavior-preserving teardown impossible.
 
 ```
-flowctl tracker sync <spec-id> --op push|pull|reconcile|comment --event <perEvent-key> [--flow-file F] [--body-file B]
+flowctl tracker sync <spec-id> --op push|pull|reconcile|comment --event <perEvent-key> \
+  [--flow-file F] [--body-file B] [--comments-file C] [--source-body-file S]
 ```
 
 One facade, four ops, matching the existing `perEvent` value vocabulary exactly (`off | pull | push | reconcile | comment`). It owns: create-if-unlinked, the granular-verb sequence, comment marker + dedup, the event-tagged receipt, and structured conflict/degradation reporting. Content that requires judgment (a rendered body, a resolved merge, comment text) is passed **in** as a file - the facade never composes it.
@@ -77,10 +78,21 @@ One facade, four ops, matching the existing `perEvent` value vocabulary exactly 
 
 | `--op` | required inputs | forbidden | internal sequence |
 |---|---|---|---|
-| `push` | `--flow-file` | `--body-file` | create-if-unlinked -> `sync-body` (push) -> `status` (if policy applies) |
-| `pull` | none | `--flow-file` | `wire read` -> snapshot both halves, no tracker write |
-| `reconcile` | `--flow-file`, `--body-file` | none | `wire read` -> `sync-body` (both halves) -> `status` |
-| `comment` | `--body-file` | `--flow-file` | create-if-unlinked -> `wire comment-add` (marker + dedup) |
+| `push` | `--flow-file`, `--body-file` | `--comments-file`, `--source-body-file` | create-if-unlinked -> `sync-body` (native title + body push) -> `status` -> project dependency relations |
+| `pull` | `--flow-file`, `--body-file`, `--comments-file` | `--source-body-file` | claimed `wire read` -> readiness projection -> verify comments + final local Flow form -> `sync-body` (pull) -> `status` |
+| `reconcile` | `--flow-file`, `--body-file`, `--comments-file`, `--source-body-file` | none | `wire read` -> readiness projection -> verify comments + final local Flow form -> project dependency relations -> `sync-body` (native title + both body halves) -> `status` |
+| `comment` | `--body-file` | `--flow-file`, `--comments-file`, `--source-body-file` | create-if-unlinked -> `wire comment-add` (marker + dedup) |
+
+For pull/reconcile, the skill first performs the judgment-bearing body/comment
+fold, writes the final local spec Markdown, and passes that exact file as
+`--flow-file`. `--body-file` is the exact tracker body used by a pull; on
+reconcile it is the approved outgoing tracker form and `--source-body-file` is
+the exact pre-merge tracker snapshot. `--comments-file` is the normalized
+comment-list JSON array used by the fold. The facade re-reads body/comments
+under its claim and refuses stale inputs before committing the paired base.
+Push/reconcile also project the current spec title into the tracker's native
+title field in the same update/readback transaction as the body; a title-only
+rename therefore cannot be hidden by the body echo fence.
 
 **Receipts do not stack.** Internal granular calls run with receipts **suppressed**; the facade writes **exactly one** aggregate, event-tagged receipt whose status is the worst of its steps. A **partial success** (write landed, readback failed) returns `success: false` with `data.completed_steps` naming what did land, so a resume is informed rather than blind. Re-running a facade op is **idempotent**: create-if-unlinked no-ops on a linked spec, and the comment marker dedups.
 
@@ -149,6 +161,7 @@ Every item measured live on 2026-07-26:
 - **GitHub `GET /issues` returns pull requests too** - filter on the `pull_request` key.
 - **GitHub sub-issues exist** (`POST /issues/{n}/sub_issues`) - hierarchy, not blocked-by.
 - **Jira Cloud cannot reproduce custom project keys** (`MY_PROJECT`, >10 chars); Cloud enforces uppercase-alphanumeric max-10. That path is implemented from prose and marked unverified.
+- **UNVERIFIED on live Jira Data Center (Cloud cannot reproduce custom keys - fn-140 R17); verified against prose only.** The DC custom-key path (`MY_LONG_PROJECT_KEY-7`: underscores, project key >10 chars) is wired through locator display parsing, lifecycle persist, list-open JQL sanitize, and status addressing.
 
 ## Acceptance Criteria
 <!-- scope: both -->

@@ -2,15 +2,23 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "6ebbf5551fb4ea4818f9a19243e28e15bb5b70c2d718157862e666b4966faacb"
+      "sha256": "81529dd01557fdc8b895510f51c266ad9de008dec10566d9c95e1016868d6285"
     },
     {
       "path": "flowctl_tracker/__init__.py",
       "sha256": "21ac29eb50e4222bc741261a5a24e412eaf61de2a268eb29e9231119f3ded691"
     },
     {
+      "path": "flowctl_tracker/attach/__init__.py",
+      "sha256": "3d056a08841e695a7412dc158f6bbcba87cf65eb500e0bbaf26d54bc13f881d4"
+    },
+    {
+      "path": "flowctl_tracker/attach/providers.py",
+      "sha256": "d8c6c7447b34e381e5b11c170e12e95df3029119c0956e3b9ec9a50057efd24e"
+    },
+    {
       "path": "flowctl_tracker/classify.py",
-      "sha256": "acc5ff4bff5548ae3a9eae638b3cb97252f46e3061b5171ae0a763333befd9e0"
+      "sha256": "dfdf6225ebaf694debf742b3a306ca3743ccbdaf51b31b97311464e0b69797e9"
     },
     {
       "path": "flowctl_tracker/config_lock.py",
@@ -26,7 +34,47 @@
     },
     {
       "path": "flowctl_tracker/executor.py",
-      "sha256": "bfadd07876a06dfd7b27724435773305f00f5feded15d8a992ab1878eebd53da"
+      "sha256": "72ac9efe1c8c69f61ef9806b34eaa221196674476a6b8f8df9d0e55e667c4688"
+    },
+    {
+      "path": "flowctl_tracker/facade/__init__.py",
+      "sha256": "4d6db8de3c12e7e1f96429a9d6d0cb257e832a46fc1eb51edec2ac252c2930b4"
+    },
+    {
+      "path": "flowctl_tracker/facade/helpers.py",
+      "sha256": "c72882e5cf7c05b981da5c77431b8e073225bd0878b79b810b9e8ee6f6371e79"
+    },
+    {
+      "path": "flowctl_tracker/facade/ops.py",
+      "sha256": "8f9f419ff534af022669c76ae9500f6b52ef4ded338ec4a5461262a7657395f2"
+    },
+    {
+      "path": "flowctl_tracker/facade/projections.py",
+      "sha256": "61e019bba76a88c070cc82c7ebccb830e09333382cac7857e4f351601ac5f36f"
+    },
+    {
+      "path": "flowctl_tracker/facade/steps.py",
+      "sha256": "8647da8c63e1b790328beecf4026d1be848a04631a325b39d2259677a0add41b"
+    },
+    {
+      "path": "flowctl_tracker/lifecycle/__init__.py",
+      "sha256": "f27ce20cb15782440af103bf389e035af1418854106d3615e7a6b87b94f0dc0d"
+    },
+    {
+      "path": "flowctl_tracker/lifecycle/helpers.py",
+      "sha256": "77faaccb2bd12f4efa9561bbc825b5872b48f350c3eeab162556fa79c5326cd9"
+    },
+    {
+      "path": "flowctl_tracker/lifecycle/linkstate.py",
+      "sha256": "f0a1b970dfb6dc0960172b78b909f481aefe3f10b73a6d2c82d9c44ea198e318"
+    },
+    {
+      "path": "flowctl_tracker/lifecycle/providers.py",
+      "sha256": "02d77098354b88740169f58c967527fafdc64a54d6e892ac47ddb49fddf593ba"
+    },
+    {
+      "path": "flowctl_tracker/lifecycle/verbs.py",
+      "sha256": "4b0300543616bab87a45c0505a050e1058964eed7dacea26e39911e5c5ec6152"
     },
     {
       "path": "flowctl_tracker/providers/__init__.py",
@@ -38,7 +86,7 @@
     },
     {
       "path": "flowctl_tracker/providers/gitlab.py",
-      "sha256": "b4c5d526f7c4f0807a719a95ed07d442c30b05351f02e7b086656e138f6cd184"
+      "sha256": "aca0f0bc4273a0161c71f08d4ee187ac78213d1a94195a2ebc26ecbccdc01bf7"
     },
     {
       "path": "flowctl_tracker/providers/jira.py",
@@ -47,6 +95,18 @@
     {
       "path": "flowctl_tracker/providers/linear.py",
       "sha256": "f049938c14c41617690c7fb8285cdea281684a83c83ecaae0ccfe89f31cb5331"
+    },
+    {
+      "path": "flowctl_tracker/relate/__init__.py",
+      "sha256": "50f9e9ad36d0e4796a4f45eef9e1149a35a73df72c385b009469bad757f4ae36"
+    },
+    {
+      "path": "flowctl_tracker/relate/ledger.py",
+      "sha256": "5d9fb5a5b2853282a078207c2ca57f44a0ffa48f4270482d0af93b3ed58b62b3"
+    },
+    {
+      "path": "flowctl_tracker/relate/providers.py",
+      "sha256": "050b8b1a03c5a58e5df7f620964ff1466e32de9079fec2e73bf249035c6c4fbb"
     },
     {
       "path": "flowctl_tracker/resolve_verb.py",
@@ -61,8 +121,48 @@
       "sha256": "133ccf527af6918cadb392592c252c1db544354701668030e54ad4737cbe5515"
     },
     {
+      "path": "flowctl_tracker/status/__init__.py",
+      "sha256": "a074ed529e1e8d6c1990f0b85477189ff60afe423c1255982dd208f53c61801c"
+    },
+    {
+      "path": "flowctl_tracker/status/policy.py",
+      "sha256": "0d05ac444acf3d2456a82d155df1011cc68f7871076bfbd9782fc70f694d12ab"
+    },
+    {
+      "path": "flowctl_tracker/status/providers.py",
+      "sha256": "91096d3af41a14c7b79f5181111d14deb0e64c792fa539de592c45c74fbfb315"
+    },
+    {
+      "path": "flowctl_tracker/status/verb.py",
+      "sha256": "e3096b97d2ee7435fcc241a94410bc67fa02e26de665f5fd4d85c70683892e29"
+    },
+    {
+      "path": "flowctl_tracker/syncbody/__init__.py",
+      "sha256": "102a535f259f680340bcc9c2550529f074ea3466916d61b064d3b07b27dd2223"
+    },
+    {
       "path": "flowctl_tracker/types.py",
-      "sha256": "cf82da7cc603529bc68e5ef5993ed67bccf42b8f42538493382dca70f03c9119"
+      "sha256": "ea8c0ee9f456702e434fe1ea45929273ee941e77070d24ee89f37d958aeaa34e"
+    },
+    {
+      "path": "flowctl_tracker/wire/__init__.py",
+      "sha256": "f5de3f1b2422ba432c2b4ee3e4b57adb260a213b1b057d6646d3abd58c645f34"
+    },
+    {
+      "path": "flowctl_tracker/wire/github.py",
+      "sha256": "58794413f376659cc66986dd615d7f5b040f7bc69f066242b1892596071ab50e"
+    },
+    {
+      "path": "flowctl_tracker/wire/gitlab.py",
+      "sha256": "4d1e7643691fa1269810f29cd2fe0c3a56e6648a2a4169d300116f06e2290610"
+    },
+    {
+      "path": "flowctl_tracker/wire/jira.py",
+      "sha256": "aee030dee859b2e46069f81a8ad62d5adb411ba1f8f789df054a439c768d59ee"
+    },
+    {
+      "path": "flowctl_tracker/wire/linear.py",
+      "sha256": "b76d4abe148a3aaab342e0b46ffea4d2ed3872026f46dc672798da23c5db96ae"
     }
   ],
   "generated_by": "scripts/gen_tracker_manifest.py",

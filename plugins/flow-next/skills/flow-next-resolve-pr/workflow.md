@@ -313,6 +313,16 @@ Default to serial when in doubt — output is identical, only throughput differs
 
 Loop over `UNITS` in cluster-first order (clusters carry higher leverage). For each unit, perform the resolver steps inline — read code, decide verdict, compose reply, apply any edits — following `agents/pr-comment-resolver.md`. Append the verdict JSON to `VERDICTS`.
 
+### Confirmed bot findings: same-cycle sibling audit
+
+For feedback from an automated reviewer, follow the resolver agent's sibling
+audit after validating the finding: name the violated invariant; inspect the
+changed surface and adjacent call sites that perform the same operation, state
+transition, or shared-helper path; fix and regression-test every **confirmed**
+sibling in this cycle. Stop at evidence — no speculative search-and-replace or
+unrelated refactor. This applies in parallel and serial dispatch and complements
+Phase 3's cross-round clustering; it does not weaken the cluster gate.
+
 ### Verdict JSON per unit
 
 See `agents/pr-comment-resolver.md` — fields: `verdict`, `feedback_id`, `feedback_type`, `reply_text`, `files_changed`, `reason`, optional `cluster_assessment`, optional `decision_context` (for `needs-human`).

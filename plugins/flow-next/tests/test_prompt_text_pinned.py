@@ -75,11 +75,11 @@ PROMPT_HASHES = {
     "CLASSIFICATION_RUBRIC_BLOCK":
         "fbde8f499ba3d82b50901b12a984912490b66c6e69f1b74c38edf80c28567a06",
     "COMPLETION_REVIEW_PROMPT_FALLBACK":
-        "c93c500f3399c0ce1bc59afe4ba09476be04281336d98aa26ee4cea6ca4aac3d",
+        "81f263ba69364fb654c5b698d341d625b14b47c6d1ef6cf0ce6217dffd1b53e1",
     "CONFIDENCE_RUBRIC_BLOCK":
         "b8cc9e9594a3fed35498040e222bc9000333f4407f48374464115a69c231ae15",
     "IMPL_REVIEW_PROMPT_FALLBACK":
-        "76d24d30d1d51e9fe0255944e0346f6bf419e90eda2316333850856c7732ca7a",
+        "ee1b15866dbaf5c23a0604c2f41b7a931cd2622e161c8ede3836723b49f0925f",
     "PLAN_QUALITY_BLOCK":
         "0cfb49bfadf0be45e5c8036950d34698b5ae3bbccf24a90564983e13d0a1192f",
     "PLAN_REVIEW_PROMPT_FALLBACK":
@@ -95,7 +95,7 @@ PROMPT_HASHES = {
     "SPEC_SKELETON_TEMPLATE":
         "181c5cd5cba913346dc8c1800871dd42d139321319f86b80a67248ca15063ead",
     "STANDALONE_REVIEW_PROMPT_FALLBACK":
-        "871d697418daa045538b7c4977ddb93d3005f9ae548419a42e09c8cfe8e160e4",
+        "b55bea20855cf9fc69025120f4cd4f11e02782e1671a99c204391c234c0e6710",
     # Condensation of validate-pass.md, NOT a copy of it (#118).
     "VALIDATOR_TEMPLATE_FALLBACK":
         "558ab25ab09ade0e315d924e72615c76f4ac8c9348cf60cfbfd761896664a36c",
@@ -143,13 +143,13 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md":
         "41f7aa18ca28c48ec6ab27fac0c3fd18224232a76e1fbc6cef631435370dfc58",
     "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md":
-        "76d24d30d1d51e9fe0255944e0346f6bf419e90eda2316333850856c7732ca7a",
+        "ee1b15866dbaf5c23a0604c2f41b7a931cd2622e161c8ede3836723b49f0925f",
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":
-        "871d697418daa045538b7c4977ddb93d3005f9ae548419a42e09c8cfe8e160e4",
+        "b55bea20855cf9fc69025120f4cd4f11e02782e1671a99c204391c234c0e6710",
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":
         "9c64c2962b1a38c82f8f26d5d756be215d4a1816ae60f2a5c1955e94c71a5315",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
-        "c93c500f3399c0ce1bc59afe4ba09476be04281336d98aa26ee4cea6ca4aac3d",
+        "81f263ba69364fb654c5b698d341d625b14b47c6d1ef6cf0ce6217dffd1b53e1",
     # Rendered by ralph.sh each autonomous loop - production prompts, and the
     # ones an unattended run depends on most.
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_plan.md":

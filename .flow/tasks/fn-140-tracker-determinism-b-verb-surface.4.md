@@ -20,16 +20,23 @@ The capability table is decided in spec A - implement it, do not re-open it. Con
 - [ ] GitLab upload uses HTTP/multipart, never `glab api -F`
 - [ ] Jira attach without XSRF header handled as auth-shape, not "endpoint missing"
 - [ ] GitLab retrieval uses upload_id, not the markdown path
-- [ ] `relate` reproduces ledger + additive-only + completed-blocker + never-clobber
+- [ ] `relate` reproduces ledger + additive-only + completed-blocker(-still-projects) + never-clobber (the `<!-- flow:deps -->` HASH-EXCLUSION half of R10 completes in .5 where body-divergence hashing exists; marker constants ship here)
 - [ ] Free tier degrades to relates_to via structured `degraded` field
 - [ ] Capability table implemented per spec A; not re-litigated
 - [ ] GitHub sub-issues never surfaced as a blocking relation
 - [ ] Unknown Linear label auto-created; single-assignee repeated `--add` replaces + reports
 
 ## Done summary
-TBD
+Attachments + relations + capability asymmetries shipped (grok-4.5 implementation, host + codex hardening over 3 rounds).
 
+attach/: wire attach / attach-get on the measured routes (jira multipart + XSRF header with the 404 surfaced as xsrf; linear two-step presigned PUT carrying PRESIGNED_ANONYMOUS with exact size then attachmentCreate success-required, retrieval restricted to trusted https linear asset hosts - the arbitrary-URL credential-exfiltration primitive is closed and pinned; gitlab HTTP multipart + upload_id retrieval; github gated class capability pre-request). Random payload-collision-checked multipart boundary. Upload/download both return sha256 for byte-identity assertions.
+
+relate/: fn-64 contract with the 4-way ledger x remote classification BEFORE mutation (probe-only provider reads): ledger+remote noop, ledger+missing = human-removal collision QUEUED (default not re-created), unledgered+remote = foreign-edge collision QUEUED (canonical deferred-decisions sink + status=queued receipts), neither = create. Completed blockers PROJECT (visible historical ordering; readiness alone excludes them) - the reviewer caught the inverted port. Ledger persistence serialized under the shared .flow writer lock (barrier-race pinned). Edge keys byte-identical to flowctl. GitHub sub_issues = hierarchy proxy only, never blocked-by. GitLab is_blocked_by / relates_to degrade with structured degraded. Jira directional Blocks (probe signature bug fixed + coverage added).
+
+R15 asymmetries: unknown Linear label auto-creates; single-assignee repeated --add replaces + reports in degraded. flow:deps hash exclusion completes in .5 (annotated; marker constants ship here).
+
+3 codex rounds: 8 -> 2 -> SHIP.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 638fcddc, 2c42683d, 7e175b27
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_capabilities -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:

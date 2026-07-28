@@ -853,7 +853,7 @@ def get_state_dir() -> Path:
     # 2. Git common-dir (shared across worktrees)
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir", "--path-format=absolute"],
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
             capture_output=True,
             text=True, encoding="utf-8",
             check=True,
@@ -6562,6 +6562,13 @@ COMPLETION_REVIEW_PROMPT_TEMPLATE_REL = (
 )
 
 IMPL_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+
+**You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
+`flowctl <backend>` review command, or a nested agent/backend to perform this
+review: this prompt already reached you through that machinery, and nesting it
+fails inside the sandbox (app-server init) and can only self-review. Read the
+diff and the repository yourself and produce the verdict in this session.
+
 ## Context Gathering
 
 This review includes:
@@ -6653,6 +6660,13 @@ Do NOT skip this tag. The automation depends on it.
 """
 
 STANDALONE_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: base_branch, context_guidance, focus_section, diff_summary, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+
+**You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
+`flowctl <backend>` review command, or a nested agent/backend to perform this
+review: this prompt already reached you through that machinery, and nesting it
+fails inside the sandbox (app-server init) and can only self-review. Read the
+diff and the repository yourself and produce the verdict in this session.
+
 # Implementation Review: Branch Changes vs {base_branch}
 
 Review all changes on the current branch compared to {base_branch}.
@@ -6816,6 +6830,13 @@ Do NOT skip this tag. The automation depends on it.
 """
 
 COMPLETION_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+
+**You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
+`flowctl <backend>` review command, or a nested agent/backend to perform this
+review: this prompt already reached you through that machinery, and nesting it
+fails inside the sandbox (app-server init) and can only self-review. Read the
+diff and the repository yourself and produce the verdict in this session.
+
 ## Context Gathering
 
 This review includes:
@@ -23218,6 +23239,102 @@ def cmd_sync_get_state(args: argparse.Namespace) -> None:
             print(f"  {key}: {val if val is not None else '(unset)'}")
 
 
+def _live_spec_operation_claim(flow_dir: Path, spec_id: str) -> Optional[dict]:
+    """First LIVE spec-keyed tracker operation claim for ``spec_id``, or None.
+
+    PR #246: the tracker verbs serialize their whole read/provider-mutation/
+    persist transactions via per-spec claims under `.flow/create-first/`
+    (create/persist-external: `spec-<id>.json`, sync-body:
+    `syncbody-<id>.json`, status:
+    `status-<id>.json`, facade sequences: `facade-<id>.json` - the outer
+    claim the push/reconcile/comment facades hold ACROSS their steps, since the
+    per-step claims leave relinkable gaps between steps). The relink writer
+    must HONOR those claims - each
+    verb's locked identity recheck can only detect a repoint after the remote
+    mutation has already landed on the old issue; it cannot undo it. Refusing
+    the relink while a live claim exists makes the exclusion claim-based
+    rather than detect-after-the-fact.
+
+    Staleness follows flowctl_tracker's owner rules (`_claim_is_stale`): a
+    claim within the stale window is live; past the window a dead pid on THIS
+    host is a crashed run's leftover and is ignored (NOT reclaimed - releasing
+    is the owning verb's job); another host's pid space is unknowable, so its
+    claims stay live (fail closed). Inner comment-marker claims are keyed by
+    marker hash rather than spec id; the comment facade's outer claim supplies
+    the spec-wide exclusion. Older `.flow/bin` copies without the tracker
+    package have no claim writers either, so the guarded import degrades to no
+    check - exactly their current semantics.
+    """
+    try:
+        from flowctl_tracker.lifecycle.verbs import _claim_is_stale
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if not (here / "flowctl_tracker").is_dir():
+            return None
+        sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker.lifecycle.verbs import _claim_is_stale
+        except ImportError:
+            return None
+    candidates = [
+        (flow_dir / "create-first" / f"{prefix}-{spec_id}.json", op)
+        for prefix, op in (("spec", "create"), ("syncbody", "sync-body"),
+                           ("status", "status"), ("facade", "facade"))
+    ]
+    candidates.extend(
+        (path, "relate")
+        for path in sorted(
+            (flow_dir / "create-first").glob(f"relate-{spec_id}-*.json"))
+    )
+    for rec_path, op in candidates:
+        try:
+            claim = json.loads(rec_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (isinstance(claim, dict)
+                and claim.get("status") == "pending"
+                and not _claim_is_stale(claim, rec_path)):
+            return {"op": claim.get("op") or op, "file": rec_path.name,
+                    "pid": claim.get("pid"), "host": claim.get("host")}
+    return None
+
+
+def _locked_sync_state_update(args: argparse.Namespace, *, action: str,
+                              mutate):
+    """Reload, claim-check, and mutate one legacy tracker sidecar atomically.
+
+    Deterministic tracker transactions hold a per-spec operation claim for
+    their full read/provider-write/persist window. Legacy sync-state setters
+    must honor that inventory under the same writer lock or a stale whole-file
+    write can erase the transaction's newly committed state.
+
+    ``mutate`` receives the tracker state and returns ``False`` for a true
+    no-op; any other return value is passed back after the atomic write.
+    """
+    flow_dir = get_flow_dir()
+    try:
+        with _shared_config_lock(flow_dir):
+            spec_json_path, spec_data = _resolve_sync_spec(args)
+            live = _live_spec_operation_claim(flow_dir, args.id)
+            if live is not None:
+                error_exit(
+                    f"spec {args.id} has a tracker {live['op']} operation in "
+                    f"flight (claim {live['file']}, pid {live['pid']} on "
+                    f"{live['host']}); refusing to {action} while it holds "
+                    "the claim; retry after the operation finishes",
+                    use_json=args.json,
+                )
+            result = mutate(spec_data["tracker"])
+            if result is not False:
+                _write_sync_state(spec_json_path, spec_data)
+            return spec_data, result
+    except TimeoutError as exc:
+        error_exit(
+            f"could not acquire the config writer lock for {action}: {exc}",
+            use_json=args.json,
+        )
+
+
 def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
     """Link a spec to a tracker issue (UUID id + display identifier + url) (R4)."""
     if not ensure_flow_exists():
@@ -23252,31 +23369,71 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
-
-    # Collision guard (R5): refuse to link two specs to one tracker UUID unless
-    # forced (re-link of the same spec is always fine).
+    # PR #246: the relink is a spec-identity WRITE, so the whole
+    # reload-guard-mutate-write runs INSIDE the shared config writer lock -
+    # the same lock every tracker verb's identity recheck (syncbody commit,
+    # comment recheck, linkstate _complete) reloads the spec under. Without
+    # it a relink could land between a verb's locked recheck and its reload,
+    # letting the recheck validate a locator the spec no longer holds. Under
+    # the lock a relink commits wholly before a recheck (detected) or wholly
+    # after it (serialized). Older `.flow/bin` copies without the tracker
+    # package degrade to the previous unlocked write via the nullcontext
+    # fallback - those copies have no locked recheck to coordinate with.
     flow_dir = get_flow_dir()
-    for owner_id, owner_state in _iter_tracker_states(flow_dir):
-        if owner_id == args.id:
-            continue
-        if owner_state.get("id") and owner_state["id"] == args.tracker_id:
-            if not getattr(args, "force", False):
+    try:
+        with _shared_config_lock(flow_dir):
+            spec_json_path, spec_data = _resolve_sync_spec(args)
+
+            # PR #246: honor LIVE per-spec operation claims (create/sync-body/
+            # status). A verb's identity recheck can only detect a relink
+            # AFTER its provider mutation landed on the old issue; refusing
+            # here keeps the relink out of the whole claimed window. The
+            # operation is short-lived and releases its claim on completion -
+            # this refusal is retryable.
+            live = _live_spec_operation_claim(flow_dir, args.id)
+            if live is not None:
                 error_exit(
-                    f"Tracker id {args.tracker_id} already linked to spec "
-                    f"{owner_id}. Pass --force to override (rare; usually a "
-                    f"duplicate-issue mistake).",
+                    f"spec {args.id} has a tracker {live['op']} operation in "
+                    f"flight (claim {live['file']}, pid {live['pid']} on "
+                    f"{live['host']}); refusing to relink while it holds the "
+                    "claim; retry after the operation finishes",
                     use_json=args.json,
                 )
 
-    state = spec_data["tracker"]
-    state["id"] = args.tracker_id
-    if validated_identifier is not None:
-        # Persist the canonical stripped display form (e.g. "WOR-17").
-        state["identifier"] = validated_identifier[2]
-    if args.url is not None:
-        state["url"] = args.url
-    _write_sync_state(spec_json_path, spec_data)
+            # Collision guard (R5): refuse to link two specs to one tracker
+            # UUID unless forced (re-link of the same spec is always fine).
+            for owner_id, owner_state in _iter_tracker_states(flow_dir):
+                if owner_id == args.id:
+                    continue
+                if owner_state.get("id") and owner_state["id"] == args.tracker_id:
+                    if not getattr(args, "force", False):
+                        error_exit(
+                            f"Tracker id {args.tracker_id} already linked to spec "
+                            f"{owner_id}. Pass --force to override (rare; usually a "
+                            f"duplicate-issue mistake).",
+                            use_json=args.json,
+                        )
+
+            state = spec_data["tracker"]
+            state["id"] = args.tracker_id
+            # A durable provider id completes an identifier-only MCP link.
+            # derive_link_state gives this explicit field precedence, so
+            # leaving it unchanged would keep durable-only verbs blocked.
+            state["linkState"] = "linked"
+            if validated_identifier is not None:
+                # Persist the canonical stripped display form (e.g. "WOR-17").
+                state["identifier"] = validated_identifier[2]
+            if args.url is not None:
+                state["url"] = args.url
+            _write_sync_state(spec_json_path, spec_data)
+    except TimeoutError as exc:
+        # ConfigLockTimeout (a TimeoutError): another writer holds the lock
+        # past the acquisition deadline. Surface cleanly instead of a
+        # traceback; nothing was written.
+        error_exit(
+            f"could not acquire the config writer lock for set-tracker-id: {exc}",
+            use_json=args.json,
+        )
 
     if args.json:
         json_output({"id": args.id, "tracker": state, "message": "tracker id set"})
@@ -23294,10 +23451,14 @@ def cmd_sync_set_last_synced(args: argparse.Namespace) -> None:
     if not is_spec_id(args.id):
         error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
     ts = args.at if getattr(args, "at", None) else now_iso()
-    spec_data["tracker"]["lastSyncedAt"] = ts
-    _write_sync_state(spec_json_path, spec_data)
+
+    def mutate(state):
+        state["lastSyncedAt"] = ts
+        return True
+
+    _locked_sync_state_update(
+        args, action="set-last-synced", mutate=mutate)
 
     if args.json:
         json_output({"id": args.id, "lastSyncedAt": ts, "message": "lastSyncedAt set"})
@@ -23343,13 +23504,16 @@ def cmd_sync_set_merge_base(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
+    def mutate(state):
+        state["mergeBaseFlow"] = flow_body
+        state["baseHashFlow"] = _content_hash(flow_body)
+        state["mergeBaseTracker"] = tracker_body
+        state["baseHashTracker"] = _content_hash(tracker_body)
+        return True
+
+    spec_data, _ = _locked_sync_state_update(
+        args, action="set-merge-base", mutate=mutate)
     state = spec_data["tracker"]
-    state["mergeBaseFlow"] = flow_body
-    state["baseHashFlow"] = _content_hash(flow_body)
-    state["mergeBaseTracker"] = tracker_body
-    state["baseHashTracker"] = _content_hash(tracker_body)
-    _write_sync_state(spec_json_path, spec_data)
 
     if args.json:
         json_output(
@@ -23379,9 +23543,26 @@ def cmd_sync_clear(args: argparse.Namespace) -> None:
     if not is_spec_id(args.id):
         error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
-    spec_data["tracker"] = default_spec_tracker_state()
-    _write_sync_state(spec_json_path, spec_data)
+    flow_dir = get_flow_dir()
+    try:
+        with _shared_config_lock(flow_dir):
+            spec_json_path, spec_data = _resolve_sync_spec(args)
+            live = _live_spec_operation_claim(flow_dir, args.id)
+            if live is not None:
+                error_exit(
+                    f"spec {args.id} has a tracker {live['op']} operation in "
+                    f"flight (claim {live['file']}, pid {live['pid']} on "
+                    f"{live['host']}); refusing to unlink while it holds the "
+                    "claim; retry after the operation finishes",
+                    use_json=args.json,
+                )
+            spec_data["tracker"] = default_spec_tracker_state()
+            _write_sync_state(spec_json_path, spec_data)
+    except TimeoutError as exc:
+        error_exit(
+            f"could not acquire the config writer lock for sync clear: {exc}",
+            use_json=args.json,
+        )
 
     if args.json:
         json_output({"id": args.id, "tracker": spec_data["tracker"], "message": "unlinked"})
@@ -23628,44 +23809,32 @@ def cmd_sync_set_dep_relation(args: argparse.Namespace) -> None:
     if dep_spec == args.id:
         error_exit("A spec cannot have a dependency relation to itself", use_json=args.json)
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
-    if dep_spec == args.id:  # re-check post-expand (args.id is now canonical)
-        error_exit("A spec cannot have a dependency relation to itself", use_json=args.json)
-
     rel_type = getattr(args, "type", None) or "blocks"
     source = getattr(args, "source", None) or "flow"
     key = _dep_relation_key(args.from_tracker_id, args.to_tracker_id)
 
-    state = spec_data["tracker"]
-    ledger = state.setdefault("depRelations", [])
-    for entry in ledger:
-        if entry.get("key") == key:
-            # Idempotent no-op — same directed edge already recorded.
-            if args.json:
-                json_output(
-                    {
-                        "success": True,
-                        "id": args.id,
-                        "key": key,
-                        "depRelations": ledger,
-                        "message": "dep relation already recorded",
-                    }
-                )
-            else:
-                print(f"dep relation {key} already recorded for {args.id}")
-            return
+    def mutate(state):
+        if dep_spec == args.id:  # args.id is canonical after locked resolve
+            error_exit(
+                "A spec cannot have a dependency relation to itself",
+                use_json=args.json)
+        ledger = state.setdefault("depRelations", [])
+        if any(entry.get("key") == key for entry in ledger):
+            return False
+        ledger.append({
+            "key": key,
+            "dep_spec": dep_spec,
+            "from_tracker_id": args.from_tracker_id,
+            "to_tracker_id": args.to_tracker_id,
+            "type": rel_type,
+            "source": source,
+            "updatedAt": now_iso(),
+        })
+        return True
 
-    entry = {
-        "key": key,
-        "dep_spec": dep_spec,
-        "from_tracker_id": args.from_tracker_id,
-        "to_tracker_id": args.to_tracker_id,
-        "type": rel_type,
-        "source": source,
-        "updatedAt": now_iso(),
-    }
-    ledger.append(entry)
-    _write_sync_state(spec_json_path, spec_data)
+    spec_data, changed = _locked_sync_state_update(
+        args, action="set-dep-relation", mutate=mutate)
+    ledger = spec_data["tracker"].setdefault("depRelations", [])
 
     if args.json:
         json_output(
@@ -23674,11 +23843,16 @@ def cmd_sync_set_dep_relation(args: argparse.Namespace) -> None:
                 "id": args.id,
                 "key": key,
                 "depRelations": ledger,
-                "message": f"recorded dep relation to {dep_spec}",
+                "message": (
+                    f"recorded dep relation to {dep_spec}"
+                    if changed else "dep relation already recorded"),
             }
         )
     else:
-        print(f"Recorded dep relation {key} ({args.id} → {dep_spec})")
+        if changed:
+            print(f"Recorded dep relation {key} ({args.id} → {dep_spec})")
+        else:
+            print(f"dep relation {key} already recorded for {args.id}")
 
 
 def cmd_sync_active(args: argparse.Namespace) -> None:
@@ -23839,6 +24013,266 @@ def cmd_tracker_resolve(args: argparse.Namespace) -> None:
         scope=getattr(args, "scope", None),
         refresh=bool(getattr(args, "refresh", False)),
         select=getattr(args, "select", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
+def cmd_tracker_wire(args: argparse.Namespace) -> None:
+    """`flowctl tracker wire <verb>` (fn-140.1) - locator-addressed wire verbs.
+
+    Thin shell over `flowctl_tracker.wire`: parse args, call the verb layer,
+    print the result envelope, exit with its code. Never raises across the
+    verb boundary - TrackerError maps to the envelope at this edge only.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    try:
+        from flowctl_tracker import wire as tracker_wire  # noqa: PLC0415
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import wire as tracker_wire  # noqa: PLC0415
+        except ImportError:
+            error_exit(
+                "flowctl_tracker package is not installed alongside flowctl.py; "
+                "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+                use_json=getattr(args, "json", False))
+    payload, code = tracker_wire.run(
+        get_flow_dir(),
+        args.wire_verb,
+        locator=getattr(args, "locator", None),
+        title=getattr(args, "title", None),
+        body_file=getattr(args, "body_file", None),
+        comment_id=getattr(args, "comment_id", None),
+        add=getattr(args, "add", None),
+        remove=getattr(args, "remove", None),
+        file_path=getattr(args, "file", None),
+        attachment_id=getattr(args, "attachment_id", None),
+        out_path=getattr(args, "out", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
+def _import_tracker_lifecycle():
+    """Guarded import matching cmd_tracker_wire / cmd_tracker_resolve."""
+    try:
+        from flowctl_tracker import lifecycle as tracker_lifecycle  # noqa: PLC0415
+        return tracker_lifecycle
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import lifecycle as tracker_lifecycle  # noqa: PLC0415
+            return tracker_lifecycle
+        except ImportError:
+            return None
+
+
+def cmd_tracker_lifecycle(args: argparse.Namespace) -> None:
+    """`flowctl tracker create|create-first|persist-external` (fn-140.2).
+
+    Thin envelope shells over `flowctl_tracker.lifecycle`. No `tracker reconcile`
+    command — UUID completion is `complete_identifier_only`, called by the .7
+    facade's `tracker sync --op reconcile`.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_lifecycle = _import_tracker_lifecycle()
+    if tracker_lifecycle is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_lifecycle.run(
+        get_flow_dir(),
+        args.lifecycle_verb,
+        spec_id=getattr(args, "spec_id", None),
+        title=getattr(args, "title", None),
+        body_file=getattr(args, "body_file", None),
+        event=getattr(args, "event", None),
+        retry_key=getattr(args, "retry_key", None),
+        identifier=getattr(args, "identifier", None),
+        durable_id=getattr(args, "durable_id", None),
+        url=getattr(args, "url", None),
+        source=getattr(args, "source", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
+def _import_tracker_status():
+    """Guarded import matching cmd_tracker_lifecycle / cmd_tracker_wire."""
+    try:
+        from flowctl_tracker import status as tracker_status  # noqa: PLC0415
+        return tracker_status
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import status as tracker_status  # noqa: PLC0415
+            return tracker_status
+        except ImportError:
+            return None
+
+
+def cmd_tracker_status(args: argparse.Namespace) -> None:
+    """`flowctl tracker status <spec-id> --to <slot>` (fn-140.3).
+
+    Thin envelope shell over `flowctl_tracker.status`. `--to` is a request;
+    fn-66's merge-evidence gate + who-wins ladder decide the outcome.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_status = _import_tracker_status()
+    if tracker_status is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_status.run(
+        get_flow_dir(),
+        spec_id=getattr(args, "spec_id", None),
+        to=getattr(args, "to", None),
+        reason=getattr(args, "reason", None),
+        event=getattr(args, "event", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
+def _import_tracker_relate():
+    """Guarded import matching cmd_tracker_status / cmd_tracker_wire."""
+    try:
+        from flowctl_tracker import relate as tracker_relate  # noqa: PLC0415
+        return tracker_relate
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import relate as tracker_relate  # noqa: PLC0415
+            return tracker_relate
+        except ImportError:
+            return None
+
+
+def cmd_tracker_relate(args: argparse.Namespace) -> None:
+    """`flowctl tracker relate <spec-id> --blocked-by <other>` (fn-140.4).
+
+    Thin envelope shell over `flowctl_tracker.relate`. Writes depRelations
+    ledger + event-tagged receipt; never clobbers a foreign edge.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_relate = _import_tracker_relate()
+    if tracker_relate is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_relate.run(
+        get_flow_dir(),
+        spec_id=getattr(args, "spec_id", None),
+        blocked_by=getattr(args, "blocked_by", None),
+        event=getattr(args, "event", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
+def _import_tracker_syncbody():
+    """Guarded import matching cmd_tracker_relate / cmd_tracker_wire."""
+    try:
+        from flowctl_tracker import syncbody as tracker_syncbody  # noqa: PLC0415
+        return tracker_syncbody
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import syncbody as tracker_syncbody  # noqa: PLC0415
+            return tracker_syncbody
+        except ImportError:
+            return None
+
+
+def cmd_tracker_syncbody(args: argparse.Namespace) -> None:
+    """`flowctl tracker sync-body <spec-id> --flow-file F` (fn-140.5).
+
+    Thin envelope shell over `flowctl_tracker.syncbody`. Writes (optional) +
+    readback + paired merge base atomically; never composes a merged body.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_syncbody = _import_tracker_syncbody()
+    if tracker_syncbody is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_syncbody.run(
+        get_flow_dir(),
+        spec_id=getattr(args, "spec_id", None),
+        flow_file=getattr(args, "flow_file", None),
+        tracker_body_file=getattr(args, "tracker_body_file", None),
+        direction=getattr(args, "direction", "push") or "push",
+        event=getattr(args, "event", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
+def _import_tracker_facade():
+    """Guarded import matching cmd_tracker_syncbody / cmd_tracker_wire."""
+    try:
+        from flowctl_tracker import facade as tracker_facade  # noqa: PLC0415
+        return tracker_facade
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker import facade as tracker_facade  # noqa: PLC0415
+            return tracker_facade
+        except ImportError:
+            return None
+
+
+def cmd_tracker_facade(args: argparse.Namespace) -> None:
+    """`flowctl tracker sync <spec-id> --op ...` (fn-140.7 lifecycle facade).
+
+    Distinct from legacy `flowctl sync ...` plumbing. One aggregate receipt;
+    judgment-bearing content always arrives as an input file.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    tracker_facade = _import_tracker_facade()
+    if tracker_facade is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    payload, code = tracker_facade.run(
+        get_flow_dir(),
+        spec_id=getattr(args, "spec_id", None),
+        op=getattr(args, "op", None),
+        event=getattr(args, "event", None),
+        flow_file=getattr(args, "flow_file", None),
+        body_file=getattr(args, "body_file", None),
+        comments_file=getattr(args, "comments_file", None),
+        source_body_file=getattr(args, "source_body_file", None),
     )
     print(payload)
     sys.exit(code)
@@ -31132,6 +31566,248 @@ def main() -> None:
     p_tracker_resolve.add_argument("--json", action="store_true",
                                    help="Accepted and ignored (output is always JSON)")
     p_tracker_resolve.set_defaults(func=cmd_tracker_resolve)
+
+    # wire verbs (fn-140.1) — locator-addressed, no local state / no receipt.
+    p_tracker_wire = tracker_sub.add_parser(
+        "wire",
+        help="Locator-addressed wire verbs (read/update/comment/label/assign/attach/list-open)",
+    )
+    wire_sub = p_tracker_wire.add_subparsers(dest="wire_verb", required=True)
+
+    def _wire_locator(p: argparse.ArgumentParser) -> None:
+        p.add_argument(
+            "--locator", required=True,
+            help='JSON locator {"durable":"<id>","display":"<#N|project#iid|KEY-N>"}',
+        )
+
+    def _wire_json(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--json", action="store_true",
+                       help="Accepted and ignored (output is always JSON)")
+
+    p_wire_read = wire_sub.add_parser("read", help="Fetch one issue by locator")
+    _wire_locator(p_wire_read)
+    _wire_json(p_wire_read)
+    p_wire_read.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_update = wire_sub.add_parser("update", help="Update title/body by locator")
+    _wire_locator(p_wire_update)
+    p_wire_update.add_argument("--title", default=None)
+    p_wire_update.add_argument("--body-file", default=None)
+    _wire_json(p_wire_update)
+    p_wire_update.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_cadd = wire_sub.add_parser("comment-add", help="Add a comment")
+    _wire_locator(p_wire_cadd)
+    p_wire_cadd.add_argument("--body-file", required=True)
+    _wire_json(p_wire_cadd)
+    p_wire_cadd.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_clist = wire_sub.add_parser("comment-list", help="List comments")
+    _wire_locator(p_wire_clist)
+    _wire_json(p_wire_clist)
+    p_wire_clist.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_cupd = wire_sub.add_parser("comment-update",
+                                     help="Update a comment (requires parent locator)")
+    _wire_locator(p_wire_cupd)
+    p_wire_cupd.add_argument("comment_id", help="Provider comment id")
+    p_wire_cupd.add_argument("--body-file", required=True)
+    _wire_json(p_wire_cupd)
+    p_wire_cupd.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_cdel = wire_sub.add_parser("comment-delete",
+                                     help="Delete a comment (requires parent locator)")
+    _wire_locator(p_wire_cdel)
+    p_wire_cdel.add_argument("comment_id", help="Provider comment id")
+    _wire_json(p_wire_cdel)
+    p_wire_cdel.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_label = wire_sub.add_parser("label", help="Add/remove labels")
+    _wire_locator(p_wire_label)
+    p_wire_label.add_argument("--add", action="append", default=[])
+    p_wire_label.add_argument("--remove", action="append", default=[])
+    _wire_json(p_wire_label)
+    p_wire_label.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_assign = wire_sub.add_parser("assign", help="Add/remove assignees")
+    _wire_locator(p_wire_assign)
+    p_wire_assign.add_argument("--add", action="append", default=[])
+    p_wire_assign.add_argument("--remove", action="append", default=[])
+    _wire_json(p_wire_assign)
+    p_wire_assign.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_list = wire_sub.add_parser("list-open",
+                                     help="List open issues (no locator)")
+    _wire_json(p_wire_list)
+    p_wire_list.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_attach = wire_sub.add_parser(
+        "attach", help="Upload an attachment (capability-gated; fn-140.4)")
+    _wire_locator(p_wire_attach)
+    p_wire_attach.add_argument("--file", required=True,
+                               help="Local file to upload")
+    _wire_json(p_wire_attach)
+    p_wire_attach.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_aget = wire_sub.add_parser(
+        "attach-get",
+        help="Download an attachment by id (no locator; fn-140.4)")
+    p_wire_aget.add_argument("attachment_id", help="Provider attachment id")
+    p_wire_aget.add_argument("--out", required=True,
+                             help="Local path to write retrieved bytes")
+    _wire_json(p_wire_aget)
+    p_wire_aget.set_defaults(func=cmd_tracker_wire)
+
+    # lifecycle verbs (fn-140.2) — create / create-first / persist-external.
+    # No `tracker reconcile` CLI: UUID completion is complete_identifier_only,
+    # invoked by the .7 facade's `tracker sync --op reconcile`.
+    p_tracker_create = tracker_sub.add_parser(
+        "create",
+        help="Create a tracker issue and link an existing spec (writes receipt)",
+    )
+    p_tracker_create.add_argument("spec_id", help="Spec ID")
+    p_tracker_create.add_argument("--title", required=True)
+    p_tracker_create.add_argument("--body-file", required=True)
+    p_tracker_create.add_argument("--event", default=None,
+                                  help="perEvent key stamped on the sync receipt")
+    p_tracker_create.add_argument("--json", action="store_true",
+                                  help="Accepted and ignored (output is always JSON)")
+    p_tracker_create.set_defaults(func=cmd_tracker_lifecycle, lifecycle_verb="create")
+
+    p_tracker_cf = tracker_sub.add_parser(
+        "create-first",
+        help="Create a tracker issue before any local spec (fn-134; no receipt)",
+    )
+    p_tracker_cf.add_argument("--title", required=True)
+    p_tracker_cf.add_argument("--body-file", required=True)
+    p_tracker_cf.add_argument("--retry-key", required=True,
+                              help="16-hex key from sync create-first-key")
+    p_tracker_cf.add_argument("--json", action="store_true",
+                              help="Accepted and ignored (output is always JSON)")
+    p_tracker_cf.set_defaults(func=cmd_tracker_lifecycle, lifecycle_verb="create-first")
+
+    p_tracker_pe = tracker_sub.add_parser(
+        "persist-external",
+        help="Record an MCP-performed Linear create (resolves UUID via GraphQL)",
+    )
+    p_tracker_pe.add_argument("spec_id", help="Spec ID")
+    p_tracker_pe.add_argument("--identifier", required=True,
+                              help="Display identifier returned by MCP (e.g. WOR-17)")
+    p_tracker_pe.add_argument("--id", dest="durable_id", default=None,
+                              help="Durable UUID when already known")
+    p_tracker_pe.add_argument("--url", default=None)
+    p_tracker_pe.add_argument("--source", required=True, choices=["mcp"],
+                              help="Must be mcp (MCP is create/discovery only)")
+    p_tracker_pe.add_argument("--event", default=None)
+    p_tracker_pe.add_argument("--json", action="store_true",
+                              help="Accepted and ignored (output is always JSON)")
+    p_tracker_pe.set_defaults(func=cmd_tracker_lifecycle,
+                              lifecycle_verb="persist-external")
+
+    # status verb (fn-140.3) — merge-evidence gate + who-wins ladder.
+    p_tracker_status = tracker_sub.add_parser(
+        "status",
+        help="Reconcile tracker status for a linked spec (--to is a request; "
+             "fn-66 merge-evidence gate decides)",
+    )
+    p_tracker_status.add_argument("spec_id", help="Spec ID")
+    p_tracker_status.add_argument(
+        "--to", required=True,
+        choices=["backlog", "todo", "in_progress", "in_review", "done", "cancelled"],
+        help="Requested normalized slot (not an authority — the gate decides)",
+    )
+    p_tracker_status.add_argument(
+        "--reason", default=None,
+        help="GitHub state_reason: completed|not_planned|duplicate|reopened",
+    )
+    p_tracker_status.add_argument("--event", default=None,
+                                  help="perEvent key stamped on the sync receipt")
+    p_tracker_status.add_argument("--json", action="store_true",
+                                  help="Accepted and ignored (output is always JSON)")
+    p_tracker_status.set_defaults(func=cmd_tracker_status)
+
+    # relate verb (fn-140.4) - depRelations ledger + blocked-by projection.
+    p_tracker_relate = tracker_sub.add_parser(
+        "relate",
+        help="Project a blocked-by relation between two linked specs "
+             "(depRelations ledger; fn-64 contract)",
+    )
+    p_tracker_relate.add_argument("spec_id", help="Spec ID (the blocked issue)")
+    p_tracker_relate.add_argument(
+        "--blocked-by", required=True, dest="blocked_by",
+        help="Spec ID of the blocker",
+    )
+    p_tracker_relate.add_argument("--event", default=None,
+                                  help="perEvent key stamped on the sync receipt")
+    p_tracker_relate.add_argument("--json", action="store_true",
+                                  help="Accepted and ignored (output is always JSON)")
+    p_tracker_relate.set_defaults(func=cmd_tracker_relate)
+
+    # sync-body verb (fn-140.5) - write/readback + paired merge base transaction.
+    p_tracker_syncbody = tracker_sub.add_parser(
+        "sync-body",
+        help="Write issue body (optional), read back, commit paired merge base "
+             "(server readback is canonical for the tracker half)",
+    )
+    p_tracker_syncbody.add_argument("spec_id", help="Spec ID")
+    p_tracker_syncbody.add_argument(
+        "--flow-file", required=True, dest="flow_file",
+        help="Final local body (agent-rendered or conflict-resolved); becomes "
+             "mergeBaseFlow exactly",
+    )
+    p_tracker_syncbody.add_argument(
+        "--tracker-body-file", default=None, dest="tracker_body_file",
+        help="Optional agent-approved tracker-side body for a two-way reconcile push",
+    )
+    p_tracker_syncbody.add_argument(
+        "--direction", default="push", choices=["push", "pull"],
+        help="push writes then readbacks; pull snapshots without writing",
+    )
+    p_tracker_syncbody.add_argument("--event", default=None,
+                                    help="perEvent key stamped on the sync receipt")
+    p_tracker_syncbody.add_argument("--json", action="store_true",
+                                    help="Accepted and ignored (output is always JSON)")
+    p_tracker_syncbody.set_defaults(func=cmd_tracker_syncbody)
+
+    # lifecycle facade (fn-140.7) — distinct from legacy `flowctl sync ...`.
+    p_tracker_sync = tracker_sub.add_parser(
+        "sync",
+        help="Lifecycle facade: push|pull|reconcile|comment as one unit "
+             "(create-if-unlinked, sequence, marker dedup, one aggregate receipt)",
+    )
+    p_tracker_sync.add_argument("spec_id", help="Spec ID")
+    p_tracker_sync.add_argument(
+        "--op", required=True, choices=["push", "pull", "reconcile", "comment"],
+        help="Facade op (matches perEvent vocabulary)",
+    )
+    p_tracker_sync.add_argument(
+        "--event", required=True,
+        help="perEvent key stamped on the single aggregate sync receipt",
+    )
+    p_tracker_sync.add_argument(
+        "--flow-file", default=None, dest="flow_file",
+        help="Exact final local flow-form body (required for push/pull/reconcile; "
+             "forbidden for comment); becomes mergeBaseFlow",
+    )
+    p_tracker_sync.add_argument(
+        "--body-file", default=None, dest="body_file",
+        help="Tracker-rendered body for push/reconcile, exact tracker snapshot "
+             "used to produce a pull fold, or comment text (required)",
+    )
+    p_tracker_sync.add_argument(
+        "--comments-file", default=None, dest="comments_file",
+        help="JSON array from the normalized comment-list snapshot used to "
+             "produce a pull/reconcile fold (required for pull/reconcile; "
+             "forbidden for push/comment)",
+    )
+    p_tracker_sync.add_argument(
+        "--source-body-file", default=None, dest="source_body_file",
+        help="Exact tracker body snapshot used to prepare a reconcile merge "
+             "(required for reconcile; forbidden for other ops)",
+    )
+    p_tracker_sync.add_argument("--json", action="store_true",
+                                help="Accepted and ignored (output is always JSON)")
+    p_tracker_sync.set_defaults(func=cmd_tracker_facade)
 
     p_sync = subparsers.add_parser(
         "sync", help="Tracker sync plumbing (config / state / enumerate / receipt)"

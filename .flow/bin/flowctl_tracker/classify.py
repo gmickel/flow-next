@@ -124,8 +124,18 @@ def _graphql_errors(resp: Response) -> Optional[list[dict]]:
     return errs or None
 
 
-def classify(provider: str, resp: Response) -> Optional[TrackerError]:
+#: Ops whose 2xx body is raw bytes, not an API document. The Linear rule
+#: parses every 2xx body as GraphQL, which misclassified a binary asset
+#: download from uploads.linear.app as transport/malformed_body (measured
+#: live 2026-07-28). These ops classify on status alone.
+_RAW_BODY_OPS = frozenset({"wire-attach-get"})
+
+
+def classify(provider: str, resp: Response,
+             op: Optional[str] = None) -> Optional[TrackerError]:
     """None means success. Otherwise a normalized, classified failure."""
+    if op in _RAW_BODY_OPS:
+        return _generic(resp)
     fn = _TABLE.get(provider, _generic)
     return fn(resp)
 

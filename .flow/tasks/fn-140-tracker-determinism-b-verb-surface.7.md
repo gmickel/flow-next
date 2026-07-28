@@ -7,7 +7,8 @@ satisfies: [R19]
 Build the facade callers actually invoke. The granular verbs are the mechanism; without this, every calling skill would have to compose them in prose - which is exactly what this batch removes, and would make spec C's behavior-preserving teardown impossible.
 
 ```
-flowctl tracker sync <spec-id> --op push|pull|reconcile|comment --event <perEvent-key> [--flow-file F] [--body-file B]
+flowctl tracker sync <spec-id> --op push|pull|reconcile|comment --event <perEvent-key> \
+  [--flow-file F] [--body-file B] [--comments-file C] [--source-body-file S]
 ```
 
 The four ops match the existing `perEvent` vocabulary exactly (`off | pull | push | reconcile | comment`). Composition is tabulated in the epic: required/forbidden inputs and the ordered internal sequence per op. **Receipts do not stack** - internal granular calls run with receipts suppressed and the facade writes exactly one aggregate, event-tagged receipt whose status is the worst of its steps. A partial success returns `success: false` with `data.completed_steps`. Re-running is idempotent.
@@ -30,9 +31,32 @@ Judgment-bearing content is passed **in** as a file. The facade never renders a 
 - [ ] A caller can replace a today-dispatch with one facade call and observe identical tracker state
 
 ## Done summary
-TBD
+Lifecycle facade shipped: tracker sync <spec-id> --op push|pull|reconcile|comment --event E (grok-4.5, 3 codex rounds).
 
+One call replaces a touchpoint dispatch after the skill prepares any judgment
+inputs. Push = create-if-unlinked -> sync-body(push) -> gate-derived status ->
+dependency projection. Pull = one claimed durable-validated issue read,
+readiness projection, current-comment validation, exact final-local-form
+validation, paired-base commit, then status reconciliation. Reconcile performs
+the same pull-side readiness/comment/final-form checks, projects dependencies
+even when body merge later conflicts, then validates the pre-merge remote
+snapshot before sync-body/status. Push/reconcile project the current spec title
+alongside the body and verify both in the same readback transaction, including
+title-only renames. Comment = create-if-unlinked ->
+flow-next:sync marker dedup via comment-list BEFORE any post
+(issue+evt+evidence; fn-89 retry rule) -> comment-add.
+
+Receipts do not stack: write_receipt=False seams cover status, sync-body, and
+relate; exactly one aggregate event-tagged receipt records the worst step.
+Partial success returns success false + completed_steps; retries are
+idempotent. MCP returns external_action_required with the actionable payload
+and zero tracker requests. Degradation stays structured. The strict input
+matrix now carries final Flow, source/outgoing tracker body, and normalized
+comment snapshot separately so the facade cannot commit a stale or mismatched
+base.
+
+Rounds: 2 findings -> 1 -> SHIP.
 ## Evidence
-- Commits:
-- Tests:
-- PRs:
+- Commits: d93dc2c5, 47126a19, c29b0cbb
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_facade test_tracker_wire test_tracker_capabilities test_tracker_conformance test_tracker_syncbody test_tracker_status test_tracker_distribution test_flowctl_surface test_prompt_text_pinned -q (401 tests); live GitHub/GitLab/Linear/Jira facade push, dependency, comment, readiness, and pull round-trips with disposable cleanup; python3 scripts/run_tests_parallel.py; uvx ruff@0.16.0 check .
+- PRs: #246

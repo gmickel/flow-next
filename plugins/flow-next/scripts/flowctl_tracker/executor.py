@@ -349,7 +349,7 @@ def execute(
         if isinstance(raw, TrackerError):
             err = raw
         else:
-            err = classify(request.provider, raw)
+            err = classify(request.provider, raw, op=request.op)
             if err is None:
                 return raw
         # Retry ONLY when the class says rate-limited AND the caller declared the
