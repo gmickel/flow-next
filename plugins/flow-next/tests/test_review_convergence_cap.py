@@ -25,6 +25,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,6 +61,20 @@ def _bash_fence_after(text: str, marker: str) -> str:
     marker_at = text.index(marker)
     fence_at = text.index("```bash\n", marker_at) + len("```bash\n")
     return text[fence_at:text.index("\n```", fence_at)]
+
+
+def _bash_executable() -> str:
+    """Return the POSIX shell CI uses, avoiding the Windows WSL launcher."""
+    if os.name == "nt":
+        git = shutil.which("git")
+        if git:
+            git_bash = Path(git).resolve().parent.parent / "bin" / "bash.exe"
+            if git_bash.is_file():
+                return str(git_bash)
+    bash = shutil.which("bash")
+    if bash:
+        return bash
+    raise RuntimeError("bash executable not found")
 
 
 # ------------------------- R4: convergence ratchet -------------------------
@@ -1035,7 +1050,7 @@ class TestRpRecorderFailureFences(unittest.TestCase):
                 }
             )
             return subprocess.run(
-                ["bash", "-c", block],
+                [_bash_executable(), "-c", block],
                 env=env,
                 text=True,
                 capture_output=True,
