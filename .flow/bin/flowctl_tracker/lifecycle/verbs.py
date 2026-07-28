@@ -160,12 +160,16 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
         # hand). TrackerError is frozen: rebuild with the completed-steps
         # detail so the caller can link the existing issue instead.
         import dataclasses  # noqa: PLC0415
-        failed = dataclasses.replace(err, details={
+        details = {
             **(err.details or {}),
             "completed_steps": ["create"],
             "id": created["id"],
             "identifier": created["identifier"],
-            "url": created.get("url")})
+            "url": created.get("url"),
+        }
+        if created.get("degraded") is not None:
+            details["degraded"] = created["degraded"]
+        failed = dataclasses.replace(err, details=details)
         _release_claim(rec_path)
         return failed
 
@@ -187,12 +191,15 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
             "identifier": created["identifier"],
             "url": created.get("url"),
         }
+        if created.get("degraded") is not None:
+            details["degraded"] = created["degraded"]
         failed = dataclasses.replace(seeded, details=details)
         if write_receipt:
             rerr = write_sync_receipt(
                 flow_dir, spec_id=spec_id, status="errored",
                 tracker_id=created["id"], event=event, transport=provider,
                 note="create linked; paired-base seed failed",
+                degraded=created.get("degraded"),
                 details=details,
             )
             if rerr is not None:
@@ -210,22 +217,29 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
         err = write_sync_receipt(
             flow_dir, spec_id=spec_id, status="pushed",
             tracker_id=created["id"], event=event, transport=provider,
+            degraded=created.get("degraded"),
         )
         if err:
             # The issue exists and the link IS persisted - a bare failure here
             # would read as "nothing happened" and invite a duplicating retry.
             # TrackerError is frozen: rebuild with the completed-steps detail.
             import dataclasses  # noqa: PLC0415
-            failed = dataclasses.replace(err, details={
+            details = {
                 **(err.details or {}),
                 "completed_steps": ["create", "link", "paired-base"],
                 "id": created["id"],
-                "identifier": created["identifier"]})
+                "identifier": created["identifier"],
+            }
+            if created.get("degraded") is not None:
+                details["degraded"] = created["degraded"]
+            failed = dataclasses.replace(err, details=details)
             _release_claim(rec_path)
             return failed
     result = {"id": created["id"], "identifier": created["identifier"],
               "url": created.get("url"), "linkState": "linked",
               "paired_base": seeded}
+    if created.get("degraded") is not None:
+        result["degraded"] = created["degraded"]
     _release_claim(rec_path)
     return result
 
@@ -455,9 +469,12 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
                 except (OSError, ValueError):
                     prior = None
                 if isinstance(prior, dict) and prior.get("id"):
-                    return {"id": prior["id"],
-                            "identifier": prior.get("identifier"),
-                            "url": prior.get("url"), "retried": True}
+                    out = {"id": prior["id"],
+                           "identifier": prior.get("identifier"),
+                           "url": prior.get("url"), "retried": True}
+                    if prior.get("degraded") is not None:
+                        out["degraded"] = prior["degraded"]
+                    return out
                 if (isinstance(prior, dict)
                         and prior.get("status") == "pending"
                         and not _claim_is_stale(prior, rec_path)):
@@ -501,6 +518,8 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
         "createdAt": now_iso(),
         "transport": provider,
     }
+    if created.get("degraded") is not None:
+        record["degraded"] = created["degraded"]
     err = atomic_write_json(rec_path, record)
     if err:
         # The issue exists but the claim is still pending - a bare failure
@@ -509,15 +528,22 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
         # rebuild with the completed-steps detail so the caller can link the
         # existing issue instead of waiting out the stale window.
         import dataclasses  # noqa: PLC0415
-        return dataclasses.replace(err, details={
+        details = {
             **(err.details or {}),
             "completed_steps": ["create"],
             "id": created["id"],
             "identifier": created["identifier"],
             "url": created.get("url"),
-            "retryKey": retry_key})
-    return {"id": created["id"], "identifier": created["identifier"],
-            "url": created.get("url"), "retried": False}
+            "retryKey": retry_key,
+        }
+        if created.get("degraded") is not None:
+            details["degraded"] = created["degraded"]
+        return dataclasses.replace(err, details=details)
+    out = {"id": created["id"], "identifier": created["identifier"],
+           "url": created.get("url"), "retried": False}
+    if created.get("degraded") is not None:
+        out["degraded"] = created["degraded"]
+    return out
 
 
 def persist_external(flow_dir, spec_id: str, *, identifier: str,
@@ -658,7 +684,8 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
         state = derive_link_state(t)
         if state != "unlinked" and (
                 t.get("identifier") != owned.get("identifier")
-                or (owned.get("id") is None and t.get("id"))):
+                or (t.get("id") is not None
+                    and str(t.get("id")) != str(owned.get("id")))):
             return TrackerError(
                 ErrorClass.CONFLICT,
                 f"spec {spec_id!r} became {state} to "
@@ -666,7 +693,8 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
                 "flight; refusing to overwrite the existing link",
                 subtype="already_linked",
                 details={"linkState": state,
-                         "identifier": t.get("identifier")})
+                         "identifier": t.get("identifier"),
+                         "id": t.get("id")})
         return {**t, **owned}
 
     persisted = _locked_tracker_write(

@@ -28,6 +28,8 @@ def fake_execute(responses: dict):
 
     def execute(request):
         calls.append(request)
+        if request.op == "lifecycle-create-meta" and request.op not in responses:
+            return ok({})
         if request.op not in responses:
             raise AssertionError(f"unexpected op {request.op!r}; have {sorted(responses)}")
         out = responses[request.op]
@@ -66,6 +68,7 @@ def ln_cfg() -> dict:
 
 def jr_cfg() -> dict:
     return {"tracker": {"type": "jira",
+                        "perTracker": {"blocksLinkType": "Blocks"},
                         "resolved": {"destination": {
                             "baseUrl": "https://ex.atlassian.net",
                             "projectKey": "SCRUM", "projectId": "10000",
@@ -278,6 +281,99 @@ class PersistExternal(unittest.TestCase):
                 flow, "fn-1-demo", identifier="WOR-17", source="cli", execute=fake_execute({}))
             self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
 
+    def test_same_identifier_concurrent_durable_relink_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, ln_cfg())
+
+            def concurrent_relink(req):
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["tracker"] = {
+                    "id": "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+                    "identifier": "WOR-17",
+                    "url": "https://linear.app/x/issue/WOR-17",
+                    "linkState": "linked",
+                    "depRelations": [],
+                }
+                path.write_text(json.dumps(data), encoding="utf-8")
+                return ok({"data": {"issue": {
+                    "id": LN_UUID,
+                    "identifier": "WOR-17",
+                    "url": "https://linear.app/x/issue/WOR-17",
+                }}})
+
+            out = L.persist_external(
+                flow, "fn-1-demo", identifier="WOR-17", source="mcp",
+                execute=fake_execute(
+                    {"lifecycle-resolve-uuid": concurrent_relink}))
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "already_linked")
+            saved = json.loads(path.read_text())["tracker"]
+            self.assertEqual(
+                saved["id"], "bbbbbbbb-cccc-dddd-eeee-ffffffffffff")
+
+
+class JiraCreateScreenFields(unittest.TestCase):
+    def test_omits_description_when_createmeta_excludes_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, jr_cfg())
+            captured = {}
+
+            def create(req):
+                captured.update(json.loads(req.body)["fields"])
+                return ok({"id": JR_ID, "key": "SCRUM-1"})
+
+            ex = fake_execute({
+                "lifecycle-create-meta": ok({"projects": [{
+                    "issuetypes": [{
+                        "id": "10001",
+                        "fields": {"summary": {}, "issuetype": {}},
+                    }],
+                }]}),
+                "lifecycle-create": create,
+                "sync-body-parent-read": _readback("jira", ""),
+            })
+            out = L.create(
+                flow, "fn-1-demo", title="T", body="B",
+                event="work.firstClaim", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertNotIn("description", captured)
+            self.assertEqual(
+                out["degraded"],
+                {"kind": "jira_create_field_omitted",
+                 "field": "description",
+                 "reason": "not_on_create_screen"})
+            saved = json.loads(
+                (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
+            self.assertEqual(saved["mergeBaseFlow"], "B")
+            self.assertEqual(saved["mergeBaseTracker"], "")
+            self.assertEqual(
+                _receipts(flow)[0]["degraded"], out["degraded"])
+
+    def test_includes_description_when_createmeta_is_unresolved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, jr_cfg())
+            captured = {}
+
+            def create(req):
+                captured.update(json.loads(req.body)["fields"])
+                return ok({"id": JR_ID, "key": "SCRUM-1"})
+
+            ex = fake_execute({
+                "lifecycle-create-meta": TrackerError(
+                    ErrorClass.TRANSPORT, "createmeta unavailable"),
+                "lifecycle-create": create,
+                "sync-body-parent-read": _readback("jira", "B"),
+            })
+            out = L.create(
+                flow, "fn-1-demo", title="T", body="B", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(captured["description"], "B")
+            self.assertNotIn("degraded", out)
+
 
 class CompleteIdentifierOnly(unittest.TestCase):
     def test_atomic_completion(self) -> None:
@@ -442,9 +538,11 @@ class ProviderCreateShapes(unittest.TestCase):
                 (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
             self.assertEqual(saved["mergeBaseTracker"], stored)
             self.assertEqual(out["url"], "https://ex.atlassian.net/browse/SCRUM-1")
-            url = str(ex.calls[0].url_or_argv)
+            create = next(
+                call for call in ex.calls if call.op == "lifecycle-create")
+            url = str(create.url_or_argv)
             self.assertIn("/rest/api/2/issue", url)
-            payload = json.loads(ex.calls[0].body.decode())
+            payload = json.loads(create.body.decode())
             self.assertEqual(payload["fields"]["project"]["id"], "10000")
             self.assertEqual(payload["fields"]["issuetype"]["id"], "10001")
 

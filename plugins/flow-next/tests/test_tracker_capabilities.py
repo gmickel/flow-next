@@ -113,7 +113,8 @@ def ln_cfg() -> dict:
 def jr_cfg() -> dict:
     return {"tracker": {"type": "jira",
                         "perTracker": {"baseUrl": "https://ex.atlassian.net",
-                                       "projectKey": "SCRUM"},
+                                       "projectKey": "SCRUM",
+                                       "blocksLinkType": "Blocks"},
                         "resolved": {"destination": {
                             "baseUrl": "https://ex.atlassian.net",
                             "projectKey": "SCRUM", "projectId": "10000",
@@ -644,6 +645,14 @@ class GitlabRelateDependencyBody(unittest.TestCase):
         self.assertNotIsInstance(updated, TrackerError)
         self.assertIn("**Blocked by:** g/p#3, g/p#13, g/p#14", updated)
         self.assertTrue(updated.startswith("Intro\n\n"))
+
+    def test_reversed_fence_is_rejected_without_appending_a_second_block(
+            self) -> None:
+        body = f"{FLOW_DEPS_CLOSE}\nHuman text\n{FLOW_DEPS_OPEN}"
+        out = RP._gitlab_deps_body(body, "g/p#13")
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "deps_block")
 
 
 class GitlabBodyMutationSerialization(unittest.TestCase):
@@ -1699,6 +1708,17 @@ class JiraProbeDirection(unittest.TestCase):
                             "inwardIssue": {"id": JR_ID_B}}])
         self.assertIs(out, False)
 
+    def test_configured_custom_link_type_is_used_for_probe(self) -> None:
+        config = jr_cfg()
+        config["tracker"]["perTracker"]["blocksLinkType"] = "Depends On"
+        ex = fake_execute({"relate-list": ok({"fields": {"issuelinks": [{
+            "type": {"name": "Depends On"},
+            "inwardIssue": {"id": JR_ID_B},
+        }]}})})
+        out = RP.jira_probe(
+            config, ex, from_id=JR_ID, to_id=JR_ID_B)
+        self.assertIs(out, True)
+
 
 class RelatePendingClaim(unittest.TestCase):
     """PR #246 review wave 4: the pending write is a CLAIM. Two relates of
@@ -2213,6 +2233,58 @@ class JiraSetDirection(unittest.TestCase):
             self.assertEqual(body["outwardIssue"], {"id": JR_ID},
                              "blocked (from) must be outwardIssue")
             self.assertEqual(body["type"], {"name": "Blocks"})
+
+    def test_jira_set_posts_configured_custom_link_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            config = jr_cfg()
+            config["tracker"]["perTracker"]["blocksLinkType"] = "Depends On"
+            a_tr = {"id": JR_ID, "identifier": "SCRUM-1", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": JR_ID_B, "identifier": "SCRUM-2", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, config, a_tracker=a_tr, b_tracker=b_tr)
+            ex = fake_execute({
+                "relate-parent-read": [
+                    ok({"id": JR_ID, "key": "SCRUM-1", "fields": {}}),
+                    ok({"id": JR_ID_B, "key": "SCRUM-2", "fields": {}})],
+                "relate-list": ok({"fields": {"issuelinks": []}}),
+                "relate-create": ok({}),
+            })
+            out = R.relate(
+                flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
+            self.assertEqual(out["kind"], "applied")
+            create = next(c for c in ex.calls if c.op == "relate-create")
+            self.assertEqual(
+                json.loads(create.body)["type"], {"name": "Depends On"})
+
+    def test_missing_blocks_semantics_defers_without_relation_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            config = jr_cfg()
+            del config["tracker"]["perTracker"]["blocksLinkType"]
+            a_tr = {"id": JR_ID, "identifier": "SCRUM-1", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": JR_ID_B, "identifier": "SCRUM-2", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, config, a_tracker=a_tr, b_tracker=b_tr)
+            ex = fake_execute({
+                "relate-parent-read": [
+                    ok({"id": JR_ID, "key": "SCRUM-1", "fields": {}}),
+                    ok({"id": JR_ID_B, "key": "SCRUM-2", "fields": {}})],
+                "relate-link-types": ok({
+                    "issueLinkTypes": [{
+                        "name": "Relates", "outward": "relates to"}]}),
+            })
+            out = R.relate(
+                flow, "fn-1-demo", blocked_by="fn-2-dep",
+                event="live.relate", execute=ex)
+            self.assertEqual(out["kind"], "queued")
+            self.assertEqual(out["reason"], "no_blocks_link_type")
+            self.assertNotIn("relate-list", [c.op for c in ex.calls])
+            self.assertNotIn("relate-create", [c.op for c in ex.calls])
+            self.assertTrue(
+                (flow / "review-deferred" / "tracker-relate.md").exists())
 
 
 class RelateRepairRelinkGuard(unittest.TestCase):

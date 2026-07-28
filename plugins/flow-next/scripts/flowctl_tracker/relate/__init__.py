@@ -594,6 +594,35 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
 
+    # Resolve Jira's configurable blocking type once and share it between the
+    # probe and mutation via the in-memory config. No blocks-semantics type is
+    # a deferred capability decision, not permission to force stock "Blocks".
+    if provider == "jira":
+        blocks_type = P.jira_blocks_type(config, ex)
+        if isinstance(blocks_type, TrackerError):
+            if blocks_type.subtype != "blocks_link_type":
+                return blocks_type
+            qerr = _queue_conflict(
+                flow_dir, spec_id,
+                summary="Jira has no resolved blocks-semantics issue link type",
+                reason="set tracker.perTracker.blocksLinkType, then retry")
+            if qerr:
+                return qerr
+            rerr = write_sync_receipt(
+                flow_dir, spec_id=spec_id, status="queued",
+                tracker_id=from_id, event=event, transport=provider,
+                note="no Jira blocks link type; relation deferred")
+            if rerr:
+                return rerr
+            return {
+                "kind": "queued",
+                "reason": "no_blocks_link_type",
+                "from": spec_id,
+                "to": blocked_by,
+                "key": key,
+                "lastSyncedAt": tracker_a.get("lastSyncedAt"),
+            }
+
     caps = caps_of(config)
     fn = P.PROVIDERS.get(provider)
     probe = P.PROBES.get(provider)

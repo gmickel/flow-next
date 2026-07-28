@@ -533,6 +533,49 @@ class FlowDepsCarryAndStrip(unittest.TestCase):
             # mergeBaseFlow is the exact --flow-file body (no deps invent).
             self.assertEqual(out["mergeBaseFlow"], outgoing)
 
+    def test_push_rejects_multiple_dependency_regions_before_update(self) -> None:
+        malformed = (
+            f"{FLOW_BODY}\n{DEPS_BLOCK}\n"
+            f"{FLOW_DEPS_OPEN}\n- Blocked by g/p#99\n{FLOW_DEPS_CLOSE}\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(flow, gl_cfg(), tracker={
+                "id": str(GL_ID), "identifier": "g/p#12", "url": "u",
+                "linkState": "linked", "depRelations": [],
+            })
+            ex = fake_execute({
+                "sync-body-parent-read": ok(_gl_issue(malformed)),
+            })
+            out = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body="replacement",
+                direction="push", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "deps_block")
+            self.assertEqual(
+                [call.op for call in ex.calls], ["sync-body-parent-read"])
+
+    def test_pull_rejects_unbalanced_dependency_region_before_base(self) -> None:
+        malformed = f"{FLOW_BODY}\n{FLOW_DEPS_OPEN}\n- Blocked by g/p#13\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            path = _write_flow(flow, gl_cfg(), tracker={
+                "id": str(GL_ID), "identifier": "g/p#12", "url": "u",
+                "linkState": "linked", "depRelations": [],
+                "mergeBaseFlow": None, "mergeBaseTracker": None,
+            })
+            before = path.read_text()
+            out = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body=FLOW_BODY,
+                direction="pull",
+                execute=fake_execute({
+                    "sync-body-parent-read": ok(_gl_issue(malformed)),
+                }))
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "deps_block")
+            self.assertEqual(path.read_text(), before)
+
 
 # ---------------------------------------------------------------------------
 # No-op seed when no base yet

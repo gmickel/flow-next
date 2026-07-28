@@ -110,14 +110,40 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str
         return TrackerError(ErrorClass.UNRESOLVED,
                             "jira destination missing projectId/issueTypeId",
                             subtype="destination")
+    # Jira rejects fields omitted from the selected issue type's CREATE
+    # screen. Include Description by default, but omit it when createmeta
+    # positively reports a non-empty field map without `description`.
+    # Unavailable/legacy createmeta keeps the common include behavior.
+    description_settable = True
+    meta = _jira(
+        execute, "lifecycle-create-meta", "GET",
+        f"{base}/rest/api/2/issue/createmeta"
+        f"?projectIds={project_id}&issuetypeIds={issue_type_id}"
+        "&expand=projects.issuetypes.fields",
+        idempotent=True,
+    )
+    if isinstance(meta, dict):
+        for project in meta.get("projects") or []:
+            if not isinstance(project, dict):
+                continue
+            for issue_type in project.get("issuetypes") or []:
+                if (not isinstance(issue_type, dict)
+                        or str(issue_type.get("id")) != str(issue_type_id)):
+                    continue
+                fields = issue_type.get("fields")
+                if isinstance(fields, dict) and fields and "description" not in fields:
+                    description_settable = False
+                break
+    fields = {
+        "project": {"id": str(project_id)},
+        "issuetype": {"id": str(issue_type_id)},
+        "summary": title,
+    }
+    if description_settable:
+        fields["description"] = body
     raw = _jira(execute, "lifecycle-create", "POST",
                 f"{base}/rest/api/2/issue",
-                body={"fields": {
-                    "project": {"id": str(project_id)},
-                    "issuetype": {"id": str(issue_type_id)},
-                    "summary": title,
-                    "description": body,
-                }})
+                body={"fields": fields})
     if isinstance(raw, TrackerError):
         return raw
     if not isinstance(raw, dict) or raw.get("id") is None or not raw.get("key"):
@@ -131,8 +157,15 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str
     key = _jira_issue_key(str(raw["key"]))
     if isinstance(key, TrackerError):
         return key
-    return {"id": str(raw["id"]), "identifier": key,
-            "url": f"{base}/browse/{key}"}
+    out = {"id": str(raw["id"]), "identifier": key,
+           "url": f"{base}/browse/{key}"}
+    if not description_settable:
+        out["degraded"] = {
+            "kind": "jira_create_field_omitted",
+            "field": "description",
+            "reason": "not_on_create_screen",
+        }
+    return out
 
 
 _CREATE = {

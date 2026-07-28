@@ -53,6 +53,8 @@ def fake_execute(responses: dict):
 
     def execute(request):
         calls.append(request)
+        if request.op == "lifecycle-create-meta" and request.op not in responses:
+            return ok({})
         if request.op not in responses:
             raise AssertionError(f"unexpected op {request.op!r}; have {sorted(responses)}")
         out = responses[request.op]
@@ -157,7 +159,8 @@ def jr_cfg(*, project_key: str = "SCRUM", status_ids=None) -> dict:
     return {"tracker": {"type": "jira",
                         "readyState": "Ready for Work",
                         "perTracker": {"baseUrl": "https://ex.atlassian.net",
-                                       "projectKey": project_key},
+                                       "projectKey": project_key,
+                                       "blocksLinkType": "Blocks"},
                         "resolved": {"destination": {
                             "baseUrl": "https://ex.atlassian.net",
                             "projectKey": project_key, "projectId": "10000",

@@ -37,6 +37,8 @@ def fake_execute(responses: dict):
 
     def execute(request):
         calls.append(request)
+        if request.op == "lifecycle-create-meta" and request.op not in responses:
+            return ok({})
         if request.op not in responses:
             if (request.op == "sync-body-parent-read"
                     and "wire-comment-list" in responses):
@@ -89,6 +91,7 @@ def ln_cfg(*, preferred: str | None = None) -> dict:
 
 def jr_cfg() -> dict:
     return {"tracker": {"type": "jira",
+                        "perTracker": {"blocksLinkType": "Blocks"},
                         "resolved": {"destination": {
                             "baseUrl": "https://ex.atlassian.net",
                             "projectKey": "SCRUM", "projectId": "10000",
@@ -535,6 +538,79 @@ class CreateIfUnlinkedSeed(unittest.TestCase):
             self.assertLess(
                 calls.index("sync-body-parent-read"),
                 calls.index("wire-comment-add"))
+
+    def test_jira_create_field_degradation_reaches_aggregate_receipt(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, jr_cfg())
+            bf = _body_file(
+                root, "evidence=abc1234\n**done** - shipped.\n")
+            ex = fake_execute({
+                "lifecycle-create-meta": ok({"projects": [{
+                    "issuetypes": [{
+                        "id": "10001",
+                        "fields": {"summary": {}, "issuetype": {}},
+                    }],
+                }]}),
+                "lifecycle-create": ok({"id": JR_ID, "key": "SCRUM-1"}),
+                "sync-body-parent-read": ok(_jr_issue("")),
+                "wire-comment-list": _comment_list_empty("jira"),
+                "wire-parent-read": ok(_jr_issue("")),
+                "wire-comment-add": ok({"id": "c-1", "body": "posted"}),
+            })
+
+            out = F.sync(
+                flow, SPEC_ID, op="comment", event="work.done",
+                body_file=bf, execute=ex)
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            expected = {
+                "kind": "jira_create_field_omitted",
+                "field": "description",
+                "reason": "not_on_create_screen",
+            }
+            self.assertEqual(out["degraded"], expected)
+            self.assertEqual(_receipts(flow)[0]["degraded"], expected)
+            create = next(
+                call for call in ex.calls if call.op == "lifecycle-create")
+            self.assertNotIn(
+                "description", json.loads(create.body)["fields"])
+
+    def test_jira_create_field_degradation_survives_later_failure(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, jr_cfg())
+            bf = _body_file(
+                root, "evidence=abc1234\n**done** - shipped.\n")
+            ex = fake_execute({
+                "lifecycle-create-meta": ok({"projects": [{
+                    "issuetypes": [{
+                        "id": "10001",
+                        "fields": {"summary": {}, "issuetype": {}},
+                    }],
+                }]}),
+                "lifecycle-create": ok({"id": JR_ID, "key": "SCRUM-1"}),
+                "sync-body-parent-read": TrackerError(
+                    ErrorClass.TRANSPORT, "readback boom",
+                    subtype="readback"),
+            })
+
+            out = F.sync(
+                flow, SPEC_ID, op="comment", event="work.done",
+                body_file=bf, execute=ex)
+
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "readback")
+            expected = {
+                "kind": "jira_create_field_omitted",
+                "field": "description",
+                "reason": "not_on_create_screen",
+            }
+            self.assertEqual(_receipts(flow)[0]["degraded"], expected)
 
     def test_comment_create_readback_failure_is_partial_and_never_posts(
             self) -> None:

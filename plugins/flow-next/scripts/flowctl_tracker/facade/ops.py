@@ -35,7 +35,8 @@ from .steps import create_if_unlinked, fail_result, ok_result, run_status
 def _fail_if_evidence(err: TrackerError, *, completed: list, statuses: list,
                       flow_dir: Path, spec_id: str, event: str,
                       transport: str,
-                      tracker_id: Optional[str] = None) -> TrackerError:
+                      tracker_id: Optional[str] = None,
+                      degraded: Any = None) -> TrackerError:
     """Route through fail_result whenever remote-mutation evidence exists -
     either facade-level completed steps or verb-level completed_steps riding
     the error's details (lifecycle_create's partial-failure shape: the issue
@@ -51,10 +52,12 @@ def _fail_if_evidence(err: TrackerError, *, completed: list, statuses: list,
     if tracker_id is None:
         tracker_id = (err.details or {}).get("id")
     tracker_id = None if tracker_id is None else str(tracker_id)
+    if degraded is None:
+        degraded = (err.details or {}).get("degraded")
     return fail_result(
         err, completed=completed, statuses=statuses,
         flow_dir=flow_dir, spec_id=spec_id, event=event,
-        tracker_id=tracker_id, transport=transport,
+        tracker_id=tracker_id, transport=transport, degraded=degraded,
     )
 
 
@@ -182,6 +185,7 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             transport=provider,
         )
     steps["create"] = created
+    degraded = collect_degraded(created) or degraded
 
     body_out = sync_body(
         flow_dir, spec_id, flow_file_body=flow_body, direction="push",
@@ -196,7 +200,7 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         return fail_result(
             body_out, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=tid, transport=provider,
+            tracker_id=tid, transport=provider, degraded=degraded,
         )
     completed.append("sync-body")
     statuses.append(step_status_from_sync_body(body_out))
@@ -213,7 +217,7 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         return fail_result(
             status_out, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=tid, transport=provider,
+            tracker_id=tid, transport=provider, degraded=degraded,
         )
     steps["status"] = status_out
     degraded = collect_degraded(status_out) or degraded
@@ -407,6 +411,7 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             transport=provider,
         )
     steps["create"] = created
+    degraded = collect_degraded(created) or degraded
 
     if link_state_of(tracker) == "identifier_only":
         done = complete_identifier_only(flow_dir, spec_id, execute=execute)
@@ -418,7 +423,7 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             return _fail_if_evidence(
                 done, completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
-                transport=provider,
+                transport=provider, degraded=degraded,
             )
         completed.append("complete-identifier-only")
         statuses.append("updated")
@@ -431,7 +436,7 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         return _fail_if_evidence(
             loaded, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            transport=provider,
+            transport=provider, degraded=degraded,
         )
     _path, _spec, tracker = loaded
     durable = require_durable(tracker)
@@ -440,6 +445,7 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             durable, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
             transport=provider, tracker_id=tracker.get("id"),
+            degraded=degraded,
         )
     locator = locator_of(tracker)
     if isinstance(locator, TrackerError):
@@ -447,6 +453,7 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             locator, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
             transport=provider, tracker_id=tracker.get("id"),
+            degraded=degraded,
         )
 
     ex = bound_executor(config, execute)
@@ -455,7 +462,7 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         return fail_result(
             read_out, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
+            tracker_id=durable, transport=provider, degraded=degraded,
         )
     completed.append("wire-read")
     steps["wire_read"] = {
@@ -480,7 +487,7 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         return fail_result(
             body_out, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
+            tracker_id=durable, transport=provider, degraded=degraded,
         )
     completed.append("sync-body")
     statuses.append(step_status_from_sync_body(body_out))
@@ -495,7 +502,7 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         return fail_result(
             status_out, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
+            tracker_id=durable, transport=provider, degraded=degraded,
         )
     steps["status"] = status_out
     degraded = collect_degraded(status_out) or degraded
@@ -698,6 +705,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
 
     completed: list = []
     statuses: list = []
+    degraded = None
     steps: dict[str, Any] = {}
 
     created = create_if_unlinked(
@@ -712,6 +720,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
             transport=provider,
         )
     steps["create"] = created
+    degraded = collect_degraded(created) or degraded
 
     # After a landed create, the reload/durable/locator failures below are
     # partial successes too - the same receipt discipline applies.
@@ -720,7 +729,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
         return _fail_if_evidence(
             loaded, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            transport=provider,
+            transport=provider, degraded=degraded,
         )
     _path, _spec, tracker = loaded
 
@@ -740,6 +749,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
                 seeded, completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
                 tracker_id=tracker.get("id"), transport=provider,
+                degraded=degraded,
             )
         if "paired-base" not in completed:
             completed.append("paired-base")
@@ -752,6 +762,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
             durable, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
             transport=provider, tracker_id=tracker.get("id"),
+            degraded=degraded,
         )
     locator = locator_of(tracker)
     if isinstance(locator, TrackerError):
@@ -759,6 +770,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
             locator, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
             transport=provider, tracker_id=tracker.get("id"),
+            degraded=degraded,
         )
 
     # Serialize the whole list-then-create sequence behind a local marker
@@ -776,7 +788,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
         return fail_result(
             claimed, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
+            tracker_id=durable, transport=provider, degraded=degraded,
         )
     try:
         # `sync set-tracker-id` can repoint the spec between the locator
@@ -793,6 +805,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
                 drift, completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
                 transport=provider, tracker_id=str(durable),
+                degraded=degraded,
             )
         ex = bound_executor(config, execute)
         listed = wire_dispatch(
@@ -801,7 +814,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
             return fail_result(
                 listed, completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
-                tracker_id=durable, transport=provider,
+                tracker_id=durable, transport=provider, degraded=degraded,
             )
         comments = listed.get("comments") if isinstance(listed, dict) else None
         if not isinstance(comments, list):
@@ -814,7 +827,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
             receipt_status = worst_status(statuses)
             rerr = write_aggregate_receipt(
                 flow_dir, spec_id=spec_id, event=event, status=receipt_status,
-                tracker_id=durable, transport=provider,
+                tracker_id=durable, transport=provider, degraded=degraded,
                 note=f"facade comment dedup ({event}/{evidence})",
             )
             if rerr:
@@ -822,6 +835,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
                     rerr, completed=completed, statuses=statuses,
                     flow_dir=flow_dir, spec_id=spec_id, event=event,
                     tracker_id=durable, transport=provider,
+                    degraded=degraded,
                 )
             return ok_result({
                 "op": "comment",
@@ -830,7 +844,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
                 "marker": marker,
                 "steps": steps,
                 "tracker_id": durable,
-            }, statuses=statuses, completed=completed)
+            }, statuses=statuses, completed=completed, degraded=degraded)
 
         # Marker not found - but a truncated scan proves nothing about
         # absence. Posting here would duplicate on high-comment issues;
@@ -848,7 +862,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
                 ),
                 completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
-                tracker_id=durable, transport=provider,
+                tracker_id=durable, transport=provider, degraded=degraded,
             )
 
         # Last locked recheck before the mutating wire call: the dedup scan
@@ -862,6 +876,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
                 drift, completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
                 transport=provider, tracker_id=str(durable),
+                degraded=degraded,
             )
 
         posted_body = f"{marker}\n\n{comment_text}"
@@ -872,7 +887,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
             return fail_result(
                 added, completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
-                tracker_id=durable, transport=provider,
+                tracker_id=durable, transport=provider, degraded=degraded,
             )
         completed.append("comment-add")
         statuses.append("updated")
@@ -881,14 +896,14 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
         receipt_status = worst_status(statuses)
         rerr = write_aggregate_receipt(
             flow_dir, spec_id=spec_id, event=event, status=receipt_status,
-            tracker_id=durable, transport=provider,
+            tracker_id=durable, transport=provider, degraded=degraded,
             note=f"facade comment ({event})",
         )
         if rerr:
             return fail_result(
                 rerr, completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
-                tracker_id=durable, transport=provider,
+                tracker_id=durable, transport=provider, degraded=degraded,
             )
 
         return ok_result({
@@ -899,7 +914,7 @@ def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
             "comment": added,
             "steps": steps,
             "tracker_id": durable,
-        }, statuses=statuses, completed=completed)
+        }, statuses=statuses, completed=completed, degraded=degraded)
     finally:
         # Release OUR pending claim on every exit (posted, dedup noop,
         # refusal, transport failure): the remote marker is the durable

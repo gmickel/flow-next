@@ -136,6 +136,64 @@ def linear_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
 # Jira
 # ---------------------------------------------------------------------------
 
+def jira_blocks_type(config: dict, execute: Execute) -> Union[str, TrackerError]:
+    """Resolve the site's blocking link type once per relate invocation.
+
+    A configured name wins. Otherwise discover a type whose outward phrase
+    carries "block" semantics. Cache only on the in-memory config object so the
+    probe and mutation use the exact same resolved name without persisting
+    runtime state behind the discovery transaction.
+    """
+    tracker = config.get("tracker") if isinstance(config.get("tracker"), dict) else {}
+    per = tracker.get("perTracker") if isinstance(tracker.get("perTracker"), dict) else {}
+    configured = per.get("blocksLinkType")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    cached = dest.get("_runtimeBlocksLinkType")
+    if isinstance(cached, str) and cached:
+        return cached
+    if cached is False:
+        return TrackerError(
+            ErrorClass.CAPABILITY,
+            "no Jira blocks link type; set tracker.perTracker.blocksLinkType",
+            subtype="blocks_link_type",
+        )
+    base = _jira_base(config, dest)
+    if isinstance(base, TrackerError):
+        return base
+    data = _jira(
+        execute, "relate-link-types", "GET",
+        f"{base}/rest/api/2/issueLinkType", idempotent=True)
+    if isinstance(data, TrackerError):
+        return data
+    rows = data.get("issueLinkTypes") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "jira issueLinkType response is malformed",
+            subtype="malformed_body",
+        )
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("name")
+        outward = row.get("outward")
+        if (isinstance(name, str) and name.strip()
+                and isinstance(outward, str)
+                and "block" in outward.lower()):
+            dest["_runtimeBlocksLinkType"] = name.strip()
+            return name.strip()
+    dest["_runtimeBlocksLinkType"] = False
+    return TrackerError(
+        ErrorClass.CAPABILITY,
+        "no Jira blocks link type; set tracker.perTracker.blocksLinkType",
+        subtype="blocks_link_type",
+    )
+
+
 def _jira_edge_exists(config: dict, execute: Execute, *, from_id: str,
                       to_id: str) -> Union[bool, TrackerError]:
     dest = _destination(config)
@@ -144,6 +202,9 @@ def _jira_edge_exists(config: dict, execute: Execute, *, from_id: str,
     base = _jira_base(config, dest)
     if isinstance(base, TrackerError):
         return base
+    blocks_type = jira_blocks_type(config, execute)
+    if isinstance(blocks_type, TrackerError):
+        return blocks_type
     data = _jira(
         execute, "relate-list", "GET",
         f"{base}/rest/api/2/issue/{quote(str(from_id), safe='')}"
@@ -160,7 +221,7 @@ def _jira_edge_exists(config: dict, execute: Execute, *, from_id: str,
         if not isinstance(link, dict):
             continue
         typ = link.get("type") if isinstance(link.get("type"), dict) else {}
-        if str(typ.get("name") or "").lower() != "blocks":
+        if str(typ.get("name") or "").casefold() != blocks_type.casefold():
             continue
         # Querying the blocked issue A: "A is blocked by B" carries the
         # blocker B in inwardIssue (jira.md listIssueRelations - the entry
@@ -183,6 +244,9 @@ def jira_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
     base = _jira_base(config, dest)
     if isinstance(base, TrackerError):
         return base
+    blocks_type = jira_blocks_type(config, execute)
+    if isinstance(blocks_type, TrackerError):
+        return blocks_type
     # Measured live 2026-07-28 (JQL linkedIssues tiebreak): POST
     # {inwardIssue: X, outwardIssue: Y} creates "X blocks Y". For
     # "A blocked-by B" the blocker B goes in inwardIssue and the blocked
@@ -191,7 +255,7 @@ def jira_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
     data = _jira(
         execute, "relate-create", "POST",
         f"{base}/rest/api/2/issueLink",
-        body={"type": {"name": "Blocks"},
+        body={"type": {"name": blocks_type},
               "inwardIssue": {"id": str(to_id)},
               "outwardIssue": {"id": str(from_id)}},
     )
@@ -286,7 +350,9 @@ def _gitlab_deps_body(description: object, blocker_ref: str
             subtype="malformed_body")
     opens = text.count(FLOW_DEPS_OPEN)
     closes = text.count(FLOW_DEPS_CLOSE)
-    if opens != closes or opens > 1:
+    if (opens != closes or opens > 1
+            or (opens == 1
+                and text.find(FLOW_DEPS_OPEN) > text.find(FLOW_DEPS_CLOSE))):
         return TrackerError(
             ErrorClass.CONFLICT,
             "gitlab flow:deps block is malformed; refusing to rewrite issue body",

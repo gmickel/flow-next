@@ -83,6 +83,29 @@ def _extract_deps_region(raw_body: str) -> Optional[str]:
     return m.group(0) if m else None
 
 
+def _deps_region_error(raw_body: str, *, label: str) -> Optional[TrackerError]:
+    """Reject marker shapes that a whole-body rewrite cannot preserve safely."""
+    text = raw_body or ""
+    opens = text.count(FLOW_DEPS_OPEN)
+    closes = text.count(FLOW_DEPS_CLOSE)
+    if opens == closes == 0:
+        return None
+    valid = (
+        opens == 1
+        and closes == 1
+        and text.find(FLOW_DEPS_OPEN) < text.find(FLOW_DEPS_CLOSE)
+    )
+    if valid:
+        return None
+    return TrackerError(
+        ErrorClass.CONFLICT,
+        f"{label} has multiple or unbalanced flow:deps regions; refusing "
+        "lossy body normalization",
+        subtype="deps_block",
+        details={"openMarkers": opens, "closeMarkers": closes},
+    )
+
+
 def _carry_deps_forward(outgoing: str, current: str) -> str:
     """Write-side rule: preserve the existing flow:deps region on full-body update.
 
@@ -377,6 +400,20 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         if isinstance(parent, TrackerError):
             return parent
         current_body = _raw_body(provider, parent)
+
+    malformed = _deps_region_error(current_body, label="tracker body")
+    if malformed is not None:
+        return malformed
+    if expected_tracker_body is not None:
+        malformed = _deps_region_error(
+            expected_tracker_body, label="expected tracker body")
+        if malformed is not None:
+            return malformed
+    if tracker_body is not None:
+        malformed = _deps_region_error(
+            tracker_body, label="approved tracker body")
+        if malformed is not None:
+            return malformed
 
     if direction == "pull":
         committed = _commit_paired_base(
