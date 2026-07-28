@@ -605,6 +605,25 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             self.assertIn("<promise>RETRY</promise>", host_requires_receipt.stdout)
             self.assertNotIn("VERDICT=SHIP", host_requires_receipt.stdout)
 
+            recovery.write_text(json.dumps(payload), encoding="utf-8")
+            blocked_parent = temp / "blocked-parent"
+            blocked_parent.write_text("not a directory", encoding="utf-8")
+            copy_failure_env = env.copy()
+            copy_failure_env["REVIEW_RECEIPT_PATH"] = (
+                blocked_parent / "receipt.json"
+            ).as_posix()
+            copy_failure = subprocess.run(
+                [_bash_executable(), "-c", block],
+                cwd=temp,
+                env=copy_failure_env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertIn("<promise>RETRY</promise>", copy_failure.stdout)
+            self.assertNotIn("VERDICT=SHIP", copy_failure.stdout)
+            self.assertTrue(recovery.exists())
+
     def test_completion_backend_persists_recovery_and_receipt_before_status(
         self,
     ) -> None:
@@ -634,6 +653,9 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         self.assertLess(rp.index('cat > "$RECEIPT_RECOVERY"'), rp.index(
             'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"'
         ))
+        self.assertIn(
+            'if ! cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"', rp
+        )
         self.assertLess(
             completion.index("_write_backend_review_receipt("),
             completion.index("_self_write_review_status("),

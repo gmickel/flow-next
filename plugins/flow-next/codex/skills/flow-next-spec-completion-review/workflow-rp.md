@@ -520,7 +520,10 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
  cat > "$RECEIPT_RECOVERY" <<EOF
 {"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts"}
 EOF
- cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"
+ if ! cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"; then
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
  if ! jq -e --arg id "$SPEC_ID" \
  '.type == "completion_review" and .id == $id and .verdict == "SHIP"' \
  "$REVIEW_RECEIPT_PATH" >/dev/null; then

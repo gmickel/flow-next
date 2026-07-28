@@ -204,8 +204,11 @@ if [[ -n "$TERMINAL_STATUS" \
   # writing the caller-selected path. Restore it before status so a transient
   # receipt-path failure never consumes another review or loses Ralph evidence.
   if [[ -f "$RECEIPT_RECOVERY" ]]; then
-    mkdir -p "$(dirname "$RECEIPT_PATH")"
-    cp "$RECEIPT_RECOVERY" "$RECEIPT_PATH"
+    if ! mkdir -p "$(dirname "$RECEIPT_PATH")" \
+      || ! cp "$RECEIPT_RECOVERY" "$RECEIPT_PATH"; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
     if ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
       --arg mode "$ATTEMPT_BACKEND" \
       '.type == "completion_review"
