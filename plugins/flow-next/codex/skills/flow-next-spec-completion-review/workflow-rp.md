@@ -517,9 +517,13 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
  EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
  fi
 
- cat > "$RECEIPT_RECOVERY" <<EOF
+ if ! cat > "$RECEIPT_RECOVERY" <<EOF
 {"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts"}
 EOF
+ then
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
  if ! cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"; then
  echo "<promise>RETRY</promise>"
  exit 0

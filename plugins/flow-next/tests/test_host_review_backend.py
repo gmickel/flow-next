@@ -653,6 +653,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         self.assertLess(rp.index('cat > "$RECEIPT_RECOVERY"'), rp.index(
             'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"'
         ))
+        self.assertIn('if ! cat > "$RECEIPT_RECOVERY"', rp)
         self.assertIn(
             'if ! cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"', rp
         )

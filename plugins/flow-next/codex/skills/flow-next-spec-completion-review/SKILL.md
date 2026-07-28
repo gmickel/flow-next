@@ -241,7 +241,10 @@ if [[ -n "$TERMINAL_STATUS" \
  exit 0
  fi
  fi
- rm -f "$RECEIPT_RECOVERY"
+ if ! rm -f "$RECEIPT_RECOVERY"; then
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
 
  if [[ "$TERMINAL_EXIT" -eq 4 ]]; then
  echo "ESCALATE: completion-review did not converge in ${REVIEW_CAP} verdict rounds"
