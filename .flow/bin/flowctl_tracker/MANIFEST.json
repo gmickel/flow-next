@@ -14,7 +14,7 @@
     },
     {
       "path": "flowctl_tracker/attach/providers.py",
-      "sha256": "58218eb4738415ff94048e7eafa8b5269ae64de202a8078e03ca7345afda22e3"
+      "sha256": "d8c6c7447b34e381e5b11c170e12e95df3029119c0956e3b9ec9a50057efd24e"
     },
     {
       "path": "flowctl_tracker/classify.py",
@@ -126,11 +126,11 @@
     },
     {
       "path": "flowctl_tracker/status/providers.py",
-      "sha256": "3286735d5d7ec8ac39b8e3bd28a584838846952a3048a4993258b6eaa1afcfe2"
+      "sha256": "91096d3af41a14c7b79f5181111d14deb0e64c792fa539de592c45c74fbfb315"
     },
     {
       "path": "flowctl_tracker/status/verb.py",
-      "sha256": "af1f3533ec3cb9b0563737cdc4be578dd4e0ad1cecb82b96373939bec718083a"
+      "sha256": "e5b6ef2d9c15ef5d5267dacd819b84b76e76d3f97b0c5e2337dd7a2fd87f38c4"
     },
     {
       "path": "flowctl_tracker/syncbody/__init__.py",

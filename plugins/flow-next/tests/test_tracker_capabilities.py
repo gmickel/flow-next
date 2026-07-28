@@ -222,6 +222,54 @@ class JiraAttachRoundTrip(unittest.TestCase):
 
 
 class LinearAttachPresigned(unittest.TestCase):
+    def test_attachment_create_failure_retains_landed_asset_evidence(self) -> None:
+        for create_result in (
+            TrackerError(
+                ErrorClass.TRANSPORT, "attachment create timed out",
+                subtype="timeout", auto_retryable=True),
+            ok({"data": {"attachmentCreate": {"success": False}}}),
+        ):
+            with self.subTest(result=type(create_result).__name__):
+                with tempfile.TemporaryDirectory() as tmp:
+                    src = Path(tmp) / "shot.png"
+                    src.write_bytes(PAYLOAD)
+                    asset = "https://uploads.linear.app/asset/landed"
+                    parent = {
+                        "id": LN_UUID, "identifier": "WOR-17", "title": "T",
+                        "description": "B", "labels": {"nodes": []},
+                    }
+                    ex = fake_execute({
+                        "wire-parent-read": ok({
+                            "data": {"issue": parent},
+                        }),
+                        "wire-attach-fileUpload": ok({
+                            "data": {"fileUpload": {
+                                "success": True,
+                                "uploadFile": {
+                                    "uploadUrl": (
+                                        "https://storage.example/presigned"),
+                                    "assetUrl": asset,
+                                    "headers": [],
+                                },
+                            }},
+                        }),
+                        "wire-attach-presigned-put": ok(b""),
+                        "wire-attach-create": create_result,
+                    })
+
+                    out = W.dispatch(
+                        "attach", ln_cfg(),
+                        locator=loc(LN_UUID, "WOR-17"),
+                        file_path=str(src), execute=ex)
+
+                    self.assertIsInstance(out, TrackerError)
+                    details = out.details or {}
+                    self.assertEqual(
+                        details["completed_steps"], ["asset-upload"])
+                    self.assertEqual(details["asset_url"], asset)
+                    self.assertEqual(details["size"], len(PAYLOAD))
+                    self.assertTrue(details["recoverable"])
+
     def test_presigned_put_anonymous_retrieval_with_auth(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "shot.png"

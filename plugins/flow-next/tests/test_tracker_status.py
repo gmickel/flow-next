@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -21,7 +22,9 @@ from flowctl_tracker.status.policy import (  # noqa: E402
     decide, flow_to_normalized, in_progress_wins_matches, is_deadlock,
     merge_evidence, terminal_wins_matches,
 )
-from flowctl_tracker.status.providers import tracker_norm_from_parent  # noqa: E402
+from flowctl_tracker.status.providers import (  # noqa: E402
+    apply_status, tracker_norm_from_parent,
+)
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
 
 
@@ -354,6 +357,48 @@ class MergeEvidence(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class StatusVerbGate(unittest.TestCase):
+    def test_jira_tls_policy_does_not_bind_source_repo_pr_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            cfg = jr_cfg()
+            cfg["tracker"]["perTracker"] = {"sslVerify": False}
+            _write_flow(
+                flow, cfg,
+                spec_extra={"status": "done"},
+                tracker={
+                    "id": JR_ID, "identifier": "SCRUM-1", "url": "u",
+                    "lastSyncedAt": None, "linkState": "linked",
+                },
+            )
+            parent = {
+                "id": JR_ID,
+                "key": "SCRUM-1",
+                "fields": {
+                    "status": {"id": "4", "name": "Done"},
+                    "labels": [],
+                },
+            }
+            raw = fake_execute({
+                "merge-evidence": ok([{"state": "MERGED", "number": 1}]),
+            })
+            tracker_bound = fake_execute({
+                "status-parent-read": ok(parent),
+            })
+
+            with mock.patch(
+                    "flowctl_tracker.resolve_verb.bound_executor",
+                    return_value=tracker_bound):
+                out = S.status(
+                    flow, "fn-1-demo", to="done", execute=raw)
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["kind"], "noop")
+            self.assertEqual(
+                [c.op for c in raw.calls], ["merge-evidence"],
+                "gh probe uses the unbound source-repository executor")
+            self.assertEqual(
+                [c.op for c in tracker_bound.calls], ["status-parent-read"])
+
     def test_completion_review_ship_to_done_without_merged_not_terminal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
@@ -536,6 +581,60 @@ class GitlabOpenedClosed(unittest.TestCase):
             self.assertEqual(bodies[0]["state_event"], "close")
             # parent was opened (not "open") — norm extracted without conflict
             self.assertEqual(out["tracker"], "in_review")
+
+
+class CanonicalStatusLabelWrites(unittest.TestCase):
+    def test_github_and_gitlab_write_hyphenated_active_labels(self) -> None:
+        for provider, target in (
+            ("github", "in_progress"),
+            ("github", "in_review"),
+            ("gitlab", "in_progress"),
+            ("gitlab", "in_review"),
+        ):
+            with self.subTest(provider=provider, target=target):
+                expected = f"status:{target.replace('_', '-')}"
+                captured: list[dict] = []
+
+                def capture(
+                        req, captured=captured, provider=provider,
+                        expected=expected):
+                    captured.append(json.loads(req.body))
+                    if provider == "github":
+                        return ok([{"name": expected}])
+                    return ok({
+                        "id": int(GL_ID), "iid": 12, "state": "opened",
+                        "labels": [expected],
+                    })
+
+                if provider == "github":
+                    ex = fake_execute({
+                        "status-set": ok({
+                            "node_id": GH_NODE, "number": 42,
+                            "state": "open",
+                        }),
+                        "status-label-rm": empty_ok(),
+                        "status-label-add": capture,
+                        "status-label-readback": ok([{"name": expected}]),
+                    })
+                    out = apply_status(
+                        provider, gh_cfg(),
+                        {"durable": GH_NODE, "display": "#42"},
+                        _gh_parent(state="open", labels=["status:todo"]),
+                        ex, target_slot=target)
+                    self.assertEqual(captured[0]["labels"], [expected])
+                else:
+                    ex = fake_execute({"status-set": capture})
+                    out = apply_status(
+                        provider, gl_cfg(),
+                        {"durable": GL_ID, "display": "g/p#12"},
+                        {
+                            "id": int(GL_ID), "iid": 12, "state": "opened",
+                            "labels": ["status:todo"],
+                        },
+                        ex, target_slot=target)
+                    self.assertEqual(captured[0]["add_labels"], expected)
+                self.assertNotIsInstance(out, TrackerError, out)
+                self.assertEqual(out["label"], expected)
 
 
 class JiraTransitions(unittest.TestCase):

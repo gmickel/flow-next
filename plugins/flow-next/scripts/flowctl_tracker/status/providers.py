@@ -20,8 +20,8 @@ from .policy import TERMINAL
 _LABEL = {
     "backlog": "status:backlog",
     "todo": "status:todo",
-    "in_progress": "status:in_progress",
-    "in_review": "status:in_review",
+    "in_progress": "status:in-progress",
+    "in_review": "status:in-review",
     "done": "status:done",
 }
 

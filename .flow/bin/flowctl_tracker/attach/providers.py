@@ -230,13 +230,37 @@ def _linear_upload(config: dict, locator: dict, execute: Execute, *,
                    "title": path.name}},
     )
     if isinstance(ref, TrackerError):
-        return ref
+        return _linear_uploaded_error(
+            ref, asset_url=asset_url, size=size, data=data)
     ref_payload = ref.get("attachmentCreate")
     if not isinstance(ref_payload, dict) or ref_payload.get("success") is not True:
-        return TrackerError(ErrorClass.TRANSPORT,
-                            "linear attachmentCreate reported failure",
-                            subtype="mutation_failed")
+        return _linear_uploaded_error(
+            TrackerError(
+                ErrorClass.TRANSPORT,
+                "linear attachmentCreate reported failure",
+                subtype="mutation_failed"),
+            asset_url=asset_url, size=size, data=data)
     return {"id": asset_url, "url": asset_url, "size": size, "sha256": _sha(data)}
+
+
+def _linear_uploaded_error(err: TrackerError, *, asset_url: str, size: int,
+                           data: bytes) -> TrackerError:
+    """Preserve the successful asset PUT when attachmentCreate fails."""
+    details = dict(err.details or {})
+    completed = list(details.get("completed_steps") or [])
+    if "asset-upload" not in completed:
+        completed.append("asset-upload")
+    details.update({
+        "completed_steps": completed,
+        "asset_url": asset_url,
+        "size": size,
+        "sha256": _sha(data),
+        "recoverable": True,
+    })
+    return TrackerError(
+        err.cls, err.message, subtype=err.subtype,
+        retry_after_s=err.retry_after_s, details=details,
+        auto_retryable=err.auto_retryable)
 
 
 def _linear_download(config: dict, execute: Execute, *, attachment_id: str,

@@ -320,7 +320,10 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
     if isinstance(tracker_norm, TrackerError):
         return tracker_norm
 
-    pr_evidence = merge_evidence(config, spec_data, ex)
+    # PR evidence belongs to the source Git checkout, not the configured
+    # tracker transport. In particular, Jira DC sslVerify=false is valid for
+    # Jira HTTP but cannot be applied to the independent gh CLI route.
+    pr_evidence = merge_evidence(config, spec_data, execute)
     tasks = _load_tasks(flow_dir, spec_id)
     flow_norm = flow_to_normalized(
         spec_data, pr_evidence,
