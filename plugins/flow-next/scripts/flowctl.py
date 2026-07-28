@@ -23273,31 +23273,51 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    spec_json_path, spec_data = _resolve_sync_spec(args)
-
-    # Collision guard (R5): refuse to link two specs to one tracker UUID unless
-    # forced (re-link of the same spec is always fine).
+    # PR #246: the relink is a spec-identity WRITE, so the whole
+    # reload-guard-mutate-write runs INSIDE the shared config writer lock -
+    # the same lock every tracker verb's identity recheck (syncbody commit,
+    # comment recheck, linkstate _complete) reloads the spec under. Without
+    # it a relink could land between a verb's locked recheck and its reload,
+    # letting the recheck validate a locator the spec no longer holds. Under
+    # the lock a relink commits wholly before a recheck (detected) or wholly
+    # after it (serialized). Older `.flow/bin` copies without the tracker
+    # package degrade to the previous unlocked write via the nullcontext
+    # fallback - those copies have no locked recheck to coordinate with.
     flow_dir = get_flow_dir()
-    for owner_id, owner_state in _iter_tracker_states(flow_dir):
-        if owner_id == args.id:
-            continue
-        if owner_state.get("id") and owner_state["id"] == args.tracker_id:
-            if not getattr(args, "force", False):
-                error_exit(
-                    f"Tracker id {args.tracker_id} already linked to spec "
-                    f"{owner_id}. Pass --force to override (rare; usually a "
-                    f"duplicate-issue mistake).",
-                    use_json=args.json,
-                )
+    try:
+        with _shared_config_lock(flow_dir):
+            spec_json_path, spec_data = _resolve_sync_spec(args)
 
-    state = spec_data["tracker"]
-    state["id"] = args.tracker_id
-    if validated_identifier is not None:
-        # Persist the canonical stripped display form (e.g. "WOR-17").
-        state["identifier"] = validated_identifier[2]
-    if args.url is not None:
-        state["url"] = args.url
-    _write_sync_state(spec_json_path, spec_data)
+            # Collision guard (R5): refuse to link two specs to one tracker
+            # UUID unless forced (re-link of the same spec is always fine).
+            for owner_id, owner_state in _iter_tracker_states(flow_dir):
+                if owner_id == args.id:
+                    continue
+                if owner_state.get("id") and owner_state["id"] == args.tracker_id:
+                    if not getattr(args, "force", False):
+                        error_exit(
+                            f"Tracker id {args.tracker_id} already linked to spec "
+                            f"{owner_id}. Pass --force to override (rare; usually a "
+                            f"duplicate-issue mistake).",
+                            use_json=args.json,
+                        )
+
+            state = spec_data["tracker"]
+            state["id"] = args.tracker_id
+            if validated_identifier is not None:
+                # Persist the canonical stripped display form (e.g. "WOR-17").
+                state["identifier"] = validated_identifier[2]
+            if args.url is not None:
+                state["url"] = args.url
+            _write_sync_state(spec_json_path, spec_data)
+    except TimeoutError as exc:
+        # ConfigLockTimeout (a TimeoutError): another writer holds the lock
+        # past the acquisition deadline. Surface cleanly instead of a
+        # traceback; nothing was written.
+        error_exit(
+            f"could not acquire the config writer lock for set-tracker-id: {exc}",
+            use_json=args.json,
+        )
 
     if args.json:
         json_output({"id": args.id, "tracker": state, "message": "tracker id set"})

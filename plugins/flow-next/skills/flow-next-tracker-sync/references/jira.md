@@ -837,10 +837,14 @@ BLOCKS_TYPE=$("$FLOWCTL" config get tracker.perTracker.blocksLinkType --json 2>/
 ### Native facts (pin these — verified live 2026-06-28)
 
 - **`POST /rest/api/3/issueLink`** with `{type:{name:"Blocks"}, outwardIssue:{key|id},
-  inwardIssue:{key|id}}` returns **HTTP 201**. `outwardIssue` **blocks** `inwardIssue`
-  → `inwardIssue` shows **"is blocked by"**. So for `depends_on`: the **dependency B**
-  is `outwardIssue` (it blocks), the **current issue A** is `inwardIssue` (it is
-  blocked). Pass the durable `id` for both operands (key also accepted).
+  inwardIssue:{key|id}}` returns **HTTP 201**. `inwardIssue` **blocks** `outwardIssue`
+  (measured live 2026-07-28 via the JQL `linkedIssues(key, "blocks")` tiebreak on a
+  Cloud sandbox — an earlier revision of this paragraph had the roles swapped, which
+  made the adapter create every edge REVERSED). So for `depends_on`: the **dependency
+  B** is `inwardIssue` (it blocks), the **current issue A** is `outwardIssue` (it is
+  blocked). The readback on A then shows B under `inwardIssue`, matching the
+  `listIssueRelations` jq below. Pass the durable `id` for both operands (key also
+  accepted).
 - **`GET /rest/api/$APIV/issue/{idOrKey}?fields=issuelinks`** returns
   `fields.issuelinks[]`, each `{ type:{name,inward,outward}, inwardIssue?, outwardIssue? }`
   — an entry has `outwardIssue` XOR `inwardIssue` depending on the direction from the
@@ -941,16 +945,17 @@ if [ "$LEDGERED" = true ] && [ "$EXISTS" != true ]; then
   return
 fi
 
-# Otherwise CREATE the link (additive-only). DIRECTION — LIVE-VALIDATED 2026-06-28
-# (FINDINGS-jira.md): `outwardIssue` **blocks** `inwardIssue`; `inwardIssue` shows
-# "is blocked by". The edge is "A is blocked by B" (A=current/blocked, B=dep/blocker),
-# so the BLOCKER B = outwardIssue (it blocks) and the BLOCKED A = inwardIssue (it is
-# blocked by). Hence out=$B_ID, in=$A_ID — do NOT swap (a fetched link on A then reads
-# back `inwardIssue: B` ⇒ "A is blocked by B", exactly what listIssueRelations expects).
+# Otherwise CREATE the link (additive-only). DIRECTION — RE-MEASURED LIVE 2026-07-28
+# (JQL `linkedIssues(key, "blocks")` tiebreak; the 2026-06-28 note had the roles
+# swapped): on CREATE, `inwardIssue` **blocks** `outwardIssue`. The edge is "A is
+# blocked by B" (A=current/blocked, B=dep/blocker), so the BLOCKER B = inwardIssue
+# and the BLOCKED A = outwardIssue. Hence in=$B_ID, out=$A_ID — do NOT swap (a
+# fetched link on A then reads back `inwardIssue: B` ⇒ "A is blocked by B", exactly
+# what listIssueRelations expects).
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -X POST "$JIRA_BASE/rest/api/$APIV/issueLink" \
-  --data @<(jq -n --arg out "$B_ID" --arg in "$A_ID" --arg blt "$BLOCKS_TYPE" \
+  --data @<(jq -n --arg out "$A_ID" --arg in "$B_ID" --arg blt "$BLOCKS_TYPE" \
               '{ type: {name:$blt}, outwardIssue:{id:$out}, inwardIssue:{id:$in} }')
 # → HTTP 201. Record the projected edge in the ledger (flowctl sync set-dep-relation).
 ```

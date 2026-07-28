@@ -1004,3 +1004,24 @@ class FailingDowngradeSinkRefusesTheRequest(unittest.TestCase):
                           on_event=sink)
         self.assertIsInstance(r, TrackerError)
         self.assertEqual(calls["n"], 3, "1 attempt + 2 retries despite the broken sink")
+
+
+class RawBodyOpsSkipGraphQLParse(unittest.TestCase):
+    """Measured live 2026-07-28: a Linear attach-get downloads raw asset
+    bytes from uploads.linear.app; classifying that 200 body as GraphQL
+    reported transport/malformed_body for every binary attachment. Raw-body
+    ops classify on status alone; GraphQL ops keep the malformed contract."""
+
+    def test_binary_200_attach_get_is_success(self) -> None:
+        e = C.classify("linear", resp(200, b"\xa4\x00\xffbinary"),
+                       op="wire-attach-get")
+        self.assertIsNone(e)
+
+    def test_binary_200_graphql_op_still_malformed(self) -> None:
+        e = C.classify("linear", resp(200, b"\xa4\x00\xffbinary"))
+        self.assertIsNotNone(e)
+        self.assertEqual(e.subtype, "malformed_body")
+
+    def test_attach_get_error_status_still_classifies(self) -> None:
+        e = C.classify("linear", resp(500, b"boom"), op="wire-attach-get")
+        self.assertIsNotNone(e)

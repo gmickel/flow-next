@@ -1164,6 +1164,51 @@ class PullReadInsideClaim(unittest.TestCase):
                 (flow / "create-first" / f"syncbody-{SPEC_ID}.json").exists(),
                 "claim released after the refused run")
 
+    def test_pull_repoint_before_claim_receipt_records_new_identity(self) -> None:
+        """PR #246 review: op_pull captured `durable` BEFORE sync_body's
+        claim while the transaction reloads the locator after claiming. A
+        set-tracker-id repoint in that gap makes the read and paired base
+        correctly target the NEW issue - so the aggregate receipt and the
+        returned tracker_id must record that same transaction identity, not
+        the stale pre-claim durable."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(), spec_md=FLOW_BODY)
+
+            orig = SB._claim_sync_body
+
+            def claim_then_repoint(*args, **kwargs):
+                out = orig(*args, **kwargs)
+                # Relink lands after op_pull captured its pre-claim durable
+                # but before the transaction reloads the locator.
+                self._repoint(flow)
+                return out
+
+            def read_new_issue(req):
+                issue = _gh_issue("NEW ISSUE BODY\n")
+                issue.update({"node_id": self.NEW_ID, "number": 99})
+                return ok(issue)
+
+            ex = fake_execute({"wire-read": read_new_issue})
+            with mock.patch.object(SB, "_claim_sync_body",
+                                   side_effect=claim_then_repoint):
+                out = F.sync(flow, SPEC_ID, op="pull", event="interview",
+                             execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["tracker_id"], self.NEW_ID)
+            # The paired base committed under the new identity...
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["tracker"]["id"], self.NEW_ID)
+            self.assertEqual(saved["tracker"]["mergeBaseTracker"],
+                             SB.trackerBodyForMerge("NEW ISSUE BODY\n"))
+            # ...and the ONE aggregate receipt records that same identity.
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["status"], "pulled")
+            self.assertEqual(receipts[0]["tracker_id"], self.NEW_ID)
+
 
 # ---------------------------------------------------------------------------
 # Comment: identity revalidated after the marker claim (PR #246 review)
@@ -1230,6 +1275,46 @@ class CommentIdentityGuard(unittest.TestCase):
                 list((flow / "create-first").glob("comment-*.json")), [])
             # Pre-flight refusal with nothing landed: receipt-less.
             self.assertEqual(_receipts(flow), [])
+
+    def test_comment_repoint_during_scan_refuses_before_post(self) -> None:
+        """PR #246: the dedup scan is network I/O run outside the lock, so a
+        relink can still land while it is in flight. A second locked recheck
+        immediately before the mutating comment-add catches it - the post
+        never fires against the old issue."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            bf = _body_file(root, "evidence=abc1234\n**done** - shipped.\n")
+
+            def repoint_then_list(req):
+                path = flow / "specs" / f"{SPEC_ID}.json"
+                spec = json.loads(path.read_text(encoding="utf-8"))
+                spec["tracker"].update({
+                    "id": self.NEW_ID, "identifier": self.NEW_DISPLAY,
+                    "url": "https://x/99"})
+                path.write_text(json.dumps(spec, indent=2) + "\n",
+                                encoding="utf-8")
+                return ok([])
+
+            # No wire-comment-add key: a post against the old issue would
+            # die on an unexpected op.
+            ex = fake_execute({"wire-comment-list": repoint_then_list})
+            out = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                         body_file=bf, execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "identity_changed")
+            details = out.details or {}
+            self.assertEqual(details.get("transaction"),
+                             {"durable": GH_NODE, "display": "#42"})
+            self.assertEqual(details.get("current"),
+                             {"durable": self.NEW_ID,
+                              "display": self.NEW_DISPLAY})
+            self.assertFalse(any(c.op == "wire-comment-add" for c in ex.calls))
+            self.assertEqual(
+                list((flow / "create-first").glob("comment-*.json")), [],
+                "claim released on the refusal path")
 
 
 # ---------------------------------------------------------------------------

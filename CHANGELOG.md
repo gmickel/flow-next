@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Added
+
+- **Deterministic tracker verb surface** (`flowctl tracker ...`, fn-140, spec B of the tracker-determinism batch). The tracker-sync prose workflows now have a deterministic Python backend in `flowctl_tracker/`: locator-addressed wire verbs (`read`/`update`/`comment`/`label`/`assign`/`attach`/`list-open`), lifecycle verbs (`create`, `create-first`, `persist-external`), `status` (fn-66 merge-evidence gate decides; `--to` is a request), `relate` (two-phase depRelations ledger, additive-only), `sync-body` (server readback is the canonical tracker half; paired merge base committed atomically), and the `sync` facade (`push|pull|reconcile|comment` as one unit with create-if-unlinked, marker dedup, and one aggregate receipt). All four adapters (GitHub, GitLab, Linear, Jira) run behind a never-raises boundary with structured `degraded` evidence, honest pagination (`truncated`, never silent absence), per-spec operation claims under the shared writer lock, and identity guards that refuse to persist across a mid-flight relink. Verified by a cross-adapter conformance matrix with fault injection plus a live smoke against all four trackers.
+
 ### Fixed
 
 - **`--validate` silently stopped reading `validate-pass.md` (regression from 3.4.x).** The fn-112 prompt-to-template extraction deleted the `VALIDATOR_TEMPLATE_REL` constant but left its use site in `load_validator_template()`. The lookup raised `NameError` straight into a bare `except Exception: pass`, so the repo-root branch never resolved and copy-mode installs fell through to the embedded condensed fallback. Review at the time caught the sibling `VALIDATOR_TEMPLATE_FALLBACK` deletion and restored it; this one went unnoticed. The constant is restored, so copy-mode installs read the full on-disk prompt again, exactly as they did before the extraction. Plugin-mode installs were never affected. No prompt text changed.

@@ -1073,6 +1073,114 @@ class RelateRelinkGuard(unittest.TestCase):
             self.assertEqual(out["kind"], "applied")
 
 
+class RelateFinalizeRelinkGuard(unittest.TestCase):
+    """PR #246 review: locks never span the provider mutation, so a relink
+    can land between _ledger_claim's release and the finalize. The finalize
+    must recheck both identities under the lock (wave-11 recheck, one step
+    later); on drift it must NOT finalize the old-ID pending entry onto the
+    relinked spec - the claim is removed and the already-landed remote
+    create (which cannot be un-sent) is surfaced as structured CONFLICT
+    evidence (completed_steps + edge identity) instead of silently recorded
+    under the wrong identity."""
+
+    NEW_UUID = "99999999-8888-7777-6666-555555555555"
+
+    def _pair(self, flow: Path) -> None:
+        a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+
+    def _run(self, flow: Path, relink_spec: str):
+        # Injection hook on the CREATE response: the relink lands after the
+        # claim's lock released and the provider mutation succeeded, but
+        # before the finalize re-acquires the lock - the exact window the
+        # finalize-time recheck closes.
+        list_empty = ok({"data": {"issue": {
+            "id": LN_UUID,
+            "relations": {"nodes": []},
+            "inverseRelations": {"nodes": []},
+        }}})
+        create_body = {"data": {"issueRelationCreate": {
+            "success": True, "issueRelation": {"id": "rel-1"}}}}
+
+        def create_hook(request):
+            RelateRelinkGuard._relink(flow, relink_spec, self.NEW_UUID)
+            return ok(create_body)
+
+        ex = fake_execute({"relate-list": [list_empty],
+                           "relate-create": [create_hook]})
+        out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
+        return out, ex
+
+    def _assert_refused(self, flow: Path, out, ex) -> None:
+        self.assertIsInstance(out, TrackerError, msg=repr(out))
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "relinked")
+        details = out.details or {}
+        # The remote create against the OLD issues landed - it is carried as
+        # evidence, never hidden (wave-8 decoration shape).
+        self.assertEqual(details.get("completed_steps"), ["relate-create"])
+        self.assertEqual(details.get("key"),
+                         dep_relation_key(LN_UUID, LN_UUID_B))
+        self.assertEqual(details.get("from"), "fn-1-demo")
+        self.assertEqual(details.get("to"), "fn-2-dep")
+        self.assertIs(details.get("recoverable"), False,
+                      "a re-run cannot un-send the orphan edge")
+        self.assertEqual([c.op for c in ex.calls],
+                         ["relate-list", "relate-create"],
+                         "the create WAS issued before the relink landed")
+        # The pending entry must NOT be finalized onto the relinked spec:
+        # no applied (status-less) entry, and the stale-identity claim is
+        # removed rather than left to linger.
+        spec = json.loads(
+            (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))
+        entries = spec["tracker"].get("depRelations") or []
+        self.assertEqual(entries, [],
+                         "old-ID entry neither finalized nor left pending")
+
+    def test_blocked_spec_relinked_between_create_and_finalize(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            out, ex = self._run(flow, "fn-1-demo")
+            self._assert_refused(flow, out, ex)
+
+    def test_blocker_spec_relinked_between_create_and_finalize(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            out, ex = self._run(flow, "fn-2-dep")
+            self._assert_refused(flow, out, ex)
+
+    def test_normal_path_finalizes_as_before(self) -> None:
+        # No relink: the guarded finalize applies the entry exactly as the
+        # unguarded finalize did.
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            list_empty = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": []},
+            }}})
+            create = ok({"data": {"issueRelationCreate": {
+                "success": True, "issueRelation": {"id": "rel-1"}}}})
+            ex = fake_execute({"relate-list": [list_empty],
+                               "relate-create": create})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "applied")
+            spec = json.loads(
+                (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertNotIn("status", entries[0],
+                             "entry finalized (claim fields dropped)")
+
+
 class GitlabProbeDirection(unittest.TestCase):
     """PR #246 review: GitLab link_type is relative to the QUERIED issue.
     A reverse `blocks` link (A blocks B) must never satisfy an
@@ -1142,8 +1250,9 @@ class JiraProbeDirection(unittest.TestCase):
         return RP.jira_probe(jr_cfg(), ex, from_id=JR_ID, to_id=JR_ID_B)
 
     def test_link_as_jira_set_created_is_found(self) -> None:
-        # jira_set posts inwardIssue=A/outwardIssue=B; GET on A then shows
-        # the blocker B in inwardIssue - the doc-correct field.
+        # jira_set posts inwardIssue=B(blocker)/outwardIssue=A(blocked); GET
+        # on A then shows the blocker B in inwardIssue (measured live
+        # 2026-07-28, JQL linkedIssues tiebreak).
         out = self._probe([{"type": {"name": "Blocks"},
                             "inwardIssue": {"id": JR_ID_B}}])
         self.assertIs(out, True,
@@ -1643,3 +1752,37 @@ class GitlabRelateProbeDrain(unittest.TestCase):
                                    to_display="g/p#13")
         self.assertIs(out, False)
         self.assertEqual(len(ex.calls), 1)
+
+
+class JiraSetDirection(unittest.TestCase):
+    """Measured live 2026-07-28 (JQL linkedIssues tiebreak on a sandbox
+    Cloud site): POST /issueLink {inwardIssue: X, outwardIssue: Y, Blocks}
+    creates "X blocks Y" - the jira.md create paragraph had the roles
+    swapped, so jira_set created the REVERSE edge and the (correct) probe
+    then queued every ledgered edge as a human removal on the next run.
+    For "A blocked-by B" the blocker B must be inwardIssue."""
+
+    def test_jira_set_posts_blocker_as_inward_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": JR_ID, "identifier": "SCRUM-1", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": JR_ID_B, "identifier": "SCRUM-2", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, jr_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            ex = fake_execute({
+                "relate-parent-read": [
+                    ok({"id": JR_ID, "key": "SCRUM-1", "fields": {}}),
+                    ok({"id": JR_ID_B, "key": "SCRUM-2", "fields": {}})],
+                "relate-list": ok({"fields": {"issuelinks": []}}),
+                "relate-create": ok({}),
+            })
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
+            self.assertEqual(out["kind"], "applied")
+            create = next(c for c in ex.calls if c.op == "relate-create")
+            body = json.loads(create.body.decode())
+            self.assertEqual(body["inwardIssue"], {"id": JR_ID_B},
+                             "blocker (to) must be inwardIssue")
+            self.assertEqual(body["outwardIssue"], {"id": JR_ID},
+                             "blocked (from) must be outwardIssue")
+            self.assertEqual(body["type"], {"name": "Blocks"})

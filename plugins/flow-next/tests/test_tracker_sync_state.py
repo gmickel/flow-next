@@ -349,6 +349,49 @@ class TrackerSyncStateTestCase(unittest.TestCase):
             self._set_id(spec_id, "node-zero", identifier="0")
         self.assertIsNone(self._state(spec_id)["id"])
 
+    # --- PR #246: relink serializes under the shared config writer lock -----
+
+    def test_set_tracker_id_excluded_by_held_config_lock(self) -> None:
+        """The relink writer must hold the same config_lock every tracker
+        verb's identity recheck reloads under: while another writer holds
+        the lock the relink does NOT land, and it completes once the lock
+        releases. Without the lock the write would land inside the held
+        window and a locked recheck could never exclude relinks."""
+        import threading
+
+        from flowctl_tracker.config_lock import config_lock
+
+        spec_id = self._create_spec("Locked relink")
+        flow_dir = self.tmpdir / ".flow"
+        spec_path = self.flowctl.find_spec_json_path(flow_dir, spec_id)
+
+        started = threading.Event()
+        done = threading.Event()
+
+        def relink() -> None:
+            started.set()
+            try:
+                self._set_id(spec_id, "uuid-locked-relink")
+            finally:
+                done.set()
+
+        t = threading.Thread(target=relink, daemon=True)
+        with config_lock(flow_dir):
+            t.start()
+            self.assertTrue(started.wait(5))
+            # Give the relink ample time to (wrongly) land while the lock is
+            # held; an unlocked writer completes well within this window.
+            done.wait(0.5)
+            on_disk = json.loads(spec_path.read_text(encoding="utf-8"))
+            self.assertIsNone(
+                on_disk["tracker"]["id"],
+                "set-tracker-id wrote while the config lock was held",
+            )
+        self.assertTrue(done.wait(15), "relink never completed after release")
+        t.join(5)
+        on_disk = json.loads(spec_path.read_text(encoding="utf-8"))
+        self.assertEqual(on_disk["tracker"]["id"], "uuid-locked-relink")
+
 
 class TrackerDepRelationsTestCase(unittest.TestCase):
     """fn-64: depRelations ledger + list/set-dep-relation plumbing."""

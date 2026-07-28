@@ -184,10 +184,15 @@ def op_pull(flow_dir: Path, spec_id: str, *, event: str,
     # snapshot with a newer base (two pulls overlapping a remote edit) or,
     # after a set-tracker-id repoint in the gap, commit the old issue's body
     # under the new locator. The successful read result threads back out
-    # through this holder so it is never re-read.
+    # through this holder so it is never re-read - and so does the
+    # transaction's OWN locator: `durable` above was captured pre-claim, so
+    # after a repoint in the gap it names the OLD issue while the read and
+    # paired base target the NEW one. The receipt and the returned tracker_id
+    # must record the identity the transaction actually used.
     read_holder: dict[str, Any] = {}
 
     def _tracker_read(txn_locator: dict) -> Any:
+        read_holder["locator"] = dict(txn_locator)
         out = wire_dispatch("read", config, locator=txn_locator, execute=ex)
         if not isinstance(out, TrackerError):
             read_holder["read"] = out
@@ -199,6 +204,12 @@ def op_pull(flow_dir: Path, spec_id: str, *, event: str,
         tracker_read=_tracker_read,
     )
     read_out = read_holder.get("read")
+    # Receipt identity = the transaction's locator (captured at the read,
+    # post-claim). Fall back to the pre-claim durable only when the
+    # transaction never reached its read - those paths landed no wire I/O
+    # under any identity.
+    txn_locator = read_holder.get("locator")
+    txn_durable = (txn_locator or {}).get("durable") or durable
     if read_out is not None:
         completed.append("wire-read")
         statuses.append("pulled")
@@ -210,7 +221,7 @@ def op_pull(flow_dir: Path, spec_id: str, *, event: str,
         return fail_result(
             body_out, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
+            tracker_id=txn_durable, transport=provider,
         )
     completed.append("sync-body")
     statuses.append(step_status_from_sync_body(body_out))
@@ -218,7 +229,7 @@ def op_pull(flow_dir: Path, spec_id: str, *, event: str,
     receipt_status = worst_status(statuses)
     rerr = write_aggregate_receipt(
         flow_dir, spec_id=spec_id, event=event, status=receipt_status,
-        tracker_id=durable, transport=provider,
+        tracker_id=txn_durable, transport=provider,
         note=f"facade pull ({', '.join(completed)})",
         degraded=collect_degraded(body_out),
     )
@@ -226,7 +237,7 @@ def op_pull(flow_dir: Path, spec_id: str, *, event: str,
         return fail_result(
             rerr, completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=durable, transport=provider,
+            tracker_id=txn_durable, transport=provider,
         )
 
     return ok_result({
@@ -237,7 +248,7 @@ def op_pull(flow_dir: Path, spec_id: str, *, event: str,
             "body": read_out.get("body") if isinstance(read_out, dict) else None,
         },
         "sync_body": body_out,
-        "tracker_id": durable,
+        "tracker_id": txn_durable,
     }, statuses=statuses, completed=completed,
         degraded=collect_degraded(body_out))
 
@@ -449,11 +460,20 @@ def _recheck_comment_identity(flow_dir: Path, spec_id: str,
     below would validate and post against the OLD issue while the spec now
     points at a new one - and the aggregate receipt would record the old
     tracker id. Under the shared writer lock (the same lock the link writers
-    hold), reload the tracker block and compare its durable/display identity
-    against the locator this invocation loaded; on drift refuse with
-    structured CONFLICT (identity_changed, the sibling subtype) BEFORE any
-    wire call. The claim taken above is keyed on the OLD issue id, so the
-    caller's finally releases it and no claim remains for the stale key."""
+    hold - since PR #246 that includes `sync set-tracker-id` itself, whose
+    reload-mutate-write runs entirely inside it), reload the tracker block
+    and compare its durable/display identity against the locator this
+    invocation loaded; on drift refuse with structured CONFLICT
+    (identity_changed, the sibling subtype) BEFORE any wire call. Because the
+    relink writer holds the same lock, a relink cannot interleave with this
+    reload: it commits entirely before the recheck (detected here) or
+    entirely after it. What is deliberately NOT guaranteed: the lock is
+    released before the wire calls (locks never span network I/O anywhere in
+    this codebase), so a relink landing after a passed recheck serializes
+    strictly after it and the wire call targets the identity that was
+    current at recheck time. The claim taken above is keyed on the OLD issue
+    id, so the caller's finally releases it and no claim remains for the
+    stale key."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
         with config_lock(flow_dir):
@@ -575,7 +595,10 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
         # load above and here; the marker claim does not coordinate with the
         # link writer. Revalidate the spec identity before any wire call so
         # the post (and the receipt's tracker id) never targets the old
-        # issue; the finally below releases the now-stale-keyed claim.
+        # issue; the finally below releases the now-stale-keyed claim. The
+        # relink writer holds the same lock, so it cannot interleave with
+        # this recheck - it lands wholly before (refused here) or wholly
+        # after (re-checked again just before comment-add below).
         drift = _recheck_comment_identity(flow_dir, spec_id, locator)
         if drift is not None:
             return _fail_if_evidence(
@@ -638,6 +661,19 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
                 completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
                 tracker_id=durable, transport=provider,
+            )
+
+        # Last locked recheck before the mutating wire call: the dedup scan
+        # above is network I/O, so a relink can land while it runs. Re-read
+        # the spec identity under the lock immediately before posting; the
+        # residual window is recheck-to-add only (a relink there serializes
+        # strictly after this check - locks never span network I/O).
+        drift = _recheck_comment_identity(flow_dir, spec_id, locator)
+        if drift is not None:
+            return _fail_if_evidence(
+                drift, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                transport=provider, tracker_id=str(durable),
             )
 
         posted_body = f"{marker}\n\n{comment_text}"

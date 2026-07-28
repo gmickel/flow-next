@@ -180,13 +180,17 @@ def jira_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
     base = _jira_base(config, dest)
     if isinstance(base, TrackerError):
         return base
-    # outwardIssue=B (blocks), inwardIssue=A (is blocked by)
+    # Measured live 2026-07-28 (JQL linkedIssues tiebreak): POST
+    # {inwardIssue: X, outwardIssue: Y} creates "X blocks Y". For
+    # "A blocked-by B" the blocker B goes in inwardIssue and the blocked
+    # A in outwardIssue; the readback on A then shows B in inwardIssue,
+    # which is exactly what _jira_edge_exists matches.
     data = _jira(
         execute, "relate-create", "POST",
         f"{base}/rest/api/2/issueLink",
         body={"type": {"name": "Blocks"},
-              "inwardIssue": {"id": str(from_id)},
-              "outwardIssue": {"id": str(to_id)}},
+              "inwardIssue": {"id": str(to_id)},
+              "outwardIssue": {"id": str(from_id)}},
     )
     if isinstance(data, TrackerError):
         return data

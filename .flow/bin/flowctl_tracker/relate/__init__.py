@@ -265,6 +265,69 @@ def _ledger_reclaim(flow_dir: Path, spec_id: str, *, key: str,
         return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
 
 
+def _ledger_finalize_guarded(flow_dir: Path, spec_id: str, dep_spec: str, *,
+                             key: str, from_id: str, to_id: str,
+                             form=None) -> Result:
+    """FINALIZE the pending entry under the shared writer lock, revalidating
+    both linked identities against the from/to this invocation claimed with
+    (the wave-11 recheck, one step later: locks never span the provider
+    mutation, so a relink can land between the claim's release and this
+    finalize - without the recheck the old-ID entry would be finalized onto
+    the newly linked spec). On drift the pending claim is REMOVED, never
+    finalized, and the returned CONFLICT/relinked carries the landed remote
+    mutation as evidence (details.completed_steps + edge identity, wave-8
+    decoration): the create against the OLD issues cannot be un-sent, so the
+    orphan edge is surfaced for a human instead of silently recorded under
+    the wrong identity. Returns the persisted tracker block, or a
+    TrackerError - never raises."""
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            reloaded = load_spec(flow_dir, spec_id)
+            if isinstance(reloaded, TrackerError):
+                return reloaded
+            path, spec = reloaded
+            tracker = merged_tracker(spec)
+            derr = _claim_identity_drift(flow_dir, spec_id, dep_spec,
+                                         tracker=tracker,
+                                         from_id=from_id, to_id=to_id)
+            if derr is None:
+                tracker = ledger_finalize(tracker, key=key)
+                werr = write_tracker_block(path, spec, tracker)
+                if werr:
+                    return werr
+                return tracker
+            if derr.subtype != "relinked":
+                # Dep spec unreadable etc. - keep the pending entry so the
+                # repair path can finalize on retry; the caller wraps this
+                # as the recoverable ledger_finalize partial success.
+                return derr
+            # Drift: drop OUR pending claim (keyed by the OLD ids, so no
+            # future run of the new pair would ever match it). Best-effort -
+            # the drift evidence below is the primary outcome either way.
+            released = ledger_release(tracker, key=key)
+            werr = write_tracker_block(path, spec, released)
+            del werr
+            import dataclasses  # noqa: PLC0415
+            return dataclasses.replace(
+                derr,
+                message=f"tracker link for {spec_id} or {dep_spec} changed "
+                        "while the provider mutation was in flight; the "
+                        "remote blocked-by edge WAS created between the OLD "
+                        "issues and cannot be un-sent - the ledger was NOT "
+                        "finalized onto the relinked spec (pending claim "
+                        "removed); review the orphan edge on the tracker",
+                details={**(derr.details or {}),
+                         "recoverable": False,
+                         "completed_steps": ["relate-create"],
+                         "key": key,
+                         "from": spec_id,
+                         "to": dep_spec,
+                         "form": form})
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
+
+
 def _ledger_claim(flow_dir: Path, spec_id: str, *, key: str, dep_spec: str,
                   from_id: str, to_id: str) -> Result:
     """CLAIM the edge by inserting the pending entry under the shared .flow
@@ -554,13 +617,21 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
     degraded = out.get("degraded")
 
     # Applied: FINALIZE the pending entry (drop the status marker) under the
-    # shared .flow writer lock. A failure here is a RECOVERABLE partial
+    # shared .flow writer lock, rechecking both linked identities first - a
+    # relink during the provider mutation must not finalize the old-ID entry
+    # onto the newly linked spec (CONFLICT/relinked with the landed create as
+    # evidence instead). Other failures here are a RECOVERABLE partial
     # success: the remote edge exists and the pending entry preserves
     # ownership, so a retry heals the ledger without a duplicate create.
-    finalized = _ledger_write(
-        flow_dir, spec_id,
-        lambda t: ledger_finalize(t, key=key))
+    finalized = _ledger_finalize_guarded(
+        flow_dir, spec_id, blocked_by, key=key,
+        from_id=from_id, to_id=to_id, form=out.get("form"))
     if isinstance(finalized, TrackerError):
+        if finalized.subtype == "relinked":
+            # Already decorated with completed_steps + edge identity; the
+            # pending claim was removed, so this is NOT the recoverable
+            # ledger_finalize shape - a human decides about the orphan edge.
+            return finalized
         return TrackerError(
             finalized.cls,
             f"relation created on tracker but ledger finalize failed: "
