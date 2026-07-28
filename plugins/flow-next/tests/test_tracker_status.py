@@ -19,6 +19,7 @@ from flowctl_tracker.status.policy import (  # noqa: E402
     decide, flow_to_normalized, in_progress_wins_matches, is_deadlock,
     merge_evidence, terminal_wins_matches,
 )
+from flowctl_tracker.status.providers import tracker_norm_from_parent  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
 
 
@@ -907,3 +908,83 @@ class Round3Ordering(unittest.TestCase):
     def test_clean_equality_still_noops(self) -> None:
         d = decide("in_review", None, "in_review", "in_review", "open")
         self.assertEqual(d.kind, "noop")
+
+
+class AmbiguousStatusLabels(unittest.TestCase):
+    """status:* is a single-valued namespace (github.md/gitlab.md "Idempotent
+    status: labels"): multiple recognized status:* labels classify as a
+    CONFLICT, never a silent provider-order first-match."""
+
+    def test_two_recognized_labels_conflict_github_order_independent(self) -> None:
+        for labels in (["status:in_progress", "status:in_review"],
+                       ["status:in_review", "status:in_progress"],
+                       ["status:done", "status:verified"]):  # same-slot pair
+            with self.subTest(labels=labels):
+                out = tracker_norm_from_parent(
+                    "github", _gh_parent(state="open", labels=labels), {})
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.CONFLICT)
+                self.assertEqual(out.subtype, "ambiguous-status-labels")
+                self.assertEqual(sorted(out.details["labels"]), sorted(labels))
+
+    def test_two_recognized_labels_conflict_gitlab(self) -> None:
+        parent = {"state": "opened",
+                  "labels": ["status:todo", "status:done"]}
+        out = tracker_norm_from_parent("gitlab", parent, {})
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "ambiguous-status-labels")
+
+    def test_gitlab_closed_with_conflicting_labels_is_conflict(self) -> None:
+        # closed + {wontfix, done} is order-dependent (cancelled vs done)
+        # under first-match; must surface instead.
+        parent = {"state": "closed",
+                  "labels": ["status:wontfix", "status:done"]}
+        out = tracker_norm_from_parent("gitlab", parent, {})
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "ambiguous-status-labels")
+
+    def test_single_recognized_label_still_classifies(self) -> None:
+        out = tracker_norm_from_parent(
+            "github", _gh_parent(state="open", labels=["status:in_review"]), {})
+        self.assertEqual(out, "in_review")
+        out = tracker_norm_from_parent(
+            "gitlab", {"state": "opened", "labels": ["status:todo"]}, {})
+        self.assertEqual(out, "todo")
+
+    def test_unrecognized_extra_status_labels_are_ignored(self) -> None:
+        out = tracker_norm_from_parent(
+            "github",
+            _gh_parent(state="open",
+                       labels=["status:custom-bucket", "status:in_review"]),
+            {})
+        self.assertEqual(out, "in_review")
+
+    def test_no_silent_noop_when_first_label_matches_derived(self) -> None:
+        """Mirror of test_last_synced_advanced_only_on_applied with one extra
+        recognized label AFTER the matching one: first-match used to make
+        tracker_norm == flow_norm == requested → noop, permanently leaving
+        the single-valued namespace inconsistent. Must surface instead."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tasks=[{"status": "in_progress"}],
+            )
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open",
+                    labels=["status:in_progress", "status:in_review"])),
+            })
+            out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "ambiguous-status-labels")
+            # No mutation, no lastSyncedAt advance, no receipt.
+            self.assertFalse(any(c.op == "status-set" for c in ex.calls))
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow), [])

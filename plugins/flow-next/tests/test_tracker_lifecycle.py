@@ -916,3 +916,236 @@ class CreateFirstClaimSerialization(unittest.TestCase):
                                    retry_key=key, execute=ex2)
             self.assertNotIsInstance(retry, TrackerError)
             self.assertFalse(retry["retried"])
+
+
+class Round6CreateSpecClaimSerialization(unittest.TestCase):
+    """PR #246 review: two concurrent create/facade-push calls against the
+    same UNLINKED spec could both pass the in-memory linkState check and both
+    reach the provider mutation - two remote issues, the later link write
+    replacing the first identity and orphaning it. The spec is reserved under
+    the shared writer lock (create-first's claim pattern, keyed on the spec
+    id) BEFORE the remote create."""
+
+    def test_concurrent_creates_single_remote_create_loser_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, gh_cfg())
+            rec_path = flow / "create-first" / "spec-fn-1-demo.json"
+            inner: dict = {}
+
+            def racing_create(req):
+                # The claim must be durable BEFORE the remote create...
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                self.assertEqual(claim.get("status"), "pending")
+                self.assertEqual(claim.get("specId"), "fn-1-demo")
+                # ...so a second worker racing in while the create is in
+                # flight refuses instead of creating a duplicate (any create
+                # attempt on the empty executor would AssertionError).
+                inner["out"] = L.create(flow, "fn-1-demo", title="T", body="B",
+                                        execute=fake_execute({}))
+                return ok({"id": 1, "node_id": GH_NODE, "number": 42,
+                           "html_url": "https://github.com/o/r/issues/42"})
+
+            ex = fake_execute({"lifecycle-create": racing_create})
+            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            self.assertNotIsInstance(out, TrackerError)
+            self.assertEqual(len(ex.calls), 1, "exactly ONE remote create")
+
+            raced = inner["out"]
+            self.assertIsInstance(raced, TrackerError)
+            self.assertIs(raced.cls, ErrorClass.CONFLICT)
+            self.assertEqual(raced.subtype, "create_in_flight")
+            self.assertTrue(raced.auto_retryable)
+            self.assertEqual((raced.details or {}).get("specId"), "fn-1-demo")
+
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["id"], GH_NODE)
+            self.assertEqual(saved["linkState"], "linked")
+            self.assertFalse(rec_path.exists(),
+                             "claim released after the link persisted")
+
+    def test_concurrent_identity_is_never_clobbered(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, gh_cfg())
+            rec_path = flow / "create-first" / "spec-fn-1-demo.json"
+
+            def link_appears_mid_flight(req):
+                # An identity lands on the spec while the provider create is
+                # in flight (e.g. a path that takes no create claim). The
+                # locked link write must refuse to replace it - replacing it
+                # is exactly the orphan-duplicate the review cites.
+                data = json.loads(path.read_text(encoding="utf-8"))
+                data["tracker"] = {"id": "I_kwDOOtherNode", "identifier": "#7",
+                                   "url": "u7", "linkState": "linked",
+                                   "depRelations": []}
+                path.write_text(json.dumps(data), encoding="utf-8")
+                return ok({"id": 1, "node_id": GH_NODE, "number": 42,
+                           "html_url": "https://github.com/o/r/issues/42"})
+
+            ex = fake_execute({"lifecycle-create": link_appears_mid_flight})
+            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "already_linked")
+            details = out.details or {}
+            # Partial-success decoration: the created identity is in hand so
+            # the caller can clean up / link it, never a bare failure.
+            self.assertEqual(details.get("completed_steps"), ["create"])
+            self.assertEqual(details.get("id"), GH_NODE)
+            self.assertEqual(details.get("identifier"), "#42")
+            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["id"], "I_kwDOOtherNode",
+                             "existing link must survive")
+            self.assertEqual(saved["identifier"], "#7")
+            self.assertFalse(rec_path.exists(), "claim released")
+
+    def test_relinked_spec_refused_under_the_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(flow, gh_cfg())
+            # A stale-but-reclaimable claim plus a spec that got LINKED after
+            # the caller's unlocked check: the locked re-check must refuse
+            # before any remote mutation.
+            data = json.loads(path.read_text(encoding="utf-8"))
+
+            real_load = L.create.__globals__["load_spec"]
+            calls = {"n": 0}
+
+            def linking_load(fd, sid):
+                calls["n"] += 1
+                if calls["n"] == 2:
+                    # Between the unlocked check (first load) and the locked
+                    # re-check (second load) another worker links the spec.
+                    data["tracker"] = {"id": GH_NODE, "identifier": "#42",
+                                       "url": "u", "linkState": "linked",
+                                       "depRelations": []}
+                    path.write_text(json.dumps(data), encoding="utf-8")
+                return real_load(fd, sid)
+
+            L.create.__globals__["load_spec"] = linking_load
+            try:
+                out = L.create(flow, "fn-1-demo", title="T", body="B",
+                               execute=fake_execute({}))
+            finally:
+                L.create.__globals__["load_spec"] = real_load
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "already_linked")
+
+
+class Round6LockedCollisionScan(unittest.TestCase):
+    """PR #246 review: the durable-collision scan ran OUTSIDE the writer
+    lock - two specs concurrently persisting the same durable id could both
+    pass the scan, then both serialized writes succeed, violating the
+    one-spec-per-durable-id invariant. The scan now runs INSIDE the same
+    critical section as the link write."""
+
+    def _two_specs(self, tmp: str) -> tuple[Path, Path, Path]:
+        flow = Path(tmp) / ".flow"
+        a = _write_flow(flow, ln_cfg(), spec_id="fn-2-other")
+        b = _write_flow(flow, ln_cfg(), spec_id="fn-1-demo")
+        return flow, a, b
+
+    @staticmethod
+    def _link_other(other: Path) -> None:
+        data = json.loads(other.read_text(encoding="utf-8"))
+        data["tracker"] = {"id": LN_UUID, "identifier": "WOR-17",
+                           "url": "u", "linkState": "linked",
+                           "depRelations": []}
+        other.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_persist_external_collision_caught_inside_the_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow, other, mine = self._two_specs(tmp)
+            # The other spec links the SAME durable id in the exact window
+            # the review cites: after any unlocked collision scan could have
+            # run, immediately before OUR critical section is entered. Only
+            # a scan INSIDE the locked section catches this.
+            gl = L.persist_external.__globals__
+            real_lw = gl["_locked_tracker_write"]
+
+            def losing_lw(fd, sid, mutate, **kw):
+                self._link_other(other)
+                return real_lw(fd, sid, mutate, **kw)
+
+            ex = fake_execute({"lifecycle-resolve-uuid": ok({
+                "data": {"issue": {
+                    "id": LN_UUID, "identifier": "WOR-17",
+                    "url": "https://linear.app/x/issue/WOR-17"}}})})
+            gl["_locked_tracker_write"] = losing_lw
+            try:
+                out = L.persist_external(flow, "fn-1-demo", identifier="WOR-17",
+                                         source="mcp", execute=ex)
+            finally:
+                gl["_locked_tracker_write"] = real_lw
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "durable_collision")
+            self.assertEqual((out.details or {}).get("owner"), "fn-2-other")
+            saved = json.loads(mine.read_text(encoding="utf-8"))["tracker"]
+            self.assertIsNone(saved.get("id"), "loser spec stays unlinked")
+
+    def test_complete_identifier_only_collision_caught_inside_the_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            other = _write_flow(flow, ln_cfg(), spec_id="fn-2-other")
+            mine = _write_flow(flow, ln_cfg(), tracker={
+                "id": None, "identifier": "WOR-17", "url": None,
+                "linkState": "identifier_only", "depRelations": []})
+
+            gl = L.complete_identifier_only.__globals__
+            real_lw = gl["locked_tracker_write"]
+
+            def losing_lw(fd, sid, mutate, **kw):
+                # Same window as the persist-external case: the other spec
+                # wins the durable id just before OUR critical section.
+                Round6LockedCollisionScan._link_other(other)
+                return real_lw(fd, sid, mutate, **kw)
+
+            ex = fake_execute({"lifecycle-resolve-uuid": ok({
+                "data": {"issue": {
+                    "id": LN_UUID, "identifier": "WOR-17",
+                    "url": "https://linear.app/x/issue/WOR-17"}}})})
+            gl["locked_tracker_write"] = losing_lw
+            try:
+                out = L.complete_identifier_only(flow, "fn-1-demo", execute=ex)
+            finally:
+                gl["locked_tracker_write"] = real_lw
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "durable_collision")
+            self.assertEqual((out.details or {}).get("owner"), "fn-2-other")
+            saved = json.loads(mine.read_text(encoding="utf-8"))["tracker"]
+            self.assertIsNone(saved.get("id"))
+            self.assertEqual(saved["linkState"], "identifier_only",
+                             "loser record is not upgraded")
+
+    def test_create_collision_caught_inside_the_lock_with_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            other = _write_flow(flow, gh_cfg(), spec_id="fn-2-other")
+            mine = _write_flow(flow, gh_cfg(), spec_id="fn-1-demo")
+
+            def create_then_lose_race(req):
+                data = json.loads(other.read_text(encoding="utf-8"))
+                data["tracker"] = {"id": GH_NODE, "identifier": "#42",
+                                   "url": "u", "linkState": "linked",
+                                   "depRelations": []}
+                other.write_text(json.dumps(data), encoding="utf-8")
+                return ok({"id": 1, "node_id": GH_NODE, "number": 42,
+                           "html_url": "https://github.com/o/r/issues/42"})
+
+            ex = fake_execute({"lifecycle-create": create_then_lose_race})
+            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "durable_collision")
+            details = out.details or {}
+            # The remote issue exists: the collision verdict carries the
+            # created identity (completed-steps decoration), never a bare
+            # failure that invites a duplicating retry.
+            self.assertEqual(details.get("completed_steps"), ["create"])
+            self.assertEqual(details.get("id"), GH_NODE)
+            saved = json.loads(mine.read_text(encoding="utf-8"))["tracker"]
+            self.assertIsNone(saved.get("id"), "loser spec stays unlinked")

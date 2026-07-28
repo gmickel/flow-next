@@ -31,8 +31,9 @@ from ..lifecycle.helpers import (ACTIVE, Execute, Result, dict_, load_spec,
                                  write_sync_receipt, write_tracker_block)
 from ..types import ErrorClass, TrackerError
 from . import providers as P
-from .ledger import (blocker_completed, caps_of, dep_relation_key, ledger_append,
-                     ledger_entry, ledger_finalize, require_linked_pair)
+from .ledger import (blocker_completed, caps_of, claim_owner,
+                     dep_relation_key, ledger_append, ledger_entry,
+                     ledger_finalize, ledger_stamp_claim, require_linked_pair)
 
 __all__ = [
     "FLOW_DEPS_CLOSE",
@@ -94,6 +95,87 @@ def _ledger_write(flow_dir: Path, spec_id: str, mutate) -> Result:
         return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
 
 
+def _pending_claim_live(entry: dict) -> bool:
+    """Is this pending entry owned by a LIVE concurrent invocation?
+
+    The owner triple ({pid, host, claimedAt}) mirrors lifecycle create-first
+    claims, judged by config_lock's owner rules: within STALE_OWNER_S the
+    claim is live; past it, a dead pid ON THIS HOST is a crashed run's
+    leftover (stale, reclaimable); another host's pid space is unknowable
+    (shared/network checkout) so we fail closed (live). Our OWN pid+host is
+    never a concurrent owner - it is this process's earlier failed attempt,
+    free to retry. Entries without the triple (wave-1 shape, or written by an
+    older version) fall back to updatedAt age: recent means possibly live,
+    old or unparsable means stale (preserving the wave-1 interrupted-run
+    retry semantics)."""
+    import os  # noqa: PLC0415
+    import socket  # noqa: PLC0415
+    import time  # noqa: PLC0415
+    from ..config_lock import STALE_OWNER_S, _pid_alive  # noqa: PLC0415
+    now = time.time()
+    try:
+        claimed_at = float(entry["claimedAt"])
+        pid = int(entry["pid"])
+        host = str(entry["host"])
+    except (KeyError, TypeError, ValueError):
+        from datetime import datetime, timezone  # noqa: PLC0415
+        raw = entry.get("updatedAt")
+        try:
+            dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return False
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (now - dt.timestamp()) <= STALE_OWNER_S
+    if host == socket.gethostname() and pid == os.getpid():
+        return False
+    if (now - claimed_at) <= STALE_OWNER_S:
+        return True
+    if host != socket.gethostname():
+        return True
+    return _pid_alive(pid)
+
+
+def _concurrent_claim_error(dep_spec: str, key: str) -> TrackerError:
+    return TrackerError(
+        ErrorClass.CONFLICT,
+        f"a concurrent relate invocation claimed the blocked-by "
+        f"edge to {dep_spec} first; no mutation performed by this "
+        "invocation - re-run relate after it completes to verify "
+        "or heal the ledger",
+        subtype="concurrent_claim",
+        details={"recoverable": True, "key": key})
+
+
+def _ledger_reclaim(flow_dir: Path, spec_id: str, *, key: str,
+                    dep_spec: str) -> Result:
+    """RECLAIM a stale pending entry (crashed run's leftover) by stamping OUR
+    owner triple onto it under the shared writer lock. Re-checks liveness on
+    the RELOADED entry inside the lock: if another invocation reclaimed (or
+    finalized) it since our snapshot, this invocation backs off instead of
+    issuing a duplicate create. Returns the persisted tracker block, or a
+    TrackerError - never raises."""
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            reloaded = load_spec(flow_dir, spec_id)
+            if isinstance(reloaded, TrackerError):
+                return reloaded
+            path, spec = reloaded
+            tracker = merged_tracker(spec)
+            entry = ledger_entry(tracker, key)
+            if (entry is None or entry.get("status") != "pending"
+                    or _pending_claim_live(entry)):
+                return _concurrent_claim_error(dep_spec, key)
+            tracker = ledger_stamp_claim(tracker, key=key)
+            werr = write_tracker_block(path, spec, tracker)
+            if werr:
+                return werr
+            return tracker
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
+
+
 def _ledger_claim(flow_dir: Path, spec_id: str, *, key: str, dep_spec: str,
                   from_id: str, to_id: str) -> Result:
     """CLAIM the edge by inserting the pending entry under the shared .flow
@@ -114,18 +196,11 @@ def _ledger_claim(flow_dir: Path, spec_id: str, *, key: str, dep_spec: str,
             path, spec = reloaded
             tracker = merged_tracker(spec)
             if ledger_entry(tracker, key) is not None:
-                return TrackerError(
-                    ErrorClass.CONFLICT,
-                    f"a concurrent relate invocation claimed the blocked-by "
-                    f"edge to {dep_spec} first; no mutation performed by this "
-                    "invocation - re-run relate after it completes to verify "
-                    "or heal the ledger",
-                    subtype="concurrent_claim",
-                    details={"recoverable": True, "key": key})
+                return _concurrent_claim_error(dep_spec, key)
             tracker = ledger_append(
                 tracker, key=key, dep_spec=dep_spec,
                 from_tracker_id=from_id, to_tracker_id=to_id,
-                status="pending")
+                status="pending", claim=claim_owner())
             werr = write_tracker_block(path, spec, tracker)
             if werr:
                 return werr
@@ -312,7 +387,22 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
             "lastSyncedAt": tracker_a.get("lastSyncedAt"),
         }
 
-    # Neither ledgered nor remote (or pending + remote-absent = retry): CREATE.
+    # Pending + remote-absent: the entry is either a LIVE concurrent worker's
+    # claim (its create has not become visible yet - the STAGGERED race: we
+    # started after its pending write but before its create landed) or a
+    # crashed/interrupted run's leftover (the wave-1 retry case). Only the
+    # stale leftover may be reclaimed and retried; a live owner backs off -
+    # otherwise both workers reach the provider create and the relation is
+    # created twice.
+    if pending:
+        if _pending_claim_live(entry):
+            return _concurrent_claim_error(blocked_by, key)
+        reclaimed = _ledger_reclaim(flow_dir, spec_id, key=key,
+                                    dep_spec=blocked_by)
+        if isinstance(reclaimed, TrackerError):
+            return reclaimed
+
+    # Neither ledgered nor remote (or reclaimed stale pending = retry): CREATE.
     # Completed blockers project too - the relation is the board's historical
     # ordering; readiness gating alone treats done deps as satisfied
     # (docs/tracker-sync.md fn-64 rule).

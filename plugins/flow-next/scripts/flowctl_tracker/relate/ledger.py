@@ -10,6 +10,9 @@ HASHING concern there - this module does not hash bodies).
 from __future__ import annotations
 
 import hashlib
+import os
+import socket
+import time
 from typing import Any, Optional
 
 from ..lifecycle.helpers import dict_, now_iso
@@ -19,6 +22,18 @@ from ..types import TrackerError
 #: Importable by sync-body (.5); do not strip or rewrite here.
 FLOW_DEPS_OPEN = "<!-- flow:deps -->"
 FLOW_DEPS_CLOSE = "<!-- /flow:deps -->"
+
+#: Fields present ONLY on a pending entry (dropped at finalize so applied
+#: entries stay byte-shaped like pre-existing fn-64 entries). The owner triple
+#: mirrors lifecycle create-first claims: it lets a later invocation tell a
+#: LIVE concurrent owner from a crashed run's leftover.
+CLAIM_FIELDS = ("status", "pid", "host", "claimedAt")
+
+
+def claim_owner() -> dict:
+    """Owner triple recorded on a pending claim (create-first claim shape)."""
+    return {"pid": os.getpid(), "host": socket.gethostname(),
+            "claimedAt": time.time()}
 
 
 def dep_relation_key(from_tracker_id: str, to_tracker_id: str) -> str:
@@ -49,10 +64,13 @@ def ledger_entry(tracker: dict, key: str) -> Optional[dict]:
 def ledger_append(tracker: dict, *, key: str, dep_spec: str,
                   from_tracker_id: str, to_tracker_id: str,
                   rel_type: str = "blocks", source: str = "flow",
-                  status: Optional[str] = None) -> dict:
+                  status: Optional[str] = None,
+                  claim: Optional[dict] = None) -> dict:
     """Idempotent append. Returns the (possibly unchanged) tracker block.
     `status="pending"` records ownership INTENT before the provider mutation;
-    omitted means applied (field absent, matching existing fn-64 entries)."""
+    omitted means applied (field absent, matching existing fn-64 entries).
+    `claim` (the `claim_owner()` triple) stamps ownership onto a pending
+    entry so later invocations can classify it live vs stale."""
     ledger = list(tracker.get("depRelations") or [])
     for entry in ledger:
         if isinstance(entry, dict) and entry.get("key") == key:
@@ -70,6 +88,8 @@ def ledger_append(tracker: dict, *, key: str, dep_spec: str,
     }
     if status is not None:
         new["status"] = status
+        if claim:
+            new.update(claim)
     ledger.append(new)
     tracker = dict(tracker)
     tracker["depRelations"] = ledger
@@ -77,13 +97,31 @@ def ledger_append(tracker: dict, *, key: str, dep_spec: str,
 
 
 def ledger_finalize(tracker: dict, *, key: str) -> dict:
-    """Mark a pending entry applied by DROPPING its status field, so finalized
-    entries are byte-shaped like pre-existing fn-64 entries. Idempotent."""
+    """Mark a pending entry applied by DROPPING its status field (and the
+    claim-owner triple), so finalized entries are byte-shaped like
+    pre-existing fn-64 entries. Idempotent."""
     ledger = []
     for entry in tracker.get("depRelations") or []:
         if (isinstance(entry, dict) and entry.get("key") == key
                 and entry.get("status") == "pending"):
-            entry = {k: v for k, v in entry.items() if k != "status"}
+            entry = {k: v for k, v in entry.items() if k not in CLAIM_FIELDS}
+            entry["updatedAt"] = now_iso()
+        ledger.append(entry)
+    tracker = dict(tracker)
+    tracker["depRelations"] = ledger
+    return tracker
+
+
+def ledger_stamp_claim(tracker: dict, *, key: str) -> dict:
+    """RECLAIM a stale pending entry: overwrite its owner triple with OURS
+    (call under the shared writer lock, after re-checking staleness).
+    Idempotent on non-pending / missing entries."""
+    ledger = []
+    for entry in tracker.get("depRelations") or []:
+        if (isinstance(entry, dict) and entry.get("key") == key
+                and entry.get("status") == "pending"):
+            entry = dict(entry)
+            entry.update(claim_owner())
             entry["updatedAt"] = now_iso()
         ledger.append(entry)
     tracker = dict(tracker)

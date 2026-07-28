@@ -215,15 +215,22 @@ def write_tracker_block(path: Path, spec_data: dict, tracker: dict
     return atomic_write_json(path, spec_data)
 
 
-def locked_tracker_write(flow_dir: Path, spec_id: str, mutate) -> Result:
+def locked_tracker_write(flow_dir: Path, spec_id: str, mutate, *,
+                         collision_id: Optional[str] = None) -> Result:
     """Reload + mutate + persist the tracker block, SERIALIZED under the
     shared .flow writer lock (same pattern as relate._ledger_write and
     status._persist_applied_state). The spec snapshot loaded before the
     provider request must never be written back wholesale - that silently
     erases a concurrent update to the same spec. `mutate` receives the
     RELOADED merged tracker block and returns the block to persist; it must
-    touch only tracker-owned fields. Returns the persisted tracker block, or
-    a TrackerError - never raises."""
+    touch only tracker-owned fields. `mutate` may instead return a
+    TrackerError to abort - nothing is persisted and the error propagates.
+    When `collision_id` is given, the durable-collision scan runs INSIDE this
+    critical section, atomically with the write: an unlocked pre-scan is a
+    check-then-lock race (two specs persisting the same durable id can both
+    pass the scan, then both serialized writes succeed, violating the
+    one-spec-per-durable-id invariant). Returns the persisted tracker block,
+    or a TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
         with config_lock(flow_dir):
@@ -231,8 +238,14 @@ def locked_tracker_write(flow_dir: Path, spec_id: str, mutate) -> Result:
             if isinstance(reloaded, TrackerError):
                 return reloaded
             path, spec = reloaded
+            if collision_id is not None:
+                hit = collision(flow_dir, collision_id, except_spec=spec_id)
+                if hit:
+                    return hit
             tracker = merged_tracker(spec)
             tracker = mutate(tracker)
+            if isinstance(tracker, TrackerError):
+                return tracker
             werr = write_tracker_block(path, spec, tracker)
             if werr:
                 return werr

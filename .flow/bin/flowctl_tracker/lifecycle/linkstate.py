@@ -9,7 +9,7 @@ from ..executor import execute as default_execute
 from ..types import ErrorClass, TrackerError
 # derive_link_state lives in helpers (merged_tracker needs it below the
 # defaults); re-exported here because this module is its public home.
-from .helpers import (Execute, Result, collision, derive_link_state, dict_,
+from .helpers import (Execute, Result, derive_link_state, dict_,
                       load_spec, locked_tracker_write, merged_tracker,
                       now_iso, read_config, tracker_type)
 
@@ -105,9 +105,6 @@ def complete_identifier_only(flow_dir, spec_id: str, *,
     resolved = resolve_linear_uuid(ex, identifier.strip())
     if isinstance(resolved, TrackerError):
         return resolved
-    hit = collision(flow_dir, resolved["id"], except_spec=spec_id)
-    if hit:
-        return hit
     link_fields = {
         "id": resolved["id"],
         "identifier": resolved["identifier"],
@@ -120,9 +117,13 @@ def complete_identifier_only(flow_dir, spec_id: str, *,
     # writer lock - the pre-resolve snapshot must never be replayed wholesale
     # (a concurrent flowctl update to the same spec landing while the GraphQL
     # request was in flight would be silently erased; create/persist_external
-    # follow the same reload-merge rule).
+    # follow the same reload-merge rule). The durable-collision scan runs
+    # INSIDE the same critical section via collision_id: an unlocked pre-scan
+    # is a check-then-lock race - two specs completing/persisting the same
+    # durable id could both pass it, then both serialized writes succeed.
     persisted = locked_tracker_write(
-        flow_dir, spec_id, lambda t: {**t, **link_fields})
+        flow_dir, spec_id, lambda t: {**t, **link_fields},
+        collision_id=resolved["id"])
     if isinstance(persisted, TrackerError):
         return persisted
     return {"id": persisted["id"], "identifier": persisted["identifier"],

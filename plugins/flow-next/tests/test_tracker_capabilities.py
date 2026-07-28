@@ -1136,6 +1136,103 @@ class RelatePendingClaim(unittest.TestCase):
             self.assertEqual([c.op for c in ex.calls], ["relate-list"],
                              "repair issues no mutation")
 
+    def _pair_with_pending(self, flow: Path, *, pid: int,
+                           claimed_at: float) -> str:
+        import socket
+        key = R.dep_relation_key(LN_UUID, LN_UUID_B)
+        a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                "linkState": "linked",
+                "depRelations": [{"key": key, "dep_spec": "fn-2-dep",
+                                  "from_tracker_id": LN_UUID,
+                                  "to_tracker_id": LN_UUID_B,
+                                  "type": "blocks", "source": "flow",
+                                  "status": "pending",
+                                  "pid": pid,
+                                  "host": socket.gethostname(),
+                                  "claimedAt": claimed_at,
+                                  "updatedAt": "2026-01-01T00:00:00Z"}]}
+        b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+        return key
+
+    @staticmethod
+    def _probe(nodes: list):
+        return ok({"data": {"issue": {
+            "id": LN_UUID,
+            "relations": {"nodes": []},
+            "inverseRelations": {"nodes": nodes},
+        }}})
+
+    def test_staggered_live_pending_claim_backs_off(self) -> None:
+        # PR #246 review wave 6 (staggered variant of the claim race): worker 2
+        # starts AFTER worker 1's pending entry landed but BEFORE worker 1's
+        # create is visible - snapshot sees pending + remote-absent. The old
+        # code took the wave-1 retry branch and created AGAIN. A LIVE owner
+        # (recent claim, foreign pid) must back off with no provider mutation.
+        import os
+        import time
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            other_pid = os.getpid() + 1  # not us; recency alone keeps it live
+            self._pair_with_pending(flow, pid=other_pid,
+                                    claimed_at=time.time())
+            ex = fake_execute({"relate-list": [self._probe([])]})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertIsInstance(out, TrackerError, msg=repr(out))
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "concurrent_claim")
+            self.assertTrue((out.details or {}).get("recoverable"))
+            self.assertEqual([c.op for c in ex.calls], ["relate-list"],
+                             "probe only - worker 2 must NOT create: worker "
+                             "1's create is the ONE provider create overall")
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["status"], "pending")
+            self.assertEqual(entries[0]["pid"], other_pid,
+                             "worker 1's claim is untouched")
+            self.assertFalse(
+                (flow / "review-deferred" / "tracker-relate.md").exists(),
+                "a live concurrent claim is not a human-review collision")
+
+            # Once worker 1's create becomes visible, the back-off re-run
+            # HEALS the ledger (repair path) - still no second create.
+            ex2 = fake_execute({"relate-list": [self._probe(
+                [{"type": "blocks", "issue": {"id": LN_UUID_B}}])]})
+            again = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                             execute=ex2)
+            self.assertNotIsInstance(again, TrackerError, msg=repr(again))
+            self.assertEqual(again["reason"], "ledger_repaired")
+            self.assertEqual([c.op for c in ex2.calls], ["relate-list"])
+
+    def test_stale_dead_pid_pending_still_retries_create(self) -> None:
+        # Interrupted-run retry semantics preserved: a pending entry whose
+        # owner is past the stale window with a dead pid ON THIS HOST is a
+        # crashed run's leftover - reclaimed and the create retried.
+        import time
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            # pid 0 is never alive; claimedAt is past the stale window.
+            self._pair_with_pending(flow, pid=0,
+                                    claimed_at=time.time() - 999)
+            created = ok({"data": {"issueRelationCreate": {
+                "success": True, "issueRelation": {"id": "rel-1"}}}})
+            ex = fake_execute({"relate-list": [self._probe([])],
+                               "relate-create": created})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "applied")
+            self.assertIn("relate-create", [c.op for c in ex.calls])
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            for field in ("status", "pid", "host", "claimedAt"):
+                self.assertNotIn(field, entries[0],
+                                 "finalized entry matches the fn-64 shape")
+
 
 class GithubRelateProbeDrain(unittest.TestCase):
     """PR #246 review wave 4: the sub_issues probe drains EVERY page to the

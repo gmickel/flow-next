@@ -14,11 +14,77 @@ from ..executor import execute as default_execute
 from ..types import ErrorClass, TrackerError
 from .helpers import (CREATE_FIRST_KEY_RE, Execute, Result, atomic_write_json,
                       leaf_is_safe,
-                      collision, load_spec, merged_tracker, now_iso,
+                      load_spec, merged_tracker, now_iso,
                       read_config, tracker_type, write_sync_receipt)
 from .helpers import locked_tracker_write as _locked_tracker_write
 from .linkstate import derive_link_state, resolve_linear_uuid
 from .providers import provider_create
+
+
+def _claim_spec_create(flow_dir: Path, spec_id: str, rec_path: Path,
+                       provider: str, title: str) -> Optional[TrackerError]:
+    """Reserve an unlinked spec under the shared writer lock BEFORE the
+    provider create (create-first's claim pattern, keyed on the spec id).
+    Two concurrent creates against the same unlinked spec could both pass the
+    unlocked linkState check and both reach the provider mutation - two
+    remote issues, the later link write orphaning the first. Under the lock:
+    the linkState is re-checked from a RELOADED spec, a live claim from
+    another process refuses (create_in_flight), and OUR pending claim lands
+    durably before any remote mutation. The CRASH window (claim written,
+    create landed, process died before the link write) stays open by spec
+    decision - this closes only the live concurrent race."""
+    unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
+    if unsafe:
+        return unsafe
+    secured = _ensure_create_first_ignored(flow_dir)
+    if secured is not None:
+        return secured
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            reloaded = load_spec(flow_dir, spec_id)
+            if isinstance(reloaded, TrackerError):
+                return reloaded
+            _path, spec_data = reloaded
+            state = derive_link_state(merged_tracker(spec_data))
+            if state != "unlinked":
+                return TrackerError(
+                    ErrorClass.CONFLICT,
+                    f"spec {spec_id!r} is already linked "
+                    f"(linkState={state!r}); refuse bare create",
+                    subtype="already_linked",
+                )
+            if rec_path.is_file():
+                try:
+                    prior = json.loads(rec_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    prior = None
+                if (isinstance(prior, dict)
+                        and prior.get("status") == "pending"
+                        and not _claim_is_stale(prior, rec_path)):
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        f"create for spec {spec_id!r} is already in flight "
+                        "in another process; retry after it finishes",
+                        subtype="create_in_flight",
+                        details={"specId": spec_id,
+                                 "claim": {"pid": prior.get("pid"),
+                                           "host": prior.get("host"),
+                                           "claimedAt": prior.get("claimedAt")}},
+                        auto_retryable=True)
+                # A STALE pending claim (crashed run) is reclaimed by
+                # overwriting it with OUR claim below - same rule as
+                # create_first.
+            claim = {"specId": spec_id, "status": "pending",
+                     "pid": os.getpid(), "host": socket.gethostname(),
+                     "claimedAt": time.time(), "title": title,
+                     "transport": provider}
+            cerr = atomic_write_json(rec_path, claim)
+            if cerr:
+                return cerr
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
+    return None
 
 
 def create(flow_dir, spec_id: str, *, title: str, body: str,
@@ -43,14 +109,16 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
             f"(linkState={derive_link_state(tracker)!r}); refuse bare create",
             subtype="already_linked",
         )
+    rec_path = flow_dir / "create-first" / f"spec-{spec_id}.json"
+    claimed = _claim_spec_create(flow_dir, spec_id, rec_path, provider, title)
+    if claimed is not None:
+        return claimed
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
     created = provider_create(config, ex, title=title, body=body)
     if isinstance(created, TrackerError):
+        _release_claim(rec_path)
         return created
-    hit = collision(flow_dir, created["id"], except_spec=spec_id)
-    if hit:
-        return hit
     link_fields = {
         "id": created["id"],
         "identifier": created["identifier"],
@@ -58,13 +126,33 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
         "linkState": "linked",
         "lastSyncedAt": now_iso(),
     }
+
+    def _link(t: dict):
+        # An identity that appeared concurrently (e.g. persist-external, which
+        # takes no create claim) must never be clobbered - replacing it is
+        # exactly the orphan-duplicate the claim exists to prevent. The
+        # created identity rides out via the completed-steps decoration below.
+        state = derive_link_state(t)
+        if state != "unlinked" and str(t.get("id") or "") != str(created["id"]):
+            return TrackerError(
+                ErrorClass.CONFLICT,
+                f"spec {spec_id!r} became {state} to "
+                f"{t.get('identifier')!r} while the provider create was in "
+                "flight; refusing to overwrite the existing link",
+                subtype="already_linked",
+                details={"linkState": state,
+                         "identifier": t.get("identifier")})
+        return {**t, **link_fields}
+
     # Persist ONLY the link-owned fields onto a spec RELOADED under the shared
     # writer lock - the pre-create snapshot must never be replayed wholesale
     # (a concurrent flowctl update to the same spec landed while the provider
     # request was in flight would be silently erased; status/relate/sync-body
-    # follow the same reload-merge rule).
+    # follow the same reload-merge rule). The durable-collision scan runs
+    # inside the same critical section (check-then-lock was a race).
     err = _locked_tracker_write(
-        flow_dir, spec_id, lambda t: {**t, **link_fields})
+        flow_dir, spec_id, _link, collision_id=created["id"])
+    _release_claim(rec_path)
     if isinstance(err, TrackerError):
         # The issue exists but the spec is still unlinked - a bare failure
         # here reads as "nothing happened" and a retry would create a
@@ -407,20 +495,40 @@ def persist_external(flow_dir, spec_id: str, *, identifier: str,
             "linkState": "linked", "lastSyncedAt": now_iso(),
         })
 
-    if resolved_id is not None:
-        hit = collision(flow_dir, resolved_id, except_spec=spec_id)
-        if hit:
-            return hit
-
     # Persist ONLY the link-owned fields onto a spec RELOADED under the shared
     # writer lock - the snapshot loaded before the UUID resolve/verify request
     # must never be replayed wholesale (a concurrent flowctl update to the
     # same spec landed while GraphQL was in flight would be silently erased;
-    # status/relate/sync-body follow the same reload-merge rule).
+    # status/relate/sync-body follow the same reload-merge rule). The
+    # durable-collision scan runs INSIDE the same critical section via
+    # collision_id: an unlocked pre-scan is a check-then-lock race - two
+    # specs persisting the same durable id could both pass it, then both
+    # serialized writes succeed.
     owned = {key: tracker.get(key)
              for key in ("id", "identifier", "url", "linkState", "lastSyncedAt")}
+
+    def _persist(t: dict):
+        # A link that appeared on THIS spec while GraphQL was in flight is
+        # never repointed and never downgraded: overwriting it repeats the
+        # existing-link-guard regression (linked/old silently became a new
+        # identity), and a degraded identifier_only write would erase a
+        # durable id.
+        state = derive_link_state(t)
+        if state != "unlinked" and (
+                t.get("identifier") != owned.get("identifier")
+                or (owned.get("id") is None and t.get("id"))):
+            return TrackerError(
+                ErrorClass.CONFLICT,
+                f"spec {spec_id!r} became {state} to "
+                f"{t.get('identifier')!r} while persist-external was in "
+                "flight; refusing to overwrite the existing link",
+                subtype="already_linked",
+                details={"linkState": state,
+                         "identifier": t.get("identifier")})
+        return {**t, **owned}
+
     persisted = _locked_tracker_write(
-        flow_dir, spec_id, lambda t: {**t, **owned})
+        flow_dir, spec_id, _persist, collision_id=resolved_id)
     if isinstance(persisted, TrackerError):
         return persisted
 

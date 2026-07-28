@@ -38,18 +38,49 @@ def _status_labels(labels: Any) -> list[str]:
     return names
 
 
-def _slot_from_status_label(labels: Any) -> Optional[str]:
+def _recognized_slot(name: str) -> Optional[str]:
+    token = name.split(":", 1)[-1].strip().lower().replace("-", "_")
+    # legacy planned → todo
+    if token == "planned":
+        return "todo"
+    if token in {"backlog", "todo", "in_progress", "in_review", "done"}:
+        return token
+    if token in {"verified"}:
+        return "done"
+    if token in {"deferred", "wontfix", "cancelled", "canceled"}:
+        return "cancelled"
+    return None
+
+
+def _slot_from_status_label(labels: Any) -> Union[Optional[str], TrackerError]:
+    """Classify the issue's status:* labels into a single slot.
+
+    The status:* namespace is single-valued (github.md/gitlab.md "Idempotent
+    status: labels"). More than one recognized status:* label is a violated
+    invariant: picking whichever the provider lists first would be arbitrary
+    (order-dependent transitions) and can no-op into permanently leaving the
+    namespace inconsistent — so it is a CONFLICT for the recovery surface,
+    never a silent first-match. Unrecognized status:* labels are ignored.
+    """
+    recognized: list[tuple[str, str]] = []
+    seen: set[str] = set()
     for name in _status_labels(labels):
-        token = name.split(":", 1)[-1].strip().lower().replace("-", "_")
-        # legacy planned → todo
-        if token == "planned":
-            return "todo"
-        if token in {"backlog", "todo", "in_progress", "in_review", "done"}:
-            return token
-        if token in {"verified"}:
-            return "done"
-        if token in {"deferred", "wontfix", "cancelled", "canceled"}:
-            return "cancelled"
+        slot = _recognized_slot(name)
+        if slot is None or name in seen:
+            continue
+        seen.add(name)
+        recognized.append((name, slot))
+    if len(recognized) > 1:
+        names = [n for n, _ in recognized]
+        return TrackerError(
+            ErrorClass.CONFLICT,
+            f"ambiguous status labels {names!r}: status:* is single-valued",
+            subtype="ambiguous-status-labels",
+            details={"normalized": "status", "labels": names,
+                     "slots": sorted({s for _, s in recognized})},
+        )
+    if recognized:
+        return recognized[0][1]
     return None
 
 
@@ -78,6 +109,8 @@ def _norm_github(parent: dict) -> Union[str, TrackerError]:
         return "done"
     # OPEN
     labeled = _slot_from_status_label(parent.get("labels"))
+    if isinstance(labeled, TrackerError):
+        return labeled
     if labeled == "cancelled":
         return "cancelled"
     if labeled:
@@ -90,6 +123,8 @@ def _norm_gitlab(parent: dict) -> Union[str, TrackerError]:
     state = str(parent.get("state") or "").lower()
     if state == "closed":
         labeled = _slot_from_status_label(parent.get("labels"))
+        if isinstance(labeled, TrackerError):
+            return labeled
         if labeled == "cancelled":
             return "cancelled"
         return "done"
@@ -101,6 +136,8 @@ def _norm_gitlab(parent: dict) -> Union[str, TrackerError]:
             details={"normalized": "status", "raw": state},
         )
     labeled = _slot_from_status_label(parent.get("labels"))
+    if isinstance(labeled, TrackerError):
+        return labeled
     if labeled == "cancelled":
         return "cancelled"
     if labeled:
