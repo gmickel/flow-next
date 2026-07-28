@@ -205,11 +205,15 @@ def flow_to_normalized(spec_data: dict, pr_evidence: str,
         # none / closed-unmerged / ambiguous / probe-error → in_review (NOT terminal)
         return "in_review"
 
-    # Rows 7–8: open spec, no PR signal
+    # Rows 7–8: open spec, no PR signal. `blocked` counts as work underway:
+    # status-sync.md says blocked tasks do not change the spec-level
+    # normalized status - "the issue stays in-progress" - so an all-blocked
+    # spec must not regress to todo (that would conflict against an
+    # already-in-progress tracker or hide that work started).
     statuses = [_task_status(t) for t in task_list]
     if not task_list:
         return "backlog"  # row 8 — no tasks
-    if any(s in ("in_progress", "done") for s in statuses):
+    if any(s in ("in_progress", "done", "blocked") for s in statuses):
         return "in_progress"  # row 7
     return "todo"  # row 8 — all todo (planned→todo)
 

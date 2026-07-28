@@ -478,6 +478,97 @@ class PartialCreateReceipt(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Receipt write failure: mutation landed but sync-runs is unwritable
+# ---------------------------------------------------------------------------
+
+class ReceiptWriteFailure(unittest.TestCase):
+    """The remote mutation lands but the aggregate receipt write fails
+    (unwritable sync-runs). ZERO receipts exist, so sync check reports the
+    lifecycle event missing - the returned error must say so honestly
+    (receipt_status "unwritten" + a structured receipt_write_failed marker)
+    while keeping the original completed_steps and identity evidence
+    verbatim. It must never claim an errored receipt was written."""
+
+    def _block_sync_runs(self, flow: Path) -> None:
+        # A regular file where the receipts dir belongs: mkdir(parents=True)
+        # inside atomic_write_json raises FileExistsError (an OSError), the
+        # deterministic cross-platform stand-in for an unwritable sync-runs.
+        (flow / "sync-runs").write_text("not a directory", encoding="utf-8")
+
+    def _assert_unwritten(self, out, flow: Path) -> None:
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.details["receipt_status"], "unwritten")
+        marker = out.details["receipt_write_failed"]
+        self.assertEqual(marker["class"], "transport")
+        self.assertEqual(marker["subtype"], "write")
+        self.assertIn("atomic write failed", marker["message"])
+        self.assertEqual(_receipts(flow), [])  # nothing claims a receipt exists
+
+    def test_partial_create_then_receipt_write_fails(self) -> None:
+        # create lands, locked link write fails, AND the partial-success
+        # receipt write fails: original error + evidence survive verbatim.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg())  # unlinked
+            self._block_sync_runs(flow)
+            ff = _flow_file(root)
+            ex = fake_execute({
+                "lifecycle-create": ok({
+                    "id": 1, "node_id": GH_NODE, "number": 42,
+                    "html_url": "https://github.com/o/r/issues/42",
+                }),
+            })
+            boom = TrackerError(ErrorClass.TRANSPORT, "link write boom",
+                                subtype="disk")
+            with mock.patch.object(LV, "_locked_tracker_write",
+                                   return_value=boom):
+                out = F.sync(flow, SPEC_ID, op="push",
+                             event="work.firstClaim", flow_file=ff,
+                             execute=ex)
+            self._assert_unwritten(out, flow)
+            # The original error and partial-success evidence are intact.
+            self.assertIs(out.cls, ErrorClass.TRANSPORT)
+            self.assertEqual(out.message, "link write boom")
+            self.assertEqual(out.subtype, "disk")
+            self.assertEqual(out.details["completed_steps"], ["create"])
+            self.assertEqual(out.details["id"], GH_NODE)
+            self.assertEqual(out.details["identifier"], "#42")
+
+    def test_success_path_receipt_write_fails_surfaces_unwritten(self) -> None:
+        # Every remote step succeeds; only the final aggregate receipt write
+        # fails. The op must NOT return ok: the run surfaces the write
+        # failure with completed_steps evidence and receipt_status unwritten.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg())  # unlinked
+            self._block_sync_runs(flow)
+            ff = _flow_file(root)
+            ex = fake_execute({
+                "lifecycle-create": ok({
+                    "id": 1, "node_id": GH_NODE, "number": 42,
+                    "html_url": "https://github.com/o/r/issues/42",
+                }),
+                **_noop_push_responses(FLOW_BODY),
+            })
+            payload, code = F.run(
+                flow, spec_id=SPEC_ID, op="push", event="work.firstClaim",
+                flow_file=ff, execute=ex)
+            self.assertNotEqual(code, 0)
+            data = json.loads(payload)
+            self.assertFalse(data["success"])
+            # sync-check surface: completed_steps evidence survives and
+            # receipt_status says no receipt exists.
+            for step in ("create", "sync-body", "status"):
+                self.assertIn(step, data["data"]["completed_steps"])
+            self.assertEqual(data["data"]["receipt_status"], "unwritten")
+            self.assertEqual(
+                data["details"]["receipt_write_failed"]["class"], "transport")
+            self.assertEqual(_receipts(flow), [])
+
+
+# ---------------------------------------------------------------------------
 # Comment marker + dedup
 # ---------------------------------------------------------------------------
 

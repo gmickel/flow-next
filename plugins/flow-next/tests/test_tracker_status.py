@@ -878,6 +878,123 @@ class Round4PersistIntegrity(unittest.TestCase):
             self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
 
 
+class BlockedTasksAreWorkUnderway(unittest.TestCase):
+    """PR #246 review: status-sync.md says blocked tasks do not change the
+    spec-level normalized status - "the issue stays `in-progress`" - so an
+    all-blocked spec with no PR signal derives in_progress, never todo."""
+
+    def test_all_blocked_no_pr_signal_is_in_progress_per_status_sync_md(self) -> None:
+        spec = {"status": "open", "completion_review_status": "unknown"}
+        out = flow_to_normalized(
+            spec, "none", True,
+            tasks=[{"status": "blocked"}, {"status": "blocked"}])
+        self.assertEqual(out, "in_progress")
+
+    def test_blocked_among_todo_is_still_in_progress(self) -> None:
+        spec = {"status": "open", "completion_review_status": "unknown"}
+        out = flow_to_normalized(
+            spec, "none", True,
+            tasks=[{"status": "todo"}, {"status": "blocked"}])
+        self.assertEqual(out, "in_progress")
+
+
+NEW_NODE = "I_kwDORepointed99"
+
+
+class Round6IdentityGuard(unittest.TestCase):
+    """PR #246 review: spec repointed to a different issue while the parent
+    read / PR probe / provider write was in flight must not persist onto the
+    NEW link (linkstate._complete pattern - refuse with structured CONFLICT,
+    persist nothing)."""
+
+    @staticmethod
+    def _repoint(path: Path) -> None:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["tracker"] = {"id": NEW_NODE, "identifier": "#99",
+                           "url": "https://x/99", "lastSyncedAt": None,
+                           "linkState": "linked"}
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_applied_path_refuses_persist_after_repoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "unknown"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+            cfg_path = flow / "config.json"
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            cfg["review"] = {"backend": "none"}
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+            def repoint_then_ok(req):
+                # Another command repoints the spec to a different issue
+                # while the provider status write is in flight.
+                self._repoint(path)
+                return ok([{"name": "status:done"}])
+
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed"}),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:done"}]),
+                "status-label-readback": repoint_then_ok,
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "identity_drift")
+            details = out.details or {}
+            self.assertEqual(details["expected"]["id"], GH_NODE)
+            self.assertEqual(details["found"]["id"], NEW_NODE)
+            # The landed provider write is still reported (never silent).
+            self.assertEqual(details["completed_steps"], ["status-write"])
+            # lastSyncedAt on the NEW link untouched - persist refused.
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["tracker"]["id"], NEW_NODE)
+            self.assertIsNone(saved["tracker"]["lastSyncedAt"])
+            self.assertEqual(_receipts(flow), [],
+                             "no receipt for a refused persist")
+
+    def test_apply_local_refuses_done_fold_after_repoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "open"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+
+            def repoint_parent(req):
+                # Repoint mid-flight; the OLD issue reads closed/terminal.
+                self._repoint(path)
+                return ok(_gh_parent(state="closed", labels=[],
+                                     state_reason="completed"))
+
+            ex = fake_execute({
+                "status-parent-read": repoint_parent,
+                "merge-evidence": ok([]),
+            })
+            out = S.status(flow, "fn-1-demo", to="todo", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "identity_drift")
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["status"], "open",
+                             "done must NOT fold from the OLD issue's "
+                             "terminal state onto the repointed spec")
+            self.assertEqual(saved["tracker"]["id"], NEW_NODE)
+            self.assertIsNone(saved["tracker"]["lastSyncedAt"])
+            self.assertEqual(_receipts(flow), [])
+
+
 class Round2Ordering(unittest.TestCase):
     def test_terminal_agreement_is_a_noop_never_a_refold(self) -> None:
         d = decide("done", None, "done", "done", "merged")

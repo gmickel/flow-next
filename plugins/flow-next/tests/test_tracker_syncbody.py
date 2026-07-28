@@ -782,3 +782,106 @@ class SyncBodyClaimSerialization(unittest.TestCase):
             receipts = _receipts(flow)
             self.assertEqual(len(receipts), 1, "still one receipt per verb")
             self.assertEqual(receipts[0]["status"], "pushed")
+
+
+# ---------------------------------------------------------------------------
+# Identity guard: set-tracker-id repointing mid-transaction refuses commit
+# ---------------------------------------------------------------------------
+
+class IdentityGuardOnCommit(unittest.TestCase):
+    """PR #246 review: the syncbody claim serializes sibling sync-body runs,
+    not `flowctl sync set-tracker-id`. If set-tracker-id repoints the spec
+    while our remote read/write is in flight, the reload inside
+    _commit_paired_base used to accept the new tracker block and store bodies
+    read from the OLD issue as the NEW issue's paired merge base. The commit
+    now re-checks the reloaded durable/display identity against the locator
+    the transaction used and refuses with structured CONFLICT
+    (identity_changed), persisting nothing."""
+
+    NEW_ID = "I_kwDORepointed9"
+    NEW_DISPLAY = "#99"
+
+    def _repoint(self, flow: Path) -> None:
+        """Simulate `sync set-tracker-id` landing mid-flight: repoint the
+        spec's tracker identity and clear the (now foreign) merge bases."""
+        path = flow / "specs" / "fn-1-demo.json"
+        spec = json.loads(path.read_text(encoding="utf-8"))
+        spec["tracker"].update({
+            "id": self.NEW_ID, "identifier": self.NEW_DISPLAY,
+            "url": "https://x/99",
+            "mergeBaseFlow": None, "mergeBaseTracker": None,
+            "baseHashFlow": None, "baseHashTracker": None,
+            "lastSyncedAt": None,
+        })
+        path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+
+    def _assert_refused_untouched(self, flow: Path, out) -> None:
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "identity_changed")
+        details = out.details or {}
+        self.assertEqual(details.get("transaction"),
+                         {"durable": GH_NODE, "display": "#42"})
+        self.assertEqual(details.get("current"),
+                         {"durable": self.NEW_ID,
+                          "display": self.NEW_DISPLAY})
+        # The NEW identity and its (empty) bases are untouched: nothing from
+        # the old issue's transaction was persisted.
+        saved = _saved(flow)["tracker"]
+        self.assertEqual(saved["id"], self.NEW_ID)
+        self.assertEqual(saved["identifier"], self.NEW_DISPLAY)
+        self.assertIsNone(saved["mergeBaseFlow"])
+        self.assertIsNone(saved["mergeBaseTracker"])
+        self.assertIsNone(saved["baseHashFlow"])
+        self.assertIsNone(saved["baseHashTracker"])
+        self.assertIsNone(saved["lastSyncedAt"])
+
+    def test_push_repointed_mid_transaction_refuses_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(flow, gh_cfg(), tracker={
+                "id": GH_NODE, "identifier": "#42", "url": "u",
+                "linkState": "linked",
+                "mergeBaseFlow": None, "mergeBaseTracker": None,
+                "baseHashFlow": None, "baseHashTracker": None,
+                "lastSyncedAt": None})
+
+            def repoint_then_readback(_req):
+                self._repoint(flow)
+                return ok(_gh_issue("NEW BODY"))
+
+            ex = fake_execute({
+                "sync-body-parent-read": ok(_gh_issue("OLD REMOTE")),
+                "wire-parent-read": ok(_gh_issue("OLD REMOTE")),
+                "wire-update": ok(_gh_issue("NEW BODY")),
+                "wire-read": repoint_then_readback,
+            })
+            out = SB.sync_body(flow, "fn-1-demo", flow_file_body="NEW BODY\n",
+                               direction="push", execute=ex)
+            self._assert_refused_untouched(flow, out)
+            self.assertEqual((out.details or {}).get("completed_steps"),
+                             ["wire-update", "wire-read"])
+            rec_path = flow / "create-first" / "syncbody-fn-1-demo.json"
+            self.assertFalse(rec_path.exists(),
+                             "claim released after the refused run")
+
+    def test_pull_repointed_mid_transaction_refuses_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_flow(flow, gh_cfg(), tracker={
+                "id": GH_NODE, "identifier": "#42", "url": "u",
+                "linkState": "linked",
+                "mergeBaseFlow": None, "mergeBaseTracker": None,
+                "baseHashFlow": None, "baseHashTracker": None,
+                "lastSyncedAt": None})
+
+            def repoint_then_parent(_req):
+                self._repoint(flow)
+                return ok(_gh_issue("OLD REMOTE"))
+
+            ex = fake_execute({
+                "sync-body-parent-read": repoint_then_parent,
+            })
+            out = SB.sync_body(flow, "fn-1-demo", flow_file_body=FLOW_BODY,
+                               direction="pull", execute=ex)
+            self._assert_refused_untouched(flow, out)

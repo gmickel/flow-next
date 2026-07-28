@@ -184,14 +184,61 @@ def _concurrent_claim_error(dep_spec: str, key: str) -> TrackerError:
         details={"recoverable": True, "key": key})
 
 
+def _relinked_error(spec_id: str, dep_spec: str, *, expected_from: str,
+                    expected_to: str, current_from, current_to) -> TrackerError:
+    return TrackerError(
+        ErrorClass.CONFLICT,
+        f"tracker link for {spec_id} or {dep_spec} changed while this relate "
+        "invocation was in flight (a spec was relinked to a different "
+        "issue); refusing to claim under the stale identity - nothing "
+        "written, no mutation performed by this invocation; re-run relate "
+        "against the current link state",
+        subtype="relinked",
+        details={"recoverable": True,
+                 "expected": {"from": expected_from, "to": expected_to},
+                 "current": {"from": current_from, "to": current_to}})
+
+
+def _claim_identity_drift(flow_dir: Path, spec_id: str, dep_spec: str, *,
+                          tracker: dict, from_id: str, to_id: str
+                          ) -> Optional[TrackerError]:
+    """Revalidate BOTH linked identities INSIDE the claim's critical section
+    (the wave-10 complete_identifier_only pattern: re-check state under the
+    lock, refuse and persist nothing on drift). The pair snapshot this
+    invocation classified against was taken BEFORE the probe and guard ran;
+    if either spec was relinked in that window, the key/from/to computed from
+    the snapshot belong to the OLD issues - claiming would attach an old-ID
+    ledger entry to the newly linked spec and then create the remote edge
+    between the old issues (orphaned relation, ledger on the wrong identity).
+    `tracker` is the caller's RELOADED tracker block for `spec_id` (already
+    loaded under the same lock); the dep spec is reloaded here. Returns a
+    CONFLICT/relinked TrackerError on drift, None when both durable ids still
+    match - never raises."""
+    current_from = tracker.get("id")
+    reloaded_dep = load_spec(flow_dir, dep_spec)
+    if isinstance(reloaded_dep, TrackerError):
+        return reloaded_dep
+    _dep_path, dep = reloaded_dep
+    current_to = merged_tracker(dep).get("id")
+    if (isinstance(current_from, str) and current_from.strip() == from_id
+            and isinstance(current_to, str)
+            and current_to.strip() == to_id):
+        return None
+    return _relinked_error(spec_id, dep_spec,
+                           expected_from=from_id, expected_to=to_id,
+                           current_from=current_from, current_to=current_to)
+
+
 def _ledger_reclaim(flow_dir: Path, spec_id: str, *, key: str,
-                    dep_spec: str) -> Result:
+                    dep_spec: str, from_id: str, to_id: str) -> Result:
     """RECLAIM a stale pending entry (crashed run's leftover) by stamping OUR
     owner triple onto it under the shared writer lock. Re-checks liveness on
     the RELOADED entry inside the lock: if another invocation reclaimed (or
     finalized) it since our snapshot, this invocation backs off instead of
-    issuing a duplicate create. Returns the persisted tracker block, or a
-    TrackerError - never raises."""
+    issuing a duplicate create. Both linked identities are revalidated
+    against from/to first - a relink since the pair load aborts
+    (CONFLICT/relinked) rather than reclaiming a stale-identity entry.
+    Returns the persisted tracker block, or a TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
         with config_lock(flow_dir):
@@ -200,6 +247,11 @@ def _ledger_reclaim(flow_dir: Path, spec_id: str, *, key: str,
                 return reloaded
             path, spec = reloaded
             tracker = merged_tracker(spec)
+            derr = _claim_identity_drift(flow_dir, spec_id, dep_spec,
+                                         tracker=tracker,
+                                         from_id=from_id, to_id=to_id)
+            if derr:
+                return derr
             entry = ledger_entry(tracker, key)
             if (entry is None or entry.get("status") != "pending"
                     or _pending_claim_live(entry)):
@@ -222,7 +274,10 @@ def _ledger_claim(flow_dir: Path, spec_id: str, *, key: str, dep_spec: str,
     provider mutation (only the inserter mutates - otherwise both workers
     probe the edge as absent and both create). Stale interrupted-run pending
     entries never reach this path: they existed at snapshot time and take the
-    repair/retry classification branches instead. Returns the persisted
+    repair/retry classification branches instead. Also revalidates BOTH
+    linked identities against the from/to ids this invocation loaded at
+    start: a spec relinked after the pair load aborts (CONFLICT/relinked)
+    instead of claiming under the stale identity. Returns the persisted
     tracker block on a successful claim, or a TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
@@ -232,6 +287,11 @@ def _ledger_claim(flow_dir: Path, spec_id: str, *, key: str, dep_spec: str,
                 return reloaded
             path, spec = reloaded
             tracker = merged_tracker(spec)
+            derr = _claim_identity_drift(flow_dir, spec_id, dep_spec,
+                                         tracker=tracker,
+                                         from_id=from_id, to_id=to_id)
+            if derr:
+                return derr
             if ledger_entry(tracker, key) is not None:
                 return _concurrent_claim_error(dep_spec, key)
             tracker = ledger_append(
@@ -446,7 +506,8 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
         if _pending_claim_live(entry):
             return _concurrent_claim_error(blocked_by, key)
         reclaimed = _ledger_reclaim(flow_dir, spec_id, key=key,
-                                    dep_spec=blocked_by)
+                                    dep_spec=blocked_by,
+                                    from_id=from_id, to_id=to_id)
         if isinstance(reclaimed, TrackerError):
             return reclaimed
 

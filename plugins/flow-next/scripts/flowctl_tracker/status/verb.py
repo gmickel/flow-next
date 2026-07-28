@@ -63,13 +63,24 @@ def _locator(tracker: dict) -> Result:
 
 
 def _persist_applied_state(flow_dir: Path, spec_id: str, *,
-                           fold_local_done: bool) -> Result:
+                           fold_local_done: bool,
+                           expected_durable: Optional[str] = None,
+                           expected_display: Optional[str] = None) -> Result:
     """Reload + merge ONLY status-owned fields + persist, serialized under the
     shared .flow writer lock (same pattern as relate._ledger_write and
     syncbody._commit_paired_base). The spec snapshot loaded before the parent,
     PR-evidence, and provider requests must never be written back wholesale -
-    that would silently erase a concurrent update to the same spec. Returns the
-    persisted tracker block, or a TrackerError - never raises."""
+    that would silently erase a concurrent update to the same spec.
+
+    Identity guard (linkstate._complete pattern): the parent read, PR probe,
+    and provider status write all ran against the identity captured BEFORE
+    this lock. If the spec was repointed to a different issue while those
+    were in flight, an unconditional merge would advance lastSyncedAt on the
+    NEW link after mutating the OLD issue (and apply_local would fold done
+    from the old issue's terminal state). Compare the reloaded block's
+    durable/display identity inside the lock; on drift return a structured
+    CONFLICT and persist nothing. Returns the persisted tracker block, or a
+    TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
         with config_lock(flow_dir):
@@ -78,6 +89,25 @@ def _persist_applied_state(flow_dir: Path, spec_id: str, *,
                 return reloaded
             path, spec = reloaded
             tracker = merged_tracker(spec)
+            if expected_durable is not None or expected_display is not None:
+                got_durable = tracker.get("id")
+                got_display = tracker.get("identifier")
+                if got_durable != expected_durable or got_display != expected_display:
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        f"spec {spec_id!r} tracker identity changed while the "
+                        f"status write was in flight (evaluated "
+                        f"{expected_display!r}/{expected_durable!r}, now "
+                        f"{got_display!r}/{got_durable!r}); refusing to "
+                        "persist; re-run status against the new link",
+                        subtype="identity_drift",
+                        details={
+                            "expected": {"id": expected_durable,
+                                         "identifier": expected_display},
+                            "found": {"id": got_durable,
+                                      "identifier": got_display},
+                        },
+                    )
             if fold_local_done:
                 spec = dict(spec)
                 spec["status"] = "done"
@@ -169,8 +199,10 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
     if decision.kind == "apply_local":
         # Tracker-terminal wins: fold into the LOCAL spec (status + lastSyncedAt),
         # never issue a tracker mutation. A PM closing the issue is authoritative.
-        persisted = _persist_applied_state(flow_dir, spec_id,
-                                           fold_local_done=True)
+        persisted = _persist_applied_state(
+            flow_dir, spec_id, fold_local_done=True,
+            expected_durable=locator["durable"],
+            expected_display=locator["display"])
         if isinstance(persisted, TrackerError):
             return persisted
         tracker = persisted
@@ -274,7 +306,10 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
         }
 
     # Applied — advance lastSyncedAt + receipt.
-    persisted = _persist_applied_state(flow_dir, spec_id, fold_local_done=False)
+    persisted = _persist_applied_state(
+        flow_dir, spec_id, fold_local_done=False,
+        expected_durable=locator["durable"],
+        expected_display=locator["display"])
     if isinstance(persisted, TrackerError):
         # Provider mutation LANDED; only local persistence failed. Report the
         # completed write in the error details (mirrors the syncbody

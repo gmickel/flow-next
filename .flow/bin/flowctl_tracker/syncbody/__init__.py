@@ -128,11 +128,20 @@ def _has_paired_base(tracker: dict) -> bool:
 
 
 def _commit_paired_base(flow_dir: Path, spec_id: str, *,
+                        locator: dict,
                         flow_file_body: str, readback_body: str,
                         advance_synced: bool) -> Result:
     """Atomically write both merge-base halves (+ hashes, optional lastSyncedAt).
 
-    Never writes one half alone (paired-snapshot invariant).
+    Never writes one half alone (paired-snapshot invariant). ``locator`` is
+    the durable/display identity the transaction's remote read/write used;
+    the reloaded tracker block is re-checked against it INSIDE the critical
+    section (linkstate's _complete pattern). The syncbody claim serializes
+    sibling sync-body runs, NOT ``sync set-tracker-id`` - if that repoints
+    the spec while our tracker I/O is in flight, committing bodies read from
+    the OLD issue as the NEW issue's paired merge base makes every later
+    reconcile merge against the wrong content. Refuse with structured
+    CONFLICT and persist nothing.
     """
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
 
@@ -147,6 +156,23 @@ def _commit_paired_base(flow_dir: Path, spec_id: str, *,
                 return loaded
             path, spec_data = loaded
             tracker = merged_tracker(spec_data)
+            reloaded = _locator(tracker)
+            if isinstance(reloaded, TrackerError) or reloaded != locator:
+                now_id = tracker.get("id")
+                now_display = tracker.get("identifier")
+                return TrackerError(
+                    ErrorClass.CONFLICT,
+                    f"spec {spec_id!r} tracker identity changed while "
+                    f"sync-body was in flight (transaction used "
+                    f"{locator.get('display')!r}/{locator.get('durable')!r}, "
+                    f"spec now has {now_display!r}/{now_id!r}); refusing to "
+                    "commit merge base read from the old issue; re-run "
+                    "sync-body against the new link",
+                    subtype="identity_changed",
+                    details={"specId": spec_id,
+                             "transaction": dict(locator),
+                             "current": {"durable": now_id,
+                                         "display": now_display}})
             tracker["mergeBaseFlow"] = base_flow
             tracker["mergeBaseTracker"] = merge_tracker
             tracker["baseHashFlow"] = hash_flow
@@ -318,7 +344,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
 
     if direction == "pull":
         committed = _commit_paired_base(
-            flow_dir, spec_id,
+            flow_dir, spec_id, locator=locator,
             flow_file_body=flow_file_body,
             readback_body=current_body,
             advance_synced=True,
@@ -394,7 +420,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
             }
         # No base yet: seed from current readback without writing.
         committed = _commit_paired_base(
-            flow_dir, spec_id,
+            flow_dir, spec_id, locator=locator,
             flow_file_body=flow_file_body,
             readback_body=current_body,
             advance_synced=True,
@@ -448,7 +474,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         readback_body = str(readback_body)
 
     committed = _commit_paired_base(
-        flow_dir, spec_id,
+        flow_dir, spec_id, locator=locator,
         flow_file_body=flow_file_body,
         readback_body=readback_body,
         advance_synced=True,

@@ -42,7 +42,7 @@ def fail_result(err: TrackerError, *, completed: list,
     receipt_status = worst_status(rank_statuses)
     details["receipt_status"] = receipt_status
     if flow_dir is not None and spec_id and event:
-        write_aggregate_receipt(
+        rerr = write_aggregate_receipt(
             flow_dir, spec_id=spec_id, event=event, status=receipt_status,
             tracker_id=tracker_id, transport=transport, degraded=degraded,
             note=f"facade partial ({', '.join(merged)})",
@@ -51,6 +51,19 @@ def fail_result(err: TrackerError, *, completed: list,
             # landed, so an automated retry is not flying blind.
             details=details,
         )
+        if rerr is not None:
+            # The remote mutation landed but the receipt write itself failed:
+            # ZERO receipts exist for this event, so sync check will report
+            # the lifecycle event missing. Say so honestly - receipt_status
+            # "errored" would claim an errored receipt was written. The
+            # original error, completed_steps and identity evidence stay
+            # verbatim; the write failure rides alongside, structured.
+            details["receipt_status"] = "unwritten"
+            details["receipt_write_failed"] = {
+                "class": rerr.cls.value,
+                "subtype": rerr.subtype,
+                "message": rerr.message,
+            }
     return TrackerError(
         err.cls, err.message, subtype=err.subtype,
         details=details, auto_retryable=err.auto_retryable,

@@ -981,6 +981,98 @@ class RelateDisplayDurableGuard(unittest.TestCase):
                              "abort BEFORE any probe or mutation request")
 
 
+class RelateRelinkGuard(unittest.TestCase):
+    """PR #246 review: the claim's critical section must revalidate BOTH
+    linked identities against the from/to ids loaded at start. A spec
+    relinked between the pair load and _ledger_claim would otherwise get an
+    old-ID ledger key appended to its NEW identity, and the remote edge would
+    be created between the OLD issues (orphaned relation, ledger attached to
+    the wrong identity)."""
+
+    NEW_UUID = "99999999-8888-7777-6666-555555555555"
+
+    def _pair(self, flow: Path) -> None:
+        a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+
+    @staticmethod
+    def _relink(flow: Path, spec_id: str, new_id: str) -> None:
+        path = flow / "specs" / f"{spec_id}.json"
+        spec = json.loads(path.read_text(encoding="utf-8"))
+        spec["tracker"]["id"] = new_id
+        spec["tracker"]["identifier"] = "WOR-99"
+        path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+
+    def _probe_and_relink(self, flow: Path, spec_id: str):
+        # Injection hook: the probe runs AFTER the pair load / classification
+        # snapshot and BEFORE _ledger_claim's locked section - the exact
+        # window the guard closes. Relink one spec to a different issue here.
+        body = {"data": {"issue": {
+            "id": LN_UUID,
+            "relations": {"nodes": []},
+            "inverseRelations": {"nodes": []},
+        }}}
+
+        def hook(request):
+            self._relink(flow, spec_id, self.NEW_UUID)
+            return ok(body)
+        return hook
+
+    def _assert_aborted(self, flow: Path, out, ex) -> None:
+        self.assertIsInstance(out, TrackerError, msg=repr(out))
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "relinked")
+        self.assertTrue((out.details or {}).get("recoverable"))
+        self.assertEqual([c.op for c in ex.calls], ["relate-list"],
+                         "probe only - the provider create is never issued")
+        spec = json.loads(
+            (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))
+        self.assertEqual(spec["tracker"].get("depRelations") or [], [],
+                         "no ledger entry written under the stale identity")
+
+    def test_blocked_spec_relinked_between_pair_load_and_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            ex = fake_execute(
+                {"relate-list": [self._probe_and_relink(flow, "fn-1-demo")]})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self._assert_aborted(flow, out, ex)
+
+    def test_blocker_spec_relinked_between_pair_load_and_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            ex = fake_execute(
+                {"relate-list": [self._probe_and_relink(flow, "fn-2-dep")]})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self._assert_aborted(flow, out, ex)
+
+    def test_normal_path_unchanged(self) -> None:
+        # No relink: the claim proceeds and the relate applies as before.
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            list_empty = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": []},
+            }}})
+            create = ok({"data": {"issueRelationCreate": {
+                "success": True, "issueRelation": {"id": "rel-1"}}}})
+            ex = fake_execute({"relate-list": [list_empty],
+                               "relate-create": create})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertNotIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out["kind"], "applied")
+
+
 class GitlabProbeDirection(unittest.TestCase):
     """PR #246 review: GitLab link_type is relative to the QUERIED issue.
     A reverse `blocks` link (A blocks B) must never satisfy an
