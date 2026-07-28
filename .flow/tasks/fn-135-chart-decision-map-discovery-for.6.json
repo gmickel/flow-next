@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-28T15:38:20.677911Z",
+  "depends_on": [
+    "fn-135-chart-decision-map-discovery-for.4",
+    "fn-135-chart-decision-map-discovery-for.3"
+  ],
+  "id": "fn-135-chart-decision-map-discovery-for.6",
+  "priority": 6,
+  "spec": "fn-135-chart-decision-map-discovery-for",
+  "spec_path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.6.md",
+  "status": "todo",
+  "title": "Ship guide router and adjacent skill handovers",
+  "updated_at": "2026-07-28T15:48:47.619329Z"
+}
