@@ -87,7 +87,7 @@ def read_text_file(path: Optional[str], *, label: str) -> Result:
                             f"{label} is required", subtype="args")
     try:
         return Path(path).read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"cannot read {label}: {exc}", subtype=label)
 
@@ -101,7 +101,7 @@ def local_spec_md(flow_dir: Path, spec_id: str) -> Result:
                             subtype="spec_md")
     try:
         return path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         return TrackerError(ErrorClass.TRANSPORT,
                             f"cannot read spec markdown: {exc}",
                             subtype="spec_md")

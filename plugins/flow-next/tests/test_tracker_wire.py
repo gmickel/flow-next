@@ -648,6 +648,24 @@ class EnvelopeRun(unittest.TestCase):
             self.assertTrue(data["success"])
             self.assertEqual(data["data"]["id"], GH_NODE)
 
+    def test_run_non_utf8_body_file_is_invalid_input_envelope(self) -> None:
+        """UnicodeDecodeError at the --body-file read must yield the structured
+        invalid-input envelope (nonzero exit, zero outbound), not a traceback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            (flow / "config.json").write_text(json.dumps(gh_cfg()), encoding="utf-8")
+            bf = flow / "body.md"
+            bf.write_bytes(b"\xff\xfe garbage")
+            ex = fake_execute({})
+            payload, code = W.run(flow, "update",
+                                  locator=json.dumps(loc(GH_NODE, "#42")),
+                                  body_file=str(bf), execute=ex)
+            self.assertNotEqual(code, 0)
+            data = json.loads(payload)
+            self.assertFalse(data["success"])
+            self.assertEqual(data["class"], "invalid_input")
+            self.assertEqual(ex.calls, [])
+
     def test_run_emits_conflict_exit_code(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp)

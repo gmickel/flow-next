@@ -412,7 +412,7 @@ def run(flow_dir, *, spec_id: Optional[str] = None,
 
     try:
         flow_file_body = Path(flow_file).read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         return envelope.failure(TrackerError(
             ErrorClass.INVALID_INPUT, f"cannot read --flow-file: {exc}",
             subtype="flow_file"))
@@ -421,7 +421,7 @@ def run(flow_dir, *, spec_id: Optional[str] = None,
     if tracker_body_file is not None:
         try:
             tracker_body = Path(tracker_body_file).read_text(encoding="utf-8")
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             return envelope.failure(TrackerError(
                 ErrorClass.INVALID_INPUT,
                 f"cannot read --tracker-body-file: {exc}",

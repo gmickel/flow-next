@@ -58,7 +58,7 @@ def run(flow_dir, verb: str, *, spec_id: Optional[str] = None,
     if body_file is not None:
         try:
             body = Path(body_file).read_text(encoding="utf-8")
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             return envelope.failure(TrackerError(
                 ErrorClass.INVALID_INPUT, f"cannot read --body-file: {exc}",
                 subtype="body_file"))

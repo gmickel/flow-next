@@ -876,7 +876,12 @@ class RelateLedgerDurability(unittest.TestCase):
                 (flow / "review-deferred" / "tracker-relate.md").exists(),
                 "no false collision queued")
 
-    def test_create_failure_leaves_pending_and_retry_creates_once(self) -> None:
+    def test_create_failure_releases_claim_and_retry_creates_once(self) -> None:
+        # PR #246 review wave 6: a DEFINITE create failure (parsed rejection,
+        # known not to have landed) RELEASES the pending claim - wave 1 left
+        # it behind, which made an immediate retry under a new pid fail
+        # concurrent_claim for the full stale window. Ambiguous transport
+        # failures still keep the entry (RelatePendingClaim covers that).
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp)
             self._pair(flow)
@@ -886,11 +891,10 @@ class RelateLedgerDurability(unittest.TestCase):
             out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep", execute=ex)
             self.assertIsInstance(out, TrackerError)
             spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
-            entries = spec["tracker"]["depRelations"]
-            self.assertEqual(len(entries), 1)
-            self.assertEqual(entries[0]["status"], "pending")
+            self.assertEqual(spec["tracker"]["depRelations"], [],
+                             "definite not-landed failure releases the claim")
 
-            # RETRY: pending + remote-absent -> the create is retried; the
+            # RETRY: entry absent + remote-absent -> a clean create; the
             # idempotent append never duplicates the ledger entry.
             ex2 = fake_execute({"relate-list": [self._list_empty()],
                                 "relate-create": self._create_ok()})
@@ -1267,6 +1271,184 @@ class RelatePendingClaim(unittest.TestCase):
             for field in ("status", "pid", "host", "claimedAt"):
                 self.assertNotIn(field, entries[0],
                                  "finalized entry matches the fn-64 shape")
+
+    def test_definite_create_failure_releases_claim_for_retry(self) -> None:
+        # PR #246 review wave 6 (immediate-retry variant): a DEFINITE provider
+        # create failure (parsed rejection - here linear success!=true) must
+        # release the pending claim before returning. The old code left the
+        # dead prior owner's claim behind, and a retry under a NEW pid failed
+        # concurrent_claim for the full STALE_OWNER_S window.
+        import os
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            rejected = ok({"data": {"issueRelationCreate": {
+                "success": False}}})
+            ex = fake_execute({"relate-list": [self._probe([])],
+                               "relate-create": [rejected]})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out.subtype, "mutation_failed")
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            self.assertEqual(spec["tracker"]["depRelations"], [],
+                             "definite not-landed failure releases the "
+                             "pending claim")
+            # Immediate same-host retry under a NEW pid (the failed run's
+            # process is gone): must claim and create - no concurrent_claim.
+            created = ok({"data": {"issueRelationCreate": {
+                "success": True, "issueRelation": {"id": "rel-1"}}}})
+            ex2 = fake_execute({"relate-list": [self._probe([])],
+                                "relate-create": [created]})
+            with mock.patch("os.getpid", return_value=os.getpid() + 7):
+                again = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                                 execute=ex2)
+            self.assertNotIsInstance(again, TrackerError, msg=repr(again))
+            self.assertEqual(again["kind"], "applied")
+            self.assertIn("relate-create", [c.op for c in ex2.calls])
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertNotIn("status", entries[0])
+
+    def test_ambiguous_create_failure_keeps_claim_for_repair(self) -> None:
+        # An AMBIGUOUS transport failure (timeout: the create may have landed)
+        # must LEAVE the pending entry so a retry classifies against the
+        # remote probe - repair (finalize, no second create) when the edge
+        # turns out to exist.
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            boom = TrackerError(ErrorClass.TRANSPORT, "timed out",
+                                subtype="timeout", auto_retryable=True)
+            ex = fake_execute({"relate-list": [self._probe([])],
+                               "relate-create": [boom]})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+            self.assertIsInstance(out, TrackerError, msg=repr(out))
+            self.assertEqual(out.subtype, "timeout")
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1,
+                             "ambiguous failure must keep the pending entry")
+            self.assertEqual(entries[0]["status"], "pending")
+            self.assertEqual(entries[0]["pid"], os.getpid())
+            # The create HAD landed: the retry repairs the ledger against the
+            # remote probe instead of creating a duplicate.
+            ex2 = fake_execute({"relate-list": [self._probe(
+                [{"type": "blocks", "issue": {"id": LN_UUID_B}}])]})
+            again = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                             execute=ex2)
+            self.assertNotIsInstance(again, TrackerError, msg=repr(again))
+            self.assertEqual(again["reason"], "ledger_repaired")
+            self.assertEqual([c.op for c in ex2.calls], ["relate-list"],
+                             "repair issues no second create")
+
+
+class RelateReceiptFailurePreservesEvidence(unittest.TestCase):
+    """PR #246 review wave 8: create + finalize succeeded but the receipt
+    write failed. A bare error read as "nothing happened", yet a retry takes
+    the in_ledger+remote no-op path and never re-attempts the receipt - the
+    error must carry the completed steps + edge identity (mirrors
+    lifecycle's create/persist-external receipt-failure decoration)."""
+
+    def _pair(self, flow: Path) -> None:
+        a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+
+    def test_receipt_failure_carries_completed_steps_and_edge(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair(flow)
+            key = R.dep_relation_key(LN_UUID, LN_UUID_B)
+            empty_probe = ok({"data": {"issue": {"id": LN_UUID,
+                              "relations": {"nodes": []},
+                              "inverseRelations": {"nodes": []}}}})
+            created = ok({"data": {"issueRelationCreate": {
+                "success": True, "issueRelation": {"id": "rel-1"}}}})
+            ex = fake_execute({"relate-list": [empty_probe],
+                               "relate-create": [created]})
+            boom = TrackerError(ErrorClass.TRANSPORT,
+                                "receipt write failed: disk full",
+                                subtype="write")
+            with mock.patch.object(R, "write_sync_receipt",
+                                   return_value=boom):
+                out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                               execute=ex)
+            self.assertIsInstance(out, TrackerError, msg=repr(out))
+            self.assertIs(out.cls, ErrorClass.TRANSPORT)
+            details = out.details or {}
+            self.assertEqual(details.get("completed_steps"),
+                             ["relate-create", "ledger-finalize"])
+            self.assertEqual(details.get("key"), key)
+            self.assertEqual(details.get("from"), "fn-1-demo")
+            self.assertEqual(details.get("to"), "fn-2-dep")
+            self.assertEqual(details.get("form"), "blocks")
+            # The ledger stays finalized - nothing is rolled back.
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertNotIn("status", entries[0])
+
+    def test_repair_receipt_failure_carries_completed_steps(self) -> None:
+        # Same partial-success shape on the repair path: the edge is on the
+        # tracker (earlier run) and the finalize landed; the receipt failure
+        # must still report the completed step + edge identity.
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            key = R.dep_relation_key(LN_UUID, LN_UUID_B)
+            a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                    "linkState": "linked",
+                    "depRelations": [{"key": key, "dep_spec": "fn-2-dep",
+                                      "from_tracker_id": LN_UUID,
+                                      "to_tracker_id": LN_UUID_B,
+                                      "type": "blocks", "source": "flow",
+                                      "status": "pending",
+                                      "updatedAt": "2026-01-01T00:00:00Z"}]}
+            b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                    "depRelations": [], "linkState": "linked"}
+            _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+            present = ok({"data": {"issue": {
+                "id": LN_UUID,
+                "relations": {"nodes": []},
+                "inverseRelations": {"nodes": [
+                    {"type": "blocks", "issue": {"id": LN_UUID_B}}]},
+            }}})
+            ex = fake_execute({"relate-list": [present]})
+            boom = TrackerError(ErrorClass.TRANSPORT,
+                                "receipt write failed: disk full",
+                                subtype="write")
+            with mock.patch.object(R, "write_sync_receipt",
+                                   return_value=boom):
+                out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                               execute=ex)
+            self.assertIsInstance(out, TrackerError, msg=repr(out))
+            details = out.details or {}
+            self.assertEqual(details.get("completed_steps"),
+                             ["ledger-finalize"])
+            self.assertEqual(details.get("key"), key)
+            self.assertEqual(details.get("from"), "fn-1-demo")
+            self.assertEqual(details.get("to"), "fn-2-dep")
+            spec = json.loads((flow / "specs" / "fn-1-demo.json").read_text())
+            entries = spec["tracker"]["depRelations"]
+            self.assertEqual(len(entries), 1)
+            self.assertNotIn("status", entries[0],
+                             "finalize is NOT rolled back")
 
 
 class GithubRelateProbeDrain(unittest.TestCase):

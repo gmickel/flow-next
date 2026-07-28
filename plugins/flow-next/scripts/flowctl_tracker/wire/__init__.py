@@ -538,7 +538,7 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
         from pathlib import Path
         try:
             body = Path(body_file).read_text(encoding="utf-8")
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             return envelope.failure(TrackerError(
                 ErrorClass.INVALID_INPUT, f"cannot read --body-file: {exc}",
                 subtype="body_file"))

@@ -112,6 +112,27 @@ def ledger_finalize(tracker: dict, *, key: str) -> dict:
     return tracker
 
 
+def ledger_release(tracker: dict, *, key: str) -> dict:
+    """DROP a pending entry owned by THIS process (call under the shared
+    writer lock, after an OBSERVED provider create failure that definitely
+    did NOT land). Restores the entry-absent state so an immediate retry -
+    typically a new pid - can claim and create again instead of failing
+    concurrent_claim for the full stale window. Entries that are applied,
+    missing, or owned by another process are left untouched (idempotent)."""
+    me = claim_owner()
+    ledger = []
+    for entry in tracker.get("depRelations") or []:
+        if (isinstance(entry, dict) and entry.get("key") == key
+                and entry.get("status") == "pending"
+                and entry.get("pid") == me["pid"]
+                and entry.get("host") == me["host"]):
+            continue
+        ledger.append(entry)
+    tracker = dict(tracker)
+    tracker["depRelations"] = ledger
+    return tracker
+
+
 def ledger_stamp_claim(tracker: dict, *, key: str) -> dict:
     """RECLAIM a stale pending entry: overwrite its owner triple with OURS
     (call under the shared writer lock, after re-checking staleness).

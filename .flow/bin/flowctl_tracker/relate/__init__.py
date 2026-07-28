@@ -33,7 +33,8 @@ from ..types import ErrorClass, TrackerError
 from . import providers as P
 from .ledger import (blocker_completed, caps_of, claim_owner,
                      dep_relation_key, ledger_append, ledger_entry,
-                     ledger_finalize, ledger_stamp_claim, require_linked_pair)
+                     ledger_finalize, ledger_release, ledger_stamp_claim,
+                     require_linked_pair)
 
 __all__ = [
     "FLOW_DEPS_CLOSE",
@@ -93,6 +94,42 @@ def _ledger_write(flow_dir: Path, spec_id: str, mutate) -> Result:
             return tracker
     except ConfigLockTimeout as exc:
         return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
+
+
+#: TRANSPORT subtypes where the failed provider create is still KNOWN not to
+#: have landed: the CLI process never spawned, or the server responded and
+#: the parsed payload reported the mutation rejected (linear success!=true).
+_TRANSPORT_NOT_LANDED = frozenset({"spawn", "mutation_failed"})
+
+
+def _create_failure_not_landed(err: TrackerError) -> bool:
+    """Did the failed provider create DEFINITELY not land?
+
+    Non-TRANSPORT classes are parsed server rejections (auth, 4xx, rate
+    limit, capability, not-found, conflict) or local pre-flight refusals -
+    nothing was applied, so the pending claim may be released for an
+    immediate retry. TRANSPORT is AMBIGUOUS (timeout / read / 5xx /
+    malformed body: the request may have reached the server and the edge
+    may exist) except the subtypes above - ambiguous failures must keep the
+    pending entry so the repair path can finalize against the remote probe
+    on retry instead of duplicating the create."""
+    if err.cls is not ErrorClass.TRANSPORT:
+        return True
+    return err.subtype in _TRANSPORT_NOT_LANDED
+
+
+def _ledger_release(flow_dir: Path, spec_id: str, *, key: str) -> None:
+    """Best-effort removal of OUR pending claim after an OBSERVED provider
+    create failure known not to have landed (mirrors lifecycle's
+    _release_claim on the create-first record). Without this, the dead prior
+    pid looked live for the full STALE_OWNER_S window and ordinary immediate
+    retries failed as concurrent_claim. Never raises; on any failure the
+    pending entry simply remains and the staleness rules recover as before."""
+    out = _ledger_write(flow_dir, spec_id,
+                        lambda t: ledger_release(t, key=key))
+    # Best-effort by design: a TrackerError here is swallowed - the caller
+    # is already returning the (more informative) create failure.
+    del out
 
 
 def _pending_claim_live(entry: dict) -> bool:
@@ -354,7 +391,18 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
             note=f"ledger finalized for flow-created blocked-by {blocked_by} "
                  "(interrupted earlier run; edge already on tracker)")
         if rerr:
-            return rerr
+            # Same partial-success shape as the applied path below: the edge
+            # is on the tracker and the ledger is now finalized, so a retry
+            # no-ops (already_recorded) and never re-attempts the receipt.
+            # Preserve the completed steps + edge identity on the frozen
+            # error. Nothing is rolled back.
+            import dataclasses  # noqa: PLC0415
+            return dataclasses.replace(rerr, details={
+                **(rerr.details or {}),
+                "completed_steps": ["ledger-finalize"],
+                "key": key,
+                "from": spec_id,
+                "to": blocked_by})
         return {
             "kind": "applied",
             "reason": "ledger_repaired",
@@ -431,6 +479,15 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
         out = fn(config, ex, **kwargs)
 
     if isinstance(out, TrackerError):
+        # OBSERVED create failure. When the mutation definitely did NOT land
+        # (parsed rejection / process never spawned), release OUR pending
+        # claim so an immediate retry - a new pid, which the age check would
+        # otherwise treat as live for the full stale window - can claim and
+        # create again. AMBIGUOUS transport failures (timeout / 5xx / read /
+        # malformed) keep the pending entry: the edge may exist remotely and
+        # the repair path finalizes it against the probe on retry.
+        if _create_failure_not_landed(out):
+            _ledger_release(flow_dir, spec_id, key=key)
         return out
 
     degraded = out.get("degraded")
@@ -467,7 +524,21 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
         degraded=degraded,
     )
     if rerr:
-        return rerr
+        # The remote relation EXISTS and the ledger is finalized - a bare
+        # failure here reads as "nothing happened", yet a retry takes the
+        # in_ledger+remote no-op path and never re-attempts the receipt,
+        # leaving the mutation with no partial-success evidence. TrackerError
+        # is frozen: rebuild with the completed-steps detail + edge identity
+        # (mirrors lifecycle's create/persist-external receipt-failure
+        # branches). Nothing is rolled back.
+        import dataclasses  # noqa: PLC0415
+        return dataclasses.replace(rerr, details={
+            **(rerr.details or {}),
+            "completed_steps": ["relate-create", "ledger-finalize"],
+            "key": key,
+            "from": spec_id,
+            "to": blocked_by,
+            "form": form})
     return {
         "kind": "applied",
         "from": spec_id,
