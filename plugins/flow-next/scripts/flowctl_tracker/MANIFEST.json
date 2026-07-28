@@ -46,7 +46,7 @@
     },
     {
       "path": "flowctl_tracker/facade/ops.py",
-      "sha256": "262217958b0d3e83c04a9b9525553df00af572b8b29086b90d3749a17ad36023"
+      "sha256": "8f9f419ff534af022669c76ae9500f6b52ef4ded338ec4a5461262a7657395f2"
     },
     {
       "path": "flowctl_tracker/facade/projections.py",
@@ -138,7 +138,7 @@
     },
     {
       "path": "flowctl_tracker/syncbody/__init__.py",
-      "sha256": "51337b2249c6232acb5767a474d6bbf082f0651eb6460d7b16eb74fd4b23f20f"
+      "sha256": "102a535f259f680340bcc9c2550529f074ea3466916d61b064d3b07b27dd2223"
     },
     {
       "path": "flowctl_tracker/types.py",

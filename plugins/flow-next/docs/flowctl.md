@@ -1070,8 +1070,9 @@ Pull/reconcile inputs are deliberately separate: flowctl never authors the
 judgment-bearing fold. It re-reads the issue and comments under the facade claim,
 projects tracker-authoritative readiness, verifies the supplied snapshots and
 on-disk final Flow form, then commits the paired base. Reconcile and push also
-project `depends_on_epics`; internal `sync-body`, status, and relation receipts
-are suppressed so each invocation emits one aggregate event receipt.
+project the current spec title to the native issue title and project
+`depends_on_epics`; internal `sync-body`, status, and relation receipts are
+suppressed so each invocation emits one aggregate event receipt.
 
 - **`set-tracker-id`** stores the durable UUID dedupe key + display `--identifier` (`WOR-17`) + url. `--force` overrides the dup-tracker-id collision guard.
 - **`set-merge-base`** is a **paired-snapshot** writer: `--flow`/`--flow-file` AND `--tracker`/`--tracker-file` must come **together** (a partial one-sided write is rejected so the 3-way base never pins one half to a stale sync point).

@@ -135,6 +135,18 @@ def _raw_body(provider: str, parent: dict) -> str:
     return body if isinstance(body, str) else str(body)
 
 
+def _raw_title(provider: str, parent: dict) -> str:
+    """Extract the native issue title from a raw parent-read object."""
+    if provider == "jira":
+        fields = parent.get("fields") if isinstance(parent.get("fields"), dict) else {}
+        title = fields.get("summary")
+    else:
+        title = parent.get("title")
+    if title is None:
+        return ""
+    return title if isinstance(title, str) else str(title)
+
+
 def _locator(tracker: dict) -> Result:
     durable = tracker.get("id")
     display = tracker.get("identifier")
@@ -283,6 +295,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               tracker_body: Optional[str] = None,
               expected_tracker_body: Optional[str] = None,
               tracker_read: Optional[Callable[[dict], Result]] = None,
+              sync_title: bool = False,
               direction: str = "push",
               event: Optional[str] = None,
               execute: Execute = default_execute,
@@ -298,7 +311,10 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
     as the tracker half. The read therefore happens INSIDE the claimed
     transaction - a snapshot captured before the claim could pair an older
     read with a newer base, or commit the old issue's body under a
-    repointed locator.
+    repointed locator. ``sync_title`` is an internal facade seam:
+    push/reconcile project the current spec title in the same update/readback
+    transaction as the body; the standalone body verb keeps its body-only
+    default.
     """
     flow_dir = Path(flow_dir)
     if not spec_id:
@@ -341,7 +357,8 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
             flow_dir, spec_id, config=config, provider=provider,
             flow_file_body=flow_file_body, tracker_body=tracker_body,
             expected_tracker_body=expected_tracker_body,
-            tracker_read=tracker_read, direction=direction,
+            tracker_read=tracker_read, sync_title=sync_title,
+            direction=direction,
             event=event, execute=execute, write_receipt=write_receipt)
     finally:
         _release_claim(body_claim)
@@ -353,6 +370,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                    tracker_body: Optional[str],
                    expected_tracker_body: Optional[str],
                    tracker_read: Optional[Callable[[dict], Result]],
+                   sync_title: bool,
                    direction: str, event: Optional[str],
                    execute: Execute, write_receipt: bool) -> Result:
     """The claimed transaction body: spec is (re)loaded AFTER the claim so
@@ -363,6 +381,8 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         return loaded
     _path, spec_data = loaded
     tracker = merged_tracker(spec_data)
+    desired_title = (
+        str(spec_data.get("title") or spec_id) if sync_title else None)
 
     durable = require_durable(tracker)
     if isinstance(durable, TrackerError):
@@ -376,6 +396,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
     from ..wire import dispatch as wire_dispatch  # noqa: PLC0415
     from ..wire import parent_read  # noqa: PLC0415
     ex = bound_executor(config, execute)
+    current_title = ""
 
     # Pull + caller-supplied reader: run the wire read HERE, inside the
     # claimed transaction and against the transaction's own locator. The
@@ -400,6 +421,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         if isinstance(parent, TrackerError):
             return parent
         current_body = _raw_body(provider, parent)
+        current_title = _raw_title(provider, parent)
 
     malformed = _deps_region_error(current_body, label="tracker body")
     if malformed is not None:
@@ -491,12 +513,13 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
     has_base = _has_paired_base(tracker)
     matches_current = (
         trackerBodyForMerge(outgoing) == trackerBodyForMerge(current_body))
+    title_matches = desired_title is None or current_title == desired_title
     echo_fence = (
         tracker_body is None
         and has_base
         and flow_file_body == tracker.get("mergeBaseFlow")
         and trackerBodyForMerge(current_body) == tracker.get("mergeBaseTracker"))
-    if matches_current or echo_fence:
+    if title_matches and (matches_current or echo_fence):
         # No tracker write beyond the parent read. But the FLOW half may have
         # moved: a base whose mergeBaseFlow no longer equals the local body
         # must be re-committed (no mutation) or every later flow-side diff
@@ -559,7 +582,8 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         }
 
     updated = wire_dispatch(
-        "update", config, locator=locator, title=None, body=outgoing, execute=ex)
+        "update", config, locator=locator, title=desired_title, body=outgoing,
+        execute=ex)
     if isinstance(updated, TrackerError):
         return updated
 
@@ -603,6 +627,24 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                     trackerBodyForMerge(readback_body)),
             },
         )
+    if desired_title is not None:
+        updated_title = (
+            updated.get("title") if isinstance(updated, dict) else None)
+        readback_title = (
+            readback.get("title") if isinstance(readback, dict) else None)
+        if updated_title != desired_title or readback_title != desired_title:
+            return TrackerError(
+                ErrorClass.CONFLICT,
+                "tracker title changed or was not applied after wire update; "
+                "refusing to commit the paired base",
+                subtype="title_readback_diverged",
+                details={
+                    "completed_steps": ["wire-update", "wire-read"],
+                    "requestedTitle": desired_title,
+                    "writtenTitle": updated_title,
+                    "readbackTitle": readback_title,
+                },
+            )
 
     committed = _commit_paired_base(
         flow_dir, spec_id, locator=locator,

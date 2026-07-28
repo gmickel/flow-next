@@ -250,7 +250,7 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     body_out = sync_body(
         flow_dir, spec_id, flow_file_body=flow_body, direction="push",
         tracker_body=tracker_body, event=event, execute=execute,
-        write_receipt=False,
+        sync_title=True, write_receipt=False,
     )
     if isinstance(body_out, TrackerError):
         prior = list((body_out.details or {}).get("completed_steps") or [])
@@ -740,7 +740,7 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         flow_dir, spec_id, flow_file_body=flow_body,
         tracker_body=tracker_body, direction="push",
         expected_tracker_body=source_tracker_body,
-        event=event, execute=execute, write_receipt=False,
+        sync_title=True, event=event, execute=execute, write_receipt=False,
     )
     if isinstance(body_out, TrackerError):
         prior = list((body_out.details or {}).get("completed_steps") or [])

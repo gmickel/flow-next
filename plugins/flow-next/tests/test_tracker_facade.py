@@ -405,7 +405,9 @@ class PushFacade(unittest.TestCase):
             writes = []
 
             def capture_write(req):
-                writes.append(json.loads(req.body)["body"])
+                payload = json.loads(req.body)
+                writes.append(payload["body"])
+                self.assertEqual(payload["title"], "Demo")
                 return ok(_gh_issue(tracker_render))
 
             parent = _gh_issue("old remote")
@@ -1372,6 +1374,55 @@ class McpRung(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class ReconcileFacade(unittest.TestCase):
+    def test_reconcile_projects_title_only_rename(self) -> None:
+        desired = "Renamed during reconcile"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            path = _write_flow(
+                flow, gh_cfg(),
+                tracker=_linked(
+                    mergeBaseFlow=FLOW_BODY,
+                    mergeBaseTracker=FLOW_BODY,
+                ),
+            )
+            spec = json.loads(path.read_text(encoding="utf-8"))
+            spec["title"] = desired
+            path.write_text(json.dumps(spec), encoding="utf-8")
+            old = _gh_issue(FLOW_BODY)
+            old["title"] = "Old tracker title"
+            updated = _gh_issue(FLOW_BODY)
+            updated["title"] = desired
+
+            def capture_update(req):
+                payload = json.loads(req.body)
+                self.assertEqual(payload["title"], desired)
+                self.assertEqual(payload["body"], FLOW_BODY)
+                return ok(updated)
+
+            ex = fake_execute({
+                "wire-read": [ok(old), ok(updated)],
+                "sync-body-parent-read": ok(old),
+                "wire-parent-read": ok(old),
+                "wire-update": capture_update,
+                "status-parent-read": ok(updated),
+                "merge-evidence": ok([]),
+            })
+
+            out = F.sync(
+                flow, SPEC_ID, op="reconcile", event="plan",
+                flow_file=_flow_file(root),
+                body_file=_body_file(root, FLOW_BODY),
+                comments_file=_comments_file(root),
+                source_body_file=_source_body_file(root, FLOW_BODY),
+                execute=ex,
+            )
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["op"], "reconcile")
+            self.assertEqual(
+                len([c for c in ex.calls if c.op == "wire-update"]), 1)
+
     def test_reconcile_completes_identifier_only_first(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

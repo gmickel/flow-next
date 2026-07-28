@@ -78,9 +78,9 @@ One facade, four ops, matching the existing `perEvent` value vocabulary exactly 
 
 | `--op` | required inputs | forbidden | internal sequence |
 |---|---|---|---|
-| `push` | `--flow-file`, `--body-file` | `--comments-file`, `--source-body-file` | create-if-unlinked -> `sync-body` (push) -> `status` -> project dependency relations |
+| `push` | `--flow-file`, `--body-file` | `--comments-file`, `--source-body-file` | create-if-unlinked -> `sync-body` (native title + body push) -> `status` -> project dependency relations |
 | `pull` | `--flow-file`, `--body-file`, `--comments-file` | `--source-body-file` | claimed `wire read` -> readiness projection -> verify comments + final local Flow form -> `sync-body` (pull) -> `status` |
-| `reconcile` | `--flow-file`, `--body-file`, `--comments-file`, `--source-body-file` | none | `wire read` -> readiness projection -> verify comments + final local Flow form -> project dependency relations -> `sync-body` (both halves) -> `status` |
+| `reconcile` | `--flow-file`, `--body-file`, `--comments-file`, `--source-body-file` | none | `wire read` -> readiness projection -> verify comments + final local Flow form -> project dependency relations -> `sync-body` (native title + both body halves) -> `status` |
 | `comment` | `--body-file` | `--flow-file`, `--comments-file`, `--source-body-file` | create-if-unlinked -> `wire comment-add` (marker + dedup) |
 
 For pull/reconcile, the skill first performs the judgment-bearing body/comment
@@ -90,6 +90,9 @@ reconcile it is the approved outgoing tracker form and `--source-body-file` is
 the exact pre-merge tracker snapshot. `--comments-file` is the normalized
 comment-list JSON array used by the fold. The facade re-reads body/comments
 under its claim and refuses stale inputs before committing the paired base.
+Push/reconcile also project the current spec title into the tracker's native
+title field in the same update/readback transaction as the body; a title-only
+rename therefore cannot be hidden by the body echo fence.
 
 **Receipts do not stack.** Internal granular calls run with receipts **suppressed**; the facade writes **exactly one** aggregate, event-tagged receipt whose status is the worst of its steps. A **partial success** (write landed, readback failed) returns `success: false` with `data.completed_steps` naming what did land, so a resume is informed rather than blind. Re-running a facade op is **idempotent**: create-if-unlinked no-ops on a linked spec, and the comment marker dedups.
 

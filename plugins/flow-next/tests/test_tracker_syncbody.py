@@ -245,6 +245,95 @@ class NoOpReconcile(unittest.TestCase):
                     self.assertEqual(receipts[0]["event"], "work.done")
 
 
+class FacadeTitleProjectionSeam(unittest.TestCase):
+    def test_title_only_push_updates_and_verifies_all_four(self) -> None:
+        desired = "Renamed spec"
+
+        def with_title(provider: str, issue: dict) -> dict:
+            issue = json.loads(json.dumps(issue))
+            if provider == "jira":
+                issue["fields"]["summary"] = desired
+            else:
+                issue["title"] = desired
+            return issue
+
+        def response(provider: str, issue: dict) -> Response:
+            return gql_issue(issue) if provider == "linear" else ok(issue)
+
+        for provider, cfg_fn, durable, display, mk, parent_resp in PROVIDERS:
+            with self.subTest(provider=provider), \
+                    tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp)
+                path = _write_flow(
+                    flow, cfg_fn(),
+                    tracker=_seeded_tracker(
+                        durable, display, body_for_base=FLOW_BODY))
+                spec = json.loads(path.read_text(encoding="utf-8"))
+                spec["title"] = desired
+                path.write_text(json.dumps(spec), encoding="utf-8")
+                updated_issue = with_title(provider, mk(FLOW_BODY))
+                update_response = (
+                    gql_update(updated_issue)
+                    if provider == "linear"
+                    else (empty_ok() if provider == "jira"
+                          else ok(updated_issue))
+                )
+                ex = fake_execute({
+                    "sync-body-parent-read": parent_resp(FLOW_BODY),
+                    "wire-parent-read": parent_resp(FLOW_BODY),
+                    "wire-update": update_response,
+                    "wire-read": response(provider, updated_issue),
+                })
+
+                out = SB.sync_body(
+                    flow, "fn-1-demo", flow_file_body=FLOW_BODY,
+                    sync_title=True, direction="push", execute=ex)
+
+                self.assertNotIsInstance(out, TrackerError, out)
+                self.assertEqual(out["kind"], "pushed")
+                update = next(c for c in ex.calls if c.op == "wire-update")
+                payload = json.loads(update.body)
+                projected = (
+                    payload["variables"]["input"]["title"]
+                    if provider == "linear"
+                    else (payload["fields"]["summary"]
+                          if provider == "jira" else payload["title"])
+                )
+                self.assertEqual(projected, desired)
+
+    def test_title_readback_race_does_not_advance_base(self) -> None:
+        desired = "Renamed spec"
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            path = _write_flow(
+                flow, gh_cfg(),
+                tracker=_seeded_tracker(
+                    GH_NODE, "#42", body_for_base=FLOW_BODY))
+            spec = json.loads(path.read_text(encoding="utf-8"))
+            spec["title"] = desired
+            path.write_text(json.dumps(spec), encoding="utf-8")
+            acknowledged = _gh_issue(FLOW_BODY)
+            acknowledged["title"] = desired
+            raced = _gh_issue(FLOW_BODY)
+            raced["title"] = "Concurrent tracker rename"
+            ex = fake_execute({
+                "sync-body-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-update": ok(acknowledged),
+                "wire-read": ok(raced),
+            })
+
+            out = SB.sync_body(
+                flow, "fn-1-demo", flow_file_body=FLOW_BODY,
+                sync_title=True, direction="push", execute=ex)
+
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "title_readback_diverged")
+            saved = _saved(flow)["tracker"]
+            self.assertEqual(saved["lastSyncedAt"], "2020-01-01T00:00:00Z")
+            self.assertEqual(saved["mergeBaseFlow"], FLOW_BODY)
+
+
 # ---------------------------------------------------------------------------
 # Linear rewrite: halves differ; second reconcile is no-op
 # ---------------------------------------------------------------------------

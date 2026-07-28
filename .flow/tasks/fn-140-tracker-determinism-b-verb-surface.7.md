@@ -40,7 +40,9 @@ readiness projection, current-comment validation, exact final-local-form
 validation, paired-base commit, then status reconciliation. Reconcile performs
 the same pull-side readiness/comment/final-form checks, projects dependencies
 even when body merge later conflicts, then validates the pre-merge remote
-snapshot before sync-body/status. Comment = create-if-unlinked ->
+snapshot before sync-body/status. Push/reconcile project the current spec title
+alongside the body and verify both in the same readback transaction, including
+title-only renames. Comment = create-if-unlinked ->
 flow-next:sync marker dedup via comment-list BEFORE any post
 (issue+evt+evidence; fn-89 retry rule) -> comment-add.
 

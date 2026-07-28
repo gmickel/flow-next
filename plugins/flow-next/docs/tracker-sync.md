@@ -96,7 +96,7 @@ A duplicate native `fn-N` ordinal whose full ids are distinct (e.g. two `fn-122-
 - **`fn` is the only globally reserved prefix.** Synthetic `gh`/`gl` are reserved only while `tracker.type` matches. Enumeration sees tracker-key specs, but native `fn-N` allocation counts `fn-*` only — a `wor-9999` never bumps the next `fn`.
 - **Native `fn-N` allocation is a union scan** over the working tree, every registered git worktree's `.flow/specs/`, and every ref (monotonic max-ever-allocated). Fail-open on git problems. That shrinks the parallel-agent collision window; separate unfetched clones can still collide — that is what `tracker.specIds=tracker` is for.
 - **One tracker team / workspace per repo.** The bridge assumes a single team key so a bare `wor-17` resolves unambiguously. Cross-workspace same-key collision is out of scope.
-- **No rename-on-push.** Existing spec/task ids, branches, and dep edges are never mutated on link; the tracker key is added as a resolvable handle, not a replacement. `flowctl spec set-title` on a tracker-linked spec updates the title only — it does **not** re-slug the id, branch, or files.
+- **No local identity rename on push.** Existing spec/task ids, branches, and dep edges are never mutated on link; the tracker key is added as a resolvable handle, not a replacement. `flowctl spec set-title` on a tracker-linked spec updates the local title only — it does **not** re-slug the id, branch, or files. The next facade push/reconcile projects that title to the tracker's native issue-title field.
 
 The widened resolver / canonicalizer + the origin-branched id generator live in `flowctl.py` — see [`architecture.md`](architecture.md).
 
