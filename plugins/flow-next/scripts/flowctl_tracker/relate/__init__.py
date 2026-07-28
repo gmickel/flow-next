@@ -229,6 +229,32 @@ def _claim_identity_drift(flow_dir: Path, spec_id: str, dep_spec: str, *,
                            current_from=current_from, current_to=current_to)
 
 
+def _post_probe_identity_drift(flow_dir: Path, spec_id: str, dep_spec: str, *,
+                               from_id: str, to_id: str
+                               ) -> Optional[TrackerError]:
+    """Revalidate both durable identities after the remote relation probe.
+
+    Collision branches do not take a ledger claim, yet they emit durable
+    local side effects (a deferred-review entry and a receipt). A relink can
+    land while the probe is in flight, making its result and the pre-probe
+    ledger snapshot belong to the old tracker IDs. Recheck under the shared
+    writer lock before classification can emit those side effects.
+    """
+    from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
+    try:
+        with config_lock(flow_dir):
+            reloaded = load_spec(flow_dir, spec_id)
+            if isinstance(reloaded, TrackerError):
+                return reloaded
+            _path, spec = reloaded
+            return _claim_identity_drift(
+                flow_dir, spec_id, dep_spec, tracker=merged_tracker(spec),
+                from_id=from_id, to_id=to_id)
+    except ConfigLockTimeout as exc:
+        return TrackerError(ErrorClass.CONFLICT, str(exc),
+                            subtype="lock_timeout")
+
+
 def _ledger_reclaim(flow_dir: Path, spec_id: str, *, key: str,
                     dep_spec: str, from_id: str, to_id: str) -> Result:
     """RECLAIM a stale pending entry (crashed run's leftover) by stamping OUR
@@ -514,6 +540,10 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
         }
 
     if in_ledger and not remote:
+        drift = _post_probe_identity_drift(
+            flow_dir, spec_id, blocked_by, from_id=from_id, to_id=to_id)
+        if drift:
+            return drift
         # A human removed OUR tracker-visible edge: a deliberate decision.
         # Queued, default NOT re-created (adapter-interface.md linkPresent).
         qerr = _queue_conflict(
@@ -579,6 +609,10 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
         }
 
     if entry is None and remote:
+        drift = _post_probe_identity_drift(
+            flow_dir, spec_id, blocked_by, from_id=from_id, to_id=to_id)
+        if drift:
+            return drift
         # Foreign edge - never clobber, never claim ownership.
         qerr = _queue_conflict(
             flow_dir, spec_id,

@@ -1085,6 +1085,62 @@ class RelateRelinkGuard(unittest.TestCase):
             self.assertEqual(out["kind"], "applied")
 
 
+class RelatePostProbeIdentityGuard(unittest.TestCase):
+    """A relation probe can overlap a relink. Collision side effects must
+    revalidate both durable identities after that network read, otherwise an
+    old ledger entry plus an old-edge-absent result queues a false human
+    removal and writes a receipt carrying the old tracker ID."""
+
+    NEW_UUID = "99999999-8888-7777-6666-555555555555"
+
+    def _pair_with_ledger(self, flow: Path) -> None:
+        key = dep_relation_key(LN_UUID, LN_UUID_B)
+        a_tr = {"id": LN_UUID, "identifier": "WOR-17", "url": "u",
+                "linkState": "linked",
+                "depRelations": [{
+                    "key": key, "dep_spec": "fn-2-dep",
+                    "from_tracker_id": LN_UUID,
+                    "to_tracker_id": LN_UUID_B,
+                    "type": "blocks", "source": "flow",
+                    "updatedAt": "2026-01-01T00:00:00Z",
+                }]}
+        b_tr = {"id": LN_UUID_B, "identifier": "WOR-18", "url": "u",
+                "depRelations": [], "linkState": "linked"}
+        _write_pair(flow, ln_cfg(), a_tracker=a_tr, b_tracker=b_tr)
+
+    def test_relink_during_probe_refuses_false_human_removal_side_effects(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            self._pair_with_ledger(flow)
+
+            def probe_then_relink(request):
+                RelateRelinkGuard._relink(
+                    flow, "fn-1-demo", self.NEW_UUID)
+                return ok({"data": {"issue": {
+                    "id": LN_UUID,
+                    "relations": {"nodes": []},
+                    "inverseRelations": {"nodes": []},
+                }}})
+
+            ex = fake_execute({"relate-list": [probe_then_relink]})
+            out = R.relate(flow, "fn-1-demo", blocked_by="fn-2-dep",
+                           execute=ex)
+
+            self.assertIsInstance(out, TrackerError, msg=repr(out))
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "relinked")
+            self.assertEqual((out.details or {}).get("expected"),
+                             {"from": LN_UUID, "to": LN_UUID_B})
+            self.assertEqual((out.details or {}).get("current"),
+                             {"from": self.NEW_UUID, "to": LN_UUID_B})
+            self.assertEqual([c.op for c in ex.calls], ["relate-list"])
+            self.assertFalse((flow / "review-deferred").exists(),
+                             "no false human-removal queue entry")
+            self.assertFalse((flow / "sync-runs").exists(),
+                             "no receipt written with old tracker IDs")
+
+
 class RelateFinalizeRelinkGuard(unittest.TestCase):
     """PR #246 review: locks never span the provider mutation, so a relink
     can land between _ledger_claim's release and the finalize. The finalize

@@ -104,7 +104,9 @@ def _claim_facade(flow_dir: Path, spec_id: str, rec_path: Path,
                         f"a tracker facade operation for spec {spec_id!r} is "
                         "already in flight in another process; retry after "
                         "it finishes",
-                        subtype="facade_in_flight",
+                        subtype=("comment_in_flight"
+                                 if op == "facade-comment"
+                                 else "facade_in_flight"),
                         details={"specId": spec_id,
                                  "claim": {"pid": prior.get("pid"),
                                            "host": prior.get("host"),
@@ -635,6 +637,28 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
         return bad_evidence
     comment_text = strip_evidence_line(raw_body)
 
+    # One spec-identity claim across the whole create -> marker scan ->
+    # comment-add -> receipt sequence. The marker claim below is issue-keyed
+    # and starts only after create_if_unlinked(), so it cannot prevent a
+    # relink from redirecting the remainder of a newly-created comment facade
+    # to another issue. The outer facade claim is spec-keyed and is honored by
+    # set-tracker-id.
+    facade_rec_path = _facade_claim_path(flow_dir, spec_id)
+    claimed = _claim_facade(flow_dir, spec_id, facade_rec_path, provider,
+                            op="facade-comment")
+    if claimed is not None:
+        return claimed
+    try:
+        return _comment_sequence(
+            flow_dir, spec_id, comment_text=comment_text, evidence=evidence,
+            config=config, provider=provider, event=event, execute=execute)
+    finally:
+        _release_claim(facade_rec_path)
+
+
+def _comment_sequence(flow_dir: Path, spec_id: str, *, comment_text: str,
+                      evidence: str, config: dict, provider: str, event: str,
+                      execute: Execute) -> Result:
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
@@ -692,11 +716,12 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
     # two concurrent facades could both prove marker absence and both post.
     marker = format_marker(
         issue=str(durable), spec_id=spec_id, event=event, evidence=evidence)
-    rec_path = _comment_claim_path(
+    marker_rec_path = _comment_claim_path(
         flow_dir, issue=str(durable), spec=spec_id, event=event,
         evidence=evidence)
     claimed = _claim_comment_marker(
-        flow_dir, spec_id, rec_path, provider, event=event, marker=marker)
+        flow_dir, spec_id, marker_rec_path, provider, event=event,
+        marker=marker)
     if claimed is not None:
         return fail_result(
             claimed, completed=completed, statuses=statuses,
@@ -830,4 +855,4 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
         # refusal, transport failure): the remote marker is the durable
         # dedup record, and a lingering claim would only force the next
         # invocation to wait out the stale window.
-        _release_claim(rec_path)
+        _release_claim(marker_rec_path)

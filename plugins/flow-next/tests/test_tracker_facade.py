@@ -1406,6 +1406,73 @@ class FacadeOuterClaim(unittest.TestCase):
             self.assertEqual(proc2.returncode, 0, proc2.stdout + proc2.stderr)
             self.assertEqual(self._spec_tracker_id(flow), self.NEW_UUID)
 
+    def test_comment_create_then_relink_refused_through_receipt(self) -> None:
+        """The comment facade's outer claim starts before create and remains
+        live through comment-add and its aggregate receipt. A relink racing
+        the provider create cannot redirect the comment and receipt to a new
+        issue while orphaning the issue just created."""
+        from flowctl_tracker.facade import ops as OPS
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg())  # unlinked
+            bf = _body_file(root, "evidence=abc1234\n**done** - shipped.\n")
+            rec_path = flow / "create-first" / f"facade-{SPEC_ID}.json"
+            seen: dict = {}
+            posted_bodies = []
+
+            def create_response(request):
+                return ok({
+                    "id": 1, "node_id": GH_NODE, "number": 42,
+                    "html_url": "https://github.com/o/r/issues/42",
+                })
+
+            original_create = OPS.create_if_unlinked
+
+            def relink_after_create(*args, **kwargs):
+                created = original_create(*args, **kwargs)
+                claim = json.loads(rec_path.read_text(encoding="utf-8"))
+                self.assertEqual(claim.get("status"), "pending")
+                self.assertEqual(claim.get("op"), "facade-comment")
+                self.assertFalse(
+                    (flow / "create-first" / f"spec-{SPEC_ID}.json").exists(),
+                    "inner create claim released before the relink attempt")
+                seen["relink"] = self._relink_cli(root)
+                seen["id_during_create"] = self._spec_tracker_id(flow)
+                return created
+
+            def capture_add(request):
+                posted_bodies.append(json.loads(request.body)["body"])
+                return ok({"id": 99, "body": posted_bodies[-1],
+                           "html_url": "https://x/c/99"})
+
+            ex = fake_execute({
+                "lifecycle-create": create_response,
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-comment-list": ok([]),
+                "wire-comment-add": capture_add,
+            })
+            with mock.patch.object(OPS, "create_if_unlinked",
+                                   side_effect=relink_after_create):
+                out = F.sync(flow, SPEC_ID, op="comment", event="work.done",
+                             body_file=bf, execute=ex)
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            proc = seen["relink"]
+            self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertIn(f"facade-{SPEC_ID}.json",
+                          proc.stdout + proc.stderr)
+            self.assertEqual(seen["id_during_create"], GH_NODE,
+                             "relink cannot land after create")
+            self.assertEqual(self._spec_tracker_id(flow), GH_NODE)
+            self.assertEqual(out["tracker_id"], GH_NODE)
+            self.assertEqual(len(posted_bodies), 1)
+            self.assertIn(f"issue={GH_NODE}", posted_bodies[0])
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["tracker_id"], GH_NODE)
+            self.assertFalse(rec_path.exists(), "facade claim released")
+
     def test_push_nested_inner_claims_coexist_no_self_deadlock(self) -> None:
         """The inner step claims use DIFFERENT keys, so a normal push runs
         with the facade claim AND the step claim pending simultaneously -

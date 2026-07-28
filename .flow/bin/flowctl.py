@@ -23246,7 +23246,7 @@ def _live_spec_operation_claim(flow_dir: Path, spec_id: str) -> Optional[dict]:
     persist transactions via per-spec claims under `.flow/create-first/`
     (create: `spec-<id>.json`, sync-body: `syncbody-<id>.json`, status:
     `status-<id>.json`, facade sequences: `facade-<id>.json` - the outer
-    claim the push/reconcile facades hold ACROSS their steps, since the
+    claim the push/reconcile/comment facades hold ACROSS their steps, since the
     per-step claims leave relinkable gaps between steps). The relink writer
     must HONOR those claims - each
     verb's locked identity recheck can only detect a repoint after the remote
@@ -23258,10 +23258,11 @@ def _live_spec_operation_claim(flow_dir: Path, spec_id: str) -> Optional[dict]:
     claim within the stale window is live; past the window a dead pid on THIS
     host is a crashed run's leftover and is ignored (NOT reclaimed - releasing
     is the owning verb's job); another host's pid space is unknowable, so its
-    claims stay live (fail closed). Comment claims are keyed by marker hash,
-    not spec id, and are out of scope here. Older `.flow/bin` copies without
-    the tracker package have no claim writers either, so the guarded import
-    degrades to no check - exactly their current semantics.
+    claims stay live (fail closed). Inner comment-marker claims are keyed by
+    marker hash rather than spec id; the comment facade's outer claim supplies
+    the spec-wide exclusion. Older `.flow/bin` copies without the tracker
+    package have no claim writers either, so the guarded import degrades to no
+    check - exactly their current semantics.
     """
     try:
         from flowctl_tracker.lifecycle.verbs import _claim_is_stale
