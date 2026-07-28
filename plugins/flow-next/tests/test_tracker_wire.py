@@ -1213,3 +1213,30 @@ class GitlabCliJsonContentType(unittest.TestCase):
         self.assertTrue(argvs, "expected at least one body-carrying request")
         for argv in argvs:
             self.assertNotIn("-H", argv)
+
+
+class GitlabSelfHostedHostname(unittest.TestCase):
+    """Measured live 2026-07-28 on a self-hosted EE instance at
+    http://gitlab.localhost:8929: glab's --hostname wants its bare-hostname
+    config key (a scheme-prefixed value is rejected 400), while the HTTP
+    attach route needs the scheme-prefixed origin to derive its API base.
+    perTracker.host stores the origin; the CLI argv builders normalize."""
+
+    def test_scheme_prefixed_host_normalized_for_glab(self) -> None:
+        from flowctl_tracker.types import gitlab_cli_hostname
+        self.assertEqual(gitlab_cli_hostname("http://gitlab.localhost:8929"),
+                         "gitlab.localhost")
+        self.assertEqual(gitlab_cli_hostname("https://gl.corp/sub"), "gl.corp")
+        self.assertEqual(gitlab_cli_hostname("gitlab.example.com"),
+                         "gitlab.example.com")
+        self.assertEqual(gitlab_cli_hostname("gitlab.localhost:8929"),
+                         "gitlab.localhost")
+
+    def test_wire_argv_carries_bare_hostname(self) -> None:
+        cfg = gl_cfg()
+        cfg["tracker"]["perTracker"]["host"] = "http://gitlab.localhost:8929"
+        ex = fake_execute({"wire-read": ok(GL_ISSUE)})
+        W.dispatch("read", cfg, locator=loc(str(GL_ID), "g/p#12"), execute=ex)
+        argv = list(ex.calls[0].url_or_argv)
+        i = argv.index("--hostname")
+        self.assertEqual(argv[i + 1], "gitlab.localhost")

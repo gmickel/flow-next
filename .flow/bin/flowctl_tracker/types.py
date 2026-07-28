@@ -121,3 +121,20 @@ class TrackerError:
     @property
     def exit_code(self) -> int:
         return EXIT_CODES[self.cls]
+
+
+def gitlab_cli_hostname(host: str) -> str:
+    """glab's --hostname wants its config key: a BARE hostname. Self-managed
+    instances on http and/or a non-default port store a scheme-prefixed
+    origin in perTracker.host (the HTTP route derives its API base from it);
+    glab carries protocol/port itself under the bare-hostname key (measured
+    live 2026-07-28: --hostname http://gitlab.localhost:8929 is rejected 400,
+    while the profile key is gitlab.localhost with api_protocol/api_host)."""
+    if "://" in host:
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(host)
+        except ValueError:
+            return host
+        return parsed.hostname or host
+    return host.split(":", 1)[0] if host.count(":") == 1 and host.rsplit(":", 1)[-1].isdigit() else host

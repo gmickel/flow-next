@@ -18,7 +18,8 @@ from typing import Callable, Optional, Union
 from urllib.parse import quote, urlparse
 
 from ..resolved_cache import STATIC_CAPABILITIES, apply_capability_probe
-from ..types import ErrorClass, Request, Response, TrackerError
+from ..types import (ErrorClass, Request, Response, TrackerError,
+                     gitlab_cli_hostname)
 
 #: Plans that unlock `is_blocked_by` (Free degrades to `relates_to` in B).
 BLOCKEDBY_PLANS = frozenset({
@@ -50,7 +51,7 @@ def _argv(config: dict, endpoint: str) -> list[str]:
     host = ((config.get("tracker") or {}).get("perTracker") or {}).get("host")
     argv = ["glab", "api", endpoint]
     if host:
-        argv += ["--hostname", str(host)]
+        argv += ["--hostname", gitlab_cli_hostname(str(host))]
     return argv
 
 

@@ -38,7 +38,8 @@ from typing import Any, Callable, Optional, Union
 
 from .. import envelope
 from ..executor import execute as default_execute
-from ..types import ErrorClass, Request, Response, TrackerError
+from ..types import (ErrorClass, Request, Response, TrackerError,
+                     gitlab_cli_hostname)
 
 #: Jira project / issue-key grammars from jira.md (listOpenIssues JQL safety).
 #: Underscores and keys longer than Cloud's 10-char alnum cap are intentional:
@@ -181,7 +182,7 @@ def _cli_argv(provider: str, config: dict, method: str, endpoint: str,
         argv = ["glab", "api"]
         host = _dict(_dict(config.get("tracker")).get("perTracker")).get("host")
         if host:
-            argv += ["--hostname", str(host)]
+            argv += ["--hostname", gitlab_cli_hostname(str(host))]
     if method.upper() != "GET":
         argv += ["--method", method.upper()]
     argv.append(endpoint)
