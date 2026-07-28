@@ -89,9 +89,23 @@ $FLOWCTL config set work.delegateConsent true
 $FLOWCTL config set work.delegateSandbox <yolo|full-auto>
 ```
 
-In headless mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set), never ask.
-Proceed only when consent was already `true`; otherwise delegation stays
-silently off.
+Every Headless Work no-question marker uses the same exact predicate:
+
+```bash
+delegation_headless() {
+ [ "${FLOW_RALPH:-}" = "1" ] && return 0
+ [ -n "${REVIEW_RECEIPT_PATH:-}" ] && return 0
+ [ "${FLOW_AUTONOMOUS:-}" = "1" ] && return 0
+ [ "${AUTONOMOUS:-}" = "1" ] && return 0 # parsed mode:autonomous token
+ return 1
+}
+```
+
+When `delegation_headless` succeeds, never ask. Proceed only when consent was
+already `true`; otherwise set `delegation_active=false` and continue standard
+in-session Work. Do not write either consent key on this fallback. Empty or
+`0` environment flags are interactive, except that any nonempty receipt path
+is headless.
 
 ## Gate 5 — eligible input
 
@@ -117,8 +131,10 @@ fi
 ## Per-task decision and terminal selection
 
 Read `work.delegateDecision`. `auto` delegates every eligible task. `ask`
-prompts before each task interactively. Headless treats `ask` as `auto` only
-with pre-granted consent; otherwise delegation stays off.
+prompts before each task only when `delegation_headless` fails. When it
+succeeds, treat `ask` as `auto` only with pre-granted consent; otherwise
+delegation stays off and standard Work continues without a prompt or config
+write.
 
 Only after all gates pass:
 

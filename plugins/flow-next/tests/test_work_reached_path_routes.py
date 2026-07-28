@@ -70,7 +70,12 @@ class WorkReachedPathRoutes(unittest.TestCase):
             self.assertGreater(row["reduction_chars"], 0)
 
     def test_requested_path_loads_exact_selection_before_active_reference(self) -> None:
-        self.assertIn("STOP and read", self.phases)
+        self.assertNotIn("STOP and read", self.phases)
+        self.assertIn(
+            "execute its exact ordered gates, consent ceremony, clean-tree\n"
+            "check, and terminal routing, then continue with Phase 2",
+            self.phases,
+        )
         self.assertIn("codex-delegation-selection.md", self.phases)
         for contract in (
             "platform_gate_ok()",
@@ -93,7 +98,13 @@ class WorkReachedPathRoutes(unittest.TestCase):
         arms = self.evidence["trace_arms"]
         self.assertIn("fixtures/b1/work", arms["baseline"])
         self.assertEqual(arms["candidate"], "route_traces below")
-        self.assertEqual(arms["observable_behavior_delta"], [])
+        self.assertEqual(
+            arms["observable_behavior_delta"],
+            [
+                "FLOW_AUTONOMOUS=1 and parsed mode:autonomous now suppress "
+                "delegation consent asks exactly like Ralph and review-receipt markers"
+            ],
+        )
         routes = {row["id"]: row for row in self.evidence["route_traces"]}
         required = {
             "serial",
@@ -132,6 +143,13 @@ class WorkReachedPathRoutes(unittest.TestCase):
             "autonomous-consent-granted",
         ):
             self.assertTrue(routes[route]["delegation_reference"])
+        for route in ("autonomous-consent-missing", "autonomous-consent-granted"):
+            self.assertEqual(
+                routes[route]["autonomy_source"],
+                "mode:autonomous -> AUTONOMOUS=1",
+            )
+            self.assertFalse(routes[route]["question_asked"])
+            self.assertFalse(routes[route]["config_write"])
         self.assertFalse(routes["tracker-inactive"]["tracker_reference"])
         self.assertTrue(routes["tracker-active"]["tracker_reference"])
         self.assertTrue(routes["tracker-probe-error"]["tracker_reference"])
@@ -145,12 +163,27 @@ class WorkReachedPathRoutes(unittest.TestCase):
             "non-scratch `.flow/` integrity",
             "scoped rollback",
             "Host circuit breaker",
-            "Ralph-safe",
+            "Autonomous-safe",
         ):
             with self.subTest(contract=contract):
                 self.assertIn(contract, self.delegation)
         self.assertNotIn("<patterns>", self.delegation)
         self.assertNotIn("<approach>", self.delegation)
+
+    def test_autonomous_consent_routes_cover_the_full_marker_family(self) -> None:
+        for source in (self.selection, self.delegation):
+            for marker in (
+                'FLOW_RALPH:-}" = "1"',
+                "REVIEW_RECEIPT_PATH:-",
+                'FLOW_AUTONOMOUS:-}" = "1"',
+                'AUTONOMOUS:-}" = "1"',
+                "mode:autonomous",
+            ):
+                with self.subTest(source=source[:20], marker=marker):
+                    self.assertIn(marker, source)
+            self.assertIn("delegation_headless", source)
+            self.assertIn("standard Work", source)
+            self.assertRegex(source, r"no config write|Do not write")
 
     def test_common_work_lifecycle_and_no_forbidden_gate_regrowth(self) -> None:
         for contract in (

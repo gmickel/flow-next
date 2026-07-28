@@ -110,7 +110,7 @@ fi
 export PILOT_AUTONOMY
 ```
 
-When `PILOT_AUTONOMY=ready` (the default), pilot behaves exactly as documented in `workflow.md` Phases 1–6 — no backlog-mode code path runs and `references/backlog-mode.md` is not loaded. When `PILOT_AUTONOMY=backlog`, **STOP and read [references/backlog-mode.md](references/backlog-mode.md) top to bottom before continuing**. It owns the backlog-only verdict extension plus SELECT/TRIAGE/ASK context; `workflow.md` keeps the enforcing guards and action sites.
+When `PILOT_AUTONOMY=ready` (the default), pilot behaves exactly as documented in `workflow.md` Phases 1–6 — no backlog-mode code path runs and `references/backlog-mode.md` is not loaded. When `PILOT_AUTONOMY=backlog`, **read [references/backlog-mode.md](references/backlog-mode.md) top to bottom, execute its backlog-only setup, then continue with `workflow.md` Phase 1**. The reference owns the backlog-only verdict extension plus SELECT/TRIAGE/ASK context; `workflow.md` keeps the enforcing guards and action sites.
 
 ## The verdict contract (read this before the workflow)
 

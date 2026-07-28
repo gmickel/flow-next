@@ -12,6 +12,11 @@ Pins live in the AGENTS.md model-routing section.
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -39,6 +44,37 @@ flowctl = _load_flowctl()
 BackendSpec = flowctl.BackendSpec
 BACKEND_REGISTRY = flowctl.BACKEND_REGISTRY
 MODEL_ROLE_BACKENDS = flowctl.MODEL_ROLE_BACKENDS
+
+REPO = Path(__file__).resolve().parents[3]
+SKILLS = REPO / "plugins" / "flow-next" / "skills"
+
+
+def _read(relative: str) -> str:
+    return (SKILLS / relative).read_text(encoding="utf-8")
+
+
+def _section(text: str, start: str, end: str) -> str:
+    return text.split(start, 1)[1].split(end, 1)[0]
+
+
+def _bash_fence_after(text: str, marker: str) -> str:
+    marker_at = text.index(marker)
+    fence_at = text.index("```bash\n", marker_at) + len("```bash\n")
+    return text[fence_at:text.index("\n```", fence_at)]
+
+
+def _bash_executable() -> str:
+    """Return the POSIX shell CI uses, avoiding the Windows WSL launcher."""
+    if os.name == "nt":
+        git = shutil.which("git")
+        if git:
+            git_bash = Path(git).resolve().parent.parent / "bin" / "bash.exe"
+            if git_bash.is_file():
+                return str(git_bash)
+    bash = shutil.which("bash")
+    if bash:
+        return bash
+    raise RuntimeError("bash executable not found")
 
 
 class TestHostBackendRegistry(unittest.TestCase):
@@ -119,3 +155,245 @@ class TestHostLenientResolution(unittest.TestCase):
             spec = flowctl.parse_backend_spec_lenient("rp:not-a-model", warn=True)
         self.assertIsNotNone(spec, "legacy lenience for non-host backends must not change")
         self.assertEqual(spec.backend, "rp")
+
+
+class TestHostReviewWorkflowRouting(unittest.TestCase):
+    """Host mechanics stay behind the selected reference and own no status."""
+
+    REVIEW_SKILLS = (
+        "flow-next-impl-review",
+        "flow-next-spec-completion-review",
+    )
+    NON_HOST_BACKENDS = ("codex", "copilot", "cursor", "rp")
+    HOST_ONLY_MECHANICS = (
+        "NEEDS_HUMAN: host review needs a cross-family model pin",
+        "`disallowedTools: Edit, Write, Task`",
+        '"mode": "host"',
+        '"session_id": null',
+    )
+
+    def test_root_host_surface_is_only_router_and_safety_invariant(self) -> None:
+        for skill in self.REVIEW_SKILLS:
+            root = _read(f"{skill}/SKILL.md")
+            host = _section(
+                root,
+                "**For host backend (fn-123 R5 / fn-126):**",
+                "**For all backends:**",
+            )
+            self.assertIn("[workflow-host.md](workflow-host.md)", host)
+            self.assertIn("fresh, tool-enforced read-only reviewer", host)
+            self.assertIn("different\nmodel family", host)
+            self.assertIn("fail closed", host)
+            for mechanic in self.HOST_ONLY_MECHANICS:
+                self.assertNotIn(mechanic, host, f"{skill}: host mechanics leaked into root")
+
+    def test_non_host_reached_paths_keep_host_mechanics_cold(self) -> None:
+        for skill in self.REVIEW_SKILLS:
+            root = _read(f"{skill}/SKILL.md")
+            common = _read(f"{skill}/workflow-common.md")
+            for backend in self.NON_HOST_BACKENDS:
+                reached = root + common + _read(f"{skill}/workflow-{backend}.md")
+                for mechanic in self.HOST_ONLY_MECHANICS:
+                    self.assertNotIn(
+                        mechanic,
+                        reached,
+                        f"{skill}/{backend}: loaded host-only mechanic {mechanic!r}",
+                    )
+
+    def test_selected_host_workflows_are_self_contained(self) -> None:
+        for skill in self.REVIEW_SKILLS:
+            host = _read(f"{skill}/workflow-host.md")
+            for mechanic in self.HOST_ONLY_MECHANICS:
+                self.assertIn(mechanic, host, f"{skill}: missing {mechanic!r}")
+            host_lower = host.lower()
+            for required in (
+                "prior findings",
+                "tests/lints",
+                "commit the fixes before re-review",
+                "<promise>RETRY</promise>",
+            ):
+                self.assertIn(
+                    required.lower(),
+                    host_lower,
+                    f"{skill}: incomplete host workflow",
+                )
+            self.assertIn("deterministic round cap", host_lower)
+            self.assertNotIn("Return the verdict", host)
+
+    def test_completion_status_has_one_shared_owner(self) -> None:
+        root = _read("flow-next-spec-completion-review/SKILL.md")
+        host = _read("flow-next-spec-completion-review/workflow-host.md")
+        rp = _read("flow-next-spec-completion-review/workflow-rp.md")
+        work = _read("flow-next-work/phases.md")
+        pilot = _read("flow-next-pilot/workflow.md")
+        command = "$FLOWCTL spec set-completion-review-status"
+        self.assertEqual(root.count(command), 1, "shared owner must issue one status write")
+        self.assertNotIn(command, host, "selected host workflow must never write status")
+        self.assertNotIn(command, rp, "selected rp workflow must never write status")
+        self.assertNotIn(command, work, "work caller must never repeat the status write")
+        self.assertIn("This shared step is the sole writer for host and rp", root)
+        self.assertIn("never write completion status", root)
+        self.assertIn("This host workflow never writes terminal completion status", host)
+        self.assertIn("stop without writing completion status", host)
+        self.assertIn("Work never writes that status again", work)
+        self.assertIn(
+            "the spec-completion-review skill writes terminal "
+            "`completion_review_status` through its backend-aware shared owner",
+            pilot,
+        )
+        self.assertNotIn("or write status here", host)
+
+    def test_capped_completion_status_precedes_exit(self) -> None:
+        root = _read("flow-next-spec-completion-review/SKILL.md")
+        write_at = root.index("$FLOWCTL spec set-completion-review-status")
+        terminal_at = root.index(
+            'echo "ESCALATE: completion-review did not converge',
+            write_at,
+        )
+        exit_at = root.index("exit 4", terminal_at)
+        self.assertLess(write_at, terminal_at)
+        self.assertLess(terminal_at, exit_at)
+        self.assertIn(
+            "An exit-4 cap refusal before this run has delivered a completion "
+            "verdict is\nnon-terminal for completion status",
+            root,
+        )
+
+    def test_shared_status_owner_rehydrates_durable_terminal_state(self) -> None:
+        root = _read("flow-next-spec-completion-review/SKILL.md")
+        block = _bash_fence_after(
+            root, "## Step 3: Record the terminal verdict exactly once"
+        )
+        self.assertIn(
+            '$FLOWCTL review-rounds attempts "$SPEC_ID"', block
+        )
+        self.assertIn("--review-type completion --json", block)
+        self.assertLess(
+            block.index("$FLOWCTL review-rounds attempts"),
+            block.index("$FLOWCTL spec set-completion-review-status"),
+        )
+
+        cases = (
+            (
+                "ship-after-counter-reset",
+                {
+                    "attempts": [{"outcome": "verdict", "verdict": "SHIP"}],
+                    "review_rounds": 0,
+                    "review_rounds_cap": 4,
+                },
+                0,
+                "ship",
+            ),
+            (
+                "capped-needs-work",
+                {
+                    "attempts": [
+                        {"outcome": "verdict", "verdict": "NEEDS_WORK"}
+                    ],
+                    "review_rounds": 4,
+                    "review_rounds_cap": 4,
+                },
+                4,
+                "needs_work",
+            ),
+            (
+                "refunded-transport-failure",
+                {
+                    "attempts": [
+                        {
+                            "outcome": "transport_failure",
+                            "verdict": None,
+                        }
+                    ],
+                    "review_rounds": 3,
+                    "review_rounds_cap": 4,
+                },
+                0,
+                None,
+            ),
+            (
+                "non-capped-needs-work",
+                {
+                    "attempts": [
+                        {"outcome": "verdict", "verdict": "NEEDS_WORK"}
+                    ],
+                    "review_rounds": 3,
+                    "review_rounds_cap": 4,
+                },
+                0,
+                None,
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            flowctl_stub = temp / "flowctl-stub"
+            flowctl_stub.write_text(
+                "#!/usr/bin/env bash\n"
+                "if [[ \"$1 $2\" == \"review-rounds attempts\" ]]; then\n"
+                "  printf '%s\\n' \"$ATTEMPTS_PAYLOAD\"\n"
+                "elif [[ \"$1 $2\" == "
+                "\"spec set-completion-review-status\" ]]; then\n"
+                "  printf '%s\\n' \"$*\" >> \"$STATUS_LOG\"\n"
+                "else\n"
+                "  exit 9\n"
+                "fi\n",
+                encoding="utf-8",
+            )
+            flowctl_stub.chmod(0o755)
+
+            for name, payload, expected_exit, expected_status in cases:
+                with self.subTest(name=name):
+                    status_log = temp / f"{name}.log"
+                    env = os.environ.copy()
+                    env.update(
+                        {
+                            "FLOWCTL": str(flowctl_stub),
+                            "SPEC_ID": "fn-1",
+                            "ATTEMPTS_PAYLOAD": json.dumps(payload),
+                            "STATUS_LOG": str(status_log),
+                        }
+                    )
+                    result = subprocess.run(
+                        [_bash_executable(), "-c", block],
+                        env=env,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertEqual(
+                        result.returncode,
+                        expected_exit,
+                        result.stdout + result.stderr,
+                    )
+                    writes = (
+                        status_log.read_text(encoding="utf-8").splitlines()
+                        if status_log.exists()
+                        else []
+                    )
+                    if expected_status is None:
+                        self.assertEqual(writes, [])
+                    else:
+                        self.assertEqual(len(writes), 1)
+                        self.assertIn(
+                            f"--status {expected_status} --json", writes[0]
+                        )
+
+    def test_host_completion_uses_shared_cap_attempt_lifecycle(self) -> None:
+        host = _read("flow-next-spec-completion-review/workflow-host.md")
+        self.assertIn(
+            '$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json',
+            host,
+        )
+        self.assertIn(
+            '$FLOWCTL review-rounds record "$SPEC_ID" --kind plan',
+            host,
+        )
+        self.assertIn("--review-type completion --backend host", host)
+        self.assertIn(
+            '$FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json',
+            host,
+        )
+        self.assertIn("(`REVIEW_ROUND == REVIEW_CAP`)", host)
+        self.assertIn("<verdict>SHIP</verdict>", host)
+        self.assertIn("<verdict>NEEDS_WORK</verdict>", host)

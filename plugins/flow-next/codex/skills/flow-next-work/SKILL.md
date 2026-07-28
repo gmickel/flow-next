@@ -39,7 +39,18 @@ If `REVIEW_RECEIPT_PATH` is set or `FLOW_RALPH=1`:
 
 ## Autonomous Mode (questions off, no receipt obligations)
 
-If `$ARGUMENTS` contains the literal token `mode:autonomous` (strip it — same parse shape as capture's `mode:autofix`, a NEW branch) or `FLOW_AUTONOMOUS=1` is set:
+Before gates, treat this host-expanded block as literal prompt data, never shell:
+
+<work-arguments>
+$ARGUMENTS
+</work-arguments>
+
+Strip standalone whitespace token `mode:autonomous` into `WORK_ARGS`; preserve
+all else verbatim (spaces/quotes/globs). Set/export `AUTONOMOUS=1` if found or
+`FLOW_AUTONOMOUS=1`; otherwise set/export `AUTONOMOUS=0`.
+
+Continue with `WORK_ARGS`; carry the exported marker into later shell fragments.
+If `AUTONOMOUS=1`:
 
 - **Ask NO setup questions** (branch + review questions below are suppressed).
 - **Branch defaults deterministically to `--branch=new`** when no explicit branch option is present — under autonomy "the user's answer" never exists, and defaulting to the current branch could commit straight to main. **Name the new branch exactly the spec's `branch_name` field** (`$FLOWCTL show <spec-id> --json | jq -r '.branch_name'`) — pilot's branch matrix, its all-done PR probe, and make-pr's branch-match spec detection all key on that name; an ad-hoc name breaks multi-tick continuity.
@@ -49,7 +60,7 @@ If `$ARGUMENTS` contains the literal token `mode:autonomous` (strip it — same 
 
 ## Input
 
-Full request: $ARGUMENTS
+Full request after mode parsing: `$WORK_ARGS`
 
 Accepts:
 - Flow spec ID `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx` to work through all tasks
@@ -78,7 +89,7 @@ Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`host`/`none
 
 ### Option Parsing (skip questions if found in arguments)
 
-Parse the arguments for these patterns. If found, use them and skip corresponding questions:
+Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding questions:
 
 **Branch mode**:
 - `--branch=current` or `--current` or "current branch" or "stay on this branch" → current branch
@@ -98,7 +109,7 @@ Parse the arguments for these patterns. If found, use them and skip correspondin
 configured/overridden backend — codex, copilot, cursor, rp, or host — itself.)
 
 **Autonomous mode**:
-- `mode:autonomous` token (stripped from arguments) or `FLOW_AUTONOMOUS=1` env → suppress ALL setup questions; defaults per the Autonomous Mode section above (branch `new`, review = configured backend).
+- `AUTONOMOUS=1` → suppress all setup questions; use the defaults above.
 
 ### If options NOT found in arguments
 
@@ -153,7 +164,7 @@ If user chose review, pass the review mode to the worker. The worker agent invok
 
 ## Tracker sync (opt-in, off by default)
 
-**The no-tracker path is the documented default and is behaviorally unchanged.** Every tracker touchpoint runs ONLY when the bridge is **active** AND the specific event is opted in (the **shared gating predicate**); otherwise it is a silent no-op (no new steps, no new prerequisites). The bridge is active iff `flowctl sync active --json` reports `active: true`. The touchpoint mechanics — the perEvent table, the shared gating predicate, and the three dispatch payloads (phases.md 3b.1 first-claim, 3d.1 done, 3g completion-review) — live in [references/tracker-touchpoints.md](references/tracker-touchpoints.md), read ONLY when a phases.md tracker gate prints its `GATE ACTIVE — STOP` sentinel (bridge active, or the gate's probe errored — fail open). A default (bridge-inactive) run never loads it. Phase 5's end-of-run `sync check` + retro-fire + the mandatory four-state `Tracker sync:` summary slot stay inline in phases.md Phase 5 — they run on EVERY run (the slot reads `n/a (bridge inactive)` when no tracker is configured).
+**The no-tracker path is the documented default and is behaviorally unchanged.** Every tracker touchpoint runs ONLY when the bridge is **active** AND the specific event is opted in (the **shared gating predicate**); otherwise it is a silent no-op (no new steps, no new prerequisites). The bridge is active iff `flowctl sync active --json` reports `active: true`. The touchpoint mechanics — the perEvent table, the shared gating predicate, and the three dispatch payloads (phases.md 3b.1 first-claim, 3d.1 done, 3g completion-review) — live in [references/tracker-touchpoints.md](references/tracker-touchpoints.md), read ONLY when a phases.md tracker gate prints its active read/execute/continue sentinel (bridge active, or the gate's probe errored — fail open). A default (bridge-inactive) run never loads it. Phase 5's end-of-run `sync check` + retro-fire + the mandatory four-state `Tracker sync:` summary slot stay inline in phases.md Phase 5 — they run on EVERY run (the slot reads `n/a (bridge inactive)` when no tracker is configured).
 
 **Handle recognition (R16):** `/flow-next:work wor-17` / `work wor-17.1` resolve the existing linked spec/task — the Phase 1 input grammar routes any single-token arg through `flowctl show` (which resolves tracker handles via fn-52.10) before treating it as idea text, so a tracker key is never re-created as a new spec.
 

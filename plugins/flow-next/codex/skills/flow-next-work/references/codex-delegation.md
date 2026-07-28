@@ -193,21 +193,36 @@ Resolution is **config > ASK** — if `work.delegateConsent` is already `true`,
 do NOT re-ask; use the persisted `work.delegateSandbox`.
 
 ```bash
-# Gate 4 (interactive): only ask if consent not already granted.
+# Gate 4: exact no-question marker family.
+delegation_headless() {
+ [ "${FLOW_RALPH:-}" = "1" ] && return 0
+ [ -n "${REVIEW_RECEIPT_PATH:-}" ] && return 0
+ [ "${FLOW_AUTONOMOUS:-}" = "1" ] && return 0
+ [ "${AUTONOMOUS:-}" = "1" ] && return 0 # parsed mode:autonomous token
+ return 1
+}
+
 CONSENT="$($FLOWCTL config get work.delegateConsent --json | jq -r '.value')"
 if [ "$CONSENT" != "true" ]; then
- # Host asks the user for consent. Lead with the recommendation (yolo), explain
- # the network tradeoff, then on confirmation persist BOTH keys:
+ if delegation_headless; then
+ : # delegation OFF; continue standard Work; no prompt and no config write
+ else
+ # Host asks the user for consent. Lead with the recommendation (yolo),
+ # explain the network tradeoff, then on confirmation persist BOTH keys:
  $FLOWCTL config set work.delegateConsent true
- $FLOWCTL config set work.delegateSandbox <yolo|full-auto> # the chosen mode
- # If the user declines consent → delegation OFF for this run (standard mode).
+ $FLOWCTL config set work.delegateSandbox <yolo|full-auto> # chosen mode
+ # If the user declines → delegation OFF for this run (standard mode).
+ fi
 fi
 ```
 
-**Headless (Ralph):** there is no prompt path. Proceed only if
-`work.delegateConsent` is already `true` (pre-granted in config); else delegation
-stays **silently off** — no consent prompt is issued, never blocks the loop.
-Headless is detected by `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` being set.
+**Headless / autonomous:** there is no prompt path. The exact active family is
+`FLOW_RALPH=1`, a nonempty `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS=1`, or the
+parsed `mode:autonomous` flag (`AUTONOMOUS=1`). Proceed only if
+`work.delegateConsent` is already `true` (pre-granted in config); else
+delegation stays **silently off** and standard Work continues without writing
+consent/config. Empty or `0` environment flags remain interactive, except that
+any nonempty receipt path is headless.
 
 ### Gate 5 — Input is a plan/spec/task, not a bare prompt
 
@@ -226,9 +241,10 @@ After the gates pass, `work.delegateDecision` controls per-task prompting:
 
 - **`auto`** (default) → delegate every eligible task without a per-task prompt.
 - **`ask`** → in **interactive** mode the host asks the user via `plain-text numbered prompt`
- before delegating each task. **Headless** has no prompt path, so `ask` is treated
- as **`auto` only when** `work.delegateConsent` is already `true`; otherwise
- delegation stays off.
+ before delegating each task. **Headless / autonomous** means
+ `delegation_headless` succeeds; it has no prompt path, so `ask` is treated as
+ **`auto` only when** `work.delegateConsent` is already `true`; otherwise
+ delegation stays off and standard Work continues without a config write.
 
 ```bash
 DECISION="$($FLOWCTL config get work.delegateDecision --json | jq -r '.value')"
@@ -775,13 +791,15 @@ case DELEGATION_ACTION:
 - The counter is **host-owned** precisely because the worker is fresh-context: an
  in-worker `consecutive_failures` would reset on every task and never reach 3.
 
-### Ralph-safe (autonomous mode)
+### Autonomous-safe
 
-In Ralph / headless mode, delegation is **non-blocking** and consent-gated:
+Under any `delegation_headless` marker, delegation is **non-blocking** and
+consent-gated:
 
 - **Consent-gated:** delegation proceeds ONLY if `work.delegateConsent` is already
- `true` (Gate 4 — headless has no `plain-text numbered prompt` path). Otherwise it stays
- silently off; the loop runs standard-mode, unchanged.
+ `true` (Gate 4 — no headless/autonomous marker has an `plain-text numbered prompt` path).
+ Otherwise it stays silently off; the loop runs standard-mode, unchanged,
+ without persisting a synthetic consent decision.
 - **Never blocks the loop:** every delegation failure path
  (`rollback` / `rollback_and_disable` / `finish_locally`) degrades to standard
  in-session work — the task still completes, the loop still advances. A forced

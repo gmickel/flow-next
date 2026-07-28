@@ -349,10 +349,27 @@ EOF
 **fn-90 R5 — deterministic cap gate (run BEFORE every review dispatch, including this first one). Completion reviews reuse the spec-scoped plan counter (`--kind plan`):**
 
 ```bash
-$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json
+ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
+ROUND_EXIT=$?
+if [[ "$ROUND_EXIT" -ne 0 ]]; then
+ printf '%s\n' "$ROUND_JSON"
+ exit "$ROUND_EXIT"
+fi
+REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
+REVIEW_CAP="$(printf '%s' "$ROUND_JSON" | jq -r '.cap')"
 ```
 
-At the cap this refuses with an `ESCALATE:` marker + exit 4. That is NOT a retryable error: do NOT dispatch the review, do NOT retry — surface the ESCALATE message to the caller and stop (Ralph/autonomous: NEEDS_HUMAN). Only proceed to `chat-send` when the increment succeeds.
+Use `REVIEW_ROUND` / `REVIEW_CAP` for this invocation's immediate fix-loop
+branching. After the verdict is recorded, the shared terminal owner re-reads
+the latest completion attempt and live cap counters from
+`review-rounds attempts`; it never relies on these shell variables surviving a
+prompt turn.
+
+At the cap this refuses with an `ESCALATE:` marker + exit 4. That is NOT a
+retryable error: do NOT dispatch the review or invent a completion verdict.
+Surface the ESCALATE message to the caller and stop without writing completion
+status (Ralph/autonomous: NEEDS_HUMAN). Only proceed to `chat-send` when the
+increment succeeds.
 
 Redirect the review response to the literal response file — it must enter context exactly ONCE, via a single Read of that file (command substitution + `echo` would be the second copy; redirection keeps stdout out of context entirely):
 
@@ -506,7 +523,17 @@ fi
 
 **CRITICAL: You MUST fix the code BEFORE re-reviewing. Never re-review without making changes.**
 
-**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-4}** iterations (default 4, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh. The `review-rounds increment` gate (step 6 below and Phase 3) enforces this deterministically across fresh invocations — completion reviews share the spec-scoped plan counter, so plan + completion rounds cannot each spend a full cap. At the cap it refuses with an `ESCALATE:` marker + exit 4, which is NOT retryable — surface it and stop (Ralph: NEEDS_HUMAN).
+**MAX ITERATIONS**: Limit fix+re-review cycles to
+**${MAX_REVIEW_ITERATIONS:-4}** iterations (default 4, configurable in Ralph's
+config.env). The `review-rounds increment` gate (step 6 below and Phase 3)
+enforces this deterministically across fresh invocations — completion reviews
+share the spec-scoped plan counter, so plan + completion rounds cannot each
+spend a full cap. When a delivered `NEEDS_WORK` consumes the final round,
+continue immediately to SKILL.md Step 3, write terminal `needs_work` exactly
+once, then emit `ESCALATE:` and exit 4. Do not attempt another increment first.
+An entry-time cap refusal with no delivered completion verdict remains
+non-terminal: surface it and stop without a status write (Ralph:
+`NEEDS_HUMAN`).
 
 If verdict is NEEDS_WORK:
 
@@ -558,10 +585,22 @@ If verdict is NEEDS_WORK:
 
  Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round.
 
- **fn-90 R5 cap gate first** — increment before EVERY re-review dispatch; exit 4 = cap reached → do NOT dispatch, surface the ESCALATE message and stop (never retry):
+ **fn-90 R5 cap gate first** — increment before EVERY re-review dispatch.
+ A delivered final-round `NEEDS_WORK` has already continued through the shared
+ status write and exited, so this command is never used to discover that
+ terminal one round late. Exit 4 here means no completion verdict was
+ delivered in this run: do NOT dispatch or write completion status; surface
+ the ESCALATE message and stop (never retry):
 
  ```bash
- $FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json
+ ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
+ ROUND_EXIT=$?
+ if [[ "$ROUND_EXIT" -ne 0 ]]; then
+ printf '%s\n' "$ROUND_JSON"
+ exit "$ROUND_EXIT"
+ fi
+ REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
+ REVIEW_CAP="$(printf '%s' "$ROUND_JSON" | jq -r '.cap')"
  ```
 
  ```bash

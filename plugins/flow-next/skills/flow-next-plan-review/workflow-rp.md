@@ -172,7 +172,7 @@ $FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json
 $FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
 ```
 
-Return the verdict to SKILL.md's shared fix loop.
+Carry the verdict directly into SKILL.md's shared Fix Loop.
 
 ## Re-review
 

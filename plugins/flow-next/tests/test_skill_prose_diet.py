@@ -364,5 +364,121 @@ class PlanReviewSingleSourceTestCase(unittest.TestCase):
                              f"{path}: agent-side review counting reintroduced (fn-90)")
 
 
+class InlineControlTransferSeamTestCase(unittest.TestCase):
+    """Inline reference/backend seams must continue; real terminals must remain."""
+
+    ROUTED_FILES = (
+        "flow-next-pilot/SKILL.md",
+        "flow-next-pilot/workflow.md",
+        "flow-next-pilot/references/qa-stage.md",
+        "flow-next-work/SKILL.md",
+        "flow-next-work/phases.md",
+        "flow-next-work/references/tracker-touchpoints.md",
+        "flow-next-plan-review/SKILL.md",
+        "flow-next-plan-review/workflow.md",
+        "flow-next-plan-review/workflow-codex.md",
+        "flow-next-plan-review/workflow-copilot.md",
+        "flow-next-plan-review/workflow-cursor.md",
+        "flow-next-plan-review/workflow-host.md",
+        "flow-next-plan-review/workflow-rp.md",
+    )
+
+    def test_false_inline_transfer_phrases_are_absent(self):
+        forbidden = (
+            re.compile(r"GATE ACTIVE\s+—\s+STOP", re.IGNORECASE),
+            re.compile(r"\bSTOP and read\b", re.IGNORECASE),
+            re.compile(
+                r"\bReturn the verdict to SKILL\.md's shared fix loop\b",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"\breturn to SKILL\.md's one\s+shared fix loop\b",
+                re.IGNORECASE,
+            ),
+        )
+        for rel in self.ROUTED_FILES:
+            for path in both_copies(rel):
+                text = read(path)
+                for pattern in forbidden:
+                    self.assertNotRegex(
+                        text,
+                        pattern,
+                        f"{path}: false inline control-transfer seam regressed",
+                    )
+
+    def test_active_routes_name_read_execute_and_next_phase(self):
+        for path in both_copies("flow-next-pilot/SKILL.md"):
+            text = read(path)
+            self.assertIn("read [references/backlog-mode.md]", text)
+            self.assertIn(
+                "execute its backlog-only setup, then continue with `workflow.md` Phase 1",
+                text,
+            )
+        for path in both_copies("flow-next-pilot/workflow.md"):
+            text = read(path)
+            self.assertIn(
+                "read and execute references/qa-stage.md#qa-stage-freshness-probe, "
+                "then continue with Phase 2 classification",
+                text,
+            )
+        for path in both_copies("flow-next-work/phases.md"):
+            text = read(path)
+            for phase in ("Phase 2", "Phase 3c", "Phase 3d.2", "Phase 4"):
+                self.assertIn(
+                    f"then continue with {phase}",
+                    text,
+                    f"{path}: active route does not name {phase}",
+                )
+        for backend in PlanReviewSingleSourceTestCase.BACKENDS:
+            for path in both_copies(
+                f"flow-next-plan-review/workflow-{backend}.md"
+            ):
+                self.assertIn(
+                    "Carry the verdict directly into SKILL.md's shared Fix Loop",
+                    read(path),
+                    f"{path}: backend verdict does not continue into shared loop",
+                )
+
+    def test_default_off_probes_and_genuine_terminals_remain(self):
+        for path in both_copies("flow-next-pilot/workflow.md"):
+            text = read(path)
+            self.assertIn(
+                '[ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1',
+                text,
+            )
+        for path in both_copies("flow-next-work/phases.md"):
+            text = read(path)
+            self.assertEqual(
+                text.count(
+                    'RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1'
+                ),
+                3,
+            )
+            self.assertEqual(
+                text.count('[ "$VAL" = "true" ] && ACTIVE=1'),
+                3,
+            )
+            self.assertIn("After **2** consecutive non-`done` returns", text)
+            self.assertIn("STOP retrying and escalate", text)
+        for path in both_copies("flow-next-plan-review/SKILL.md"):
+            text = read(path)
+            self.assertIn("<promise>RETRY</promise>` and stops", text)
+            self.assertIn("stop with `BLOCKED: DESIGN_CONFLICT`", text)
+        for path in both_copies("flow-next-pilot/SKILL.md"):
+            text = read(path)
+            self.assertIn(
+                "Every tick ends with exactly one terminal line, the last line",
+                text,
+            )
+            self.assertIn("PILOT_VERDICT=<ADVANCED|NO_WORK|", text)
+        for path in both_copies("flow-next-land/SKILL.md"):
+            text = read(path)
+            self.assertIn(
+                "Every tick ends with exactly one terminal line, the last line",
+                text,
+            )
+            self.assertIn("LAND_VERDICT=<verdict|NO_WORK>", text)
+
+
 if __name__ == "__main__":
     unittest.main()
