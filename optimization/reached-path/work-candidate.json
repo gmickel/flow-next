@@ -12,24 +12,24 @@
   },
   "prompt_hashes": {
     "plugins/flow-next/skills/flow-next-work/SKILL.md": "c6b319c27827270f4bb5eeb9a7d71c96d0312266a485b31de6efc3a20702e6dd",
-    "plugins/flow-next/skills/flow-next-work/phases.md": "95daffea110c8878b73c1923ff5f64e41dfd0346391de531db62098137a93ed8",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "ed523747cf2c3150d5cf2fd3a148b111ceace709bb204df8c912e6bf6c7639e5",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "1e72fe556e16476e2a71da32536792703a69cfc7dd5f65a4215ce595f4445858",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "9853594ad12db98edafc83780b266f5f7cc95a1090acade3a178c890e1d43a3b",
-    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "0fb43f923444b8fd8aae5df3bc3c535dd2c9f33fcaae0c206184a7df9bfff6d2"
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "a9d2319fb4b48cc1e32f8d24307107aa29199feab701a31744f15e13970aaed1"
   },
   "metrics": {
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
       "baseline_reached_path_chars": 51330,
-      "candidate_reached_path_chars": 50798,
-      "reduction_chars": 532,
-      "reduction_percent": 1.04
+      "candidate_reached_path_chars": 51033,
+      "reduction_chars": 297,
+      "reduction_percent": 0.58
     },
     "delegation_active_path": {
       "baseline_reached_path_chars": 102426,
-      "candidate_reached_path_chars": 101894,
-      "reduction_chars": 532,
-      "reduction_percent": 0.52
+      "candidate_reached_path_chars": 102129,
+      "reduction_chars": 297,
+      "reduction_percent": 0.29
     },
     "revisions": [
       {
@@ -89,6 +89,12 @@
         "date": "2026-07-29",
         "reason": "The first-claim touchpoint and retro-fire path now use push --status-only so claiming work cannot overwrite tracker-side body edits or relations.",
         "baseline_note": "The executable modifier adds 14 characters to both always-loaded paths. The tracker-touchpoints reference hash also changes for lifecycle ownership accuracy but remains cold unless its gate activates."
+      },
+      {
+        "spec": "fn-141-pr-review-comment-evidence",
+        "date": "2026-07-29",
+        "reason": "Repeatable work.done and completionReview comments now name stable occurrence-specific evidence tokens at both the primary touchpoint and retro-fire path.",
+        "baseline_note": "The explicit evidence contract adds 235 characters to both always-loaded paths. Both remain 297 characters below their current ratchet baselines; the tracker-touchpoints reference hash changes for the same required lifecycle identity contract."
       }
     ]
   },
