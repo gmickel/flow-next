@@ -972,7 +972,7 @@ fi
 **Retro-fire on MISSING — exactly ONE cycle, never blocking:**
 
 1. Record the retro-fire start anchor and echo it (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
-2. Invoke the **flow-next-tracker-sync skill directly** — the same dispatch as 5.7, with its `event:` tag: `skill: flow-next-tracker-sync (operation: <leaf> <SPEC_ID>, event: capture)` — NEVER this check block as a wrapper (no recursion).
+2. Invoke the **inline flow-next-tracker-sync wrapper directly**. Re-resolve the operation with 5.7's complete `off | pull | push | reconcile | comment` mapping. For `comment`, Capture re-synthesizes the created/updated-spec summary plus captured context in a mode `0600` body file. The wrapper prepares the other legal operation inputs, makes exactly one `flowctl tracker sync <spec-id> --op <op> --event capture <legal file flags>` call, and deletes the temporary files. NEVER invoke this check block as a wrapper.
 3. Re-check with `--since` = the step-1 anchor:
    `"$FLOWCTL" sync check "$SPEC_ID" --events capture --since "<retro-fire-start>" --json`
 4. Record the final state in the footer slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the spec is already on disk; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.

@@ -273,6 +273,11 @@ class TrackerCallerOracleTests(unittest.TestCase):
             text = (REPO_ROOT / relative).read_text(encoding="utf-8")
             for token in RUNNER_TOKENS:
                 self.assertNotIn(token, text, f"{relative}: {token}")
+            self.assertNotRegex(
+                text,
+                r"skill: flow-next-tracker-sync[^\n]*event:",
+                f"{relative}: legacy lifecycle dispatch grammar",
+            )
 
         for caller in self.callers.values():
             text = (REPO_ROOT / caller["file"]).read_text(encoding="utf-8")
