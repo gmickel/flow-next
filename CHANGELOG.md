@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 3.6.1] - 2026-07-29
+
 ### Fixed
 
 - **Tracker status deadlocks now honor `tracker.conflictTiebreak`.** The shared
