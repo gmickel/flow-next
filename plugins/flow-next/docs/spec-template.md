@@ -139,27 +139,37 @@ Rules:
 
 ### Source tags - what you said vs what the agent inferred
 
-`/flow-next:capture` tags every acceptance criterion at source: `[user]` (your words), `[paraphrase]` (your meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
+`/flow-next:capture` **and** `/flow-next:interview` tag every acceptance criterion they write at source: `[user]` (the human's words - the PO under a business pass, the tech lead under a technical one), `[paraphrase]` (that meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
 
 ```markdown
 - **R1:** Root marketplace manifest exists and imports cleanly. [user]
 - **R3:** Host detection switches to a positive signal. [inferred]
 ```
 
-The tags are **load-bearing, not decoration**: capture's read-back refuses to recommend `approve` while unverified `[inferred]` items remain (the no-self-blessing rule).
+Three rules matter when reading a tagged spec:
+
+- **A pass tags only the criteria it authors**, and never retags an existing bullet - provenance is frozen exactly like the R-ID number. So on a spec that went through a business pass then a technical pass, each criterion's tag reflects the pass that wrote it.
+- **Untagged means unknown provenance, never `[user]`.** Criteria written before this shipped, or by hand, carry no tag. Defaulting them to "a human said this" is wrong in the dangerous direction.
+- **The tags are load-bearing, not decoration**: the read-back refuses to recommend `approve` while unverified `[inferred]` items remain (the no-self-blessing rule). In interview that is narrowed to `[inferred]` criteria no question covered, since an answered question has already done the verifying.
 
 They are also the cheapest review filter available, because reading them is a grep rather than a model judgment. Tally which criteria are grounded and which are guesswork:
 
 ```bash
 flowctl cat fn-14 \
-  | grep -oE '\*\*R[0-9]+[a-z]?:.*\[[a-z:]+\]$' \
-  | sed -E 's/^\*\*(R[0-9]+[a-z]?):.*\[([a-z:]+)\]$/\2 \1/' \
-  | sort | awk '{c[$1]=c[$1]" "$2; n[$1]++} END {for (t in c) printf "%-12s %2d  %s\n", t, n[t], c[t]}'
+  | grep -oE '\*\*R[0-9]+[a-z]?:.*\[[^]]+\]$' \
+  | sed -E 's/^\*\*(R[0-9]+[a-z]?):.*\[([^]]+)\]$/\2\t\1/' \
+  | sort | awk -F'\t' '{c[$1]=c[$1]" "$2; n[$1]++} END {for (t in c) printf "%-26s %2d %s\n", t, n[t], c[t]}'
 
-user          6   R1 R13 R5 R6 R7 R8
-paraphrase    3   R10 R12 R2
-inferred      4   R11 R3 R4 R9
+user                        6  R1 R13 R5 R6 R7 R8
+paraphrase                  3  R10 R12 R2
+inferred                    4  R11 R3 R4 R9
+strategy:Cross-platform parity  1  R14
 ```
+
+Two details in that pipeline are load-bearing, and both exist because a track name is **not** a lowercase slug - it keeps its literal casing and may contain spaces or hyphens (`[strategy:Cross-platform parity]`):
+
+- the character class is `[^]]+`, not `[a-z:]+` - a lowercase-only class silently drops every `[strategy:*]` criterion from the tally;
+- `sed` emits a **tab** and `awk` reads `-F'\t'` - with the default whitespace split, a track name containing a space lands in `$2` and the tally reports a phantom tag.
 
 Then interview only the uncertainty instead of re-litigating settled requirements:
 
@@ -168,7 +178,9 @@ Then interview only the uncertainty instead of re-litigating settled requirement
 (R3, R4, R9, R11); the [user] and [paraphrase] ones are settled, leave them alone
 ```
 
-Append-only R-ID numbering is what makes that targeting safe - a later pass cannot renumber or rewrite the criteria you already blessed.
+Append-only R-ID numbering is what makes that targeting safe - a later pass cannot renumber or rewrite the criteria you already blessed, and it will not retag them either.
+
+Scope: tags apply to a spec's `## Acceptance Criteria` bullets. Task acceptance is plain `- [ ]` checklist items and carries no tags, and an interview over a loose markdown file leaves that file's structure alone - tags start when `/flow-next:plan` promotes it to a spec.
 
 Note: `flowctl spec export-cognitive-aid --json` does not surface parsed criteria with their tags as a top-level array today (the parse feeds the PR-body coverage table internally), so the grep above is the supported route.
 
