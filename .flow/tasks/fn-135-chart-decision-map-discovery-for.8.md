@@ -1,5 +1,5 @@
 ---
-satisfies: [R19, R30, R31, R32, R33, R34]
+satisfies: [R19, R30, R31, R32, R33, R34, R49, R51]
 ---
 # fn-135-chart-decision-map-discovery-for.8 Publish public chart docs and cookbook journeys
 
@@ -11,6 +11,8 @@ Update the public `flow-next.dev` documentation in its own clean worktree, inclu
 ### Worktree boundary
 
 The current `~/work/flow-next.dev` checkout may contain unrelated work. Create a separate worktree/branch for this task, preserve existing changes, commit this docs-site change separately, and report that commit as evidence for fn-135.
+
+Before editing, re-read the landed fn-147 docs commit and fn-148's final report/current landed template guidance. Preserve fn-147's two evidence/source-tag cookbook recipes and interview-page semantics. A planned, NOT CONFIRMED, or INCONCLUSIVE fn-148 outcome adds no public claim; consume verified/inferred fact guidance only when its exact human-approved diff has landed.
 
 ### Exact files
 
@@ -42,8 +44,8 @@ Use flow-next chart vocabulary and approximated examples, not source attribution
 - Chart is an optional high-fog on-ramp before capture; preserve the lightweight first-run happy path.
 - One smallest-sufficient matrix covers direct change, prospect, chart, capture/direct spec, interview, plan, work, review/QA/ship.
 - Prompt-first language leads; exact CLI/flags/config/error/result contracts remain complete in reference pages.
-- Explain attended/unattended automation boundaries and `.flow/` canonical/tracker projection.
-- Add public glossary terms and `## Unreleased`; no version bump.
+- Explain attended/unattended automation boundaries and `.flow/` canonical/tracker projection. D-ID/evidence provenance remains separate from acceptance-criterion source tags; chart hands off through capture without implying capture is the only criterion-tag writer.
+- Add public glossary terms and append under the existing `## Unreleased`; retain fn-147 and other pending entries; no version bump.
 
 ### Quick commands
 
@@ -55,11 +57,13 @@ pnpm build
 ### Non-goals
 
 - No product code or plugin generated files in the docs repo.
+- No chart-level verified/inferred fact or decision grammar ahead of a landed human-approved fn-148 result.
 
 ## Acceptance
 - A complete public chart page ships and both independent nav sources place it between Prospect and Capture.
 - Pipeline, when-to-use, menu, prototype doctrine, first-run, CLI/config, spec, skill-boundary, team, orchestration/autonomy, glossary, and changelog pages agree on the optional prompt-first contract.
 - Cookbook includes all four required materially different journeys with prompts, evidence/consent boundaries, adaptive re-charting, and no mandatory phase order or external source attribution.
+- Cookbook/interview docs preserve fn-147's source-tag recipes and `untagged = unknown`, while chart examples retain D-ID/evidence references without relabelling facts or claiming an unlanded fn-148 outcome.
 - Public `## Unreleased` entry exists, with no version bump.
 - Work occurs in a separate clean flow-next.dev worktree and yields a separate commit for fn-135 evidence.
 - `pnpm check` and `pnpm build` pass in that worktree.

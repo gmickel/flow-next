@@ -1,5 +1,5 @@
 ---
-satisfies: [R14, R17, R19, R20, R26, R30, R31, R32, R33, R34, R36]
+satisfies: [R14, R17, R19, R20, R26, R30, R31, R32, R33, R34, R36, R49, R51]
 ---
 # fn-135-chart-decision-map-discovery-for.7 Complete repo docs, assertions, mirrors, and gates
 
@@ -18,11 +18,12 @@ Complete the canonical repo documentation, vocabulary, durable inventory asserti
 
 ### Documentation content
 
+- Before editing shared prompt/docs/changelog surfaces, re-read landed fn-147 changes and fn-148's final recorded outcome. Preserve fn-147's interview source-tag semantics and any existing `## Unreleased` entry; do not infer a product change from an unfinished, NOT CONFIRMED, or INCONCLUSIVE fn-148 study.
 - Define Chart, Decision record, D-ID, chart Frontier versus task frontier, Briefing package, and Supersession.
 - Show chart as optional before capture, with the guide matrix and explicit skip conditions. Update every diagram, lifecycle/command inventory, skill count, and “where to look” index that claims the idea-to-PR route.
 - Document the complete `flowctl chart` subcommand/flag/result/error/state/ID/file/config contract and exact automation syntax, while onboarding/README lead with natural-language prompting.
-- Explain attended/unattended boundaries, one attended decision per session, parallel unattended evidence, local canonical/tracker projection, capture handoff, no spec writes/readiness, and no fixed discovery phase order.
-- Stage root `## Unreleased`; do not touch version manifests or run the bump script.
+- Explain attended/unattended boundaries, one attended decision per session, parallel unattended evidence, local canonical/tracker projection, capture handoff, no spec writes/readiness, and no fixed discovery phase order. State that D-ID/evidence provenance is distinct from acceptance-criterion author tags; capture is the chart handoff, not the only skill that emits criterion tags.
+- Append the chart entry under the existing root `## Unreleased`; never replace/reorder fn-147 or other pending entries, touch version manifests, or run the bump script.
 
 ### Durable assertions
 
@@ -52,10 +53,12 @@ If intentional embedded prompt text changed, update the pinned SHA-256 in the sa
 
 - No flow-next.dev edit in this task.
 - No plugin version bump.
+- No verified/inferred chart-fact grammar; fn-148 alone licenses any human-approved template prose change.
 
 ## Acceptance
 - All named repo pipeline, lifecycle, skill, CLI, vocabulary, team, orchestration/autonomy, platform-difference, and usage surfaces document chart/guide consistently.
 - Documentation leads with prompt-first smallest-sufficient routing; exact flags remain complete for automation; examples do not become a mandatory route sequence.
+- Docs preserve fn-147's criterion-tag semantics (`untagged` remains unknown), distinguish them from D-ID/evidence provenance, and make no verified/inferred fact claim beyond a landed human-approved fn-148 outcome.
 - Root `## Unreleased` entry exists and no version manifest changes.
 - `test_chart_docs_inventory.py` enforces the enumerated route, optionality, count, mirror, CLI, and parity contracts.
 - Flowctl copy, tracker manifest, and generated Codex mirror are refreshed; `sync-codex.sh` second run is byte-idempotent.

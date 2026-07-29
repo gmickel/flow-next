@@ -84,9 +84,10 @@ on it before choosing a decision.>
 
 ## Notes
 <Domain. Skills every session should consult. Standing preferences for this effort.>
-<Known facts may be source-tagged here. A fact becomes a resolved D-ID only when
-the chart actually asked and settled that question; importing background does not
-fabricate decision history.>
+<Known facts carry citations or approved evidence references here. Acceptance-
+criterion source tags do not apply to chart facts. A fact becomes a resolved D-ID
+only when the chart actually asked and settled that question; importing background
+does not fabricate decision history.>
 
 ## Decisions
 <!-- the ledger: one line per resolved decision, append-only, D-IDs never reused -->
@@ -101,6 +102,16 @@ fabricate decision history.>
 ```
 
 `## Open Questions` and `## Boundaries` carry the same meaning here as in a spec: parked unknowns, and what is deliberately not being done. `## Outcome` is the chart's `Goal & Context`.
+
+### Three provenance lanes that must not collapse
+
+Chart sits beside two provenance changes that deliberately own different surfaces:
+
+1. **Chart decision provenance** is structural: D-ID, decision type, answer, evidence/assets, dependencies, supersession, and briefing membership. A briefing preserves those links and references; it does not convert them into trailing source tags.
+2. **Acceptance-criterion author provenance** uses the existing `[user] | [paraphrase] | [inferred] | [strategy:<track>]` trailing tags. Capture already applies them to criteria it newly writes; fn-147 extends the same semantics to criteria interview newly writes. These tags answer *who grounded this criterion*, not *how strong the supporting evidence is*. A criterion derived from a resolved unattended D-ID is therefore not automatically `[user]`.
+3. **Verified-versus-inferred technical facts and decisions** are the subject of fn-148's preregistered eval. fn-135 adds no chart-level `[verified]`/`[inferred]` grammar and makes no template claim ahead of that result. If fn-148 later lands human-approved guidance, fn-135 consumes the landed wording without widening it; a null or inconclusive result changes nothing here.
+
+This separation is load-bearing. It preserves fn-147's append-only rule (never retag a criterion authored by an earlier pass), keeps D-ID evidence navigable, and avoids contaminating fn-148's baseline by shipping its experimental intervention through chart first.
 
 ### The decision record
 
@@ -198,7 +209,11 @@ A chart is done when no open decision remains and `## Open Questions` is empty.
 
 Default is **N=1**; a split is only proposed when the decision clusters are genuinely disjoint. Clustering and confirmation are agent judgments owned by the chart skill. `flowctl` only validates and emits a confirmed proposal file; it never pretends a deterministic command obtained consent.
 
-Briefings are immutable and versioned (`B1`, `B2`, ...). A forced briefing is marked `draft`, lists every unresolved/claimed/parked item, and leaves the chart `open`; it is never silently capture-ready. Capture ingests a briefing as source-tagged evidence, performs its normal read-back, and may be declined without changing the chart. After successful spec creation, capture calls an idempotent chart link operation with the briefing id, spec id, and D-ID set. Partial multi-spec capture records only successful links and remains resumable; a later supersession marks affected briefing/spec links stale but does not rewrite them.
+Briefings are immutable and versioned (`B1`, `B2`, ...). A forced briefing is marked `draft`, lists every unresolved/claimed/parked item, and leaves the chart `open`; it is never silently capture-ready. Capture ingests a briefing as attributable evidence, preserving its chart id, B-ID, cluster, D-ID links, and approved asset references, then applies its normal read-back and source tags only to acceptance criteria it newly authors. Declining the read-back changes neither chart nor handoff state.
+
+Draft or stale briefings are refused for ordinary capture. An explicit override must identify the unresolved or invalidated decisions, read back the risk, and still cannot promote a forced draft to a final briefing. Shared-context D-IDs may be cited by more than one proposed spec, but capture must not duplicate them into acceptance requirements unless each target spec independently needs that guarantee.
+
+After successful spec creation, capture calls an idempotent chart link operation with the briefing id, cluster key, spec id, and D-ID set. The handoff has a stable retry identity and recoverable journal across `spec create` / `spec set-plan` / `chart link-spec`: a process interruption after spec creation must discover and link the existing spec rather than create a duplicate. Partial multi-spec capture records only successful links and remains resumable; a declined or failed cluster does not roll back successful siblings. A later supersession marks affected briefing/spec links stale but does not rewrite them.
 
 Publishing the first non-draft briefing transitions `open -> done`. A done chart is immutable to add/wire/resolve/scope operations. `chart reopen --reason` explicitly transitions `done|abandoned -> open`, records who/why, and marks existing briefings plus affected spec links stale before new decisions or supersession are accepted. Re-briefing computes a fingerprint over chart revision plus normalized confirmed proposal: an identical retry returns the existing B-ID; a changed proposal or later chart revision allocates the next B-ID. `abandoned` is otherwise terminal.
 
@@ -283,7 +298,7 @@ Parallelism means parallel **invocations**, never a batch tick: the host may dis
 - **Session-sized decisions.** Every selected decision must fit one agent context. If it does not, work mode splits the question before dispatch rather than asking an agent to plan, research, prototype, and decide an entire workstream in one session.
 - **Charting resolves nothing.** Chart mode ends after the map, the first decision records, and the cost estimate exist. A charting session that starts answering its own decisions has skipped the human's scoping act.
 - **The agent never answers an attended decision.** Hard gate, not guidance. A `prototype` or `interview` decision resolved inside an unattended run is a contract violation and must terminate `NEEDS_HUMAN`.
-- **Chart never writes a spec.** It hands a briefing to `capture`. Letting chart author specs directly would let inferred discovery content bypass capture's source-tagging and read-back, which is exactly the guarantee the ratchet depends on.
+- **Chart never writes a spec.** It hands a briefing to `capture`. Letting chart author specs directly would let discovery content bypass capture's acceptance-criterion source-tagging and read-back, which is exactly the guarantee the ratchet depends on.
 - **Chart never sets `ready`.** Promotion stays a human act, unchanged.
 - **Charts are not required.** A small, well-understood effort goes straight to `capture`. Reaching for a chart on a two-day feature is the same error as running a full interview on a one-line fix. `/flow-next:chart` on an idea with nothing parked must say so and stop rather than manufacture decisions.
 - **Charts have a size ceiling.** Past `chart.maxDecisions` (default 12) at charting time, chart refuses to persist and proposes either narrowing the Outcome or splitting into two charts, because a 20-decision chart is a quarter of discovery masquerading as one effort. `--force-size --reason` overrides only after prompt-layer warning/read-back and records actor, configured ceiling, proposed count, timestamp, and reason. The ceiling is a charting-time guard only; decisions graduated later from `## Open Questions` may legitimately carry a chart past it.
@@ -294,6 +309,9 @@ Parallelism means parallel **invocations**, never a batch tick: the host may dis
 - **`## Open Questions` is not a backlog.** It must not be pre-sliced into decision-shaped entries. One parked entry may graduate into several decisions, or none.
 - **No new tracker adapters.** Chart projection rides the existing four (Linear, GitHub, GitLab, Jira) or degrades to local-only.
 - **Unsafe evidence stays referenced, not copied.** If an answer contains an obvious secret or a literal guard-triggering destructive command, chart refuses to embed it. The source remains at a repository-relative evidence path or approved HTTPS reference; the decision stores a safe redacted/escaped summary and link. This applies to answer bodies, assets, normal briefings, and forced drafts. Never silently strip bytes from the cited source.
+- **Do not overload source tags.** Chart facts, decisions, assets, D-ID records, and briefing evidence do not use the acceptance-criterion trailing-tag grammar. Capture and interview tag only criteria they newly author, and never retag an existing bullet.
+- **Do not preempt fn-148.** No verified/inferred fact or decision grammar ships through chart unless fn-148 returns CONFIRMED, the human approves the ready-to-apply diff, and that guidance has landed. Null, inconclusive, or merely planned outcomes add nothing.
+- **Handoff retries are identity-safe.** A crash after a spec is created but before the chart link is recorded must not produce a second spec on retry. Draft/stale briefing admission and partial multi-spec recovery fail visibly, never by guessing from titles.
 - **Spec prose must not trip destructive-command guards.** Chart bodies, decision records, and briefings are frequently piped through shells by drivers and skills. Documentation examples inside these artefacts must avoid literal destructive command strings, which guard packs match on sight regardless of context. This spec is itself a worked example: an earlier draft was blocked by dcg for quoting an uninstall command in prose.
 
 ## Acceptance Criteria
@@ -310,7 +328,7 @@ Parallelism means parallel **invocations**, never a batch tick: the host may dis
 - **R9:** Independent unattended decisions may be dispatched as separate parallel work invocations, each claiming exactly one D-ID and emitting its own verdict; no batch invocation aggregates mixed outcomes. Attended decisions remain one per session.
 - **R10:** `flowctl chart out-of-scope` closes a decision, writes a one-line reason under `## Boundaries`, and produces no entry under `## Decisions`.
 - **R11:** `flowctl chart briefing <id>` refuses with a non-zero exit while any open decision (including blocked or claimed decisions) or `## Open Questions` remains, unless `--force` is passed; forced output is visibly draft-only and leaves the chart open.
-- **R12:** The emitted briefing index contains the Outcome, every decision with title, gist and link, superseded decisions, all recorded assets, and the boundaries list; `/flow-next:capture` ingests it as source-tagged evidence and preserves its normal read-back consent.
+- **R12:** The emitted briefing index contains the Outcome, every decision with title, gist and link, superseded decisions, all recorded assets, and the boundaries list; `/flow-next:capture` preserves its chart/B-ID/cluster/D-ID evidence references, then applies normal read-back consent and source tags only to acceptance criteria capture newly authors.
 - **R13:** Chart writes no file under `.flow/specs/` and never mutates a spec's `ready` flag.
 - **R14:** Every `flowctl chart` subcommand supports `--json` and emits an exact fixture-validated v1 envelope using `success`, `schema_version`, `command`, and a command-specific `result` or structured `error`.
 - **R15:** Work mode terminates with exactly one `CHART_VERDICT=` line matching the documented grammar.
@@ -347,6 +365,9 @@ Parallelism means parallel **invocations**, never a batch tick: the host may dis
 - **R46:** Parallel unattended work is one invocation per D-ID with one claim and one verdict. Scenario tests cover crash/stale-claim recovery and demonstrate that no batch/mixed-result grammar exists.
 - **R47:** Prompt-first behavior is exercised by a structured scenario/eval harness, not static prose checks alone: known facts, ambiguous steering/read-back, reversal, attended gating, adaptive frontier growth, guide routing, skip-chart, and exact terminal verdicts.
 - **R48:** Unsafe or secret-bearing evidence is preserved by reference with a safe display summary; emitted chart, answer, briefing, and draft artifacts never copy literal guard-triggering commands or credentials.
+- **R49:** Chart decision provenance and acceptance-criterion author provenance remain distinct: briefings preserve D-ID/evidence links, capture and interview use the settled four-tag grammar only on criteria each pass newly writes, existing criteria are never retagged, and untagged remains unknown rather than user-grounded.
+- **R50:** Capture handoff is retry-safe and admission-aware: draft/stale briefings fail closed absent explicit risk read-back, shared-context D-IDs do not become duplicated requirements by default, and interruption between spec creation and `chart link-spec` resumes against the existing B-ID/cluster/spec identity without creating a duplicate.
+- **R51:** fn-135 does not define verified/inferred marking for chart facts or decisions. Each overlapping implementation/docs task re-anchors on fn-148's final recorded outcome and consumes only human-approved guidance that has actually landed; NOT CONFIRMED or INCONCLUSIVE produces no chart contract or documentation claim.
 
 ## Boundaries
 <!-- scope: business -->
@@ -399,6 +420,10 @@ The timing argument: the ideation edge was left deliberately open, and that was 
 **Named `chart`, not `map`.** `/flow-next:map` is already the clawpatch feature-map wrapper. `chart` reads as both noun and verb and does not collide.
 
 **Documentation is part of the feature.** Rejected treating chart as one new command page. It changes the mental model of the full pipeline: when discovery happens, when capture is premature, when chart is waste, and which later stages can be skipped or narrowed because equivalent evidence already exists. The implementation must update every canonical when-to-run and pipeline-routing surface together, with an assertion that prevents one property from silently reverting to a rigid conveyor.
+
+**Provenance lanes stay separate.** fn-147 makes acceptance-criterion author tags consistent across capture and interview; chart consumes that settled behavior but does not make briefings or decision facts tag writers. fn-148 is research into a different prose demand for technical facts and inference-backed decisions. Reusing `[inferred]` for both would make one token answer two questions and would preempt the eval. D-ID/evidence links therefore remain structural, criterion tags remain author provenance, and any verified/inferred fact guidance is adopted only from a confirmed, human-approved fn-148 outcome.
+
+**Coordination is not dependency.** fn-135 does not require fn-147 behavior to build its chart store or capture handoff, and fn-148 may correctly close with no product change. Neither belongs in fn-135's spec dependency DAG. The affected tasks must nevertheless re-read the landed fn-147 prompt/docs changes and fn-148 closeout before editing shared files, preserve both projects' existing `## Unreleased` entries, and resolve same-file changes additively rather than replacing them.
 
 **The guide/router ships here.** The approved fn-67 routing scope never produced an implementation task or a shipped `/flow-next:guide` surface, while R30/R31 require one consistent router. This spec absorbs that settled scope rather than depending on an absent command: implement the small prompt-first guide, give it the smallest-sufficient-workflow matrix, and keep it pure routing rather than a new delivery stage.
 

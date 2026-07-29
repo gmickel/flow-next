@@ -1,5 +1,5 @@
 ---
-satisfies: [R1, R2, R3, R4, R5, R7, R8, R9, R15, R17, R20, R26, R27, R28, R29, R33, R35, R36, R37, R43, R46, R47, R48]
+satisfies: [R1, R2, R3, R4, R5, R7, R8, R9, R15, R17, R20, R26, R27, R28, R29, R33, R35, R36, R37, R43, R46, R47, R48, R49, R51]
 ---
 # fn-135-chart-decision-map-discovery-for.4 Ship prompt-first chart skill and adaptive loop
 
@@ -27,11 +27,12 @@ Ship the canonical prompt-first `/flow-next:chart` skill and command shim. The h
 - Work mode: re-anchor Outcome; call `flowctl chart frontier`; choose one smallest uncertainty; claim; run the evidence route; resolve/scope/release; infer only newly-visible decisions; recompute. Never follow a frozen initial route.
 - One work invocation owns exactly one D-ID/claim/verdict. Independent unattended routes fan out only as separate invocations; there is no batch or mixed-result verdict. One attended decision per session. Unattended driver reaching any stored `attendance: attended` decision must persist no answer and emit `NEEDS_HUMAN`.
 - Full decision bodies/assets are read on selection, not during ordinary status/frontier navigation.
+- Known facts and resolved decisions retain citations, D-ID links, and approved evidence references. The skill never applies acceptance-criterion trailing tags to chart facts/decisions and never invents a verified/inferred fact grammar ahead of a landed, human-approved fn-148 outcome.
 
 ### Native examples to include
 
 - “This is too broad to capture; help me find the first decision worth making.”
-- “We know the storage choice. Record it as background and show what uncertainty disappears; do not invent a resolved decision.”
+- “We know the storage choice. Record it as cited background and show what uncertainty disappears; do not invent a resolved decision or source tag.”
 - “Use the cheapest real-world check for viability.”
 - “The prototype changed direction. Preserve the old assumption and redraw.”
 - “Show whether this should become one spec or two; do not build yet.”
@@ -39,7 +40,7 @@ Ship the canonical prompt-first `/flow-next:chart` skill and command shim. The h
 
 Each example must show the inferred operation, read-back point, evidence/consent boundary, and terminal `CHART_VERDICT`.
 
-The scenario harness covers known background facts, ambiguous steering that requires read-back, reversal/supersession, attended gating, newly visible frontier growth, crash/stale-claim recovery, skip-chart, and exact terminal verdicts. Static prose tests remain useful but are not evidence for prompt interpretation.
+The scenario harness covers known background facts with evidence references but no acceptance-criterion tags, ambiguous steering that requires read-back, reversal/supersession, attended gating, newly visible frontier growth, crash/stale-claim recovery, skip-chart, and exact terminal verdicts. Static prose tests remain useful but are not evidence for prompt interpretation.
 
 ### Quick commands
 
@@ -51,12 +52,14 @@ cd plugins/flow-next/tests && python3 -m unittest test_chart_skill_contract test
 
 - No implementation work hidden inside chart, except a `task` decision that only enables another decision.
 - No automatic chart creation when the idea is already capture-ready.
+- No chart-level `[user]`/`[paraphrase]`/`[inferred]`/`[strategy:*]` fact grammar and no pre-judgment of fn-148.
 ## Acceptance
 - Chart mode names/read-backs Outcome, stops without persistence when no fog exists, otherwise creates only the visible frontier and cost estimate while resolving nothing.
 - Work mode uses `flowctl chart frontier` as its sole selection input, claims before work, re-charts after every transition, and splits oversized decisions before dispatch.
 - Attended prototype/interview decisions cannot self-resolve; unattended driving emits exactly one `CHART_VERDICT=NEEDS_HUMAN` line with no answer write.
 - Independent unattended evidence routes fan out only as separate one-D-ID invocations; each has one claim/verdict, and crash recovery is observable through the stored claim.
 - Natural-language examples cover known facts, cheapest evidence, reversal/supersession, skip-chart, and one-vs-two-spec briefing without teaching a fixed route order.
+- Known-fact scenarios preserve citations/D-ID evidence without borrowing acceptance-criterion tags; fn-148 outcome handling is consume-only after a confirmed, human-approved change lands.
 - Structured scenario/eval fixtures prove prompt interpretation, read-back, guarded operations, adaptive frontier changes, guide handoff, stale recovery, and exact verdicts; canonical skill/shim/registries and focused commands pass.
 - Over-ceiling prompt scenarios prove refusal by default, narrowing/split recommendation, explicit read-back, and audited `--force-size --reason` only after consent.
 ## Done summary
