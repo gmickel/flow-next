@@ -164,7 +164,7 @@ This project uses Flow-Next. Use `.flow/bin/flowctl` for ALL task tracking. Do N
 # e.json: {"commits": ["<sha>"], "tests": ["<command>"], "prs": []}
 ```
 
-**Creating a spec:** write it directly - do NOT use `/flow-next:plan` (task breakdown only). Scaffold cascade (first match wins): `SPEC.md` -> `spec.md` -> `.flow/templates/spec.md` -> bundled template.
+**Creating a spec:** write it directly - do NOT use `/flow-next:plan` (task breakdown only). Scaffold cascade (first match wins): `SPEC.md` -> `spec.md` -> `.flow/templates/spec.md` -> bundled template. To change the spec shape for a project, copy the bundled template to a repo-root `SPEC.md` and edit it - adding sections and rewriting the guidance prose is free; renaming `## Acceptance Criteria` / `## Boundaries` / `## Goal & Context` / `## Decision Context` silently degrades the features that parse them. Full guide: [`plugins/flow-next/docs/spec-template.md`](plugins/flow-next/docs/spec-template.md#customizing-the-scaffold-for-your-project).
 
 ```bash
 .flow/bin/flowctl spec create --title "Short title" --json

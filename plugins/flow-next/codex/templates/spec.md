@@ -49,6 +49,16 @@ Discovery cascade (first match wins):
   2. <repo_root>/spec.md           (lowercase honored when uppercase absent)
   3. .flow/templates/spec.md       (project-local copy from /flow-next:setup)
   4. bundled ${PLUGIN_ROOT}/templates/spec.md  (this file — canonical source of truth)
+
+Customizing: adding sections and rewriting the guidance prose under any heading is
+free. Renaming or removing `## Acceptance Criteria`, `## Boundaries`,
+`## Goal & Context` or `## Decision Context` does NOT error - it silently degrades
+the features that parse them (R-ID coverage, PR "Not in this PR", interview scope
+routing, Decision Context shape detection).
+
+Full guide, incl. the known limitation for custom sections under an interview pass:
+flow-next docs, "Customizing the scaffold for your project"
+(plugins/flow-next/docs/spec-template.md - https://flow-next.dev/docs/spec-template/).
 -->
 
 # <spec-id> <Title>

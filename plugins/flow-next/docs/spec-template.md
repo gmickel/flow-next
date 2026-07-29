@@ -24,7 +24,78 @@ When a skill needs the spec template, it walks four locations in order (first ma
 3. `.flow/templates/spec.md` — project-local copy from `/flow-next:setup`
 4. `${PLUGIN_ROOT}/templates/spec.md` — bundled (canonical source of truth)
 
-Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that implements it live in [`../references/spec-template-discovery.md`](../references/spec-template-discovery.md). Copy + customize tier 1 to override the scaffold for your project.
+Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that implements it live in [`../references/spec-template-discovery.md`](../references/spec-template-discovery.md).
+
+## Customizing the scaffold for your project
+
+**The bundled section list is a default, not a requirement.** Tier 1 exists so a project can impose its own spec shape without forking the plugin or waiting for upstream to agree. If your team wants user stories in every spec, a risk register, a rollout/runbook section, a compliance block, or a data-retention statement - add it and it is there on every spec that project authors from then on.
+
+### How
+
+```bash
+# from your repo root
+cp "$CLAUDE_PLUGIN_ROOT/templates/spec.md" SPEC.md   # or copy .flow/templates/spec.md in copy-mode repos
+$EDITOR SPEC.md                                       # add / reorder / reword
+git add SPEC.md && git commit -m "docs: project spec scaffold"
+```
+
+Commit it. The scaffold is a team artifact - an uncommitted `SPEC.md` gives you a spec shape your teammates and your CI agents do not have.
+
+Frontmatter and the `<!-- scope: ... -->` markers are authoring guidance, not spec content; keep them if you want the interview passes to keep routing correctly, and know that they may be stripped from the finished spec body.
+
+### What is safe to change
+
+- **Adding sections.** Free, and the main reason to customize. Nothing parses for an unknown heading, so an extra section is carried as prose.
+- **Reordering** sections, including moving an added section between canonical ones.
+- **Rewriting the guidance prose** under any heading. It is instruction to the authoring agent - make it say what your project actually needs. This is the highest-leverage edit and the most commonly missed one.
+- **Adding project vocabulary**, links to your ADRs / design docs / glossary, or a house rule ("every spec names the observability signal that proves it worked").
+
+### What breaks if you rename or remove a canonical heading
+
+These four headings are parsed by `flowctl`. Renaming or deleting one does not error - the corresponding feature silently degrades, which is worse. Verified against the current implementation:
+
+| Heading | What reads it | Consequence if renamed or removed |
+|---|---|---|
+| `## Acceptance Criteria` | R-ID extraction (`_export_parse_acceptance_criteria`) | R-IDs stop being found. Coverage tables in `make-pr` and the review skills come out empty, task `satisfies:` mapping breaks, and unaddressed-R-ID verdict gating stops firing. Legacy `## Acceptance criteria` and bare `## Acceptance` are tolerated; anything else is not. |
+| `## Boundaries` | exact-match regex on the heading | The "Not in this PR" section of a generated PR body loses its source. |
+| `## Goal & Context` | interview business-scope routing | `--scope=business` loses a write target; the business pass has nowhere canonical to put framing. |
+| `## Decision Context` | flat-vs-substructured detection | The `### Motivation` / `### Implementation Tradeoffs` promotion logic cannot tell which shape the spec is in. |
+
+Keep R-ID bullets in the canonical form - `- **R1:** <criterion>` - with optional single-letter sibling suffixes (`R4a`, `R4b`). The parser matches `R<digits><optional letter>`; prose numbering like "Requirement 1" is not recognized.
+
+The other three canonical sections (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`) are technical-scope write targets. Removing them is survivable, but the technical interview pass will have fewer places to put what it learns.
+
+### Known limitation - custom sections and the interview passes
+
+`flowctl scope write-policy` returns a `writable` list and a `preserved` list, and **both enumerate only the seven canonical sections**. A section you added appears in neither, so the write-policy contract does not explicitly instruct an interview pass to preserve it byte-for-byte the way it protects the other scope's canonical sections.
+
+In practice a pass reads the existing body and refines in place, so custom sections normally survive. But the guarantee is contractual for canonical sections and incidental for yours. If you add a section carrying content you cannot afford to lose, keep it under version control (you committed `SPEC.md`, so `git diff` on the spec after a pass is the check) rather than relying on the pass to protect it.
+
+`capture` and `plan` seed from the template directly and have no such caveat.
+
+### Worked example - adding user stories
+
+```markdown
+## Goal & Context
+<!-- scope: business -->
+...
+
+## User Stories
+<!-- scope: business -->
+
+Numbered, one actor per story: "As a <actor>, I want <capability>, so that <benefit>."
+Cover the unhappy paths too, not only the demo path.
+
+## Architecture & Data Models
+<!-- scope: technical -->
+...
+```
+
+Canonical headings untouched, one section added, scope marker set so the business pass owns it.
+
+### Why this is not the default
+
+We benchmarked adding user-story and test-seam sections to the bundled scaffold. A first pass looked positive; a pre-registered replication did not hold up, and the larger scaffold cost roughly a third more spec length - paid on every downstream read by every worker and reviewer. So the default stays lean and the override stays available. Section preferences are project-specific and the cascade is the right place to express them.
 
 ## Acceptance criteria — R-ID rules
 

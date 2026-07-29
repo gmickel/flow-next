@@ -4,6 +4,24 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Documentation
+
+- **Customizing the spec scaffold is now properly documented.** The repo-root
+  `SPEC.md` override has always won the 4-tier discovery cascade, but it was
+  documented only as a lookup order - so the most useful thing about it, that a
+  project can impose its own spec shape without forking the plugin, was easy to
+  miss. `plugins/flow-next/docs/spec-template.md` gains a "Customizing the
+  scaffold for your project" guide: how to do it, what is free to change
+  (adding sections, reordering, rewriting the guidance prose under any
+  heading), and a verified table of what silently degrades if you rename or
+  remove `## Acceptance Criteria`, `## Boundaries`, `## Goal & Context` or
+  `## Decision Context`. Also documents a known limitation: `flowctl scope
+  write-policy` enumerates only the seven canonical sections, so a
+  user-added section has no contractual byte-for-byte preservation guarantee
+  under an `interview` pass (`capture` and `plan` are unaffected). The bundled
+  template and `CLAUDE.md` cross-link the guide. Docs only - no behavior
+  change, no version bump.
+
 ## [flow-next 3.6.1] - 2026-07-29
 
 ### Fixed
