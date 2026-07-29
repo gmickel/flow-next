@@ -148,15 +148,21 @@ No product API. Study contract:
   hypothesis.
 - **R10:** A null or inconclusive result closes this spec with no flow-next change, and that
   is recorded as the outcome rather than treated as failure.
-- **R11:** If and only if the rule clears its bar, a follow-up spec proposes the template
-  prose change with its measured cost - this spec does not itself edit the bundled template.
+- **R11:** The study ends in a report + human handover, never an autonomous template edit.
+  On CONFIRMED, the report carries the exact winning guidance prose as a ready-to-apply diff
+  against `plugins/flow-next/templates/spec.md`, with its measured cost - so the human
+  go/no-go is the only remaining step, and on "go" the change is implemented directly (it is
+  a small prose diff backed by the eval evidence; no further spec required). On NOT
+  CONFIRMED / INCONCLUSIVE the handover recommends closing with no change.
 - **R12:** The report states whether the effect varies by work shape, addressing the
   standing bug-shape hypothesis from `studies/NEXT.md`.
 
 ## Boundaries
 <!-- scope: business -->
 
-- **No template edit in this spec.** Shipping is a separate, evidence-gated follow-up (R11).
+- **No autonomous template edit.** The study's terminal artifact is a report + human
+  handover carrying the ready-to-apply diff (R11); the template changes only after the
+  human says go, and then directly - no intermediate spec.
 - **No new sections.** That question is settled - the answer was no. This tests prose
   demands inside existing sections.
 - **Not the F2 implementation study.** The approved-not-started code-quality study in
