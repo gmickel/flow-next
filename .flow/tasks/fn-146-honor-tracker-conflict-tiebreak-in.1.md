@@ -53,9 +53,8 @@ Wire the existing `tracker.conflictTiebreak` configuration into the shared deter
 
 
 ## Done summary
-TBD
-
+Implemented strict `tracker.conflictTiebreak` handling across direct status and facade operations: `always-ask`, `flow-wins`, and `tracker-wins` now use the shared policy with fail-fast persisted-config validation and zero-side-effect unrepresentable conflicts. Added provider-parity and facade regression coverage, propagated bundled/Codex copies, and updated canonical plus public documentation; Codex implementation review returned SHIP.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 30341e0525e356f73dfc47c64d3b850d9e65bbac, c6db2eb84bcde20792a932ca37c496a617c7b4d8
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_status test_tracker_facade test_tracker_config -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_status test_tracker_facade test_tracker_config test_tracker_distribution -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/scripts/flowctl_tracker/status/policy.py plugins/flow-next/scripts/flowctl_tracker/status/verb.py plugins/flow-next/scripts/flowctl_tracker/facade/ops.py plugins/flow-next/tests/test_tracker_status.py plugins/flow-next/tests/test_tracker_facade.py plugins/flow-next/tests/test_tracker_config.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh (twice; idempotent and validation guards green), cd /Users/gordon/work/flow-next.dev && pnpm build
 - PRs:
