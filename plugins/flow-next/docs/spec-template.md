@@ -137,6 +137,41 @@ Rules:
 - Impl-review and spec-completion review emit a per-R-ID coverage table (met / partial / not-addressed / deferred).
 - Any unaddressed R-ID flips verdict to `NEEDS_WORK`; receipt carries an `unaddressed: ["R2", "R5"]` array so the fix loop has targeted work.
 
+### Source tags - what you said vs what the agent inferred
+
+`/flow-next:capture` tags every acceptance criterion at source: `[user]` (your words), `[paraphrase]` (your meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
+
+```markdown
+- **R1:** Root marketplace manifest exists and imports cleanly. [user]
+- **R3:** Host detection switches to a positive signal. [inferred]
+```
+
+The tags are **load-bearing, not decoration**: capture's read-back refuses to recommend `approve` while unverified `[inferred]` items remain (the no-self-blessing rule).
+
+They are also the cheapest review filter available, because reading them is a grep rather than a model judgment. Tally which criteria are grounded and which are guesswork:
+
+```bash
+flowctl cat fn-14 \
+  | grep -oE '\*\*R[0-9]+[a-z]?:.*\[[a-z:]+\]$' \
+  | sed -E 's/^\*\*(R[0-9]+[a-z]?):.*\[([a-z:]+)\]$/\2 \1/' \
+  | sort | awk '{c[$1]=c[$1]" "$2; n[$1]++} END {for (t in c) printf "%-12s %2d  %s\n", t, n[t], c[t]}'
+
+user          6   R1 R13 R5 R6 R7 R8
+paraphrase    3   R10 R12 R2
+inferred      4   R11 R3 R4 R9
+```
+
+Then interview only the uncertainty instead of re-litigating settled requirements:
+
+```text
+/flow-next:interview fn-14 - focus only on the [inferred] acceptance criteria
+(R3, R4, R9, R11); the [user] and [paraphrase] ones are settled, leave them alone
+```
+
+Append-only R-ID numbering is what makes that targeting safe - a later pass cannot renumber or rewrite the criteria you already blessed.
+
+Note: `flowctl spec export-cognitive-aid --json` does not surface parsed criteria with their tags as a top-level array today (the parse feeds the PR-body coverage table internally), so the grep above is the supported route.
+
 ## Confidence anchors (0 / 25 / 50 / 75 / 100)
 
 Reviewers score every finding on exactly five discrete values:
