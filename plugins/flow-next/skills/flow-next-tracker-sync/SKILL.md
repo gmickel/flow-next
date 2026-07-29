@@ -1,185 +1,129 @@
 ---
 name: flow-next-tracker-sync
-description: Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, or Jira) and reconcile body/status/comments two-way - projection, not coordination. The spec stays the source of truth; the tracker is a co-editable mirror. Use to configure the bridge (discovery ceremony), link a spec to an issue (flow-first push, tracker-first "grab issue X and spec it", or create-first for a fresh idea before any local spec), push/pull/reconcile, or unlink. Triggers on /flow-next:tracker-sync, "sync to linear", "push this spec to the tracker", "grab issue X and spec it", "create the tracker issue first", "link this spec to the issue", "reconcile with the tracker". NOT /flow-next:sync (that is plan-sync, a different skill).
+description: Project a flow-next spec to Linear, GitHub, GitLab, or Jira and reconcile body, status, and comments. Use for tracker discovery, linking, create-first, push, pull, reconcile, comment, or unlink. Not /flow-next:sync, which is plan-sync.
 user-invocable: false
-allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
+allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit
 ---
 
-# flow-next-tracker-sync — project a spec to a tracker, reconcile two-way
+# flow-next-tracker-sync
 
-The `.flow/specs/<id>.md` spec is the source of truth and the quality layer; the tracker (Linear, GitHub, GitLab, or Jira) is a **co-editable mirror** for teams that must live in it. This skill is **projection, not coordination** — the tracker mirrors the spec (body, status, comments all sync two-way) but never drives flow state or spawns agents (see the decision record at `.flow/memory/.../tracker-sync-is-projection-not-*`).
+The flow spec is the source of truth and quality layer. The tracker is a
+co-editable projection. Tracker activity never starts agents or changes Flow
+task state.
 
-This skill is the **spine**: the discovery ceremony, the spec↔issue grain, the identity/naming alias, and a **transport-blind** push/pull/reconcile orchestration skeleton. It does NOT contain transport code or merge logic — those plug in via the normalized interface.
+## Load the reached path
 
-- **Transports** implement `fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` / `setStatus` plus the relation and enumeration methods. This skill calls the one selected adapter through the normalized interface; reconciliation never sees a wire shape.
-- **Reconcile** operates only on the **normalized payload structs** (`issue` / `comment` / `status`) the adapters exchange. The agentic 3-way **body merge** + format translation + scoped conflict is in [`references/body-merge.md`](references/body-merge.md); the per-field **status who-wins** is [`references/status-sync.md`](references/status-sync.md) and **comments/evidence append + dedup** is [`references/comments-sync.md`](references/comments-sync.md). The interface is defined in `references/adapter-interface.md`.
+Read [steps.md](steps.md) for the operation sequence and
+[references/adapter-interface.md](references/adapter-interface.md) for the
+normalized contract. Load only references needed by the reached path:
 
-## Reached-path loading — common rules + one selected adapter
+- Body comparison or conflict:
+  [references/body-merge.md](references/body-merge.md).
+- Status projection: [references/status-sync.md](references/status-sync.md).
+- Comment or question-valve content:
+  [references/comments-sync.md](references/comments-sync.md).
+- Hybrid identifiers: [references/identity.md](references/identity.md).
+- Linear transport shape: [references/linear-ladder.md](references/linear-ladder.md),
+  then only the reached MCP or GraphQL reference.
+- GitHub, GitLab, or Jira transport shape: the matching provider reference only.
 
-Read the common reconciliation path on every active/configuration run:
+Never load an unselected provider merely because another reference links it.
 
-- [steps.md](steps.md) — phase-by-phase orchestration
-- [references/adapter-interface.md](references/adapter-interface.md) — normalized payload and nine-method boundary
-- [references/body-merge.md](references/body-merge.md) — semantic three-way body merge
-- [references/status-sync.md](references/status-sync.md) — status/readiness who-wins
-- [references/comments-sync.md](references/comments-sync.md) — comment/evidence append and dedup
-- [references/identity.md](references/identity.md) — hybrid id model
+## Deterministic boundary
 
-Then resolve the configured tracker and read **exactly one** adapter path. Do not read an unselected adapter merely because common prose cross-links it:
+`flowctl tracker` owns tracker transport, normalization, credentials, retries,
+capability degradation, lifecycle ordering, receipts, and atomic local state.
+The skill supplies only approved semantic inputs and reacts to the structured
+result. Do not reconstruct provider requests in skill prose or shell.
 
-| Resolved state | Adapter reference to read | Forbidden cold reads |
-|---|---|---|
-| inactive / no config | none | every adapter |
-| `linear` | [references/linear-ladder.md](references/linear-ladder.md), then only the reached MCP **or** GraphQL rung | GitHub, GitLab, Jira, and the unreached Linear rung |
-| `github` | [references/github.md](references/github.md) | Linear, GitLab, Jira |
-| `gitlab` | [references/gitlab.md](references/gitlab.md) | Linear, GitHub, Jira |
-| `jira` | [references/jira.md](references/jira.md) | Linear, GitHub, GitLab |
-| malformed / unknown | none; keep the common safety rules, surface the invalid state, and make no remote call | every adapter |
-
-After defining `$FLOWCTL` in the Preamble below, resolve fail-closed before any transport call:
-
-```bash
-ROUTE_STATE=unknown
-ACTIVE_RAW=$($FLOWCTL sync active --json 2>/dev/null) && \
-  ACTIVE=$(printf '%s' "$ACTIVE_RAW" | jq -r '.active' 2>/dev/null) || ACTIVE=parse-error
-if [ "$ACTIVE" = "false" ]; then
-  ROUTE_STATE=inactive
-elif [ "$ACTIVE" = "true" ]; then
-  TYPE_RAW=$($FLOWCTL config get tracker.type --json 2>/dev/null) && \
-    TRACKER_TYPE=$(printf '%s' "$TYPE_RAW" | jq -r '.value // empty' 2>/dev/null | tr '[:upper:]' '[:lower:]') || TRACKER_TYPE=
-  case "$TRACKER_TYPE" in
-    linear|github|gitlab|jira) ROUTE_STATE="$TRACKER_TYPE" ;;
-    *) ROUTE_STATE=unknown ;;
-  esac
-fi
-```
-
-`inactive` may enter the common discovery ceremony; load an adapter only after the user confirms a provider. `unknown` is a safe stop for transport work: explain the invalid/unreadable `tracker.type`, do not guess a provider, do not call any tracker, do not mutate sync state, and emit a `noop`/`errored` receipt only when a valid spec id is available. Once selected, every command and payload comes from that adapter reference; never improvise a parallel wire form.
-
-> Sync engine shape (discovery ceremony, per-item `lastSyncedAt`, surface-diffs-never-overwrite) adapted from Ray Fernando's `running-bug-review-board` `issue-trackers.md` (Apache-2.0) — see CHANGELOG.
-
-## Preamble
-
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `steps.md`) use `$FLOWCTL`:
+Use the lifecycle facade for event-driven projection:
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+$FLOWCTL tracker sync "$SPEC_ID" --op "$OP" --event "$EVENT" \
+  --flow-file "$FLOW_FILE" --body-file "$BODY_FILE" \
+  --comments-file "$COMMENTS_FILE" --source-body-file "$SOURCE_BODY_FILE"
 ```
 
-**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). The discovery ceremony (Phase 1) and genuine-conflict surfacing (body-merge / comments-sync) both require user choice in interactive mode. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.) This inline requirement covers the ceremonies and interactive conflict resolution only — a background `tracker-runner` dispatch legitimately runs this skill in a fork with `DISPATCH=forked`, which folds into the Phase 0 RALPH gate (steps.md), so in a fork every would-be prompt resolves to queue (`sync defer`) and no interactive prompt is ever reachable there.
+Pass only flags legal for the selected operation. [steps.md](steps.md) lists
+the file contract. For discovery, create-first, link, unlink, status, relation,
+attachment, and direct wire maintenance, use the matching `flowctl tracker`
+verb. `flowctl tracker --help` is the executable source of truth.
 
-## flowctl owns plumbing; the skill owns judgment
+Every command returns one JSON object on stdout. Success has `success: true`,
+`data`, `degraded`, and `probe`. Failure has `success: false`, `class`, `error`,
+`retryable`, and typed `details`. Branch on `class`, never provider text.
 
-The canonical flow-next split. flowctl provides atomic, deterministic helpers; this skill, running on the host agent, does the API calls / reconciliation / asking:
+## Exactly five judgment surfaces
 
-| flowctl owns (deterministic) | the skill owns (host-agent judgment) |
-|---|---|
-| `sync active` — is the bridge active (value-checked)? | discovery ceremony: probe signals, surface, ASK, confirm |
-| `sync list-unsynced` / `list-stale` — enumerate | decide which specs to push/pull this run |
-| `sync set-tracker-id` / `set-last-synced` / `set-merge-base` — atomic state write | call the transport (`fetchIssue` / `writeIssue` / …) |
-| `sync clear` — unlink, wipe state atomically | semantic 3-way body merge (body-merge.md), status who-wins + comment dedup (status-sync.md / comments-sync.md) |
-| `sync receipt` / `sync defer` — proof-of-work + queue | translate flow-structured ↔ tracker free-form |
-| `sync check-collisions` — flag shared tracker ids | decide create-vs-link on ambiguity; ASK the user |
-| `spec create --tracker-first` / `config set` — id + config write | choose the hybrid id origin (tracker-first vs flow-first) |
-| `sync list-dep-relations` — enumerate `depends_on_epics` edges + resolved tracker links + local dep status | `projectDepRelations`: drive `setIssueRelation` / `listIssueRelations`, warn on unlinked deps, keep completed blockers visible, defer the missing-remotely collision (steps.md § projectDepRelations) |
-| `ready --all` — flow-side open specs + eligibility facts | **`list-open`**: union in the tracker-only items via `listOpenIssues`, no-op when `readyState` unset; **`list-relations`**: READ one issue's dep relations via `listIssueRelations` (dep-ordering edges, never a write); **`question`**: author the stable question-valve anchor + post via `postComment`, detect/import the matched answer (steps.md Phase 7) |
-| `sync set-dep-relation` — atomic provenance-ledger write | decide *which* edges are ours-to-touch (ledger / fenced-block provenance — never clobber a manual relation) |
+These are the only five surfaces intentionally retained in the host agent:
 
-Never reimplement a flowctl helper inline; never push a merge/judgment decision into flowctl.
+1. **MCP rung.** MCP tools exist only in the host tool environment, so flowctl
+   cannot invoke them. The agent may perform the explicitly requested Linear
+   MCP action, then hands the returned identity to `tracker persist-external`.
+2. **Discovery ceremony.** Choosing a tracker, project or team, and enabling
+   lifecycle events is an ambiguous one-time product decision. The agent
+   surfaces detected choices and asks before persisting configuration.
+3. **Body-merge conflict adjudication.** A three-way body conflict is semantic
+   because equivalent prose, intent, and requirement meaning cannot be resolved
+   from hashes or syntax alone. The agent adjudicates only conflicting sections,
+   while flowctl owns snapshots and atomic persistence.
+4. **Comment content synthesis.** Lifecycle comments communicate human context.
+   The caller decides what the comment should say; flowctl owns marker dedup,
+   transport, and the receipt.
+5. **Recovery routing from a structured error.** A typed conflict,
+   `external_action_required`, or non-retryable capability result can require a
+   user choice, an MCP continuation, a local correction, or a defer. The agent
+   selects that next action from the structured envelope instead of parsing
+   error prose.
 
-## Discovery ceremony (R2) — detect / surface / ask / never-assume
+No other tracker operation is agentic. In particular, request construction,
+pagination, provider field mapping, status policy, relation projection,
+comment dedup, credential selection, retry timing, and receipt writes remain
+deterministic.
 
-The bridge is **off until explicitly enabled**. The ceremony probes six signals, surfaces present AND absent, ASKS, and writes config **only on confirmation** — with provenance. No-signal ⇒ nothing written; `enabled` stays `false`. Never assume. But **once the user confirms, enabling is opt-OUT, not opt-in**: the ceremony activates the whole pipeline (every `perEvent` event) by default — hooking up the bridge means you want it to sync. The user excludes events at ceremony time or turns any off later (`flowctl config set tracker.perEvent.<event> off`). The `get_default_config()` schema default stays `off`, so a bare `enabled=true` set WITHOUT the ceremony activates **no lifecycle-event sync** (every `perEvent` event stays dormant) — only the ceremony's explicit writes activate them. (Two exceptions are unconditional whenever the bridge is active — no per-event gate, by design: (1) make-pr's PR↔issue link **and its In Review status push** (R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge).)
+## Discovery ceremony
 
-Probe these six signals (detection lives in the skill, not flowctl):
+The bridge is off until the user confirms it. Surface available and unavailable
+provider signals, the proposed project or team, and lifecycle defaults. Resolve
+environment overrides before stored configuration. If the destination is
+ambiguous, ask. If the user declines, write nothing.
 
-| Signal | Probe | Means |
-|---|---|---|
-| Linear MCP registered | the host's MCP/tool list contains a Linear server (e.g. `*Linear*` tools like `save_issue`) | interactive Linear transport available (OAuth handled) |
-| `LINEAR_API_KEY` | `[ -n "$LINEAR_API_KEY" ]` | headless Linear GraphQL transport available |
-| GitHub auth | `gh auth status` exits 0 | headless GitHub transport available |
-| GitLab auth / token | `glab auth status` exits 0, or `GITLAB_TOKEN` / `CI_JOB_TOKEN` set | GitLab transport available (`glab` primary → REST token fallback; self-managed hosts honored — references/gitlab.md) |
-| Jira REST + token | `JIRA_BASE_URL` set, plus Cloud `JIRA_EMAIL`+`JIRA_API_TOKEN` OR self-hosted DC/Server `JIRA_PAT` | Jira REST transport available — **offered** (Cloud `/rest/api/3` + API-token, DC/Server `/rest/api/2` + PAT; single rung + no-op, NO MCP — references/jira.md). A bare `*.atlassian.net` host with no credential is surfaced but can't be offered |
+After confirmation, use `flowctl config set` for the selected provider and
+`flowctl tracker resolve` to persist `tracker.resolved`. Credentials remain in
+the environment. Never copy credentials into config, a prompt, argv, receipt,
+or error note.
 
-Resolution model is **env > config > ASK**, mirroring `cmd_review_backend`: if the transport/tracker is already decided by env or config, don't re-ask. Steps in [steps.md](steps.md) Phase 1.
+Linear MCP is discovery/create only. All later shell-reachable operations use
+the deterministic GraphQL route. If an MCP create returns only a display key,
+`tracker persist-external` resolves and stores its durable identity.
 
-**On confirmation only**, write via `flowctl config set` (dot-paths are safe — config keys are nested):
+## Operating rules
 
-```bash
-$FLOWCTL config set tracker.enabled true
-$FLOWCTL config set tracker.type linear            # or github / gitlab / jira
-$FLOWCTL config set tracker.provenance "discovery ceremony 2026-06-03; confirmed by <who>; signals: MCP+API_KEY"
-# DEFAULT-ON (opt-out): activate the whole pipeline — skip only what the user excluded.
-$FLOWCTL config set tracker.perEvent.capture reconcile
-$FLOWCTL config set tracker.perEvent.interview reconcile
-$FLOWCTL config set tracker.perEvent.plan reconcile
-$FLOWCTL config set tracker.perEvent.work.firstClaim push
-$FLOWCTL config set tracker.perEvent.work.done comment
-$FLOWCTL config set tracker.perEvent.makePr comment
-$FLOWCTL config set tracker.perEvent.resolvePr comment
-$FLOWCTL config set tracker.perEvent.completionReview comment   # comment-shaped (verdict + R-ID coverage) — NEVER terminal Done; land.merged is the sole Done driver (active-by-default, no perEvent seed needed)
-# Jira (tracker.type jira) — write the site + project key, and PERSIST the
-# deployment shape the probe detected (auth scheme + api version) so runtime
-# never re-infers. Credentials stay in env (read each run), never written here.
-$FLOWCTL config set tracker.perTracker.baseUrl "https://acme.atlassian.net"  # Jira: the site base (JIRA_BASE_URL env overrides; the persisted value is the default)
-$FLOWCTL config set tracker.perTracker.projectKey "PROJ"                      # Jira: the project key (JQL / listOpenIssues scope)
-$FLOWCTL config set tracker.perTracker.authScheme "cloud-basic"               # Jira: cloud-basic (Cloud email:API_TOKEN) | bearer-pat (DC/Server PAT) — detected from the credential/host, persisted
-$FLOWCTL config set tracker.perTracker.apiVersion "3"                         # Jira: 3 (Cloud, ADF) | 2 (DC/Server) — the REST endpoint family
-$FLOWCTL config set tracker.perTracker.statusMap "$DERIVED_STATUSMAP_JSON"    # Jira: normalized→{id|name}, AUTO-DERIVED from the project workflow — WITHOUT it setStatus defers EVERY status (steps.md / jira.md § Status); write {} + warn the user when no creds
-$FLOWCTL sync active --json   # confirm active: true
-```
-
-> **Auth scheme + api version are detected from the credential/deployment and PERSISTED at the ceremony** — a `*.atlassian.net` `baseUrl` ⇒ `cloud-basic` + apiVersion `3`. A **custom domain** (a Cloud tenant on an Atlassian custom domain, OR self-hosted — neither ends in `.atlassian.net`) can't be told apart by URL, so infer from the **credential**: only `JIRA_EMAIL`+`JIRA_API_TOKEN` ⇒ `cloud-basic` + `3`; only `JIRA_PAT` ⇒ `bearer-pat` + `2`. If BOTH `JIRA_API_TOKEN` and `JIRA_PAT` are present AND the deployment is genuinely ambiguous, **ASK** (never silently guess), then persist. Runtime reads only the persisted `authScheme` — precedence is decided once here, never re-raced per run (mirrors `cmd_review_backend`).
-
-Confirm the result with `flowctl sync active --json` (must report `active: true` once enabled/type are set). Negative path: user declines ⇒ write nothing; `sync active` stays `active: false`.
-
-## Flexible entry (R2) — no fixed starting point
-
-Three entry flows, all attach sync state **on link** (never impose where the user must start):
-
-1. **Author-in-flow-then-push (flow-first):** a `fn-NN` spec already exists (capture/interview/plan authored it). Push creates the tracker issue, then `sync set-tracker-id` attaches the issue UUID + `--identifier WOR-17` + `--url`. Keep the `fn-NN` id; store the tracker key as a resolvable alias.
-2. **Link-existing-issue (tracker-first): "grab issue X and spec it."** Fetch the issue via an already-installed transport, create the spec **keyed by the tracker key** (`flowctl spec create --tracker-first --tracker-identifier WOR-17`), seed the merge base from the current issue body, first pass is pull-only. Native `KEY-N` (Linear `WOR-17`, Jira `PROJ-123`) mints directly; GitHub `#N` / GitLab `<project>#<iid>` mint via synthetic keys (`gh-N` / `gl-N` — flowctl task .2). See [steps.md](steps.md) Phase 2 and [`references/identity.md`](references/identity.md).
-3. **Create-first (fresh idea - issue before any local spec):** title + body only, **no local spec id**. Creates the issue via `writeIssue` and returns `{id, identifier, url}`. Caller then mints `KEY-N-slug` / synthetic `gh-N-slug` / `gl-N-slug` → `sync set-tracker-id` → seed merge base. Distinct from create-if-unlinked (that needs an existing local spec). Receipts are pre-spec: durable recovery file keyed by a **retry lookup key**, normal `sync receipt` only after mint. Failure after remote create surfaces identifier + url so a retry **links**, never re-creates. Full contract in [steps.md](steps.md) Phase 2d.
-
-## Grain (R3) — one spec ↔ one issue
-
-- **One flow spec maps to one tracker issue.** The tracker UUID is the durable dedupe key (`sync set-tracker-id`); `sync check-collisions` flags any UUID shared by two specs.
-- **Tasks stay flow-local by default** — NEVER auto-created as tracker sub-issues.
-- **Optional checklist-in-body render** — tasks MAY be rendered as a checklist inside the issue body (not sub-issues). **Scoping decision: owned by the body-merge layer (body-merge.md).** The scaffold defines the grain (one-to-one, tasks-local); the checklist is a body-format concern. The skeleton exposes a `renderTaskChecklist` hook on the body-sync path (off by default) so the body-merge layer can opt it in without reshaping the spine.
-
-## Identity / naming (R16) — hybrid via flowctl's id layer
-
-The link/create ceremony assigns the canonical id through flowctl's id generator. **Never rename an existing spec.** Full rules in [`references/identity.md`](references/identity.md); the headline:
-
-- **Tracker-first link → canonical spec id `wor-17-slug`, canonical tasks `wor-17-slug.M`.** The bare forms `wor-17` / `wor-17.M` are aliases, resolved by flowctl's widened resolver (`flowctl show wor-17`, `work wor-17`, … all resolve). Branch follows the canonical id. Use `flowctl spec create --tracker-first --tracker-identifier WOR-17`.
-- **Flow-first → keep `fn-NN-slug`.** Store the tracker key in the single `tracker.identifier` field (R4, display form `WOR-17`) as a resolvable alias via `sync set-tracker-id --identifier WOR-17`, and write the back-reference into the issue (`flow:<id>` label / `[<id>]` title-prefix).
-- **Resolution is flowctl's job, not the scaffold's.** The skill just calls flowctl and relies on the widened resolver. Surface `identifier` in sync listings (see Phase 6 in [steps.md](steps.md)).
-
-## Orchestration skeleton — transport-blind
-
-Three sync operations across three layers, all transport-blind. The skeleton routes; the named hooks plug in later:
-
-```
-push     flow → tracker   (writeIssue/setStatus/postComment from the normalized spec view)
-pull     tracker → flow   (fetchIssue/readStatus/listComments → normalized → fold into spec)
-reconcile two-way         (3-way body merge + status who-wins + comment append)
-```
-
-- **Transport interface** (the Linear / GitHub / GitLab / Jira adapters implement): `fetchIssue`, `writeIssue`, `listComments`, `postComment`, `readStatus`, `setStatus`, the dependency-projection pair `listIssueRelations` / `setIssueRelation`, plus the backlog enumeration method `listOpenIssues(filter) → issue[]` (the promoted-lane scan backlog mode unions in — Linear, GitHub, GitLab + Jira). Each maps its wire shape to/from the normalized structs. Defined in [`references/adapter-interface.md`](references/adapter-interface.md).
-- **Backlog-mode named ops**: `list-open` (enumerate the promoted lane via `listOpenIssues`), `list-relations <tracker-id>` (READ one issue's dependency relations via `listIssueRelations` for dep-ordering — read-only, never a write), and `question <spec-id | tracker-id>` (post the async question-valve comment behind a stable anchor) — skill-level + transport-blind, invoked per-tick by `/flow-next:pilot` backlog mode. Bodies in [steps.md](steps.md) Phase 7; all run under the autonomy gate (never `AskUserQuestion`).
-- **Create-first** (`create-first` op - title + body, no local spec): skill-level, transport-blind. Creates an issue and returns `{id, identifier, url}` so a caller can mint a tracker-keyed spec after the issue exists. Pre-spec recovery (retry lookup key + `.flow/create-first/<retryKey>.json`); normal `sync receipt` only after mint. Best-effort like siblings. Body in [steps.md](steps.md) Phase 2d.
-- **Dependency projection**: `projectDepRelations` rides the push + reconcile paths (modelled on `projectReadiness`) and projects a spec's local `depends_on_epics` edges as **blocked-by** tracker relations — transport-blind (R8), additive-only (never deletes a relation flow can't prove it created — R6), completed-blocker-aware (a `done` dep stays a visible historical blocker but never re-gates `ready=true` — R5), and conservative on collision (a ledgered relation a tracker user removed is **deferred + `queued`, never silently recreated** — R6/R10). On GitHub's fenced fallback and on GitLab (every tier — the durable direction source alongside the native link, and the sole one on the degrade) the `<!-- flow:deps -->` body block is flow-owned and excluded from body-merge divergence (the `trackerBodyForMerge` transform — body-merge.md Step 0.5, R10). Full hook body in [steps.md](steps.md) § projectDepRelations.
-- **Reconcile** operates only on the normalized `issue` / `comment` / `status` structs — never a transport detail. The 3-way **body merge** + format translation + scoped conflict is [`references/body-merge.md`](references/body-merge.md); **status who-wins** is [`references/status-sync.md`](references/status-sync.md) and **comments/evidence append + dedup** is [`references/comments-sync.md`](references/comments-sync.md).
-- **Link / unlink ceremony stubs:** first-link base-seeding is handled by the body-merge layer (body-merge.md — seed base from current issue body so the first sync isn't a whole-body conflict). **Unlink** wipes state via `sync clear` and posts a one-line detached comment to the issue (`postComment`). Skeleton in [steps.md](steps.md) Phase 5.
-
-Every run emits a receipt (`sync receipt --status …`) and genuine conflicts queue (`sync defer …`) — never block (R11/R12). The transport choice (mcp / graphql / gh / glab / rest / none) is recorded on the receipt; when no transport is reachable, the run is a `noop` + receipt note (never a crash). **Lifecycle runs are event-tagged**: the calling skill passes `event: <perEvent-key>` in the invocation, and every receipt that run carries `--event` — the tag `flowctl sync check` audits at end-of-skill. Manual runs carry no event tag (see [steps.md](steps.md) Phase 0).
+- One Flow spec maps to one tracker issue. Tasks remain Flow-local.
+- Tracker-first creation uses the hybrid identifier rules in `identity.md`.
+  Never rename an existing Flow-first spec.
+- Callers retain their bridge-active and `perEvent` gates. An inactive bridge
+  remains silent because the lifecycle facade is not invoked.
+- Event-driven callers use `tracker sync`, not granular tracker verbs.
+- Comment text and merged body text travel through mode `0600` temporary files,
+  never argv. Delete temporary files after the call.
+- The facade writes one aggregate receipt. Do not add a second receipt.
+- A pull or reconcile may update Flow prose, but never Flow task status.
+- Dependency projection is additive and provenance-led. Never delete or
+  recreate a user-controlled relation without evidence that Flow owns it.
+- `inactive` is a silent no-op for lifecycle callers.
+- `rate_limited` is retried only when the envelope says `retryable: true`.
+- `auth`, `unresolved`, `stale_id`, `conflict`, `capability`, and
+  `external_action_required` follow the recovery table in `steps.md`.
+- In Ralph or a forked lifecycle call, queue a decision that needs a person.
+  Never attempt an interactive prompt from the fork.
 
 ## Boundaries
 
-- **This is the spine, not the transports or the merge.** Do not implement Linear/GitHub/GitLab/Jira API calls here (the adapter references) or the 3-way merge / status who-wins (body-merge.md / status-sync.md / comments-sync.md). Define the hooks; leave them as named stubs that delegate.
-- **`/flow-next:tracker-sync` is DISTINCT from `/flow-next:sync`** (= plan-sync, `flow-next-sync` skill). Never conflate them. The two are documented side-by-side in `docs/tracker-sync.md`.
-- **Projection, not coordination** — the tracker never drives flow state or spawns agents. A Symphony-style trigger layer is explicitly out of scope (separable future addition).
-- **Dependency projection is strictly additive and flow-authoritative.** `projectDepRelations` NEVER deletes a tracker relation it can't prove it created (ledger / fenced marker — R6), NEVER silently recreates a relation a tracker user removed (collision ⇒ `sync defer` + `queued` — R6/R10), NEVER feeds a projected/completed relation back into `ready=true` gating (R5), and NEVER traverses the dep graph — only direct `depends_on_epics` edges project, no transitive expansion (R8). Tracker→flow dependency *authoring* (declaring deps from the tracker side) is out of scope. The hook is transport-blind — **no per-tracker (Linear / GitHub / GitLab / Jira) branching in the skill** (R8); fidelity differences live in the adapters.
-- **Backlog-mode ops are skill-level, never flowctl transport**: `list-open` / `question` enumerate / post via the agentic adapter ladder — flowctl has no tracker transport and must not grow one. A tracker-only `question` (no spec) is exempt from the spec-id sync receipt; its parked/answered state lives in the tracker comments.
-- **Codex mirror** (sync-codex.sh per-skill block + openai.yaml registration): mirror regen is a SEPARATE task. Author these canonical files Claude-native (`AskUserQuestion`, `Task`); do NOT regenerate the mirror here.
+This skill is projection, not coordination. `/flow-next:tracker-sync` is
+distinct from `/flow-next:sync`. Flow state remains authoritative. Provider
+wire details live in deterministic Python; the Markdown references document
+their shapes so reviewers can inspect the contract without copying executable
+transport recipes into prompts.

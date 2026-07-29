@@ -1,4 +1,4 @@
-"""Codex-mirror parity for the GitLab (fn-69.3) and Jira (fn-70.4) tracker adapters.
+"""Codex-mirror parity for the GitLab and Jira tracker adapter documentation.
 
 The Codex mirror at `plugins/flow-next/codex/` is a DERIVED artifact regenerated
 by `scripts/sync-codex.sh`. A missing sync rule silently degrades Codex parity, so
@@ -6,7 +6,7 @@ this test pins the load-bearing invariants for the per-adapter references:
 
   * The canonical `references/<adapter>.md` is mirrored into the codex/ tree (the
     adapter reference must exist on the Codex side, not only Claude's).
-  * The mirror's `<adapter>.md` is content-faithful to the canonical — every
+  * The mirror's `<adapter>.md` is content-faithful to the canonical: every
     non-blank line of the canonical survives into the mirror modulo the sync
     script's leading-whitespace normalization inside fenced code blocks. (Neither
     gitlab.md nor jira.md carries `AskUserQuestion` prose, so no tool-name rewrite
@@ -15,13 +15,11 @@ this test pins the load-bearing invariants for the per-adapter references:
     AND "Jira" (the registration metadata Codex surfaces).
   * The `scripts/sync-codex.sh` registration line for flow-next-tracker-sync names
     GitLab AND Jira (the single source the openai.yaml is generated from).
-  * The transport-vocabulary rung (`glab` / `rest`) survives into the mirror's
-    SKILL.md / steps.md / adapter-interface.md (the receipt `--transport` enum;
-    Jira's REST rung reuses `rest`).
+  * The deterministic flowctl boundary survives in the mirror's SKILL.md,
+    steps.md, and adapter-interface.md.
 
-These guard the fn-69.3 / fn-70.4 acceptance: "the named parity test asserting the
-canonical adapter reference is mirrored into codex/ AND openai.yaml includes the
-tracker name."
+These guards prevent canonical/mirror drift after the provider references were
+reduced to transport-shape documentation.
 
 Run:
     python3 -m unittest discover -s plugins/flow-next/tests -v
@@ -77,7 +75,7 @@ class GitlabMirrorExistsTestCase(unittest.TestCase):
     def test_mirror_gitlab_reference_exists(self) -> None:
         self.assertTrue(
             MIRROR_GITLAB.is_file(),
-            "canonical references/gitlab.md was not mirrored into codex/ — "
+            "canonical references/gitlab.md was not mirrored into codex/ - "
             "run `bash scripts/sync-codex.sh`",
         )
 
@@ -86,7 +84,7 @@ class GitlabMirrorContentParityTestCase(unittest.TestCase):
     def test_mirror_adds_no_fabricated_content(self) -> None:
         """Every mirror content line traces back to the canonical.
 
-        The sync only transforms whitespace and drops the Codex-meta note — it
+        The sync only transforms whitespace and drops the Codex-meta note. It
         never INVENTS content. So (whitespace-collapsed) the mirror's content-line
         set must be a subset of the canonical's. A mirror line with no canonical
         origin means the sync corrupted the file.
@@ -106,7 +104,7 @@ class GitlabMirrorContentParityTestCase(unittest.TestCase):
 
         Only the single trailing Codex-meta bullet is deliberately stripped, so the
         mirror must retain the overwhelming bulk of canonical content. A large drop
-        means the sync silently lost adapter prose — a real parity failure.
+        means the sync silently lost adapter prose: a real parity failure.
         """
         canon = _normalize(CANON_GITLAB.read_text(encoding="utf-8"))
         mirror = set(_normalize(MIRROR_GITLAB.read_text(encoding="utf-8")))
@@ -116,19 +114,19 @@ class GitlabMirrorContentParityTestCase(unittest.TestCase):
             len(missing),
             4,
             f"codex/ gitlab.md dropped {len(missing)} canonical content lines "
-            f"(stale mirror — run sync-codex.sh): e.g. {missing[:5]}",
+            f"(stale mirror - run sync-codex.sh): e.g. {missing[:5]}",
         )
 
     def test_mirror_carries_load_bearing_gitlab_content(self) -> None:
         """The load-bearing GitLab adapter facts are present in the mirror."""
         mirror = MIRROR_GITLAB.read_text(encoding="utf-8")
         for marker in (
-            "glab",
-            "is_blocked_by",
-            "CI_JOB_TOKEN",
-            "access_level",
-            "listOpenIssues",
-            "/api/v4",
+            "GitLab CLI transport",
+            "global issue id",
+            "`project#iid`",
+            "`noteable_id`",
+            "`flow:deps`",
+            "capability transition",
         ):
             self.assertIn(
                 marker,
@@ -147,7 +145,7 @@ class JiraMirrorExistsTestCase(unittest.TestCase):
     def test_mirror_jira_reference_exists(self) -> None:
         self.assertTrue(
             MIRROR_JIRA.is_file(),
-            "canonical references/jira.md was not mirrored into codex/ — "
+            "canonical references/jira.md was not mirrored into codex/ - "
             "run `bash scripts/sync-codex.sh`",
         )
 
@@ -175,20 +173,20 @@ class JiraMirrorContentParityTestCase(unittest.TestCase):
             len(missing),
             4,
             f"codex/ jira.md dropped {len(missing)} canonical content lines "
-            f"(stale mirror — run sync-codex.sh): e.g. {missing[:5]}",
+            f"(stale mirror - run sync-codex.sh): e.g. {missing[:5]}",
         )
 
     def test_mirror_carries_load_bearing_jira_content(self) -> None:
         """The load-bearing Jira adapter facts are present in the mirror."""
         mirror = MIRROR_JIRA.read_text(encoding="utf-8")
         for marker in (
-            "/rest/api/",
+            "API version",
             "ADF",
-            "transition",
-            "issueLink",
-            "remotelink",
-            "listOpenIssues",
-            "authScheme",
+            "version 2",
+            "transition id",
+            "directional issue-link",
+            "JQL",
+            "authentication scheme",
         ):
             self.assertIn(
                 marker,
@@ -246,30 +244,30 @@ class TrackerSyncRegistrationIncludesGitlabTestCase(unittest.TestCase):
 
 
 class TransportVocabularyMirroredTestCase(unittest.TestCase):
-    """The GitLab transport rung (glab / rest) must survive into the mirror."""
+    """The deterministic transport boundary must survive into the mirror."""
 
-    def test_mirror_skill_records_glab_rest_transport(self) -> None:
+    def test_mirror_skill_records_flowctl_transport_ownership(self) -> None:
         text = (TRACKER_MIRROR / "SKILL.md").read_text(encoding="utf-8")
-        self.assertRegex(
+        self.assertIn(
+            "`flowctl tracker` owns tracker transport",
             text,
-            r"glab\s*/\s*rest",
-            "mirror SKILL.md transport-choice prose must include the glab / rest rung",
+            "mirror SKILL.md must retain deterministic transport ownership",
         )
 
-    def test_mirror_steps_records_glab_rest_transport_enum(self) -> None:
+    def test_mirror_steps_names_executable_source_of_truth(self) -> None:
         text = (TRACKER_MIRROR / "steps.md").read_text(encoding="utf-8")
         self.assertIn(
-            "glab,rest",
-            text,
-            "mirror steps.md --transport enum must include glab,rest",
+            "The executable contract is the CLI and `flowctl_tracker` package.",
+            " ".join(_normalize(text)),
+            "mirror steps.md must identify the deterministic executable contract",
         )
 
-    def test_mirror_adapter_interface_records_transport_enum(self) -> None:
+    def test_mirror_adapter_interface_records_structured_envelope(self) -> None:
         text = (TRACKER_MIRROR / "references" / "adapter-interface.md").read_text(encoding="utf-8")
-        self.assertRegex(
+        self.assertIn(
+            '"success": false, "class": "conflict"',
             text,
-            r"--transport\s+mcp\|graphql\|gh\|glab\|rest\|none",
-            "mirror adapter-interface.md must carry the full --transport enum incl. glab|rest",
+            "mirror adapter-interface.md must retain the structured error envelope",
         )
 
 
