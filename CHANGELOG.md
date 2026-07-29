@@ -4,7 +4,23 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 3.6.0] - 2026-07-29
+
+### Changed
+
+- **Tracker determinism is now published under the correct minor version.**
+  The fn-139/fn-140/fn-141 batch replaces tracker-sync's provider mutation
+  prose with the deterministic `flowctl tracker` wire, lifecycle, status,
+  relation, body-sync, and facade layers across GitHub, GitLab, Linear, and
+  Jira. This is the semver-correct publication of the substantial behavior
+  already present in 3.5.2; there is no additional runtime delta between
+  3.5.2 and 3.6.0 beyond the version metadata. The 3.5.2 release and changelog
+  remain intact as historical records of the prematurely classified artifact.
+
 ## [flow-next 3.5.2] - 2026-07-29
+
+> Superseded the same day by 3.6.0 so the tracker-determinism batch is
+> classified as a minor release. The published 3.5.2 artifact remains intact.
 
 ### Added
 
