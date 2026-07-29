@@ -86,6 +86,7 @@ validate_base() {
 }
 
 ensure_dir() {
+  local worktree_name="$1"
   assert_worktrees_dir
   mkdir -p "$worktrees_dir"
   local ignore_file="$worktrees_dir/.gitignore"
@@ -97,6 +98,11 @@ ensure_dir() {
   fi
   if [[ ! -e "$ignore_file" ]]; then
     printf '*\n!.gitignore\n' > "$ignore_file"
+  elif ! git -C "$repo_root" check-ignore --quiet --no-index -- ".worktrees/$worktree_name/"; then
+    if [[ -s "$ignore_file" ]] && [[ "$(tail -c 1 "$ignore_file" | wc -l | tr -d ' ')" == "0" ]]; then
+      printf '\n' >> "$ignore_file"
+    fi
+    printf '/%s/\n' "$worktree_name" >> "$ignore_file"
   fi
 }
 
@@ -122,7 +128,7 @@ case "$cmd" in
   create)
     [[ -n "$name" ]] || fail "usage: create <name> [base]"
     validate_name "$name"
-    ensure_dir
+    ensure_dir "$name"
 
     base="${base:-$(default_base)}"
     validate_base "$base"

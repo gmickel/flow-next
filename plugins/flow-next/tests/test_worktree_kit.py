@@ -113,6 +113,25 @@ class WorktreeIgnore(unittest.TestCase):
             "# custom\nfeature/\n",
         )
 
+    def test_create_extends_custom_ignore_that_does_not_cover_target(self) -> None:
+        worktrees = self.repo / ".worktrees"
+        worktrees.mkdir()
+        ignore = worktrees / ".gitignore"
+        ignore.write_text("# custom\nfeature/", encoding="utf-8")
+
+        created = run(self.repo, "create", "other")
+        self.assertEqual(created.returncode, 0, created.stderr)
+        self.assertEqual(
+            ignore.read_text(encoding="utf-8"),
+            "# custom\nfeature/\n/other/\n",
+        )
+
+        staged = git(self.repo, "add", "-A")
+        self.assertEqual(staged.returncode, 0, staged.stderr)
+        entries = git(self.repo, "ls-files", "--stage")
+        self.assertEqual(entries.returncode, 0, entries.stderr)
+        self.assertNotIn("160000 ", entries.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -54,7 +54,7 @@ No slash command — just describe what you want.
 | [`flow-next-drive`](../skills/flow-next-drive/SKILL.md) | "drive the app", "verify the deployed UI" | Drive any UI surface like a real user — web, Electron/WebView2 over CDP, or native via the Cua Driver (MIT, provider-agnostic, background) / Computer Use, with a Cua Sandbox rung for headless/CI native runs. Surface-aware driver ladder; powers `/flow-next:qa`. |
 | [`flow-next-export-context`](../skills/flow-next-export-context/SKILL.md) | "export context for external review" | Export RepoPrompt context to markdown for review with an external LLM (ChatGPT, Claude web, …). |
 | [`flow-next-rp-explorer`](../skills/flow-next-rp-explorer/SKILL.md) | "use rp to find …" | Token-efficient codebase exploration through the RepoPrompt CLI. |
-| [`flow-next-worktree-kit`](../skills/flow-next-worktree-kit/SKILL.md) | "create a worktree for …" | Git worktree create/list/switch/cleanup + `.env` copying — parallel feature work, isolated review; initializes a self-contained `.worktrees/.gitignore` so nested worktrees cannot be staged as gitlinks. |
+| [`flow-next-worktree-kit`](../skills/flow-next-worktree-kit/SKILL.md) | "create a worktree for …" | Git worktree create/list/switch/cleanup + `.env` copying — parallel feature work, isolated review; initializes or safely extends `.worktrees/.gitignore` so nested worktrees cannot be staged as gitlinks. |
 
 ## See also
 
