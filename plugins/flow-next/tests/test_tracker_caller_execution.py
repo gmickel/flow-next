@@ -237,7 +237,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         return [
             item
             for flag, name in inputs
-            for item in (flag, str(self.root / name))
+            for item in (flag, (self.root / name).as_posix())
         ]
 
     def _wrapper_body(self, caller_id: str, op_expression: str) -> str:
@@ -289,6 +289,10 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             op_expression = '"$QA_OP"'
         source = self._instrumented_fence(caller_id, op_expression)
         if caller_id == "plan":
+            source = source.replace(
+                "flow-plan-config-<suffix>.json",
+                "flow-plan-config-harness.json",
+            )
             snapshot = subprocess.run(
                 [sys.executable, str(self.fake_flowctl), "config", "get", "--json"],
                 env=self._environment(value, active),
@@ -297,7 +301,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 encoding="utf-8",
                 check=True,
             ).stdout
-            (self.root / "flow-plan-config-<suffix>.json").write_text(
+            (self.root / "flow-plan-config-harness.json").write_text(
                 snapshot,
                 encoding="utf-8",
             )
