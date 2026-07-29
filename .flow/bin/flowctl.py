@@ -1131,8 +1131,9 @@ def get_default_tracker_config() -> dict:
             # and persisted (`cloud-basic` = Cloud HTTP-basic `email:API_TOKEN`;
             # `bearer-pat` = DC/Server `Authorization: Bearer <PAT>`) so runtime
             # never re-infers it — credentials still read from env each run, never
-            # stored here. `apiVersion` is the REST endpoint family (`3` Cloud ADF
-            # / `2` DC/Server) the adapter branches on. `sslVerify` is an opt-in
+            # stored here. `apiVersion` is null until resolver output pins version
+            # 2 for either deployment shape; migration also converges legacy 3 to
+            # 2. `sslVerify` is an opt-in
             # escape hatch (default true) for self-hosted internal-CA / self-signed
             # certs (`JIRA_SSL_VERIFY=false` env override); never silent. `statusMap`
             # maps the FULL normalized status set → a Jira status `{name}`/`{id}`
@@ -23718,8 +23719,10 @@ def cmd_sync_list_dep_relations(args: argparse.Namespace) -> None:
     resolves the dep spec's tracker link + LOCAL status, plus whether the edge
     is already in our `depRelations` provenance ledger. Self-edges are skipped
     (a spec can never `depends_on_epics` itself, but we guard defensively so the
-    listing can never represent a self-relation). Transport-blind: this is pure
-    flowctl plumbing; the projection DECISION lives in the skill (fn-64.5).
+    listing can never represent a self-relation). fn-141 R8 supersedes fn-57
+    R3: this command remains a local-state enumerator, while deterministic
+    tracker transport and relation mutation now live in `flowctl tracker`.
+    Semantic conflict recovery remains in the tracker-sync skill.
 
     Output (`--json`): `[{dep_spec, dep_tracker_id, dep_identifier,
     dep_status, projected}]` where `dep_status` is the local dep-spec status.
@@ -24048,6 +24051,10 @@ def cmd_tracker_wire(args: argparse.Namespace) -> None:
         title=getattr(args, "title", None),
         body_file=getattr(args, "body_file", None),
         comment_id=getattr(args, "comment_id", None),
+        subject_id=getattr(args, "subject_id", None),
+        blocked_stage=getattr(args, "blocked_stage", None),
+        reason_code=getattr(args, "reason_code", None),
+        question_slug=getattr(args, "question_slug", None),
         add=getattr(args, "add", None),
         remove=getattr(args, "remove", None),
         file_path=getattr(args, "file", None),
@@ -24273,6 +24280,9 @@ def cmd_tracker_facade(args: argparse.Namespace) -> None:
         body_file=getattr(args, "body_file", None),
         comments_file=getattr(args, "comments_file", None),
         source_body_file=getattr(args, "source_body_file", None),
+        comment_file=getattr(args, "comment_file", None),
+        pr_url=getattr(args, "pr_url", None),
+        status_only=getattr(args, "status_only", False),
     )
     print(payload)
     sys.exit(code)
@@ -24716,9 +24726,9 @@ def cmd_sync_check(args: argparse.Namespace) -> None:
     success/failure detail. `event: null` (pre-flag) receipts never clear.
 
     Exit 0 always (best-effort contract — output drives agent action, not the
-    exit code). NO tracker-mutation code lives here or anywhere in flowctl
-    (R3): all tracker mutations stay agent-driven through the tracker-sync
-    skill; this command only reads local receipts.
+    exit code). fn-141 R8 supersedes fn-57 R3: `flowctl tracker` now owns
+    deterministic tracker mutations. This audit command itself remains
+    read-only and reads only local receipts.
     """
     # R8 zero-overhead gate: bridge inactive → silent constant-time exit 0,
     # BEFORE any receipt IO, id resolution, or output. `tracker_sync_active`
@@ -31614,7 +31624,7 @@ def main() -> None:
     # wire verbs (fn-140.1) — locator-addressed, no local state / no receipt.
     p_tracker_wire = tracker_sub.add_parser(
         "wire",
-        help="Locator-addressed wire verbs (read/update/comment/label/assign/attach/list-open)",
+        help="Locator-addressed wire verbs (issue/comment/relation/question/attachment)",
     )
     wire_sub = p_tracker_wire.add_subparsers(dest="wire_verb", required=True)
 
@@ -31684,6 +31694,23 @@ def main() -> None:
                                      help="List open issues (no locator)")
     _wire_json(p_wire_list)
     p_wire_list.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_relations = wire_sub.add_parser(
+        "relation-list", help="List normalized dependency relations")
+    _wire_locator(p_wire_relations)
+    _wire_json(p_wire_relations)
+    p_wire_relations.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_question = wire_sub.add_parser(
+        "question", help="Idempotently post a question-valve comment")
+    _wire_locator(p_wire_question)
+    p_wire_question.add_argument("--subject-id", required=True)
+    p_wire_question.add_argument("--blocked-stage", required=True)
+    p_wire_question.add_argument("--reason-code", required=True)
+    p_wire_question.add_argument("--question-slug", required=True)
+    p_wire_question.add_argument("--body-file", required=True)
+    _wire_json(p_wire_question)
+    p_wire_question.set_defaults(func=cmd_tracker_wire)
 
     p_wire_attach = wire_sub.add_parser(
         "attach", help="Upload an attachment (capability-gated; fn-140.4)")
@@ -31848,6 +31875,21 @@ def main() -> None:
         "--source-body-file", default=None, dest="source_body_file",
         help="Exact tracker body snapshot used to prepare a reconcile merge "
              "(required for reconcile; forbidden for other ops)",
+    )
+    p_tracker_sync.add_argument(
+        "--comment-file", default=None, dest="comment_file",
+        help="Optional judgment-bearing comment to post inside --op push; "
+             "forbidden for pull/reconcile/comment",
+    )
+    p_tracker_sync.add_argument(
+        "--pr-url", default=None, dest="pr_url",
+        help="Optional PR URL to link inside --op reconcile --event makePr; "
+             "forbidden for every other op/event",
+    )
+    p_tracker_sync.add_argument(
+        "--status-only", action="store_true", dest="status_only",
+        help="For --op push, create/link if needed and project status only; "
+             "skip body and relation writes",
     )
     p_tracker_sync.add_argument("--json", action="store_true",
                                 help="Accepted and ignored (output is always JSON)")

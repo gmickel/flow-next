@@ -42,6 +42,7 @@ def _issue_out(raw: dict, *, parent_identity: str = "validated") -> dict:
 def _comment_out(raw: dict, *, parent_identity: str) -> dict:
     return {"id": raw.get("id"), "body": raw.get("body"),
             "url": raw.get("web_url"),
+            "created_at": raw.get("created_at"),
             "raw": raw, "parent_identity": parent_identity}
 
 def parent_read(config: dict, locator: dict, execute: Execute, *,
@@ -75,6 +76,50 @@ def read(config: dict, locator: dict, execute: Execute) -> Result:
     if isinstance(parent, TrackerError):
         return parent
     return _issue_out(parent, parent_identity="validated")
+
+
+def pr_link(config: dict, locator: dict, execute: Execute, *, url: str) -> Result:
+    """Post one non-closing PR URL note, deduplicated by the exact URL."""
+    parent = parent_read(config, locator, execute, op="wire-pr-link-parent-read")
+    if isinstance(parent, TrackerError):
+        return parent
+    listed = comment_list(config, locator, execute)
+    if isinstance(listed, TrackerError):
+        return listed
+    comments = listed.get("comments")
+    if not isinstance(comments, list):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab PR-link comment list is malformed",
+            subtype="malformed_body",
+        )
+    expected = f"Flow-Next PR: {url}"
+    for comment in comments:
+        body = comment.get("body") if isinstance(comment, dict) else None
+        if isinstance(body, str) and body.strip() == expected:
+            return {
+                "linked": False,
+                "deduped": True,
+                "kind": "note",
+                "url": url,
+                "comment": comment,
+            }
+    if listed.get("truncated"):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab PR-link dedup scan truncated; refusing to post",
+            subtype="dedup_truncated",
+        )
+    added = comment_add(config, locator, execute, body=expected)
+    if isinstance(added, TrackerError):
+        return added
+    return {
+        "linked": True,
+        "deduped": False,
+        "kind": "note",
+        "url": url,
+        "comment": added,
+    }
 
 
 def update(config: dict, locator: dict, execute: Execute, *,

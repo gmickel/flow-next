@@ -614,17 +614,25 @@ After the Phase 6 verdict is written, optionally post it as a structured tracker
 
 ```bash
 QA_LEAF="$($FLOWCTL config get tracker.perEvent.qa --json | jq -r '.value')"
+case "$QA_LEAF" in
+ pull|push|reconcile|comment) QA_OP="comment" ;;
+ off|null) QA_OP="off" ;;
+ *) QA_OP="off" ;; # malformed config stays silent
+esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$QA_LEAF" != "off" ] && [ "$QA_LEAF" != "null" ]; then
- # comment is the ONLY sensible verb for a QA verdict — post it as a tracker
- # comment via the flow-next-tracker-sync skill. Any non-`off` value (a stray
- # push/pull/reconcile) is treated as comment, never as a body/status op.
- # The verdict + qa_outcome + open-P0/P1 list compose the comment body.
- # skill: flow-next-tracker-sync (operation: comment <spec-id>, event: qa)
- : # best-effort — never blocks
+ && [ "$QA_OP" != "off" ]; then
+ # QA synthesizes the comment content by name: verdict, qa_outcome, open P0/P1
+ # findings, and R-ID coverage. Its FIRST line is
+ # `evidence=<tested-head-sha>`. Write it to a mode 0600 temporary body file,
+ # never argv. The inline flow-next-tracker-sync wrapper makes exactly one
+ # facade call and deletes the file:
+ # "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event qa --body-file "$BODY_FILE"
+ # pull, push, reconcile, and comment all coerce to comment. Best-effort.
+ : # never blocks
 fi
 ```
 
-Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker_runner` agent (Use the tracker_runner agent) per that reference and await its terminal line before the skill's summary (no later `sync check` audits this event); otherwise run it inline exactly as above. The skill emits its own receipt, event-tagged `--event qa`. When the dispatch forked, the §6.4 verdict surface MUST include the runner's parsed terminal outcome verbatim as a `Tracker runner: qa: TRACKER_RUNNER=<status> note="..."` line — an `errored`/`queued` outcome is visible nowhere else.
+The facade emits one receipt tagged `--event qa`. Structured errors are routed
+by the inline wrapper and remain best-effort.
 
 The leaf accepts `off` | `comment` (default `off`). `comment` is the only verdict-meaningful verb; treat any other non-`off` value as `comment` (never `push`/`pull`/`reconcile`). The actual transport / comment dedup / receipt lives entirely in the **flow-next-tracker-sync** skill — Phase A only gates + delegates.

@@ -220,6 +220,139 @@ class PreMutationGate(unittest.TestCase):
                 self.assertEqual([c.op for c in ex.calls], ["wire-parent-read"])
 
 
+class PullRequestLink(unittest.TestCase):
+    URL = "https://github.com/o/r/pull/7"
+
+    def test_rejects_invalid_url_before_transport(self) -> None:
+        for url in ("relative/pull/7", "https://example.test/pull/7\nspoof"):
+            with self.subTest(url=url):
+                ex = fake_execute({})
+                out = W.link_pr(
+                    "github", gh_cfg(), loc(GH_NODE, "#42"), ex,
+                    url=url,
+                )
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.subtype, "pr_url")
+                self.assertEqual(ex.calls, [])
+
+    def test_github_uses_native_pr_body_ref(self) -> None:
+        ex = fake_execute({
+            "wire-pr-link-parent-read": ok(GH_ISSUE),
+        })
+        out = W.link_pr(
+            "github", gh_cfg(), loc(GH_NODE, "#42"), ex, url=self.URL)
+        self.assertEqual(out["kind"], "native-pr-body-ref")
+        self.assertTrue(out["deduped"])
+
+    def test_gitlab_posts_then_deduplicates_exact_url_note(self) -> None:
+        note = {
+            "id": 9,
+            "body": f"Flow-Next PR: {self.URL}",
+            "noteable_id": GL_ID,
+            "created_at": "2026-07-29T00:00:00Z",
+        }
+        ex = fake_execute({
+            "wire-pr-link-parent-read": [ok(GL_ISSUE), ok(GL_ISSUE)],
+            "wire-parent-read": [ok(GL_ISSUE), ok(GL_ISSUE), ok(GL_ISSUE)],
+            "wire-comment-list": [ok([]), ok([note])],
+            "wire-comment-add": ok(note),
+        })
+        first = W.link_pr(
+            "gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"), ex, url=self.URL)
+        second = W.link_pr(
+            "gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"), ex, url=self.URL)
+        self.assertTrue(first["linked"])
+        self.assertFalse(second["linked"])
+        self.assertTrue(second["deduped"])
+        self.assertEqual(
+            [c.op for c in ex.calls].count("wire-comment-add"), 1)
+
+    def test_jira_upserts_remote_link_with_stable_global_id(self) -> None:
+        captured = {}
+
+        def capture(request):
+            captured.update(json.loads(request.body))
+            return empty()
+
+        ex = fake_execute({
+            "wire-pr-link-parent-read": ok(JR_ISSUE),
+            "wire-pr-link": capture,
+        })
+        out = W.link_pr(
+            "jira", jr_cfg(), loc(JR_ID, "SCRUM-1"), ex, url=self.URL)
+        self.assertEqual(out["kind"], "remote-link")
+        self.assertEqual(captured["globalId"], f"flow-next:pr:{self.URL}")
+        self.assertEqual(captured["object"]["url"], self.URL)
+
+    def test_linear_creates_then_deduplicates_rich_url_attachment(self) -> None:
+        attachment = {"id": "att-1", "url": self.URL}
+        ex = fake_execute({
+            "wire-pr-link-parent-read": [
+                gql_issue(LN_ISSUE),
+                gql_issue(LN_ISSUE),
+            ],
+            "wire-pr-link-list": [
+                ok({"data": {"issue": {"attachments": {
+                    "nodes": [],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }}}}),
+                ok({"data": {"issue": {"attachments": {
+                    "nodes": [attachment],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }}}}),
+            ],
+            "wire-pr-link": ok({"data": {
+                "attachmentLinkURL": {
+                    "success": True,
+                    "attachment": attachment,
+                },
+            }}),
+        })
+        first = W.link_pr(
+            "linear", ln_cfg(), loc(LN_UUID, "WOR-17"), ex, url=self.URL)
+        second = W.link_pr(
+            "linear", ln_cfg(), loc(LN_UUID, "WOR-17"), ex, url=self.URL)
+        self.assertTrue(first["linked"])
+        self.assertFalse(first["deduped"])
+        self.assertFalse(second["linked"])
+        self.assertTrue(second["deduped"])
+        self.assertEqual(second["attachment"], attachment)
+        self.assertEqual(
+            [c.op for c in ex.calls].count("wire-pr-link"),
+            1,
+        )
+        mutation = next(c for c in ex.calls if c.op == "wire-pr-link")
+        payload = json.loads(mutation.body)
+        self.assertIn("attachmentLinkURL", payload["query"])
+        self.assertEqual(payload["variables"]["url"], self.URL)
+
+    def test_linear_rereads_after_mutation_race(self) -> None:
+        attachment = {"id": "att-1", "url": self.URL}
+        ex = fake_execute({
+            "wire-pr-link-parent-read": gql_issue(LN_ISSUE),
+            "wire-pr-link-list": [
+                ok({"data": {"issue": {"attachments": {
+                    "nodes": [],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }}}}),
+                ok({"data": {"issue": {"attachments": {
+                    "nodes": [attachment],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }}}}),
+            ],
+            "wire-pr-link": TrackerError(
+                ErrorClass.INVALID_INPUT,
+                "unable to create issue attachment",
+                subtype="graphql",
+            ),
+        })
+        out = W.link_pr(
+            "linear", ln_cfg(), loc(LN_UUID, "WOR-17"), ex, url=self.URL)
+        self.assertFalse(out["linked"])
+        self.assertTrue(out["deduped"])
+        self.assertEqual(out["attachment"], attachment)
+
+
 # ---------------------------------------------------------------------------
 # Parent-identity availability (response-side; never faked)
 # ---------------------------------------------------------------------------
@@ -1387,3 +1520,551 @@ class DispatchEnvelopeBoundary(unittest.TestCase):
                              or (data.get("details") or {}).get("subtype"),
                              "malformed_body")
             self.assertNotEqual(code, 0)
+
+
+class BacklogRelationAndQuestionWire(unittest.TestCase):
+    _QUESTION = "<!-- flow-next:question id=a7f96309954a181b status=open -->"
+    _ANSWER = "<!-- flow-next:answer id=a7f96309954a181b -->"
+
+    def _flow_dir(self) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        flow = Path(tmp.name) / ".flow"
+        flow.mkdir()
+        return flow
+
+    def _comment(self, provider: str, number: int, body: str,
+                 created_at: str | None) -> dict:
+        raw = {"id": str(number), "body": body}
+        if provider == "github":
+            raw.update({
+                "created_at": created_at,
+                "html_url": f"https://x/comments/{number}",
+            })
+        elif provider == "gitlab":
+            raw.update({
+                "created_at": created_at,
+                "noteable_id": GL_ID,
+                "system": False,
+            })
+        elif provider == "jira":
+            raw["created"] = created_at
+        else:
+            raw.update({
+                "createdAt": created_at,
+                "url": f"https://linear.test/comments/{number}",
+            })
+        return raw
+
+    def _question_case(self, provider: str, comments: list[dict]):
+        added_body = "posted"
+        if provider == "github":
+            return (
+                gh_cfg(),
+                loc(GH_NODE, "#42"),
+                {
+                    "wire-comment-list": ok(comments),
+                    "wire-question-parent-read": ok(GH_ISSUE),
+                    "wire-parent-read": ok(GH_ISSUE),
+                    "wire-comment-add": ok(self._comment(
+                        provider, 99, added_body, "2026-07-29T12:00:00Z")),
+                },
+            )
+        if provider == "gitlab":
+            return (
+                gl_cfg(),
+                loc(str(GL_ID), "g/p#12"),
+                {
+                    "wire-comment-list": ok(comments),
+                    "wire-parent-read": ok(GL_ISSUE),
+                    "wire-comment-add": ok(self._comment(
+                        provider, 99, added_body, "2026-07-29T12:00:00Z")),
+                },
+            )
+        if provider == "jira":
+            return (
+                jr_cfg(),
+                loc(JR_ID, "SCRUM-1"),
+                {
+                    "wire-comment-list": ok({
+                        "comments": comments,
+                        "total": len(comments),
+                    }),
+                    "wire-parent-read": ok(JR_ISSUE),
+                    "wire-comment-add": ok(self._comment(
+                        provider, 99, added_body, "2026-07-29T12:00:00Z")),
+                },
+            )
+        return (
+            ln_cfg(),
+            loc(LN_UUID, "WOR-17"),
+            {
+                "wire-comment-list": ok({"data": {"issue": {
+                    "id": LN_UUID,
+                    "comments": {
+                        "nodes": comments,
+                        "pageInfo": {
+                            "hasNextPage": False,
+                            "endCursor": None,
+                        },
+                    },
+                }}}),
+                "wire-parent-read": gql_issue(LN_ISSUE),
+                "wire-comment-add": ok({"data": {"commentCreate": {
+                    "success": True,
+                    "comment": {
+                        **self._comment(
+                            provider, 99, added_body,
+                            "2026-07-29T12:00:00Z"),
+                        "issue": {"id": LN_UUID},
+                    },
+                }}}),
+            },
+        )
+
+    def _ask(self, provider: str, comments: list[dict]):
+        cfg, locator, responses = self._question_case(provider, comments)
+        ex = fake_execute(responses)
+        out = W.dispatch(
+            "question", cfg, locator=locator,
+            subject_id="subject-1", blocked_stage="triage",
+            reason_code="needs-spec", question_slug="capture-or-interview",
+            body="What next?", flow_dir=self._flow_dir(), execute=ex,
+        )
+        return out, ex
+
+    def test_question_rounds_follow_chronology_all_four(self) -> None:
+        rounds = [
+            ([(self._QUESTION, "2026-07-29T08:00:00Z")], False),
+            ([
+                (self._QUESTION, "2026-07-29T08:00:00Z"),
+                (self._ANSWER, "2026-07-29T09:00:00Z"),
+            ], True),
+            ([
+                (self._QUESTION, "2026-07-29T08:00:00Z"),
+                (self._ANSWER, "2026-07-29T09:00:00Z"),
+                (self._QUESTION, "2026-07-29T10:00:00Z"),
+            ], False),
+            ([
+                (self._QUESTION, "2026-07-29T08:00:00Z"),
+                (self._ANSWER, "2026-07-29T09:00:00Z"),
+                (self._QUESTION, "2026-07-29T10:00:00Z"),
+                (self._ANSWER, "2026-07-29T11:00:00Z"),
+            ], True),
+        ]
+        for provider in ("github", "gitlab", "jira", "linear"):
+            for markers, expected_posted in rounds:
+                with self.subTest(
+                    provider=provider, rounds=len(markers),
+                    posted=expected_posted,
+                ):
+                    comments = [
+                        self._comment(provider, index, body, created_at)
+                        for index, (body, created_at) in enumerate(markers, 1)
+                    ]
+                    out, ex = self._ask(provider, comments)
+                    self.assertNotIsInstance(out, TrackerError, out)
+                    self.assertEqual(out["posted"], expected_posted)
+                    self.assertEqual(
+                        any(call.op == "wire-comment-add" for call in ex.calls),
+                        expected_posted,
+                    )
+                    if expected_posted:
+                        self.assertTrue(out["reopened"])
+
+    def test_question_chronology_ignores_list_order_duplicates_and_other_ids(
+            self) -> None:
+        comments = [
+            self._comment(
+                "github", 4, self._ANSWER, "2026-07-29T11:00:00Z"),
+            self._comment(
+                "github", 1, self._QUESTION, "2026-07-29T08:00:00Z"),
+            self._comment(
+                "github", 3,
+                "<!-- flow-next:answer id=other -->",
+                "2026-07-29T12:00:00Z"),
+            self._comment(
+                "github", 2, self._ANSWER, "2026-07-29T09:00:00Z"),
+        ]
+        out, ex = self._ask("github", comments)
+        self.assertNotIsInstance(out, TrackerError, out)
+        self.assertTrue(out["posted"])
+        self.assertTrue(out["reopened"])
+        self.assertEqual(
+            [call.op for call in ex.calls].count("wire-comment-add"),
+            1,
+        )
+
+    def test_question_mixed_markers_fail_closed_without_clear_chronology(
+            self) -> None:
+        for provider in ("github", "gitlab", "jira", "linear"):
+            cases = [
+                [
+                    self._comment(
+                        provider, 1, self._QUESTION,
+                        "2026-07-29T08:00:00Z"),
+                    self._comment(provider, 2, self._ANSWER, None),
+                ],
+                [
+                    self._comment(
+                        provider, 1, self._QUESTION,
+                        "2026-07-29T08:00:00Z"),
+                    self._comment(
+                        provider, 2, self._ANSWER,
+                        "2026-07-29T08:00:00Z"),
+                ],
+            ]
+            for comments in cases:
+                with self.subTest(provider=provider, comments=comments):
+                    out, ex = self._ask(provider, comments)
+                    self.assertIsInstance(out, TrackerError)
+                    self.assertIs(out.cls, ErrorClass.TRANSPORT)
+                    self.assertEqual(out.subtype, "malformed_body")
+                    self.assertFalse(
+                        any(call.op == "wire-comment-add" for call in ex.calls),
+                    )
+
+    def test_relation_list_normalizes_direction_all_four(self) -> None:
+        jira_config = jr_cfg()
+        jira_config["tracker"]["perTracker"]["blocksLinkType"] = "Blocks"
+        cases = [
+            (
+                "github",
+                gh_cfg(),
+                loc(GH_NODE, "#42"),
+                {
+                    "wire-relation-parent-read": ok(GH_ISSUE),
+                },
+                set(),
+            ),
+            (
+                "gitlab",
+                gl_cfg(),
+                loc(str(GL_ID), "g/p#12"),
+                {
+                    "wire-relation-parent-read": ok(dict(
+                        GL_ISSUE,
+                        description=(
+                            "<!-- flow:deps -->\n"
+                            "**Blocked by:** g/p#9\n"
+                            "<!-- /flow:deps -->"
+                        ),
+                    )),
+                    "relate-list": ok([
+                        {"iid": 9, "link_type": "is_blocked_by",
+                         "references": {"full": "g/p#9"}},
+                        {"iid": 13, "link_type": "blocks",
+                         "references": {"full": "g/p#13"}},
+                    ]),
+                },
+                {("g/p#12", "g/p#9"), ("g/p#13", "g/p#12")},
+            ),
+            (
+                "linear",
+                ln_cfg(),
+                loc(LN_UUID, "WOR-17"),
+                {
+                    "wire-relation-list": ok({"data": {"issue": {
+                        "id": LN_UUID,
+                        "identifier": "WOR-17",
+                        "relations": {
+                            "nodes": [{"type": "blocks", "relatedIssue": {
+                                "id": "dep-18", "identifier": "WOR-18"}}],
+                            "pageInfo": {
+                                "hasNextPage": False, "endCursor": None},
+                        },
+                        "inverseRelations": {
+                            "nodes": [{"type": "blocks", "issue": {
+                                "id": "dep-16", "identifier": "WOR-16"}}],
+                            "pageInfo": {
+                                "hasNextPage": False, "endCursor": None},
+                        },
+                    }}}),
+                },
+                {("WOR-18", "WOR-17"), ("WOR-17", "WOR-16")},
+            ),
+            (
+                "jira",
+                jira_config,
+                loc(JR_ID, "SCRUM-1"),
+                {
+                    "wire-relation-list": ok({
+                        "id": JR_ID,
+                        "key": "SCRUM-1",
+                        "fields": {"issuelinks": [
+                            {
+                                "type": {"name": "Blocks"},
+                                "inwardIssue": {"id": "10041", "key": "SCRUM-2"},
+                            },
+                            {
+                                "type": {"name": "Blocks"},
+                                "outwardIssue": {"id": "10043", "key": "SCRUM-3"},
+                            },
+                        ]},
+                    }),
+                },
+                {("SCRUM-1", "SCRUM-2"), ("SCRUM-3", "SCRUM-1")},
+            ),
+        ]
+        for provider, cfg, locator, responses, expected in cases:
+            with self.subTest(provider=provider):
+                ex = fake_execute(responses)
+                out = W.dispatch(
+                    "relation-list", cfg, locator=locator,
+                    execute=ex)
+                self.assertNotIsInstance(out, TrackerError)
+                pairs = {(row["from"], row["to"]) for row in out["relations"]}
+                self.assertEqual(pairs, expected)
+                self.assertTrue(all(
+                    row["type"] == "blocks" and row["linkPresent"]
+                    for row in out["relations"]))
+                if provider == "gitlab":
+                    native = next(
+                        row for row in out["relations"]
+                        if row["from"] == "g/p#12"
+                        and row["to"] == "g/p#9"
+                    )
+                    self.assertEqual(native["source"], "unknown")
+                    self.assertNotIn("degraded", native)
+                if provider == "github":
+                    self.assertEqual(
+                        [call.op for call in ex.calls],
+                        ["wire-relation-parent-read"],
+                    )
+
+    def test_gitlab_relation_list_keeps_relates_to_body_fallback_degraded(
+            self) -> None:
+        out = W.dispatch(
+            "relation-list",
+            gl_cfg(),
+            locator=loc(str(GL_ID), "g/p#12"),
+            execute=fake_execute({
+                "wire-relation-parent-read": ok(dict(
+                    GL_ISSUE,
+                    description=(
+                        "<!-- flow:deps -->\n"
+                        "**Blocked by:** g/p#9\n"
+                        "<!-- /flow:deps -->"
+                    ),
+                )),
+                "relate-list": ok([
+                    {"iid": 9, "link_type": "relates_to",
+                     "references": {"full": "g/p#9"}},
+                ]),
+            }),
+        )
+        self.assertNotIsInstance(out, TrackerError, out)
+        self.assertEqual(len(out["relations"]), 1)
+        fallback = out["relations"][0]
+        self.assertEqual(
+            (fallback["from"], fallback["to"]), ("g/p#12", "g/p#9"))
+        self.assertTrue(fallback["linkPresent"])
+        self.assertEqual(fallback["source"], "flow")
+        self.assertEqual(fallback["degraded"]["kind"], "relates_to")
+
+    def test_relation_list_fails_closed_when_pages_are_truncated(self) -> None:
+        full_gitlab_page = [
+            {"iid": i + 1000, "link_type": "blocks",
+             "references": {"full": f"g/p#{i + 1000}"}}
+            for i in range(W._PAGE_SIZE)
+        ]
+        linear_pages = []
+        for page in range(W._MAX_PAGES):
+            linear_pages.append(ok({"data": {"issue": {
+                "id": LN_UUID,
+                "identifier": "WOR-17",
+                "relations": {
+                    "nodes": [],
+                    "pageInfo": {
+                        "hasNextPage": True,
+                        "endCursor": f"rel-{page}",
+                    },
+                },
+                "inverseRelations": {
+                    "nodes": [],
+                    "pageInfo": {
+                        "hasNextPage": False,
+                        "endCursor": None,
+                    },
+                },
+            }}}))
+        cases = [
+            (
+                "gitlab",
+                gl_cfg(),
+                loc(str(GL_ID), "g/p#12"),
+                {
+                    "wire-relation-parent-read": ok(GL_ISSUE),
+                    "relate-list": [
+                        ok(full_gitlab_page) for _ in range(W._MAX_PAGES)
+                    ],
+                },
+            ),
+            (
+                "linear",
+                ln_cfg(),
+                loc(LN_UUID, "WOR-17"),
+                {"wire-relation-list": linear_pages},
+            ),
+        ]
+        for provider, cfg, locator, responses in cases:
+            with self.subTest(provider=provider):
+                out = W.dispatch(
+                    "relation-list", cfg, locator=locator,
+                    execute=fake_execute(responses))
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.cls, ErrorClass.TRANSPORT)
+                self.assertEqual(out.subtype, "truncated")
+
+    def test_question_dedups_before_posting(self) -> None:
+        marker = "<!-- flow-next:question id=a7f96309954a181b status=open -->"
+        ex = fake_execute({
+            "wire-comment-list": ok([{"id": 1, "body": f"{marker}\n\nOld"}]),
+            "wire-question-parent-read": ok(GH_ISSUE),
+        })
+        out = W.dispatch(
+            "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+            subject_id="subject-1", blocked_stage="triage",
+            reason_code="needs-spec", question_slug="capture-or-interview",
+            body="Rephrased", flow_dir=self._flow_dir(), execute=ex)
+        self.assertEqual(out["posted"], False)
+        self.assertEqual(
+            [call.op for call in ex.calls],
+            ["wire-comment-list", "wire-question-parent-read"],
+        )
+
+    def test_question_concurrent_same_key_single_add_loser_conflicts(self) -> None:
+        flow = self._flow_dir()
+        inner: dict = {}
+        posted = []
+
+        def racing_list(_request):
+            claim_files = list((flow / "create-first").glob("question-*.json"))
+            self.assertEqual(len(claim_files), 1)
+            self.assertEqual(
+                json.loads(claim_files[0].read_text(encoding="utf-8"))["status"],
+                "pending",
+            )
+            inner_ex = fake_execute({})
+            inner["ex"] = inner_ex
+            inner["out"] = W.dispatch(
+                "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+                subject_id="subject-1", blocked_stage="triage",
+                reason_code="needs-spec",
+                question_slug="capture-or-interview",
+                body="What next?", flow_dir=flow, execute=inner_ex,
+            )
+            return ok([])
+
+        def capture_add(request):
+            posted.append(json.loads(request.body)["body"])
+            return ok({"id": 2, "body": posted[-1]})
+
+        ex = fake_execute({
+            "wire-comment-list": racing_list,
+            "wire-parent-read": ok(GH_ISSUE),
+            "wire-comment-add": capture_add,
+        })
+        out = W.dispatch(
+            "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+            subject_id="subject-1", blocked_stage="triage",
+            reason_code="needs-spec", question_slug="capture-or-interview",
+            body="What next?", flow_dir=flow, execute=ex,
+        )
+        self.assertNotIsInstance(out, TrackerError, out)
+        self.assertTrue(out["posted"])
+        self.assertEqual(len(posted), 1)
+        raced = inner["out"]
+        self.assertIsInstance(raced, TrackerError)
+        self.assertIs(raced.cls, ErrorClass.CONFLICT)
+        self.assertEqual(raced.subtype, "question_in_flight")
+        self.assertTrue(raced.auto_retryable)
+        self.assertEqual(inner["ex"].calls, [])
+        self.assertEqual(
+            list((flow / "create-first").glob("question-*.json")), [])
+
+    def test_question_dedup_rejects_stale_display_addressed_parents(self) -> None:
+        marker = "<!-- flow-next:question id=a7f96309954a181b status=open -->"
+        cases = [
+            (
+                "github",
+                gh_cfg(),
+                loc(GH_NODE, "#42"),
+                {
+                    "wire-comment-list": ok([
+                        {"id": 1, "body": f"{marker}\n\nUnrelated"},
+                    ]),
+                    "wire-question-parent-read": ok(
+                        dict(GH_ISSUE, node_id="OTHER_NODE")
+                    ),
+                },
+            ),
+            (
+                "gitlab",
+                gl_cfg(),
+                loc(str(GL_ID), "g/p#12"),
+                {
+                    "wire-comment-list": ok([
+                        {
+                            "id": 1,
+                            "body": f"{marker}\n\nUnrelated",
+                            "system": False,
+                        },
+                    ]),
+                    "wire-question-parent-read": ok(
+                        dict(GL_ISSUE, id=GL_ID + 1)
+                    ),
+                },
+            ),
+        ]
+        for provider, cfg, locator, responses in cases:
+            with self.subTest(provider=provider):
+                ex = fake_execute(responses)
+                out = W.dispatch(
+                    "question", cfg, locator=locator,
+                    subject_id="subject-1", blocked_stage="triage",
+                    reason_code="needs-spec",
+                    question_slug="capture-or-interview",
+                    body="Rephrased", flow_dir=self._flow_dir(), execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.cls, ErrorClass.CONFLICT)
+                self.assertEqual(
+                    [call.op for call in ex.calls],
+                    ["wire-comment-list", "wire-question-parent-read"],
+                )
+
+    def test_question_posts_canonical_marker_and_refuses_unproven_absence(self) -> None:
+        ex = fake_execute({
+            "wire-comment-list": ok([]),
+            "wire-parent-read": ok(GH_ISSUE),
+            "wire-comment-add": ok({"id": 2, "body": "posted"}),
+        })
+        out = W.dispatch(
+            "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+            subject_id="subject-1", blocked_stage="triage",
+            reason_code="needs-spec", question_slug="capture-or-interview",
+            body="What next?", flow_dir=self._flow_dir(), execute=ex)
+        self.assertEqual(out["posted"], True)
+        posted = next(call for call in ex.calls if call.op == "wire-comment-add")
+        payload = json.loads(posted.body)
+        self.assertEqual(
+            payload["body"],
+            "<!-- flow-next:question id=a7f96309954a181b status=open -->"
+            "\n\nWhat next?",
+        )
+
+        full_page = [{"id": i, "body": "other"} for i in range(100)]
+        truncated = fake_execute({
+            "wire-comment-list": [ok(full_page) for _ in range(W._MAX_PAGES)],
+        })
+        out = W.dispatch(
+            "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+            subject_id="subject-1", blocked_stage="triage",
+            reason_code="needs-spec", question_slug="capture-or-interview",
+            body="What next?", flow_dir=self._flow_dir(), execute=truncated)
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "truncated")
+        self.assertEqual(
+            [call.op for call in truncated.calls],
+            ["wire-comment-list"] * W._MAX_PAGES,
+        )

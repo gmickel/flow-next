@@ -1,252 +1,29 @@
-# Linear MCP rung (interactive default)
+# Linear MCP shape
 
-Rung 1 of the Linear transport ladder ([linear-ladder.md](linear-ladder.md)): the
-**Linear MCP server** registered on the host. The interactive convenience path —
-the server handles OAuth/token, so there is no key to manage. Use it when a
-Linear MCP server is present in the host's tool list; otherwise the ladder falls
-to the GraphQL rung ([linear-graphql.md](linear-graphql.md)).
+MCP is one of the five retained judgment surfaces because its tools exist only
+in the host agent environment. Flowctl cannot invoke them.
 
-The MCP tool surface is host-agent-visible: the agent calls the tools directly
-(`save_issue`, `get_issue`, …) — there is no shell command. Pass markdown bodies
-**literally** (real newlines, no `\n` escape sequences — the server's own
-instruction).
+## Allowed use
 
-**MCP is restricted to CREATE and DISCOVERY (fn-140 R5).** Every other
-operation — status, comments, labels, body sync, relations — requires the
-GraphQL rung, where flowctl's deterministic verbs run. After an MCP-performed
-create, hand the result to `flowctl tracker persist-external <spec-id>
---identifier <KEY-N> --source mcp` — MCP returns the display identifier only,
-never the durable UUID (see line ~100), so flowctl resolves the UUID via
-GraphQL (or records an explicitly-marked `identifier_only` link state that a
-later `tracker sync --op reconcile` completes). Do not assume any wider
-"persist an arbitrary external operation" contract exists; it does not, by
-design.
+- discover accessible Linear teams and projects during the confirmed ceremony;
+- create an issue only when the user authorized that action and no
+ shell-reachable Linear credential can complete it;
+- return the created issue identity to deterministic persistence.
 
-## Tool-name pin (verified — re-verify at build; MCP tool names drift)
+MCP does not perform routine update, status, comment, relation, attachment,
+pull, or reconcile operations. Those use flowctl's GraphQL transport.
 
-> **CLAUDE.md-style breadcrumb.** Linear's official MCP server uses **upsert
-> verbs** — `save_*`, NOT `create_*`/`update_*`. The same verb creates or
-> updates depending on whether an `id` is passed. These names drift across server
-> versions; the table below was **verified 2026-06-03** against the registered
-> Linear MCP server in this environment (tool prefix
-> `mcp__claude_ai_Linear__*`). Re-verify by inspecting the host tool list before
-> relying on them on a different host/version. The GraphQL rung needs no pin (its
-> wire contract is version-stable).
+## Handoff
 
-| Interface method | Linear MCP tool (verified 2026-06-03) | Key params |
-|---|---|---|
-| `writeIssue` (upsert) | **`save_issue`** | create: `team`+`title` required, `description` (body, markdown). update: pass `id` (UUID **or** identifier `WOR-17`) + changed fields. `state` (state type/name/ID) sets status. `labels`, `priority` (0=None,1=Urgent,2=High,3=Medium,4=Low). `assignee` (NOT `assigneeId`). **Returns the identifier (`WOR-17`-form) as `id` — never the UUID** (verified 2026-06-09). |
-| `fetchIssue` | **`get_issue`** | `id` (UUID or identifier). `includeRelations:true` for blocking/related. Returns title, `description`, `state`, `priority`, `labels`, `url`, `updatedAt`, git branch name. **The returned `id` is the identifier, not the UUID** (verified 2026-06-09). |
-| `listComments` | **`list_comments`** | `issueId` (UUID or identifier). `orderBy: createdAt|updatedAt`, `limit` (default 50, max 250), `cursor` for paging. Each comment carries its `parent`/`parentId` (a reply's parent comment) → the optional `comment.parentId` (fn-68 R15 answer-thread match). Set `marker` from the **closed flow-owned set** — `flow-next:sync`/`flow-next:question`/rolling `flow-next:status` (adapter-interface.md § `comment`); `flow-next:answer` keeps `marker:null` but surfaces its `id`. |
-| `postComment` | **`save_comment`** | create top-level: `issueId` + `body`. update: `id` + `body`. reply: `parentId` + `body`. |
-| `listOpenIssues` | **`list_issues`** | filter to the promoted lane: `team` (name or ID) + the **exact** `tracker.readyState` workflow-state **name** (`state`/`status` filter, case-insensitive name match — NOT `state.type`, no ordering). `limit`/`cursor` paging. Returns normalized `issue[]` (fn-68 enumeration). **Like `get_issue`, `list_issues` returns the identifier-form `id` (`WOR-17`), NOT the UUID (verified 2026-06-09) — normalize it the same way `fetchIssue` does so the handle is consistent within the MCP rung; linkage/dedupe keys on the back-reference + local sync state, never a raw cross-rung id compare (the GraphQL rung's `id` is the UUID).** |
-| `listIssueRelations` | **`get_issue`** + `includeRelations:true` | `id` (UUID or identifier). Returns the issue's blocking/related/duplicate relations (fn-64.3). |
-| `setIssueRelation` | **`save_issue`** + `blockedBy:[…]` | update form: `id` = the **blocked** issue + `blockedBy:[<blocker id/identifier>]`. **Append-only** — server doc: "existing relations are never removed" (fn-64.3). |
-| status map build | **`list_issue_statuses`** | `team` (name or ID) → the team's workflow states (name + type + id) for the normalized-status map. |
+Capture the MCP result as:
 
-Supporting tools used during the discovery/link ceremony (not part of the six
-interface methods, but verified present): `list_teams`, `get_team`,
-`list_issue_labels` / `create_issue_label`, `list_projects`, `list_users`, and
-`get_issue_status` (validates the chosen `tracker.readyState` state resolves —
-fn-58 ceremony, steps.md Phase 1 step 5; `list_issue_statuses` feeds the same
-question's state discovery).
-
-**`makePr` (PR link → Linear Diffs) on the MCP rung.** The MCP exposes **no
-URL-attach tool** — `create_attachment` / `prepare_attachment_upload` are for
-*file* uploads, not for linking a GitHub PR. So on this rung the PR linkage relies
-entirely on **make-pr §4.6a** putting a non-closing `Ref WOR-N` in the PR body:
-Linear's GitHub integration auto-links the PR on the identifier, which is what
-makes **Linear Diffs** render it inside the issue. (The rich `attachmentLinkURL`
-belt-and-suspenders is GraphQL-rung only — [linear-graphql.md](linear-graphql.md).)
-The MCP *does* expose **read-only diff tools** — `list_diffs`, `get_diff`,
-`get_diff_threads` (resolve by GitHub PR URL) — handy for a future `resolvePr`
-touchpoint that folds Linear review threads back into flow; out of scope for the
-`makePr` link itself.
-
-**Asymmetry to remember vs the GraphQL rung:** MCP accepts the **identifier**
-(`WOR-17`) interchangeably with the UUID on most inputs (`get_issue`,
-`save_comment`'s `issueId`, `save_issue`'s update `id`) — but it **returns
-identifiers, never UUIDs**: create AND fetch both come back with the
-`WOR-17`-form key as `id` (verified live 2026-06-09 — `get_issue` /
-`list_issues` / `save_issue` all did). The GraphQL rung is the mirror image:
-stricter on inputs (`commentCreate` needs the **UUID**) and the only rung whose
-responses carry the UUID. Either way, **store the UUID as the durable dedupe
-key** (`sync set-tracker-id`) and surface the `identifier` to humans; never
-persist `WOR-17` as the primary key — which means **first-link needs the GraphQL
-rung to obtain that UUID** (see Gotchas).
-
-## The original six core methods over MCP
-
-The six core methods below. The enumeration method `listOpenIssues` (fn-68.2) is
-pinned in the tool-name table above (`list_issues`); the dependency-projection pair
-(`listIssueRelations` / `setIssueRelation`, fn-64.3) is its own section below —
-together the **nine-method** interface ([adapter-interface.md](adapter-interface.md)).
-Mapping wire ↔ normalized happens here, at the adapter boundary. Reconcile never
-sees an MCP shape.
-
-### `fetchIssue(trackerId)` → normalized `issue` | not-found
-
-```
-get_issue(id: <uuid or identifier>)
- → map: identifier, title, description→body, state.name→status.raw,
- (state.type + config map)→status.normalized, priority, labels[].name,
- url, updatedAt
- → the wire `id` IS the identifier (`WOR-17`-form), never the UUID — populate
- the normalized `issue.id` (UUID) from the stored sync state of the linked
- spec (`sync get-state`), not from the MCP response (see Gotchas).
- → on missing/archived/deleted: the call errors or returns nothing ⇒ return
- `not-found` (NEVER raise out of the adapter). The skeleton then emits an
- `errored` receipt + prompts/queues unlink (see linear-ladder.md error contract).
+```json
+{"identifier": "TEAM-123", "id": "optional durable UUID", "url": "optional canonical URL"}
 ```
 
-### `writeIssue(issue)` → `{id, identifier, url}` (upsert)
+Then call `tracker persist-external` with source `mcp`. If the durable id is
+missing, flowctl resolves the display identifier before persisting it. Failure
+to resolve leaves local link state unchanged.
 
-```
-no issue.id ⇒ CREATE: save_issue(team:<team>, title:<title>, description:<body>,
- labels:[...,"flow:<id>"], priority:<0-4>)
-issue.id set ⇒ UPDATE: save_issue(id:<uuid>, description:<body>, title:<title>,
- labels:[...], priority:<0-4>) # changed fields only
- → return { identifier, url } from the result; the interface's `id` (UUID) slot
- CANNOT be filled on this rung — the wire `id` field IS the identifier
- (`WOR-17`-form), NOT the UUID. On create, the durable UUID for
- `sync set-tracker-id` must be fetched via the GraphQL rung (see Gotchas).
-```
-
-Write the flow back-reference on create/first-link: a `flow:<id>` label and/or a
-`[<id>]` title prefix (Phase 2a/2b of [steps.md](../steps.md)) so the issue
-points back at the spec.
-
-**create-first (fn-134.3 / R19)** - issue before any local spec (steps.md Phase 2d).
-Create with title + body only; return `{id, identifier, url}` (identifier is the
-native `KEY-N`; durable UUID still requires the GraphQL rung per Gotchas below).
-Omit `flow:<spec-id>` until after mint + attach. No `sync receipt` pre-spec —
-recovery file `.flow/create-first/<retryKey>.json` (retry lookup key in steps.md
-Phase 2d); retry links, never re-creates.
-
-### `setStatus(trackerId, status)` → ok | errored
-
-```
-# Resolve normalized status → the team's concrete state.
-# save_issue's `state` accepts a state type/name/ID, so either:
-save_issue(id:<uuid>, state:<state-name-or-id from the config status map>)
- → on a state that doesn't exist for the team: return `errored` (don't crash).
-```
-
-### `listComments(trackerId)` → normalized `comment[]`
-
-```
-list_comments(issueId:<uuid>, orderBy:createdAt, limit:250)
- → map each: id, user→author, body, createdAt, and DETECT the flow marker
- (a `flow-evt:<event>` token flow itself posted) → set `marker`; genuine
- tracker-side comments get `marker:null` and pull into the spec sync log.
- → page via `cursor` if the issue has >250 comments.
-```
-
-### `postComment(trackerId, body)` → normalized `comment`
-
-```
-save_comment(issueId:<uuid>, body:<markdown, with the flow-evt marker line>)
- → map the result back to a normalized `comment`.
-```
-
-### `readStatus(trackerId)` → normalized `status`
-
-```
-# Derived from the issue fetch — no separate call.
-get_issue(id:<uuid>).state → { raw: state.name,
- normalized: map(state.type, config) }
-```
-
-## Relation transport (dependency projection, fn-64.3)
-
-The two relation methods from [adapter-interface.md](adapter-interface.md) over MCP.
-**Direction convention** (stated once there): `from` is-blocked-by `to`; flow's
-`depends_on_epics:[B]` on spec A projects to `setIssueRelation(issue=A, blockedBy=B)`.
-
-> **MCP schema re-verify (fn-64.3, verified live 2026-06-17).** `save_issue` DOES
-> expose `blockedBy` / `blocks` (append-only — "existing relations are never
-> removed") and `removeBlockedBy` / `removeBlocks`; `get_issue` DOES expose
-> `includeRelations:true`. The schema drifts, so **re-inspect the host tool list
-> before relying on these** — if a future server drops `blockedBy`, the ladder
-> falls to the GraphQL rung when `LINEAR_API_KEY` is set, else writes a `noop`
-> receipt ([linear-ladder.md](linear-ladder.md)). flow projects **only the
-> blocked-by edge** — never touch `blocks` / `relatedTo` / `duplicateOf` here.
-
-### `listIssueRelations(issue)` → normalized `relation[]` | errored
-
-```
-get_issue(id:<uuid or identifier>, includeRelations:true)
- → read the returned relations (the blocking set: this issue's "blocked by"
- edges). For each blocker B, emit a normalized relation:
- { from: <this issue>, to: B, type: "blocks", source: "unknown", linkPresent: true }
- → `source` is "unknown" on MCP — Linear stores no relation authorship; the
- flow-side depRelations ledger (fn-64.1) is the provenance authority.
- → `linkPresent` is always true — a Linear native relation IS the tracker-visible
- link (no separate-block split like GitLab; Linear never emits linkPresent:false).
- → return ONLY the blocked-by view. Drop related/duplicate edges so the skill's
- read-before-write dedup never trips over an unrelated relation kind.
- → on error / missing issue: return `errored` — never raise.
-```
-
-### `setIssueRelation(issue, blockedBy)` → ok | errored | noop
-
-```
-# READ-BEFORE-WRITE (mandatory): listIssueRelations(issue) first; if the
-# (issue is-blocked-by blockedBy) edge already exists → return noop, skip write.
-save_issue(id:<the BLOCKED issue>, blockedBy:[<the BLOCKING issue>])
- → save_issue's blockedBy is append-only (the server never removes existing
- relations), so this only ever ADDS the edge — it can never clobber a human's
- manual relation (R6). Pass id/identifier interchangeably.
- → on success: return ok (the skill records the edge in the depRelations ledger).
- → on error (issue not found, etc.): return `errored` — never raise.
-```
-
-**Why read-before-write even though `blockedBy` is append-only.** The MCP rung's
-append-only semantics mean a duplicate `save_issue(blockedBy:…)` is harmless on
-the wire, but the contract still requires the pre-check ([adapter-interface.md](adapter-interface.md))
-for parity with the GraphQL rung (where `issueRelationCreate` is **not** reliably
-idempotent) and so the skill can record "no new edge created" accurately. Skip
-the write when the edge is already present.
-
-## Status map (MCP)
-
-Build the team's name/type → state map **once at config time** so `setStatus`
-can resolve a normalized status back to a concrete state:
-
-```
-list_issue_statuses(team:<team>)
- → for each state: { id, name, type } # type ∈ backlog|unstarted|started|completed|canceled
- → fold into tracker.perTracker.statusMap (config-driven name overrides, e.g. a
- "Verified" completed-state → normalized `verified`).
-```
-
-The default `state.type` → normalized mapping is shared with the GraphQL rung —
-see the status table in [linear-ladder.md](linear-ladder.md).
-
-## Gotchas
-
-- **Literal markdown, no escapes.** The server expects real newlines in
- `description`/`body` — never `\n` escape sequences (a round-trip-spike failure
- mode: escaped newlines come back as literal backslash-n).
-- **MCP create/fetch returns an identifier, not a UUID** — `get_issue` /
- `list_issues` / `save_issue` all return the `WOR-17`-form key as `id`
- (verified live 2026-06-09). **First-link therefore requires the GraphQL rung
- (`LINEAR_API_KEY`) to obtain the UUID** for `sync set-tracker-id` — a pure-MCP
- environment cannot populate the durable dedupe key on a fresh link.
-- **UUID is the key, identifier is for humans.** MCP's leniency about accepting
- `WOR-17` does not make it a safe dedupe key — a deleted+recreated issue can
- reuse an identifier but never the UUID.
-- **Tool names drift** — the pin above is dated; re-verify on a new host/server
- version. The ladder probes for *a* Linear server, but the exact verbs are what
- the round-trip spike confirms before fn-52.4 builds on them.
-- **Rate limits still apply** — even though the server manages auth, it can
- surface a rate-limit error; back off (don't fail) per the
- [linear-ladder.md](linear-ladder.md) error contract.
-- **MCP is interactive-only in practice** — treat it as absent on headless / CI /
- cron / Ralph paths; those fall through to the GraphQL rung, which is why parity
- (linear-ladder.md) matters.
-- **Linear normalizes markdown on save** (auto-linkified slash-joined filenames,
- inserted blank lines before lists, `>`-leading list items rewritten as
- blockquotes) — the stored body differs from what `save_issue` sent. Every
- merge-base snapshot after a write must re-fetch and snapshot the STORED body,
- never the sent render: body-merge.md Step 5 § Fetch-back rule.
+Never copy OAuth tokens, tool metadata, or raw MCP diagnostics into Flow state
+or receipts.

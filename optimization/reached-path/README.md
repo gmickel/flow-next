@@ -116,6 +116,7 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `trace.py` | Parse stream-json Read activations |
 | `inventory.py` | Declarative B0 fixture inventory + frozen B1 source commit |
 | `run_eval.py` | CLI: self-test / B0+B1 freeze/validate/input checks / production-path smoke |
+| `tracker_candidate.py` | Reproducible fn-141 B1-to-candidate tracker fixture delta |
 | `run_claude_fleet_smoke.py` | Actual `/flow-next:*` B1/candidate fleet through Claude Code `--plugin-dir`; isolated inline-plugin, side-effect, and workflow contracts |
 | `claude_fleet_oracles.py` | Process helpers, transcript parsing, privacy scrub, and per-workflow behavioral oracles for the Claude fleet smoke |
 | `plan_review_candidate.py` | fn-130.6 selected-backend route traces + production plan-prompt corpus checks |
@@ -124,6 +125,7 @@ open-spec (fn-129 / fn-122 / fn-61 / fn-73) deferrals.
 | `fixtures/synthetic/` | Subject skill for the Claude production-path smoke |
 | `runs/b0-production-path-smoke.json` | Write-once tracked B0 Claude proof (immutable) |
 | `runs/plan-review-candidate.json` | fn-130.6 B1→candidate route/corpus ratchet evidence |
+| `tracker-teardown-candidate.json` | fn-141 candidate delta for all 15 immutable B1 tracker fixtures |
 | `evidence/fn130/plan-review-real-backend.json` | fn-130 completion repair: B1/candidate risky, clean, and user-edited Plan Review corpus through Codex `gpt-5.6-sol` high, with reviews, verdicts, usage, and production-prompt hashes |
 | `evidence/fn130/claude-plugin-fleet-smoke.json` | Actual Claude Code canonical-plugin fleet: nine B1 and nine candidate slash-command runs; candidate 9/9, B1 7/9 with both baseline misses retained |
 | `evidence/fn130/codex-copy-drift-smoke.json` | Official temporary Codex install plus actual `$flow-next-plan`: installed manifest read, `0.0.1 → 3.4.1` warning, completed autonomous plan |

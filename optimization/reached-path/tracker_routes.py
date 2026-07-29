@@ -38,15 +38,16 @@ ADAPTER_REFS = {
 }
 ALL_ADAPTER_REFS = frozenset(path for refs in ADAPTER_REFS.values() for path in refs)
 
-# Representative production forms, asserted against the selected canonical
-# adapter reference.  The fake records these strings but never invokes them.
+# Representative transport-shape markers, asserted against the selected
+# canonical adapter reference. The fake records these strings but never invokes
+# provider transport.
 PRODUCTION_FORMS = {
-    "github": "gh issue edit",
-    "gitlab": 'glab api --method PUT "projects/$ENC/issues/$IID"',
-    "jira": "$JIRA_BASE/rest/api/$APIV/issue/",
-    "linear-mcp": "save_issue",
-    "linear-graphql": "https://api.linear.app/graphql",
-    "linear-none": "sync receipt",
+    "github": "authenticated GitHub CLI transport",
+    "gitlab": "authenticated GitLab CLI transport",
+    "jira": "Jira REST through the deterministic HTTP executor",
+    "linear-mcp": "MCP is one of the five retained judgment surfaces",
+    "linear-graphql": "Flowctl sends JSON GraphQL documents",
+    "linear-none": "MCP is not a general runtime fallback",
 }
 
 
@@ -145,7 +146,7 @@ class FakeTransport:
 
 
 def assert_production_form(repo_root: Path, route: Route) -> None:
-    """Prove a fake's wire marker comes from the selected canonical reference."""
+    """Prove a fake's shape marker comes from the selected canonical reference."""
     marker = PRODUCTION_FORMS.get(route.state)
     if marker is None:
         return

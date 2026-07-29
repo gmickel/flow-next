@@ -28,3 +28,6 @@ Safety notes:
 - `origin` fetch is optional; local base refs are allowed
 - fetch from `origin` only when base looks like a branch
 - Worktrees live under `.worktrees/`
+- `create` initializes `.worktrees/.gitignore` (`*` plus `!.gitignore`) when
+ absent, so `git add -A` cannot stage nested worktrees as gitlinks; existing
+ custom ignore files are preserved

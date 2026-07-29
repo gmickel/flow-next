@@ -71,8 +71,9 @@ else
 
   # Invariant #1 — never merge / never invoke land (R6). The ONLY skills a backlog
   # tick may invoke are the pipeline stages {plan, plan-review, work, qa, make-pr}
-  # plus the tracker-sync surfacing/read ops {reconcile, list-open, list-relations,
-  # question}. ALL FOUR tracker ops are read/surface-only — none merges, lands, or
+  # plus the tracker-sync surfacing/read ops {reconcile, list-open, list-comments,
+  # list-relations, question}. These tracker ops only read or surface a question —
+  # none merges, lands, or
   # resolves, so the never-merge guard is unaffected. `list-relations` is the
   # per-issue listIssueRelations READ that 1e needs for tracker dep edges. Called
   # inline immediately before EVERY dispatch (Phase 1.5 tracker ops, Phase 3.5 ask,
@@ -80,7 +81,7 @@ else
   assert_allowed_dispatch() {  # $1 = the slash command about to be invoked
     case "$1" in
       /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) return 0 ;;
-      "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) return 0 ;;
+      "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-comments"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) return 0 ;;
       *)
         echo "Evidence: backlog mode attempted a forbidden dispatch ($1)"
         echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — never merges/lands/resolves (R6)"'
@@ -181,7 +182,18 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 ⇒ inspection-only: no tracker-sync dispatch, f
    fi
    ```
 
-4. **1d — skip parked subjects (R7/R15)** (backlog-mode.md 1d).
+4. **1d — skip parked subjects (R7/R15)** (backlog-mode.md 1d). For every
+   tracker-only candidate, guard and execute the missing comment read before
+   deciding whether its latest question round is parked:
+
+   ```bash
+   if [ "$DRY" = "0" ]; then
+     DISPATCH_TARGET="/flow-next:tracker-sync list-comments"; assert_allowed_dispatch "$DISPATCH_TARGET"
+     # → dispatch per tracker-only issue: /flow-next:tracker-sync list-comments <tracker-id> mode:autonomous
+     # Any error or truncated listing fails closed: do not select from an
+     # incomplete question/answer history.
+   fi
+   ```
 
 5. **1e — dep-order the survivors** (backlog-mode.md 1e). The tracker relation edges come from the guarded per-issue `list-relations` READ (invariant #1 — on the allowlist, never a merge):
 
@@ -533,7 +545,7 @@ If the sub-skill emitted a `Tracker sync:` summary line, pass that line through 
 DISPATCH_TARGET="/flow-next:tracker-sync question"; assert_allowed_dispatch "$DISPATCH_TARGET"
 ```
 
-The question is then posted via tracker-sync's transport-blind `question` op (it owns the stable-anchor authoring, comments-sync dedup, and the answer round-trip — backlog mode invokes it, never re-implements it):
+The question is then posted through tracker-sync's inline `question` wrapper. The skill owns semantic question authoring and structured recovery; flowctl owns deterministic comment transport, marker dedup, and normalized answer readback. Backlog mode invokes the wrapper and never re-implements it:
 
 ```text
 /flow-next:tracker-sync question <SUBJECT_ID> mode:autonomous     # <SUBJECT_ID> = spec id (spec-backed) OR the list-open issue.identifier (tracker-only — the display handle, NOT the global id; GitLab needs the <project>#<iid> it carries to post …/issues/:iid/notes)

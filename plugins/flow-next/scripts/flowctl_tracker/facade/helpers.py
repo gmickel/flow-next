@@ -20,22 +20,23 @@ OPS = frozenset({"push", "pull", "reconcile", "comment"})
 OP_INPUTS = {
     "push": {
         "require": frozenset({"flow_file", "body_file"}),
-        "forbid": frozenset({"comments_file", "source_body_file"}),
+        "forbid": frozenset({"comments_file", "source_body_file", "pr_url"}),
     },
     "pull": {
         "require": frozenset({"flow_file", "body_file", "comments_file"}),
-        "forbid": frozenset({"source_body_file"}),
+        "forbid": frozenset({"source_body_file", "comment_file", "pr_url"}),
     },
     "reconcile": {
         "require": frozenset({
             "flow_file", "body_file", "comments_file", "source_body_file",
         }),
-        "forbid": frozenset(),
+        "forbid": frozenset({"comment_file"}),
     },
     "comment": {
         "require": frozenset({"body_file"}),
         "forbid": frozenset({
-            "flow_file", "comments_file", "source_body_file",
+            "flow_file", "comments_file", "source_body_file", "comment_file",
+            "pr_url",
         }),
     },
 }
@@ -91,7 +92,9 @@ def marker_component_error(name: str, value: Any) -> Optional[TrackerError]:
 def validate_inputs(op: str, *, flow_file: Optional[str],
                     body_file: Optional[str], comments_file: Optional[str],
                     source_body_file: Optional[str],
-                    event: Optional[str]
+                    event: Optional[str], comment_file: Optional[str] = None,
+                    pr_url: Optional[str] = None,
+                    status_only: bool = False,
                     ) -> Optional[TrackerError]:
     if op not in OPS:
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -100,6 +103,12 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
     if not event or not str(event).strip():
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "--event is required", subtype="event")
+    if status_only and op != "push":
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "--status-only is valid only with --op push",
+            subtype="args",
+        )
     # The event is a marker field (and a receipt/claim key): reject values
     # the emitted marker could not round-trip BEFORE any wire call.
     bad_event = marker_component_error("event", str(event))
@@ -111,6 +120,8 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
         "body_file": body_file is not None,
         "comments_file": comments_file is not None,
         "source_body_file": source_body_file is not None,
+        "comment_file": comment_file is not None,
+        "pr_url": pr_url is not None,
     }
     for name in sorted(rules["forbid"]):
         if present[name]:
@@ -126,6 +137,12 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
                 f"--op {op} requires --{name.replace('_', '-')}",
                 subtype="args",
             )
+    if pr_url is not None and event != "makePr":
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "--pr-url is only valid for --op reconcile --event makePr",
+            subtype="pr_url",
+        )
     return None
 
 
@@ -300,7 +317,7 @@ def comments_have_marker(comments: list, *, issue: str, spec: str,
 
 
 def parse_evidence(body: str) -> str:
-    """Optional leading `evidence=<sha>` line; else `none`."""
+    """Parse the leading `evidence=<token>` line; else return `none`."""
     if not body:
         return "none"
     first = body.splitlines()[0].strip() if body.splitlines() else ""
@@ -308,6 +325,31 @@ def parse_evidence(body: str) -> str:
         val = first.split("=", 1)[1].strip()
         return val or "none"
     return "none"
+
+
+def require_evidence(body: str, *, label: str) -> Result:
+    """Require a stable comment identity before any remote mutation.
+
+    ``none`` used to be accepted as a shared fallback marker. That made every
+    evidence-less occurrence of the same lifecycle event collapse into one
+    comment, so later task completions could appear successfully synchronized
+    without posting. Synthesized lifecycle comments are repeatable; their
+    first line therefore must carry a caller-owned, whitespace-free identity.
+    """
+    evidence = parse_evidence(body)
+    if evidence.lower() == "none":
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"{label} must start with evidence=<token>; use a stable "
+            "event-specific commit or content fingerprint so separate "
+            "lifecycle occurrences do not deduplicate together",
+            subtype="evidence",
+            details={"field": "evidence", "label": label},
+        )
+    bad_evidence = marker_component_error("evidence", evidence)
+    if bad_evidence:
+        return bad_evidence
+    return evidence
 
 
 def strip_evidence_line(body: str) -> str:

@@ -33,6 +33,7 @@ from ..wire import (
 )
 from .ledger import FLOW_DEPS_CLOSE, FLOW_DEPS_OPEN
 
+
 # ---------------------------------------------------------------------------
 # Linear
 # ---------------------------------------------------------------------------
@@ -499,6 +500,13 @@ def gitlab_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
 # GitHub - sub_issues hierarchy ONLY (never blocked-by)
 # ---------------------------------------------------------------------------
 
+_GITHUB_HIERARCHY_DEGRADED = {
+    "kind": "hierarchy",
+    "form": "sub_issues",
+    "note": "GitHub sub_issues is hierarchy, never blocked-by",
+}
+
+
 def github_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
                from_display: str, to_display: str) -> Result:
     """Degraded hierarchy: B (blocker) is parent, A (blocked) is sub-issue.
@@ -537,11 +545,7 @@ def github_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
         return data
     return {
         "projected": True, "already": False, "form": "sub_issues",
-        "degraded": {
-            "kind": "hierarchy",
-            "form": "sub_issues",
-            "note": "GitHub sub_issues is hierarchy, never blocked-by",
-        },
+        "degraded": dict(_GITHUB_HIERARCHY_DEGRADED),
     }
 
 
@@ -551,7 +555,6 @@ PROVIDERS = {
     "gitlab": gitlab_set,
     "github": github_set,
 }
-
 
 # ---------------------------------------------------------------------------
 # Probe-only presence (read, never mutate) - the 4-way ledger x remote

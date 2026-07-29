@@ -48,7 +48,8 @@ def _issue_out(raw: dict, *, parent_identity: str = "not_available") -> dict:
 
 def _comment_out(raw: dict, *, parent_identity: str) -> dict:
     return {"id": raw.get("id"), "body": raw.get("body"),
-            "url": None, "raw": raw, "parent_identity": parent_identity}
+            "url": None, "created_at": raw.get("created"),
+            "raw": raw, "parent_identity": parent_identity}
 
 def parent_read(config: dict, locator: dict, execute: Execute, *,
                 op: str = "wire-parent-read") -> Result:
@@ -92,6 +93,87 @@ def read(config: dict, locator: dict, execute: Execute) -> Result:
     if isinstance(parent, TrackerError):
         return parent
     return _issue_out(parent, parent_identity="validated")
+
+
+def pr_link(config: dict, locator: dict, execute: Execute, *, url: str) -> Result:
+    """Upsert a Jira remote link, falling back to a deduplicated URL comment."""
+    parent = parent_read(config, locator, execute, op="wire-pr-link-parent-read")
+    if isinstance(parent, TrackerError):
+        return parent
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    base = _jira_base(config, dest)
+    if isinstance(base, TrackerError):
+        return base
+    endpoint = (
+        f"{base}/rest/api/2/issue/"
+        f"{quote(str(locator['durable']), safe='')}/remotelink"
+    )
+    linked = _jira(
+        execute,
+        "wire-pr-link",
+        "POST",
+        endpoint,
+        body={
+            "globalId": f"flow-next:pr:{url}",
+            "object": {
+                "url": url,
+                "title": "Flow-Next pull request",
+            },
+        },
+        idempotent=True,
+    )
+    if not isinstance(linked, TrackerError):
+        return {
+            "linked": True,
+            "deduped": False,
+            "kind": "remote-link",
+            "url": url,
+        }
+
+    listed = comment_list(config, locator, execute)
+    if isinstance(listed, TrackerError):
+        return linked
+    comments = listed.get("comments")
+    if not isinstance(comments, list):
+        return linked
+    expected = f"Flow-Next PR: {url}"
+    for comment in comments:
+        body = comment.get("body") if isinstance(comment, dict) else None
+        if isinstance(body, str) and body.strip() == expected:
+            return {
+                "linked": False,
+                "deduped": True,
+                "kind": "comment-fallback",
+                "url": url,
+                "comment": comment,
+                "degraded": {
+                    "capability": "remote-link",
+                    "reason": linked.message,
+                },
+            }
+    if listed.get("truncated"):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "jira PR-link fallback dedup scan truncated; refusing to post",
+            subtype="dedup_truncated",
+            details={"remote_link_error": linked.message},
+        )
+    added = comment_add(config, locator, execute, body=expected)
+    if isinstance(added, TrackerError):
+        return linked
+    return {
+        "linked": True,
+        "deduped": False,
+        "kind": "comment-fallback",
+        "url": url,
+        "comment": added,
+        "degraded": {
+            "capability": "remote-link",
+            "reason": linked.message,
+        },
+    }
 
 
 def update(config: dict, locator: dict, execute: Execute, *,

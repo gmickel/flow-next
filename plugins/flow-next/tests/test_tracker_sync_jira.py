@@ -63,6 +63,7 @@ TRACKER_SKILL = REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-trac
 STEPS_MD = TRACKER_SKILL / "steps.md"
 SKILL_MD = TRACKER_SKILL / "SKILL.md"
 DOCS_TRACKER_SYNC = REPO_ROOT / "plugins" / "flow-next" / "docs" / "tracker-sync.md"
+JIRA_REF = TRACKER_SKILL / "references" / "jira.md"
 
 
 def _load_flowctl(name: str) -> Any:
@@ -450,123 +451,31 @@ class JiraReceiptTransportTestCase(unittest.TestCase):
 
 
 class JiraCeremonyWiringTestCase(unittest.TestCase):
-    """Discovery-ceremony prose wiring (R5) — presence/grep assertions.
-
-    The ceremony is prose the host agent executes, so we assert the Jira sites
-    are PRESENT (probe row, ASK option, config-writes, readiness branch), not an
-    executable shape.
-    """
+    """The skill owns deployment choice; flowctl owns Jira HTTP mechanics."""
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.steps = STEPS_MD.read_text(encoding="utf-8")
         cls.skill = SKILL_MD.read_text(encoding="utf-8")
         cls.docs = DOCS_TRACKER_SYNC.read_text(encoding="utf-8")
+        cls.jira = JIRA_REF.read_text(encoding="utf-8")
 
-    # --- probe table (R5) ---------------------------------------------------
+    def test_discovery_persists_jira_deployment_shape(self) -> None:
+        compact = " ".join(self.steps.split())
+        self.assertIn("persist the deployment shape", compact)
+        self.assertIn("API version 2 is the default", compact)
 
-    def test_steps_has_jira_rest_probe(self) -> None:
-        # The REST signal: JIRA_BASE_URL + Cloud (email+api token) OR DC PAT.
-        self.assertIn("JIRA_BASE_URL", self.steps)
-        self.assertIn("JIRA_API_TOKEN", self.steps)
-        self.assertIn("JIRA_EMAIL", self.steps)
-        self.assertIn("JIRA_PAT", self.steps)
+    def test_jira_reference_describes_transport_shape_only(self) -> None:
+        self.assertIn("Jira REST through the deterministic HTTP executor", self.jira)
+        self.assertIn("Skill prose never constructs Jira requests", self.jira)
+        self.assertNotIn("curl ", self.jira)
+        self.assertNotIn("project/$PROJ_KEY/statuses", self.jira)
 
-    def test_steps_jira_probe_has_no_mcp(self) -> None:
-        # Jira is REST-only — the probe must explicitly say NO MCP (fn-70 decision).
-        self.assertIn("NO MCP", self.steps)
-
-    def test_skill_probe_table_has_jira_rest_row(self) -> None:
-        self.assertIn("JIRA_BASE_URL", self.skill)
-        self.assertIn("Jira REST", self.skill)
-        # The old "out of scope / surface but don't offer" framing is gone.
-        self.assertNotIn("out of scope here — surface but don't offer", self.skill)
-
-    def test_probe_count_wording_updated_to_six(self) -> None:
-        # The PROBE-count wording must read SIX (Linear MCP, LINEAR_API_KEY,
-        # GitHub, GitLab, Jira REST). Scope the negative assertion to the probe
-        # phrasing — steps.md legitimately says "four signals" elsewhere about
-        # the RALPH autonomy-marker family, which is a DIFFERENT four and stays.
-        self.assertIn("probes six signals", self.skill)
-        self.assertIn("Probe these six signals", self.skill)
-        self.assertIn("Probe the six signals", self.steps)
-        self.assertNotIn("probes five signals", self.skill)
-        self.assertNotIn("Probe these five signals", self.skill)
-        self.assertNotIn("Probe the five signals", self.steps)
-        # docs/tracker-sync.md probe-table header must match the six-row table
-        # (rp-review P3: the count header lagged the added Jira row).
-        self.assertIn("Six probed signals", self.docs)
-        self.assertNotIn("Five probed signals", self.docs)
-
-    # --- ASK option (R5) ----------------------------------------------------
-
-    def test_steps_ask_offers_jira(self) -> None:
-        # The tracker-choice question must offer jira alongside the others.
-        self.assertIn("`jira`", self.steps)
-
-    # --- config-write block (R5) --------------------------------------------
-
-    def test_steps_config_write_emits_jira_keys(self) -> None:
-        self.assertIn("tracker.perTracker.baseUrl", self.steps)
-        self.assertIn("tracker.perTracker.projectKey", self.steps)
-        self.assertIn("tracker.perTracker.authScheme", self.steps)
-        self.assertIn("tracker.perTracker.apiVersion", self.steps)
-        # tracker.type jira is offered as a write choice.
-        self.assertIn("jira", self.steps)
-
-    def test_skill_config_write_emits_jira_keys(self) -> None:
-        self.assertIn("tracker.perTracker.baseUrl", self.skill)
-        self.assertIn("tracker.perTracker.projectKey", self.skill)
-        self.assertIn("tracker.perTracker.authScheme", self.skill)
-        self.assertIn("tracker.perTracker.apiVersion", self.skill)
-
-    # --- readiness ceremony branch (R5) -------------------------------------
-
-    def test_steps_has_jira_readiness_branch(self) -> None:
-        # A dedicated Jira readiness branch — a workflow STATUS NAME (like Linear,
-        # not a label), validated against the project's statuses when creds are
-        # present, else skip → no-op backlog lane.
-        self.assertIn("/rest/api/", self.steps)
-        self.assertIn("project/$PROJ_KEY/statuses", self.steps)
-        self.assertIn("READY_OK", self.steps)
-        self.assertIn("tracker.readyState", self.steps)
-
-    def test_steps_jira_readiness_uses_persisted_auth_scheme(self) -> None:
-        # rp-review fix: the readiness validation must branch on the CEREMONY-
-        # PERSISTED authScheme (decided once, R5), NOT re-race which JIRA_* env
-        # var happens to be set. Assert it reads the persisted config + branches
-        # on cloud-basic / bearer-pat by name, and resolves baseUrl/projectKey
-        # config-first (env baseUrl override only).
-        self.assertIn("tracker.perTracker.authScheme", self.steps)
-        self.assertIn("cloud-basic)", self.steps)
-        self.assertIn("bearer-pat)", self.steps)
-        self.assertIn("tracker.perTracker.projectKey", self.steps)
-        self.assertIn("tracker.perTracker.baseUrl", self.steps)
-
-    def test_steps_jira_readiness_distinguishes_config_error_from_floor(self) -> None:
-        # rp-review fix #2: the readiness branch must NOT collapse "no creds"
-        # (spec-first floor → accept-on-faith) with "creds present but
-        # baseUrl/projectKey missing" (a config error → never write an
-        # unvalidated readyState). Assert the three-way split: a CRED_OK=0 floor
-        # path, a config-incomplete path that does NOT write, and a separate
-        # READY_WRITE gate on the actual config-set.
-        self.assertIn('[ "$CRED_OK" = 0 ]', self.steps)
-        self.assertIn("READY_WRITE", self.steps)
-        # The config-set is gated on BOTH READY_OK and READY_WRITE — so the
-        # config-error path (READY_WRITE=0) can never persist a readyState.
-        self.assertIn(
-            '[ "$READY_OK" = 1 ] && [ "$READY_WRITE" = 1 ] && $FLOWCTL config set tracker.readyState',
-            self.steps,
-        )
-
-    # --- tracker-first caveat (R6-identity) ---------------------------------
-
-    def test_steps_phase2_caveat_says_jira_tracker_first(self) -> None:
-        # Jira PROJ-123 IS KEY-N → tracker-first like Linear. GitHub/GitLab also
-        # support tracker-first via synthetic keys (fn-134); the Phase 2 caveat
-        # still names the Jira path explicitly.
-        self.assertIn("Jira grabs go TRACKER-FIRST", self.steps)
-        self.assertIn("PROJ-123", self.steps)
+    def test_jira_reference_preserves_persisted_auth_choice(self) -> None:
+        self.assertIn("Cloud | email plus API token | 2", self.jira)
+        self.assertIn("Data Center/Server | bearer PAT | 2 by default", self.jira)
+        self.assertIn("Runtime never", self.jira)
+        self.assertIn("re-races credentials", self.jira)
 
 
 if __name__ == "__main__":

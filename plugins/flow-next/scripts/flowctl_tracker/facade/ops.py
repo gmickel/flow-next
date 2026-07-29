@@ -25,11 +25,13 @@ from ..resolve_verb import bound_executor
 from ..syncbody import sync_body
 from ..types import ErrorClass, TrackerError
 from ..wire import dispatch as wire_dispatch
+from ..wire import link_pr as wire_link_pr
+from ..wire import validate_pr_url
 from .helpers import (collect_degraded, comments_have_marker,
                       comments_snapshot, format_marker, link_state_of,
                       live_comments_snapshot, load_tracker, local_spec_md,
                       locator_of,
-                      marker_component_error, parse_evidence,
+                      require_evidence,
                       read_comments_file, read_text_file,
                       step_status_from_sync_body, strip_evidence_line,
                       worst_status, write_aggregate_receipt)
@@ -186,7 +188,9 @@ def _claim_facade(flow_dir: Path, spec_id: str, rec_path: Path,
 
 
 def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
-            event: str, execute: Execute = default_execute) -> Result:
+            event: str, comment_file: Optional[str] = None,
+            status_only: bool = False,
+            execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
     provider = tracker_type(config)
     if provider is None:
@@ -198,6 +202,17 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
     tracker_body = read_text_file(body_file, label="--body-file")
     if isinstance(tracker_body, TrackerError):
         return tracker_body
+    comment_text = None
+    comment_evidence = None
+    if comment_file is not None:
+        raw_comment = read_text_file(comment_file, label="--comment-file")
+        if isinstance(raw_comment, TrackerError):
+            return raw_comment
+        comment_evidence = require_evidence(
+            raw_comment, label="--comment-file")
+        if isinstance(comment_evidence, TrackerError):
+            return comment_evidence
+        comment_text = strip_evidence_line(raw_comment)
 
     # One spec-identity claim across the whole create -> sync-body -> status
     # -> receipt sequence, so a relink cannot split the push across two
@@ -212,7 +227,9 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
         return _push_sequence(
             flow_dir, spec_id, flow_body=flow_body,
             tracker_body=tracker_body, config=config, provider=provider,
-            event=event, execute=execute)
+            event=event, comment_text=comment_text,
+            comment_evidence=comment_evidence,
+            status_only=status_only, execute=execute)
     finally:
         # Release on every exit: the aggregate receipt, not the claim file,
         # is the durable record of what landed.
@@ -221,7 +238,9 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
 
 def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
                    tracker_body: str, config: dict, provider: str,
-                   event: str, execute: Execute) -> Result:
+                   event: str, comment_text: Optional[str],
+                   comment_evidence: Optional[str],
+                   status_only: bool, execute: Execute) -> Result:
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
@@ -247,26 +266,28 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     steps["create"] = created
     degraded = collect_degraded(created) or degraded
 
-    body_out = sync_body(
-        flow_dir, spec_id, flow_file_body=flow_body, direction="push",
-        tracker_body=tracker_body, event=event, execute=execute,
-        sync_title=True, write_receipt=False,
-    )
-    if isinstance(body_out, TrackerError):
-        prior = list((body_out.details or {}).get("completed_steps") or [])
-        if prior:
-            completed.append("sync-body-partial")
-        loaded_p = load_tracker(flow_dir, spec_id)
-        tid = loaded_p[2].get("id") if not isinstance(loaded_p, TrackerError) else None
-        return fail_result(
-            body_out, completed=completed, statuses=statuses,
-            flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=tid, transport=provider, degraded=degraded,
+    if not status_only:
+        body_out = sync_body(
+            flow_dir, spec_id, flow_file_body=flow_body, direction="push",
+            tracker_body=tracker_body, event=event, execute=execute,
+            sync_title=True, write_receipt=False,
         )
-    completed.append("sync-body")
-    statuses.append(step_status_from_sync_body(body_out))
-    steps["sync_body"] = body_out
-    degraded = collect_degraded(body_out) or degraded
+        if isinstance(body_out, TrackerError):
+            prior = list((body_out.details or {}).get("completed_steps") or [])
+            if prior:
+                completed.append("sync-body-partial")
+            loaded_p = load_tracker(flow_dir, spec_id)
+            tid = (loaded_p[2].get("id")
+                   if not isinstance(loaded_p, TrackerError) else None)
+            return fail_result(
+                body_out, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=tid, transport=provider, degraded=degraded,
+            )
+        completed.append("sync-body")
+        statuses.append(step_status_from_sync_body(body_out))
+        steps["sync_body"] = body_out
+        degraded = collect_degraded(body_out) or degraded
 
     status_out = run_status(
         flow_dir, spec_id, config=config, event=event, execute=execute,
@@ -283,20 +304,40 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     steps["status"] = status_out
     degraded = collect_degraded(status_out) or degraded
 
-    relations_out = _project_relations(
-        flow_dir, spec_id, event=event, execute=execute,
-        completed=completed, statuses=statuses,
-    )
-    if isinstance(relations_out, TrackerError):
-        loaded_p = load_tracker(flow_dir, spec_id)
-        tid = loaded_p[2].get("id") if not isinstance(loaded_p, TrackerError) else None
-        return fail_result(
-            relations_out, completed=completed, statuses=statuses,
-            flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=tid, transport=provider, degraded=degraded,
+    if not status_only:
+        relations_out = _project_relations(
+            flow_dir, spec_id, event=event, execute=execute,
+            completed=completed, statuses=statuses,
         )
-    steps["relations"] = relations_out
-    degraded = collect_degraded(relations_out) or degraded
+        if isinstance(relations_out, TrackerError):
+            loaded_p = load_tracker(flow_dir, spec_id)
+            tid = (loaded_p[2].get("id")
+                   if not isinstance(loaded_p, TrackerError) else None)
+            return fail_result(
+                relations_out, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=tid, transport=provider, degraded=degraded,
+            )
+        steps["relations"] = relations_out
+        degraded = collect_degraded(relations_out) or degraded
+
+    if comment_text is not None and comment_evidence is not None:
+        comment_out = _project_push_comment(
+            flow_dir, spec_id, comment_text=comment_text,
+            evidence=comment_evidence, config=config, provider=provider,
+            event=event, execute=execute, completed=completed,
+            statuses=statuses,
+        )
+        if isinstance(comment_out, TrackerError):
+            loaded_p = load_tracker(flow_dir, spec_id)
+            tid = (loaded_p[2].get("id")
+                   if not isinstance(loaded_p, TrackerError) else None)
+            return fail_result(
+                comment_out, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=tid, transport=provider, degraded=degraded,
+            )
+        steps["comment"] = comment_out
 
     loaded2 = load_tracker(flow_dir, spec_id)
     tracker_id = None
@@ -318,6 +359,7 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
 
     return ok_result({
         "op": "push",
+        "status_only": status_only,
         "steps": steps,
         "tracker_id": tracker_id,
     }, statuses=statuses, completed=completed, degraded=degraded)
@@ -526,11 +568,16 @@ def _pull_sequence(flow_dir: Path, spec_id: str, *, event: str,
 def op_reconcile(flow_dir: Path, spec_id: str, *, flow_file: str,
                  body_file: str, comments_file: str,
                  source_body_file: str, event: str,
+                 pr_url: Optional[str] = None,
                  execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
+    if pr_url is not None:
+        invalid_pr_url = validate_pr_url(pr_url)
+        if invalid_pr_url is not None:
+            return invalid_pr_url
 
     flow_body = read_text_file(flow_file, label="--flow-file")
     if isinstance(flow_body, TrackerError):
@@ -564,7 +611,8 @@ def op_reconcile(flow_dir: Path, spec_id: str, *, flow_file: str,
             flow_dir, spec_id, flow_body=flow_body, tracker_body=tracker_body,
             source_tracker_body=source_tracker_body,
             expected_comments=expected_comments,
-            config=config, provider=provider, event=event, execute=execute)
+            config=config, provider=provider, event=event, pr_url=pr_url,
+            execute=execute)
     finally:
         _release_claim(rec_path)
 
@@ -573,7 +621,8 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
                         tracker_body: str, source_tracker_body: str,
                         expected_comments: list,
                         config: dict, provider: str,
-                        event: str, execute: Execute) -> Result:
+                        event: str, pr_url: Optional[str],
+                        execute: Execute) -> Result:
     completed: list = []
     statuses: list = []
     steps: dict[str, Any] = {}
@@ -701,6 +750,21 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     completed.append("comments")
     statuses.append("pulled")
     steps["comments"] = comments_out
+
+    if pr_url is not None:
+        pr_link_out = wire_link_pr(
+            provider, config, locator, ex, url=pr_url)
+        if isinstance(pr_link_out, TrackerError):
+            return fail_result(
+                pr_link_out, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=durable, transport=provider, degraded=degraded,
+            )
+        completed.append("pr-link")
+        statuses.append(
+            "updated" if pr_link_out.get("linked") else "noop")
+        steps["pr_link"] = pr_link_out
+        degraded = collect_degraded(pr_link_out) or degraded
 
     local_body = local_spec_md(flow_dir, spec_id)
     if isinstance(local_body, TrackerError):
@@ -912,6 +976,100 @@ def _recheck_comment_identity(flow_dir: Path, spec_id: str,
     return None
 
 
+def _project_push_comment(flow_dir: Path, spec_id: str, *,
+                          comment_text: str, evidence: str,
+                          config: dict, provider: str, event: str,
+                          execute: Execute, completed: list,
+                          statuses: list) -> Result:
+    """Post/dedup one judgment-bearing comment inside the push facade claim.
+
+    The caller already completed create/link and paired-base work. This helper
+    adds only the marker-claimed list -> optional add sequence, leaving the
+    push facade to write the single aggregate receipt for status, relations,
+    and comment together.
+    """
+    loaded = load_tracker(flow_dir, spec_id)
+    if isinstance(loaded, TrackerError):
+        return loaded
+    _path, _spec, tracker = loaded
+    durable = require_durable(tracker)
+    if isinstance(durable, TrackerError):
+        return durable
+    locator = locator_of(tracker)
+    if isinstance(locator, TrackerError):
+        return locator
+
+    marker = format_marker(
+        issue=str(durable), spec_id=spec_id, event=event, evidence=evidence)
+    marker_rec_path = _comment_claim_path(
+        flow_dir, issue=str(durable), spec=spec_id, event=event,
+        evidence=evidence)
+    claimed = _claim_comment_marker(
+        flow_dir, spec_id, marker_rec_path, provider, event=event,
+        marker=marker)
+    if claimed is not None:
+        return claimed
+
+    try:
+        drift = _recheck_comment_identity(flow_dir, spec_id, locator)
+        if drift is not None:
+            return drift
+        ex = bound_executor(config, execute)
+        listed = wire_dispatch(
+            "comment-list", config, locator=locator, execute=ex)
+        if isinstance(listed, TrackerError):
+            return listed
+        comments = listed.get("comments") if isinstance(listed, dict) else None
+        if not isinstance(comments, list):
+            comments = []
+
+        if comments_have_marker(
+                comments, issue=str(durable), spec=spec_id,
+                event=event, evidence=evidence):
+            completed.append("comment-dedup")
+            statuses.append("noop")
+            return {
+                "posted": False,
+                "deduped": True,
+                "marker": marker,
+                "tracker_id": durable,
+            }
+
+        if isinstance(listed, dict) and listed.get("truncated"):
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "comment dedup scan truncated at drain cap; "
+                "marker absence unproven, refusing to post",
+                subtype="dedup_truncated",
+                details={
+                    "truncated": True,
+                    "event": event,
+                    "issue": str(durable),
+                },
+            )
+
+        drift = _recheck_comment_identity(flow_dir, spec_id, locator)
+        if drift is not None:
+            return drift
+        posted_body = f"{marker}\n\n{comment_text}"
+        added = wire_dispatch(
+            "comment-add", config, locator=locator, body=posted_body,
+            execute=ex)
+        if isinstance(added, TrackerError):
+            return added
+        completed.append("comment-add")
+        statuses.append("updated")
+        return {
+            "posted": True,
+            "deduped": False,
+            "marker": marker,
+            "comment": added,
+            "tracker_id": durable,
+        }
+    finally:
+        _release_claim(marker_rec_path)
+
+
 def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
                execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
@@ -922,14 +1080,9 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
     raw_body = read_text_file(body_file, label="--body-file")
     if isinstance(raw_body, TrackerError):
         return raw_body
-    evidence = parse_evidence(raw_body)
-    # Evidence is a marker field and part of the claim key: a value the
-    # emitted marker cannot round-trip through _MARKER_RE would post once
-    # and then duplicate on every retry (the dedup scan never matches).
-    # Reject BEFORE any wire call and before the claim is taken.
-    bad_evidence = marker_component_error("evidence", evidence)
-    if bad_evidence:
-        return bad_evidence
+    evidence = require_evidence(raw_body, label="--body-file")
+    if isinstance(evidence, TrackerError):
+        return evidence
     comment_text = strip_evidence_line(raw_body)
 
     # One spec-identity claim across the whole create -> marker scan ->

@@ -98,8 +98,8 @@ class TestCursorAgentFrontmatter(unittest.TestCase):
         """Agents that retain Edit or Write must not carry readonly: true.
 
         Derived: any agent that does NOT deny both Edit and Write. Named
-        examples (worker / plan-sync / pr-comment-resolver / tracker-runner)
-        are writing agents but the check is property-based, not a roster.
+        examples (worker / plan-sync / pr-comment-resolver) are writing agents
+        but the check is property-based, not a roster.
         """
         writers_with_readonly: list[str] = []
         writers_seen = 0

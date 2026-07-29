@@ -11,7 +11,7 @@
   "candidate_prompt_hashes": {
     "plugins/flow-next/references/html-artifacts.md": "9c2cd74ef1149979d2771b295fac72d47fe77c53036c66d72f1e03e23501c82e",
     "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "5130d4129574121f2f09c81a7ba7ecbaf8540e23802d6cfe69fe8df201f8c51f",
-    "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md": "4b7aebfd7391d377f15340ca566d88d4b3d07ce15585592d88a2c310473306aa",
+    "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md": "05e7f9e3994f897c8aede9c1e2e0a00774ce238fd363d4fd607e79864dbcb77e",
     "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "804ebc2d31cc89f09b51333a0b5ed84987994c3b616d120116db2a2e32b625f1",
     "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md": "bf7c72d18be2764733a1d211145ff996a711b3c72994e9cd18897dbfa8acb2f0",
     "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "031f8eeffd8847b986244eb2cf7c196f8936d7c34ef04a0049b64a6eacba9fbd"
@@ -47,34 +47,34 @@
       },
       "html-off": {
         "b1_chars": 191058,
-        "candidate_chars": 183796,
-        "delta_chars": -7262
+        "candidate_chars": 183722,
+        "delta_chars": -7336
       },
       "html-on": {
         "b1_chars": 210653,
-        "candidate_chars": 211103,
-        "delta_chars": 450,
+        "candidate_chars": 211029,
+        "delta_chars": 376,
         "note": "Selected HTML path pays the direct-reference router overhead; no wall-time claim."
       },
       "create": {
         "b1_chars": 191058,
-        "candidate_chars": 183796,
-        "delta_chars": -7262
+        "candidate_chars": 183722,
+        "delta_chars": -7336
       },
       "finalize": {
         "b1_chars": 179412,
-        "candidate_chars": 172150,
-        "delta_chars": -7262
+        "candidate_chars": 172076,
+        "delta_chars": -7336
       },
       "existing-pr": {
         "b1_chars": 179412,
-        "candidate_chars": 172150,
-        "delta_chars": -7262
+        "candidate_chars": 172076,
+        "delta_chars": -7336
       },
       "push-retry": {
         "b1_chars": 179412,
-        "candidate_chars": 172150,
-        "delta_chars": -7262
+        "candidate_chars": 172076,
+        "delta_chars": -7336
       }
     },
     "required_reads": {

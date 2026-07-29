@@ -876,13 +876,25 @@ If a future enhancement adds a `--commit` flag, Phase 5 would gain a "stage + co
 
 ```bash
 LEAF="$("$FLOWCTL" config get tracker.perEvent.capture --json | jq -r '.value')"
+case "$LEAF" in
+  pull)      OP="pull" ;;
+  push)      OP="push" ;;
+  reconcile) OP="reconcile" ;;
+  comment)   OP="comment" ;;
+  off|null)  OP="off" ;;
+  *)         OP="off" ;; # malformed config stays silent
+esac
 if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
-  # Invoke the flow-next-tracker-sync skill: push/pull/reconcile the spec body
-  # (operation follows the perEvent leaf — push | pull | reconcile).
-  #   skill: flow-next-tracker-sync   (operation: <leaf> <SPEC_ID>, event: capture)
-  # No-ops cleanly if no transport is reachable; genuine body conflicts surface
-  # scoped (interactive) or queue (Ralph — but capture is Ralph-blocked anyway).
+   && [ "$OP" != "off" ]; then
+  # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
+  # operation-specific 0600 input files, then makes exactly one lifecycle call:
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event capture <legal file flags>
+  # For OP=comment, Capture synthesizes the comment content by name: a compact
+  # created/updated-spec summary plus the captured context. The 0600
+  # --body-file FIRST line is `evidence=<sha256-of-current-spec-file>`; delete
+  # the file after the call. No content travels in argv.
+  # No reachable transport is best-effort; genuine body conflicts surface scoped
+  # (interactive) or queue (Ralph, though capture itself is Ralph-blocked).
   :
 fi
 ```
@@ -937,7 +949,7 @@ When `HTML_LENS = true`: **read [`references/html-lens.md`](references/html-lens
 
 **Goal:** print the suggested next step. The deliverable is the new spec; this footer tells the user what to do with it.
 
-**Tracker-sync end-of-run check — runs BEFORE the footer.** Read-only audit: did the capture touchpoint (5.7) actually fire (receipt-backed)? It runs independently of 5.7, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the footer slot then reads `n/a (bridge inactive)` and nothing else changes. (Capture is Ralph-blocked, so there is no stdout-routing concern — the slot prints where the footer prints.) Join first: before running this `sync check`, await any outstanding `tracker-runner` dispatches for this spec (join-before-audit, [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md)).
+**Tracker-sync end-of-run check - runs BEFORE the footer.** Read-only audit: did the capture touchpoint (5.7) actually fire (receipt-backed)? It runs independently of 5.7, so a wholesale-skipped facade call is still caught. With no tracker configured, `sync check` exits silently in constant time; the footer slot then reads `n/a (bridge inactive)` and nothing else changes. (Capture is Ralph-blocked, so there is no stdout-routing concern; the slot prints where the footer prints.)
 
 ```bash
 # --since: the run anchor written at the Phase-5 write step (5.2/5.3). Fallback:
@@ -961,7 +973,7 @@ fi
 **Retro-fire on MISSING — exactly ONE cycle, never blocking:**
 
 1. Record the retro-fire start anchor and echo it (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
-2. Invoke the **flow-next-tracker-sync skill directly** — the same dispatch as 5.7, with its `event:` tag: `skill: flow-next-tracker-sync (operation: <leaf> <SPEC_ID>, event: capture)` — NEVER this check block as a wrapper (no recursion).
+2. Invoke the **inline flow-next-tracker-sync wrapper directly**. Re-resolve the operation with 5.7's complete `off | pull | push | reconcile | comment` mapping. For `comment`, Capture re-synthesizes the created/updated-spec summary plus captured context in a mode `0600` body file. The wrapper prepares the other legal operation inputs, makes exactly one `flowctl tracker sync <spec-id> --op <op> --event capture <legal file flags>` call, and deletes the temporary files. NEVER invoke this check block as a wrapper.
 3. Re-check with `--since` = the step-1 anchor:
    `"$FLOWCTL" sync check "$SPEC_ID" --events capture --since "<retro-fire-start>" --json`
 4. Record the final state in the footer slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the spec is already on disk; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.

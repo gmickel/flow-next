@@ -599,7 +599,7 @@ Ralph closes done specs at the end of the loop.
 
 Then push + open PR if user wants.
 
-**Tracker-sync end-of-run check — LAST action before the final summary.** Read-only audit: did every lifecycle touchpoint that triggered this run actually fire (receipt-backed)? It runs independently of the touchpoints, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the summary slot then reads `n/a (bridge inactive)` and nothing else changes. Join first: before running this `sync check`, await any outstanding `tracker-runner` dispatches for this spec (join-before-audit, [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md)).
+**Tracker-sync end-of-run check - LAST action before the final summary.** Read-only audit: did every lifecycle touchpoint that triggered this run actually fire (receipt-backed)? It runs independently of the touchpoints, so a wholesale-skipped facade call is still caught. With no tracker configured, `sync check` exits silently in constant time; the summary slot then reads `n/a (bridge inactive)` and nothing else changes.
 
 ```bash
 # Tasks worked this run = the task ids Phase 3 claimed/completed (you know these
@@ -633,10 +633,10 @@ EVENTS="work.firstClaim,work.done"   # ← substitute the actual triggered set
 **Retro-fire on MISSING — exactly ONE cycle, never blocking:**
 
 1. Record the retro-fire start anchor and echo it (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
-2. For each MISSING event, invoke the **flow-next-tracker-sync skill directly** — the same dispatch as the touchpoint that missed, with its `event:` tag — NEVER this check block as a wrapper (no recursion):
-   - `work.firstClaim` → `skill: flow-next-tracker-sync (operation: push <spec-id>, status-only, event: work.firstClaim)`
-   - `work.done` → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.done)`
-   - completion review → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: completionReview)` — comment-shaped (verdict + R-ID coverage as evidence), NEVER terminal (fn-66). Event key is the TOP-LEVEL `completionReview` (matches the `tracker.perEvent.completionReview` leaf — a `work.`-prefixed tag resolves no leaf and the audit can never clear or miss it)
+2. For each MISSING event, invoke the **inline flow-next-tracker-sync wrapper directly**. It prepares the same approved inputs as the missed touchpoint and makes exactly one facade call with the event tag. NEVER invoke this check block as a wrapper:
+   - `work.firstClaim` → `flowctl tracker sync <spec-id> --op push --status-only --event work.firstClaim <legal file flags>`
+   - `work.done` → Work re-synthesizes the task done summary plus tests, commits, and PR evidence; the 0600 body starts with the same stable per-task `evidence=<task-id>@<final-evidence-commit-sha>` (or task-evidence fingerprint) required by the primary touchpoint, then Work calls `flowctl tracker sync <spec-id> --op comment --event work.done --body-file <0600-file>`
+   - completion review: Work re-synthesizes the verdict plus R-ID coverage; the 0600 body starts with `evidence=<reviewed-head-sha>`, then Work calls `flowctl tracker sync <spec-id> --op comment --event completionReview --body-file <0600-file>`. This is comment-shaped and NEVER terminal (fn-66). Event key is the TOP-LEVEL `completionReview` (matches the `tracker.perEvent.completionReview` leaf; a `work.`-prefixed tag resolves no leaf and the audit can never clear or miss it)
 3. Re-check the missed events only, `--since` = the step-1 anchor:
    `"$FLOWCTL" sync check "$SPEC_ID" --events "<missed-csv>" --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the work is already done; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
@@ -651,13 +651,6 @@ Review: <verdict | n/a>
 Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B>   # one line per outcome; repeat for each
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
 ```
-
-When any touchpoint ran as a forked `tracker-runner` dispatch this run, append one
-`Tracker runner:` line per dispatch under the `Tracker sync:` slot, carrying the
-runner's parsed terminal outcome verbatim (`<event>: TRACKER_RUNNER=<status> note="..."`).
-The aggregate slot proves the audit ran; these lines surface WHAT each runner
-reported — `sync check` counts any receipt as fired, so an `errored`/`queued`
-outcome is visible only here. Inline (non-forked) touchpoints add no line.
 
 ## Definition of Done
 

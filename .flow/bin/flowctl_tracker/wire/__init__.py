@@ -1,7 +1,12 @@
-"""Wire verbs: locator-addressed tracker operations with no local state (fn-140.1).
+"""Wire verbs: locator-addressed tracker operations (fn-140.1).
 
 Wire verbs take a locator `{durable, display}` (except `list-open`), touch no
-config / receipt, and every WRITE validates the parent BEFORE mutating:
+config / receipt, and every WRITE validates the parent BEFORE mutating.
+`question` additionally uses one transient local claim to serialize its
+list-then-add dedup transaction; the claim is always released and is not a
+receipt.
+
+Every write validates the parent before mutating:
 
     1. resolve the display address → one parent read
     2. compare the returned durable id to `locator.durable`
@@ -32,13 +37,21 @@ Per-provider verb bodies live in `wire/{github,gitlab,linear,jira}.py`.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
+from urllib.parse import urlparse
 
 from .. import envelope
 from ..executor import execute as default_execute
+from ..question_claim import (
+    claim_question,
+    question_claim_path,
+    release_question_claim,
+)
 from ..types import (ErrorClass, Request, Response, TrackerError,
                      gitlab_cli_hostname)
 
@@ -52,11 +65,12 @@ _JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
 #: Verbs this module owns. `attach` / `attach-get` delegate to attach/ (fn-140.4).
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
-    "comment-delete", "label", "assign", "list-open", "attach", "attach-get",
+    "comment-delete", "label", "assign", "list-open", "relation-list",
+    "question", "attach", "attach-get",
 )
 WRITE_VERBS = frozenset({
     "update", "comment-add", "comment-update", "comment-delete", "label", "assign",
-    "attach",
+    "question", "attach",
 })
 #: Verbs that require a parent locator. attach-get and list-open are context-free.
 LOCATOR_VERBS = frozenset(v for v in WIRE_VERBS if v not in ("list-open", "attach-get"))
@@ -66,6 +80,23 @@ LINEAR_GQL = "https://api.linear.app/graphql"
 
 Result = Union[dict, TrackerError]
 Execute = Callable[[Request], Union[Response, TrackerError]]
+
+
+def _created_at(comment: dict) -> Optional[datetime]:
+    """Parse one normalized immutable comment timestamp."""
+    raw = comment.get("created_at")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    value = raw.strip()
+    if value.endswith("Z"):
+        value = f"{value[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -441,6 +472,131 @@ def parent_read(provider: str, config: dict, locator: dict, execute: Execute, *,
     return mod.parent_read(config, locator, execute, op=op)
 
 
+def validate_pr_url(url: Any) -> Optional[TrackerError]:
+    """Reject malformed link content before a facade claim or provider read."""
+    if not isinstance(url, str):
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "PR URL must be an absolute http(s) URL up to 2048 characters",
+            subtype="pr_url",
+        )
+    value = url.strip()
+    parsed = urlparse(value)
+    if (parsed.scheme not in ("http", "https") or not parsed.netloc
+            or any(ch.isspace() or ord(ch) < 0x20 or ord(ch) == 0x7f
+                   for ch in value)
+            or len(url) > 2048):
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "PR URL must be an absolute http(s) URL up to 2048 characters",
+            subtype="pr_url",
+        )
+    return None
+
+
+def link_pr(provider: str, config: dict, locator: dict, execute: Execute, *,
+            url: str) -> Result:
+    """Project one PR URL through the provider's native non-closing link."""
+    invalid = validate_pr_url(url)
+    if invalid is not None:
+        return invalid
+    mod = _PROVIDERS.get(provider)
+    if mod is None:
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"unknown tracker type {provider!r}",
+            subtype="provider",
+        )
+    return mod.pr_link(config, locator, execute, url=url.strip())
+
+
+def _dispatch_question(*, mod: Any, provider: str, config: dict,
+                       locator: dict, execute: Execute, body: str,
+                       question_id: str) -> Result:
+    """Read the current semantic round and post only when no round is open."""
+    marker = f"<!-- flow-next:question id={question_id} status=open -->"
+    listed = mod.comment_list(config, locator, execute)
+    if isinstance(listed, TrackerError):
+        return listed
+    comments = listed.get("comments")
+    if not isinstance(comments, list):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "question comment list is malformed",
+            subtype="malformed_body")
+    if listed.get("truncated"):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "question comment pages truncated; latest round is unproven",
+            subtype="truncated")
+    question_pattern = re.compile(
+        rf"<!--\s*flow-next:question\s+id={re.escape(question_id)}"
+        r"(?:\s+status=[A-Za-z0-9_-]+)?\s*-->")
+    answer_pattern = re.compile(
+        rf"<!--\s*flow-next:answer\s+id={re.escape(question_id)}\s*-->")
+    questions = []
+    answers = []
+    for comment in comments:
+        comment_body = comment.get("body") if isinstance(comment, dict) else None
+        if not isinstance(comment_body, str):
+            continue
+        if question_pattern.search(comment_body):
+            questions.append(comment)
+        if answer_pattern.search(comment_body):
+            answers.append(comment)
+
+    current_question = questions[-1] if questions else None
+    reopen = False
+    if questions and answers:
+        timed_questions = [(_created_at(c), c) for c in questions]
+        timed_answers = [(_created_at(c), c) for c in answers]
+        if (any(stamp is None for stamp, _ in timed_questions)
+                or any(stamp is None for stamp, _ in timed_answers)):
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "question and answer markers need immutable created_at "
+                "timestamps to determine the latest round",
+                subtype="malformed_body")
+        latest_question = max(timed_questions, key=lambda row: row[0])
+        latest_answer = max(timed_answers, key=lambda row: row[0])
+        if latest_question[0] == latest_answer[0]:
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "question and answer chronology is ambiguous",
+                subtype="malformed_body")
+        current_question = latest_question[1]
+        reopen = latest_answer[0] > latest_question[0]
+
+    if current_question is not None and not reopen:
+        # GitHub and GitLab comment-list routes address the parent by
+        # display number/IID. Accept a dedup match only after durable
+        # identity is proven, either by the comment payload itself or
+        # by an explicit display-addressed parent read.
+        if (provider in ("github", "gitlab")
+                and current_question.get("parent_identity") != "validated"):
+            parent = mod.parent_read(
+                config, locator, execute,
+                op="wire-question-parent-read")
+            if isinstance(parent, TrackerError):
+                return parent
+        return {
+            "posted": False,
+            "question_id": question_id,
+            "comment": current_question,
+        }
+    rendered = f"{marker}\n\n{body.lstrip()}"
+    added = mod.comment_add(
+        config, locator, execute, body=rendered)
+    if isinstance(added, TrackerError):
+        return added
+    return {
+        "posted": True,
+        "reopened": reopen,
+        "question_id": question_id,
+        "comment": added,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Dispatch + CLI entry
 # ---------------------------------------------------------------------------
@@ -448,10 +604,15 @@ def parent_read(provider: str, config: dict, locator: dict, execute: Execute, *,
 def dispatch(verb: str, config: dict, *, locator: Any = None,
              title: Optional[str] = None, body: Optional[str] = None,
              comment_id: Optional[str] = None,
+             subject_id: Optional[str] = None,
+             blocked_stage: Optional[str] = None,
+             reason_code: Optional[str] = None,
+             question_slug: Optional[str] = None,
              add: Optional[list] = None, remove: Optional[list] = None,
              file_path: Optional[str] = None,
              attachment_id: Optional[str] = None,
              out_path: Optional[str] = None,
+             flow_dir: Optional[Path] = None,
              execute: Execute = default_execute) -> Result:
     """Run one wire verb. Returns data dict or TrackerError — never raises."""
     if verb not in WIRE_VERBS:
@@ -520,6 +681,57 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
         return mod.assign(config, parsed, execute, add=add, remove=remove)  # type: ignore[arg-type]
     if verb == "list-open":
         return mod.list_open(config, execute)
+    if verb == "relation-list":
+        from ..relate import listing as relation_listing  # noqa: PLC0415
+        return relation_listing.list_relations(
+            provider, config, execute, locator=parsed)  # type: ignore[arg-type]
+    if verb == "question":
+        if body is None:
+            return TrackerError(
+                ErrorClass.INVALID_INPUT,
+                "question requires --body-file",
+                subtype="body")
+        identity = {
+            "subject-id": subject_id,
+            "blocked-stage": blocked_stage,
+            "reason-code": reason_code,
+            "question-slug": question_slug,
+        }
+        for name, value in identity.items():
+            if (not isinstance(value, str) or not value.strip()
+                    or "\0" in value or len(value) > 256):
+                return TrackerError(
+                    ErrorClass.INVALID_INPUT,
+                    f"question requires --{name} (1-256 non-NUL characters)",
+                    subtype=name.replace("-", "_"))
+        stable = "\0".join(str(value).strip() for value in identity.values())
+        question_id = hashlib.sha256(stable.encode()).hexdigest()[:16]
+        if flow_dir is None:
+            return TrackerError(
+                ErrorClass.INVALID_INPUT,
+                "question requires the .flow directory for concurrency-safe "
+                "deduplication",
+                subtype="flow_dir")
+        if parsed is None:
+            return TrackerError(
+                ErrorClass.INVALID_INPUT,
+                "question requires the parent locator",
+                subtype="locator")
+        rec_path = question_claim_path(
+            Path(flow_dir), provider=provider,
+            durable=str(parsed["durable"]), question_id=question_id)
+        claimed = claim_question(
+            Path(flow_dir), rec_path, provider=provider,
+            durable=str(parsed["durable"]), question_id=question_id,
+            subject_id=str(subject_id))
+        if claimed is not None:
+            return claimed
+        try:
+            return _dispatch_question(
+                mod=mod, provider=provider, config=config, locator=parsed,
+                execute=execute, body=body, question_id=question_id)
+        finally:
+            release_question_claim(rec_path)
     return TrackerError(ErrorClass.INVALID_INPUT, f"unhandled verb {verb!r}", subtype="verb")
 
 
@@ -533,6 +745,8 @@ def _read_config(flow_dir) -> dict:
 
 def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None,
         body_file: Optional[str] = None, comment_id: Optional[str] = None,
+        subject_id: Optional[str] = None, blocked_stage: Optional[str] = None,
+        reason_code: Optional[str] = None, question_slug: Optional[str] = None,
         add: Optional[list] = None, remove: Optional[list] = None,
         file_path: Optional[str] = None, attachment_id: Optional[str] = None,
         out_path: Optional[str] = None,
@@ -579,9 +793,13 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
     try:
         try:
             out = dispatch(verb, config, locator=locator, title=title, body=body,
-                           comment_id=comment_id, add=add, remove=remove,
+                           comment_id=comment_id, subject_id=subject_id,
+                           blocked_stage=blocked_stage,
+                           reason_code=reason_code, question_slug=question_slug,
+                           add=add, remove=remove,
                            file_path=file_path, attachment_id=attachment_id,
-                           out_path=out_path, execute=ex)
+                           out_path=out_path, flow_dir=Path(flow_dir),
+                           execute=ex)
         except Exception as exc:  # noqa: BLE001 - envelope boundary
             out = TrackerError(
                 ErrorClass.TRANSPORT,

@@ -139,9 +139,8 @@ is the agent's read in Phase 2, never a flowctl field.
 
 Union in the **tracker-only** promoted issues that have no flow spec — tickets a
 human promoted on the board but never `capture`/`interview`'d into a spec, invisible
-to `flowctl specs`. flowctl has **no** tracker transport (architecture rule — it must
-not grow one), so the skill supplies this half via tracker-sync's transport-blind
-named op:
+to `flowctl specs`. The inline tracker-sync wrapper supplies this half through
+flowctl's deterministic tracker transport:
 
 ```text
 /flow-next:tracker-sync list-open mode:autonomous
@@ -150,7 +149,7 @@ named op:
 - It enumerates open issues at the **exact** `tracker.readyState` (the promoted lane
  — the same explicit signal as the flow `ready` flag), via the `listOpenIssues`
  adapter method. Returns normalized `issue[]` (`{id, identifier, title, status,
- labels, url}`) — **transport-blind**: backlog mode reads the struct and never
+ labels, url}`) — **provider-neutral**: backlog mode reads the struct and never
  branches on tracker type (Linear / GitHub / GitLab / Jira).
 - **`tracker.readyState` unset ⇒ `list-open` no-ops** (returns `[]` + a note): no
  promoted lane exists to filter on, so backlog mode runs the **flow-ready specs
@@ -174,10 +173,20 @@ R3 forbids. Check the parked home that applies to the item:
 
 - **Spec-backed** — scan the spec's `## Open Questions` for a
  `<!-- flow-next:question id=… status=open -->` anchor.
-- **Tracker-only** (no spec) — scan the tracker comments (from the `list-open` /
- `listComments` read) for a `flow-next:question id=… status=open` anchor with **no**
- matching `<!-- flow-next:answer id=… -->`. The parked state lives in the tracker;
- there is no spec to anchor in.
+- **Tracker-only** (no spec) — `list-open` returns issues, not comments. Before
+ deciding parked state, invoke `list-comments <tracker-id>` exactly once for
+ that candidate. It maps to the normalized `comment-list` wire read. Compare
+ matching `flow-next:question` / `flow-next:answer` markers by stable `id` and
+ immutable `created_at`: the subject is parked when its latest matching marker
+ is a question, and answered when its latest matching marker is an answer.
+ This supports repeated rounds (`question → answer → question`) without an old
+ answer falsely clearing the new question. The parked state lives in the
+ tracker; there is no spec to anchor in.
+
+ A failed or truncated comment listing, or mixed matching markers without
+ unambiguous timestamps, fails closed. Do not select that candidate from an
+ incomplete history; route the structured error and end `NEEDS_HUMAN` when it
+ prevents a safe selection.
 
 An item whose anchor has flipped to `status=answered` (a human edited the spec
 anchor, or the answer round-trip matched a tracker reply by `id` — tracker-sync
@@ -204,14 +213,21 @@ edges come from **two** sources and feed **one** existing sorter:
  opaque global `id`.** On GitLab the global id can't index the
  `/projects/:id/issues/:iid` path — the adapter needs the `<project>#<iid>` the
  identifier carries (gitlab.md § identity). `list-open` already returns `identifier`
+ for every provider. On GitHub this read validates the issue and returns no
+ dependency edges: parent/sub-issue hierarchy is not blocked-by and never feeds
+ the sorter.
  per issue, so the pilot passes that handle straight through; Linear/GitHub resolve
  their display handle the same way. (Spec-backed candidates pass the spec/tracker id,
  which resolves to the stored `tracker.identifier`.)
 
- (This routes through the `listIssueRelations` adapter method from fn-64 over the
- same transport-blind ladder — backlog mode never calls a tracker API directly. It
- is a **READ** — on pilot's dispatch allowlist, never a merge/write. No-ops when the
- bridge is inactive or the issue has no relations.)
+ (The inline tracker-sync wrapper builds
+ `{"durable":issue.id,"display":issue.identifier}` and calls
+ `flowctl tracker wire relation-list --locator "$LOCATOR" --json`; see
+ tracker-sync `steps.md` Phase 7. Backlog mode never calls a tracker API
+ directly. It is a **READ** — on pilot's dispatch allowlist, never a
+ merge/write. It no-ops when the bridge is inactive or the issue has no
+ relations. A structured `subtype: truncated` error is a failed read, never a
+ partial graph to sort.)
 
 Feed **both** edge sets — the flow `blockedBy` edges and the normalized tracker
 `relation[]` edges — into the **flow-next-deps jq topo-sort** (the phase-assignment
@@ -349,9 +365,10 @@ ticket without a workable spec is **surfaced as a gap** — "run `/flow-next:cap
 or `/flow-next:interview`" — **never auto-written**. An agent inventing scope from a
 one-line ticket is exactly the slop the valve exists to prevent.
 
-The question is posted via tracker-sync's transport-blind `question` op, which owns
-the stable-anchor authoring, the comments-sync dedup, and the answer round-trip
-(tracker-sync steps.md Phase 7 — backlog mode invokes it, never re-implements it):
+The question is posted through tracker-sync's inline `question` wrapper. The skill
+owns the semantic question and recovery choice; flowctl owns deterministic comment
+transport, marker dedup, and the normalized answer readback (tracker-sync steps.md
+Phase 7 — backlog mode invokes it, never re-implements it):
 
 ```text
 /flow-next:tracker-sync question <spec-id | tracker-id> mode:autonomous
@@ -361,6 +378,13 @@ For a **tracker-only** subject the `<tracker-id>` is the candidate's `list-open`
 `issue.identifier` (the display handle, not the opaque global id) — posting the comment
 hits `POST /projects/:id/issues/:iid/notes` on GitLab, which needs the `<project>#<iid>`
 the identifier carries (gitlab.md § identity); a spec-backed subject passes its `<spec-id>`.
+The wrapper resolves the matching durable/display locator, writes the free-prose
+body to a mode `0600` temporary file, then executes `flowctl tracker wire
+question` with `--subject-id`, `--blocked-stage`, `--reason-code`,
+`--question-slug`, and `--body-file` exactly as specified in tracker-sync
+`steps.md` Phase 7. The stable subject id is the spec id for a spec-backed item
+or normalized `issue.id` for a tracker-only item; the display handle is locator
+input only, never hash identity.
 
 Where the question parks depends on whether a spec exists:
 
@@ -428,15 +452,26 @@ selected item belongs to one.)
 
 ---
 
-## Transport-blind, multi-tracker (R13)
+## Deterministic, multi-tracker (R13)
 
-Backlog mode's tracker surface is **only** the three transport-blind named ops —
-`list-open` (enumerate the promoted lane), `list-relations` (READ one issue's dep
-edges via `listIssueRelations`), and `question` (park a gap). All three are on
-pilot's dispatch allowlist; `list-open` / `list-relations` are read-only, `question`
-posts a comment. It calls **no** tracker-specific API and **never** branches on
-tracker type; the active adapter (from `tracker.type`) supplies the wire query behind
-the normalized interface.
+Backlog mode's tracker surface is **only** four inline tracker-sync wrappers —
+`list-open` (enumerate the promoted lane), `list-comments` (READ one issue's
+question rounds), `list-relations` (READ one issue's dep edges), and `question`
+(park a gap). Each wrapper makes one structured
+`flowctl tracker` call and handles only semantic content or structured recovery.
+All four are on pilot's dispatch allowlist; `list-open` / `list-comments` /
+`list-relations` are read-only, `question` posts a comment. Pilot calls **no**
+tracker-specific API and
+**never** branches on tracker type; flowctl selects the active adapter from the
+resolved tracker configuration and returns the normalized envelope.
+
+The executable mapping is fixed:
+
+- `list-open` → `tracker wire list-open`;
+- `list-comments` → `tracker wire comment-list --locator <durable/display>`;
+- `list-relations` → `tracker wire relation-list --locator <durable/display>`;
+- `question` → `tracker wire question --locator <durable/display>` plus the four
+ stable identity flags and one secure body file.
 
 - **Ships on Linear, GitHub, GitLab + Jira** — the four adapters that implement
  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64 / fn-69 / fn-70).
@@ -452,11 +487,12 @@ the normalized interface.
  carries both `issue.id` and `issue.identifier` in the normalized struct.
  The normalized op signature is identical for every tracker; the id/iid/key derivation is an
  adapter-internal concern, so pilot still branches on **no** tracker type.
-- **Zero-setup (R17).** Each tracker resolves via tracker-sync's discovery-ceremony
- probe ladder, preferring auth the company already has (`gh`/`glab` CLI session,
- a registered Linear MCP, or a CI/REST env token — Jira is REST-token only, **no
- MCP**: fn-70's transport decision) — no flow-next-specific provisioning, OAuth app,
- webhook, or special config. The spec-first floor
+- **Zero-setup (R17).** Tracker-sync's one-time discovery ceremony resolves and
+ persists the destination, available capabilities, and existing auth
+ (`gh`/`glab` CLI session, a registered Linear MCP, or a CI/REST env token — Jira
+ is REST-token only, **no MCP**: fn-70's transport decision). Runtime operations
+ consume that resolved state through `flowctl tracker`. No flow-next-specific
+ provisioning, OAuth app, webhook, or special config is required. The spec-first floor
  guarantees the loop works with **zero** trackers configured.
 
 ---

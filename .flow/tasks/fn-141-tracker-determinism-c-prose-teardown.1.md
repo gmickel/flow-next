@@ -17,9 +17,8 @@ Measurement is mechanical, not by eye: a test asserts zero executable-invocation
 - [ ] Body-merge adjudication explicitly retained as agentic
 
 ## Done summary
-TBD
-
+Collapsed tracker-sync skill prose into deterministic transport contracts while retaining exactly five rationalized agentic judgment surfaces. Added mechanical teardown guards, migrated stale provider tests, refreshed Codex mirrors and reached-path checks, and aligned facade event and comment normalization guidance with production.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: fc714a7d3d14b5c60c02db02d1a7729d200536fa, fb1cbedbb1159f387e4d76a3abf0e2145bc39a61, 58d6d4198f802e492ad09b158893a2d9a83e0731
+- Tests: python3 plugins/flow-next/tests/test_tracker_sync_prose_teardown.py -q, python3 -m unittest discover -s plugins/flow-next/tests -p 'test_tracker_sync*.py' -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_sync_mirror_parity test_reached_path_harness -q, ./scripts/sync-codex.sh (twice, idempotent)
 - PRs:

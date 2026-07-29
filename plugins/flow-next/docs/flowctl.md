@@ -7,7 +7,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, setup-block, detect, status, config, sync, pilot-log, review-backend, models, review-rounds,
+init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, models, review-rounds,
 memory, prospect, anchor, repo-map, prime, glossary, strategy, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
 checkpoint, rp, codex, copilot, cursor,
@@ -603,7 +603,7 @@ Output:
 }
 ```
 
-Returns **deterministic eligibility facts only** for every open flow spec — `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `readySignal ∈ {local, none}` (whether that local flag is set — flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score — *workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). flowctl has **no tracker transport** and must not grow one: the **tracker-side** open items (incl. tickets with no flow spec) are unioned in by the skill from tracker-sync's adapter, not by `ready --all`. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
+Returns **deterministic eligibility facts only** for every open flow spec: `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `readySignal ∈ {local, none}` (whether that local flag is set; flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score. *Workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). `ready --all` itself performs no tracker request. The tracker-sync skill unions its output with `flowctl tracker wire list-open`, while flowctl owns that deterministic tracker transport. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
 
 ### pilot-log
 
@@ -765,7 +765,7 @@ flowctl config set memory.enabled false [--json]
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync — scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
 | `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` — cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
-| `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`sync`](#sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
+| `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`flowctl sync`](#flowctl-sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
 | `tracker.specIds` | string | `flow` (merged default; **unset-detectable** on disk) | Id scheme for new specs when a tracker bridge is active: `flow` (native `fn-N`) or `tracker` (tracker-keyed `KEY-N-slug` / synthetic `gh-N` / `gl-N`). Strict enum — invalid CLI writes rejected; malformed on-disk values fail closed to `flow`. Not materialized at init so setup can ask once when a tracker is configured and the key is still absent. Skills route to `--tracker-first` / create-first when value is `tracker` and the bridge is active. See [`tracker-sync.md`](tracker-sync.md). |
 | `tracker.provenance` | string | `null` | Free-form provenance written by the discovery ceremony on confirmation (who/when/signals). |
@@ -774,7 +774,7 @@ flowctl config set memory.enabled false [--json]
 | `tracker.perEvent.land.merged` | string | `off` | **`/flow-next:land` post-merge touchpoint (fn-60, 1.14.0+; fn-66 made it the sole `Done` driver).** After land merges a PR and closes its spec, dispatches tracker-sync (`operation: push <spec-id>`, event tag `land.merged`) — status flips to the **merge-confirmed** terminal state (`done`/`verified`, gated on the GitHub `MERGED` probe) and the merge/release verdict comment is posted. **fn-66: active-by-default whenever the bridge is active** — a real merge is the ONLY event that legitimately projects terminal `Done`, so this touchpoint rides the bridge-active predicate alone (NOT gated behind this leaf, which then only tunes the optional verdict comment). The schema default stays `off` (accidental-enable guard); the land skill fires it on bridge-active regardless. Best-effort — a tracker failure never blocks land's tail or changes the PR's verdict. |
 | `tracker.perTracker.teamId` / `projectId` / `labelMap` / `priorityMap` | mixed | `null` / `{}` | Per-tracker linkage hints (Linear team/project ids; label/priority maps). |
 | `tracker.perTracker.repo` / `project` / `host` | string | `null` | Tracker-specific repo/project linkage. **GitHub** writes `repo` (`owner/name`). **GitLab** writes `project` (the group/sub-group/project path, e.g. `group/subgroup/project`; URL-encoded once for the API, never double-encoded) and, for self-managed hosts, `host`. Written by the `/flow-next:tracker-sync` discovery ceremony on confirmation. |
-| `tracker.perTracker.baseUrl` / `projectKey` / `authScheme` / `apiVersion` / `statusMap` / `sslVerify` | mixed | `null` | **Jira linkage (fn-70).** `baseUrl` = the site base (`https://acme.atlassian.net` Cloud / `https://jira.acme.com` DC/Server; `JIRA_BASE_URL` env overrides). `projectKey` = the project key (the `listOpenIssues` JQL scope; validated `^[A-Z][A-Z0-9]+$`). `authScheme` = `cloud-basic` (Cloud HTTP-basic `email:API_TOKEN`) \| `bearer-pat` (DC/Server `Authorization: Bearer <PAT>`) — runtime reads only this, never re-probes the env. `apiVersion` = `3` (Cloud `/rest/api/3`, ADF) \| `2` (DC/Server `/rest/api/2`). `statusMap` = normalized status → Jira transition target (`{"id":…}` preferred over `{"name":…}`; applied via the **transitions API**, not a direct status set — `tracker.readyState` is used RAW, NOT through this map). `sslVerify` = `false` opts out of TLS verification for a self-hosted cert (`JIRA_SSL_VERIFY=false` env override; default `true`). Written by the discovery ceremony on confirmation (references/jira.md). |
+| `tracker.perTracker.baseUrl` / `projectKey` / `authScheme` / `apiVersion` / `statusMap` / `sslVerify` | mixed | `null` / `{}` / `true` | **Jira linkage (fn-70).** `baseUrl`, `projectKey`, `authScheme`, and `apiVersion` default to `null`; `statusMap` defaults to `{}`; `sslVerify` defaults to `true`. The resolver pins `tracker.resolved.destination.apiVersion` to `2` for both deployment shapes because measured v2 issue bodies round-trip as plain strings byte-exact, and migration rewrites a legacy configured `3` to `2`. `baseUrl` is the site base; `projectKey` is the JQL scope; `authScheme` is `cloud-basic` or `bearer-pat`; `statusMap` maps normalized slots to Jira transition targets. `sslVerify=false` is an explicit opt-out for a self-hosted certificate. Written by the discovery ceremony on confirmation (references/jira.md). |
 | `tracker.staleAfterHours` | int | `24` | Staleness threshold (hours) consumed by `sync list-stale`. |
 | `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. In Ralph mode `always-ask` resolves to *queue*, not prompt. |
 | `tracker.readyState` | string | `null` | **Readiness projection (fn-58, 1.12.0+).** The tracker workflow state that means "ready for work" — a Linear workflow-state **name** or a **Jira status name** (both matched case-insensitive/trimmed against `status.raw`; names, not `state.type` — a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone; the Jira name is used RAW in the promoted-lane JQL, validated to exist at ceremony time), or a GitHub / GitLab **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready — a normal state, never an error). Set by the `/flow-next:tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag — **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/interview's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant); clear with `flowctl config set tracker.readyState null` (the literal `null` token is stored as JSON null, not the string). |
@@ -1004,7 +1004,231 @@ flowctl prospect archive <artifact-id> [--json]
 
 Exit codes: corrupt artifact on `promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
 
-### sync
+## flowctl tracker
+
+Deterministic tracker transport and lifecycle verbs. The tracker-sync skill
+owns discovery choices, semantic body/comment composition, and recovery
+judgment. `flowctl tracker` owns provider requests, normalized identifiers,
+credentials, retries, capability handling, mutations, receipts, and atomic
+local state.
+
+All tracker commands always emit one JSON object on stdout. `--json` is accepted
+for interface consistency and does not change the shape.
+
+### Resolve persisted runtime facts
+
+```bash
+flowctl tracker resolve \
+  [--scope destination|destination.statusIds|destination.stateIds|capabilities] \
+  [--refresh] [--select NORMALIZED=ID] [--json]
+```
+
+`resolve` fills or refreshes `tracker.resolved`. `--select` persists one
+validated human tiebreak for an ambiguous Linear state or Jira status slot.
+The normalized slots are `todo`, `in_progress`, and `done`; optional provider
+slots may also be retained. The persisted shape is:
+
+```json
+{
+  "destination": {
+    "owner": "acme",
+    "repo": "widget",
+    "statusIds": {"todo": "1", "in_progress": "2", "done": "3"},
+    "stateIds": {"todo": "a", "in_progress": "b", "done": "c"}
+  },
+  "capabilities": {
+    "attachments": false,
+    "blockedBy": false,
+    "subIssues": true,
+    "deleteIssue": false
+  },
+  "scopeResolvedAt": {
+    "destination": "<ISO timestamp>",
+    "destination.statusIds": "<ISO timestamp>",
+    "destination.stateIds": "<ISO timestamp>",
+    "capabilities": "<ISO timestamp>"
+  },
+  "resolvedAt": "<ISO timestamp or null>"
+}
+```
+
+Destination keys vary by provider. GitHub requires `owner` and `repo`; GitLab
+requires `projectId`, `projectPath`, `host`, and `namespaceId`; Linear requires
+`teamId`, `teamKey`, `stateIds`, and `labelIds`; Jira requires `baseUrl`,
+`projectKey`, `projectId`, `issueTypeId`, `apiVersion`, `style`, and
+`statusIds`. Jira `apiVersion` defaults to 2.
+
+`resolvedAt` becomes non-null only when all required destination fields,
+required normalized slots, and capability booleans are present. Scope
+timestamps are independent. A destination refresh cannot make capabilities or
+status ids look fresh.
+
+### Wire verbs
+
+Wire verbs address a provider object through a durable/display locator. They do
+not write Flow sync state or receipts.
+
+```bash
+LOCATOR='{"durable":"<provider-id>","display":"<#N|project#iid|KEY-N>"}'
+
+flowctl tracker wire read           --locator "$LOCATOR" [--json]
+flowctl tracker wire update         --locator "$LOCATOR" [--title TEXT] [--body-file F] [--json]
+flowctl tracker wire comment-add    --locator "$LOCATOR" --body-file F [--json]
+flowctl tracker wire comment-list   --locator "$LOCATOR" [--json]
+flowctl tracker wire comment-update --locator "$LOCATOR" <comment-id> --body-file F [--json]
+flowctl tracker wire comment-delete --locator "$LOCATOR" <comment-id> [--json]
+flowctl tracker wire label          --locator "$LOCATOR" [--add LABEL]... [--remove LABEL]... [--json]
+flowctl tracker wire assign         --locator "$LOCATOR" [--add USER]... [--remove USER]... [--json]
+flowctl tracker wire list-open      [--json]
+flowctl tracker wire relation-list  --locator "$LOCATOR" [--json]
+flowctl tracker wire question       --locator "$LOCATOR" \
+  --subject-id ID --blocked-stage STAGE --reason-code CODE \
+  --question-slug SLUG --body-file F [--json]
+flowctl tracker wire attach         --locator "$LOCATOR" --file PATH [--json]
+flowctl tracker wire attach-get     <attachment-id> --out PATH [--json]
+```
+
+Every locator-addressed mutation validates the response identity against
+`locator.durable`. A mismatch returns `class: conflict` and does not proceed as
+success. `relation-list` returns provider-native dependency rows normalized as
+directed `{from,to,type:"blocks"}` for backlog ordering and fails with
+`class: transport`, `subtype: truncated` when bounded pagination cannot prove
+the graph complete. GitHub parent/sub-issue hierarchy is not a blocked-by
+relation, so GitHub validates the parent and returns an empty relation set.
+`question` hashes its four stable identity inputs, adds the canonical question
+marker, takes a local provider+issue+question claim, and reads comments before
+writing. A concurrent identical ask returns retryable `question_in_flight`.
+Normalized comments include immutable `created_at`. A latest question marker
+dedups; a latest matching answer reopens the same stable id as a new question
+round. Missing, tied, or truncated chronology fails closed. The free-prose body
+is not part of the hash. `attach` and `attach-get` are capability-gated.
+
+### Lifecycle and projection verbs
+
+```bash
+# Create and link an issue for an existing spec; writes an event receipt.
+flowctl tracker create <spec-id> --title TEXT --body-file F \
+  [--event KEY] [--json]
+
+# Create before the local spec exists; retry record key comes from
+# `flowctl sync create-first-key`; no spec receipt exists yet.
+flowctl tracker create-first --title TEXT --body-file F \
+  --retry-key <16-hex> [--json]
+
+# Persist a Linear issue created through host MCP.
+flowctl tracker persist-external <spec-id> --identifier KEY-N \
+  [--id DURABLE-ID] [--url URL] --source mcp [--event KEY] [--json]
+
+# Project a normalized status request through the who-wins and merge gates.
+flowctl tracker status <spec-id> \
+  --to backlog|todo|in_progress|in_review|done|cancelled \
+  [--reason completed|not_planned|duplicate|reopened] \
+  [--event KEY] [--json]
+
+# Add an owned blocked-by relation between two linked specs.
+flowctl tracker relate <spec-id> --blocked-by <dependency-spec-id> \
+  [--event KEY] [--json]
+
+# Optional write, canonical server readback, and paired merge-base commit.
+flowctl tracker sync-body <spec-id> --flow-file F \
+  [--tracker-body-file F] [--direction push|pull] \
+  [--event KEY] [--json]
+```
+
+`status --to` is a request, not an unconditional state assignment. Terminal
+states remain gated on merge evidence. `relate` maintains the
+`depRelations` provenance ledger and never removes a relation it cannot prove
+Flow owns. `sync-body` stores the exact local file as `mergeBaseFlow` and the
+server readback as `mergeBaseTracker`.
+
+### Lifecycle facade
+
+Event-driven callers use one composed command rather than sequencing granular
+verbs:
+
+```bash
+flowctl tracker sync <spec-id> --op push --event KEY \
+  --flow-file F --body-file F [--comment-file F]
+
+# First-claim projection: create/link if needed, then status only.
+flowctl tracker sync <spec-id> --op push --status-only --event KEY \
+  --flow-file F --body-file F
+
+flowctl tracker sync <spec-id> --op pull --event KEY \
+  --flow-file F --body-file F --comments-file comments.json
+
+flowctl tracker sync <spec-id> --op reconcile --event KEY \
+  --flow-file F --body-file F --source-body-file F \
+  --comments-file comments.json [--pr-url URL]
+
+flowctl tracker sync <spec-id> --op comment --event KEY \
+  --body-file F
+```
+
+The facade owns create-if-unlinked, lifecycle ordering, marker deduplication,
+status/readiness/dependency projection, transaction boundaries, and one
+aggregate receipt. Pull and reconcile receive the already adjudicated final
+Flow form as an input file; flowctl never authors the semantic merge.
+`--comment-file` is optional only for `push`; its marker-deduped comment is
+posted inside the same facade claim and aggregate receipt as body, status, and
+relation projection.
+Both `comment --body-file` and push `--comment-file` must begin with
+`evidence=<token>`. The whitespace-free token is a stable occurrence identity
+(commit SHA or content fingerprint); flowctl strips it from visible content
+and rejects missing or placeholder evidence before any provider call.
+`--pr-url` is optional only for `reconcile --event makePr`; it projects the
+provider-native, non-closing PR link inside that same claim and receipt.
+`--status-only` is valid only with `push`; it preserves body and relation
+co-edits on an already-linked issue while retaining create/link/paired-base
+seeding for an unlinked spec.
+
+### Result envelope and exit codes
+
+Success:
+
+```json
+{"success":true,"data":{},"degraded":null,"probe":null}
+```
+
+Failure:
+
+```json
+{
+  "success": false,
+  "class": "conflict",
+  "error": "redacted human-readable summary",
+  "retryable": false,
+  "details": {"normalized": "todo", "candidates": []}
+}
+```
+
+`data` is verb-specific. `degraded` reports a confirmed capability transition;
+`probe` reports a capability probe outcome without claiming a transition. A
+failed GitLab TTL probe keeps the prior capability and returns it through
+`probe`; only a confirmed loss can set `degraded`. Failure `details` is a typed
+variant: rate limits include `retry_after_s`, capability failures include
+`capability` and `required_plan`, conflicts include `normalized` and
+`candidates`, and MCP continuations include `action` and `payload`. Branch on
+`class`, never provider error text.
+
+The `class` enum and fixed process exit codes are exhaustive:
+
+| Exit | `class` | Meaning |
+|---:|---|---|
+| 0 | success | Command completed; inspect `degraded` and `probe` for non-failure transitions |
+| 2 | `invalid_input` | CLI input or local contract is invalid |
+| 3 | `inactive` | Tracker bridge is inactive |
+| 4 | `unresolved` | Required `tracker.resolved` facts are absent or incomplete |
+| 5 | `auth` | Credential is absent or rejected |
+| 6 | `rate_limited` | Provider rate limit; retry only when `retryable` is true |
+| 7 | `transport` | Provider transport failed or returned an unusable response |
+| 8 | `not_found` | Addressed provider object does not exist |
+| 9 | `capability` | Requested operation is unsupported by the resolved capability set |
+| 10 | `conflict` | Durable identity, status mapping, or transaction state conflicts |
+| 11 | `stale_id` | Persisted provider identity is stale |
+| 12 | `external_action_required` | Host must perform the described MCP continuation |
+
+## flowctl sync
 
 Tracker-sync plumbing for the `/flow-next:tracker-sync` bridge — atomic,
 deterministic helpers and provider adapters the skill calls. flowctl owns
@@ -1030,7 +1254,7 @@ flowctl sync list-unsynced [--json]                             # linked-id miss
 flowctl sync list-stale [--older-than-hours N] [--json]         # default N = tracker.staleAfterHours
 flowctl sync check-collisions [--json]                          # tracker UUIDs shared by >1 spec
 
-# Dependency-relation projection (fn-64) — transport-blind ledger plumbing
+# Dependency-relation projection (fn-64) - local ledger plumbing
 flowctl sync list-dep-relations <spec-id> [--json]              # edges + resolved tracker links + projected status
 flowctl sync set-dep-relation <spec-id> --dep-spec <id> \
     --from-tracker-id <blocked-issue> --to-tracker-id <blocking-issue> \
@@ -1049,6 +1273,11 @@ tracker verbs themselves:
 
 ```bash
 flowctl tracker sync <spec-id> --op push --event <key> \
+  --flow-file <exact-local-flow-form> --body-file <tracker-render> \
+  [--comment-file <optional-synthesized-comment>]
+
+# First-claim status projection without overwriting linked body/relations.
+flowctl tracker sync <spec-id> --op push --status-only --event <key> \
   --flow-file <exact-local-flow-form> --body-file <tracker-render>
 
 flowctl tracker sync <spec-id> --op pull --event <key> \
@@ -1060,7 +1289,8 @@ flowctl tracker sync <spec-id> --op reconcile --event <key> \
   --flow-file <final-local-merge-already-written> \
   --body-file <approved-outgoing-tracker-form> \
   --source-body-file <pre-merge-tracker-snapshot> \
-  --comments-file <normalized-comment-array.json>
+  --comments-file <normalized-comment-array.json> \
+  [--pr-url <absolute-url-for-makePr-only>]
 
 flowctl tracker sync <spec-id> --op comment --event <key> \
   --body-file <comment-text>
@@ -1073,13 +1303,24 @@ on-disk final Flow form, then commits the paired base. Reconcile and push also
 project the current spec title to the native issue title and project
 `depends_on_epics`; internal `sync-body`, status, and relation receipts are
 suppressed so each invocation emits one aggregate event receipt.
+An optional push `--comment-file` is marker-deduped and posted under that same
+facade claim and receipt; other operations reject it.
+Every comment input begins with `evidence=<token>`, where the whitespace-free
+token is stable for that lifecycle occurrence. Flowctl removes the line before
+posting and rejects absent or placeholder evidence before any remote call.
+An optional reconcile `--pr-url` is accepted only for event `makePr`; flowctl
+projects the native GitHub/GitLab/Jira/Linear link and records it in the same
+aggregate receipt.
+The `push --status-only` modifier skips body/title and relation projection. On
+an unlinked spec it still creates the issue, persists the link, seeds the paired
+base from readback, and projects status.
 
 - **`set-tracker-id`** stores the durable UUID dedupe key + display `--identifier` (`WOR-17`) + url. `--force` overrides the dup-tracker-id collision guard.
 - **`set-merge-base`** is a **paired-snapshot** writer: `--flow`/`--flow-file` AND `--tracker`/`--tracker-file` must come **together** (a partial one-sided write is rejected so the 3-way base never pins one half to a stale sync point).
-- **`list-dep-relations`** is the transport-blind enumerator behind the skill's `projectDepRelations` hook (fn-64): it reads the spec's `depends_on_epics`, resolves each dep spec's tracker link + **local** status from sync state, and reports whether the edge is already in the `depRelations` provenance ledger — `[{dep_spec, dep_tracker_id, dep_identifier, dep_status, projected}]`. `dep_status` is the *local* dep-spec status (`done`/`open`/…), never a remote fetch — flow is authoritative, and the completed-blocker rule keys off the local dep spec being `done`. Self-edges are skipped. A dep spec with no tracker link surfaces as `dep_tracker_id: null` (the skill turns that into the missing-link warning).
+- **`list-dep-relations`** remains a local-state enumerator after fn-141 R8 superseded fn-57 R3. It reads the spec's `depends_on_epics`, resolves each dep spec's tracker link + **local** status from sync state, and reports whether the edge is already in the `depRelations` provenance ledger: `[{dep_spec, dep_tracker_id, dep_identifier, dep_status, projected}]`. `dep_status` is the local dep-spec status (`done`/`open`/…), never a remote fetch. Flow is authoritative, and the completed-blocker rule keys off the local dep spec being `done`. Self-edges are skipped. A dep spec with no tracker link surfaces as `dep_tracker_id: null`. Deterministic remote relation mutation belongs to `flowctl tracker relate` and the lifecycle facade.
 - **`set-dep-relation`** records a projected blocked-by edge in the per-spec `depRelations` ledger (the `.flow/specs/<id>.json` sidecar, atomic write). `--from-tracker-id` is the **blocked** (current) issue; `--to-tracker-id` is the **blocking** (dependency) issue. The ledger entry's `key` is an opaque hash of the directed pair (never a raw issue key inline - trackers auto-linkify keys even inside HTML comments). Idempotent append (mirrors `spec add-dep`): re-recording the same directed edge is a no-op that does **not** bump `updatedAt`, so reruns are true no-ops. Self-edges are rejected. Stale ledger entries are pruned by the skill (edit the sidecar); there is no clear-dep-relation CLI.
 - **`receipt --status`** enum: `pushed | pulled | merged | updated | diverged | queued | errored | noop`. When no transport is reachable the run is a `noop` + receipt note, never a crash. **`--event <perEvent-key>`** tags the receipt with the lifecycle touchpoint it served (`work.firstClaim`, `work.done`, `capture`, `makePr`, …) — free-form, NOT enum-validated (the perEvent key set is an open extension point). Pre-flag receipts carry `event: null` and never satisfy an event-specific `sync check`.
-- **`check`** is the **read-only** end-of-skill audit (no tracker-mutation code lives in flowctl): for each event in `--events` (comma-separated perEvent keys that *triggered this run*), it reports `OK:<event>` / `MISSING:<event>` (`--json`: `{events, missing, count}`). MISSING iff the event triggered AND its `tracker.perEvent` leaf is enabled AND the bridge is active AND no receipt with a matching `event` tag and `timestamp ≥ --since` exists. Any receipt status clears (the check asserts the touchpoint *ran*); `--since` is the run-scoping lower bound (older receipts never clear); linkage is NOT a precondition (a never-linked spec that should have create-if-unlinked'd is exactly the miss this catches). **Bridge inactive → silent constant-time exit 0 before any IO** — the zero-overhead path for non-tracker repos. Exit 0 always; output drives agent action, not the exit code.
+- **`check`** is the **read-only** end-of-skill audit. fn-141 R8 supersedes fn-57 R3 by moving deterministic tracker mutations into `flowctl tracker`; this command itself still reads only local receipts. For each event in `--events` (comma-separated perEvent keys that *triggered this run*), it reports `OK:<event>` / `MISSING:<event>` (`--json`: `{events, missing, count}`). MISSING iff the event triggered AND its `tracker.perEvent` leaf is enabled AND the bridge is active AND no receipt with a matching `event` tag and `timestamp ≥ --since` exists. Any receipt status clears (the check asserts the touchpoint *ran*); `--since` is the run-scoping lower bound (older receipts never clear); linkage is NOT a precondition (a never-linked spec that should have create-if-unlinked'd is exactly the miss this catches). **Bridge inactive → silent constant-time exit 0 before any IO**; this is the zero-overhead path for non-tracker repos. Exit 0 always; output drives agent action, not the exit code.
 - **`defer`** queues a genuine conflict to the review deferred-findings sink (`.flow/review-deferred/<branch>.md`) — **never blocks**. In Ralph mode an `always-ask` tiebreak resolves to *queue*, not prompt.
 - The hybrid id model (tracker-first `wor-17-slug` / `gh-123-slug` / `gl-456-slug` canonical / flow-first `fn-NN` + resolvable alias) is keyed at create/link time: `flowctl spec create --tracker-first --tracker-identifier <key-or-ref>` (see [`spec create`](#spec-create)). Skills auto-route when `tracker.specIds=tracker`. Ids never rename; resolution is case-insensitive. Details in [`tracker-sync.md`](tracker-sync.md) + [`architecture.md`](architecture.md).
 

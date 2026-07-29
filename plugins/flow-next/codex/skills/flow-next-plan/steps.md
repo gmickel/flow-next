@@ -583,9 +583,20 @@ and recompute these waves before presenting the final summary.
 
 ```bash
 LEAF="$(jq -r '.value.tracker.perEvent.plan' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)" # leaf from the Step 0 root snapshot (shared gating predicate — work SKILL.md); missing → literal "null", same as the old per-key read
+case "$LEAF" in
+ pull) OP="pull" ;;
+ push) OP="push" ;;
+ reconcile) OP="reconcile" ;;
+ comment) OP="comment" ;;
+ off|null) OP="off" ;;
+ *) OP="off" ;; # malformed config stays silent
+esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
- # Load and follow references/tracker-projection.md with <leaf> and <spec-id>.
+ && [ "$OP" != "off" ]; then
+ # Load and follow references/tracker-projection.md with <OP> and <spec-id>.
+ # Its inline wrapper makes exactly one lifecycle facade call:
+ # "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event plan <legal file flags>
+ # For OP=comment, Plan synthesizes the planning summary named in that reference.
 fi
 ```
 

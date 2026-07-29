@@ -54,6 +54,7 @@ def _issue_out(raw: dict, *, parent_identity: str = "validated") -> dict:
 def _comment_out(raw: dict, *, parent_identity: str) -> dict:
     return {"id": raw.get("id"), "body": raw.get("body"),
             "url": raw.get("url"),
+            "created_at": raw.get("createdAt"),
             "raw": raw, "parent_identity": parent_identity}
 
 def parent_read(config: dict, locator: dict, execute: Execute, *,
@@ -121,6 +122,107 @@ def read(config: dict, locator: dict, execute: Execute) -> Result:
     return _issue_out(parent, parent_identity="validated")
 
 
+def _pr_attachments(locator: dict, execute: Execute) -> Result:
+    """Drain the PR-link dedup surface; absence is valid only when complete."""
+    def pluck(data: dict) -> Union[dict, TrackerError]:
+        issue = data.get("issue")
+        conn = issue.get("attachments") if isinstance(issue, dict) else None
+        if not isinstance(conn, dict):
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "linear attachments connection is malformed",
+                subtype="malformed_body",
+            )
+        return conn
+
+    drained = _gql_connection_drain(
+        execute,
+        "wire-pr-link-list",
+        "query($id: String!, $after: String) { issue(id: $id) { "
+        f"attachments(first: {_PAGE_SIZE}, after: $after) "
+        "{ nodes { id url } pageInfo { hasNextPage endCursor } } } }",
+        {"id": locator["durable"]},
+        pluck,
+    )
+    if isinstance(drained, TrackerError):
+        return drained
+    nodes, truncated = drained
+    return {"attachments": nodes, "truncated": truncated}
+
+
+def _matching_pr_attachment(listed: dict, url: str) -> Optional[dict]:
+    attachments = listed.get("attachments")
+    if not isinstance(attachments, list):
+        return None
+    return next(
+        (
+            attachment
+            for attachment in attachments
+            if isinstance(attachment, dict) and attachment.get("url") == url
+        ),
+        None,
+    )
+
+
+def pr_link(config: dict, locator: dict, execute: Execute, *, url: str) -> Result:
+    """Create Linear's rich URL attachment for PR status/diff integration."""
+    parent = parent_read(config, locator, execute, op="wire-pr-link-parent-read")
+    if isinstance(parent, TrackerError):
+        return parent
+    listed = _pr_attachments(locator, execute)
+    if isinstance(listed, TrackerError):
+        return listed
+    existing = _matching_pr_attachment(listed, url)
+    if existing is not None:
+        return {
+            "linked": False,
+            "deduped": True,
+            "kind": "rich-attachment",
+            "url": url,
+            "attachment": existing,
+        }
+    if listed.get("truncated"):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "linear PR-link dedup scan truncated; refusing to attach",
+            subtype="dedup_truncated",
+        )
+    data = _gql(
+        execute,
+        "wire-pr-link",
+        "mutation($issueId: String!, $url: String!) { "
+        "attachmentLinkURL(issueId: $issueId, url: $url) { "
+        "success attachment { id url } } }",
+        {"issueId": locator["durable"], "url": url},
+    )
+    if isinstance(data, TrackerError):
+        # Another make-pr process may have attached the same URL after our
+        # complete absence scan. Re-read once before surfacing the mutation
+        # error so that the race remains idempotent without hiding other errors.
+        raced = _pr_attachments(locator, execute)
+        if not isinstance(raced, TrackerError):
+            existing = _matching_pr_attachment(raced, url)
+            if existing is not None:
+                return {
+                    "linked": False,
+                    "deduped": True,
+                    "kind": "rich-attachment",
+                    "url": url,
+                    "attachment": existing,
+                }
+        return data
+    payload = _require_success(data, "attachmentLinkURL")
+    if isinstance(payload, TrackerError):
+        return payload
+    return {
+        "linked": True,
+        "deduped": False,
+        "kind": "rich-attachment",
+        "url": url,
+        "attachment": payload.get("attachment"),
+    }
+
+
 def update(config: dict, locator: dict, execute: Execute, *,
            title: Optional[str], body: Optional[str]) -> Result:
     parent = _require_parent(config, locator, execute)
@@ -162,7 +264,7 @@ def comment_add(config: dict, locator: dict, execute: Execute, *, body: str) -> 
     data = _gql(execute, "wire-comment-add",
                 "mutation($input: CommentCreateInput!) { "
                 "commentCreate(input: $input) { success "
-                "comment { id body url issue { id } } } }",
+                "comment { id body url createdAt issue { id } } } }",
                 {"input": {"issueId": locator["durable"], "body": body}})
     if isinstance(data, TrackerError):
         return data
@@ -213,7 +315,8 @@ def comment_list(config: dict, locator: dict, execute: Execute) -> Result:
         execute, "wire-comment-list",
         "query($id: String!, $after: String) { issue(id: $id) { "
         f"comments(first: {_PAGE_SIZE}, after: $after) "
-        "{ nodes { id body url } pageInfo { hasNextPage endCursor } } } }",
+        "{ nodes { id body url createdAt } "
+        "pageInfo { hasNextPage endCursor } } } }",
         {"id": locator["display"]}, pluck)
     if isinstance(drained, TrackerError):
         return drained
@@ -234,7 +337,7 @@ def comment_update(config: dict, locator: dict, execute: Execute, *,
     data = _gql(execute, "wire-comment-update",
                 "mutation($id: String!, $input: CommentUpdateInput!) { "
                 "commentUpdate(id: $id, input: $input) { success "
-                "comment { id body url issue { id } } } }",
+                "comment { id body url createdAt issue { id } } } }",
                 {"id": comment_id, "input": {"body": body}})
     if isinstance(data, TrackerError):
         return data

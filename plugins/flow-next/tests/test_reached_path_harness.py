@@ -50,6 +50,9 @@ class TestReachedPathHarness(unittest.TestCase):
         cls.trace = _load("rp_trace", HARNESS / "trace.py")
         cls.inventory = _load("rp_inventory", HARNESS / "inventory.py")
         cls.run_eval = _load("rp_run_eval", RUN_EVAL)
+        cls.tracker_candidate = _load(
+            "rp_tracker_candidate", HARNESS / "tracker_candidate.py"
+        )
 
     def test_harness_entrypoint_present(self) -> None:
         self.assertTrue(RUN_EVAL.is_file())
@@ -673,6 +676,52 @@ class TestReachedPathHarness(unittest.TestCase):
             ),
             1,
         )
+
+    def test_tracker_teardown_candidate_is_reproducible_and_complete(self) -> None:
+        artifact_path = HARNESS / "tracker-teardown-candidate.json"
+        artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+        rebuilt = self.tracker_candidate.build_artifact(
+            artifact["lineage"]["candidate_source_commit"]
+        )
+        self.assertEqual(artifact, rebuilt)
+        self.assertEqual(artifact["classification"], "CANDIDATE")
+        self.assertIs(artifact["b2_introduced"], False)
+        self.assertIn("Reduction by design, not regression", artifact["rationale"])
+
+        index = json.loads(
+            (HARNESS / "fixtures" / "b1" / "INDEX.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        expected = {
+            row["fixture_id"]
+            for row in index["fixtures"]
+            if row["cluster"] == "tracker"
+        }
+        actual = {row["fixture_id"] for row in artifact["fixtures"]}
+        self.assertEqual(expected, actual)
+        self.assertEqual(len(actual), 15)
+        for row in artifact["fixtures"]:
+            self.assertEqual(row["before_reached_path_chars"], 452_552)
+            self.assertGreater(row["reduction_chars"], 0)
+            self.assertLess(
+                row["after_reached_path_chars"],
+                row["before_reached_path_chars"],
+            )
+
+    def test_tracker_candidate_displays_custom_output_paths(self) -> None:
+        relative = Path("optimization/reached-path/custom-candidate.json")
+        inside = self.tracker_candidate.REPO_ROOT / relative
+        self.assertEqual(
+            self.tracker_candidate._display_path(inside),
+            relative.as_posix(),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "custom-candidate.json"
+            self.assertEqual(
+                self.tracker_candidate._display_path(outside),
+                str(outside.resolve()),
+            )
 
     def test_auth_envelope_positive_and_zero_token(self) -> None:
         """Deterministic JSON-envelope auth contract — no live model."""

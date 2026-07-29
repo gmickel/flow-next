@@ -52,7 +52,7 @@ The R10 lifecycle touchpoints (wired into the 7 skills in fn-52.6) that produce 
 | Event (`tracker.perEvent` key) | Comment posted to the issue |
 |---|---|
 | `work.done` | a status comment + **evidence** (tests run, PR link if present) |
-| `makePr` | **link** the PR to the issue (not just a comment) so it renders as a reviewable diff: make-pr §4.6a adds a non-closing `Ref <identifier>` to the PR body (→ the tracker integration auto-links it → **Linear Diffs**); the Linear/GraphQL rung also creates the rich PR attachment via `attachmentLinkURL`. GitHub tracker → native `Refs #N`. See [linear-ladder.md](linear-ladder.md) / [github.md](github.md). |
+| `makePr` | **link** the PR to the issue (not just a comment) so it renders as a reviewable diff: make-pr §4.6a adds a non-closing `Ref <identifier>` to the PR body, then passes the explicit PR URL to the reconcile facade. Flowctl projects GitHub's native `Refs #N`, a deduplicated GitLab URL note, a Jira remote-link upsert with comment fallback, or Linear's rich `attachmentLinkURL` attachment. |
 | `resolvePr` | an optional resolution-summary comment |
 | `completionReview` | the completion-review verdict + R-ID coverage summary |
 
@@ -76,7 +76,7 @@ Every flow-posted comment carries a **hidden HTML-comment marker** as its first
 line. The marker is the canonical dedup key and the back-reference all at once:
 
 ```html
-<!-- flow-next:sync issue=<issue-uuid> spec=<spec-id> evt=<event> evidence=<sha-or-none> -->
+<!-- flow-next:sync issue=<issue-uuid> spec=<spec-id> evt=<event> evidence=<stable-token> -->
 ```
 
 - `issue=<issue-uuid>` — the tracker issue's stable UUID. **Primary, linkify-safe
@@ -89,9 +89,13 @@ line. The marker is the canonical dedup key and the back-reference all at once:
 - `evt=<event>` — the lifecycle event (`work.done`, `makePr`,
   `completionReview`, …) — the **shorthand the adapter surfaces as the normalized
   `comment.marker` (`flow-evt:<event>`)**.
-- `evidence=<sha>` — for an evidence comment, the commit/evidence sha it reports
-  (`none` when not evidence-bearing). This makes a *re-post of the same evidence*
-  detectable even if the surrounding prose changed.
+- `evidence=<stable-token>` — the caller-owned occurrence identity: a
+  task/evidence commit, reviewed or tested head, spec-content fingerprint, or
+  merge commit. Every synthesized lifecycle comment input starts with this
+  whitespace-free token; missing, empty, or placeholder evidence is rejected
+  before a provider call. This makes a *re-post of the same occurrence*
+  detectable even if the surrounding prose changed without collapsing later
+  occurrences of the same event.
 
 **Retry rule — re-check before ANY re-post.** A post whose response you failed to
 parse may still have LANDED (body-escaping bugs corrupt the response read, not the
@@ -199,7 +203,7 @@ for c in listComments(trackerId):
   append c to the spec's ## Sync Log         # a genuine tracker-side comment
 
 # POST (flow → tracker):
-marker = "<!-- flow-next:sync issue=<uuid> spec=<id> evt=<event> evidence=<sha|none> -->"
+marker = "<!-- flow-next:sync issue=<uuid> spec=<id> evt=<event> evidence=<stable-token> -->"
 existing = listComments(trackerId)               # normalize each body first: strip <issue …>KEY</issue> → KEY
 if any(e has marker with same issue+evt+evidence):  skip   # Layer 1 exact-match: already posted
 else:
@@ -211,11 +215,9 @@ else:
 `lastSyncedAt` advances on a real TWO-WAY comment reconcile (a genuine import, or
 a post made as part of a reconcile run); a run that dedups everything to a no-op
 does **not** advance it (consistent with the body echo-fence). A one-way lifecycle
-comment APPEND (a touchpoint dispatch - forked or inline) never advances
-`lastSyncedAt`: it writes its receipt and the tracker comment, nothing else. This
-scoping is what makes linked-spec comment forks safe to overlap
-(tracker-dispatch.md MUST invariant 1); the two-way reconcile path is state-shaped
-and runs alone.
+comment append never advances `lastSyncedAt`: it writes its receipt and the
+tracker comment, nothing else. The two-way reconcile path is state-shaped and
+runs alone.
 
 ## The sync log on the flow side
 
@@ -271,10 +273,17 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
   **never a bare tracker key** (`WOR-17` / `#123`), because the linkify hazard above
   mangles keys even inside HTML comments. The **free-prose reason is OUTSIDE the
   hash**, so rephrasing the question never spawns a duplicate anchor.
-- **Dedup by `id` (Layer 1).** Before posting a question, `listComments` and check
-  for an existing `flow-next:question id=<id>` → if present, **skip the re-post**
-  (the subject is already parked). Same exact-match fence as the `flow-evt` marker,
-  keyed on `id`.
+- **Round-aware dedup by `id` (Layer 1).** Before posting a question,
+  `listComments` and collect matching `flow-next:question` and
+  `flow-next:answer` markers. Compare normalized immutable `created_at` values:
+  latest question → **skip** (the subject is parked); latest answer → post a new
+  question round with the same stable id. A mixed history with missing, invalid,
+  or tied timestamps fails closed. This prevents both duplicate open questions
+  and the opposite bug where an old answer suppresses every future round.
+- **Concurrent dedup.** Before `listComments`, flowctl takes a local claim keyed
+  by provider, durable issue id, and stable question id, and holds it through
+  any post. A racing identical ask returns retryable `question_in_flight`; its
+  retry then sees and deduplicates against the winner's open marker.
 - **`flow-next:question` is flow-posted ⇒ the adapter sets `marker = flow-evt:question`
   ⇒ NOT pulled into the Sync Log** (Layer 1 on pull — it is flow's own structured
   comment, like every `flow-evt` comment; the adapter MUST detect it per the closed
@@ -407,9 +416,12 @@ reason.
 
 **Action:** the `question` op recomputes `id` and `listComments` before posting.
 
-**Expected:** the rephrase leaves `id == H1` (prose is OUTSIDE the hash) → Layer-1
-dedup finds the existing `flow-next:question id=H1` → **skip the re-post**. No
-duplicate question comment.
+**Expected:** the rephrase leaves `id == H1` (prose is OUTSIDE the hash) →
+Layer-1 dedup finds the latest marker is the existing
+`flow-next:question id=H1` → **skip the re-post**. No duplicate open question.
+
+If a later `flow-next:answer id=H1` exists, the next ask posts a new question
+round with the same id. A subsequent retry sees that newer question and skips.
 
 **Oracle:** exactly one `flow-next:question id=H1` comment; the re-triage is a
 `noop`. PASS iff rephrasing never spawns a second anchor.
