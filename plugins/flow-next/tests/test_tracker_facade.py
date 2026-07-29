@@ -325,6 +325,51 @@ def _status_noop_responses(provider: str, issue: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 class InputMatrix(unittest.TestCase):
+    def test_malformed_tiebreak_stops_status_facades_before_all_side_effects(
+            self) -> None:
+        cases = (
+            ("push", {}),
+            ("pull", {"comments_file": "comments"}),
+            ("reconcile", {
+                "comments_file": "comments",
+                "source_body_file": "source",
+            }),
+        )
+        for op, extra in cases:
+            with self.subTest(op=op), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                flow = root / ".flow"
+                cfg = gh_cfg()
+                cfg["tracker"]["conflictTiebreak"] = "tracker-WINS"
+                path = _write_flow(
+                    flow, cfg, tracker=_linked(lastSyncedAt="OLD"))
+                before = path.read_text(encoding="utf-8")
+                ff = _flow_file(root)
+                bf = _body_file(root, FLOW_BODY)
+                comments = _comments_file(root)
+                source = _source_body_file(root, FLOW_BODY)
+                kwargs = {
+                    "flow_file": ff,
+                    "body_file": bf,
+                }
+                if extra.get("comments_file"):
+                    kwargs["comments_file"] = comments
+                if extra.get("source_body_file"):
+                    kwargs["source_body_file"] = source
+                ex = fake_execute({})
+                out = F.sync(
+                    flow, SPEC_ID, op=op, event="plan",
+                    execute=ex, **kwargs)
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+                self.assertEqual(out.subtype, "conflict_tiebreak")
+                self.assertEqual(ex.calls, [])
+                self.assertEqual(path.read_text(encoding="utf-8"), before)
+                self.assertFalse(
+                    (flow / "create-first" / f"facade-{SPEC_ID}.json")
+                    .exists())
+                self.assertEqual(_receipts(flow), [])
+
     def test_forbidden_inputs_invalid_before_any_request(self) -> None:
         cases = [
             ("push", {
@@ -448,6 +493,49 @@ class InputMatrix(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class PushFacade(unittest.TestCase):
+    def test_status_only_consumes_flow_wins_deadlock_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            cfg = gh_cfg()
+            cfg["tracker"]["conflictTiebreak"] = "flow-wins"
+            _write_flow(
+                flow, cfg, tracker=_linked(lastSyncedAt="OLD"),
+                tasks=[{"status": "in_progress"}],
+            )
+            ff = _flow_file(root)
+            parent = _gh_issue(
+                FLOW_BODY, labels=[{"name": "status:done"}])
+            parent["state"] = "closed"
+            parent["state_reason"] = "completed"
+            ex = fake_execute({
+                "status-parent-read": ok(parent),
+                "merge-evidence": ok([]),
+                "status-set": ok({
+                    **parent,
+                    "state": "open",
+                    "labels": [{"name": "status:in-progress"}],
+                }),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:in-progress"}]),
+                "status-label-readback": ok([
+                    {"name": "status:in-progress"},
+                ]),
+            })
+            out = F.sync(
+                flow, SPEC_ID, op="push", event="work.firstClaim",
+                flow_file=ff, body_file=ff, status_only=True, execute=ex,
+            )
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["steps"]["status"]["kind"], "applied")
+            self.assertEqual(
+                out["steps"]["status"]["applied"], "in_progress")
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json")
+                .read_text(encoding="utf-8"))["tracker"]
+            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow)[0]["status"], "updated")
+
     def test_push_keeps_flow_base_distinct_from_tracker_render(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

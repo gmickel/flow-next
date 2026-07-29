@@ -1397,6 +1397,9 @@ _INIT_UNMATERIALIZED_LEAVES = ("tracker.specIds",)
 # Strict enum for tracker.specIds (fn-134.2). Write-side rejects anything else;
 # read-side fail-closes anything else to "flow".
 TRACKER_SPEC_IDS_VALUES = frozenset({"flow", "tracker"})
+TRACKER_CONFLICT_TIEBREAK_VALUES = frozenset(
+    {"always-ask", "flow-wins", "tracker-wins"}
+)
 
 
 def normalize_tracker_spec_ids(value) -> str:
@@ -9596,6 +9599,20 @@ def cmd_config_set(args: argparse.Namespace) -> None:
                 f"Invalid tracker.specIds value {raw_val!r}. "
                 f"Expected one of: flow, tracker. "
                 f"Use: flowctl config set tracker.specIds flow|tracker",
+                use_json=args.json,
+            )
+
+    if canonical_key == "tracker.conflictTiebreak":
+        raw_val = args.value
+        if (
+            not isinstance(raw_val, str)
+            or raw_val not in TRACKER_CONFLICT_TIEBREAK_VALUES
+        ):
+            error_exit(
+                f"Invalid tracker.conflictTiebreak value {raw_val!r}. "
+                f"Expected one of: always-ask, flow-wins, tracker-wins. "
+                "Use: flowctl config set tracker.conflictTiebreak "
+                "always-ask|flow-wins|tracker-wins",
                 use_json=args.json,
             )
 

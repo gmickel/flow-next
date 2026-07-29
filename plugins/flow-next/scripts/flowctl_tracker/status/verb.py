@@ -26,7 +26,8 @@ from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
                                _release_claim)
 from ..types import ErrorClass, TrackerError
 from .policy import (Decision, decide, decision_as_error, flow_to_normalized,
-                     merge_evidence, validate_to_reason)
+                     merge_evidence, validate_conflict_tiebreak,
+                     validate_to_reason)
 from .providers import (apply_status, enrich_linear_parent, github_native_status,
                         github_status_labels_match, repair_github_status_labels,
                         tracker_norm_from_parent)
@@ -262,6 +263,9 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
                             "status requires <spec-id>", subtype="args")
 
     config = read_config(flow_dir)
+    conflict_tiebreak = validate_conflict_tiebreak(config)
+    if isinstance(conflict_tiebreak, TrackerError):
+        return conflict_tiebreak
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
@@ -273,6 +277,7 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
     try:
         return _status_txn(
             flow_dir, spec_id, config=config, provider=provider,
+            conflict_tiebreak=conflict_tiebreak,
             to=to, reason=reason, event=event, execute=execute,
             write_receipt=write_receipt)
     finally:
@@ -280,6 +285,7 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
 
 
 def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
+                conflict_tiebreak: str,
                 to: str, reason: Optional[str], event: Optional[str],
                 execute: Execute, write_receipt: bool) -> Result:
     """The claimed transaction body: spec loaded AFTER the claim, so every
@@ -343,7 +349,8 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
                 and tracker_norm.subtype == "ambiguous-status-labels"):
             native_norm = github_native_status(parent)
             repair_decision = decide(
-                to, reason, flow_norm, native_norm, pr_evidence)
+                to, reason, flow_norm, native_norm, pr_evidence,
+                conflict_tiebreak)
             if repair_decision.kind == "noop" and native_norm == to:
                 tracker_norm = native_norm
                 repair_retry = True
@@ -358,7 +365,9 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
         else:
             return tracker_norm
     if not repair_retry:
-        decision = decide(to, reason, flow_norm, tracker_norm, pr_evidence)
+        decision = decide(
+            to, reason, flow_norm, tracker_norm, pr_evidence,
+            conflict_tiebreak)
     err = decision_as_error(decision)
     if err:
         return err

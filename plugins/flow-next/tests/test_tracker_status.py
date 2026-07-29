@@ -20,7 +20,7 @@ from flowctl_tracker import status as S  # noqa: E402
 from flowctl_tracker.status import verb as V  # noqa: E402
 from flowctl_tracker.status.policy import (  # noqa: E402
     decide, flow_to_normalized, in_progress_wins_matches, is_deadlock,
-    merge_evidence, terminal_wins_matches,
+    merge_evidence, terminal_wins_matches, validate_conflict_tiebreak,
 )
 from flowctl_tracker.status.providers import (  # noqa: E402
     apply_status, tracker_norm_from_parent,
@@ -202,6 +202,52 @@ class DecideLadder(unittest.TestCase):
         self.assertEqual(d.kind, "conflict")
         self.assertEqual(d.reason, "status-deadlock")
 
+    def test_deadlock_tiebreak_matrix_covers_both_orientations(self) -> None:
+        pairs = (
+            ("in_progress", "done"),
+            ("done", "in_progress"),
+        )
+        for flow, tracker in pairs:
+            with self.subTest(policy="always-ask", flow=flow, tracker=tracker):
+                d = decide(
+                    flow, None, flow, tracker, "merged", "always-ask")
+                self.assertEqual((d.kind, d.reason),
+                                 ("conflict", "status-deadlock"))
+            with self.subTest(policy="flow-wins", flow=flow, tracker=tracker):
+                d = decide(
+                    flow, None, flow, tracker, "merged", "flow-wins")
+                self.assertEqual((d.kind, d.target_slot), ("apply", flow))
+
+        terminal = decide(
+            "in_progress", None, "in_progress", "done", "none",
+            "tracker-wins")
+        self.assertEqual(
+            (terminal.kind, terminal.target_slot), ("apply_local", "done"))
+
+        mirror = decide(
+            "done", None, "done", "in_progress", "merged",
+            "tracker-wins")
+        self.assertEqual(mirror.kind, "conflict")
+        self.assertEqual(mirror.reason, "status-deadlock-unrepresentable")
+        self.assertTrue(mirror.details["unrepresentable"])
+
+    def test_conflict_tiebreak_runtime_validation(self) -> None:
+        self.assertEqual(validate_conflict_tiebreak({}), "always-ask")
+        self.assertEqual(
+            validate_conflict_tiebreak({"tracker": {}}), "always-ask")
+        for value in ("always-ask", "flow-wins", "tracker-wins"):
+            self.assertEqual(
+                validate_conflict_tiebreak(
+                    {"tracker": {"conflictTiebreak": value}}),
+                value,
+            )
+        for value in (None, True, "FLOW-WINS", "typo", 1):
+            with self.subTest(value=value):
+                out = validate_conflict_tiebreak(
+                    {"tracker": {"conflictTiebreak": value}})
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+
     def test_reordering_guard_deadlock_also_matches_terminal_wins(self) -> None:
         """If deadlock ran AFTER terminal-wins, this pair would silently noop.
 
@@ -357,6 +403,85 @@ class MergeEvidence(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class StatusVerbGate(unittest.TestCase):
+    def test_malformed_tiebreak_fails_before_claim_or_executor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            cfg = gh_cfg()
+            cfg["tracker"]["conflictTiebreak"] = "flow-WINS"
+            path = _write_flow(
+                flow, cfg,
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            )
+            before = path.read_text(encoding="utf-8")
+            ex = fake_execute({})
+            out = S.status(
+                flow, "fn-1-demo", to="in_progress", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+            self.assertEqual(out.subtype, "conflict_tiebreak")
+            self.assertEqual(ex.calls, [])
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertFalse(
+                (flow / "create-first" / "status-fn-1-demo.json").exists())
+            self.assertEqual(_receipts(flow), [])
+
+    def test_tracker_wins_terminal_reuses_local_fold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            cfg = gh_cfg()
+            cfg["tracker"]["conflictTiebreak"] = "tracker-wins"
+            path = _write_flow(
+                flow, cfg,
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tasks=[{"status": "in_progress"}],
+            )
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="closed", labels=["status:done"],
+                    state_reason="completed")),
+                "merge-evidence": ok([]),
+            })
+            out = S.status(
+                flow, "fn-1-demo", to="in_progress", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["kind"], "applied_local")
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["status"], "done")
+            self.assertNotEqual(saved["tracker"]["lastSyncedAt"], "OLD")
+            self.assertFalse(any(c.op == "status-set" for c in ex.calls))
+            self.assertEqual(_receipts(flow)[0]["status"], "pulled")
+
+    def test_tracker_wins_active_mirror_is_unrepresentable_no_mutation(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            cfg = gh_cfg()
+            cfg["tracker"]["conflictTiebreak"] = "tracker-wins"
+            cfg["review"] = {"backend": "none"}
+            path = _write_flow(
+                flow, cfg, spec_extra={"status": "done"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            )
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in-progress"])),
+                "merge-evidence": ok([{"state": "MERGED"}]),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(
+                out.subtype, "status-deadlock-unrepresentable")
+            self.assertTrue(out.details["unrepresentable"])
+            self.assertFalse(any(c.op == "status-set" for c in ex.calls))
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["status"], "done")
+            self.assertEqual(saved["tracker"]["lastSyncedAt"], "OLD")
+            self.assertEqual(_receipts(flow), [])
+
     def test_jira_tls_policy_does_not_bind_source_repo_pr_probe(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
@@ -758,6 +883,85 @@ class LinearStateIds(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError, msg=repr(out))
             self.assertEqual(out["kind"], "applied")
             self.assertEqual(variables[0]["stateId"], "s-ip")
+
+
+class ProviderDeadlockParity(unittest.TestCase):
+    def test_all_providers_reach_shared_always_ask_decision(self) -> None:
+        fixtures = (
+            (
+                "github", gh_cfg(), GH_NODE, "#42",
+                {
+                    "status-parent-read": ok(_gh_parent(
+                        state="closed", labels=["status:done"],
+                        state_reason="completed")),
+                },
+            ),
+            (
+                "gitlab", gl_cfg(), GL_ID, "g/p#12",
+                {
+                    "status-parent-read": ok({
+                        "id": int(GL_ID), "iid": 12, "state": "closed",
+                        "labels": ["status:done"],
+                    }),
+                },
+            ),
+            (
+                "linear", ln_cfg(), LN_UUID, "WOR-1",
+                {
+                    "status-parent-read": ok({"data": {
+                        "issue": {
+                            "id": LN_UUID, "identifier": "WOR-1",
+                            "title": "t", "description": "", "url": "u",
+                            "updatedAt": "t", "labels": {"nodes": []},
+                            "assignee": None,
+                        },
+                    }}),
+                    "status-state-read": ok({"data": {
+                        "issue": {
+                            "id": LN_UUID,
+                            "state": {
+                                "id": "s-done", "name": "Done",
+                                "type": "completed",
+                            },
+                        },
+                    }}),
+                },
+            ),
+            (
+                "jira", jr_cfg(), JR_ID, "SCRUM-1",
+                {
+                    "status-parent-read": ok({
+                        "id": JR_ID, "key": "SCRUM-1",
+                        "fields": {
+                            "status": {"id": "4", "name": "Done"},
+                            "labels": [],
+                        },
+                    }),
+                },
+            ),
+        )
+        for provider, config, durable, display, responses in fixtures:
+            with self.subTest(provider=provider), tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp) / ".flow"
+                _write_flow(
+                    flow, config,
+                    tracker={
+                        "id": durable, "identifier": display, "url": "u",
+                        "lastSyncedAt": "OLD", "linkState": "linked",
+                    },
+                    tasks=[{"status": "in_progress"}],
+                )
+                ex = fake_execute({
+                    **responses,
+                    "merge-evidence": ok([]),
+                })
+                out = S.status(
+                    flow, "fn-1-demo", to="in_progress", execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.CONFLICT)
+                self.assertEqual(out.subtype, "status-deadlock")
+                self.assertFalse(any(c.op == "status-set" for c in ex.calls))
+                self.assertEqual(_receipts(flow), [])
 
 
 class ReorderingUnit(unittest.TestCase):

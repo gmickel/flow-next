@@ -23,6 +23,7 @@ from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
 from ..relate import relate
 from ..resolve_verb import bound_executor
 from ..syncbody import sync_body
+from ..status.policy import validate_conflict_tiebreak
 from ..types import ErrorClass, TrackerError
 from ..wire import dispatch as wire_dispatch
 from ..wire import link_pr as wire_link_pr
@@ -192,6 +193,9 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
             status_only: bool = False,
             execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
+    conflict_tiebreak = validate_conflict_tiebreak(config)
+    if isinstance(conflict_tiebreak, TrackerError):
+        return conflict_tiebreak
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
@@ -369,6 +373,9 @@ def op_pull(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
             comments_file: str, event: str,
             execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
+    conflict_tiebreak = validate_conflict_tiebreak(config)
+    if isinstance(conflict_tiebreak, TrackerError):
+        return conflict_tiebreak
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
@@ -571,6 +578,9 @@ def op_reconcile(flow_dir: Path, spec_id: str, *, flow_file: str,
                  pr_url: Optional[str] = None,
                  execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
+    conflict_tiebreak = validate_conflict_tiebreak(config)
+    if isinstance(conflict_tiebreak, TrackerError):
+        return conflict_tiebreak
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
