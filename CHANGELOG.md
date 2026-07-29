@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 3.5.2] - 2026-07-29
+
 ### Added
 
 - **Deterministic tracker verb surface** (`flowctl tracker ...`, fn-140, spec B of the tracker-determinism batch). The tracker-sync prose workflows now have a deterministic Python backend in `flowctl_tracker/`: locator-addressed wire verbs (`read`/`update`/`comment`/`label`/`assign`/`attach`/`list-open`), lifecycle verbs (`create`, `create-first`, `persist-external`), `status` (fn-66 merge-evidence gate decides; `--to` is a request), `relate` (two-phase depRelations ledger, additive-only), `sync-body` (server readback is the canonical tracker half; paired merge base committed atomically), and the `sync` facade (`push|pull|reconcile|comment` as one unit with create-if-unlinked, native-title projection on push/reconcile, marker dedup, and one aggregate receipt). All four adapters (GitHub, GitLab, Linear, Jira) run behind a never-raises boundary with structured `degraded` evidence, honest pagination (`truncated`, never silent absence), per-spec operation claims under the shared writer lock, and identity guards that refuse to persist across a mid-flight relink. Verified by a cross-adapter conformance matrix with fault injection plus a live smoke against all four trackers.
