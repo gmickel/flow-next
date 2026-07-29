@@ -31,7 +31,12 @@ Section-write rules from the scope-aware pass behavior (above) MUST be honored â
 
 ### Source tags on acceptance criteria (same vocabulary as `/flow-next:capture`)
 
-Every acceptance criterion **this pass newly writes** carries a trailing source tag - the last `[...]` token on the bullet, lowercase tag name, no spaces inside (`[strategy:<track>]` keeps the track name's literal casing, e.g. `[strategy:Reliability]`): `- **R7:** Errors include the request id for trace correlation. [inferred]`
+Every acceptance criterion **this pass newly writes** carries a trailing source tag - the last `[...]` token on the bullet. The **tag name** is lowercase with no spaces (`user` / `paraphrase` / `inferred` / `strategy`). For `[strategy:<track>]` the part after the colon is the track's H3 heading **copied literally** - keep its casing AND its spaces, so a track named `### Cross-platform parity` becomes `[strategy:Cross-platform parity]`. Never slugify, lowercase, or strip spaces from a track name; the literal text is what links the criterion back to `STRATEGY.md`.
+
+```markdown
+- **R7:** Errors include the request id for trace correlation. [inferred]
+- **R9:** Windows paths resolve without a shell. [strategy:Cross-platform parity]
+```
 
 | Tag | Meaning |
 |-----|---------|
