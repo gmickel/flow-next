@@ -13,7 +13,7 @@ After interview complete, write everything back — **scope depends on input typ
 **Print-then-ask approval (R13 — same contract as capture Phase 4):** before handing the draft to flowctl, obtain write-back approval:
 
 1. **Print first:** emit the FULL draft markdown as an ordinary assistant message (the user-visible read-back — real markdown, real newlines). Never embed multi-paragraph drafts/diffs/criteria lists in the `AskUserQuestion` body (they render as collapsed plain text).
-2. **Then short ask** via `AskUserQuestion`: one-line pointer (`Full write-back draft printed above.`) + any compact warnings (e.g. open-questions count) + options only — e.g. `approve` / `edit` / `abort`. No multi-paragraph content in the ask.
+2. **Then short ask** via `AskUserQuestion`: one-line pointer (`Full write-back draft printed above.`) + the compact source-tag tally for the criteria this pass wrote (`Source: [user] N / [paraphrase] M / [strategy] K / [inferred] L`) + any compact warnings (e.g. open-questions count) + options only — e.g. `approve` / `edit` / `abort`. No multi-paragraph content in the ask.
 
 **Edit-cycle rule:** if the user picks `edit`, apply revisions via the Edit tool (deltas only), then **Read the FULL draft file**, **reprint the full revised draft as ordinary markdown**, and re-issue the short approval ask. The full-file Read also satisfies Edit's read-before-edit for the next cycle. Loop until `approve` or `abort`.
 
@@ -28,6 +28,24 @@ Section-write rules from the scope-aware pass behavior (above) MUST be honored �
 - **no marker, or a marker you cannot parse** → **preserve byte-for-byte**, and mention in the read-back that it was left untouched so the user can add a marker if they wanted it filled.
 
 `scope: both` on a project-added section is writable under any pass. A project-added section carrying an empty body is still preserved unless it is writable under this scope - an empty section you do not own is the user's placeholder, not litter.
+
+### Source tags on acceptance criteria (same vocabulary as `/flow-next:capture`)
+
+Every acceptance criterion **this pass newly writes** carries a trailing source tag - the last `[...]` token on the bullet, lowercase, no spaces inside: `- **R7:** Errors include the request id for trace correlation. [inferred]`
+
+| Tag | Meaning |
+|-----|---------|
+| `[user]` | Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning). "The user" is the human in THIS pass: the PO under `--scope=business`, the tech lead under `--scope=technical`. |
+| `[paraphrase]` | User intent restated in spec language (semantic equivalence; no new constraints introduced) |
+| `[inferred]` | Agent fill-in (most-scrutinized; user must confirm at read-back) - a gap you drafted rather than asked about |
+| `[strategy:<track>]` | Derived from `STRATEGY.md` content (verbatim or near-verbatim from `approach` or a `### <track-name>` H3 sub-block); track name lives literally in the tag |
+
+Hard rules:
+
+- **Tag only criteria this pass authors.** Never add, change, or remove a tag on a criterion an earlier pass wrote - provenance is frozen exactly like the R-ID number. Untagged legacy criteria stay untagged; absence means unknown provenance, never `[user]`.
+- **Never ask about tagging.** The tag records how a criterion got written down; it is not an extra interview question.
+- **Uniform tagging is a failure, not a safe default.** A criterion the interviewee answered is `[user]` or `[paraphrase]`; only genuine gap-fill is `[inferred]`. If everything you wrote came out `[inferred]`, the tally carries no signal - re-check which criteria came from actual answers.
+- **No self-blessing on unasked guesses** (capture's rule, narrowed for interview): if any criterion you wrote is `[inferred]` AND no interview question covered it, do NOT recommend `approve` in the ask above - state the count and let the user check those lines. Criteria settled by an answered question are verified by construction and do not trigger this.
 
 ### For NEW IDEA (text input, no Flow ID)
 
@@ -84,12 +102,15 @@ fi
 #   2. Append the auxiliary interview-audit sections (only those that fired):
 ```
 
+**Source-tag every acceptance criterion written here** (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`, trailing token - see "Source tags on acceptance criteria" above). This branch mints the spec, so every criterion in it is one you authored this pass: an answered question yields `[user]` or `[paraphrase]`, agent gap-fill yields `[inferred]`.
+
 Compose the full body and Write it ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md`) via the **Write tool** — per the single-emission write pattern above. The body:
 
 ```markdown
 <canonical body from skeleton, with interview-answered prose under each
  writable section per the write-policy — biz pass fills biz-owned sections,
- tech pass fills tech-owned, placeholders under empty other-side sections>
+ tech pass fills tech-owned, placeholders under empty other-side sections;
+ every acceptance criterion carries its trailing source tag>
 
 ## Resolved via Codebase
 (optional — written by the technical pass when codebase-investigation resolved items)
@@ -134,13 +155,17 @@ The canonical section layout for the spec body is in [`plugins/flow-next/templat
 
 **Reuse the spec body already fetched at Detect Input Type** (`$FLOWCTL cat <id>` ran there) — do NOT re-fetch here. Re-fetch only if the interview mutated the spec on disk since that read (e.g. an earlier partial write-back in this run).
 
+**Source-tag only the acceptance criteria this pass appends** (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`, trailing token - see "Source tags on acceptance criteria" above). Criteria already in the spec keep their bullet exactly as read: never add a tag to an untagged legacy criterion, never change or drop an existing one.
+
 Refine canonical sections under your scope's writable list (per write-policy) while preserving sections owned by the other scope byte-for-byte, apply the project-added-section ownership rule above, append the auxiliary interview-audit sections (only those that fired), and Write the merged body ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md`) via the **Write tool** - per the single-emission write pattern above. The body:
 
 ```markdown
 <merged body: EVERY section present in the Detect-Input-Type read, in its
  original order, with this scope's writable sections refined from interview
  answers, other-scope sections preserved byte-for-byte per the write-policy,
- and project-added sections written or preserved per their scope-owner marker>
+ and project-added sections written or preserved per their scope-owner marker.
+ Acceptance criteria: newly appended R-IDs carry a trailing source tag;
+ pre-existing bullets keep their tag, or stay untagged, byte-for-byte>
 
 ## Resolved via Codebase
 (optional — written by the technical pass when codebase-investigation resolved items)
