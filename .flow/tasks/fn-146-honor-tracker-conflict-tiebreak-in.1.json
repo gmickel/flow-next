@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-29T17:15:22.265942Z",
+  "depends_on": [],
+  "id": "fn-146-honor-tracker-conflict-tiebreak-in.1",
+  "priority": null,
+  "spec": "fn-146-honor-tracker-conflict-tiebreak-in",
+  "spec_path": ".flow/tasks/fn-146-honor-tracker-conflict-tiebreak-in.1.md",
+  "status": "todo",
+  "title": "Honor conflict tiebreak in shared status policy",
+  "updated_at": "2026-07-29T17:15:22.265942Z"
+}
