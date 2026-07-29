@@ -32,6 +32,7 @@ def _git_text(commit: str, relative: str) -> str:
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     return result.stdout
 
@@ -43,6 +44,7 @@ def _git_commit(commit: str) -> str:
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     return result.stdout.strip()
 

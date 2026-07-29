@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -85,6 +86,9 @@ def _shell_if_block_around(path: Path, sentinel: str) -> str:
 class TrackerCallerExecutionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls.bash = shutil.which("bash")
+        if cls.bash is None:
+            raise unittest.SkipTest("tracker caller execution requires bash")
         oracle = json.loads(ORACLE_PATH.read_text(encoding="utf-8"))
         cls.callers = {row["id"]: row for row in oracle["callers"]}
         cls.values = tuple(oracle["per_event_enum"])
@@ -124,18 +128,18 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         env = os.environ.copy()
         env.update(
             {
-                "FLOWCTL": str(self.fake_flowctl),
-                "CALL_LOG": str(self.call_log),
-                "IMPORT_LOG": str(self.import_log),
+                "FLOWCTL": self.fake_flowctl.as_posix(),
+                "CALL_LOG": self.call_log.as_posix(),
+                "IMPORT_LOG": self.import_log.as_posix(),
                 "TRACKER_LEAF": value,
                 "BRIDGE_ACTIVE": str(active).lower(),
                 "MERGED_STATE": str(merged).lower(),
                 "SPEC_ID": "fn-141-harness",
                 "PR_URL": "https://example.test/pull/141",
                 "BRANCH_NAME": "fn-141-harness",
-                "BODY_FILE": str(self.root / "comment.md"),
-                "TMPDIR": str(self.root),
-                "PATH": f"{self.root}:{env['PATH']}",
+                "BODY_FILE": (self.root / "comment.md").as_posix(),
+                "TMPDIR": self.root.as_posix(),
+                "PATH": f"{self.root.as_posix()}{os.pathsep}{env['PATH']}",
             }
         )
         (self.root / "comment.md").write_text("caller-owned comment\n", encoding="utf-8")
@@ -161,11 +165,12 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 f"caller harness refused side-effecting command: {forbidden.group(0)!r}"
             )
         return subprocess.run(
-            ["/bin/bash", "-c", source],
+            [self.bash, "-c", source],
             cwd=REPO_ROOT,
             env=self._environment(value, active, merged),
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
 
@@ -285,10 +290,11 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         source = self._instrumented_fence(caller_id, op_expression)
         if caller_id == "plan":
             snapshot = subprocess.run(
-                [str(self.fake_flowctl), "config", "get", "--json"],
+                [sys.executable, str(self.fake_flowctl), "config", "get", "--json"],
                 env=self._environment(value, active),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 check=True,
             ).stdout
             (self.root / "flow-plan-config-<suffix>.json").write_text(
