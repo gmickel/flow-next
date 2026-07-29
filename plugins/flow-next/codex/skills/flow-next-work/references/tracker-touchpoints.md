@@ -19,7 +19,7 @@ Contents:
 
 | Lifecycle event | perEvent key | Resolved facade op | Effect when opted in |
 |---|---|---|---|
-| first task claimed (phases.md 3b.1) | `tracker.perEvent.work.firstClaim` | fixed `push` for `pull`, `push`, `reconcile`, or `comment` | move the linked issue In-Progress |
+| first task claimed (phases.md 3b.1) | `tracker.perEvent.work.firstClaim` | fixed `push --status-only` for `pull`, `push`, `reconcile`, or `comment` | move the linked issue In-Progress without body/relation overwrite |
 | task done (phases.md 3d.1) | `tracker.perEvent.work.done` | fixed `comment` for `pull`, `push`, `reconcile`, or `comment` | post a status comment + evidence (tests / commits / PR) |
 | spec-completion-review SHIP (phases.md 3g) | `tracker.perEvent.completionReview` | fixed `comment` for `pull`, `push`, `reconcile`, or `comment` | post verdict / R-ID coverage as a comment; NEVER terminal Done (fn-66: Done is reserved for a MERGED PR, driven by land.merged); at most leaves the issue at In Review |
 
@@ -58,9 +58,12 @@ case "$LEAF" in
 esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
  && [ "$OP" != "off" ]; then
- # Invoke the inline wrapper. Work supplies the status-only approved snapshots,
+ # Invoke the inline wrapper. Work supplies the create-time approved snapshots,
  # then the wrapper makes exactly one facade call:
- # "$FLOWCTL" tracker sync "$SPEC_ID" --op push --event work.firstClaim <legal file flags>
+ # "$FLOWCTL" tracker sync "$SPEC_ID" --op push --status-only --event work.firstClaim <legal file flags>
+ # For an already-linked issue this updates status only: it never pushes the
+ # local body or relations over tracker-side edits. An unlinked spec still
+ # creates, links, seeds the paired base, and then updates status.
  # Unlinked specs create and link inside the facade. No reachable transport is
  # best-effort; in Ralph mode structured conflicts queue instead of asking.
  :

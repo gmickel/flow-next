@@ -193,7 +193,7 @@ Sync is wired into seven lifecycle skills. **When you hook the bridge up via the
 | capture | `tracker.perEvent.capture` | `reconcile` | a spec is captured |
 | interview | `tracker.perEvent.interview` | `reconcile` | a spec is refined |
 | plan | `tracker.perEvent.plan` | `reconcile` | a spec is decomposed into tasks |
-| work (first claim) | `tracker.perEvent.work.firstClaim` | `push` | the first task of a spec is claimed |
+| work (first claim) | `tracker.perEvent.work.firstClaim` | `push --status-only` | the first task of a spec is claimed |
 | work (done) | `tracker.perEvent.work.done` | `comment` | a task completes |
 | make-pr | `tracker.perEvent.makePr` | `comment` | a PR is opened (→ issue **In Review** + PR link, unconditional when bridge active — fn-66) |
 | resolve-pr | `tracker.perEvent.resolvePr` | `comment` | PR threads are resolved |
@@ -230,6 +230,11 @@ any comment content they own, and invoke `flowctl tracker sync <spec-id> --op
 <op> --event <key>` inline. The facade owns create-if-unlinked, transport,
 marker dedup, ordering, and the single aggregate receipt. Content travels only
 through mode `0600` temporary files.
+
+Work's `firstClaim` caller uses `push --status-only`: an already-linked issue
+receives status only, preserving tracker-side body and relation co-edits. An
+unlinked spec still creates, links, seeds the paired merge base, and then
+projects status.
 
 The same path runs on Claude Code, Codex, Cursor, Droid, and Grok Build. A
 structured conflict or external action request returns to the tracker-sync
@@ -293,8 +298,9 @@ The Phase-0 gate recognizes the **full autonomy marker family** (2.2.0+, fn-68 R
 [`/flow-next:pilot`](../skills/flow-next-pilot/SKILL.md) backlog mode reaches in front of the ready gate and enumerates the whole promoted lane, including tracker tickets with no Flow spec. It surfaces "stuck" as a **question, not a stall**. `flowctl tracker` now owns the deterministic enumeration and comment transport; **fn-141 R8 supersedes fn-57 R3**. The skill retains the semantic question text and recovery choice:
 
 - **`flowctl tracker wire list-open`** enumerates promoted-lane open issues, filtered to the **exact** `tracker.readyState` state/label (no ordering, no "beyond"). It returns normalized `issue[]` so pilot can union tracker-only tickets with `flowctl specs`. When `tracker.readyState` is unset, there is no promoted tracker lane and backlog mode runs Flow-ready specs only.
-- **`flowctl tracker wire relation-list --locator …`** reads one issue's normalized directed dependency rows for pilot ordering. The locator comes from the same `list-open` row: durable `issue.id` plus display `issue.identifier`.
-- **`question <spec-id | tracker-id>`** is the skill-owned semantic operation. The skill composes the question text, then calls `flowctl tracker wire question` with the issue locator, four stable identity inputs, and a secure body file. flowctl computes the stable `id`, reads existing comments, and posts only when that `id` is absent behind `<!-- flow-next:question id=<hash> status=open -->`. The `id` hashes `subjectId` + blocked-stage + reason code + question slug; free prose is outside the hash, so rephrasing never duplicates. A human reply carries `<!-- flow-next:answer id=<hash> -->`, matched by `id` and imported under the matching `## Open Questions` entry. A tracker-only question has no spec receipt; its parked/answered state stays in tracker comments until `capture` or `interview` creates a spec.
+- **`list-comments <tracker-id>`** maps to `flowctl tracker wire comment-list --locator …` for every tracker-only candidate before parked-state selection. Normalized comments include immutable `created_at`; a failed or truncated read fails closed.
+- **`flowctl tracker wire relation-list --locator …`** reads one issue's normalized directed dependency rows for pilot ordering. The locator comes from the same `list-open` row: durable `issue.id` plus display `issue.identifier`. GitHub validates the issue but returns no rows because parent/sub-issue hierarchy is not blocked-by and must not order backlog work.
+- **`question <spec-id | tracker-id>`** is the skill-owned semantic operation. The skill composes the question text, then calls `flowctl tracker wire question` with the issue locator, four stable identity inputs, and a secure body file. flowctl computes the stable `id` and reads existing comments. Latest matching question means parked and dedups; latest matching answer posts a new round with the same id. Missing, tied, or truncated chronology fails closed. The `id` hashes `subjectId` + blocked-stage + reason code + question slug; free prose is outside the hash, so rephrasing never duplicates an open round. A human reply carries `<!-- flow-next:answer id=<hash> -->`, matched by `id` and imported under the matching `## Open Questions` entry. A tracker-only question has no spec receipt; its parked/answered state stays in tracker comments until `capture` or `interview` creates a spec.
 
 See [`references/adapter-interface.md`](../skills/flow-next-tracker-sync/references/adapter-interface.md) (the `listOpenIssues` contract + the `comment` reply/parent metadata), [`steps.md`](../skills/flow-next-tracker-sync/steps.md) Phase 7 (the named-op bodies + the answer round-trip), and [`references/comments-sync.md`](../skills/flow-next-tracker-sync/references/comments-sync.md) (the question-valve marker dedup).
 

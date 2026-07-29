@@ -24280,6 +24280,7 @@ def cmd_tracker_facade(args: argparse.Namespace) -> None:
         body_file=getattr(args, "body_file", None),
         comments_file=getattr(args, "comments_file", None),
         source_body_file=getattr(args, "source_body_file", None),
+        status_only=getattr(args, "status_only", False),
     )
     print(payload)
     sys.exit(code)
@@ -31872,6 +31873,11 @@ def main() -> None:
         "--source-body-file", default=None, dest="source_body_file",
         help="Exact tracker body snapshot used to prepare a reconcile merge "
              "(required for reconcile; forbidden for other ops)",
+    )
+    p_tracker_sync.add_argument(
+        "--status-only", action="store_true", dest="status_only",
+        help="For --op push, create/link if needed and project status only; "
+             "skip body and relation writes",
     )
     p_tracker_sync.add_argument("--json", action="store_true",
                                 help="Accepted and ignored (output is always JSON)")

@@ -1090,12 +1090,17 @@ flowctl tracker wire attach-get     <attachment-id> --out PATH [--json]
 
 Every locator-addressed mutation validates the response identity against
 `locator.durable`. A mismatch returns `class: conflict` and does not proceed as
-success. `relation-list` returns normalized directed `{from,to,type:"blocks"}`
-rows for backlog ordering and fails with `class: transport`,
-`subtype: truncated` when bounded pagination cannot prove the graph complete.
+success. `relation-list` returns provider-native dependency rows normalized as
+directed `{from,to,type:"blocks"}` for backlog ordering and fails with
+`class: transport`, `subtype: truncated` when bounded pagination cannot prove
+the graph complete. GitHub parent/sub-issue hierarchy is not a blocked-by
+relation, so GitHub validates the parent and returns an empty relation set.
 `question` hashes its four stable identity inputs, adds the canonical question
-marker, reads comments before writing, and skips an existing id; the free-prose
-body is not part of the hash. `attach` and `attach-get` are capability-gated.
+marker, and reads comments before writing. Normalized comments include immutable
+`created_at`. A latest question marker dedups; a latest matching answer reopens
+the same stable id as a new question round. Missing, tied, or truncated
+chronology fails closed. The free-prose body is not part of the hash. `attach`
+and `attach-get` are capability-gated.
 
 ### Lifecycle and projection verbs
 
@@ -1144,6 +1149,10 @@ verbs:
 flowctl tracker sync <spec-id> --op push --event KEY \
   --flow-file F --body-file F
 
+# First-claim projection: create/link if needed, then status only.
+flowctl tracker sync <spec-id> --op push --status-only --event KEY \
+  --flow-file F --body-file F
+
 flowctl tracker sync <spec-id> --op pull --event KEY \
   --flow-file F --body-file F --comments-file comments.json
 
@@ -1159,6 +1168,9 @@ The facade owns create-if-unlinked, lifecycle ordering, marker deduplication,
 status/readiness/dependency projection, transaction boundaries, and one
 aggregate receipt. Pull and reconcile receive the already adjudicated final
 Flow form as an input file; flowctl never authors the semantic merge.
+`--status-only` is valid only with `push`; it preserves body and relation
+co-edits on an already-linked issue while retaining create/link/paired-base
+seeding for an unlinked spec.
 
 ### Result envelope and exit codes
 
@@ -1253,6 +1265,10 @@ tracker verbs themselves:
 flowctl tracker sync <spec-id> --op push --event <key> \
   --flow-file <exact-local-flow-form> --body-file <tracker-render>
 
+# First-claim status projection without overwriting linked body/relations.
+flowctl tracker sync <spec-id> --op push --status-only --event <key> \
+  --flow-file <exact-local-flow-form> --body-file <tracker-render>
+
 flowctl tracker sync <spec-id> --op pull --event <key> \
   --flow-file <final-local-fold-already-written> \
   --body-file <tracker-source-snapshot> \
@@ -1275,6 +1291,9 @@ on-disk final Flow form, then commits the paired base. Reconcile and push also
 project the current spec title to the native issue title and project
 `depends_on_epics`; internal `sync-body`, status, and relation receipts are
 suppressed so each invocation emits one aggregate event receipt.
+The `push --status-only` modifier skips body/title and relation projection. On
+an unlinked spec it still creates the issue, persists the link, seeds the paired
+base from readback, and projects status.
 
 - **`set-tracker-id`** stores the durable UUID dedupe key + display `--identifier` (`WOR-17`) + url. `--force` overrides the dup-tracker-id collision guard.
 - **`set-merge-base`** is a **paired-snapshot** writer: `--flow`/`--flow-file` AND `--tracker`/`--tracker-file` must come **together** (a partial one-sided write is rejected so the 3-way base never pins one half to a stale sync point).

@@ -269,10 +269,13 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
   **never a bare tracker key** (`WOR-17` / `#123`), because the linkify hazard above
   mangles keys even inside HTML comments. The **free-prose reason is OUTSIDE the
   hash**, so rephrasing the question never spawns a duplicate anchor.
-- **Dedup by `id` (Layer 1).** Before posting a question, `listComments` and check
-  for an existing `flow-next:question id=<id>` → if present, **skip the re-post**
-  (the subject is already parked). Same exact-match fence as the `flow-evt` marker,
-  keyed on `id`.
+- **Round-aware dedup by `id` (Layer 1).** Before posting a question,
+  `listComments` and collect matching `flow-next:question` and
+  `flow-next:answer` markers. Compare normalized immutable `created_at` values:
+  latest question → **skip** (the subject is parked); latest answer → post a new
+  question round with the same stable id. A mixed history with missing, invalid,
+  or tied timestamps fails closed. This prevents both duplicate open questions
+  and the opposite bug where an old answer suppresses every future round.
 - **`flow-next:question` is flow-posted ⇒ the adapter sets `marker = flow-evt:question`
   ⇒ NOT pulled into the Sync Log** (Layer 1 on pull — it is flow's own structured
   comment, like every `flow-evt` comment; the adapter MUST detect it per the closed
@@ -405,9 +408,12 @@ reason.
 
 **Action:** the `question` op recomputes `id` and `listComments` before posting.
 
-**Expected:** the rephrase leaves `id == H1` (prose is OUTSIDE the hash) → Layer-1
-dedup finds the existing `flow-next:question id=H1` → **skip the re-post**. No
-duplicate question comment.
+**Expected:** the rephrase leaves `id == H1` (prose is OUTSIDE the hash) →
+Layer-1 dedup finds the latest marker is the existing
+`flow-next:question id=H1` → **skip the re-post**. No duplicate open question.
+
+If a later `flow-next:answer id=H1` exists, the next ask posts a new question
+round with the same id. A subsequent retry sees that newer question and skips.
 
 **Oracle:** exactly one `flow-next:question id=H1` comment; the re-triage is a
 `noop`. PASS iff rephrasing never spawns a second anchor.

@@ -42,6 +42,7 @@ not manufacture identity fields absent from a provider response.
   "id": "provider comment id",
   "body": "plain markdown",
   "url": "provider URL or null",
+  "created_at": "immutable provider timestamp or null",
   "raw": {},
   "parent_identity": "validated or not_available"
 }
@@ -51,10 +52,12 @@ not manufacture identity fields absent from a provider response.
 provider field. It is never inferred. The facade's `comments-file` snapshot is
 the stable subset `id`, `body`, and `parent_identity`.
 
-Comment authors, timestamps, and question/answer markers belong to the semantic
-comment layer, not the wire envelope. The closed marker vocabulary and Sync Log
-rules are documented in [comments-sync.md](comments-sync.md); flowctl owns sync
-marker formatting, normalization, and deduplication.
+`created_at` preserves the provider's immutable creation timestamp so
+question/answer rounds can be ordered independently of provider list order.
+Comment authors and question/answer marker meaning belong to the semantic
+comment layer. The closed marker vocabulary and Sync Log rules are documented
+in [comments-sync.md](comments-sync.md); flowctl owns sync marker formatting,
+normalization, and deduplication.
 
 ## Wire verbs
 

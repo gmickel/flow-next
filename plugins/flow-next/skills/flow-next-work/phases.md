@@ -634,7 +634,7 @@ EVENTS="work.firstClaim,work.done"   # ← substitute the actual triggered set
 
 1. Record the retro-fire start anchor and echo it (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
 2. For each MISSING event, invoke the **inline flow-next-tracker-sync wrapper directly**. It prepares the same approved inputs as the missed touchpoint and makes exactly one facade call with the event tag. NEVER invoke this check block as a wrapper:
-   - `work.firstClaim` → `flowctl tracker sync <spec-id> --op push --event work.firstClaim <legal file flags>`
+   - `work.firstClaim` → `flowctl tracker sync <spec-id> --op push --status-only --event work.firstClaim <legal file flags>`
    - `work.done` → Work re-synthesizes the task done summary plus tests, commits, and PR evidence, then calls `flowctl tracker sync <spec-id> --op comment --event work.done --body-file <0600-file>`
    - completion review: Work re-synthesizes the verdict plus R-ID coverage, then calls `flowctl tracker sync <spec-id> --op comment --event completionReview --body-file <0600-file>`. This is comment-shaped and NEVER terminal (fn-66). Event key is the TOP-LEVEL `completionReview` (matches the `tracker.perEvent.completionReview` leaf; a `work.`-prefixed tag resolves no leaf and the audit can never clear or miss it)
 3. Re-check the missed events only, `--since` = the step-1 anchor:

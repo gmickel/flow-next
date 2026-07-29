@@ -22,6 +22,11 @@ ADAPTER = (SKILL_ROOT / "references/adapter-interface.md").read_text(
     encoding="utf-8"
 )
 COMMENTS = (SKILL_ROOT / "references/comments-sync.md").read_text(encoding="utf-8")
+PILOT_ROOT = REPO_ROOT / "plugins/flow-next/skills/flow-next-pilot"
+PILOT_WORKFLOW = (PILOT_ROOT / "workflow.md").read_text(encoding="utf-8")
+PILOT_BACKLOG = (
+    PILOT_ROOT / "references/backlog-mode.md"
+).read_text(encoding="utf-8")
 
 
 def collapsed(text: str) -> str:
@@ -45,6 +50,14 @@ class BacklogWireContractTests(unittest.TestCase):
             "--question-slug",
         ):
             self.assertIn(flag, STEPS)
+
+    def test_tracker_only_parked_scan_executes_comment_read(self) -> None:
+        self.assertIn("list-comments", PILOT_WORKFLOW)
+        self.assertIn(
+            "tracker wire comment-list --locator", PILOT_BACKLOG)
+        self.assertIn(
+            "tracker wire comment-list --locator", STEPS)
+        self.assertIn("fails closed", PILOT_BACKLOG)
 
     def test_every_provider_implements_list_open(self) -> None:
         for provider in (github, gitlab, jira, linear):
@@ -94,8 +107,14 @@ class QuestionValveContractTests(unittest.TestCase):
 
     def test_wire_and_semantic_comment_shapes_are_not_conflated(self) -> None:
         self.assertIn('"parent_identity": "validated or not_available"', ADAPTER)
+        self.assertIn('"created_at": "immutable provider timestamp or null"', ADAPTER)
         self.assertIn("stable subset `id`, `body`, and `parent_identity`", ADAPTER)
         self.assertIn("semantic comment layer", collapsed(ADAPTER))
+
+    def test_question_reopens_only_after_latest_answer(self) -> None:
+        self.assertIn("latest question", COMMENTS)
+        self.assertIn("latest answer", COMMENTS)
+        self.assertIn("created_at", COMMENTS)
 
 
 class AutonomousBoundaryTests(unittest.TestCase):

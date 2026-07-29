@@ -172,8 +172,19 @@ resolved ready lane. It returns normalized issues only. It does not create Flow
 specs by itself.
 
 For each returned issue, build its locator from the same normalized row
-(`durable = issue.id`, `display = issue.identifier`). `list-relations` is the
-read-only dependency-ordering call:
+(`durable = issue.id`, `display = issue.identifier`). `list-comments` is the
+read-only parked-question call:
+
+```bash
+$FLOWCTL tracker wire comment-list --locator "$LOCATOR" --json
+```
+
+It returns normalized `created_at` timestamps. Reject truncated listings.
+When the same stable question id has both question and answer markers, compare
+their immutable timestamps: latest question means parked; latest answer means
+answered. Missing or tied chronology fails closed.
+
+`list-relations` is the read-only dependency-ordering call:
 
 ```bash
 $FLOWCTL tracker wire relation-list --locator "$LOCATOR" --json
@@ -186,7 +197,7 @@ dependency graph.
 For `question`, the caller owns the semantic body and the four stable identity
 inputs. Write only the free-prose body to a mode `0600` temporary file. The wire
 verb computes the id, adds the canonical marker, lists existing comments, and
-posts only when that id is absent:
+posts only when the latest round for that id is answered or no question exists:
 
 ```bash
 $FLOWCTL tracker wire question --locator "$LOCATOR" \

@@ -48,7 +48,8 @@ def _issue_out(raw: dict, *, parent_identity: str = "not_available") -> dict:
 
 def _comment_out(raw: dict, *, parent_identity: str) -> dict:
     return {"id": raw.get("id"), "body": raw.get("body"),
-            "url": None, "raw": raw, "parent_identity": parent_identity}
+            "url": None, "created_at": raw.get("created"),
+            "raw": raw, "parent_identity": parent_identity}
 
 def parent_read(config: dict, locator: dict, execute: Execute, *,
                 op: str = "wire-parent-read") -> Result:

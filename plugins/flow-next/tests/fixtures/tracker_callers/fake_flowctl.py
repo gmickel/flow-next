@@ -40,6 +40,11 @@ def _validate_facade(argv: list[str]) -> tuple[str, str]:
     if op not in OP_INPUTS:
         raise SystemExit("invalid tracker sync operation: " + repr(op))
     tail = argv[7:]
+    status_only = "--status-only" in tail
+    if status_only:
+        if op != "push" or tail.count("--status-only") != 1:
+            raise SystemExit("invalid --status-only modifier: " + repr(tail))
+        tail = [arg for arg in tail if arg != "--status-only"]
     if len(tail) % 2:
         raise SystemExit("input flags require values: " + repr(tail))
     supplied = {}

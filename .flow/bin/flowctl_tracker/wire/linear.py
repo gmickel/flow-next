@@ -54,6 +54,7 @@ def _issue_out(raw: dict, *, parent_identity: str = "validated") -> dict:
 def _comment_out(raw: dict, *, parent_identity: str) -> dict:
     return {"id": raw.get("id"), "body": raw.get("body"),
             "url": raw.get("url"),
+            "created_at": raw.get("createdAt"),
             "raw": raw, "parent_identity": parent_identity}
 
 def parent_read(config: dict, locator: dict, execute: Execute, *,
@@ -162,7 +163,7 @@ def comment_add(config: dict, locator: dict, execute: Execute, *, body: str) -> 
     data = _gql(execute, "wire-comment-add",
                 "mutation($input: CommentCreateInput!) { "
                 "commentCreate(input: $input) { success "
-                "comment { id body url issue { id } } } }",
+                "comment { id body url createdAt issue { id } } } }",
                 {"input": {"issueId": locator["durable"], "body": body}})
     if isinstance(data, TrackerError):
         return data
@@ -213,7 +214,8 @@ def comment_list(config: dict, locator: dict, execute: Execute) -> Result:
         execute, "wire-comment-list",
         "query($id: String!, $after: String) { issue(id: $id) { "
         f"comments(first: {_PAGE_SIZE}, after: $after) "
-        "{ nodes { id body url } pageInfo { hasNextPage endCursor } } } }",
+        "{ nodes { id body url createdAt } "
+        "pageInfo { hasNextPage endCursor } } } }",
         {"id": locator["display"]}, pluck)
     if isinstance(drained, TrackerError):
         return drained
@@ -234,7 +236,7 @@ def comment_update(config: dict, locator: dict, execute: Execute, *,
     data = _gql(execute, "wire-comment-update",
                 "mutation($id: String!, $input: CommentUpdateInput!) { "
                 "commentUpdate(id: $id, input: $input) { success "
-                "comment { id body url issue { id } } } }",
+                "comment { id body url createdAt issue { id } } } }",
                 {"id": comment_id, "input": {"body": body}})
     if isinstance(data, TrackerError):
         return data

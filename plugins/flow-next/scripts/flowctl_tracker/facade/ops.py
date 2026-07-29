@@ -186,7 +186,8 @@ def _claim_facade(flow_dir: Path, spec_id: str, rec_path: Path,
 
 
 def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
-            event: str, execute: Execute = default_execute) -> Result:
+            event: str, status_only: bool = False,
+            execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
     provider = tracker_type(config)
     if provider is None:
@@ -212,7 +213,7 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
         return _push_sequence(
             flow_dir, spec_id, flow_body=flow_body,
             tracker_body=tracker_body, config=config, provider=provider,
-            event=event, execute=execute)
+            event=event, status_only=status_only, execute=execute)
     finally:
         # Release on every exit: the aggregate receipt, not the claim file,
         # is the durable record of what landed.
@@ -221,7 +222,7 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
 
 def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
                    tracker_body: str, config: dict, provider: str,
-                   event: str, execute: Execute) -> Result:
+                   event: str, status_only: bool, execute: Execute) -> Result:
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
@@ -247,26 +248,28 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     steps["create"] = created
     degraded = collect_degraded(created) or degraded
 
-    body_out = sync_body(
-        flow_dir, spec_id, flow_file_body=flow_body, direction="push",
-        tracker_body=tracker_body, event=event, execute=execute,
-        sync_title=True, write_receipt=False,
-    )
-    if isinstance(body_out, TrackerError):
-        prior = list((body_out.details or {}).get("completed_steps") or [])
-        if prior:
-            completed.append("sync-body-partial")
-        loaded_p = load_tracker(flow_dir, spec_id)
-        tid = loaded_p[2].get("id") if not isinstance(loaded_p, TrackerError) else None
-        return fail_result(
-            body_out, completed=completed, statuses=statuses,
-            flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=tid, transport=provider, degraded=degraded,
+    if not status_only:
+        body_out = sync_body(
+            flow_dir, spec_id, flow_file_body=flow_body, direction="push",
+            tracker_body=tracker_body, event=event, execute=execute,
+            sync_title=True, write_receipt=False,
         )
-    completed.append("sync-body")
-    statuses.append(step_status_from_sync_body(body_out))
-    steps["sync_body"] = body_out
-    degraded = collect_degraded(body_out) or degraded
+        if isinstance(body_out, TrackerError):
+            prior = list((body_out.details or {}).get("completed_steps") or [])
+            if prior:
+                completed.append("sync-body-partial")
+            loaded_p = load_tracker(flow_dir, spec_id)
+            tid = (loaded_p[2].get("id")
+                   if not isinstance(loaded_p, TrackerError) else None)
+            return fail_result(
+                body_out, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=tid, transport=provider, degraded=degraded,
+            )
+        completed.append("sync-body")
+        statuses.append(step_status_from_sync_body(body_out))
+        steps["sync_body"] = body_out
+        degraded = collect_degraded(body_out) or degraded
 
     status_out = run_status(
         flow_dir, spec_id, config=config, event=event, execute=execute,
@@ -283,20 +286,22 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     steps["status"] = status_out
     degraded = collect_degraded(status_out) or degraded
 
-    relations_out = _project_relations(
-        flow_dir, spec_id, event=event, execute=execute,
-        completed=completed, statuses=statuses,
-    )
-    if isinstance(relations_out, TrackerError):
-        loaded_p = load_tracker(flow_dir, spec_id)
-        tid = loaded_p[2].get("id") if not isinstance(loaded_p, TrackerError) else None
-        return fail_result(
-            relations_out, completed=completed, statuses=statuses,
-            flow_dir=flow_dir, spec_id=spec_id, event=event,
-            tracker_id=tid, transport=provider, degraded=degraded,
+    if not status_only:
+        relations_out = _project_relations(
+            flow_dir, spec_id, event=event, execute=execute,
+            completed=completed, statuses=statuses,
         )
-    steps["relations"] = relations_out
-    degraded = collect_degraded(relations_out) or degraded
+        if isinstance(relations_out, TrackerError):
+            loaded_p = load_tracker(flow_dir, spec_id)
+            tid = (loaded_p[2].get("id")
+                   if not isinstance(loaded_p, TrackerError) else None)
+            return fail_result(
+                relations_out, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=tid, transport=provider, degraded=degraded,
+            )
+        steps["relations"] = relations_out
+        degraded = collect_degraded(relations_out) or degraded
 
     loaded2 = load_tracker(flow_dir, spec_id)
     tracker_id = None
@@ -318,6 +323,7 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
 
     return ok_result({
         "op": "push",
+        "status_only": status_only,
         "steps": steps,
         "tracker_id": tracker_id,
     }, statuses=statuses, completed=completed, degraded=degraded)

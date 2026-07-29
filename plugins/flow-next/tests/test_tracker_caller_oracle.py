@@ -201,6 +201,14 @@ class TrackerCallerOracleTests(unittest.TestCase):
                 len(caller["config_reads"]["active"]),
                 len(caller["config_reads"]["inactive"]),
             )
+        first_claim_text = (
+            REPO_ROOT / self.callers["work.firstClaim"]["file"]
+        ).read_text(encoding="utf-8")
+        phases_text = (
+            REPO_ROOT / "plugins/flow-next/skills/flow-next-work/phases.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("--op push --status-only", first_claim_text)
+        self.assertIn("--op push --status-only", phases_text)
 
     def test_caller_inventory_and_event_tokens_match_real_files(self) -> None:
         sweep = self.oracle["teardown_sweep"]

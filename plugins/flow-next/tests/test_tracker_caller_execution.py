@@ -216,6 +216,8 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             row["event"],
         ]
         argv.extend(self._input_argv(op))
+        if caller_id == "work.firstClaim":
+            argv.append("--status-only")
         return argv
 
     def _input_argv(self, op: str) -> list[str]:
@@ -242,6 +244,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
 
     def _wrapper_body(self, caller_id: str, op_expression: str) -> str:
         row = self.callers[caller_id]
+        modifier = ' STATUS_ARGS=(--status-only)' if caller_id == "work.firstClaim" else ' STATUS_ARGS=()'
         imports = []
         if caller_id == "plan":
             imports.append("references/tracker-projection.md")
@@ -259,8 +262,9 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 '  reconcile) INPUT_ARGS=(--flow-file "$TMPDIR/flow.md" --body-file "$BODY_FILE" --comments-file "$TMPDIR/comments.json" --source-body-file "$TMPDIR/source.md") ;;',
                 '  comment) INPUT_ARGS=(--body-file "$BODY_FILE") ;;',
                 "esac",
+                modifier,
                 f'FACADE_RESULT=$("$FLOWCTL" tracker sync "$SPEC_ID" --op "$HARNESS_OP" '
-                f'--event {row["event"]} "${{INPUT_ARGS[@]}}")',
+                f'--event {row["event"]} "${{INPUT_ARGS[@]}}" "${{STATUS_ARGS[@]}}")',
                 'printf "%s" "$FACADE_RESULT" >/dev/null',
             ]
         )
@@ -501,6 +505,10 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 self.assertEqual(current[:3], ["tracker", "sync", "fn-141-harness"])
                 self.assertEqual(current[3:5], ["--op", expected_op])
                 self.assertEqual(current[5:7], ["--event", row["event"]])
+                self.assertEqual(
+                    "--status-only" in current,
+                    caller_id == "work.firstClaim",
+                )
 
 
 if __name__ == "__main__":

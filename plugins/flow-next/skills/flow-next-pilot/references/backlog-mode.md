@@ -173,10 +173,20 @@ R3 forbids. Check the parked home that applies to the item:
 
 - **Spec-backed** — scan the spec's `## Open Questions` for a
   `<!-- flow-next:question id=… status=open -->` anchor.
-- **Tracker-only** (no spec) — scan the tracker comments (from the `list-open` /
-  `listComments` read) for a `flow-next:question id=… status=open` anchor with **no**
-  matching `<!-- flow-next:answer id=… -->`. The parked state lives in the tracker;
-  there is no spec to anchor in.
+- **Tracker-only** (no spec) — `list-open` returns issues, not comments. Before
+  deciding parked state, invoke `list-comments <tracker-id>` exactly once for
+  that candidate. It maps to the normalized `comment-list` wire read. Compare
+  matching `flow-next:question` / `flow-next:answer` markers by stable `id` and
+  immutable `created_at`: the subject is parked when its latest matching marker
+  is a question, and answered when its latest matching marker is an answer.
+  This supports repeated rounds (`question → answer → question`) without an old
+  answer falsely clearing the new question. The parked state lives in the
+  tracker; there is no spec to anchor in.
+
+  A failed or truncated comment listing, or mixed matching markers without
+  unambiguous timestamps, fails closed. Do not select that candidate from an
+  incomplete history; route the structured error and end `NEEDS_HUMAN` when it
+  prevents a safe selection.
 
 An item whose anchor has flipped to `status=answered` (a human edited the spec
 anchor, or the answer round-trip matched a tracker reply by `id` — tracker-sync
@@ -203,6 +213,9 @@ edges come from **two** sources and feed **one** existing sorter:
   opaque global `id`.** On GitLab the global id can't index the
   `/projects/:id/issues/:iid` path — the adapter needs the `<project>#<iid>` the
   identifier carries (gitlab.md § identity). `list-open` already returns `identifier`
+  for every provider. On GitHub this read validates the issue and returns no
+  dependency edges: parent/sub-issue hierarchy is not blocked-by and never feeds
+  the sorter.
   per issue, so the pilot passes that handle straight through; Linear/GitHub resolve
   their display handle the same way. (Spec-backed candidates pass the spec/tracker id,
   which resolves to the stored `tracker.identifier`.)
@@ -441,18 +454,21 @@ selected item belongs to one.)
 
 ## Deterministic, multi-tracker (R13)
 
-Backlog mode's tracker surface is **only** three inline tracker-sync wrappers —
-`list-open` (enumerate the promoted lane), `list-relations` (READ one issue's dep
-edges), and `question` (park a gap). Each wrapper makes one structured
+Backlog mode's tracker surface is **only** four inline tracker-sync wrappers —
+`list-open` (enumerate the promoted lane), `list-comments` (READ one issue's
+question rounds), `list-relations` (READ one issue's dep edges), and `question`
+(park a gap). Each wrapper makes one structured
 `flowctl tracker` call and handles only semantic content or structured recovery.
-All three are on pilot's dispatch allowlist; `list-open` / `list-relations` are
-read-only, `question` posts a comment. Pilot calls **no** tracker-specific API and
+All four are on pilot's dispatch allowlist; `list-open` / `list-comments` /
+`list-relations` are read-only, `question` posts a comment. Pilot calls **no**
+tracker-specific API and
 **never** branches on tracker type; flowctl selects the active adapter from the
 resolved tracker configuration and returns the normalized envelope.
 
 The executable mapping is fixed:
 
 - `list-open` → `tracker wire list-open`;
+- `list-comments` → `tracker wire comment-list --locator <durable/display>`;
 - `list-relations` → `tracker wire relation-list --locator <durable/display>`;
 - `question` → `tracker wire question --locator <durable/display>` plus the four
   stable identity flags and one secure body file.

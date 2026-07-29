@@ -91,7 +91,7 @@ def marker_component_error(name: str, value: Any) -> Optional[TrackerError]:
 def validate_inputs(op: str, *, flow_file: Optional[str],
                     body_file: Optional[str], comments_file: Optional[str],
                     source_body_file: Optional[str],
-                    event: Optional[str]
+                    event: Optional[str], status_only: bool = False,
                     ) -> Optional[TrackerError]:
     if op not in OPS:
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -100,6 +100,12 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
     if not event or not str(event).strip():
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "--event is required", subtype="event")
+    if status_only and op != "push":
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "--status-only is valid only with --op push",
+            subtype="args",
+        )
     # The event is a marker field (and a receipt/claim key): reject values
     # the emitted marker could not round-trip BEFORE any wire call.
     bad_event = marker_component_error("event", str(event))

@@ -350,6 +350,22 @@ class InputMatrix(unittest.TestCase):
                 self.assertIn(needle, out.message, op)
                 self.assertEqual(ex.calls, [], op)
 
+    def test_status_only_is_valid_only_for_push(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            for op in ("pull", "reconcile", "comment"):
+                with self.subTest(op=op):
+                    ex = fake_execute({})
+                    out = F.sync(
+                        flow, SPEC_ID, op=op, event="work.done",
+                        status_only=True, execute=ex,
+                    )
+                    self.assertIsInstance(out, TrackerError)
+                    self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+                    self.assertIn("--status-only", out.message)
+                    self.assertEqual(ex.calls, [])
+
     def test_required_inputs_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
@@ -446,7 +462,7 @@ class PushFacade(unittest.TestCase):
                 }),
                 **_noop_push_responses(FLOW_BODY),
             })
-            out = F.sync(flow, SPEC_ID, op="push", event="work.firstClaim",
+            out = F.sync(flow, SPEC_ID, op="push", event="capture",
                          flow_file=ff, body_file=ff, execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["op"], "push")
@@ -461,7 +477,7 @@ class PushFacade(unittest.TestCase):
                 "the requested push must reuse the create-time body")
             receipts = _receipts(flow)
             self.assertEqual(len(receipts), 1, receipts)
-            self.assertEqual(receipts[0]["event"], "work.firstClaim")
+            self.assertEqual(receipts[0]["event"], "capture")
             self.assertEqual(receipts[0]["type"], "sync")
             saved = json.loads(
                 (flow / "specs" / f"{SPEC_ID}.json").read_text(encoding="utf-8"))
@@ -472,6 +488,103 @@ class PushFacade(unittest.TestCase):
                 saved["tracker"]["mergeBaseTracker"],
                 SB.trackerBodyForMerge(FLOW_BODY))
             self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
+
+    def test_status_only_linked_preserves_remote_body_and_skips_relations(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            remote_body = "REMOTE HUMAN EDIT"
+            _write_flow(
+                flow, gh_cfg(), tracker=_linked(),
+                tasks=[{"status": "in_progress"}],
+            )
+            ff = _flow_file(root, "LOCAL FLOW BODY")
+            parent = _gh_issue(remote_body)
+            ex = fake_execute({
+                "status-parent-read": ok(parent),
+                "status-set": ok({
+                    **parent,
+                    "labels": [{"name": "status:in-progress"}],
+                }),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:in-progress"}]),
+                "status-label-readback": ok([
+                    {"name": "status:in-progress"},
+                ]),
+                "merge-evidence": ok([]),
+            })
+            out = F.sync(
+                flow, SPEC_ID, op="push", event="work.firstClaim",
+                flow_file=ff, body_file=ff, status_only=True, execute=ex,
+            )
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertTrue(out["status_only"])
+            self.assertEqual(set(out["steps"]), {"create", "status"})
+            self.assertFalse(
+                any(c.op.startswith("sync-body") or c.op == "wire-update"
+                    for c in ex.calls),
+            )
+            self.assertFalse(
+                any(c.op.startswith("relation-") for c in ex.calls),
+            )
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json")
+                .read_text(encoding="utf-8"))["tracker"]
+            self.assertIsNone(saved["mergeBaseFlow"])
+            self.assertIsNone(saved["mergeBaseTracker"])
+            self.assertEqual(_receipts(flow)[0]["event"], "work.firstClaim")
+
+    def test_status_only_unlinked_creates_seeds_base_then_updates_status(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(
+                flow, gh_cfg(), tasks=[{"status": "in_progress"}],
+            )
+            ff = _flow_file(root)
+            created = _gh_issue(FLOW_BODY)
+            ex = fake_execute({
+                "lifecycle-create": ok(created),
+                "sync-body-parent-read": ok(created),
+                "status-parent-read": ok(created),
+                "status-set": ok({
+                    **created,
+                    "labels": [{"name": "status:in-progress"}],
+                }),
+                "status-label-rm": empty_ok(),
+                "status-label-add": ok([{"name": "status:in-progress"}]),
+                "status-label-readback": ok([
+                    {"name": "status:in-progress"},
+                ]),
+                "merge-evidence": ok([]),
+            })
+            out = F.sync(
+                flow, SPEC_ID, op="push", event="work.firstClaim",
+                flow_file=ff, body_file=ff, status_only=True, execute=ex,
+            )
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertTrue(out["status_only"])
+            self.assertEqual(
+                out["completed_steps"],
+                ["create", "paired-base", "status"],
+            )
+            self.assertFalse(
+                any(c.op == "wire-update" for c in ex.calls),
+            )
+            self.assertEqual(
+                [c.op for c in ex.calls].count("sync-body-parent-read"),
+                1,
+            )
+            saved = json.loads(
+                (flow / "specs" / f"{SPEC_ID}.json")
+                .read_text(encoding="utf-8"))["tracker"]
+            self.assertEqual(saved["mergeBaseFlow"], FLOW_BODY)
+            self.assertEqual(
+                saved["mergeBaseTracker"],
+                SB.trackerBodyForMerge(FLOW_BODY),
+            )
 
     def test_push_linked_is_idempotent_no_second_create(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

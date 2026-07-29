@@ -42,6 +42,7 @@ def _issue_out(raw: dict, *, parent_identity: str = "validated") -> dict:
 def _comment_out(raw: dict, *, parent_identity: str) -> dict:
     return {"id": raw.get("id"), "body": raw.get("body"),
             "url": raw.get("web_url"),
+            "created_at": raw.get("created_at"),
             "raw": raw, "parent_identity": parent_identity}
 
 def parent_read(config: dict, locator: dict, execute: Execute, *,

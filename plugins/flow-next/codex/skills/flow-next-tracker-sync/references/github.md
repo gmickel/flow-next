@@ -23,7 +23,8 @@ failures. Skill prose never executes GitHub API requests directly.
 | assignees | issue assignees |
 | status | open/closed state plus configured project/status policy |
 | list-open | repository issues filtered by configured ready label |
-| relation | native blocked-by when capability exists, otherwise flow-owned body block |
+| relation projection | sub-issue hierarchy proxy with structured degradation |
+| relation-list | validated empty dependency set; hierarchy is not blocked-by |
 | attachment | unsupported capability |
 
 Issue bodies and comments are Markdown. Pagination is completed inside flowctl.
@@ -31,10 +32,12 @@ Pull requests are not treated as issues in the ready lane.
 
 ## Capability degradation
 
-GitHub attachment upload is unsupported. Blocked-by support is capability
-dependent. When native dependency support is absent, the deterministic relation
-layer maintains the `flow:deps` body block and records that degradation. The
-block is excluded from body-merge divergence.
+GitHub attachment upload is unsupported. GitHub issues expose parent/sub-issue
+hierarchy but no issue-level blocked-by relation. Projection may use that
+hierarchy as a visibly degraded proxy and records it in Flow's provenance
+ledger. The backlog `relation-list` read deliberately returns no dependency
+rows after validating the parent: hierarchy can express decomposition or
+ownership and must never be normalized as `type: blocks`.
 
 All mutations validate the issue node id before writing. A moved, deleted, or
 reused display number produces a structured stale/not-found/conflict result and

@@ -35,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
@@ -68,6 +69,23 @@ LINEAR_GQL = "https://api.linear.app/graphql"
 
 Result = Union[dict, TrackerError]
 Execute = Callable[[Request], Union[Response, TrackerError]]
+
+
+def _created_at(comment: dict) -> Optional[datetime]:
+    """Parse one normalized immutable comment timestamp."""
+    raw = comment.get("created_at")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    value = raw.strip()
+    if value.endswith("Z"):
+        value = f"{value[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -562,33 +580,66 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
                 ErrorClass.TRANSPORT,
                 "question comment list is malformed",
                 subtype="malformed_body")
-        question_pattern = re.compile(
-            rf"<!--\s*flow-next:question\s+id={re.escape(question_id)}"
-            r"(?:\s+status=[A-Za-z0-9_-]+)?\s*-->")
-        for comment in comments:
-            comment_body = comment.get("body") if isinstance(comment, dict) else None
-            if isinstance(comment_body, str) and question_pattern.search(comment_body):
-                # GitHub and GitLab comment-list routes address the parent by
-                # display number/IID. Accept a dedup match only after durable
-                # identity is proven, either by the comment payload itself or
-                # by an explicit display-addressed parent read.
-                if (provider in ("github", "gitlab")
-                        and comment.get("parent_identity") != "validated"):
-                    parent = mod.parent_read(
-                        config, parsed, execute,
-                        op="wire-question-parent-read")  # type: ignore[arg-type]
-                    if isinstance(parent, TrackerError):
-                        return parent
-                return {
-                    "posted": False,
-                    "question_id": question_id,
-                    "comment": comment,
-                }
         if listed.get("truncated"):
             return TrackerError(
                 ErrorClass.TRANSPORT,
-                "question comment pages truncated; marker absence unproven",
+                "question comment pages truncated; latest round is unproven",
                 subtype="truncated")
+        question_pattern = re.compile(
+            rf"<!--\s*flow-next:question\s+id={re.escape(question_id)}"
+            r"(?:\s+status=[A-Za-z0-9_-]+)?\s*-->")
+        answer_pattern = re.compile(
+            rf"<!--\s*flow-next:answer\s+id={re.escape(question_id)}\s*-->")
+        questions = []
+        answers = []
+        for comment in comments:
+            comment_body = comment.get("body") if isinstance(comment, dict) else None
+            if not isinstance(comment_body, str):
+                continue
+            if question_pattern.search(comment_body):
+                questions.append(comment)
+            if answer_pattern.search(comment_body):
+                answers.append(comment)
+
+        current_question = questions[-1] if questions else None
+        reopen = False
+        if questions and answers:
+            timed_questions = [(_created_at(c), c) for c in questions]
+            timed_answers = [(_created_at(c), c) for c in answers]
+            if (any(stamp is None for stamp, _ in timed_questions)
+                    or any(stamp is None for stamp, _ in timed_answers)):
+                return TrackerError(
+                    ErrorClass.TRANSPORT,
+                    "question and answer markers need immutable created_at "
+                    "timestamps to determine the latest round",
+                    subtype="malformed_body")
+            latest_question = max(timed_questions, key=lambda row: row[0])
+            latest_answer = max(timed_answers, key=lambda row: row[0])
+            if latest_question[0] == latest_answer[0]:
+                return TrackerError(
+                    ErrorClass.TRANSPORT,
+                    "question and answer chronology is ambiguous",
+                    subtype="malformed_body")
+            current_question = latest_question[1]
+            reopen = latest_answer[0] > latest_question[0]
+
+        if current_question is not None and not reopen:
+            # GitHub and GitLab comment-list routes address the parent by
+            # display number/IID. Accept a dedup match only after durable
+            # identity is proven, either by the comment payload itself or
+            # by an explicit display-addressed parent read.
+            if (provider in ("github", "gitlab")
+                    and current_question.get("parent_identity") != "validated"):
+                parent = mod.parent_read(
+                    config, parsed, execute,
+                    op="wire-question-parent-read")  # type: ignore[arg-type]
+                if isinstance(parent, TrackerError):
+                    return parent
+            return {
+                "posted": False,
+                "question_id": question_id,
+                "comment": current_question,
+            }
         rendered = f"{marker}\n\n{body.lstrip()}"
         added = mod.comment_add(
             config, parsed, execute, body=rendered)  # type: ignore[arg-type]
@@ -596,6 +647,7 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
             return added
         return {
             "posted": True,
+            "reopened": reopen,
             "question_id": question_id,
             "comment": added,
         }

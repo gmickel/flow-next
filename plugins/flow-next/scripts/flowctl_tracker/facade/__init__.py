@@ -25,13 +25,14 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
          flow_file: Optional[str] = None, body_file: Optional[str] = None,
          comments_file: Optional[str] = None,
          source_body_file: Optional[str] = None,
+         status_only: bool = False,
          execute: Execute = default_execute):
     """Compose one facade op. Returns data dict or TrackerError — never raises."""
     flow_dir = Path(flow_dir)
     bad = validate_inputs(
         op, flow_file=flow_file, body_file=body_file,
         comments_file=comments_file, source_body_file=source_body_file,
-        event=event)
+        event=event, status_only=status_only)
     if bad:
         return bad
 
@@ -43,7 +44,8 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
         if op == "push":
             return op_push(
                 flow_dir, spec_id, flow_file=flow_file or "",
-                body_file=body_file or "", event=event, execute=execute)
+                body_file=body_file or "", event=event,
+                status_only=status_only, execute=execute)
         if op == "pull":
             return op_pull(
                 flow_dir, spec_id, flow_file=flow_file or "",
@@ -95,6 +97,7 @@ def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
         body_file: Optional[str] = None,
         comments_file: Optional[str] = None,
         source_body_file: Optional[str] = None,
+        status_only: bool = False,
         execute: Execute = default_execute) -> tuple[str, int]:
     """Thin envelope shell — never raises across the boundary."""
     config = read_config(flow_dir)
@@ -115,7 +118,8 @@ def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
     out = sync(flow_dir, spec_id, op=op, event=event or "",
                flow_file=flow_file, body_file=body_file,
                comments_file=comments_file,
-               source_body_file=source_body_file, execute=execute)
+               source_body_file=source_body_file, status_only=status_only,
+               execute=execute)
     if isinstance(out, TrackerError):
         if out.cls is ErrorClass.INACTIVE:
             return envelope.inactive()

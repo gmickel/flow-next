@@ -13,15 +13,11 @@ from ..wire import (
     Execute,
     Result,
     _check_durable,
-    _cli,
     _destination,
-    _gh_repo,
-    _github_number,
     _gitlab_iid,
     _gql,
     _jira,
     _jira_base,
-    _rest_drain,
 )
 from . import providers
 from .ledger import FLOW_DEPS_CLOSE, FLOW_DEPS_OPEN
@@ -287,56 +283,15 @@ def gitlab_list(config: dict, execute: Execute, *, locator: dict) -> Result:
 
 
 def github_list(config: dict, execute: Execute, *, locator: dict) -> Result:
-    """List both sides of GitHub's degraded parent/sub-issue relation."""
+    """Validate the issue, but never reinterpret hierarchy as dependency."""
     from ..wire import github as wire_github  # noqa: PLC0415
 
     parent_issue = wire_github.parent_read(
         config, locator, execute, op="wire-relation-parent-read")
     if isinstance(parent_issue, TrackerError):
         return parent_issue
-    dest = _destination(config)
-    if isinstance(dest, TrackerError):
-        return dest
-    repo = _gh_repo(dest)
-    number = _github_number(locator["display"])
-    if isinstance(repo, TrackerError):
-        return repo
-    if isinstance(number, TrackerError):
-        return number
-    current = f"#{number}"
-    rows: list = []
-
-    parent = _cli(
-        execute, "github", config, "wire-relation-parent", "GET",
-        f"repos/{repo}/issues/{number}/parent", idempotent=True)
-    if isinstance(parent, TrackerError):
-        if parent.cls is not ErrorClass.NOT_FOUND:
-            return parent
-    elif isinstance(parent, dict) and isinstance(parent.get("number"), int):
-        rows.append(_relation(
-            current, f"#{parent['number']}",
-            degraded=dict(providers._GITHUB_HIERARCHY_DEGRADED)))
-    else:
-        return TrackerError(
-            ErrorClass.TRANSPORT, "github parent issue is malformed",
-            subtype="malformed_body")
-
-    drained = _rest_drain(lambda page: _cli(
-        execute, "github", config, "wire-relation-list", "GET",
-        f"repos/{repo}/issues/{number}/sub_issues"
-        f"?per_page={_PAGE_SIZE}&page={page}", idempotent=True))
-    if isinstance(drained, TrackerError):
-        return drained
-    children, truncated = drained
-    if truncated:
-        return _truncated_error("github")
-    for child in children:
-        if isinstance(child, dict) and isinstance(child.get("number"), int):
-            rows.append(_relation(
-                f"#{child['number']}", current,
-                degraded=dict(providers._GITHUB_HIERARCHY_DEGRADED)))
     return {
-        "relations": _dedupe_relations(rows),
+        "relations": [],
         "truncated": False,
         "parent_identity": "validated",
     }
