@@ -1,7 +1,9 @@
 {
   "branch_name": "fn-148-eval-two-spec-prose-candidates-measured",
   "created_at": "2026-07-29T21:34:11.063590Z",
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-147-source-tags-in-interview-provenance-for"
+  ],
   "id": "fn-148-eval-two-spec-prose-candidates-measured",
   "next_task": 1,
   "plan_review_status": "unknown",
@@ -20,5 +22,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-29T21:35:30.903399Z"
+  "updated_at": "2026-07-29T21:38:01.990438Z"
 }

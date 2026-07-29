@@ -23,9 +23,30 @@ cheap to express as template guidance and neither adds machinery:
    decisions the spec flagged as its own inference and asked to have confirmed before the
    build session committed to them.
 
-Note what (2) actually is: our `[inferred]` tag, applied to **technical facts and
-decisions** rather than only to acceptance criteria. The affordance already exists in one
-place and is demonstrably useful there.
+Note what (2) actually is: the provenance *idea* behind our `[inferred]` tag, applied to
+**technical facts and decisions** rather than to acceptance criteria. The affordance already
+exists in one place and is demonstrably useful there.
+
+**What this spec is NOT.** It is not "add more tags." Depends on
+[fn-147](fn-147-source-tags-in-interview-provenance-for.md), which is the tag work:
+extending the existing four-tag vocabulary to the acceptance criteria that
+`/flow-next:interview` writes. fn-147 needs no eval - the tags are proven in capture and
+the parser already reads them from any writer - so it is a feature, not research.
+
+This spec tests something different: whether two **demands on the prose** improve a spec.
+Only one of the two is provenance-flavoured at all:
+
+- Arm M (measured claims) has nothing to do with tags or provenance.
+- Arm V targets a **different surface** - environment/codebase facts in the technical
+  sections, and decisions resting on an inference - and plausibly a different mechanism
+  (the reference spec used a prose block, "verified in `node_modules` rather than
+  inferred", not a per-bullet suffix). Whether it should reuse fn-147's `[...]` grammar or
+  stay prose is itself an open question this eval should answer.
+
+**Sequencing is a design constraint, not scheduling preference.** fn-147 ships first so
+that (a) the vocabulary and the reader habit already exist, making arm V cheaper to express
+and able to reuse one single-sourced definition instead of forking a parallel one, and
+(b) arm V cannot be credited with an effect that fn-147 actually produced.
 
 The question this spec answers is whether adding either demand to the template's guidance
 prose measurably improves downstream outcomes, or whether it is another intuition that
@@ -96,9 +117,12 @@ No product API. Study contract:
   prefer adding a contrasting repo since the last study could not.
 - **Do not reuse the last study's invalidated key items.** F1 L9, F3 M4 and F3 M9 were
   judged design-preference rather than requirement. They stay dropped.
-- **Confounding with fn-147.** If interview tagging ships first, arm V's "mark facts
-  verified or inferred" may partly overlap it. Sequence or note the overlap explicitly;
-  do not let one intervention take credit for the other's effect.
+- **fn-147 is a hard prerequisite, and the reason is measurement integrity.** Arm V and
+  fn-147 both touch provenance. If they land in the same window, an arm-V gain could
+  actually be fn-147's effect. fn-147 first, its behaviour settled, then arm V measured on
+  top of it as the baseline - and the fixtures used for this eval must be authored under
+  post-fn-147 behaviour so the baseline arm already carries criteria tags. A baseline that
+  predates fn-147 would make arm V look better than it is.
 
 ## Acceptance Criteria
 <!-- scope: both -->
