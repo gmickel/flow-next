@@ -19,9 +19,8 @@ Instrument each caller with a **fake flowctl** and assert config reads, argv, im
 - [ ] Fake flowctl asserts config reads, argv, imports, stdout, stderr vs a pre-teardown oracle
 
 ## Done summary
-TBD
-
+Added an executable fake-flowctl harness for all ten tracker lifecycle callers. It proves inactive-path silence against the pinned oracle and validates every perEvent value, facade input contract, QA coercion, Work fixed operation, make-pr unconditional reconcile, and land merge-evidence route.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f630180d35b7854bb3ff8f7e7d529e05302dc210, 8b0a6cc1dd1c9cc779e52616403182d82c80c8d2, 6b4c1924731965cf673b854b8f2ab76f2c8dae89
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_caller_execution test_tracker_caller_oracle test_tracker_sync_prose_teardown test_tracker_sync_mirror_parity test_reached_path_harness -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_sync_mirror_parity test_reached_path_harness -q, python3 -m py_compile plugins/flow-next/tests/test_tracker_caller_execution.py plugins/flow-next/tests/fixtures/tracker_callers/fake_flowctl.py, Codex impl-review: SHIP (gpt-5.6-sol, medium)
 - PRs:
