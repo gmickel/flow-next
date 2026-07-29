@@ -221,9 +221,9 @@ harvested, the remaining ROI prize is the **always-loaded prompt weight of the h
 `SKILL.md` + force-loaded companion files a skill reads on *every* invocation. Three levers, safest first
 (all zero-quality-loss when applied in this order — see `optimization-log.md` fn-82 rows for the numbers):
 
-**Tracker-sync re-measurement (2026-07-29): medium, 17,832 LF-normalized
-characters (~4,458 chars/4 tokens).** The always-loaded set is exactly
-`SKILL.md` (6,656) + `steps.md` (6,927) +
+**Tracker-sync re-measurement (2026-07-29): medium, 17,829 LF-normalized
+characters (~4,457 chars/4 tokens).** The always-loaded set is exactly
+`SKILL.md` (6,656) + `steps.md` (6,924) +
 `references/adapter-interface.md` (4,249); provider, body, status, comment, and
 identity references remain reached-path only. Reproduce from the repo root:
 
