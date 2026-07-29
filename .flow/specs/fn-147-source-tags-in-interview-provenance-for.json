@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-147-source-tags-in-interview-provenance-for.md",
-  "status": "open",
+  "status": "done",
   "title": "Source tags in interview - provenance for criteria the interview writes",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-29T21:34:10.545837Z"
+  "updated_at": "2026-07-29T23:38:32.088507Z"
 }
