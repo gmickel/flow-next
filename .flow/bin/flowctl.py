@@ -24280,6 +24280,7 @@ def cmd_tracker_facade(args: argparse.Namespace) -> None:
         body_file=getattr(args, "body_file", None),
         comments_file=getattr(args, "comments_file", None),
         source_body_file=getattr(args, "source_body_file", None),
+        comment_file=getattr(args, "comment_file", None),
         status_only=getattr(args, "status_only", False),
     )
     print(payload)
@@ -31873,6 +31874,11 @@ def main() -> None:
         "--source-body-file", default=None, dest="source_body_file",
         help="Exact tracker body snapshot used to prepare a reconcile merge "
              "(required for reconcile; forbidden for other ops)",
+    )
+    p_tracker_sync.add_argument(
+        "--comment-file", default=None, dest="comment_file",
+        help="Optional judgment-bearing comment to post inside --op push; "
+             "forbidden for pull/reconcile/comment",
     )
     p_tracker_sync.add_argument(
         "--status-only", action="store_true", dest="status_only",

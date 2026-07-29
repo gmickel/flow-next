@@ -330,6 +330,7 @@ class InputMatrix(unittest.TestCase):
             ("push", {
                 "flow_file": "x", "body_file": "x", "comments_file": "x",
             }, "comments-file"),
+            ("pull", {"comment_file": "x"}, "comment-file"),
             ("comment", {"flow_file": "x"}, "flow-file"),
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -601,6 +602,65 @@ class PushFacade(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError)
             self.assertFalse(any(c.op == "lifecycle-create" for c in ex.calls))
             self.assertEqual(len(_receipts(flow)), 1)
+
+    def test_push_posts_optional_verdict_comment_in_same_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked(
+                mergeBaseFlow=FLOW_BODY,
+                mergeBaseTracker=FLOW_BODY.rstrip("\n"),
+            ))
+            ff = _flow_file(root)
+            cf = _body_file(
+                root,
+                "evidence=merge-abc123\n"
+                "Merged PR: https://github.com/o/r/pull/7\n"
+                "Release outcome: RELEASED 1.2.3\n",
+            )
+            posted = []
+
+            def capture_add(request):
+                posted.append(json.loads(request.body)["body"])
+                return ok({"id": 101, "body": posted[-1]})
+
+            responses = _noop_push_responses(FLOW_BODY)
+            responses.update({
+                "wire-comment-list": ok([]),
+                "wire-comment-add": capture_add,
+            })
+            out = F.sync(
+                flow, SPEC_ID, op="push", event="land.merged",
+                flow_file=ff, body_file=ff, comment_file=cf,
+                execute=fake_execute(responses),
+            )
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertTrue(out["steps"]["comment"]["posted"])
+            self.assertEqual(len(posted), 1)
+            self.assertIn("evt=land.merged", posted[0])
+            self.assertIn("evidence=merge-abc123", posted[0])
+            self.assertIn("Merged PR:", posted[0])
+            self.assertIn("comment-add", out["completed_steps"])
+            receipts = _receipts(flow)
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0]["event"], "land.merged")
+            self.assertIn("comment-add", receipts[0]["note"])
+
+            responses2 = _noop_push_responses(FLOW_BODY)
+            responses2["wire-comment-list"] = ok([{
+                "id": 101,
+                "body": posted[0],
+                "html_url": "https://x/c/101",
+            }])
+            out2 = F.sync(
+                flow, SPEC_ID, op="push", event="land.merged",
+                flow_file=ff, body_file=ff, comment_file=cf,
+                execute=fake_execute(responses2),
+            )
+            self.assertNotIsInstance(out2, TrackerError, out2)
+            self.assertFalse(out2["steps"]["comment"]["posted"])
+            self.assertTrue(out2["steps"]["comment"]["deduped"])
+            self.assertEqual(len(_receipts(flow)), 2)
 
     def test_partial_success_readback_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

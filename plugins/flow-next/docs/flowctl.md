@@ -1096,11 +1096,12 @@ directed `{from,to,type:"blocks"}` for backlog ordering and fails with
 the graph complete. GitHub parent/sub-issue hierarchy is not a blocked-by
 relation, so GitHub validates the parent and returns an empty relation set.
 `question` hashes its four stable identity inputs, adds the canonical question
-marker, and reads comments before writing. Normalized comments include immutable
-`created_at`. A latest question marker dedups; a latest matching answer reopens
-the same stable id as a new question round. Missing, tied, or truncated
-chronology fails closed. The free-prose body is not part of the hash. `attach`
-and `attach-get` are capability-gated.
+marker, takes a local provider+issue+question claim, and reads comments before
+writing. A concurrent identical ask returns retryable `question_in_flight`.
+Normalized comments include immutable `created_at`. A latest question marker
+dedups; a latest matching answer reopens the same stable id as a new question
+round. Missing, tied, or truncated chronology fails closed. The free-prose body
+is not part of the hash. `attach` and `attach-get` are capability-gated.
 
 ### Lifecycle and projection verbs
 
@@ -1147,7 +1148,7 @@ verbs:
 
 ```bash
 flowctl tracker sync <spec-id> --op push --event KEY \
-  --flow-file F --body-file F
+  --flow-file F --body-file F [--comment-file F]
 
 # First-claim projection: create/link if needed, then status only.
 flowctl tracker sync <spec-id> --op push --status-only --event KEY \
@@ -1168,6 +1169,9 @@ The facade owns create-if-unlinked, lifecycle ordering, marker deduplication,
 status/readiness/dependency projection, transaction boundaries, and one
 aggregate receipt. Pull and reconcile receive the already adjudicated final
 Flow form as an input file; flowctl never authors the semantic merge.
+`--comment-file` is optional only for `push`; its marker-deduped comment is
+posted inside the same facade claim and aggregate receipt as body, status, and
+relation projection.
 `--status-only` is valid only with `push`; it preserves body and relation
 co-edits on an already-linked issue while retaining create/link/paired-base
 seeding for an unlinked spec.
@@ -1263,7 +1267,8 @@ tracker verbs themselves:
 
 ```bash
 flowctl tracker sync <spec-id> --op push --event <key> \
-  --flow-file <exact-local-flow-form> --body-file <tracker-render>
+  --flow-file <exact-local-flow-form> --body-file <tracker-render> \
+  [--comment-file <optional-synthesized-comment>]
 
 # First-claim status projection without overwriting linked body/relations.
 flowctl tracker sync <spec-id> --op push --status-only --event <key> \
@@ -1291,6 +1296,8 @@ on-disk final Flow form, then commits the paired base. Reconcile and push also
 project the current spec title to the native issue title and project
 `depends_on_epics`; internal `sync-body`, status, and relation receipts are
 suppressed so each invocation emits one aggregate event receipt.
+An optional push `--comment-file` is marker-deduped and posted under that same
+facade claim and receipt; other operations reject it.
 The `push --status-only` modifier skips body/title and relation projection. On
 an unlinked spec it still creates the issue, persists the link, seeds the paired
 base from readback, and projects status.

@@ -1,7 +1,12 @@
-"""Wire verbs: locator-addressed tracker operations with no local state (fn-140.1).
+"""Wire verbs: locator-addressed tracker operations (fn-140.1).
 
 Wire verbs take a locator `{durable, display}` (except `list-open`), touch no
-config / receipt, and every WRITE validates the parent BEFORE mutating:
+config / receipt, and every WRITE validates the parent BEFORE mutating.
+`question` additionally uses one transient local claim to serialize its
+list-then-add dedup transaction; the claim is always released and is not a
+receipt.
+
+Every write validates the parent before mutating:
 
     1. resolve the display address → one parent read
     2. compare the returned durable id to `locator.durable`
@@ -41,6 +46,11 @@ from typing import Any, Callable, Optional, Union
 
 from .. import envelope
 from ..executor import execute as default_execute
+from ..question_claim import (
+    claim_question,
+    question_claim_path,
+    release_question_claim,
+)
 from ..types import (ErrorClass, Request, Response, TrackerError,
                      gitlab_cli_hostname)
 
@@ -461,6 +471,93 @@ def parent_read(provider: str, config: dict, locator: dict, execute: Execute, *,
     return mod.parent_read(config, locator, execute, op=op)
 
 
+def _dispatch_question(*, mod: Any, provider: str, config: dict,
+                       locator: dict, execute: Execute, body: str,
+                       question_id: str) -> Result:
+    """Read the current semantic round and post only when no round is open."""
+    marker = f"<!-- flow-next:question id={question_id} status=open -->"
+    listed = mod.comment_list(config, locator, execute)
+    if isinstance(listed, TrackerError):
+        return listed
+    comments = listed.get("comments")
+    if not isinstance(comments, list):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "question comment list is malformed",
+            subtype="malformed_body")
+    if listed.get("truncated"):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "question comment pages truncated; latest round is unproven",
+            subtype="truncated")
+    question_pattern = re.compile(
+        rf"<!--\s*flow-next:question\s+id={re.escape(question_id)}"
+        r"(?:\s+status=[A-Za-z0-9_-]+)?\s*-->")
+    answer_pattern = re.compile(
+        rf"<!--\s*flow-next:answer\s+id={re.escape(question_id)}\s*-->")
+    questions = []
+    answers = []
+    for comment in comments:
+        comment_body = comment.get("body") if isinstance(comment, dict) else None
+        if not isinstance(comment_body, str):
+            continue
+        if question_pattern.search(comment_body):
+            questions.append(comment)
+        if answer_pattern.search(comment_body):
+            answers.append(comment)
+
+    current_question = questions[-1] if questions else None
+    reopen = False
+    if questions and answers:
+        timed_questions = [(_created_at(c), c) for c in questions]
+        timed_answers = [(_created_at(c), c) for c in answers]
+        if (any(stamp is None for stamp, _ in timed_questions)
+                or any(stamp is None for stamp, _ in timed_answers)):
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "question and answer markers need immutable created_at "
+                "timestamps to determine the latest round",
+                subtype="malformed_body")
+        latest_question = max(timed_questions, key=lambda row: row[0])
+        latest_answer = max(timed_answers, key=lambda row: row[0])
+        if latest_question[0] == latest_answer[0]:
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "question and answer chronology is ambiguous",
+                subtype="malformed_body")
+        current_question = latest_question[1]
+        reopen = latest_answer[0] > latest_question[0]
+
+    if current_question is not None and not reopen:
+        # GitHub and GitLab comment-list routes address the parent by
+        # display number/IID. Accept a dedup match only after durable
+        # identity is proven, either by the comment payload itself or
+        # by an explicit display-addressed parent read.
+        if (provider in ("github", "gitlab")
+                and current_question.get("parent_identity") != "validated"):
+            parent = mod.parent_read(
+                config, locator, execute,
+                op="wire-question-parent-read")
+            if isinstance(parent, TrackerError):
+                return parent
+        return {
+            "posted": False,
+            "question_id": question_id,
+            "comment": current_question,
+        }
+    rendered = f"{marker}\n\n{body.lstrip()}"
+    added = mod.comment_add(
+        config, locator, execute, body=rendered)
+    if isinstance(added, TrackerError):
+        return added
+    return {
+        "posted": True,
+        "reopened": reopen,
+        "question_id": question_id,
+        "comment": added,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Dispatch + CLI entry
 # ---------------------------------------------------------------------------
@@ -476,6 +573,7 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
              file_path: Optional[str] = None,
              attachment_id: Optional[str] = None,
              out_path: Optional[str] = None,
+             flow_dir: Optional[Path] = None,
              execute: Execute = default_execute) -> Result:
     """Run one wire verb. Returns data dict or TrackerError — never raises."""
     if verb not in WIRE_VERBS:
@@ -569,88 +667,32 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
                     subtype=name.replace("-", "_"))
         stable = "\0".join(str(value).strip() for value in identity.values())
         question_id = hashlib.sha256(stable.encode()).hexdigest()[:16]
-        marker = f"<!-- flow-next:question id={question_id} status=open -->"
-        listed = mod.comment_list(
-            config, parsed, execute)  # type: ignore[arg-type]
-        if isinstance(listed, TrackerError):
-            return listed
-        comments = listed.get("comments")
-        if not isinstance(comments, list):
+        if flow_dir is None:
             return TrackerError(
-                ErrorClass.TRANSPORT,
-                "question comment list is malformed",
-                subtype="malformed_body")
-        if listed.get("truncated"):
+                ErrorClass.INVALID_INPUT,
+                "question requires the .flow directory for concurrency-safe "
+                "deduplication",
+                subtype="flow_dir")
+        if parsed is None:
             return TrackerError(
-                ErrorClass.TRANSPORT,
-                "question comment pages truncated; latest round is unproven",
-                subtype="truncated")
-        question_pattern = re.compile(
-            rf"<!--\s*flow-next:question\s+id={re.escape(question_id)}"
-            r"(?:\s+status=[A-Za-z0-9_-]+)?\s*-->")
-        answer_pattern = re.compile(
-            rf"<!--\s*flow-next:answer\s+id={re.escape(question_id)}\s*-->")
-        questions = []
-        answers = []
-        for comment in comments:
-            comment_body = comment.get("body") if isinstance(comment, dict) else None
-            if not isinstance(comment_body, str):
-                continue
-            if question_pattern.search(comment_body):
-                questions.append(comment)
-            if answer_pattern.search(comment_body):
-                answers.append(comment)
-
-        current_question = questions[-1] if questions else None
-        reopen = False
-        if questions and answers:
-            timed_questions = [(_created_at(c), c) for c in questions]
-            timed_answers = [(_created_at(c), c) for c in answers]
-            if (any(stamp is None for stamp, _ in timed_questions)
-                    or any(stamp is None for stamp, _ in timed_answers)):
-                return TrackerError(
-                    ErrorClass.TRANSPORT,
-                    "question and answer markers need immutable created_at "
-                    "timestamps to determine the latest round",
-                    subtype="malformed_body")
-            latest_question = max(timed_questions, key=lambda row: row[0])
-            latest_answer = max(timed_answers, key=lambda row: row[0])
-            if latest_question[0] == latest_answer[0]:
-                return TrackerError(
-                    ErrorClass.TRANSPORT,
-                    "question and answer chronology is ambiguous",
-                    subtype="malformed_body")
-            current_question = latest_question[1]
-            reopen = latest_answer[0] > latest_question[0]
-
-        if current_question is not None and not reopen:
-            # GitHub and GitLab comment-list routes address the parent by
-            # display number/IID. Accept a dedup match only after durable
-            # identity is proven, either by the comment payload itself or
-            # by an explicit display-addressed parent read.
-            if (provider in ("github", "gitlab")
-                    and current_question.get("parent_identity") != "validated"):
-                parent = mod.parent_read(
-                    config, parsed, execute,
-                    op="wire-question-parent-read")  # type: ignore[arg-type]
-                if isinstance(parent, TrackerError):
-                    return parent
-            return {
-                "posted": False,
-                "question_id": question_id,
-                "comment": current_question,
-            }
-        rendered = f"{marker}\n\n{body.lstrip()}"
-        added = mod.comment_add(
-            config, parsed, execute, body=rendered)  # type: ignore[arg-type]
-        if isinstance(added, TrackerError):
-            return added
-        return {
-            "posted": True,
-            "reopened": reopen,
-            "question_id": question_id,
-            "comment": added,
-        }
+                ErrorClass.INVALID_INPUT,
+                "question requires the parent locator",
+                subtype="locator")
+        rec_path = question_claim_path(
+            Path(flow_dir), provider=provider,
+            durable=str(parsed["durable"]), question_id=question_id)
+        claimed = claim_question(
+            Path(flow_dir), rec_path, provider=provider,
+            durable=str(parsed["durable"]), question_id=question_id,
+            subject_id=str(subject_id))
+        if claimed is not None:
+            return claimed
+        try:
+            return _dispatch_question(
+                mod=mod, provider=provider, config=config, locator=parsed,
+                execute=execute, body=body, question_id=question_id)
+        finally:
+            release_question_claim(rec_path)
     return TrackerError(ErrorClass.INVALID_INPUT, f"unhandled verb {verb!r}", subtype="verb")
 
 
@@ -717,7 +759,8 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
                            reason_code=reason_code, question_slug=question_slug,
                            add=add, remove=remove,
                            file_path=file_path, attachment_id=attachment_id,
-                           out_path=out_path, execute=ex)
+                           out_path=out_path, flow_dir=Path(flow_dir),
+                           execute=ex)
         except Exception as exc:  # noqa: BLE001 - envelope boundary
             out = TrackerError(
                 ErrorClass.TRANSPORT,

@@ -88,6 +88,16 @@ validate_base() {
 ensure_dir() {
   assert_worktrees_dir
   mkdir -p "$worktrees_dir"
+  local ignore_file="$worktrees_dir/.gitignore"
+  if [[ -L "$ignore_file" ]]; then
+    fail ".worktrees/.gitignore is a symlink; refusing for safety: $ignore_file"
+  fi
+  if [[ -e "$ignore_file" && ! -f "$ignore_file" ]]; then
+    fail ".worktrees/.gitignore exists but is not a file: $ignore_file"
+  fi
+  if [[ ! -e "$ignore_file" ]]; then
+    printf '*\n!.gitignore\n' > "$ignore_file"
+  fi
 }
 
 copy_env() {

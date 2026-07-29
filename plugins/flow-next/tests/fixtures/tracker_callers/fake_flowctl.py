@@ -25,6 +25,7 @@ ALL_INPUTS = {
     "--body-file",
     "--comments-file",
     "--source-body-file",
+    "--comment-file",
 }
 
 
@@ -56,9 +57,11 @@ def _validate_facade(argv: list[str]) -> tuple[str, str]:
         if not Path(value).is_file():
             raise SystemExit("input file does not exist: " + repr(value))
     required = OP_INPUTS[op]
-    if set(supplied) != required:
+    allowed = required | ({"--comment-file"} if op == "push" else set())
+    if not required.issubset(supplied) or not set(supplied).issubset(allowed):
         raise SystemExit(
-            f"{op} input mismatch: expected {sorted(required)}, "
+            f"{op} input mismatch: expected {sorted(required)} "
+            f"and allowed {sorted(allowed)}, "
             f"got {sorted(supplied)}"
         )
     return op, event

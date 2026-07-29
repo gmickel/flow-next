@@ -1393,6 +1393,13 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
     _QUESTION = "<!-- flow-next:question id=a7f96309954a181b status=open -->"
     _ANSWER = "<!-- flow-next:answer id=a7f96309954a181b -->"
 
+    def _flow_dir(self) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        flow = Path(tmp.name) / ".flow"
+        flow.mkdir()
+        return flow
+
     def _comment(self, provider: str, number: int, body: str,
                  created_at: str | None) -> dict:
         raw = {"id": str(number), "body": body}
@@ -1489,7 +1496,7 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
             "question", cfg, locator=locator,
             subject_id="subject-1", blocked_stage="triage",
             reason_code="needs-spec", question_slug="capture-or-interview",
-            body="What next?", execute=ex,
+            body="What next?", flow_dir=self._flow_dir(), execute=ex,
         )
         return out, ex
 
@@ -1748,12 +1755,62 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
             "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
             subject_id="subject-1", blocked_stage="triage",
             reason_code="needs-spec", question_slug="capture-or-interview",
-            body="Rephrased", execute=ex)
+            body="Rephrased", flow_dir=self._flow_dir(), execute=ex)
         self.assertEqual(out["posted"], False)
         self.assertEqual(
             [call.op for call in ex.calls],
             ["wire-comment-list", "wire-question-parent-read"],
         )
+
+    def test_question_concurrent_same_key_single_add_loser_conflicts(self) -> None:
+        flow = self._flow_dir()
+        inner: dict = {}
+        posted = []
+
+        def racing_list(_request):
+            claim_files = list((flow / "create-first").glob("question-*.json"))
+            self.assertEqual(len(claim_files), 1)
+            self.assertEqual(
+                json.loads(claim_files[0].read_text(encoding="utf-8"))["status"],
+                "pending",
+            )
+            inner_ex = fake_execute({})
+            inner["ex"] = inner_ex
+            inner["out"] = W.dispatch(
+                "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+                subject_id="subject-1", blocked_stage="triage",
+                reason_code="needs-spec",
+                question_slug="capture-or-interview",
+                body="What next?", flow_dir=flow, execute=inner_ex,
+            )
+            return ok([])
+
+        def capture_add(request):
+            posted.append(json.loads(request.body)["body"])
+            return ok({"id": 2, "body": posted[-1]})
+
+        ex = fake_execute({
+            "wire-comment-list": racing_list,
+            "wire-parent-read": ok(GH_ISSUE),
+            "wire-comment-add": capture_add,
+        })
+        out = W.dispatch(
+            "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+            subject_id="subject-1", blocked_stage="triage",
+            reason_code="needs-spec", question_slug="capture-or-interview",
+            body="What next?", flow_dir=flow, execute=ex,
+        )
+        self.assertNotIsInstance(out, TrackerError, out)
+        self.assertTrue(out["posted"])
+        self.assertEqual(len(posted), 1)
+        raced = inner["out"]
+        self.assertIsInstance(raced, TrackerError)
+        self.assertIs(raced.cls, ErrorClass.CONFLICT)
+        self.assertEqual(raced.subtype, "question_in_flight")
+        self.assertTrue(raced.auto_retryable)
+        self.assertEqual(inner["ex"].calls, [])
+        self.assertEqual(
+            list((flow / "create-first").glob("question-*.json")), [])
 
     def test_question_dedup_rejects_stale_display_addressed_parents(self) -> None:
         marker = "<!-- flow-next:question id=a7f96309954a181b status=open -->"
@@ -1797,7 +1854,7 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
                     subject_id="subject-1", blocked_stage="triage",
                     reason_code="needs-spec",
                     question_slug="capture-or-interview",
-                    body="Rephrased", execute=ex)
+                    body="Rephrased", flow_dir=self._flow_dir(), execute=ex)
                 self.assertIsInstance(out, TrackerError)
                 self.assertEqual(out.cls, ErrorClass.CONFLICT)
                 self.assertEqual(
@@ -1815,7 +1872,7 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
             "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
             subject_id="subject-1", blocked_stage="triage",
             reason_code="needs-spec", question_slug="capture-or-interview",
-            body="What next?", execute=ex)
+            body="What next?", flow_dir=self._flow_dir(), execute=ex)
         self.assertEqual(out["posted"], True)
         posted = next(call for call in ex.calls if call.op == "wire-comment-add")
         payload = json.loads(posted.body)
@@ -1833,7 +1890,7 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
             "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
             subject_id="subject-1", blocked_stage="triage",
             reason_code="needs-spec", question_slug="capture-or-interview",
-            body="What next?", execute=truncated)
+            body="What next?", flow_dir=self._flow_dir(), execute=truncated)
         self.assertIsInstance(out, TrackerError)
         self.assertEqual(out.subtype, "truncated")
         self.assertEqual(

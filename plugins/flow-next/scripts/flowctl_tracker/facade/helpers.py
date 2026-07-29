@@ -24,18 +24,18 @@ OP_INPUTS = {
     },
     "pull": {
         "require": frozenset({"flow_file", "body_file", "comments_file"}),
-        "forbid": frozenset({"source_body_file"}),
+        "forbid": frozenset({"source_body_file", "comment_file"}),
     },
     "reconcile": {
         "require": frozenset({
             "flow_file", "body_file", "comments_file", "source_body_file",
         }),
-        "forbid": frozenset(),
+        "forbid": frozenset({"comment_file"}),
     },
     "comment": {
         "require": frozenset({"body_file"}),
         "forbid": frozenset({
-            "flow_file", "comments_file", "source_body_file",
+            "flow_file", "comments_file", "source_body_file", "comment_file",
         }),
     },
 }
@@ -91,7 +91,8 @@ def marker_component_error(name: str, value: Any) -> Optional[TrackerError]:
 def validate_inputs(op: str, *, flow_file: Optional[str],
                     body_file: Optional[str], comments_file: Optional[str],
                     source_body_file: Optional[str],
-                    event: Optional[str], status_only: bool = False,
+                    event: Optional[str], comment_file: Optional[str] = None,
+                    status_only: bool = False,
                     ) -> Optional[TrackerError]:
     if op not in OPS:
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -117,6 +118,7 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
         "body_file": body_file is not None,
         "comments_file": comments_file is not None,
         "source_body_file": source_body_file is not None,
+        "comment_file": comment_file is not None,
     }
     for name in sorted(rules["forbid"]):
         if present[name]:

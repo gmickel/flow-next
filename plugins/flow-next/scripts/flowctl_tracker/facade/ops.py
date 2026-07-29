@@ -186,7 +186,8 @@ def _claim_facade(flow_dir: Path, spec_id: str, rec_path: Path,
 
 
 def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
-            event: str, status_only: bool = False,
+            event: str, comment_file: Optional[str] = None,
+            status_only: bool = False,
             execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
     provider = tracker_type(config)
@@ -199,6 +200,17 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
     tracker_body = read_text_file(body_file, label="--body-file")
     if isinstance(tracker_body, TrackerError):
         return tracker_body
+    comment_text = None
+    comment_evidence = None
+    if comment_file is not None:
+        raw_comment = read_text_file(comment_file, label="--comment-file")
+        if isinstance(raw_comment, TrackerError):
+            return raw_comment
+        comment_evidence = parse_evidence(raw_comment)
+        bad_evidence = marker_component_error("evidence", comment_evidence)
+        if bad_evidence:
+            return bad_evidence
+        comment_text = strip_evidence_line(raw_comment)
 
     # One spec-identity claim across the whole create -> sync-body -> status
     # -> receipt sequence, so a relink cannot split the push across two
@@ -213,7 +225,9 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
         return _push_sequence(
             flow_dir, spec_id, flow_body=flow_body,
             tracker_body=tracker_body, config=config, provider=provider,
-            event=event, status_only=status_only, execute=execute)
+            event=event, comment_text=comment_text,
+            comment_evidence=comment_evidence,
+            status_only=status_only, execute=execute)
     finally:
         # Release on every exit: the aggregate receipt, not the claim file,
         # is the durable record of what landed.
@@ -222,7 +236,9 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
 
 def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
                    tracker_body: str, config: dict, provider: str,
-                   event: str, status_only: bool, execute: Execute) -> Result:
+                   event: str, comment_text: Optional[str],
+                   comment_evidence: Optional[str],
+                   status_only: bool, execute: Execute) -> Result:
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
@@ -302,6 +318,24 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             )
         steps["relations"] = relations_out
         degraded = collect_degraded(relations_out) or degraded
+
+    if comment_text is not None and comment_evidence is not None:
+        comment_out = _project_push_comment(
+            flow_dir, spec_id, comment_text=comment_text,
+            evidence=comment_evidence, config=config, provider=provider,
+            event=event, execute=execute, completed=completed,
+            statuses=statuses,
+        )
+        if isinstance(comment_out, TrackerError):
+            loaded_p = load_tracker(flow_dir, spec_id)
+            tid = (loaded_p[2].get("id")
+                   if not isinstance(loaded_p, TrackerError) else None)
+            return fail_result(
+                comment_out, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=tid, transport=provider, degraded=degraded,
+            )
+        steps["comment"] = comment_out
 
     loaded2 = load_tracker(flow_dir, spec_id)
     tracker_id = None
@@ -916,6 +950,100 @@ def _recheck_comment_identity(flow_dir: Path, spec_id: str,
                      "current": {"durable": now_id,
                                  "display": now_display}})
     return None
+
+
+def _project_push_comment(flow_dir: Path, spec_id: str, *,
+                          comment_text: str, evidence: str,
+                          config: dict, provider: str, event: str,
+                          execute: Execute, completed: list,
+                          statuses: list) -> Result:
+    """Post/dedup one judgment-bearing comment inside the push facade claim.
+
+    The caller already completed create/link and paired-base work. This helper
+    adds only the marker-claimed list -> optional add sequence, leaving the
+    push facade to write the single aggregate receipt for status, relations,
+    and comment together.
+    """
+    loaded = load_tracker(flow_dir, spec_id)
+    if isinstance(loaded, TrackerError):
+        return loaded
+    _path, _spec, tracker = loaded
+    durable = require_durable(tracker)
+    if isinstance(durable, TrackerError):
+        return durable
+    locator = locator_of(tracker)
+    if isinstance(locator, TrackerError):
+        return locator
+
+    marker = format_marker(
+        issue=str(durable), spec_id=spec_id, event=event, evidence=evidence)
+    marker_rec_path = _comment_claim_path(
+        flow_dir, issue=str(durable), spec=spec_id, event=event,
+        evidence=evidence)
+    claimed = _claim_comment_marker(
+        flow_dir, spec_id, marker_rec_path, provider, event=event,
+        marker=marker)
+    if claimed is not None:
+        return claimed
+
+    try:
+        drift = _recheck_comment_identity(flow_dir, spec_id, locator)
+        if drift is not None:
+            return drift
+        ex = bound_executor(config, execute)
+        listed = wire_dispatch(
+            "comment-list", config, locator=locator, execute=ex)
+        if isinstance(listed, TrackerError):
+            return listed
+        comments = listed.get("comments") if isinstance(listed, dict) else None
+        if not isinstance(comments, list):
+            comments = []
+
+        if comments_have_marker(
+                comments, issue=str(durable), spec=spec_id,
+                event=event, evidence=evidence):
+            completed.append("comment-dedup")
+            statuses.append("noop")
+            return {
+                "posted": False,
+                "deduped": True,
+                "marker": marker,
+                "tracker_id": durable,
+            }
+
+        if isinstance(listed, dict) and listed.get("truncated"):
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "comment dedup scan truncated at drain cap; "
+                "marker absence unproven, refusing to post",
+                subtype="dedup_truncated",
+                details={
+                    "truncated": True,
+                    "event": event,
+                    "issue": str(durable),
+                },
+            )
+
+        drift = _recheck_comment_identity(flow_dir, spec_id, locator)
+        if drift is not None:
+            return drift
+        posted_body = f"{marker}\n\n{comment_text}"
+        added = wire_dispatch(
+            "comment-add", config, locator=locator, body=posted_body,
+            execute=ex)
+        if isinstance(added, TrackerError):
+            return added
+        completed.append("comment-add")
+        statuses.append("updated")
+        return {
+            "posted": True,
+            "deduped": False,
+            "marker": marker,
+            "comment": added,
+            "tracker_id": durable,
+        }
+    finally:
+        _release_claim(marker_rec_path)
 
 
 def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,

@@ -276,6 +276,10 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
  question round with the same stable id. A mixed history with missing, invalid,
  or tied timestamps fails closed. This prevents both duplicate open questions
  and the opposite bug where an old answer suppresses every future round.
+- **Concurrent dedup.** Before `listComments`, flowctl takes a local claim keyed
+ by provider, durable issue id, and stable question id, and holds it through
+ any post. A racing identical ask returns retryable `question_in_flight`; its
+ retry then sees and deduplicates against the winner's open marker.
 - **`flow-next:question` is flow-posted ⇒ the adapter sets `marker = flow-evt:question`
  ⇒ NOT pulled into the Sync Log** (Layer 1 on pull — it is flow's own structured
  comment, like every `flow-evt` comment; the adapter MUST detect it per the closed

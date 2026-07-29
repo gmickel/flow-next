@@ -216,6 +216,11 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             row["event"],
         ]
         argv.extend(self._input_argv(op))
+        if caller_id == "land.merged" and op == "push":
+            argv.extend([
+                "--comment-file",
+                (self.root / "comment.md").as_posix(),
+            ])
         if caller_id == "work.firstClaim":
             argv.append("--status-only")
         return argv
@@ -245,6 +250,12 @@ class TrackerCallerExecutionTests(unittest.TestCase):
     def _wrapper_body(self, caller_id: str, op_expression: str) -> str:
         row = self.callers[caller_id]
         modifier = ' STATUS_ARGS=(--status-only)' if caller_id == "work.firstClaim" else ' STATUS_ARGS=()'
+        comment_modifier = (
+            ' [ "$HARNESS_OP" != "push" ] || '
+            'INPUT_ARGS+=(--comment-file "$BODY_FILE")'
+            if caller_id == "land.merged"
+            else ""
+        )
         imports = []
         if caller_id == "plan":
             imports.append("references/tracker-projection.md")
@@ -263,6 +274,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 '  comment) INPUT_ARGS=(--body-file "$BODY_FILE") ;;',
                 "esac",
                 modifier,
+                comment_modifier,
                 f'FACADE_RESULT=$("$FLOWCTL" tracker sync "$SPEC_ID" --op "$HARNESS_OP" '
                 f'--event {row["event"]} "${{INPUT_ARGS[@]}}" "${{STATUS_ARGS[@]}}")',
                 'printf "%s" "$FACADE_RESULT" >/dev/null',
@@ -485,6 +497,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         source = self.sources["land.merged"].read_text(encoding="utf-8")
         self.assertEqual(source.count('"$FLOWCTL" tracker sync "$spec"'), 2)
         self.assertNotIn('"$FLOWCTL" tracker sync "$SPEC_ID"', source)
+        self.assertIn('--comment-file "$COMMENT_FILE"', source)
 
     def test_current_active_argv_is_a_declared_delta_from_the_oracle(self) -> None:
         for caller_id, row in self.callers.items():

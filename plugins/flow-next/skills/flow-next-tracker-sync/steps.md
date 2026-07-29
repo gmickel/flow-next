@@ -99,12 +99,12 @@ spec.
 Content is written to secure temporary files. Create with mode `0600`, pass the
 path, and delete it after the command.
 
-| Operation | `flow-file` | `body-file` | `comments-file` | `source-body-file` |
-|---|---|---|---|---|
-| `push` | final Flow body | rendered tracker body | forbidden | forbidden |
-| `pull` | final agent-folded Flow body | exact tracker snapshot used for the fold | normalized comment snapshot | forbidden |
-| `reconcile` | final conflict-resolved Flow body | final tracker body | normalized comment snapshot | original tracker body used by the merge |
-| `comment` | forbidden | synthesized comment text | forbidden | forbidden |
+| Operation | `flow-file` | `body-file` | `comments-file` | `source-body-file` | `comment-file` |
+|---|---|---|---|---|---|
+| `push` | final Flow body | rendered tracker body | forbidden | forbidden | optional synthesized comment |
+| `pull` | final agent-folded Flow body | exact tracker snapshot used for the fold | normalized comment snapshot | forbidden | forbidden |
+| `reconcile` | final conflict-resolved Flow body | final tracker body | normalized comment snapshot | original tracker body used by the merge | forbidden |
+| `comment` | forbidden | synthesized comment text | forbidden | forbidden | forbidden |
 
 The facade owns create-if-unlinked, provider calls, status and relation
 projection, marker dedup, paired snapshots, `lastSyncedAt`, and one aggregate
@@ -205,6 +205,11 @@ $FLOWCTL tracker wire question --locator "$LOCATOR" \
   --reason-code "$REASON_CODE" --question-slug "$QUESTION_SLUG" \
   --body-file "$BODY_FILE" --json
 ```
+
+Before listing, flowctl takes a local claim keyed by provider, durable issue id,
+and stable question id; it releases the claim after dedup/post. A concurrent
+identical ask returns retryable `question_in_flight`, then deduplicates against
+the winner on retry.
 
 `SUBJECT_ID` is the spec id for a spec-backed item and the normalized durable
 `issue.id` for a tracker-only item; never use the display key in the hash.

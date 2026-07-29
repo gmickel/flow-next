@@ -231,6 +231,13 @@ any comment content they own, and invoke `flowctl tracker sync <spec-id> --op
 marker dedup, ordering, and the single aggregate receipt. Content travels only
 through mode `0600` temporary files.
 
+`push` may additionally receive `--comment-file` when the caller owns a
+judgment-bearing verdict that must accompany the lifecycle projection. The
+facade posts or deduplicates that comment under the same outer transaction and
+records status, relations, and comment in one aggregate receipt. Land uses this
+form after a confirmed merge so its terminal verdict and `Done` projection
+cannot split into two independently retried facade calls.
+
 Work's `firstClaim` caller uses `push --status-only`: an already-linked issue
 receives status only, preserving tracker-side body and relation co-edits. An
 unlinked spec still creates, links, seeds the paired merge base, and then
@@ -300,7 +307,7 @@ The Phase-0 gate recognizes the **full autonomy marker family** (2.2.0+, fn-68 R
 - **`flowctl tracker wire list-open`** enumerates promoted-lane open issues, filtered to the **exact** `tracker.readyState` state/label (no ordering, no "beyond"). It returns normalized `issue[]` so pilot can union tracker-only tickets with `flowctl specs`. When `tracker.readyState` is unset, there is no promoted tracker lane and backlog mode runs Flow-ready specs only.
 - **`list-comments <tracker-id>`** maps to `flowctl tracker wire comment-list --locator …` for every tracker-only candidate before parked-state selection. Normalized comments include immutable `created_at`; a failed or truncated read fails closed.
 - **`flowctl tracker wire relation-list --locator …`** reads one issue's normalized directed dependency rows for pilot ordering. The locator comes from the same `list-open` row: durable `issue.id` plus display `issue.identifier`. GitHub validates the issue but returns no rows because parent/sub-issue hierarchy is not blocked-by and must not order backlog work.
-- **`question <spec-id | tracker-id>`** is the skill-owned semantic operation. The skill composes the question text, then calls `flowctl tracker wire question` with the issue locator, four stable identity inputs, and a secure body file. flowctl computes the stable `id` and reads existing comments. Latest matching question means parked and dedups; latest matching answer posts a new round with the same id. Missing, tied, or truncated chronology fails closed. The `id` hashes `subjectId` + blocked-stage + reason code + question slug; free prose is outside the hash, so rephrasing never duplicates an open round. A human reply carries `<!-- flow-next:answer id=<hash> -->`, matched by `id` and imported under the matching `## Open Questions` entry. A tracker-only question has no spec receipt; its parked/answered state stays in tracker comments until `capture` or `interview` creates a spec.
+- **`question <spec-id | tracker-id>`** is the skill-owned semantic operation. The skill composes the question text, then calls `flowctl tracker wire question` with the issue locator, four stable identity inputs, and a secure body file. flowctl computes the stable `id`, takes a local provider+issue+question claim, and reads existing comments. A concurrent identical ask returns retryable `question_in_flight`; its retry sees the winner's marker. Latest matching question means parked and dedups; latest matching answer posts a new round with the same id. Missing, tied, or truncated chronology fails closed. The `id` hashes `subjectId` + blocked-stage + reason code + question slug; free prose is outside the hash, so rephrasing never duplicates an open round. A human reply carries `<!-- flow-next:answer id=<hash> -->`, matched by `id` and imported under the matching `## Open Questions` entry. A tracker-only question has no spec receipt; its parked/answered state stays in tracker comments until `capture` or `interview` creates a spec.
 
 See [`references/adapter-interface.md`](../skills/flow-next-tracker-sync/references/adapter-interface.md) (the `listOpenIssues` contract + the `comment` reply/parent metadata), [`steps.md`](../skills/flow-next-tracker-sync/steps.md) Phase 7 (the named-op bodies + the answer round-trip), and [`references/comments-sync.md`](../skills/flow-next-tracker-sync/references/comments-sync.md) (the question-valve marker dedup).
 

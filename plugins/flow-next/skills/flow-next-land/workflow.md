@@ -512,6 +512,9 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    `TRACKER_FIRE == 1` → invoke the inline flow-next-tracker-sync wrapper. It
    prepares the approved mode `0600` inputs, makes exactly one fn-140 lifecycle
    facade call, deletes the inputs, and routes any structured recovery.
+   For the terminal branch it writes the synthesized merge/release verdict to
+   a distinct `COMMENT_FILE`; the tracker-rendered issue body remains the
+   regular `--body-file`.
    **The `TRACKER_TERMINAL_OK` self-check selects the operation**: land does
    NOT trust the caller's merge claim, it branches on its own GitHub-`MERGED`
    probe (fn-66, R3):
@@ -519,7 +522,8 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    - **`TRACKER_TERMINAL_OK == 1`** (clean GitHub `MERGED`) → dispatch the terminal `push`:
 
      ```bash
-     "$FLOWCTL" tracker sync "$spec" --op push --event land.merged <legal file flags>
+     "$FLOWCTL" tracker sync "$spec" --op push --event land.merged \
+       --comment-file "$COMMENT_FILE" <other legal file flags>
      ```
 
      The `push` projects the just-closed spec; the tracker-sync skill's own `flowToNormalized(spec, merged)` gate (status-sync.md S-I) resolves the terminal rung — `verified` if completion review shipped, else `done` — so status who-wins flips the issue to the merge-confirmed terminal state, ALSO posting the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The Done write is **double-gated** (this caller's probe AND the skill's own merge-evidence gate).
