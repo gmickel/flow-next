@@ -35,11 +35,28 @@ TAGS = ("[user]", "[paraphrase]", "[inferred]", "[strategy:<track>]")
 
 # The shared definitions. Byte-identical in capture and interview — if either
 # side rewords one, this test fails and the drift is caught at the edit.
+#
+# `[strategy:<track>]` is pinned by PREFIX only here because capture's own two
+# copies legitimately differ past it: workflow.md carries the long form
+# ("...H3 sub-block); track name lives literally in the tag") while phases.md
+# carries a shorter one ("...quote of approach / track body"). The prefix is the
+# most both can share. The long form is pinned separately, for the
+# workflow.md <-> write-back.md pair only, by STRATEGY_LONG_FORM below.
 SHARED_DEFINITIONS = (
     "Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning)",
     "User intent restated in spec language (semantic equivalence; no new constraints introduced)",
     "Agent fill-in (most-scrutinized; user must confirm at read-back)",
     "Derived from `STRATEGY.md` content",
+)
+
+# Interview copied capture/workflow.md's long `[strategy]` form verbatim. Pin the
+# whole tail so the substantive part cannot drift alone (the SHARED_DEFINITIONS
+# prefix above would not notice). phases.md is deliberately excluded — its
+# wording is its own.
+STRATEGY_LONG_FORM = (
+    "Derived from `STRATEGY.md` content (verbatim or near-verbatim from "
+    "`approach` or a `### <track-name>` H3 sub-block); track name lives "
+    "literally in the tag"
 )
 
 # Invariants the interview guidance must carry at the emission sites.
@@ -151,6 +168,49 @@ class InterviewSourceTagsTest(unittest.TestCase):
                         f"{label} no longer carries the shared definition "
                         f"{definition!r} — capture and interview have drifted",
                     )
+
+    def test_tag_vocabulary_matches_capture(self) -> None:
+        """Neither skill can rename or drop a TAG TOKEN alone.
+
+        Without this, the definitions pin above passes while capture renames
+        `[user]` -> `[stated]` (or adds a fifth tag) and interview silently
+        diverges: the Meaning-column sentences carry no tag tokens, so they
+        cannot detect a rename. Asserted over BOTH capture copies and the
+        interview site so a one-sided edit fails CI in either direction.
+        """
+        sources = {
+            "capture/workflow.md": self.capture_workflow,
+            "capture/phases.md": self.capture_phases,
+            "interview/references/write-back.md": self.write_back,
+        }
+        for tag in TAGS:
+            for label, text in sources.items():
+                with self.subTest(tag=tag, file=label):
+                    self.assertIn(
+                        tag,
+                        text,
+                        f"{label} no longer carries the tag token {tag} — "
+                        f"the shared vocabulary has drifted",
+                    )
+
+    def test_strategy_long_form_matches_capture_workflow(self) -> None:
+        """The `[strategy]` tail interview copied cannot drift alone.
+
+        SHARED_DEFINITIONS pins only the prefix (capture's two copies diverge
+        past it), so without this the substantive tail could change on one side
+        unnoticed. Pinned for the workflow.md <-> write-back.md pair only.
+        """
+        for label, text in (
+            ("capture/workflow.md", self.capture_workflow),
+            ("interview/references/write-back.md", self.write_back),
+        ):
+            with self.subTest(file=label):
+                self.assertIn(
+                    STRATEGY_LONG_FORM,
+                    text,
+                    f"{label} no longer carries the full `[strategy]` "
+                    f"definition — the pair has drifted",
+                )
 
     # --- R5: tags discriminate on the frozen fixture ------------------------
 

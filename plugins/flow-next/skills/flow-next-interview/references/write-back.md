@@ -13,7 +13,7 @@ After interview complete, write everything back — **scope depends on input typ
 **Print-then-ask approval (R13 — same contract as capture Phase 4):** before handing the draft to flowctl, obtain write-back approval:
 
 1. **Print first:** emit the FULL draft markdown as an ordinary assistant message (the user-visible read-back — real markdown, real newlines). Never embed multi-paragraph drafts/diffs/criteria lists in the `AskUserQuestion` body (they render as collapsed plain text).
-2. **Then short ask** via `AskUserQuestion`: one-line pointer (`Full write-back draft printed above.`) + the compact source-tag tally for the criteria this pass wrote (`Source: [user] N / [paraphrase] M / [strategy] K / [inferred] L`) + any compact warnings (e.g. open-questions count) + options only — e.g. `approve` / `edit` / `abort`. No multi-paragraph content in the ask.
+2. **Then short ask** via `AskUserQuestion`: one-line pointer (`Full write-back draft printed above.`) + the compact source-tag tally for the criteria this pass wrote (`Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L`) + any compact warnings (e.g. open-questions count) + options only — e.g. `approve` / `edit` / `abort`. No multi-paragraph content in the ask.
 
 **Edit-cycle rule:** if the user picks `edit`, apply revisions via the Edit tool (deltas only), then **Read the FULL draft file**, **reprint the full revised draft as ordinary markdown**, and re-issue the short approval ask. The full-file Read also satisfies Edit's read-before-edit for the next cycle. Loop until `approve` or `abort`.
 
@@ -31,13 +31,13 @@ Section-write rules from the scope-aware pass behavior (above) MUST be honored �
 
 ### Source tags on acceptance criteria (same vocabulary as `/flow-next:capture`)
 
-Every acceptance criterion **this pass newly writes** carries a trailing source tag - the last `[...]` token on the bullet, lowercase, no spaces inside: `- **R7:** Errors include the request id for trace correlation. [inferred]`
+Every acceptance criterion **this pass newly writes** carries a trailing source tag - the last `[...]` token on the bullet, lowercase tag name, no spaces inside (`[strategy:<track>]` keeps the track name's literal casing, e.g. `[strategy:Reliability]`): `- **R7:** Errors include the request id for trace correlation. [inferred]`
 
 | Tag | Meaning |
 |-----|---------|
 | `[user]` | Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning). "The user" is the human in THIS pass: the PO under `--scope=business`, the tech lead under `--scope=technical`. |
 | `[paraphrase]` | User intent restated in spec language (semantic equivalence; no new constraints introduced) |
-| `[inferred]` | Agent fill-in (most-scrutinized; user must confirm at read-back) - a gap you drafted rather than asked about |
+| `[inferred]` | Agent fill-in (most-scrutinized; user must confirm at read-back) |
 | `[strategy:<track>]` | Derived from `STRATEGY.md` content (verbatim or near-verbatim from `approach` or a `### <track-name>` H3 sub-block); track name lives literally in the tag |
 
 Hard rules:
@@ -202,7 +202,7 @@ $FLOWCTL cat <id>
 
 **If task has substantial planning content** (description with file refs, sizing, approach):
 - **Do NOT overwrite** — planning detail would be lost
-- Only ADD new acceptance criteria discovered in interview: read the existing acceptance (already fetched via `$FLOWCTL cat <id>` above), append the new criteria, and Write the merged list ONCE via the **Write tool** to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md`) — per the single-emission write pattern above. Then:
+- Only ADD new acceptance criteria discovered in interview: read the existing acceptance (already fetched via `$FLOWCTL cat <id>` above), append the new criteria, and Write the merged list ONCE via the **Write tool** to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md`) — per the single-emission write pattern above. **No source tags here:** task acceptance is plain `- [ ]` checklist items, not R-ID spec criteria; tagging is for the spec's `## Acceptance Criteria` bullets only. Then:
   ```bash
   $FLOWCTL task set-acceptance <id> --file "${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md" --json
   ```
@@ -231,5 +231,6 @@ Rewrite the file with refined spec:
 - Add sections for areas covered in interview
 - Include edge cases, acceptance criteria
 - Keep it requirements-focused (what, not how)
+- **No source tags here:** this is the user's own document, not a `.flow` spec — preserving its structure outranks injecting our tag grammar. Tags start when `/flow-next:plan <file>` promotes it to a spec.
 
 This is typically a pre-spec doc. After interview, suggest `/flow-next:plan <file>` to create spec + tasks.

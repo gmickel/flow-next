@@ -73,8 +73,10 @@ No CLI surface changes required. Tag format is fixed by the existing parser:
 - **R<n+1>:** <criterion text> [inferred]
 ```
 
-Trailing token, last `[...]` on the bullet, lowercase, no spaces inside. `[strategy:<track>]`
-carries a colon and a track slug.
+Trailing token, last `[...]` on the bullet, lowercase tag name, no spaces inside.
+`[strategy:<track>]` carries a colon plus the track name in its **literal casing**
+(e.g. `[strategy:Reliability]`) - the tag name is lowercase, the track name is not
+normalised.
 
 Deliberately **out of scope as an API change, but recorded as a known gap:** `flowctl spec
 export-cognitive-aid --json` does not expose parsed criteria with their tags as a top-level
