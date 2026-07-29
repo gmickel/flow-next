@@ -21,8 +21,9 @@ Callers with stricter event contracts retain them. QA maps every non-`off`
 value to `comment`. Work events use their fixed operation. Make PR and the
 successful land merge have their documented unconditional active-bridge paths.
 
-Manual runs choose an operation explicitly and do not invent an event tag.
-Lifecycle runs always pass the caller's event key.
+Manual runs use the matching granular `flowctl tracker` verb and carry no event
+tag. The `tracker sync` facade is event-only and always receives the caller's
+real event key; never invoke that facade without `--event`.
 
 ## 1. Discovery
 

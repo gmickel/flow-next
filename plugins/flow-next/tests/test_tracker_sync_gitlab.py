@@ -53,6 +53,7 @@ REPO_ROOT = HERE.parents[3]
 TRACKER_SKILL = REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-tracker-sync"
 STEPS_MD = TRACKER_SKILL / "steps.md"
 SKILL_MD = TRACKER_SKILL / "SKILL.md"
+GITLAB_REF = TRACKER_SKILL / "references" / "gitlab.md"
 
 
 def _load_flowctl(name: str) -> Any:
@@ -244,69 +245,28 @@ class GitlabIdentifierValidatorTestCase(unittest.TestCase):
 
 
 class GitlabCeremonyWiringTestCase(unittest.TestCase):
-    """Discovery-ceremony prose wiring (R3 + R5) — presence/grep assertions.
-
-    The ceremony is prose the host agent executes, so we assert the GitLab
-    sites are PRESENT (probe row, ASK option, config-writes, readiness branch),
-    not an executable shape.
-    """
+    """The skill owns choices; flowctl owns GitLab transport mechanics."""
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.steps = STEPS_MD.read_text(encoding="utf-8")
         cls.skill = SKILL_MD.read_text(encoding="utf-8")
+        cls.gitlab = GITLAB_REF.read_text(encoding="utf-8")
 
-    # --- probe table (R3) ---------------------------------------------------
+    def test_discovery_retains_confirmation_judgment(self) -> None:
+        self.assertIn("No confirmation means no write", self.steps)
+        self.assertIn("Discovery ceremony", self.skill)
 
-    def test_steps_has_gitlab_probe(self) -> None:
-        self.assertIn("glab auth status", self.steps)
-        # The headless REST fallback signal.
-        self.assertIn("GITLAB_TOKEN", self.steps)
-        self.assertIn("CI_JOB_TOKEN", self.steps)
+    def test_gitlab_reference_describes_transport_shape_only(self) -> None:
+        compact = " ".join(self.gitlab.split())
+        self.assertIn("authenticated GitLab CLI transport", self.gitlab)
+        self.assertIn("Skill prose never builds GitLab requests", compact)
+        self.assertNotIn("glab api", self.gitlab)
+        self.assertNotIn("POST /projects", self.gitlab)
 
-    def test_skill_probe_table_has_gitlab_row(self) -> None:
-        self.assertIn("glab auth status", self.skill)
-        self.assertIn("GITLAB_TOKEN", self.skill)
-
-    def test_probe_count_wording_not_stale_four(self) -> None:
-        # The PROBE-count wording grew past FOUR when GitLab landed (fn-69) and
-        # again to SIX when Jira landed (fn-70). Assert it is NOT the stale
-        # "four"; the EXACT count is owned by test_tracker_sync_jira (so this
-        # test doesn't break each time a tracker is added). Scope the negative
-        # assertion to the probe phrasing — steps.md legitimately says "four
-        # signals" elsewhere about the RALPH autonomy-marker family (FLOW_RALPH /
-        # REVIEW_RECEIPT_PATH / FLOW_AUTONOMOUS / mode:autonomous), which is a
-        # DIFFERENT four and must stay.
-        self.assertNotIn("probes four signals", self.skill)
-        self.assertNotIn("Probe these four signals", self.skill)
-        self.assertNotIn("Probe the four signals", self.steps)
-        # GitLab is still offered regardless of the count wording.
-        self.assertIn("`gitlab`", self.steps)
-
-    # --- ASK option (R3) ----------------------------------------------------
-
-    def test_steps_ask_offers_gitlab(self) -> None:
-        # The tracker-choice question must offer gitlab alongside linear/github.
-        self.assertIn("`gitlab`", self.steps)
-
-    # --- config-write block (R3) --------------------------------------------
-
-    def test_steps_config_write_emits_gitlab_keys(self) -> None:
-        self.assertIn("tracker.perTracker.project", self.steps)
-        self.assertIn("tracker.perTracker.host", self.steps)
-        # tracker.type gitlab is offered as a write choice.
-        self.assertIn("gitlab", self.steps)
-
-    # --- readiness-label ceremony branch (R5) -------------------------------
-
-    def test_steps_has_gitlab_readiness_label_branch(self) -> None:
-        # A dedicated GitLab readiness branch that pre-creates the label and
-        # tolerates already-exists (mirrors the GitHub branch).
-        self.assertIn("POST /projects/:id/labels", self.steps)
-        self.assertIn("already exists", self.steps)
-        # never write readyState on a failed/unconfirmed create.
-        self.assertIn("LABEL_OK", self.steps)
-        self.assertIn("tracker.readyState", self.steps)
+    def test_gitlab_reference_preserves_self_managed_resolution(self) -> None:
+        self.assertIn("Self-managed host, protocol, port", self.gitlab)
+        self.assertIn("resolved destination", self.gitlab)
 
 
 if __name__ == "__main__":

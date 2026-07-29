@@ -35,21 +35,26 @@ flowctl reads the parent and compares the returned durable id. A mismatch is
 Missing provider fields normalize to `null` or an empty collection. Adapters do
 not manufacture identity fields absent from a provider response.
 
-## Normalized comment
+## Normalized wire comment
 
 ```json
 {
  "id": "provider comment id",
  "body": "plain markdown",
- "author": {"id": "provider id", "name": "display name"},
- "createdAt": "provider timestamp",
- "updatedAt": "provider timestamp",
- "parentId": "durable issue id or null"
+ "url": "provider URL or null",
+ "raw": {},
+ "parent_identity": "validated or not_available"
 }
 ```
 
-`parentId` is included only when the provider response exposes it. Parent
-identity is never inferred from a URL-shaped string.
+`parent_identity` records whether the adapter verified the parent from a real
+provider field. It is never inferred. The facade's `comments-file` snapshot is
+the stable subset `id`, `body`, and `parent_identity`.
+
+Comment authors, timestamps, and question/answer markers belong to the semantic
+comment layer, not the wire envelope. The closed marker vocabulary and Sync Log
+rules are documented in [comments-sync.md](comments-sync.md); flowctl owns sync
+marker formatting, normalization, and deduplication.
 
 ## Wire verbs
 

@@ -89,12 +89,12 @@ class SelectedAdapterRouteTestCase(unittest.TestCase):
     def test_prompt_contains_fail_closed_router_contract(self) -> None:
         text = SKILL.read_text(encoding="utf-8")
         for marker in (
-            "Reached-path loading — common rules + one selected adapter",
-            "read **exactly one** adapter path",
-            "ROUTE_STATE=unknown",
-            "linear|github|gitlab|jira",
-            "do not guess a provider",
-            "do not mutate sync state",
+            "## Load the reached path",
+            "matching provider reference only",
+            "Never load an unselected provider",
+            "If the destination is",
+            "ambiguous, ask",
+            "write nothing",
         ):
             self.assertIn(marker, text)
 
@@ -105,15 +105,15 @@ class SelectedAdapterRouteTestCase(unittest.TestCase):
         }
         combined = "\n".join(texts.values())
         for marker in (
-            "Create-if-unlinked",
-            "threeWayMergeBody",
+            "create-if-unlinked",
+            "three-way",
             "who-wins",
-            "sync defer",
-            "projectDepRelations",
+            "defer",
+            "Dependency projection",
             "list-open",
             "list-relations",
-            "question <spec-id | tracker-id>",
-            "sync receipt",
+            "`question`",
+            "aggregate receipt",
             "lastSyncedAt",
         ):
             self.assertIn(marker, combined)
