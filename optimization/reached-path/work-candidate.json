@@ -12,24 +12,24 @@
   },
   "prompt_hashes": {
     "plugins/flow-next/skills/flow-next-work/SKILL.md": "c6b319c27827270f4bb5eeb9a7d71c96d0312266a485b31de6efc3a20702e6dd",
-    "plugins/flow-next/skills/flow-next-work/phases.md": "b0b9da2933e7f55708bc345e5b15af916a711fc08ce0904fcf1f2a4e521b6b24",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "8e397d48c0d2a43fe5bfce6c8b36dce286dcf6bb5e11532123e0a606cd0f3cb3",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "1e72fe556e16476e2a71da32536792703a69cfc7dd5f65a4215ce595f4445858",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "9853594ad12db98edafc83780b266f5f7cc95a1090acade3a178c890e1d43a3b",
-    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "9c5836ec1348f5c841e44b55ad035d1aed54a54f542980ee4568e160c4196897"
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "9aa1ccce1381a9df18336c6e519c60d69a9a3916765e67759b2ba553ffa09b23"
   },
   "metrics": {
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
       "baseline_reached_path_chars": 51330,
-      "candidate_reached_path_chars": 51328,
-      "reduction_chars": 3730,
-      "reduction_percent": 6.86
+      "candidate_reached_path_chars": 50784,
+      "reduction_chars": 546,
+      "reduction_percent": 1.06
     },
     "delegation_active_path": {
       "baseline_reached_path_chars": 102426,
-      "candidate_reached_path_chars": 102424,
-      "reduction_chars": 427,
-      "reduction_percent": 0.42
+      "candidate_reached_path_chars": 101880,
+      "reduction_chars": 546,
+      "reduction_percent": 0.53
     },
     "revisions": [
       {

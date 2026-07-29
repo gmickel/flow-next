@@ -25,6 +25,19 @@ Manual runs use the matching granular `flowctl tracker` verb and carry no event
 tag. The `tracker sync` facade is event-only and always receives the caller's
 real event key; never invoke that facade without `--event`.
 
+All autonomous signals collapse into one no-prompt gate:
+
+```bash
+RALPH=0
+[[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
+   || "${FLOW_AUTONOMOUS:-}" == "1" || "$ARGUMENTS" == *mode:autonomous* ]] \
+  && RALPH=1
+```
+
+> **Autonomy parity is a hard invariant.** Under `RALPH=1` no code path reaches
+> `AskUserQuestion`: discovery, collisions, merge conflicts, and question
+> authoring defer for a human instead of prompting.
+
 ## 1. Discovery
 
 Discovery is the one-time agentic ceremony:
@@ -54,6 +67,24 @@ Three supported starts share one durable locator:
   exists, mint from the returned identity, then link. If local persistence
   fails after the remote create, retry links the recovery record and never
   creates a duplicate.
+
+#### Receipt / retry contract
+
+Before creating remotely, derive the first 16 hex characters of
+`sha256(type NUL title NUL body)` with `sync create-first-key`, then query that
+key with `sync create-first-get`. A hit resumes by linking the recorded issue;
+it never creates another.
+
+After a successful remote create, immediately persist the returned identity
+with `sync create-first-put`. Keep that recovery record across any later
+failure. Only after mint, attach, merge-base seed, back-reference, and the
+normal spec-keyed receipt all succeed may the caller consume it with
+`sync create-first-clear`. These four helpers exclusively own the retry record;
+do not recompute its hash or read, write, or delete its file directly.
+
+**Back-reference:** write `flow:<spec-id>` only after the durable local link
+exists. A failed back-reference leaves the recovery record available for a
+safe retry.
 
 Linear MCP creation is allowed only as the MCP judgment surface. Pass its result
 to `tracker persist-external`; the deterministic path completes the durable id

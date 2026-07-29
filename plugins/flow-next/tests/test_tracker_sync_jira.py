@@ -472,7 +472,7 @@ class JiraCeremonyWiringTestCase(unittest.TestCase):
         self.assertNotIn("project/$PROJ_KEY/statuses", self.jira)
 
     def test_jira_reference_preserves_persisted_auth_choice(self) -> None:
-        self.assertIn("Cloud | email plus API token | 3", self.jira)
+        self.assertIn("Cloud | email plus API token | 2", self.jira)
         self.assertIn("Data Center/Server | bearer PAT | 2 by default", self.jira)
         self.assertIn("Runtime never", self.jira)
         self.assertIn("re-races credentials", self.jira)

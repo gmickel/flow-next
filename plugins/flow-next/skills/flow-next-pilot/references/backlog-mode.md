@@ -502,5 +502,3 @@ The executable mapping is fixed:
   Triage is the host agent's read; flowctl supplies facts and a log row only.
 - **No new graph engine.** Dep-ordering reuses the flow-next-deps jq topo-sort; a
   cycle is surfaced (`ASKED`/`BLOCKED`), never spun on.
-- **Codex mirror is regenerated in fn-68.5** (a SEPARATE task) — keep this file
-  Claude-native (`AskUserQuestion`, `Task`); do NOT regenerate the mirror here.

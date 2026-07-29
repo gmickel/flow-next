@@ -340,12 +340,11 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         self.assertIn("plain-text numbered prompt", self.m_skill)
         self.assertIn("plain-text numbered prompt", self.m_workflow)
 
-    def test_maintainer_breadcrumb_stripped_from_mirror(self) -> None:
-        """The 'Codex mirror is regenerated in fn-68.5 — keep this file
-        Claude-native' maintainer breadcrumb is self-contradictory inside the
-        already-rewritten mirror; sync-codex.sh must strip it from BOTH the
-        backlog-mode and tracker-sync mirror."""
+    def test_historical_maintainer_breadcrumb_is_absent(self) -> None:
+        """The fn-68.5 mirror breadcrumb was task-local and is now stale."""
         for fname, text in (
+            ("canonical pilot/backlog-mode.md", self.pilot_backlog),
+            ("canonical tracker-sync/steps.md", self.ts_steps),
             ("pilot/backlog-mode.md", self.m_backlog),
             ("tracker-sync/steps.md", self.m_ts_steps),
         ):
@@ -360,9 +359,6 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
                     text,
                     f"{fname}: the breadcrumb tail must be stripped",
                 )
-        # And the breadcrumb DOES survive in canonical (it is human-useful there).
-        self.assertIn("Codex mirror is regenerated in fn-68.5", self.pilot_backlog)
-        self.assertIn("Codex mirror is regenerated in **fn-68.5**", self.ts_steps)
 
     def test_no_r2_instruction_block_injected_into_pilot_mirror(self) -> None:
         """THE defect this regen exposed: pilot ONLY negates AskUserQuestion
