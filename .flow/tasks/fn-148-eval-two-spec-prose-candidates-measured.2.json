@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-29T21:44:15.532522Z",
+  "depends_on": [
+    "fn-148-eval-two-spec-prose-candidates-measured.1"
+  ],
+  "id": "fn-148-eval-two-spec-prose-candidates-measured.2",
+  "priority": null,
+  "spec": "fn-148-eval-two-spec-prose-candidates-measured",
+  "spec_path": ".flow/tasks/fn-148-eval-two-spec-prose-candidates-measured.2.md",
+  "status": "todo",
+  "title": "Screen: one draw per cell, blind consolidated scoring, cost axes",
+  "updated_at": "2026-07-29T21:44:15.532522Z"
+}

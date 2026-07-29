@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-29T21:43:29.791040Z",
+  "depends_on": [
+    "fn-147-source-tags-in-interview-provenance-for.1"
+  ],
+  "id": "fn-147-source-tags-in-interview-provenance-for.2",
+  "priority": null,
+  "spec": "fn-147-source-tags-in-interview-provenance-for",
+  "spec_path": ".flow/tasks/fn-147-source-tags-in-interview-provenance-for.2.md",
+  "status": "todo",
+  "title": "Downstream docs: repo + flow-next.dev + changelog",
+  "updated_at": "2026-07-29T21:43:29.791040Z"
+}
