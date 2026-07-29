@@ -65,11 +65,23 @@ Keep R-ID bullets in the canonical form - `- **R1:** <criterion>` - with optiona
 
 The other three canonical sections (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`) are technical-scope write targets. Removing them is survivable, but the technical interview pass will have fewer places to put what it learns.
 
-### Known limitation - custom sections and the interview passes
+### Custom sections and the interview passes - use the scope marker
 
-`flowctl scope write-policy` returns a `writable` list and a `preserved` list, and **both enumerate only the seven canonical sections**. A section you added appears in neither, so the write-policy contract does not explicitly instruct an interview pass to preserve it byte-for-byte the way it protects the other scope's canonical sections.
+`flowctl scope write-policy` enumerates the seven canonical sections only, so a section you added appears in neither its `writable` nor its `preserved` list. Ownership of a project-added section therefore comes from **the section's own scope-owner marker in the spec body**, and the interview passes apply a three-way rule:
 
-In practice a pass reads the existing body and refines in place, so custom sections normally survive. But the guarantee is contractual for canonical sections and incidental for yours. If you add a section carrying content you cannot afford to lose, keep it under version control (you committed `SPEC.md`, so `git diff` on the spec after a pass is the check) rather than relying on the pass to protect it.
+| Marker on your section | What an interview pass does |
+|---|---|
+| names the pass's own scope (`<!-- scope: business -->` under `--scope=business`) | **writes it** - fills and refines it like a canonical section of that scope |
+| names the other scope | preserves it byte-for-byte |
+| `<!-- scope: both -->` | writable under any pass |
+| absent or unparseable | preserves it byte-for-byte, and says so in the read-back |
+
+So the marker is the difference between a section that gets filled and a section that stays frozen. Add one if you want the interview to do the work; leave it off if the section is yours to hand-write.
+
+Two consequences worth knowing:
+
+- A marked section is **rewritable**. If you hand-write user stories and mark them `scope: business`, the next business pass will refine them. That is the point, but it means hand-authored content under a marker you own is not sacred - drop the marker to freeze it.
+- Scope-owner markers are ordinarily authoring guidance and may be stripped from a finished spec body. For project-added sections they must be **kept**, because they are the only ownership signal a later pass has. See [`../references/spec-template-discovery.md`](../references/spec-template-discovery.md).
 
 `capture` and `plan` seed from the template directly and have no such caveat.
 
