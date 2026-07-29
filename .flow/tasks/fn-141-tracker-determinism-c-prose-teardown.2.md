@@ -20,17 +20,8 @@ Sweep is **enumerated, not a single grep**: every canonical calling skill by nam
 - [ ] sync-codex.sh run twice, mirror committed
 
 ## Done summary
-Replaced the tracker-runner lifecycle dispatch with direct calls to the fn-140
-tracker facade while retaining the inactive caller gate and every `perEvent`
-mapping. Removed the runner agent, dispatch reference, generated mirror TOML,
-and obsolete sync transforms. Preserved QA coercion, Work fixed operations,
-and the unconditional active-bridge Make PR and Land paths. Added caller-oracle
-coverage, including Capture's retro-fire path, and refreshed tracker/platform
-docs plus the Codex mirror.
-
+Rewired lifecycle callers to the fn-140 facade while retaining their caller-side gates and perEvent mapping. Removed the runner agent, dispatch reference, generated mirror TOML, and obsolete sync transforms. Preserved QA coercion, Work fixed operations, and the unconditional active-bridge Make PR and Land paths. Added caller-oracle coverage, including Capture retro-fire, and refreshed tracker/platform docs plus the Codex mirror.
 ## Evidence
-- Commits: `1b5ab070`, `5c9592ff`, `1ba36bce` (lifecycle prerequisite:
-  `432ba6bb`)
-- Tests: 70 focused caller-oracle/lifecycle tests; 56 task Quick-command tests;
-  Codex review `NEEDS_WORK` repaired to `SHIP`; `sync-codex.sh` twice
+- Commits: 231d724a84045d6c3267130a96c578593bd97fe8, 5a72d35e9725d2869abd1905571797301cba0ae6, 1e318ecb4b96edc23df9c9b8b883f06b19c807db
+- Tests: 70 focused caller-oracle/lifecycle tests, 56 task Quick-command tests, Codex review NEEDS_WORK repaired to SHIP, ./scripts/sync-codex.sh twice
 - PRs:
