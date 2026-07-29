@@ -532,7 +532,7 @@ If the sub-skill emitted a `Tracker sync:` summary line, pass that line through 
 DISPATCH_TARGET="/flow-next:tracker-sync question"; assert_allowed_dispatch "$DISPATCH_TARGET"
 ```
 
-The question is then posted via tracker-sync's transport-blind `question` op (it owns the stable-anchor authoring, comments-sync dedup, and the answer round-trip — backlog mode invokes it, never re-implements it):
+The question is then posted through tracker-sync's inline `question` wrapper. The skill owns semantic question authoring and structured recovery; flowctl owns deterministic comment transport, marker dedup, and normalized answer readback. Backlog mode invokes the wrapper and never re-implements it:
 
 ```text
 /flow-next:tracker-sync question <SUBJECT_ID> mode:autonomous # <SUBJECT_ID> = spec id (spec-backed) OR the list-open issue.identifier (tracker-only — the display handle, NOT the global id; GitLab needs the <project>#<iid> it carries to post …/issues/:iid/notes)
