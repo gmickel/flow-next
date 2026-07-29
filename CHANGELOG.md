@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 3.7.0] - 2026-07-29
+
 ### Changed
 
 - **Project-added spec sections are now first-class to the interview passes.**
