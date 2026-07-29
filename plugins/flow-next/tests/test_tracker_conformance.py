@@ -239,7 +239,8 @@ PROVIDERS = [
 
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
-    "comment-delete", "label", "assign", "list-open", "attach", "attach-get",
+    "comment-delete", "label", "assign", "list-open", "relation-list",
+    "question", "attach", "attach-get",
 )
 
 
@@ -545,6 +546,87 @@ class ConformanceMatrix(unittest.TestCase):
                 out = W.dispatch("list-open", cfg, execute=ex)
                 self.assertEqual(out, {"issues": [], "truncated": False})
                 self.assertEqual(ex.calls, [])
+
+    def test_relation_list_all_four(self) -> None:
+        not_found = TrackerError(
+            ErrorClass.NOT_FOUND, "no parent", subtype="http")
+        jira_config = jr_cfg()
+        jira_config["tracker"]["perTracker"]["blocksLinkType"] = "Blocks"
+        cases = [
+            ("github", gh_cfg(), loc(GH_NODE, "#42"), {
+                "wire-relation-parent-read": ok(GH_ISSUE),
+                "wire-relation-parent": not_found,
+                "wire-relation-list": ok([]),
+            }),
+            ("gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"), {
+                "wire-relation-parent-read": ok(GL_ISSUE),
+                "relate-list": ok([]),
+            }),
+            ("linear", ln_cfg(), loc(LN_UUID, "WOR-17"), {
+                "wire-relation-list": ok({"data": {"issue": {
+                    "id": LN_UUID,
+                    "identifier": "WOR-17",
+                    "relations": {"nodes": [], "pageInfo": {
+                        "hasNextPage": False, "endCursor": None}},
+                    "inverseRelations": {"nodes": [], "pageInfo": {
+                        "hasNextPage": False, "endCursor": None}},
+                }}}),
+            }),
+            ("jira", jira_config, loc(JR_ID, "SCRUM-1"), {
+                "wire-relation-list": ok({
+                    "id": JR_ID, "key": "SCRUM-1",
+                    "fields": {"issuelinks": []},
+                }),
+            }),
+        ]
+        for provider, cfg, locator, responses in cases:
+            with self.subTest(provider=provider):
+                self._matrix_case(
+                    provider, cfg, locator, responses,
+                    verb="relation-list", kwargs={})
+
+    def test_question_all_four(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            body = Path(tmp) / "q.md"
+            body.write_text("What should happen next?", encoding="utf-8")
+            cases = [
+                ("github", gh_cfg(), loc(GH_NODE, "#42"), {
+                    "wire-comment-list": ok([]),
+                    "wire-parent-read": ok(GH_ISSUE),
+                    "wire-comment-add": ok({"id": 1, "body": "question"}),
+                }),
+                ("gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"), {
+                    "wire-comment-list": ok([]),
+                    "wire-parent-read": ok(GL_ISSUE),
+                    "wire-comment-add": ok({
+                        "id": 1, "body": "question", "noteable_id": GL_ID}),
+                }),
+                ("linear", ln_cfg(), loc(LN_UUID, "WOR-17"), {
+                    "wire-comment-list": ok({"data": {"issue": {
+                        "id": LN_UUID, "comments": {"nodes": []}}}}),
+                    "wire-parent-read": gql_issue(LN_ISSUE),
+                    "wire-comment-add": ok({"data": {"commentCreate": {
+                        "success": True,
+                        "comment": {"id": "c", "body": "question",
+                                    "issue": {"id": LN_UUID}},
+                    }}}),
+                }),
+                ("jira", jr_cfg(), loc(JR_ID, "SCRUM-1"), {
+                    "wire-comment-list": ok({"comments": []}),
+                    "wire-parent-read": ok(JR_ISSUE),
+                    "wire-comment-add": ok({"id": "c", "body": "question"}),
+                }),
+            ]
+            for provider, cfg, locator, responses in cases:
+                with self.subTest(provider=provider):
+                    self._matrix_case(
+                        provider, cfg, locator, responses,
+                        verb="question",
+                        kwargs={"body_file": str(body),
+                                "subject_id": "subject-1",
+                                "blocked_stage": "triage",
+                                "reason_code": "needs-spec",
+                                "question_slug": "capture-or-interview"})
 
     def test_attach_all_four_github_asserts_gate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

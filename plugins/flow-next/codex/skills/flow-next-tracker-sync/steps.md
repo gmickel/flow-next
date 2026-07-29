@@ -140,10 +140,38 @@ Backlog enumeration uses the deterministic `wire list-open` contract and the
 resolved ready lane. It returns normalized issues only. It does not create Flow
 specs by itself.
 
-`list-relations` is read-only dependency ordering. `question` uses caller-owned
-content synthesis and the comment marker contract. In autonomous mode, a
-question is parked in tracker comments and resumed only from the matching
-answer marker.
+For each returned issue, build its locator from the same normalized row
+(`durable = issue.id`, `display = issue.identifier`). `list-relations` is the
+read-only dependency-ordering call:
+
+```bash
+$FLOWCTL tracker wire relation-list --locator "$LOCATOR" --json
+```
+
+Treat `class: transport`, `subtype: truncated` as a failed read and route it
+through normal structured-error recovery. Never order work from a partial
+dependency graph.
+
+For `question`, the caller owns the semantic body and the four stable identity
+inputs. Write only the free-prose body to a mode `0600` temporary file. The wire
+verb computes the id, adds the canonical marker, lists existing comments, and
+posts only when that id is absent:
+
+```bash
+$FLOWCTL tracker wire question --locator "$LOCATOR" \
+ --subject-id "$SUBJECT_ID" --blocked-stage "$BLOCKED_STAGE" \
+ --reason-code "$REASON_CODE" --question-slug "$QUESTION_SLUG" \
+ --body-file "$BODY_FILE" --json
+```
+
+`SUBJECT_ID` is the spec id for a spec-backed item and the normalized durable
+`issue.id` for a tracker-only item; never use the display key in the hash.
+Spec-backed questions also write the returned `data.question_id` into the
+matching `## Open Questions` anchor. A tracker-only question has no local
+receipt or spec write. In autonomous mode, a question resumes only from the
+matching answer marker. If no tracker transport exists, retain the existing
+spec-only floor; a tracker-only subject has nowhere durable to park and returns
+`NEEDS_HUMAN`.
 
 ## 8. Completion
 

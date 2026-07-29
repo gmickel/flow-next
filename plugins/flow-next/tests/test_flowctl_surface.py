@@ -190,6 +190,8 @@ tracker wire comment-delete
 tracker wire label
 tracker wire assign
 tracker wire list-open
+tracker wire relation-list
+tracker wire question
 tracker wire attach
 tracker wire attach-get
 task create
@@ -413,7 +415,13 @@ class ActiveReferenceContractTest(unittest.TestCase):
                         continue
                     if top in GROUPED_COMMANDS and child:
                         command = f"{top} {child}"
-                        if command not in EXPECTED_LEAF_PATHS:
+                        if (
+                            command not in EXPECTED_LEAF_PATHS
+                            and not any(
+                                leaf.startswith(f"{command} ")
+                                for leaf in EXPECTED_LEAF_PATHS
+                            )
+                        ):
                             failures.append(
                                 f"{path.relative_to(REPO_ROOT)}: {command}"
                             )

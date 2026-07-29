@@ -207,10 +207,14 @@ edges come from **two** sources and feed **one** existing sorter:
   their display handle the same way. (Spec-backed candidates pass the spec/tracker id,
   which resolves to the stored `tracker.identifier`.)
 
-  (The inline tracker-sync wrapper consumes flowctl's normalized
-  `listIssueRelations` result — backlog mode never calls a tracker API directly.
-  It is a **READ** — on pilot's dispatch allowlist, never a merge/write. No-ops when
-  the bridge is inactive or the issue has no relations.)
+  (The inline tracker-sync wrapper builds
+  `{"durable":issue.id,"display":issue.identifier}` and calls
+  `flowctl tracker wire relation-list --locator "$LOCATOR" --json`; see
+  tracker-sync `steps.md` Phase 7. Backlog mode never calls a tracker API
+  directly. It is a **READ** — on pilot's dispatch allowlist, never a
+  merge/write. It no-ops when the bridge is inactive or the issue has no
+  relations. A structured `subtype: truncated` error is a failed read, never a
+  partial graph to sort.)
 
 Feed **both** edge sets — the flow `blockedBy` edges and the normalized tracker
 `relation[]` edges — into the **flow-next-deps jq topo-sort** (the phase-assignment
@@ -361,6 +365,13 @@ For a **tracker-only** subject the `<tracker-id>` is the candidate's `list-open`
 `issue.identifier` (the display handle, not the opaque global id) — posting the comment
 hits `POST /projects/:id/issues/:iid/notes` on GitLab, which needs the `<project>#<iid>`
 the identifier carries (gitlab.md § identity); a spec-backed subject passes its `<spec-id>`.
+The wrapper resolves the matching durable/display locator, writes the free-prose
+body to a mode `0600` temporary file, then executes `flowctl tracker wire
+question` with `--subject-id`, `--blocked-stage`, `--reason-code`,
+`--question-slug`, and `--body-file` exactly as specified in tracker-sync
+`steps.md` Phase 7. The stable subject id is the spec id for a spec-backed item
+or normalized `issue.id` for a tracker-only item; the display handle is locator
+input only, never hash identity.
 
 Where the question parks depends on whether a spec exists:
 
@@ -438,6 +449,13 @@ All three are on pilot's dispatch allowlist; `list-open` / `list-relations` are
 read-only, `question` posts a comment. Pilot calls **no** tracker-specific API and
 **never** branches on tracker type; flowctl selects the active adapter from the
 resolved tracker configuration and returns the normalized envelope.
+
+The executable mapping is fixed:
+
+- `list-open` → `tracker wire list-open`;
+- `list-relations` → `tracker wire relation-list --locator <durable/display>`;
+- `question` → `tracker wire question --locator <durable/display>` plus the four
+  stable identity flags and one secure body file.
 
 - **Ships on Linear, GitHub, GitLab + Jira** — the four adapters that implement
   `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64 / fn-69 / fn-70).

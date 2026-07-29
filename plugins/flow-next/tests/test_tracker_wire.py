@@ -1387,3 +1387,219 @@ class DispatchEnvelopeBoundary(unittest.TestCase):
                              or (data.get("details") or {}).get("subtype"),
                              "malformed_body")
             self.assertNotEqual(code, 0)
+
+
+class BacklogRelationAndQuestionWire(unittest.TestCase):
+    def test_relation_list_normalizes_direction_all_four(self) -> None:
+        jira_config = jr_cfg()
+        jira_config["tracker"]["perTracker"]["blocksLinkType"] = "Blocks"
+        cases = [
+            (
+                "github",
+                gh_cfg(),
+                loc(GH_NODE, "#42"),
+                {
+                    "wire-relation-parent-read": ok(GH_ISSUE),
+                    "wire-relation-parent": ok({"number": 7}),
+                    "wire-relation-list": ok([{"number": 43}]),
+                },
+                {("#42", "#7"), ("#43", "#42")},
+            ),
+            (
+                "gitlab",
+                gl_cfg(),
+                loc(str(GL_ID), "g/p#12"),
+                {
+                    "wire-relation-parent-read": ok(dict(
+                        GL_ISSUE,
+                        description=(
+                            "<!-- flow:deps -->\n"
+                            "**Blocked by:** g/p#9\n"
+                            "<!-- /flow:deps -->"
+                        ),
+                    )),
+                    "relate-list": ok([
+                        {"iid": 9, "link_type": "is_blocked_by",
+                         "references": {"full": "g/p#9"}},
+                        {"iid": 13, "link_type": "blocks",
+                         "references": {"full": "g/p#13"}},
+                    ]),
+                },
+                {("g/p#12", "g/p#9"), ("g/p#13", "g/p#12")},
+            ),
+            (
+                "linear",
+                ln_cfg(),
+                loc(LN_UUID, "WOR-17"),
+                {
+                    "wire-relation-list": ok({"data": {"issue": {
+                        "id": LN_UUID,
+                        "identifier": "WOR-17",
+                        "relations": {
+                            "nodes": [{"type": "blocks", "relatedIssue": {
+                                "id": "dep-18", "identifier": "WOR-18"}}],
+                            "pageInfo": {
+                                "hasNextPage": False, "endCursor": None},
+                        },
+                        "inverseRelations": {
+                            "nodes": [{"type": "blocks", "issue": {
+                                "id": "dep-16", "identifier": "WOR-16"}}],
+                            "pageInfo": {
+                                "hasNextPage": False, "endCursor": None},
+                        },
+                    }}}),
+                },
+                {("WOR-18", "WOR-17"), ("WOR-17", "WOR-16")},
+            ),
+            (
+                "jira",
+                jira_config,
+                loc(JR_ID, "SCRUM-1"),
+                {
+                    "wire-relation-list": ok({
+                        "id": JR_ID,
+                        "key": "SCRUM-1",
+                        "fields": {"issuelinks": [
+                            {
+                                "type": {"name": "Blocks"},
+                                "inwardIssue": {"id": "10041", "key": "SCRUM-2"},
+                            },
+                            {
+                                "type": {"name": "Blocks"},
+                                "outwardIssue": {"id": "10043", "key": "SCRUM-3"},
+                            },
+                        ]},
+                    }),
+                },
+                {("SCRUM-1", "SCRUM-2"), ("SCRUM-3", "SCRUM-1")},
+            ),
+        ]
+        for provider, cfg, locator, responses, expected in cases:
+            with self.subTest(provider=provider):
+                out = W.dispatch(
+                    "relation-list", cfg, locator=locator,
+                    execute=fake_execute(responses))
+                self.assertNotIsInstance(out, TrackerError)
+                pairs = {(row["from"], row["to"]) for row in out["relations"]}
+                self.assertEqual(pairs, expected)
+                self.assertTrue(all(
+                    row["type"] == "blocks" and row["linkPresent"]
+                    for row in out["relations"]))
+
+    def test_relation_list_fails_closed_when_pages_are_truncated(self) -> None:
+        not_found = TrackerError(
+            ErrorClass.NOT_FOUND, "no parent", subtype="http")
+        full_github_page = [{"number": i + 1000} for i in range(W._PAGE_SIZE)]
+        full_gitlab_page = [
+            {"iid": i + 1000, "link_type": "blocks",
+             "references": {"full": f"g/p#{i + 1000}"}}
+            for i in range(W._PAGE_SIZE)
+        ]
+        linear_pages = []
+        for page in range(W._MAX_PAGES):
+            linear_pages.append(ok({"data": {"issue": {
+                "id": LN_UUID,
+                "identifier": "WOR-17",
+                "relations": {
+                    "nodes": [],
+                    "pageInfo": {
+                        "hasNextPage": True,
+                        "endCursor": f"rel-{page}",
+                    },
+                },
+                "inverseRelations": {
+                    "nodes": [],
+                    "pageInfo": {
+                        "hasNextPage": False,
+                        "endCursor": None,
+                    },
+                },
+            }}}))
+        cases = [
+            (
+                "github",
+                gh_cfg(),
+                loc(GH_NODE, "#42"),
+                {
+                    "wire-relation-parent-read": ok(GH_ISSUE),
+                    "wire-relation-parent": not_found,
+                    "wire-relation-list": [
+                        ok(full_github_page) for _ in range(W._MAX_PAGES)
+                    ],
+                },
+            ),
+            (
+                "gitlab",
+                gl_cfg(),
+                loc(str(GL_ID), "g/p#12"),
+                {
+                    "wire-relation-parent-read": ok(GL_ISSUE),
+                    "relate-list": [
+                        ok(full_gitlab_page) for _ in range(W._MAX_PAGES)
+                    ],
+                },
+            ),
+            (
+                "linear",
+                ln_cfg(),
+                loc(LN_UUID, "WOR-17"),
+                {"wire-relation-list": linear_pages},
+            ),
+        ]
+        for provider, cfg, locator, responses in cases:
+            with self.subTest(provider=provider):
+                out = W.dispatch(
+                    "relation-list", cfg, locator=locator,
+                    execute=fake_execute(responses))
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.cls, ErrorClass.TRANSPORT)
+                self.assertEqual(out.subtype, "truncated")
+
+    def test_question_dedups_before_posting(self) -> None:
+        marker = "<!-- flow-next:question id=a7f96309954a181b status=open -->"
+        ex = fake_execute({
+            "wire-comment-list": ok([{"id": 1, "body": f"{marker}\n\nOld"}]),
+        })
+        out = W.dispatch(
+            "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+            subject_id="subject-1", blocked_stage="triage",
+            reason_code="needs-spec", question_slug="capture-or-interview",
+            body="Rephrased", execute=ex)
+        self.assertEqual(out["posted"], False)
+        self.assertEqual([call.op for call in ex.calls], ["wire-comment-list"])
+
+    def test_question_posts_canonical_marker_and_refuses_unproven_absence(self) -> None:
+        ex = fake_execute({
+            "wire-comment-list": ok([]),
+            "wire-parent-read": ok(GH_ISSUE),
+            "wire-comment-add": ok({"id": 2, "body": "posted"}),
+        })
+        out = W.dispatch(
+            "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+            subject_id="subject-1", blocked_stage="triage",
+            reason_code="needs-spec", question_slug="capture-or-interview",
+            body="What next?", execute=ex)
+        self.assertEqual(out["posted"], True)
+        posted = next(call for call in ex.calls if call.op == "wire-comment-add")
+        payload = json.loads(posted.body)
+        self.assertEqual(
+            payload["body"],
+            "<!-- flow-next:question id=a7f96309954a181b status=open -->"
+            "\n\nWhat next?",
+        )
+
+        full_page = [{"id": i, "body": "other"} for i in range(100)]
+        truncated = fake_execute({
+            "wire-comment-list": [ok(full_page) for _ in range(W._MAX_PAGES)],
+        })
+        out = W.dispatch(
+            "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
+            subject_id="subject-1", blocked_stage="triage",
+            reason_code="needs-spec", question_slug="capture-or-interview",
+            body="What next?", execute=truncated)
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "truncated")
+        self.assertEqual(
+            [call.op for call in truncated.calls],
+            ["wire-comment-list"] * W._MAX_PAGES,
+        )

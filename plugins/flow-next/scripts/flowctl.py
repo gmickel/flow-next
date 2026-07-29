@@ -24051,6 +24051,10 @@ def cmd_tracker_wire(args: argparse.Namespace) -> None:
         title=getattr(args, "title", None),
         body_file=getattr(args, "body_file", None),
         comment_id=getattr(args, "comment_id", None),
+        subject_id=getattr(args, "subject_id", None),
+        blocked_stage=getattr(args, "blocked_stage", None),
+        reason_code=getattr(args, "reason_code", None),
+        question_slug=getattr(args, "question_slug", None),
         add=getattr(args, "add", None),
         remove=getattr(args, "remove", None),
         file_path=getattr(args, "file", None),
@@ -31617,7 +31621,7 @@ def main() -> None:
     # wire verbs (fn-140.1) — locator-addressed, no local state / no receipt.
     p_tracker_wire = tracker_sub.add_parser(
         "wire",
-        help="Locator-addressed wire verbs (read/update/comment/label/assign/attach/list-open)",
+        help="Locator-addressed wire verbs (issue/comment/relation/question/attachment)",
     )
     wire_sub = p_tracker_wire.add_subparsers(dest="wire_verb", required=True)
 
@@ -31687,6 +31691,23 @@ def main() -> None:
                                      help="List open issues (no locator)")
     _wire_json(p_wire_list)
     p_wire_list.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_relations = wire_sub.add_parser(
+        "relation-list", help="List normalized dependency relations")
+    _wire_locator(p_wire_relations)
+    _wire_json(p_wire_relations)
+    p_wire_relations.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_question = wire_sub.add_parser(
+        "question", help="Idempotently post a question-valve comment")
+    _wire_locator(p_wire_question)
+    p_wire_question.add_argument("--subject-id", required=True)
+    p_wire_question.add_argument("--blocked-stage", required=True)
+    p_wire_question.add_argument("--reason-code", required=True)
+    p_wire_question.add_argument("--question-slug", required=True)
+    p_wire_question.add_argument("--body-file", required=True)
+    _wire_json(p_wire_question)
+    p_wire_question.set_defaults(func=cmd_tracker_wire)
 
     p_wire_attach = wire_sub.add_parser(
         "attach", help="Upload an attachment (capability-gated; fn-140.4)")

@@ -33,6 +33,19 @@ class BacklogWireContractTests(unittest.TestCase):
         self.assertIn("list-open", WIRE_VERBS)
         self.assertIn("deterministic `wire list-open` contract", STEPS)
 
+    def test_relation_and_question_ops_have_executable_wire_verbs(self) -> None:
+        self.assertIn("relation-list", WIRE_VERBS)
+        self.assertIn("question", WIRE_VERBS)
+        self.assertIn("tracker wire relation-list --locator", STEPS)
+        self.assertIn("tracker wire question --locator", STEPS)
+        for flag in (
+            "--subject-id",
+            "--blocked-stage",
+            "--reason-code",
+            "--question-slug",
+        ):
+            self.assertIn(flag, STEPS)
+
     def test_every_provider_implements_list_open(self) -> None:
         for provider in (github, gitlab, jira, linear):
             with self.subTest(provider=provider.__name__):
@@ -57,7 +70,8 @@ class BacklogWireContractTests(unittest.TestCase):
 class QuestionValveContractTests(unittest.TestCase):
     def test_question_content_remains_an_explicit_judgment_surface(self) -> None:
         self.assertIn("**Comment content synthesis.**", SKILL)
-        self.assertIn("`question` uses caller-owned", STEPS)
+        self.assertIn(
+            "For `question`, the caller owns the semantic body", STEPS)
 
     def test_closed_marker_families_remain_in_semantic_reference(self) -> None:
         for marker in (

@@ -1080,13 +1080,22 @@ flowctl tracker wire comment-delete --locator "$LOCATOR" <comment-id> [--json]
 flowctl tracker wire label          --locator "$LOCATOR" [--add LABEL]... [--remove LABEL]... [--json]
 flowctl tracker wire assign         --locator "$LOCATOR" [--add USER]... [--remove USER]... [--json]
 flowctl tracker wire list-open      [--json]
+flowctl tracker wire relation-list  --locator "$LOCATOR" [--json]
+flowctl tracker wire question       --locator "$LOCATOR" \
+  --subject-id ID --blocked-stage STAGE --reason-code CODE \
+  --question-slug SLUG --body-file F [--json]
 flowctl tracker wire attach         --locator "$LOCATOR" --file PATH [--json]
 flowctl tracker wire attach-get     <attachment-id> --out PATH [--json]
 ```
 
 Every locator-addressed mutation validates the response identity against
 `locator.durable`. A mismatch returns `class: conflict` and does not proceed as
-success. `attach` and `attach-get` are capability-gated.
+success. `relation-list` returns normalized directed `{from,to,type:"blocks"}`
+rows for backlog ordering and fails with `class: transport`,
+`subtype: truncated` when bounded pagination cannot prove the graph complete.
+`question` hashes its four stable identity inputs, adds the canonical question
+marker, reads comments before writing, and skips an existing id; the free-prose
+body is not part of the hash. `attach` and `attach-get` are capability-gated.
 
 ### Lifecycle and projection verbs
 

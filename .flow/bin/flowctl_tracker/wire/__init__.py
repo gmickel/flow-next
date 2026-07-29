@@ -32,6 +32,7 @@ Per-provider verb bodies live in `wire/{github,gitlab,linear,jira}.py`.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -52,11 +53,12 @@ _JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
 #: Verbs this module owns. `attach` / `attach-get` delegate to attach/ (fn-140.4).
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
-    "comment-delete", "label", "assign", "list-open", "attach", "attach-get",
+    "comment-delete", "label", "assign", "list-open", "relation-list",
+    "question", "attach", "attach-get",
 )
 WRITE_VERBS = frozenset({
     "update", "comment-add", "comment-update", "comment-delete", "label", "assign",
-    "attach",
+    "question", "attach",
 })
 #: Verbs that require a parent locator. attach-get and list-open are context-free.
 LOCATOR_VERBS = frozenset(v for v in WIRE_VERBS if v not in ("list-open", "attach-get"))
@@ -448,6 +450,10 @@ def parent_read(provider: str, config: dict, locator: dict, execute: Execute, *,
 def dispatch(verb: str, config: dict, *, locator: Any = None,
              title: Optional[str] = None, body: Optional[str] = None,
              comment_id: Optional[str] = None,
+             subject_id: Optional[str] = None,
+             blocked_stage: Optional[str] = None,
+             reason_code: Optional[str] = None,
+             question_slug: Optional[str] = None,
              add: Optional[list] = None, remove: Optional[list] = None,
              file_path: Optional[str] = None,
              attachment_id: Optional[str] = None,
@@ -520,6 +526,68 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
         return mod.assign(config, parsed, execute, add=add, remove=remove)  # type: ignore[arg-type]
     if verb == "list-open":
         return mod.list_open(config, execute)
+    if verb == "relation-list":
+        from ..relate import listing as relation_listing  # noqa: PLC0415
+        return relation_listing.list_relations(
+            provider, config, execute, locator=parsed)  # type: ignore[arg-type]
+    if verb == "question":
+        if body is None:
+            return TrackerError(
+                ErrorClass.INVALID_INPUT,
+                "question requires --body-file",
+                subtype="body")
+        identity = {
+            "subject-id": subject_id,
+            "blocked-stage": blocked_stage,
+            "reason-code": reason_code,
+            "question-slug": question_slug,
+        }
+        for name, value in identity.items():
+            if (not isinstance(value, str) or not value.strip()
+                    or "\0" in value or len(value) > 256):
+                return TrackerError(
+                    ErrorClass.INVALID_INPUT,
+                    f"question requires --{name} (1-256 non-NUL characters)",
+                    subtype=name.replace("-", "_"))
+        stable = "\0".join(str(value).strip() for value in identity.values())
+        question_id = hashlib.sha256(stable.encode()).hexdigest()[:16]
+        marker = f"<!-- flow-next:question id={question_id} status=open -->"
+        listed = mod.comment_list(
+            config, parsed, execute)  # type: ignore[arg-type]
+        if isinstance(listed, TrackerError):
+            return listed
+        comments = listed.get("comments")
+        if not isinstance(comments, list):
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "question comment list is malformed",
+                subtype="malformed_body")
+        question_pattern = re.compile(
+            rf"<!--\s*flow-next:question\s+id={re.escape(question_id)}"
+            r"(?:\s+status=[A-Za-z0-9_-]+)?\s*-->")
+        for comment in comments:
+            comment_body = comment.get("body") if isinstance(comment, dict) else None
+            if isinstance(comment_body, str) and question_pattern.search(comment_body):
+                return {
+                    "posted": False,
+                    "question_id": question_id,
+                    "comment": comment,
+                }
+        if listed.get("truncated"):
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "question comment pages truncated; marker absence unproven",
+                subtype="truncated")
+        rendered = f"{marker}\n\n{body.lstrip()}"
+        added = mod.comment_add(
+            config, parsed, execute, body=rendered)  # type: ignore[arg-type]
+        if isinstance(added, TrackerError):
+            return added
+        return {
+            "posted": True,
+            "question_id": question_id,
+            "comment": added,
+        }
     return TrackerError(ErrorClass.INVALID_INPUT, f"unhandled verb {verb!r}", subtype="verb")
 
 
@@ -533,6 +601,8 @@ def _read_config(flow_dir) -> dict:
 
 def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None,
         body_file: Optional[str] = None, comment_id: Optional[str] = None,
+        subject_id: Optional[str] = None, blocked_stage: Optional[str] = None,
+        reason_code: Optional[str] = None, question_slug: Optional[str] = None,
         add: Optional[list] = None, remove: Optional[list] = None,
         file_path: Optional[str] = None, attachment_id: Optional[str] = None,
         out_path: Optional[str] = None,
@@ -579,7 +649,10 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
     try:
         try:
             out = dispatch(verb, config, locator=locator, title=title, body=body,
-                           comment_id=comment_id, add=add, remove=remove,
+                           comment_id=comment_id, subject_id=subject_id,
+                           blocked_stage=blocked_stage,
+                           reason_code=reason_code, question_slug=question_slug,
+                           add=add, remove=remove,
                            file_path=file_path, attachment_id=attachment_id,
                            out_path=out_path, execute=ex)
         except Exception as exc:  # noqa: BLE001 - envelope boundary
