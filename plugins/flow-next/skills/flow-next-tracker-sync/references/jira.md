@@ -8,7 +8,7 @@ Skill prose never constructs Jira requests.
 
 | Shape | Authentication | API version | Body form |
 |---|---|---|---|
-| Cloud | email plus API token | 3 | ADF on the wire, Markdown at the adapter boundary |
+| Cloud | email plus API token | 2 by default | plain string/renderer form normalized to Markdown |
 | Data Center/Server | bearer PAT | 2 by default | plain string/renderer form normalized to Markdown |
 
 The resolved destination stores base URL, project key, API version,
@@ -41,10 +41,11 @@ search. Pagination is hidden by the adapter.
 
 ## Body fidelity
 
-Cloud ADF converts at the adapter boundary. Unsupported ADF nodes are preserved
-as an explicit opaque representation rather than silently discarded. Data
-Center/Server version 2 is the default because plain string bodies round-trip
-byte-exact in the measured shape.
+The version 2 default applies to both deployment shapes because plain string
+bodies round-trip byte-exact in the measured shape. If an explicitly resolved Jira
+Cloud destination uses version 3, ADF converts at the adapter boundary and
+unsupported ADF nodes are preserved as an explicit opaque representation
+rather than silently discarded.
 
 ## Status and relations
 

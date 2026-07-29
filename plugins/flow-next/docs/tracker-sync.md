@@ -29,13 +29,13 @@ Six probed signals:
 | `LINEAR_API_KEY` | `[ -n "$LINEAR_API_KEY" ]` | headless Linear GraphQL transport available |
 | GitHub auth | `gh auth status` exits 0 | headless GitHub transport available |
 | GitLab auth / token | `glab auth status` exits 0, or `GITLAB_TOKEN` / `CI_JOB_TOKEN` set | GitLab transport available (`glab` CLI primary → raw-REST token fallback; self-managed hosts honored) |
-| Jira REST + token | `JIRA_BASE_URL` set, plus Cloud `JIRA_EMAIL`+`JIRA_API_TOKEN` OR self-hosted DC/Server `JIRA_PAT` | Jira REST transport available — **offered** (Cloud `/rest/api/3` + API-token, DC/Server `/rest/api/2` + PAT; single rung + no-op, NO MCP). A bare `*.atlassian.net` host with no credential is surfaced but can't be offered |
+| Jira REST + token | `JIRA_BASE_URL` set, plus Cloud `JIRA_EMAIL`+`JIRA_API_TOKEN` OR self-hosted DC/Server `JIRA_PAT` | Jira REST transport available and **offered**. API version 2 is the default for Cloud and DC/Server; a bare `*.atlassian.net` host with no credential is surfaced but cannot be offered |
 
 Resolution is **env > config > ASK** (mirrors `flowctl review-backend`): if env/config already decides the transport, the ceremony doesn't re-ask. On confirmation the skill writes via `flowctl config set tracker.…` and verifies with `flowctl sync active --json` (must report `active: true`). The bridge is active iff raw `tracker.enabled == true` **OR** raw `tracker.type ∈ {linear, github, gitlab, jira}`.
 
 For a **GitLab** tracker the ceremony additionally writes `tracker.perTracker.project` (the group/sub-group/project path, e.g. `group/subgroup/project` — the GitLab analog of GitHub's `repo`) and, for self-managed hosts, `tracker.perTracker.host`. A self-managed instance on plain http and/or a non-default port stores the **scheme-prefixed origin** (e.g. `http://gitlab.internal:8929`) — the HTTP transport derives its API base from it verbatim, while the `glab` CLI route normalizes it to the bare hostname for `--hostname` (glab carries protocol/port itself under that host key in its own config; measured live 2026-07-28). A plain hostname (`gitlab.example.com`) keeps meaning https on 443. flow-next stores the literal path and derives the URL-encoded form (`group%2Fsubgroup%2Fproject`) once for the API, never double-encoding. **Zero special setup** — GitLab works from an existing `glab auth login` session OR a `GITLAB_TOKEN`/`CI_JOB_TOKEN` already present (gh-style), with no flow-next-specific provisioning; the spec-first floor applies when neither is present.
 
-For a **Jira** tracker the ceremony writes `tracker.perTracker.baseUrl` (the site, e.g. `https://acme.atlassian.net`) + `tracker.perTracker.projectKey` (the `PROJ` key), and **persists the deployment shape the probe detected** — `tracker.perTracker.authScheme` (`cloud-basic` = Cloud HTTP-basic `email:API_TOKEN`; `bearer-pat` = DC/Server `Authorization: Bearer <PAT>`) and `tracker.perTracker.apiVersion` (`3` Cloud `/rest/api/3` ADF; `2` DC/Server `/rest/api/2`) — so runtime never re-infers (decided once, like `review-backend`). An opt-in `tracker.perTracker.sslVerify=false` (env `JIRA_SSL_VERIFY=false`) covers self-hosted internal-CA / self-signed certs; never silent. **Credentials are read from env each run, never stored in flow state.** **Zero special setup** — a standard Jira credential the company already issues (Cloud API token or DC/Server PAT) — no OAuth app, MCP server, webhook, or Connect/Forge app; the spec-first floor applies when no credential is present. NO MCP rung: the official Atlassian MCP can't transition status / update fields / set links (the writes a two-way sync needs) and the community MCP is a redundant PAT-wrapper (the fn-70 transport decision).
+For a **Jira** tracker the ceremony writes `tracker.perTracker.baseUrl` (the site, e.g. `https://acme.atlassian.net`) + `tracker.perTracker.projectKey` (the `PROJ` key), and **persists the deployment shape the probe detected**: `tracker.perTracker.authScheme` (`cloud-basic` = Cloud HTTP-basic `email:API_TOKEN`; `bearer-pat` = DC/Server `Authorization: Bearer <PAT>`) and `tracker.perTracker.apiVersion`. The API version defaults to **2** for both deployment shapes because measured v2 issue bodies round-trip as plain strings byte-exact; an explicitly resolved alternate version remains part of the pinned destination. Runtime never re-infers the shape. An opt-in `tracker.perTracker.sslVerify=false` (env `JIRA_SSL_VERIFY=false`) covers self-hosted internal-CA / self-signed certs; never silent. **Credentials are read from env each run, never stored in flow state.** **Zero special setup**: a standard Jira credential the company already issues (Cloud API token or DC/Server PAT), with no OAuth app, MCP server, webhook, or Connect/Forge app. The spec-first floor applies when no credential is present. The official Atlassian MCP cannot transition status, update fields, or set links, and the community MCP is a redundant PAT wrapper, so Jira operations run through flowctl's deterministic REST transport.
 
 After the config writes, the ceremony asks **one optional, skippable readiness question** (1.12.0+): *which tracker workflow state means "ready for work"?* — a Linear workflow-state name (discovered from the team's states, with a "Ready"-looking name recommended), a GitHub label (suggested `ready`, pre-created idempotently), on GitLab a label (suggested `ready`, pre-created idempotently; GitLab has no rich workflow, so readiness is a label like GitHub), or — on **Jira** — a workflow **status name** (like Linear; validated against the project's statuses when a credential is present, else skip → no-op backlog lane). The answer is stored as `tracker.readyState`; skipping writes nothing and leaves the readiness gate dormant. See [Readiness projection](#readiness-projection--trackerreadystate--local-ready-flag) below.
 
@@ -120,18 +120,69 @@ State lives in the existing `.flow/specs/<id>.json` sidecar (not frontmatter —
 
 The **merge base is a paired snapshot at one sync point**: `flowctl sync set-merge-base` requires **both** `--flow`/`--flow-file` AND `--tracker`/`--tracker-file` together (a partial write that pins one half to a stale sync point is rejected). The base is stored in a form comparable to each side so a 3-way merge can compare flow-structured spec against tracker free-form issue.
 
-## Transport ladder
+## Flowctl-owned transport and resolved capabilities
 
-The skill is **transport-blind** — it calls a normalized interface (`fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` / `setStatus`) and never sees a wire shape. Each adapter detects the **best available transport** and degrades gracefully:
+`flowctl tracker` owns provider selection, credentials, request construction,
+pagination, retries, normalization, capability checks, and mutations. The skill
+does not select or execute a runtime transport path. It supplies semantic input
+files, then branches only on the structured result envelope.
 
-| Adapter | Ladder | Status fidelity |
+| Provider | Flowctl-owned route | Status fidelity |
 |---|---|---|
-| **Linear** | MCP → GraphQL (`LINEAR_API_KEY`) → no-op | full workflow states |
-| **GitHub** | `gh` (single rung) → no-op | reduced fidelity (open/closed) |
-| **GitLab** | `glab` CLI → raw-REST `/api/v4` (`GITLAB_TOKEN` / `CI_JOB_TOKEN`) → no-op | reduced fidelity (open/closed) |
-| **Jira** | REST `/rest/api/{3,2}` token (Cloud `email:API_TOKEN` / DC-Server `Bearer PAT`) → no-op; **NO MCP** | full workflow states via the transitions API + `statusMap` |
+| **Linear** | GraphQL with `LINEAR_API_KEY`; host MCP is limited to discovery or create, then handed back through `tracker persist-external` | full workflow states |
+| **GitHub** | authenticated `gh api` | reduced fidelity through open/closed plus the configured status label |
+| **GitLab** | authenticated `glab api` or REST, selected deterministically from resolved configuration and available credentials | reduced fidelity through open/closed plus the configured status label |
+| **Jira** | REST with the resolved deployment/authentication shape; API version 2 by default | full workflow states through resolved transition ids |
 
-When **no transport is reachable**, the run is a **`noop` + receipt note** — never a crash. The transport actually used (`mcp` / `graphql` / `gh` / `glab` / `rest` / `none`) is recorded on every receipt. (`glab` is GitLab's CLI rung; `rest` is GitLab's raw-REST `/api/v4` token fallback **and** Jira's `/rest/api/{3,2}` token rung — Jira is REST-only, single-rung, no MCP.)
+Discovery persists the normalized runtime facts under
+`tracker.resolved`; consuming verbs read that block instead of rediscovering
+provider metadata:
+
+```json
+{
+  "tracker": {
+    "resolved": {
+      "destination": {
+        "owner": "acme",
+        "repo": "widget",
+        "statusIds": {"todo": "1", "in_progress": "2", "done": "3"},
+        "stateIds": {"todo": "a", "in_progress": "b", "done": "c"}
+      },
+      "capabilities": {
+        "attachments": false,
+        "blockedBy": false,
+        "subIssues": true,
+        "deleteIssue": false
+      },
+      "scopeResolvedAt": {
+        "destination": "<ISO timestamp>",
+        "destination.statusIds": "<ISO timestamp>",
+        "destination.stateIds": "<ISO timestamp>",
+        "capabilities": "<ISO timestamp>"
+      },
+      "resolvedAt": "<ISO timestamp or null>"
+    }
+  }
+}
+```
+
+The destination fields are provider-specific: GitHub uses `owner` and `repo`;
+GitLab uses `projectId`, `projectPath`, `host`, and `namespaceId`; Linear uses
+`teamId`, `teamKey`, `stateIds`, and `labelIds`; Jira uses `baseUrl`,
+`projectKey`, `projectId`, `issueTypeId`, `apiVersion`, `style`, and
+`statusIds`. `resolvedAt` is set only when every required destination field,
+required normalized status slot, and capability boolean is present. Each
+`scopeResolvedAt` timestamp belongs only to its named scope, so a partial
+refresh cannot make unrelated data look fresh.
+
+Capability degradation is explicit. GitLab's plan-sensitive `blockedBy`
+capability is re-probed after 24 hours. A confirmed change from available to
+unavailable returns success with a `degraded` object such as
+`{"capability":"blockedBy","from":true,"to":false,"fallback":"body-block"}`.
+A failed probe keeps the prior capability and reports a separate `probe`
+object; a transient authorization or transport failure never becomes a silent
+downgrade. A requested unsupported operation returns `class: capability` with
+typed details. No provider path is selected from prose or provider error text.
 
 ## Lifecycle sync points (on by default — opt-out)
 
@@ -215,7 +266,12 @@ When `tracker.readyState` is configured (the optional ceremony question above), 
 
 Flow specs declare cross-spec dependencies locally via `depends_on_epics` (the edges shown by `flowctl show` / `flowctl dep`). Left alone, that graph stays **local-only** — the board shows independent issues even though Flow knows one blocks another. Dependency projection (2.1.0+, fn-64) closes that gap: on push/reconcile of a linked spec, each `depends_on_epics` edge between two **linked** specs becomes a **blocked-by** relation between their issues — on Linear, GitHub, GitLab, and Jira, each at its native fidelity (see Per-adapter fidelity below; Jira specifically uses native "is blocked by" issue links — directional and universally available, no licence gate), idempotently, never clobbering a relation a human added by hand. It is the relations counterpart to body/status/comments sync — projection, not coordination; flow stays authoritative and the tracker is never a control plane for deps.
 
-The projection runs through the transport-blind `projectDepRelations` hook (modelled on the one-way `projectReadiness` pull): the skill resolves the edges via `flowctl sync list-dep-relations`, then calls the normalized adapter relation transport (`setIssueRelation` / `listIssueRelations`, see [`references/adapter-interface.md`](../skills/flow-next-tracker-sync/references/adapter-interface.md)). The skill code does **not** branch on tracker type — only the adapter fidelity differs.
+The projection is flowctl-owned. `flowctl sync list-dep-relations` enumerates
+local dependency state, and `flowctl tracker relate` or the lifecycle facade
+performs the normalized provider mutation. The tracker-sync skill supplies
+semantic recovery only and never branches on provider type. This replaces the
+agent-driven mutation rule from fn-57 R3; **fn-141 R8 is the superseding
+decision and implementation pointer**.
 
 - **Direction — blocked-by.** Flow's `depends_on_epics` means "this spec is blocked by those," a direct match to the blocked-by/blocks relation pair. The current (dependent) issue is recorded as **blocked by** each dependency issue — no inversion ambiguity. On Linear that is a `blocks` edge with the operands swapped; on GitHub a `blocked_by` dependency; on GitLab an `is_blocked_by` issue link; on Jira a `POST /issueLink` with the configured/discovered blocking type, `inwardIssue=B` (the blocker dependency; it blocks) and `outwardIssue=A` (the blocked current issue).
 - **Per-adapter fidelity.** **Linear:** native issue relations — MCP `save_issue` `blockedBy`/`blocks` if the pinned schema exposes them, else the GraphQL `issueRelationCreate` rung, else a `noop` receipt on the bottom rung. **GitHub:** native issue **dependencies** (GA Aug 2025) via the REST `…/issues/{n}/dependencies/blocked_by` endpoints where the repo/account has them (feature-detected with a `GET` probe), else a provenance-fenced **"Blocked by" body block** (`<!-- flow:deps -->`…`<!-- /flow:deps -->` list of `#N` references) — the same reduced-fidelity posture the adapter already takes for status. **GitLab:** native directional issue **links** (`POST /issues/{iid}/links`, `link_type=is_blocked_by`) on a **Premium/Ultimate-licensed namespace**; on a Free or personal namespace the API returns `403 Blocked issues not available for current license`, so the adapter writes a **directionless `relates_to`** link for GitLab-UI visibility instead. **On both tiers the adapter ALWAYS also writes the provenance-fenced `<!-- flow:deps -->` body block** — it is the durable direction + provenance source on the native path (alongside the board-visible link) and the *sole* direction record on the degrade, so a `writeIssue` update must preserve it on every tier. `listIssueRelations` reads directed `blocks` edges **only** from native directional links or the fenced block — never from a directionless `relates_to`. **Jira:** native **"is blocked by" issue links** (`POST /rest/api/{3,2}/issueLink`) using `tracker.perTracker.blocksLinkType` or a discovered blocks-semantics type — directional and **universally available** (no licence tier, no degrade ladder), so there is one fidelity and **no `<!-- flow:deps -->` body block** (the native link is the sole projection; `linkPresent` is always `true`, never orphans). The flow-side `depRelations` ledger is its sole provenance authority; a ledgered edge whose native link a human deleted is a defer-on-removal collision (queued, never silently re-created), not a missing projection to recreate. A site with no blocks-semantics type queues the relation and asks for an explicit config value instead of forcing stock `Blocks`.
@@ -234,10 +290,10 @@ The Phase-0 gate recognizes the **full autonomy marker family** (2.2.0+, fn-68 R
 
 ## Backlog-mode enumeration + the async question-valve (2.2.0+, fn-68)
 
-[`/flow-next:pilot`](../skills/flow-next-pilot/SKILL.md) backlog mode reaches in front of the ready gate — it enumerates the whole promoted lane (including tracker tickets with no flow spec) and surfaces "stuck" as a **question, not a stall**. Two skill-level, transport-blind named ops carry that (NOT flowctl transport — flowctl has no tracker transport):
+[`/flow-next:pilot`](../skills/flow-next-pilot/SKILL.md) backlog mode reaches in front of the ready gate and enumerates the whole promoted lane, including tracker tickets with no Flow spec. It surfaces "stuck" as a **question, not a stall**. `flowctl tracker` now owns the deterministic enumeration and comment transport; **fn-141 R8 supersedes fn-57 R3**. The skill retains the semantic question text and recovery choice:
 
-- **`list-open`** — enumerate the promoted-lane open issues via the 9th adapter method `listOpenIssues(filter) → issue[]`, filtered to the **exact** `tracker.readyState` state/label (no ordering, no "beyond"). Returns normalized `issue[]` so pilot can union in tracker-only tickets `flowctl specs` can't see. **No-ops with a note when `tracker.readyState` is unset** (no promoted lane to filter on — backlog mode then runs flow-ready specs only). Implemented for **Linear, GitHub, GitLab + Jira** (Jira via JQL `project = <KEY> AND status = "<readyState>"`, fn-70).
-- **`question <spec-id | tracker-id>`** — post a question-valve comment behind a **stable anchor** `<!-- flow-next:question id=<hash> status=open -->`, where `id` hashes **stable fields only** (`subjectId` + blocked-stage + reason code + question slug; free prose is *outside* the hash, so rephrasing never duplicates; `subjectId` is the spec id when spec-backed, else the opaque tracker UUID — never a bare tracker key, which trackers auto-linkify). A human's reply carries `<!-- flow-next:answer id=<hash> -->`, matched by `id` (threaded on Linear via the comment's reply/parent metadata; flat on GitHub / GitLab / Jira via the body marker) and imported **under the matching `## Open Questions` entry**, flipping the anchor to `answered`. A **tracker-only** `question` (no spec) is **exempt from the spec-id sync receipt** — its parked/answered state lives in the tracker (scan the comments for the open/answer markers), with no spec import until `capture`/`interview` later creates a spec.
+- **`flowctl tracker wire list-open`** enumerates promoted-lane open issues, filtered to the **exact** `tracker.readyState` state/label (no ordering, no "beyond"). It returns normalized `issue[]` so pilot can union tracker-only tickets with `flowctl specs`. When `tracker.readyState` is unset, there is no promoted tracker lane and backlog mode runs Flow-ready specs only.
+- **`question <spec-id | tracker-id>`** is the skill-owned semantic operation. The skill composes the question text; `flowctl tracker` posts and reads the question-valve comment behind a stable anchor `<!-- flow-next:question id=<hash> status=open -->`. The `id` hashes stable fields only (`subjectId` + blocked-stage + reason code + question slug); free prose is outside the hash, so rephrasing never duplicates. A human reply carries `<!-- flow-next:answer id=<hash> -->`, matched by `id` and imported under the matching `## Open Questions` entry. A tracker-only question has no spec receipt; its parked/answered state stays in tracker comments until `capture` or `interview` creates a spec.
 
 See [`references/adapter-interface.md`](../skills/flow-next-tracker-sync/references/adapter-interface.md) (the `listOpenIssues` contract + the `comment` reply/parent metadata), [`steps.md`](../skills/flow-next-tracker-sync/steps.md) Phase 7 (the named-op bodies + the answer round-trip), and [`references/comments-sync.md`](../skills/flow-next-tracker-sync/references/comments-sync.md) (the question-valve marker dedup).
 

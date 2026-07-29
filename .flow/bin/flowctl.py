@@ -23718,8 +23718,10 @@ def cmd_sync_list_dep_relations(args: argparse.Namespace) -> None:
     resolves the dep spec's tracker link + LOCAL status, plus whether the edge
     is already in our `depRelations` provenance ledger. Self-edges are skipped
     (a spec can never `depends_on_epics` itself, but we guard defensively so the
-    listing can never represent a self-relation). Transport-blind: this is pure
-    flowctl plumbing; the projection DECISION lives in the skill (fn-64.5).
+    listing can never represent a self-relation). fn-141 R8 supersedes fn-57
+    R3: this command remains a local-state enumerator, while deterministic
+    tracker transport and relation mutation now live in `flowctl tracker`.
+    Semantic conflict recovery remains in the tracker-sync skill.
 
     Output (`--json`): `[{dep_spec, dep_tracker_id, dep_identifier,
     dep_status, projected}]` where `dep_status` is the local dep-spec status.
@@ -24716,9 +24718,9 @@ def cmd_sync_check(args: argparse.Namespace) -> None:
     success/failure detail. `event: null` (pre-flag) receipts never clear.
 
     Exit 0 always (best-effort contract — output drives agent action, not the
-    exit code). NO tracker-mutation code lives here or anywhere in flowctl
-    (R3): all tracker mutations stay agent-driven through the tracker-sync
-    skill; this command only reads local receipts.
+    exit code). fn-141 R8 supersedes fn-57 R3: `flowctl tracker` now owns
+    deterministic tracker mutations. This audit command itself remains
+    read-only and reads only local receipts.
     """
     # R8 zero-overhead gate: bridge inactive → silent constant-time exit 0,
     # BEFORE any receipt IO, id resolution, or output. `tracker_sync_active`

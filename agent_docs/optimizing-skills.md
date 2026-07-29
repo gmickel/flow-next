@@ -220,6 +220,17 @@ modest) and NOT on agents whose output is already a **bounded template**. That p
 harvested, the remaining ROI prize is the **always-loaded prompt weight of the hot-path skills** — the
 `SKILL.md` + force-loaded companion files a skill reads on *every* invocation. Three levers, safest first
 (all zero-quality-loss when applied in this order — see `optimization-log.md` fn-82 rows for the numbers):
+
+**Tracker-sync re-measurement (2026-07-29): medium, 17,832 LF-normalized
+characters (~4,458 chars/4 tokens).** The always-loaded set is exactly
+`SKILL.md` (6,656) + `steps.md` (6,927) +
+`references/adapter-interface.md` (4,249); provider, body, status, comment, and
+identity references remain reached-path only. Reproduce from the repo root:
+
+```bash
+python3 -c 'from pathlib import Path; ps=[Path("plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md"),Path("plugins/flow-next/skills/flow-next-tracker-sync/steps.md"),Path("plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md")]; xs=[len(p.read_text(encoding="utf-8").replace("\r\n","\n").replace("\r","\n")) for p in ps]; print(xs, sum(xs), sum(xs)/4)'
+```
+
 - **Progressive-disclosure gating (biggest lever):** default-OFF machinery inlined in an always-read
   file is dead weight on the default path. Move it behind a **forcing-sentinel gate** into a
   `references/*.md` file — a gate whose stdout is an imperative the agent must act on (`GATE ACTIVE —
