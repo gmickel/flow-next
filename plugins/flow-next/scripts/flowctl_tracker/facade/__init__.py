@@ -26,6 +26,7 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
          comments_file: Optional[str] = None,
          source_body_file: Optional[str] = None,
          comment_file: Optional[str] = None,
+         pr_url: Optional[str] = None,
          status_only: bool = False,
          execute: Execute = default_execute):
     """Compose one facade op. Returns data dict or TrackerError — never raises."""
@@ -33,7 +34,8 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
     bad = validate_inputs(
         op, flow_file=flow_file, body_file=body_file,
         comments_file=comments_file, source_body_file=source_body_file,
-        comment_file=comment_file, event=event, status_only=status_only)
+        comment_file=comment_file, pr_url=pr_url,
+        event=event, status_only=status_only)
     if bad:
         return bad
 
@@ -58,7 +60,7 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
                 flow_dir, spec_id, flow_file=flow_file or "",
                 body_file=body_file or "", comments_file=comments_file or "",
                 source_body_file=source_body_file or "",
-                event=event, execute=execute)
+                event=event, pr_url=pr_url, execute=execute)
         if op == "comment":
             return op_comment(
                 flow_dir, spec_id, body_file=body_file or "",
@@ -100,6 +102,7 @@ def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
         comments_file: Optional[str] = None,
         source_body_file: Optional[str] = None,
         comment_file: Optional[str] = None,
+        pr_url: Optional[str] = None,
         status_only: bool = False,
         execute: Execute = default_execute) -> tuple[str, int]:
     """Thin envelope shell — never raises across the boundary."""
@@ -122,7 +125,8 @@ def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
                flow_file=flow_file, body_file=body_file,
                comments_file=comments_file,
                source_body_file=source_body_file,
-               comment_file=comment_file, status_only=status_only,
+               comment_file=comment_file, pr_url=pr_url,
+               status_only=status_only,
                execute=execute)
     if isinstance(out, TrackerError):
         if out.cls is ErrorClass.INACTIVE:

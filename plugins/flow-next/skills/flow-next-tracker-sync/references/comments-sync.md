@@ -52,7 +52,7 @@ The R10 lifecycle touchpoints (wired into the 7 skills in fn-52.6) that produce 
 | Event (`tracker.perEvent` key) | Comment posted to the issue |
 |---|---|
 | `work.done` | a status comment + **evidence** (tests run, PR link if present) |
-| `makePr` | **link** the PR to the issue (not just a comment) so it renders as a reviewable diff: make-pr §4.6a adds a non-closing `Ref <identifier>` to the PR body (→ the tracker integration auto-links it → **Linear Diffs**); the Linear/GraphQL rung also creates the rich PR attachment via `attachmentLinkURL`. GitHub tracker → native `Refs #N`. See [linear-ladder.md](linear-ladder.md) / [github.md](github.md). |
+| `makePr` | **link** the PR to the issue (not just a comment) so it renders as a reviewable diff: make-pr §4.6a adds a non-closing `Ref <identifier>` to the PR body, then passes the explicit PR URL to the reconcile facade. Flowctl projects GitHub's native `Refs #N`, a deduplicated GitLab URL note, a Jira remote-link upsert with comment fallback, or Linear's rich `attachmentLinkURL` attachment. |
 | `resolvePr` | an optional resolution-summary comment |
 | `completionReview` | the completion-review verdict + R-ID coverage summary |
 

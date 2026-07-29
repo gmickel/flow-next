@@ -20,11 +20,11 @@ OPS = frozenset({"push", "pull", "reconcile", "comment"})
 OP_INPUTS = {
     "push": {
         "require": frozenset({"flow_file", "body_file"}),
-        "forbid": frozenset({"comments_file", "source_body_file"}),
+        "forbid": frozenset({"comments_file", "source_body_file", "pr_url"}),
     },
     "pull": {
         "require": frozenset({"flow_file", "body_file", "comments_file"}),
-        "forbid": frozenset({"source_body_file", "comment_file"}),
+        "forbid": frozenset({"source_body_file", "comment_file", "pr_url"}),
     },
     "reconcile": {
         "require": frozenset({
@@ -36,6 +36,7 @@ OP_INPUTS = {
         "require": frozenset({"body_file"}),
         "forbid": frozenset({
             "flow_file", "comments_file", "source_body_file", "comment_file",
+            "pr_url",
         }),
     },
 }
@@ -92,6 +93,7 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
                     body_file: Optional[str], comments_file: Optional[str],
                     source_body_file: Optional[str],
                     event: Optional[str], comment_file: Optional[str] = None,
+                    pr_url: Optional[str] = None,
                     status_only: bool = False,
                     ) -> Optional[TrackerError]:
     if op not in OPS:
@@ -119,6 +121,7 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
         "comments_file": comments_file is not None,
         "source_body_file": source_body_file is not None,
         "comment_file": comment_file is not None,
+        "pr_url": pr_url is not None,
     }
     for name in sorted(rules["forbid"]):
         if present[name]:
@@ -134,6 +137,12 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
                 f"--op {op} requires --{name.replace('_', '-')}",
                 subtype="args",
             )
+    if pr_url is not None and event != "makePr":
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "--pr-url is only valid for --op reconcile --event makePr",
+            subtype="pr_url",
+        )
     return None
 
 

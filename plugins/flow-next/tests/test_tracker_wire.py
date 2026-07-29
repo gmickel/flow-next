@@ -220,6 +220,139 @@ class PreMutationGate(unittest.TestCase):
                 self.assertEqual([c.op for c in ex.calls], ["wire-parent-read"])
 
 
+class PullRequestLink(unittest.TestCase):
+    URL = "https://github.com/o/r/pull/7"
+
+    def test_rejects_invalid_url_before_transport(self) -> None:
+        for url in ("relative/pull/7", "https://example.test/pull/7\nspoof"):
+            with self.subTest(url=url):
+                ex = fake_execute({})
+                out = W.link_pr(
+                    "github", gh_cfg(), loc(GH_NODE, "#42"), ex,
+                    url=url,
+                )
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.subtype, "pr_url")
+                self.assertEqual(ex.calls, [])
+
+    def test_github_uses_native_pr_body_ref(self) -> None:
+        ex = fake_execute({
+            "wire-pr-link-parent-read": ok(GH_ISSUE),
+        })
+        out = W.link_pr(
+            "github", gh_cfg(), loc(GH_NODE, "#42"), ex, url=self.URL)
+        self.assertEqual(out["kind"], "native-pr-body-ref")
+        self.assertTrue(out["deduped"])
+
+    def test_gitlab_posts_then_deduplicates_exact_url_note(self) -> None:
+        note = {
+            "id": 9,
+            "body": f"Flow-Next PR: {self.URL}",
+            "noteable_id": GL_ID,
+            "created_at": "2026-07-29T00:00:00Z",
+        }
+        ex = fake_execute({
+            "wire-pr-link-parent-read": [ok(GL_ISSUE), ok(GL_ISSUE)],
+            "wire-parent-read": [ok(GL_ISSUE), ok(GL_ISSUE), ok(GL_ISSUE)],
+            "wire-comment-list": [ok([]), ok([note])],
+            "wire-comment-add": ok(note),
+        })
+        first = W.link_pr(
+            "gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"), ex, url=self.URL)
+        second = W.link_pr(
+            "gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"), ex, url=self.URL)
+        self.assertTrue(first["linked"])
+        self.assertFalse(second["linked"])
+        self.assertTrue(second["deduped"])
+        self.assertEqual(
+            [c.op for c in ex.calls].count("wire-comment-add"), 1)
+
+    def test_jira_upserts_remote_link_with_stable_global_id(self) -> None:
+        captured = {}
+
+        def capture(request):
+            captured.update(json.loads(request.body))
+            return empty()
+
+        ex = fake_execute({
+            "wire-pr-link-parent-read": ok(JR_ISSUE),
+            "wire-pr-link": capture,
+        })
+        out = W.link_pr(
+            "jira", jr_cfg(), loc(JR_ID, "SCRUM-1"), ex, url=self.URL)
+        self.assertEqual(out["kind"], "remote-link")
+        self.assertEqual(captured["globalId"], f"flow-next:pr:{self.URL}")
+        self.assertEqual(captured["object"]["url"], self.URL)
+
+    def test_linear_creates_then_deduplicates_rich_url_attachment(self) -> None:
+        attachment = {"id": "att-1", "url": self.URL}
+        ex = fake_execute({
+            "wire-pr-link-parent-read": [
+                gql_issue(LN_ISSUE),
+                gql_issue(LN_ISSUE),
+            ],
+            "wire-pr-link-list": [
+                ok({"data": {"issue": {"attachments": {
+                    "nodes": [],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }}}}),
+                ok({"data": {"issue": {"attachments": {
+                    "nodes": [attachment],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }}}}),
+            ],
+            "wire-pr-link": ok({"data": {
+                "attachmentLinkURL": {
+                    "success": True,
+                    "attachment": attachment,
+                },
+            }}),
+        })
+        first = W.link_pr(
+            "linear", ln_cfg(), loc(LN_UUID, "WOR-17"), ex, url=self.URL)
+        second = W.link_pr(
+            "linear", ln_cfg(), loc(LN_UUID, "WOR-17"), ex, url=self.URL)
+        self.assertTrue(first["linked"])
+        self.assertFalse(first["deduped"])
+        self.assertFalse(second["linked"])
+        self.assertTrue(second["deduped"])
+        self.assertEqual(second["attachment"], attachment)
+        self.assertEqual(
+            [c.op for c in ex.calls].count("wire-pr-link"),
+            1,
+        )
+        mutation = next(c for c in ex.calls if c.op == "wire-pr-link")
+        payload = json.loads(mutation.body)
+        self.assertIn("attachmentLinkURL", payload["query"])
+        self.assertEqual(payload["variables"]["url"], self.URL)
+
+    def test_linear_rereads_after_mutation_race(self) -> None:
+        attachment = {"id": "att-1", "url": self.URL}
+        ex = fake_execute({
+            "wire-pr-link-parent-read": gql_issue(LN_ISSUE),
+            "wire-pr-link-list": [
+                ok({"data": {"issue": {"attachments": {
+                    "nodes": [],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }}}}),
+                ok({"data": {"issue": {"attachments": {
+                    "nodes": [attachment],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                }}}}),
+            ],
+            "wire-pr-link": TrackerError(
+                ErrorClass.INVALID_INPUT,
+                "unable to create issue attachment",
+                subtype="graphql",
+            ),
+        })
+        out = W.link_pr(
+            "linear", ln_cfg(), loc(LN_UUID, "WOR-17"), ex, url=self.URL)
+        self.assertFalse(out["linked"])
+        self.assertTrue(out["deduped"])
+        self.assertEqual(out["attachment"], attachment)
+
+
 # ---------------------------------------------------------------------------
 # Parent-identity availability (response-side; never faked)
 # ---------------------------------------------------------------------------

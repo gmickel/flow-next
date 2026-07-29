@@ -24281,6 +24281,7 @@ def cmd_tracker_facade(args: argparse.Namespace) -> None:
         comments_file=getattr(args, "comments_file", None),
         source_body_file=getattr(args, "source_body_file", None),
         comment_file=getattr(args, "comment_file", None),
+        pr_url=getattr(args, "pr_url", None),
         status_only=getattr(args, "status_only", False),
     )
     print(payload)
@@ -31879,6 +31880,11 @@ def main() -> None:
         "--comment-file", default=None, dest="comment_file",
         help="Optional judgment-bearing comment to post inside --op push; "
              "forbidden for pull/reconcile/comment",
+    )
+    p_tracker_sync.add_argument(
+        "--pr-url", default=None, dest="pr_url",
+        help="Optional PR URL to link inside --op reconcile --event makePr; "
+             "forbidden for every other op/event",
     )
     p_tracker_sync.add_argument(
         "--status-only", action="store_true", dest="status_only",

@@ -53,6 +53,15 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _display_path(path: Path) -> str:
+    """Show repository paths relatively and caller-selected paths safely."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
 def build_artifact(source_commit: str) -> dict[str, Any]:
     """Measure candidate bytes against every immutable B1 tracker fixture."""
     candidate_commit = _git_commit(source_commit)
@@ -141,11 +150,11 @@ def main() -> int:
             raise SystemExit(f"missing candidate artifact: {args.output}")
         if args.output.read_text(encoding="utf-8") != rendered:
             raise SystemExit(f"candidate artifact is stale: {args.output}")
-        print(f"OK: {args.output.relative_to(REPO_ROOT)} is reproducible")
+        print(f"OK: {_display_path(args.output)} is reproducible")
         return 0
 
     args.output.write_text(rendered, encoding="utf-8")
-    print(f"wrote {args.output.relative_to(REPO_ROOT)}")
+    print(f"wrote {_display_path(args.output)}")
     return 0
 
 

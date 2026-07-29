@@ -709,6 +709,20 @@ class TestReachedPathHarness(unittest.TestCase):
                 row["before_reached_path_chars"],
             )
 
+    def test_tracker_candidate_displays_custom_output_paths(self) -> None:
+        relative = Path("optimization/reached-path/custom-candidate.json")
+        inside = self.tracker_candidate.REPO_ROOT / relative
+        self.assertEqual(
+            self.tracker_candidate._display_path(inside),
+            relative.as_posix(),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "custom-candidate.json"
+            self.assertEqual(
+                self.tracker_candidate._display_path(outside),
+                str(outside.resolve()),
+            )
+
     def test_auth_envelope_positive_and_zero_token(self) -> None:
         """Deterministic JSON-envelope auth contract — no live model."""
         positive = {

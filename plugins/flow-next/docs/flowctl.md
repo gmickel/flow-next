@@ -1159,7 +1159,7 @@ flowctl tracker sync <spec-id> --op pull --event KEY \
 
 flowctl tracker sync <spec-id> --op reconcile --event KEY \
   --flow-file F --body-file F --source-body-file F \
-  --comments-file comments.json
+  --comments-file comments.json [--pr-url URL]
 
 flowctl tracker sync <spec-id> --op comment --event KEY \
   --body-file F
@@ -1172,6 +1172,8 @@ Flow form as an input file; flowctl never authors the semantic merge.
 `--comment-file` is optional only for `push`; its marker-deduped comment is
 posted inside the same facade claim and aggregate receipt as body, status, and
 relation projection.
+`--pr-url` is optional only for `reconcile --event makePr`; it projects the
+provider-native, non-closing PR link inside that same claim and receipt.
 `--status-only` is valid only with `push`; it preserves body and relation
 co-edits on an already-linked issue while retaining create/link/paired-base
 seeding for an unlinked spec.
@@ -1283,7 +1285,8 @@ flowctl tracker sync <spec-id> --op reconcile --event <key> \
   --flow-file <final-local-merge-already-written> \
   --body-file <approved-outgoing-tracker-form> \
   --source-body-file <pre-merge-tracker-snapshot> \
-  --comments-file <normalized-comment-array.json>
+  --comments-file <normalized-comment-array.json> \
+  [--pr-url <absolute-url-for-makePr-only>]
 
 flowctl tracker sync <spec-id> --op comment --event <key> \
   --body-file <comment-text>
@@ -1298,6 +1301,9 @@ project the current spec title to the native issue title and project
 suppressed so each invocation emits one aggregate event receipt.
 An optional push `--comment-file` is marker-deduped and posted under that same
 facade claim and receipt; other operations reject it.
+An optional reconcile `--pr-url` is accepted only for event `makePr`; flowctl
+projects the native GitHub/GitLab/Jira/Linear link and records it in the same
+aggregate receipt.
 The `push --status-only` modifier skips body/title and relation projection. On
 an unlinked spec it still creates the issue, persists the link, seeds the paired
 base from readback, and projects status.

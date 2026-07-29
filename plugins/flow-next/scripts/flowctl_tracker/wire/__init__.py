@@ -43,6 +43,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
+from urllib.parse import urlparse
 
 from .. import envelope
 from ..executor import execute as default_execute
@@ -469,6 +470,44 @@ def parent_read(provider: str, config: dict, locator: dict, execute: Execute, *,
     if mod is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
     return mod.parent_read(config, locator, execute, op=op)
+
+
+def validate_pr_url(url: Any) -> Optional[TrackerError]:
+    """Reject malformed link content before a facade claim or provider read."""
+    if not isinstance(url, str):
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "PR URL must be an absolute http(s) URL up to 2048 characters",
+            subtype="pr_url",
+        )
+    value = url.strip()
+    parsed = urlparse(value)
+    if (parsed.scheme not in ("http", "https") or not parsed.netloc
+            or any(ch.isspace() or ord(ch) < 0x20 or ord(ch) == 0x7f
+                   for ch in value)
+            or len(url) > 2048):
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "PR URL must be an absolute http(s) URL up to 2048 characters",
+            subtype="pr_url",
+        )
+    return None
+
+
+def link_pr(provider: str, config: dict, locator: dict, execute: Execute, *,
+            url: str) -> Result:
+    """Project one PR URL through the provider's native non-closing link."""
+    invalid = validate_pr_url(url)
+    if invalid is not None:
+        return invalid
+    mod = _PROVIDERS.get(provider)
+    if mod is None:
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"unknown tracker type {provider!r}",
+            subtype="provider",
+        )
+    return mod.pr_link(config, locator, execute, url=url.strip())
 
 
 def _dispatch_question(*, mod: Any, provider: str, config: dict,

@@ -99,12 +99,12 @@ spec.
 Content is written to secure temporary files. Create with mode `0600`, pass the
 path, and delete it after the command.
 
-| Operation | `flow-file` | `body-file` | `comments-file` | `source-body-file` | `comment-file` |
-|---|---|---|---|---|---|
-| `push` | final Flow body | rendered tracker body | forbidden | forbidden | optional synthesized comment |
-| `pull` | final agent-folded Flow body | exact tracker snapshot used for the fold | normalized comment snapshot | forbidden | forbidden |
-| `reconcile` | final conflict-resolved Flow body | final tracker body | normalized comment snapshot | original tracker body used by the merge | forbidden |
-| `comment` | forbidden | synthesized comment text | forbidden | forbidden | forbidden |
+| Operation | `flow-file` | `body-file` | `comments-file` | `source-body-file` | `comment-file` | `pr-url` |
+|---|---|---|---|---|---|---|
+| `push` | final Flow body | rendered tracker body | forbidden | forbidden | optional synthesized comment | forbidden |
+| `pull` | final agent-folded Flow body | exact tracker snapshot used for the fold | normalized comment snapshot | forbidden | forbidden | forbidden |
+| `reconcile` | final conflict-resolved Flow body | final tracker body | normalized comment snapshot | original tracker body used by the merge | forbidden | optional only for event `makePr` |
+| `comment` | forbidden | synthesized comment text | forbidden | forbidden | forbidden | forbidden |
 
 The facade owns create-if-unlinked, provider calls, status and relation
 projection, marker dedup, paired snapshots, `lastSyncedAt`, and one aggregate
@@ -142,6 +142,12 @@ Comment bodies are synthesized by the caller. The facade owns stable markers,
 deduplication, posting, and the receipt. Question-valve behavior and comment
 normalization are documented in
 [references/comments-sync.md](references/comments-sync.md).
+
+Make PR passes its just-created absolute PR URL as `--pr-url`. The reconcile
+facade owns the provider projection: GitHub's PR-body `Refs #N`, a deduplicated
+GitLab note, a Jira remote-link upsert with comment fallback, or Linear's rich
+URL attachment. Merge evidence supplies lifecycle state only; never infer link
+content from it.
 
 ## 6. Structured recovery
 

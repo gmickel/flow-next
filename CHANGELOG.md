@@ -16,6 +16,13 @@ All notable changes to the flow-next.
 
 ### Fixed
 
+- **Make PR tracker links survive the deterministic tracker rewrite.** The
+  lifecycle reconcile facade now accepts the explicit PR URL for `makePr` and
+  projects the provider-native non-closing link in the same claim and receipt:
+  GitHub PR-body reference, deduplicated GitLab note, Jira remote-link upsert
+  with comment fallback, or Linear rich URL attachment. The reached-path
+  candidate utility also reports relative and out-of-repository `--output`
+  paths without failing after a successful write.
 - **Worktree Kit no longer exposes nested worktrees to `git add -A` as broken
   gitlinks.** `create` initializes a self-contained, non-clobbering
   `.worktrees/.gitignore` (`*` plus `!.gitignore`) before adding the worktree,

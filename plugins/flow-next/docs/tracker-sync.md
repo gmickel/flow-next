@@ -195,7 +195,7 @@ Sync is wired into seven lifecycle skills. **When you hook the bridge up via the
 | plan | `tracker.perEvent.plan` | `reconcile` | a spec is decomposed into tasks |
 | work (first claim) | `tracker.perEvent.work.firstClaim` | `push --status-only` | the first task of a spec is claimed |
 | work (done) | `tracker.perEvent.work.done` | `comment` | a task completes |
-| make-pr | `tracker.perEvent.makePr` | `comment` | a PR is opened (→ issue **In Review** + PR link, unconditional when bridge active — fn-66) |
+| make-pr | `tracker.perEvent.makePr` | `reconcile --pr-url` | a PR is opened (→ issue **In Review** + PR link, unconditional when bridge active — fn-66) |
 | resolve-pr | `tracker.perEvent.resolvePr` | `comment` | PR threads are resolved |
 | completion review | `tracker.perEvent.completionReview` | `comment` | a spec-completion review runs (verdict + R-ID coverage; **never terminal Done** — fn-66) |
 | land (merged) | `tracker.perEvent.land.merged` | `push` | a PR **merges** (→ issue **Done**, the SOLE Done driver, gated on the GitHub `MERGED` probe; **active-by-default** when bridge active — fn-66) |
@@ -237,6 +237,14 @@ facade posts or deduplicates that comment under the same outer transaction and
 records status, relations, and comment in one aggregate receipt. Land uses this
 form after a confirmed merge so its terminal verdict and `Done` projection
 cannot split into two independently retried facade calls.
+
+Make PR's reconcile call additionally receives the just-created absolute URL
+as `--pr-url`. That input is accepted only for `--op reconcile --event makePr`
+and is projected inside the same facade claim and receipt: GitHub uses the
+non-closing PR-body reference, GitLab posts/deduplicates a URL note, Jira
+upserts a remote link with a URL-comment fallback, and Linear creates its rich
+`attachmentLinkURL` attachment. Merge evidence determines lifecycle state; it
+does not carry the URL.
 
 Work's `firstClaim` caller uses `push --status-only`: an already-linked issue
 receives status only, preserving tracker-side body and relation co-edits. An

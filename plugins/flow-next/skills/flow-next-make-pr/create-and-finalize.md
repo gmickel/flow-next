@@ -546,7 +546,8 @@ if [[ -n "$PR_URL" ]] \
   # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
   # reconcile snapshots and optional 0600 breadcrumb body, then makes exactly
   # one lifecycle call:
-  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op reconcile --event makePr <legal file flags>
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op reconcile --event makePr \
+  #     --pr-url "$PR_URL" <other legal file flags>
   # The `reconcile` op (open-PR evidence) moves the issue to In Review AND links $PR_URL —
   # BOTH ride this unconditional bridge-active path (NOT gated behind perEvent.makePr):
   # the link powers Diffs and In Review is the honest lifecycle state for an open PR.
@@ -572,11 +573,11 @@ if [[ -n "$PR_URL" ]] \
   #            In Review transition via reconcileStatus (open prEvidence → in-review). No
   #            PR-body ref auto-links a Jira issue, so the remote link IS the cross-link.
   #            On a remote-link POST failure (permission / older DC) it falls back to a
-  #            PR-URL **comment** carrying the lifecycle marker (jira.md §makePr).
-  #   (PR URL source: reconcile RE-DERIVES it from `mergeEvidenceProbe(spec.branch_name)` —
-  #    the same probe yielding open/merged queries the code host `gh pr … --json url,state`
-  #    (status-sync.md) — so the op token `reconcile <spec-id>` deliberately omits it; the
-  #    note dedupes on the URL so a re-run never stacks duplicates. gitlab.md §makePr.)
+  #            URL-deduplicated `Flow-Next PR: <url>` **comment**.
+  #   (PR URL source: make-pr passes the just-created `$PR_URL` explicitly as
+  #    `--pr-url`. Merge evidence still derives only the lifecycle state; it is
+  #    not a transport for link content. Provider link writes are idempotent or
+  #    URL-deduplicated, so a re-run never stacks duplicates.)
   # The open PR is the merge-evidence `open` bucket → In Review, NEVER terminal (no MERGED).
   # Unlinked spec → flow-first link (create + base-snapshot) first, then reconcile the now-linked
   # spec → link the PR / Diff + In Review (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
@@ -607,7 +608,7 @@ SINCE=$(gh pr view "$PR_URL" --json createdAt --jq .createdAt 2>/dev/null || tru
 **Retro-fire on MISSING — exactly ONE cycle, never blocking:**
 
 1. Record the retro-fire start anchor (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
-2. Invoke the **inline flow-next-tracker-sync wrapper directly**. It prepares the same reconcile inputs and optional PR breadcrumb as §5.6, then makes exactly one `flowctl tracker sync <spec-id> --op reconcile --event makePr <legal file flags>` call. NEVER invoke this check block as a wrapper.
+2. Invoke the **inline flow-next-tracker-sync wrapper directly**. It prepares the same reconcile inputs and optional PR breadcrumb as §5.6, then makes exactly one `flowctl tracker sync <spec-id> --op reconcile --event makePr --pr-url "$PR_URL" <other legal file flags>` call. NEVER invoke this check block as a wrapper.
 3. Re-check with `--since` = the step-1 anchor:
    `"$FLOWCTL" sync check "$SPEC_ID" --events makePr --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the PR is already open; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.

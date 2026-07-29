@@ -331,6 +331,10 @@ class InputMatrix(unittest.TestCase):
                 "flow_file": "x", "body_file": "x", "comments_file": "x",
             }, "comments-file"),
             ("pull", {"comment_file": "x"}, "comment-file"),
+            ("push", {
+                "flow_file": "x", "body_file": "x",
+                "pr_url": "https://example.test/pull/1",
+            }, "pr-url"),
             ("comment", {"flow_file": "x"}, "flow-file"),
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -350,6 +354,44 @@ class InputMatrix(unittest.TestCase):
                 self.assertIs(out.cls, ErrorClass.INVALID_INPUT, op)
                 self.assertIn(needle, out.message, op)
                 self.assertEqual(ex.calls, [], op)
+
+    def test_pr_url_requires_make_pr_reconcile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            ex = fake_execute({})
+            out = F.sync(
+                flow, SPEC_ID, op="reconcile", event="plan",
+                flow_file=_flow_file(root),
+                body_file=_body_file(root, FLOW_BODY),
+                comments_file=_comments_file(root),
+                source_body_file=_source_body_file(root, FLOW_BODY),
+                pr_url="https://example.test/pull/1",
+                execute=ex,
+            )
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "pr_url")
+            self.assertEqual(ex.calls, [])
+
+    def test_make_pr_rejects_invalid_pr_url_before_transport(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            ex = fake_execute({})
+            out = F.sync(
+                flow, SPEC_ID, op="reconcile", event="makePr",
+                flow_file=_flow_file(root),
+                body_file=_body_file(root, FLOW_BODY),
+                comments_file=_comments_file(root),
+                source_body_file=_source_body_file(root, FLOW_BODY),
+                pr_url="relative/pull/1",
+                execute=ex,
+            )
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "pr_url")
+            self.assertEqual(ex.calls, [])
 
     def test_status_only_is_valid_only_for_push(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -802,6 +844,42 @@ class CreateIfUnlinkedSeed(unittest.TestCase):
             self.assertEqual(len(receipts), 1)
             self.assertEqual(receipts[0]["event"], "plan")
             self.assertEqual(receipts[0]["tracker_id"], GH_NODE)
+
+    def test_make_pr_reconcile_projects_explicit_pr_url_in_same_receipt(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(
+                flow, gh_cfg(),
+                tracker=_linked(
+                    mergeBaseFlow=FLOW_BODY,
+                    mergeBaseTracker=FLOW_BODY,
+                ),
+            )
+            issue = _gh_issue(FLOW_BODY)
+            responses = _status_noop_responses("github", issue)
+            responses["wire-pr-link-parent-read"] = ok(issue)
+            ex = fake_execute(responses)
+
+            out = F.sync(
+                flow, SPEC_ID, op="reconcile", event="makePr",
+                flow_file=_flow_file(root),
+                body_file=_body_file(root, FLOW_BODY),
+                comments_file=_comments_file(root),
+                source_body_file=_source_body_file(root, FLOW_BODY),
+                pr_url="https://github.com/o/r/pull/7",
+                execute=ex,
+            )
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(
+                out["steps"]["pr_link"]["kind"],
+                "native-pr-body-ref",
+            )
+            self.assertIn("pr-link", out["completed_steps"])
+            self.assertEqual(len(_receipts(flow)), 1)
+            self.assertIn("pr-link", _receipts(flow)[0]["note"])
 
     def test_comment_unlinked_seeds_from_normalized_stored_body_before_post(
             self) -> None:

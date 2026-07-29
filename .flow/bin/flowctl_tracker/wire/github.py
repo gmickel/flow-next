@@ -105,6 +105,19 @@ def read(config: dict, locator: dict, execute: Execute) -> Result:
     return _issue_out(parent, parent_identity="validated")
 
 
+def pr_link(config: dict, locator: dict, execute: Execute, *, url: str) -> Result:
+    """GitHub linkage already lives in the PR body's non-closing `Refs #N`."""
+    parent = parent_read(config, locator, execute, op="wire-pr-link-parent-read")
+    if isinstance(parent, TrackerError):
+        return parent
+    return {
+        "linked": False,
+        "deduped": True,
+        "kind": "native-pr-body-ref",
+        "url": url,
+    }
+
+
 def update(config: dict, locator: dict, execute: Execute, *,
            title: Optional[str], body: Optional[str]) -> Result:
     parent = _require_parent(config, locator, execute)

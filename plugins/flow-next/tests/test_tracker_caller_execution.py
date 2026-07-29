@@ -221,6 +221,8 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 "--comment-file",
                 (self.root / "comment.md").as_posix(),
             ])
+        if caller_id == "makePr" and op == "reconcile":
+            argv.extend(["--pr-url", "https://example.test/pull/141"])
         if caller_id == "work.firstClaim":
             argv.append("--status-only")
         return argv
@@ -256,6 +258,12 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             if caller_id == "land.merged"
             else ""
         )
+        pr_modifier = (
+            ' [ "$HARNESS_OP" != "reconcile" ] || '
+            'INPUT_ARGS+=(--pr-url "$PR_URL")'
+            if caller_id == "makePr"
+            else ""
+        )
         imports = []
         if caller_id == "plan":
             imports.append("references/tracker-projection.md")
@@ -275,6 +283,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 "esac",
                 modifier,
                 comment_modifier,
+                pr_modifier,
                 f'FACADE_RESULT=$("$FLOWCTL" tracker sync "$SPEC_ID" --op "$HARNESS_OP" '
                 f'--event {row["event"]} "${{INPUT_ARGS[@]}}" "${{STATUS_ARGS[@]}}")',
                 'printf "%s" "$FACADE_RESULT" >/dev/null',

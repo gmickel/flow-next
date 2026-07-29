@@ -25,6 +25,8 @@ from ..resolve_verb import bound_executor
 from ..syncbody import sync_body
 from ..types import ErrorClass, TrackerError
 from ..wire import dispatch as wire_dispatch
+from ..wire import link_pr as wire_link_pr
+from ..wire import validate_pr_url
 from .helpers import (collect_degraded, comments_have_marker,
                       comments_snapshot, format_marker, link_state_of,
                       live_comments_snapshot, load_tracker, local_spec_md,
@@ -566,11 +568,16 @@ def _pull_sequence(flow_dir: Path, spec_id: str, *, event: str,
 def op_reconcile(flow_dir: Path, spec_id: str, *, flow_file: str,
                  body_file: str, comments_file: str,
                  source_body_file: str, event: str,
+                 pr_url: Optional[str] = None,
                  execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
+    if pr_url is not None:
+        invalid_pr_url = validate_pr_url(pr_url)
+        if invalid_pr_url is not None:
+            return invalid_pr_url
 
     flow_body = read_text_file(flow_file, label="--flow-file")
     if isinstance(flow_body, TrackerError):
@@ -604,7 +611,8 @@ def op_reconcile(flow_dir: Path, spec_id: str, *, flow_file: str,
             flow_dir, spec_id, flow_body=flow_body, tracker_body=tracker_body,
             source_tracker_body=source_tracker_body,
             expected_comments=expected_comments,
-            config=config, provider=provider, event=event, execute=execute)
+            config=config, provider=provider, event=event, pr_url=pr_url,
+            execute=execute)
     finally:
         _release_claim(rec_path)
 
@@ -613,7 +621,8 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
                         tracker_body: str, source_tracker_body: str,
                         expected_comments: list,
                         config: dict, provider: str,
-                        event: str, execute: Execute) -> Result:
+                        event: str, pr_url: Optional[str],
+                        execute: Execute) -> Result:
     completed: list = []
     statuses: list = []
     steps: dict[str, Any] = {}
@@ -741,6 +750,21 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     completed.append("comments")
     statuses.append("pulled")
     steps["comments"] = comments_out
+
+    if pr_url is not None:
+        pr_link_out = wire_link_pr(
+            provider, config, locator, ex, url=pr_url)
+        if isinstance(pr_link_out, TrackerError):
+            return fail_result(
+                pr_link_out, completed=completed, statuses=statuses,
+                flow_dir=flow_dir, spec_id=spec_id, event=event,
+                tracker_id=durable, transport=provider, degraded=degraded,
+            )
+        completed.append("pr-link")
+        statuses.append(
+            "updated" if pr_link_out.get("linked") else "noop")
+        steps["pr_link"] = pr_link_out
+        degraded = collect_degraded(pr_link_out) or degraded
 
     local_body = local_spec_md(flow_dir, spec_id)
     if isinstance(local_body, TrackerError):
