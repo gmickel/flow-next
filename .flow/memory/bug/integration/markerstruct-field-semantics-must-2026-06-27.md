@@ -4,11 +4,12 @@ date: "2026-06-27"
 track: bug
 category: integration
 module: plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md
-tags: [fn-68, tracker-sync, adapter-interface, marker, comments-sync, listComments, question-valve, nine-method, cross-model-review]
+tags: [fn-68, tracker-sync, adapter-interface, marker, comments-sync, listComments, question-valve, nine-method, cross-model-review, fn-141, facade, comments, prose-teardown]
 problem_type: integration
 symptoms: comments-sync said flow-next:question is flow-owned (skip Sync Log) but the adapter comment.marker contract still detected only flow-evt:<event> — an adapter would return marker:null and wrongly import the parked question into the Sync Log
 root_cause: documented new marker behavior only in the consumer file (comments-sync.md) while leaving the producer contract (comment.marker field + each adapter's listComments) describing the old marker set
 resolution_type: fix
+last_updated: "2026-07-29"
 related_to: [bug/integration/gh-api-f-stringifies-numeric-body-2026-06-17, bug/integration/set-tracker-id-rejected-github-n-2026-06-03, bug/integration/trackers-auto-linkify-issue-key-2026-06-03]
 ---
 
@@ -25,3 +26,38 @@ Make the flow-owned marker set a CLOSED, explicitly-tabulated vocabulary in the 
 
 ## Prevention
 When a sync/projection feature adds a marker or struct-field semantics, update the PRODUCER contract (the normalized struct field + every adapter that emits it), not just the consumer/reconcile doc — the two drift silently and an adapter author implements the stale side. A prose-contract test should assert the closed vocabulary is named in BOTH the interface contract and each adapter's read path. For interface-method additions, grep the whole skill tree for stale "<N>-method" / "the <count> interface methods" wording and add a test guard forbidding the old count across all adapter docs (allow only explicitly-scoped "original six core" subset references).
+
+## Update 2026-07-29
+
+## Problem
+Tracker-sync prose teardown removed executable transport recipes, but the first
+pass also drifted two surviving contracts: manual use of the event-only
+`tracker sync` facade, and the normalized comment snapshot shape. Legacy
+provider tests still asserted deleted ceremony snippets, hiding the intended
+deterministic boundary behind 40 stale failures.
+
+This extends the earlier marker lesson: changing consumer prose without checking
+the producer and facade contracts leaves a split-brain interface even when the
+new architecture is directionally correct.
+
+## What Didn't Work
+Reviewing only the reduced prose inventory and new acceptance test. That proved
+the character reduction and forbidden-command removal, but did not exercise all
+tracker-sync tests or compare the rewritten adapter contract with the actual
+facade helpers.
+
+## Solution
+Document manual runs as granular verbs and reserve `tracker sync --event` for
+lifecycle callers. Match the facade comment snapshot exactly:
+`id`, `body`, and `parent_identity`, while keeping semantic marker handling in
+`comments-sync.md`. Replace obsolete GitLab/Jira ceremony-grep tests with
+deterministic configuration and transport-boundary assertions. Run every
+`test_tracker_sync*.py` test, not only the task Quick command.
+
+## Prevention
+For prose teardown, validate three layers before review:
+
+1. compare documented normalized structures with their producer helper;
+2. compare facade invocation prose with CLI validation requirements;
+3. run the complete subsystem test glob and migrate stale prose assertions to
+   behavior or boundary assertions.
