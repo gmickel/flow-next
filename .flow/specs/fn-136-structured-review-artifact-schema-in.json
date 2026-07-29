@@ -1,11 +1,18 @@
 {
   "branch_name": "fn-136-structured-review-artifact-schema-in",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-07-25T11:56:53.752489Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-136-structured-review-artifact-schema-in",
+  "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_rounds": 0,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-07-29T07:54:30.375256Z",
   "spec_path": ".flow/specs/fn-136-structured-review-artifact-schema-in.md",
   "status": "open",
   "title": "Structured review-artifact schema in receipts",
@@ -20,5 +27,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-25T12:00:04.196172Z"
+  "updated_at": "2026-07-29T07:54:30.375427Z"
 }
