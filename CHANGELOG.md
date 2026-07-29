@@ -4,6 +4,18 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Fixed
+
+- **Tracker status deadlocks now honor `tracker.conflictTiebreak`.** The shared
+  deterministic policy consumes `always-ask`, `flow-wins`, and `tracker-wins`
+  across direct status and lifecycle-facade calls. Flow wins through the
+  existing provider-neutral write path; a terminal tracker wins through the
+  existing local fold and `pulled` receipt. The unrepresentable mirror — a
+  merged Flow spec against an active tracker — remains an explicit
+  candidate-bearing conflict with no mutation. Malformed persisted values now
+  fail with `INVALID_INPUT` before claims or sequence work, and invalid
+  `config set` values are rejected. Fixes #268.
+
 ## [flow-next 3.6.0] - 2026-07-29
 
 ### Changed

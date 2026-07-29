@@ -107,6 +107,34 @@ class TrackerConfigTestCase(unittest.TestCase):
         # fn-58: a fresh repo reads a clean null for the readiness knob.
         self.assertIsNone(self.flowctl.get_config("tracker.readyState"))
 
+    def test_conflict_tiebreak_write_is_strict_string_enum(self) -> None:
+        import argparse
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+
+        self.flowctl.set_config("tracker.enabled", False)
+        for bad in ("ask", "FLOW-WINS", "true", "", True, None):
+            ns = argparse.Namespace(
+                key="tracker.conflictTiebreak", value=bad, json=True)
+            out = io.StringIO()
+            err = io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                with self.assertRaises(SystemExit) as ctx:
+                    self.flowctl.cmd_config_set(ns)
+            self.assertNotEqual(ctx.exception.code, 0)
+            payload = json.loads(out.getvalue() or err.getvalue())
+            self.assertFalse(payload["success"])
+            self.assertIn("Invalid tracker.conflictTiebreak",
+                          payload["error"])
+
+        for good in ("always-ask", "flow-wins", "tracker-wins"):
+            ns = argparse.Namespace(
+                key="tracker.conflictTiebreak", value=good, json=True)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                self.flowctl.cmd_config_set(ns)
+            self.assertEqual(json.loads(out.getvalue())["value"], good)
+
     # --- config set null coercion (PR #170 review) ---------------------------
 
     def test_config_set_null_clears_ready_state(self) -> None:

@@ -276,7 +276,7 @@ with `sync defer`; it never prompts.
 ## Reconciliation — who-wins
 
 - **Body** — agentic host-agent semantic **3-way merge** against the `lastSyncedAt` merge-base snapshot, translating between flow's structured spec and the tracker's free-form issue. Only **genuine contradictions** surface; confident merges proceed.
-- **Status** — per-field **who-wins** ladder. The collision/deadlock case is evaluated **before** single-field terminal-wins rules (a `tracker=done × flow=…` deadlock must fall to `conflictTiebreak`, not be silently overwritten by terminal-wins). Tiebreak is `tracker.conflictTiebreak` (`flow-wins | tracker-wins | always-ask`, default `always-ask`).
+- **Status** — per-field **who-wins** ladder. The collision/deadlock case is evaluated **before** single-field terminal-wins rules (a `tracker=done × flow=…` deadlock must fall to `conflictTiebreak`, not be silently overwritten by terminal-wins). Tiebreak is `tracker.conflictTiebreak` (`flow-wins | tracker-wins | always-ask`, default `always-ask`). `flow-wins` reuses the provider-neutral status write and still requires merged-PR evidence for terminal projection. `tracker-wins` reuses the local terminal fold when the tracker is terminal (no provider write, existing `pulled` receipt). The mirror — merged Flow terminal while the tracker is active — cannot converge through raw `spec.status`; it remains an explicit candidate-bearing conflict with no mutation or `lastSyncedAt` advance.
 - **Comments / evidence** — two-way **append** with dedup; neither side overwrites the other.
 
 ## Readiness projection — `tracker.readyState` → local `ready` flag

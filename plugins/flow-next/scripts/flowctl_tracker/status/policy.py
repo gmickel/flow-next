@@ -28,6 +28,7 @@ NEEDS_HUMAN_EVIDENCE = frozenset({"closed-unmerged", "ambiguous", "probe-error"}
 PR_EVIDENCE = frozenset({
     "merged", "open", "closed-unmerged", "none", "ambiguous", "probe-error",
 })
+CONFLICT_TIEBREAKS = frozenset({"always-ask", "flow-wins", "tracker-wins"})
 
 #: GitHub close/reopen reasons — docs list completed|not_planned|reopened;
 #: undocumented `duplicate` is accepted live; anything else is invalid_input
@@ -83,6 +84,26 @@ def validate_to_reason(requested_to: Any, reason: Optional[str]
             subtype="reason",
         )
     return None
+
+
+def validate_conflict_tiebreak(config: dict) -> str | TrackerError:
+    """Return the exact configured deadlock policy, defaulting only if absent.
+
+    Runtime config is user-editable. A malformed persisted value must fail
+    before any claim or sequence work rather than silently changing authority.
+    """
+    tracker = config.get("tracker")
+    if not isinstance(tracker, dict) or "conflictTiebreak" not in tracker:
+        return "always-ask"
+    value = tracker["conflictTiebreak"]
+    if isinstance(value, str) and value in CONFLICT_TIEBREAKS:
+        return value
+    return TrackerError(
+        ErrorClass.INVALID_INPUT,
+        f"tracker.conflictTiebreak must be one of "
+        f"{sorted(CONFLICT_TIEBREAKS)}, got {value!r}",
+        subtype="conflict_tiebreak",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +268,8 @@ def in_progress_wins_matches(flow_norm: str, tracker_norm: str) -> bool:
 
 
 def decide(requested_to: str, reason: Optional[str], flow_norm: str,
-           tracker_norm: str, pr_evidence: str) -> Decision:
+           tracker_norm: str, pr_evidence: str,
+           conflict_tiebreak: str = "always-ask") -> Decision:
     """`--to` is a REQUEST, not an authority — the gate decides.
 
     Order (load-bearing):
@@ -273,6 +295,50 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
 
     # ── DEADLOCK FIRST ──────────────────────────────────────────────
     if is_deadlock(flow_norm, tracker_norm):
+        if conflict_tiebreak == "flow-wins":
+            close = (
+                reason
+                if reason in {"completed", "duplicate"}
+                else "completed"
+            )
+            return Decision(
+                "apply",
+                target_slot=flow_norm,
+                close_reason=close if flow_norm in TERMINAL else None,
+                details={
+                    "who": "flow-wins",
+                    "flow": flow_norm,
+                    "tracker": tracker_norm,
+                    "requested": requested_to,
+                },
+            )
+        if conflict_tiebreak == "tracker-wins":
+            if tracker_norm in TERMINAL:
+                return Decision(
+                    "apply_local",
+                    target_slot=tracker_norm,
+                    details={
+                        "who": "tracker-wins",
+                        "flow": flow_norm,
+                        "tracker": tracker_norm,
+                        "requested": requested_to,
+                    },
+                )
+            return Decision(
+                "conflict",
+                reason="status-deadlock-unrepresentable",
+                details={
+                    "flow": flow_norm,
+                    "tracker": tracker_norm,
+                    "requested": requested_to,
+                    "policy": conflict_tiebreak,
+                    "unrepresentable": True,
+                    "both_sides": {
+                        "flow": flow_norm,
+                        "tracker": tracker_norm,
+                    },
+                },
+            )
         return Decision(
             "conflict", reason="status-deadlock",
             details={"flow": flow_norm, "tracker": tracker_norm,

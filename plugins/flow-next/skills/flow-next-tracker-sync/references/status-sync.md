@@ -280,8 +280,8 @@ Resolution falls back to the **R1 `conflictTiebreak` default**
 
 | `conflictTiebreak` | Interactive | Ralph / autonomous |
 |---|---|---|
-| `tracker-wins` | apply the tracker's state to flow (fold `done` into the spec) | same — confident, proceeds |
-| `flow-wins` | push flow's state to the tracker (`setStatus`) | same — confident, proceeds |
+| `tracker-wins` | if the tracker is terminal, fold `done` into the spec through the existing local-status path (no provider write; `pulled` receipt). The mirror — merged Flow terminal while the tracker is active — is not durably representable by raw `spec.status`, so return the candidate-bearing `status-deadlock-unrepresentable` conflict with no mutation | same deterministic result |
+| `flow-wins` | push Flow's normalized state through the existing provider-neutral `setStatus` path; terminal projection still requires clean merged-PR evidence | same — confident, proceeds |
 | `always-ask` (default) | **ask via `AskUserQuestion`** — show both states, let the human pick | **`sync defer`** — queue the deadlock, never block (R11) |
 
 "Ask the human" resolves to "**queue** for the human" in autonomous mode (the
@@ -299,8 +299,10 @@ $FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport "$TRANSPORT" ${EV
   --note "status deadlock queued (tracker=done × flow=in-progress); no status written, base unchanged"
 ```
 
-`flow-wins` / `tracker-wins` auto-resolve (still a confident reconcile → proceed +
-`sync set-last-synced` + a `merged`/`updated` receipt). Only `always-ask` surfaces.
+Supported `flow-wins` / `tracker-wins` resolutions reuse the existing persistence
+and receipt paths: provider writes emit `updated`; a tracker-terminal local fold
+emits `pulled`. The unrepresentable `tracker-wins` mirror and `always-ask` surface
+without a provider/local write or `lastSyncedAt` advance.
 
 ## Linear `workflowState.type` ↔ flow status mapping (R7) — with unmapped fallback
 
