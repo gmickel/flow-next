@@ -8,7 +8,9 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-146-honor-tracker-conflict-tiebreak-in",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-146-honor-tracker-conflict-tiebreak-in.1": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
@@ -66,10 +68,24 @@
       "task": null,
       "timestamp": "2026-07-29T17:26:43.066922Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "6d7be6d45f2c5527ec0ed2beb9604e0680de14744321287694b20e1872e552e1",
+      "round_consumed": true,
+      "scope": "impl:fn-146-honor-tracker-conflict-tiebreak-in.1",
+      "task": "fn-146-honor-tracker-conflict-tiebreak-in.1",
+      "timestamp": "2026-07-29T17:51:28.470314Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
+    "impl:fn-146-honor-tracker-conflict-tiebreak-in.1": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-146-honor-tracker-conflict-tiebreak-in.md",
@@ -86,5 +102,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-29T17:26:43.068175Z"
+  "updated_at": "2026-07-29T17:51:28.471658Z"
 }
