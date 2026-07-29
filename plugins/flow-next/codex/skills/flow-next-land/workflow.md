@@ -512,7 +512,9 @@ git log --oneline -1 # evidence echo: the squash commit referencing the PR
  facade call, deletes the inputs, and routes any structured recovery.
  For the terminal branch it writes the synthesized merge/release verdict to
  a distinct `COMMENT_FILE`; the tracker-rendered issue body remains the
- regular `--body-file`.
+ regular `--body-file`. Every verdict-comment file starts with the stable
+ merge identity `evidence=<merge-commit-sha>`; retries of the same merge
+ deduplicate, while a different merge cannot collapse into that marker.
  **The `TRACKER_TERMINAL_OK` self-check selects the operation**: land does
  NOT trust the caller's merge claim, it branches on its own GitHub-`MERGED`
  probe (fn-66, R3):

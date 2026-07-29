@@ -70,8 +70,10 @@ These are the only five surfaces intentionally retained in the host agent:
    from hashes or syntax alone. The agent adjudicates only conflicting sections,
    while flowctl owns snapshots and atomic persistence.
 4. **Comment content synthesis.** Lifecycle comments communicate human context.
-   The caller decides what the comment should say; flowctl owns marker dedup,
-   transport, and the receipt.
+   The caller decides what the comment should say and supplies a stable
+   occurrence identity as the first file line, `evidence=<token>`. Flowctl
+   rejects missing/placeholder evidence, strips that line from visible content,
+   and owns marker dedup, transport, and the receipt.
 5. **Recovery routing from a structured error.** A typed conflict,
    `external_action_required`, or non-retryable capability result can require a
    user choice, an MCP continuation, a local correction, or a defer. The agent

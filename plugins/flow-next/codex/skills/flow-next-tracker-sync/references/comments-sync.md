@@ -76,7 +76,7 @@ Every flow-posted comment carries a **hidden HTML-comment marker** as its first
 line. The marker is the canonical dedup key and the back-reference all at once:
 
 ```html
-<!-- flow-next:sync issue=<issue-uuid> spec=<spec-id> evt=<event> evidence=<sha-or-none> -->
+<!-- flow-next:sync issue=<issue-uuid> spec=<spec-id> evt=<event> evidence=<stable-token> -->
 ```
 
 - `issue=<issue-uuid>` — the tracker issue's stable UUID. **Primary, linkify-safe
@@ -89,9 +89,13 @@ line. The marker is the canonical dedup key and the back-reference all at once:
 - `evt=<event>` — the lifecycle event (`work.done`, `makePr`,
  `completionReview`, …) — the **shorthand the adapter surfaces as the normalized
  `comment.marker` (`flow-evt:<event>`)**.
-- `evidence=<sha>` — for an evidence comment, the commit/evidence sha it reports
- (`none` when not evidence-bearing). This makes a *re-post of the same evidence*
- detectable even if the surrounding prose changed.
+- `evidence=<stable-token>` — the caller-owned occurrence identity: a
+ task/evidence commit, reviewed or tested head, spec-content fingerprint, or
+ merge commit. Every synthesized lifecycle comment input starts with this
+ whitespace-free token; missing, empty, or placeholder evidence is rejected
+ before a provider call. This makes a *re-post of the same occurrence*
+ detectable even if the surrounding prose changed without collapsing later
+ occurrences of the same event.
 
 **Retry rule — re-check before ANY re-post.** A post whose response you failed to
 parse may still have LANDED (body-escaping bugs corrupt the response read, not the
@@ -199,7 +203,7 @@ for c in listComments(trackerId):
  append c to the spec's ## Sync Log # a genuine tracker-side comment
 
 # POST (flow → tracker):
-marker = "<!-- flow-next:sync issue=<uuid> spec=<id> evt=<event> evidence=<sha|none> -->"
+marker = "<!-- flow-next:sync issue=<uuid> spec=<id> evt=<event> evidence=<stable-token> -->"
 existing = listComments(trackerId) # normalize each body first: strip <issue …>KEY</issue> → KEY
 if any(e has marker with same issue+evt+evidence): skip # Layer 1 exact-match: already posted
 else:

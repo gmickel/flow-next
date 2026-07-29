@@ -531,8 +531,10 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
  # operation-specific 0600 input files, then makes exactly one lifecycle call:
  # "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event interview <legal file flags>
  # For OP=comment, Interview synthesizes the comment content by name: a compact
- # refined-spec summary and the decisions resolved in this interview, written
- # to the 0600 --body-file and deleted after the call. No content travels in argv.
+ # refined-spec summary and the decisions resolved in this interview. The
+ # 0600 --body-file FIRST line is
+ # `evidence=<sha256-of-current-spec-file>`; delete the file after the call.
+ # No content travels in argv.
  # Unlinked specs create and link inside the facade. No reachable transport is
  # best-effort; a tracker failure never blocks the interview write-back.
  :

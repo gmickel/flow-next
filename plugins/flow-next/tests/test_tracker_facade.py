@@ -1289,6 +1289,45 @@ class CommentFacade(unittest.TestCase):
             self.assertFalse(any(c.op == "wire-comment-add" for c in ex2.calls))
             self.assertEqual(len(_receipts(flow)), 2)
 
+    def test_work_done_distinct_task_evidence_posts_distinct_comment(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            first_evidence = "fn-141.1@abc1234"
+            first_marker = (
+                f"<!-- flow-next:sync issue={GH_NODE} spec={SPEC_ID} "
+                f"evt=work.done evidence={first_evidence} -->"
+            )
+            second_evidence = "fn-141.2@def5678"
+            bf = _body_file(
+                root,
+                f"evidence={second_evidence}\n**done** - second task.\n",
+            )
+            posted = []
+
+            def capture_add(req):
+                posted.append(json.loads(req.body)["body"])
+                return ok({"id": 100, "body": posted[-1]})
+
+            ex = fake_execute({
+                "wire-parent-read": ok(_gh_issue(FLOW_BODY)),
+                "wire-comment-list": ok([{
+                    "id": 99,
+                    "body": f"{first_marker}\n\n**done** - first task.",
+                }]),
+                "wire-comment-add": capture_add,
+            })
+            out = F.sync(
+                flow, SPEC_ID, op="comment", event="work.done",
+                body_file=bf, execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertTrue(out["posted"])
+            self.assertFalse(out["deduped"])
+            self.assertEqual(len(posted), 1)
+            self.assertIn(f"evidence={second_evidence}", posted[0])
+
     def test_comment_truncated_scan_without_marker_refuses_post(self) -> None:
         """A truncated dedup scan proves nothing about marker absence:
         the facade must refuse to post rather than risk a duplicate."""
@@ -1439,6 +1478,47 @@ class MarkerRoundTrip(unittest.TestCase):
         cf = flow / "create-first"
         self.assertEqual(
             list(cf.glob("comment-*.json")) if cf.is_dir() else [], [])
+
+    def test_comment_requires_leading_evidence_before_wire(self) -> None:
+        for body in (
+            "**done** - shipped.\n",
+            "evidence=\n**done** - shipped.\n",
+            "evidence=none\n**done** - shipped.\n",
+        ):
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                flow = root / ".flow"
+                _write_flow(flow, gh_cfg(), tracker=_linked())
+                bf = _body_file(root, body)
+                ex = fake_execute({})
+                out = F.sync(
+                    flow, SPEC_ID, op="comment", event="work.done",
+                    body_file=bf, execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+                self.assertEqual(out.subtype, "evidence")
+                self.assertEqual(ex.calls, [])
+                self._no_claims(flow)
+                self.assertEqual(_receipts(flow), [])
+
+    def test_push_comment_file_requires_leading_evidence_before_wire(
+            self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gh_cfg(), tracker=_linked())
+            ff = _flow_file(root)
+            cf = _body_file(root, "Merged PR without identity\n")
+            ex = fake_execute({})
+            out = F.sync(
+                flow, SPEC_ID, op="push", event="land.merged",
+                flow_file=ff, body_file=ff, comment_file=cf, execute=ex)
+            self.assertIsInstance(out, TrackerError)
+            self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+            self.assertEqual(out.subtype, "evidence")
+            self.assertEqual(ex.calls, [])
+            self._no_claims(flow)
+            self.assertEqual(_receipts(flow), [])
 
     def test_comment_evidence_with_whitespace_rejected_before_wire(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

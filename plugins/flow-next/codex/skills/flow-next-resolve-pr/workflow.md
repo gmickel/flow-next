@@ -460,8 +460,9 @@ esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
  && [ "$OP" != "off" ]; then
  # Resolve PR synthesizes the comment content by name: "Addressed N of M
- # review items on PR #<NUMBER>" plus the terminal resolution counts. Write
- # it to a mode 0600 temporary body file, never argv. The inline
+ # review items on PR #<NUMBER>" plus the terminal resolution counts. Its
+ # FIRST line is `evidence=<post-resolution-pr-head-sha>`. Write it to a mode
+ # 0600 temporary body file, never argv. The inline
  # flow-next-tracker-sync wrapper makes exactly one facade call and deletes it:
  # "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event resolvePr --body-file "$BODY_FILE"
  # Unlinked specs create and link inside the facade. Best-effort; never blocks

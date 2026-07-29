@@ -222,6 +222,66 @@ class TrackerCallerOracleTests(unittest.TestCase):
             self.assertIn(caller["event"], text, caller["id"])
             self.assertIn(caller["config_key"], text, caller["id"])
 
+    def test_repeatable_synthesized_comments_name_stable_evidence_tokens(
+            self) -> None:
+        """Every repeated comment caller must distinguish occurrences.
+
+        The facade rejects evidence-less comments, but the host-facing prose
+        must also name the right stable token instead of leaving callers to
+        improvise one shared marker.
+        """
+        expected = {
+            (
+                "plugins/flow-next/skills/flow-next-work/"
+                "references/tracker-touchpoints.md"
+            ): (
+                "evidence=<task-id>@<final-evidence-commit-sha>",
+                "evidence=<reviewed-head-sha>",
+            ),
+            "plugins/flow-next/skills/flow-next-work/phases.md": (
+                "evidence=<task-id>@<final-evidence-commit-sha>",
+                "evidence=<reviewed-head-sha>",
+            ),
+            "plugins/flow-next/skills/flow-next-capture/workflow.md": (
+                "evidence=<sha256-of-current-spec-file>",
+            ),
+            "plugins/flow-next/skills/flow-next-interview/SKILL.md": (
+                "evidence=<sha256-of-current-spec-file>",
+            ),
+            (
+                "plugins/flow-next/skills/flow-next-plan/"
+                "references/tracker-projection.md"
+            ): ("evidence=<sha256-of-current-spec-file>",),
+            "plugins/flow-next/skills/flow-next-qa/workflow.md": (
+                "evidence=<tested-head-sha>",
+            ),
+            "plugins/flow-next/skills/flow-next-resolve-pr/workflow.md": (
+                "evidence=<post-resolution-pr-head-sha>",
+            ),
+            "plugins/flow-next/skills/flow-next-land/workflow.md": (
+                "evidence=<merge-commit-sha>",
+            ),
+            "plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md": (
+                "evidence=<token>",
+                "rejects missing/placeholder evidence",
+            ),
+            "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": (
+                "evidence=<token>",
+                "never reuse one fallback token",
+            ),
+            (
+                "plugins/flow-next/skills/flow-next-tracker-sync/"
+                "references/comments-sync.md"
+            ): (
+                "evidence=<stable-token>",
+                "placeholder evidence is rejected",
+            ),
+        }
+        for relative, tokens in expected.items():
+            text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+            for token in tokens:
+                self.assertIn(token, text, f"{relative}: {token}")
+
     def test_sweep_inventory_is_explicit_and_matches_pinned_tree(self) -> None:
         sweep = self.oracle["teardown_sweep"]
         path_groups = (

@@ -890,8 +890,9 @@ if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
   # operation-specific 0600 input files, then makes exactly one lifecycle call:
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event capture <legal file flags>
   # For OP=comment, Capture synthesizes the comment content by name: a compact
-  # created/updated-spec summary plus the captured context, written to the 0600
-  # --body-file and deleted after the call. No content travels in argv.
+  # created/updated-spec summary plus the captured context. The 0600
+  # --body-file FIRST line is `evidence=<sha256-of-current-spec-file>`; delete
+  # the file after the call. No content travels in argv.
   # No reachable transport is best-effort; genuine body conflicts surface scoped
   # (interactive) or queue (Ralph, though capture itself is Ralph-blocked).
   :

@@ -231,6 +231,15 @@ any comment content they own, and invoke `flowctl tracker sync <spec-id> --op
 marker dedup, ordering, and the single aggregate receipt. Content travels only
 through mode `0600` temporary files.
 
+Every synthesized comment file (`comment --body-file` or push
+`--comment-file`) must start with `evidence=<token>`. The token is a stable,
+whitespace-free identity for that occurrence: for example a task plus its
+evidence commit, the reviewed/tested head SHA, a spec-content fingerprint, or
+the merge commit. Flowctl strips the line before posting and uses it only in
+the dedup marker. Missing or placeholder evidence is rejected before any
+provider call; otherwise separate occurrences of one event would all collapse
+onto the old shared `evidence=none` marker.
+
 `push` may additionally receive `--comment-file` when the caller owns a
 judgment-bearing verdict that must accompany the lifecycle projection. The
 facade posts or deduplicates that comment under the same outer transaction and

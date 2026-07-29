@@ -13,11 +13,12 @@ lifecycle call:
 ```
 
 For `OP=comment`, Plan synthesizes the comment content by name: a compact
-planning summary, task count, and execution-wave outline. Write it to the mode
-`0600` `--body-file`, never argv, and delete it after the call. If the spec is
-not yet linked (for example, planning started without `/flow-next:capture`),
-the facade creates and links the issue before applying the selected operation.
-No reachable transport is a best-effort no-op; tracker failure never blocks
+planning summary, task count, and execution-wave outline. The mode `0600`
+`--body-file` FIRST line is `evidence=<sha256-of-current-spec-file>`; keep the
+comment content off argv and delete the file after the call. If the spec is not
+yet linked (for example, planning started without `/flow-next:capture`), the
+facade creates and links the issue before applying the selected operation. No
+reachable transport is a best-effort no-op; tracker failure never blocks
 planning.
 
 Never create one tracker issue per task. The grain is one spec ↔ one issue and

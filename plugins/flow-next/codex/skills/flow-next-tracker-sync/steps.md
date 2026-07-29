@@ -106,6 +106,12 @@ path, and delete it after the command.
 | `reconcile` | final conflict-resolved Flow body | final tracker body | normalized comment snapshot | original tracker body used by the merge | forbidden | optional only for event `makePr` |
 | `comment` | forbidden | synthesized comment text | forbidden | forbidden | forbidden | forbidden |
 
+Every synthesized comment input (`comment` body or push `comment-file`) starts
+with `evidence=<token>`. The caller chooses a stable, whitespace-free identity
+for that occurrence — task/evidence commit, reviewed or tested head, spec
+content fingerprint, or merge commit. Missing, empty, or placeholder evidence
+is invalid input; never reuse one fallback token across repeatable events.
+
 The facade owns create-if-unlinked, provider calls, status and relation
 projection, marker dedup, paired snapshots, `lastSyncedAt`, and one aggregate
 receipt. Do not reproduce those steps around the facade.
@@ -138,9 +144,10 @@ Dependency projection uses `tracker relate`. It is direct-edge only,
 additive, and provenance-led. A missing remote relation that Flow previously
 recorded is a conflict to defer, not permission to recreate it.
 
-Comment bodies are synthesized by the caller. The facade owns stable markers,
-deduplication, posting, and the receipt. Question-valve behavior and comment
-normalization are documented in
+Comment bodies and their stable `evidence=<token>` occurrence identities are
+synthesized by the caller. The facade owns stable markers, deduplication,
+posting, and the receipt. Question-valve behavior and comment normalization are
+documented in
 [references/comments-sync.md](references/comments-sync.md).
 
 Make PR passes its just-created absolute PR URL as `--pr-url`. The reconcile

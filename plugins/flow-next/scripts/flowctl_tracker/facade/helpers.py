@@ -317,7 +317,7 @@ def comments_have_marker(comments: list, *, issue: str, spec: str,
 
 
 def parse_evidence(body: str) -> str:
-    """Optional leading `evidence=<sha>` line; else `none`."""
+    """Parse the leading `evidence=<token>` line; else return `none`."""
     if not body:
         return "none"
     first = body.splitlines()[0].strip() if body.splitlines() else ""
@@ -325,6 +325,31 @@ def parse_evidence(body: str) -> str:
         val = first.split("=", 1)[1].strip()
         return val or "none"
     return "none"
+
+
+def require_evidence(body: str, *, label: str) -> Result:
+    """Require a stable comment identity before any remote mutation.
+
+    ``none`` used to be accepted as a shared fallback marker. That made every
+    evidence-less occurrence of the same lifecycle event collapse into one
+    comment, so later task completions could appear successfully synchronized
+    without posting. Synthesized lifecycle comments are repeatable; their
+    first line therefore must carry a caller-owned, whitespace-free identity.
+    """
+    evidence = parse_evidence(body)
+    if evidence.lower() == "none":
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"{label} must start with evidence=<token>; use a stable "
+            "event-specific commit or content fingerprint so separate "
+            "lifecycle occurrences do not deduplicate together",
+            subtype="evidence",
+            details={"field": "evidence", "label": label},
+        )
+    bad_evidence = marker_component_error("evidence", evidence)
+    if bad_evidence:
+        return bad_evidence
+    return evidence
 
 
 def strip_evidence_line(body: str) -> str:

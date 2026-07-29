@@ -31,7 +31,7 @@ from .helpers import (collect_degraded, comments_have_marker,
                       comments_snapshot, format_marker, link_state_of,
                       live_comments_snapshot, load_tracker, local_spec_md,
                       locator_of,
-                      marker_component_error, parse_evidence,
+                      require_evidence,
                       read_comments_file, read_text_file,
                       step_status_from_sync_body, strip_evidence_line,
                       worst_status, write_aggregate_receipt)
@@ -208,10 +208,10 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
         raw_comment = read_text_file(comment_file, label="--comment-file")
         if isinstance(raw_comment, TrackerError):
             return raw_comment
-        comment_evidence = parse_evidence(raw_comment)
-        bad_evidence = marker_component_error("evidence", comment_evidence)
-        if bad_evidence:
-            return bad_evidence
+        comment_evidence = require_evidence(
+            raw_comment, label="--comment-file")
+        if isinstance(comment_evidence, TrackerError):
+            return comment_evidence
         comment_text = strip_evidence_line(raw_comment)
 
     # One spec-identity claim across the whole create -> sync-body -> status
@@ -1080,14 +1080,9 @@ def op_comment(flow_dir: Path, spec_id: str, *, body_file: str, event: str,
     raw_body = read_text_file(body_file, label="--body-file")
     if isinstance(raw_body, TrackerError):
         return raw_body
-    evidence = parse_evidence(raw_body)
-    # Evidence is a marker field and part of the claim key: a value the
-    # emitted marker cannot round-trip through _MARKER_RE would post once
-    # and then duplicate on every retry (the dedup scan never matches).
-    # Reject BEFORE any wire call and before the claim is taken.
-    bad_evidence = marker_component_error("evidence", evidence)
-    if bad_evidence:
-        return bad_evidence
+    evidence = require_evidence(raw_body, label="--body-file")
+    if isinstance(evidence, TrackerError):
+        return evidence
     comment_text = strip_evidence_line(raw_body)
 
     # One spec-identity claim across the whole create -> marker scan ->

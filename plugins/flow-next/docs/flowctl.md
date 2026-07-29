@@ -1172,6 +1172,10 @@ Flow form as an input file; flowctl never authors the semantic merge.
 `--comment-file` is optional only for `push`; its marker-deduped comment is
 posted inside the same facade claim and aggregate receipt as body, status, and
 relation projection.
+Both `comment --body-file` and push `--comment-file` must begin with
+`evidence=<token>`. The whitespace-free token is a stable occurrence identity
+(commit SHA or content fingerprint); flowctl strips it from visible content
+and rejects missing or placeholder evidence before any provider call.
 `--pr-url` is optional only for `reconcile --event makePr`; it projects the
 provider-native, non-closing PR link inside that same claim and receipt.
 `--status-only` is valid only with `push`; it preserves body and relation
@@ -1301,6 +1305,9 @@ project the current spec title to the native issue title and project
 suppressed so each invocation emits one aggregate event receipt.
 An optional push `--comment-file` is marker-deduped and posted under that same
 facade claim and receipt; other operations reject it.
+Every comment input begins with `evidence=<token>`, where the whitespace-free
+token is stable for that lifecycle occurrence. Flowctl removes the line before
+posting and rejects absent or placeholder evidence before any remote call.
 An optional reconcile `--pr-url` is accepted only for event `makePr`; flowctl
 projects the native GitHub/GitLab/Jira/Linear link and records it in the same
 aggregate receipt.

@@ -247,6 +247,7 @@ def gitlab_list(config: dict, execute: Execute, *, locator: dict) -> Result:
     current = locator["display"]
     rows: list = []
     visible_blockers: set[str] = set()
+    native_blockers: set[str] = set()
     for link in links:
         if not isinstance(link, dict):
             continue
@@ -257,12 +258,18 @@ def gitlab_list(config: dict, execute: Execute, *, locator: dict) -> Result:
         if kind == "is_blocked_by":
             rows.append(_relation(current, target))
             visible_blockers.add(target)
+            native_blockers.add(target)
         elif kind == "blocks":
             rows.append(_relation(target, current))
         elif kind == "relates_to":
             visible_blockers.add(target)
 
     for blocker in _gitlab_blocked_refs(parent.get("description")):
+        # A native directional row is already the stronger representation.
+        # Do not let the body-owned fallback duplicate win _dedupe_relations()
+        # and relabel a real is_blocked_by link as degraded relates_to.
+        if blocker in native_blockers:
+            continue
         present = blocker in visible_blockers
         rows.append(_relation(
             current,

@@ -1818,11 +1818,49 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
                 self.assertTrue(all(
                     row["type"] == "blocks" and row["linkPresent"]
                     for row in out["relations"]))
+                if provider == "gitlab":
+                    native = next(
+                        row for row in out["relations"]
+                        if row["from"] == "g/p#12"
+                        and row["to"] == "g/p#9"
+                    )
+                    self.assertEqual(native["source"], "unknown")
+                    self.assertNotIn("degraded", native)
                 if provider == "github":
                     self.assertEqual(
                         [call.op for call in ex.calls],
                         ["wire-relation-parent-read"],
                     )
+
+    def test_gitlab_relation_list_keeps_relates_to_body_fallback_degraded(
+            self) -> None:
+        out = W.dispatch(
+            "relation-list",
+            gl_cfg(),
+            locator=loc(str(GL_ID), "g/p#12"),
+            execute=fake_execute({
+                "wire-relation-parent-read": ok(dict(
+                    GL_ISSUE,
+                    description=(
+                        "<!-- flow:deps -->\n"
+                        "**Blocked by:** g/p#9\n"
+                        "<!-- /flow:deps -->"
+                    ),
+                )),
+                "relate-list": ok([
+                    {"iid": 9, "link_type": "relates_to",
+                     "references": {"full": "g/p#9"}},
+                ]),
+            }),
+        )
+        self.assertNotIsInstance(out, TrackerError, out)
+        self.assertEqual(len(out["relations"]), 1)
+        fallback = out["relations"][0]
+        self.assertEqual(
+            (fallback["from"], fallback["to"]), ("g/p#12", "g/p#9"))
+        self.assertTrue(fallback["linkPresent"])
+        self.assertEqual(fallback["source"], "flow")
+        self.assertEqual(fallback["degraded"]["kind"], "relates_to")
 
     def test_relation_list_fails_closed_when_pages_are_truncated(self) -> None:
         full_gitlab_page = [

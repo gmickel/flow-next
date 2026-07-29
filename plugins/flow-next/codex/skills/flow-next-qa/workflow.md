@@ -622,7 +622,8 @@ esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
  && [ "$QA_OP" != "off" ]; then
  # QA synthesizes the comment content by name: verdict, qa_outcome, open P0/P1
- # findings, and R-ID coverage. Write it to a mode 0600 temporary body file,
+ # findings, and R-ID coverage. Its FIRST line is
+ # `evidence=<tested-head-sha>`. Write it to a mode 0600 temporary body file,
  # never argv. The inline flow-next-tracker-sync wrapper makes exactly one
  # facade call and deletes the file:
  # "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event qa --body-file "$BODY_FILE"

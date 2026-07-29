@@ -86,7 +86,10 @@ esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
    && [ "$OP" != "off" ]; then
   # Work synthesizes the comment content by name: the task done summary plus
-  # tests, commits, and PR evidence. Write it to a mode 0600 temporary body file.
+  # tests, commits, and PR evidence. Its FIRST line is the stable per-task
+  # identity `evidence=<task-id>@<final-evidence-commit-sha>` (or, when the
+  # task has no commit, `<task-id>@<sha256-of-task-evidence-json>`). Write the
+  # remaining comment to a mode 0600 temporary body file.
   # The inline wrapper then makes exactly one facade call and deletes the file:
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event work.done --body-file "$BODY_FILE"
   # Unlinked specs create and link inside the facade. No reachable transport is
@@ -111,8 +114,10 @@ esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
    && [ "$OP" != "off" ]; then
   # Work synthesizes the comment content by name: completion-review verdict and
-  # R-ID coverage. Write it to a mode 0600 temporary body file. The inline
-  # wrapper makes exactly one facade call and deletes the file:
+  # R-ID coverage. Its FIRST line is `evidence=<reviewed-head-sha>`, so a retry
+  # of the same review deduplicates while a review after new commits does not.
+  # Write it to a mode 0600 temporary body file. The inline wrapper makes
+  # exactly one facade call and deletes the file:
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event completionReview --body-file "$BODY_FILE"
   # This is comment-only and NEVER a terminal status push. land.merged is the
   # sole Done driver. Unlinked specs create and link inside the facade.
