@@ -74,6 +74,7 @@ class TrackerCallerOracleTests(unittest.TestCase):
             "post-fn-140 / pre-fn-141-C caller baseline",
         )
         self.assertIs(self.oracle["captured_before_caller_rewire"], True)
+        self.assertIn("byte-exact", self.oracle["observation_scope"])
         self.assertRegex(SOURCE_COMMIT, r"^[0-9a-f]{40}$")
 
         for relative, blob in self.oracle["source_blobs"].items():
@@ -100,22 +101,51 @@ class TrackerCallerOracleTests(unittest.TestCase):
         for caller in self.callers.values():
             self.assertEqual(set(caller), REQUIRED_CALLER_FIELDS, caller["id"])
             self.assertTrue((REPO_ROOT / caller["file"]).is_file(), caller["file"])
-            self.assertIn(caller["event"], caller["expected_receipt"])
+            self.assertTrue(caller["expected_receipt"])
             self.assertIn("off", caller["legal_config_values"])
             self.assertTrue(caller["resolved_facade_op"])
             self.assertTrue(caller["content_input"])
-            for observation in ("argv", "imports", "stdout", "stderr"):
+            for observation in ("argv", "imports"):
                 self.assertEqual(
                     set(caller[observation]),
                     {"inactive", "active"},
                     f"{caller['id']}:{observation}",
                 )
+            self.assertEqual(
+                set(caller["config_reads"]),
+                {"inactive", "active"},
+                caller["id"],
+            )
+            for stream in ("stdout", "stderr"):
+                self.assertEqual(
+                    caller[stream],
+                    {"inactive": "", "active_success": ""},
+                    f"{caller['id']}:{stream}",
+                )
             self.assertEqual(caller["argv"]["inactive"], [])
             self.assertEqual(caller["imports"]["inactive"], [])
-            self.assertEqual(caller["stdout"]["inactive"], "")
-            self.assertEqual(caller["stderr"]["inactive"], "")
 
     def test_exception_semantics_are_explicit(self) -> None:
+        for caller_id in ("interview", "plan"):
+            caller = self.callers[caller_id]
+            self.assertNotIn(
+                f"event:{caller['event']}",
+                caller["argv"]["active"],
+            )
+            self.assertEqual(
+                caller["expected_receipt"],
+                "sync receipt without an event tag",
+            )
+
+        interview_source = self._source_at_oracle_commit(
+            "plugins/flow-next/skills/flow-next-interview/SKILL.md"
+        )
+        plan_source = self._source_at_oracle_commit(
+            "plugins/flow-next/skills/flow-next-plan/steps.md"
+        )
+        self.assertNotIn("event: interview", interview_source)
+        self.assertNotIn("event: plan", plan_source)
+
         qa = self.callers["qa"]
         self.assertEqual(qa["legal_config_values"], ["off", "comment"])
         self.assertEqual(qa["resolved_facade_op"], "comment")
@@ -123,12 +153,24 @@ class TrackerCallerOracleTests(unittest.TestCase):
             self.assertIn(value, qa["unconditional_behavior"])
 
         make_pr = self.callers["makePr"]
-        self.assertEqual(make_pr["config_reads"], [["sync", "active", "--json"]])
+        self.assertEqual(
+            make_pr["config_reads"],
+            {
+                "inactive": [["sync", "active", "--json"]],
+                "active": [["sync", "active", "--json"]],
+            },
+        )
         self.assertEqual(make_pr["resolved_facade_op"], "reconcile")
         self.assertIn("regardless of the leaf", make_pr["unconditional_behavior"])
 
         land = self.callers["land.merged"]
-        self.assertEqual(land["config_reads"], [["sync", "active", "--json"]])
+        self.assertEqual(
+            land["config_reads"],
+            {
+                "inactive": [["sync", "active", "--json"]],
+                "active": [["sync", "active", "--json"]],
+            },
+        )
         self.assertEqual(
             land["resolved_facade_op"],
             "push_if_merged_else_comment",
@@ -145,6 +187,14 @@ class TrackerCallerOracleTests(unittest.TestCase):
             caller = self.callers[caller_id]
             self.assertEqual(caller["resolved_facade_op"], expected_op)
             self.assertIn("fixed", caller["unconditional_behavior"])
+            self.assertEqual(
+                caller["config_reads"]["inactive"],
+                [["sync", "active", "--json"]],
+            )
+            self.assertGreater(
+                len(caller["config_reads"]["active"]),
+                len(caller["config_reads"]["inactive"]),
+            )
 
     def test_caller_inventory_and_event_tokens_match_real_files(self) -> None:
         sweep = self.oracle["teardown_sweep"]

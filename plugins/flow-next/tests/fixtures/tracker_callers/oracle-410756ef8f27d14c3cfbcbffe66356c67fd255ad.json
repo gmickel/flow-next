@@ -3,6 +3,7 @@
   "source_commit": "410756ef8f27d14c3cfbcbffe66356c67fd255ad",
   "source_commit_name": "post-fn-140 / pre-fn-141-C caller baseline",
   "captured_before_caller_rewire": true,
+  "observation_scope": "Exact tracker-touchpoint delta. Existing caller output outside the touchpoint is excluded; empty strings are byte-exact.",
   "per_event_enum": [
     "off",
     "pull",
@@ -32,10 +33,16 @@
       "unconditional_behavior": "none",
       "content_input": "captured or enriched spec body",
       "expected_receipt": "sync receipt tagged capture",
-      "config_reads": [
-        ["config", "get", "tracker.perEvent.capture", "--json"],
-        ["sync", "active", "--json"]
-      ],
+      "config_reads": {
+        "inactive": [
+          ["config", "get", "tracker.perEvent.capture", "--json"],
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["config", "get", "tracker.perEvent.capture", "--json"],
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
         "active": ["flow-next-tracker-sync", "operation:<configured-value>", "<spec-id>", "event:capture"]
@@ -44,8 +51,8 @@
         "inactive": [],
         "active": ["skill:flow-next-tracker-sync"]
       },
-      "stdout": {"inactive": "", "active": "capture output unchanged"},
-      "stderr": {"inactive": "", "active": "best-effort tracker warnings only"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     },
     {
       "id": "interview",
@@ -56,21 +63,27 @@
       "resolved_facade_op": "configured_value",
       "unconditional_behavior": "none",
       "content_input": "refined spec body; file inputs skip tracker sync",
-      "expected_receipt": "sync receipt tagged interview",
-      "config_reads": [
-        ["config", "get", "tracker.perEvent.interview", "--json"],
-        ["sync", "active", "--json"]
-      ],
+      "expected_receipt": "sync receipt without an event tag",
+      "config_reads": {
+        "inactive": [
+          ["config", "get", "tracker.perEvent.interview", "--json"],
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["config", "get", "tracker.perEvent.interview", "--json"],
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
-        "active": ["flow-next-tracker-sync", "operation:<configured-value>", "<spec-id>", "event:interview"]
+        "active": ["flow-next-tracker-sync", "operation:<configured-value>", "<spec-id>"]
       },
       "imports": {
         "inactive": [],
         "active": ["skill:flow-next-tracker-sync"]
       },
-      "stdout": {"inactive": "", "active": "interview output unchanged"},
-      "stderr": {"inactive": "", "active": "best-effort tracker warnings only"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     },
     {
       "id": "plan",
@@ -81,21 +94,27 @@
       "resolved_facade_op": "configured_value",
       "unconditional_behavior": "none",
       "content_input": "planned spec body; tasks remain Flow-local",
-      "expected_receipt": "sync receipt tagged plan",
-      "config_reads": [
-        ["config", "get", "--json"],
-        ["sync", "active", "--json"]
-      ],
+      "expected_receipt": "sync receipt without an event tag",
+      "config_reads": {
+        "inactive": [
+          ["config", "get", "--json"],
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["config", "get", "--json"],
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
-        "active": ["flow-next-tracker-sync", "operation:<configured-value>", "<spec-id>", "event:plan"]
+        "active": ["flow-next-tracker-sync", "operation:<configured-value>", "<spec-id>"]
       },
       "imports": {
         "inactive": [],
         "active": ["references/tracker-projection.md", "skill:flow-next-tracker-sync"]
       },
-      "stdout": {"inactive": "", "active": "plan output unchanged"},
-      "stderr": {"inactive": "", "active": "best-effort tracker warnings only"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     },
     {
       "id": "work.firstClaim",
@@ -107,11 +126,16 @@
       "unconditional_behavior": "fixed push for every configured non-off value",
       "content_input": "status-only In-Progress projection",
       "expected_receipt": "sync receipt tagged work.firstClaim",
-      "config_reads": [
-        ["sync", "active", "--json"],
-        ["config", "get", "tracker.perEvent.work.firstClaim", "--json"],
-        ["sync", "active", "--json"]
-      ],
+      "config_reads": {
+        "inactive": [
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["sync", "active", "--json"],
+          ["config", "get", "tracker.perEvent.work.firstClaim", "--json"],
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
         "active": ["flow-next-tracker-sync", "operation:push", "<spec-id>", "status-only", "event:work.firstClaim"]
@@ -120,8 +144,8 @@
         "inactive": [],
         "active": ["references/tracker-touchpoints.md", "skill:flow-next-tracker-sync"]
       },
-      "stdout": {"inactive": "", "active": "work output unchanged"},
-      "stderr": {"inactive": "", "active": "best-effort tracker warnings only"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     },
     {
       "id": "work.done",
@@ -133,11 +157,16 @@
       "unconditional_behavior": "fixed comment for every configured non-off value",
       "content_input": "task done summary plus tests, commits and PR evidence",
       "expected_receipt": "sync receipt tagged work.done",
-      "config_reads": [
-        ["sync", "active", "--json"],
-        ["config", "get", "tracker.perEvent.work.done", "--json"],
-        ["sync", "active", "--json"]
-      ],
+      "config_reads": {
+        "inactive": [
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["sync", "active", "--json"],
+          ["config", "get", "tracker.perEvent.work.done", "--json"],
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
         "active": ["flow-next-tracker-sync", "operation:comment", "<spec-id>", "event:work.done"]
@@ -151,8 +180,8 @@
           "skill:flow-next-tracker-sync"
         ]
       },
-      "stdout": {"inactive": "", "active": "work output unchanged"},
-      "stderr": {"inactive": "", "active": "runner outcome or best-effort tracker warning"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     },
     {
       "id": "completionReview",
@@ -164,11 +193,16 @@
       "unconditional_behavior": "fixed non-terminal comment for every configured non-off value",
       "content_input": "completion-review verdict plus R-ID coverage",
       "expected_receipt": "sync receipt tagged completionReview",
-      "config_reads": [
-        ["sync", "active", "--json"],
-        ["config", "get", "tracker.perEvent.completionReview", "--json"],
-        ["sync", "active", "--json"]
-      ],
+      "config_reads": {
+        "inactive": [
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["sync", "active", "--json"],
+          ["config", "get", "tracker.perEvent.completionReview", "--json"],
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
         "active": ["flow-next-tracker-sync", "operation:comment", "<spec-id>", "event:completionReview"]
@@ -182,8 +216,8 @@
           "skill:flow-next-tracker-sync"
         ]
       },
-      "stdout": {"inactive": "", "active": "work output unchanged"},
-      "stderr": {"inactive": "", "active": "runner outcome or best-effort tracker warning"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     },
     {
       "id": "makePr",
@@ -195,9 +229,14 @@
       "unconditional_behavior": "when PR_URL exists and bridge is active, link PR and project In Review regardless of the leaf",
       "content_input": "PR URL is re-derived as merge evidence; optional breadcrumb comment",
       "expected_receipt": "sync receipt tagged makePr",
-      "config_reads": [
-        ["sync", "active", "--json"]
-      ],
+      "config_reads": {
+        "inactive": [
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
         "active": ["flow-next-tracker-sync", "operation:reconcile", "<spec-id>", "event:makePr"]
@@ -206,8 +245,8 @@
         "inactive": [],
         "active": ["skill:flow-next-tracker-sync"]
       },
-      "stdout": {"inactive": "", "active": "PR_URL=<url> remains sole Ralph stdout artifact"},
-      "stderr": {"inactive": "", "active": "tracker check, summary and warnings route to stderr under Ralph"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     },
     {
       "id": "resolvePr",
@@ -219,10 +258,16 @@
       "unconditional_behavior": "fixed comment for every configured non-off value",
       "content_input": "one-line resolved-review-items summary with PR number",
       "expected_receipt": "sync receipt tagged resolvePr",
-      "config_reads": [
-        ["config", "get", "tracker.perEvent.resolvePr", "--json"],
-        ["sync", "active", "--json"]
-      ],
+      "config_reads": {
+        "inactive": [
+          ["config", "get", "tracker.perEvent.resolvePr", "--json"],
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["config", "get", "tracker.perEvent.resolvePr", "--json"],
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
         "active": ["flow-next-tracker-sync", "operation:comment", "<spec-id>", "event:resolvePr"]
@@ -235,8 +280,8 @@
           "skill:flow-next-tracker-sync"
         ]
       },
-      "stdout": {"inactive": "", "active": "resolve-pr summary unchanged"},
-      "stderr": {"inactive": "", "active": "runner outcome or best-effort tracker warning"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     },
     {
       "id": "qa",
@@ -248,10 +293,16 @@
       "unconditional_behavior": "coerce pull, push, reconcile and comment to comment; off stays silent",
       "content_input": "QA verdict, open P0/P1 findings and R-ID coverage",
       "expected_receipt": "sync receipt tagged qa",
-      "config_reads": [
-        ["config", "get", "tracker.perEvent.qa", "--json"],
-        ["sync", "active", "--json"]
-      ],
+      "config_reads": {
+        "inactive": [
+          ["config", "get", "tracker.perEvent.qa", "--json"],
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["config", "get", "tracker.perEvent.qa", "--json"],
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
         "active": ["flow-next-tracker-sync", "operation:comment", "<spec-id>", "event:qa"]
@@ -264,8 +315,8 @@
           "skill:flow-next-tracker-sync"
         ]
       },
-      "stdout": {"inactive": "", "active": "QA verdict output unchanged"},
-      "stderr": {"inactive": "", "active": "runner outcome or best-effort tracker warning"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     },
     {
       "id": "land.merged",
@@ -277,9 +328,14 @@
       "unconditional_behavior": "bridge-active path ignores the leaf; a fresh MERGED probe selects terminal push, otherwise comment plus NEEDS_HUMAN",
       "content_input": "merged PR URL plus optional release outcome; non-merged path carries diagnostic comment",
       "expected_receipt": "sync receipt tagged land.merged",
-      "config_reads": [
-        ["sync", "active", "--json"]
-      ],
+      "config_reads": {
+        "inactive": [
+          ["sync", "active", "--json"]
+        ],
+        "active": [
+          ["sync", "active", "--json"]
+        ]
+      },
       "argv": {
         "inactive": [],
         "active": [
@@ -293,8 +349,8 @@
         "inactive": [],
         "active": ["skill:flow-next-tracker-sync"]
       },
-      "stdout": {"inactive": "", "active": "LAND_VERDICT remains terminal stdout line"},
-      "stderr": {"inactive": "", "active": "best-effort tracker warning in PR evidence block"}
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     }
   ],
   "teardown_sweep": {
