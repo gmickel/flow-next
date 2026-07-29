@@ -30,10 +30,10 @@ what interview emits, not a parser change.
 
 No new machinery. The tag vocabulary, the parse, and the consumers already exist:
 
-- **Vocabulary + semantics:** owned by capture today (`skills/flow-next-capture/`). This
-  spec must not fork it - the tag set and its meanings become shared, single-sourced
-  guidance that both skills reference, so the two skills cannot drift into different
-  definitions of `[inferred]`.
+- **Vocabulary + semantics:** owned by capture today, and deliberately **repeated** across
+  `skills/flow-next-capture/{SKILL,phases,workflow}.md` rather than centralised (fn-84.2
+  proved relocating it regresses accuracy). Interview gets the same short guidance at its
+  own emission sites; drift is prevented by a test, not by DRYing the prose.
 - **Parser:** `_export_parse_acceptance_criteria` in `flowctl.py` extracts the trailing
   `[...]` token into a `tag` field. Source-agnostic, unchanged by this spec.
 - **Writers to change:** `skills/flow-next-interview/` - the R-ID emission sites in
@@ -98,6 +98,13 @@ follow-up spec, not this one.
   history of regressing on "obviously safe" prose edits (a prune cue in fn-84.3 fixed one
   fixture and dropped NFR probes on another). The tag guidance must be short and sit at the
   emission site, not as a distant reference - proximity is load-bearing.
+- **Do NOT single-source the tag table by relocating it.** This exact experiment already
+  failed: fn-84.2 moved capture's duplicated source-tag + biz-routing tables out to a
+  cross-linked file as a self-evidently safe DRY trim, regressed a fixture (15 -> 14) and was
+  reverted, with the conclusion that the duplication is accuracy-load-bearing proximity.
+  Capture currently repeats its tag guidance across SKILL.md, phases.md and workflow.md on
+  purpose. So "cannot drift" must be enforced by a **test** asserting the definitions match,
+  not by DRYing the prose into one location.
 - **No new questions.** This must not lengthen the interview. Tagging is a property of how
   a criterion is *written down*, not an extra thing to ask about.
 - **Cross-platform.** Canonical prose, `sync-codex.sh` twice, guards green.
@@ -110,8 +117,10 @@ follow-up spec, not this one.
   `[strategy:<track>]`), in the trailing-token format the current parser already extracts.
 - **R2:** An interview pass never adds, changes, or removes a tag on a criterion it did not
   author in that pass; untagged legacy criteria stay untagged.
-- **R3:** Tag semantics are single-sourced and shared with capture, so neither skill can
-  drift into a different definition of `[inferred]`.
+- **R3:** Interview's tag definitions match capture's, and a test pins them so the two
+  cannot drift. **Achieved without relocating tag guidance away from its emission sites** -
+  see the proximity constraint in Edge Cases; a shared cross-linked table is explicitly the
+  wrong shape here.
 - **R4:** The 3.7.0 tally recipe (grep over `flowctl cat`) returns a non-empty, mixed-tag
   result on a spec authored end-to-end by interview, where today it returns nothing.
 - **R5:** Tags discriminate: on a frozen fixture where some criteria are quoted from the
