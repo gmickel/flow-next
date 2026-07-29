@@ -4,22 +4,22 @@ satisfies: [R1, R2]
 # fn-136-structured-review-artifact-schema-in.2 Deterministic finding parser in flowctl
 
 ## Description
-Pure-stdlib parser: reviewer markdown -> findings[] per the schema; tolerant, degrade-to-empty.
+Implement the pure-stdlib parser and finding-lineage model for the versioned `findings` container.
 
-**Size:** M
+**Size:** L
 
-**Files:** flowctl.py (parser functions - mind the dual-copy + SOURCE_SHA256 pin checklist), tests module.
+**Files:** flowctl.py parser/lineage helpers, dual-copy pin, focused fixtures/tests.
 
 ### Approach
-- Parse numbered finding blocks w/ labeled fields (Severity incl. P0-P3 mapping, Confidence anchors, Classification, File:Line -> file+line, Problem -> title/body split, Suggestion, R-ID mentions -> rIds[]); ratchet forms ("Prior finding N - fixed|not-fixed") -> status on prior-linked findings; ordinal preserved.
-- Tolerance: unknown labels ignored; missing anchors leave file/line null; wholly unparseable -> [] (never raises); size-bounded input handling.
-- Tests over the .1 corpus: every backend shape, edge cases, property: parser never throws on arbitrary text.
-- Quick commands: focused unittest module.
-
+- Parse current review fields into canonical P0-P3 severity, confidence anchors 0/25/50/75/100, introduced/pre_existing classification and open/fixed/not_fixed/withdrawn status.
+- Generate deterministic round-1 IDs from source receipt identity plus ordinal. Carry IDs through ratchet `Prior finding N` forms; new later findings get new IDs and explicit lineage where needed.
+- Parse portable anchors only when path, side/line and base/head context are available. Never guess an anchor; preserve rename/original-path metadata when evidenced.
+- Preserve explicit receipt/round/supersedes context and canonical finding order.
+- Tolerate observed backend label variants. Unknown enums/unsupported versions retain prose as unsupported; wholly unparseable output emits no structured container and never raises.
+- Bound parser input and cover arbitrary-text never-throws behavior.
 ## Acceptance
-- [ ] Parser covers the corpus w/ degrade-to-empty + never-throws property (R2).
-- [ ] Output matches the receipt findings schema exactly (R1).
-
+- [ ] Parser emits the exact versioned findings schema, canonical enums, stable lineage IDs, portable anchors and ordering (R1).
+- [ ] Real backend and ratchet fixtures prove identity carry-forward, no guessed anchors, unsupported-version behavior, degrade-to-prose and never-throws safety (R2).
 ## Done summary
 TBD
 

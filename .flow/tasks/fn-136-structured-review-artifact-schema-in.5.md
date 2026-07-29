@@ -4,19 +4,18 @@ satisfies: [R5]
 # fn-136-structured-review-artifact-schema-in.5 Docs, consumer contract, full gate
 
 ## Description
-Document the findings contract; converge.
+Document the complete portable findings contract and run the original findings stream's final gates.
 
 **Size:** S
 
 ### Approach
-- Docs: memory-schema/receipts pages gain the findings schema + consumer notes; a short consumer contract section (field semantics, degrade behavior, versioning stance: additive-only).
-- REPO SELF-CONTEXT: STRATEGY.md gains a 'downstream consumers' track note (flow-next emits structured machine-readable evidence - findings today, criteria compliance and config schema alongside - consumed by cockpit-class tools; receipts are the stable contract, never internal APIs) and GLOSSARY.md gains 'structured findings'; wording stays product-neutral pending the naming decision (see spec-prose note).
-- Unreleased CHANGELOG entry (repo + note for the docs-site walk); NO version bump (batched).
-- FULL suite: python3 scripts/run_tests_parallel.py + bash smoke where touched.
-
+- Document schema version, canonical enums/aliases, durable IDs, anchor semantics, receipt/round lineage, stale/current selection, deterministic order, limits and fallback behavior.
+- Keep consumer wording product-neutral: stable receipts, never internal APIs.
+- Update STRATEGY/GLOSSARY and Unreleased CHANGELOG as originally planned, without a version bump.
+- Run sync-codex twice, focused suites, full tests and pinned Ruff.
 ## Acceptance
-- [ ] Docs + consumer contract + Unreleased entries; full suite green (R5).
-
+- [ ] Receipt/memory/consumer docs define versioning, enums, anchors, lineage/currentness, bounds and fallback behavior (R5).
+- [ ] Strategy/glossary/Unreleased entries are present; mirrors are idempotent; full gates pass.
 ## Done summary
 TBD
 
