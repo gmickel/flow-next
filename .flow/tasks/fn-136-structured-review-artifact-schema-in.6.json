@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-29T06:49:23.863968Z",
+  "depends_on": [
+    "fn-136-structured-review-artifact-schema-in.4"
+  ],
+  "id": "fn-136-structured-review-artifact-schema-in.6",
+  "priority": null,
+  "spec": "fn-136-structured-review-artifact-schema-in",
+  "spec_path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.6.md",
+  "status": "todo",
+  "title": "Structured PR cognitive-aid artifact + GitHub Markdown walkthrough",
+  "updated_at": "2026-07-29T06:52:25.339211Z"
+}

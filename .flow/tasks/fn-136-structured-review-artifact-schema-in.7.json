@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-29T06:49:24.053044Z",
+  "depends_on": [
+    "fn-136-structured-review-artifact-schema-in.5",
+    "fn-136-structured-review-artifact-schema-in.6"
+  ],
+  "id": "fn-136-structured-review-artifact-schema-in.7",
+  "priority": null,
+  "spec": "fn-136-structured-review-artifact-schema-in",
+  "spec_path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.7.md",
+  "status": "todo",
+  "title": "Cross-render parity fixtures + consumer docs + final gate",
+  "updated_at": "2026-07-29T06:49:24.053044Z"
+}
