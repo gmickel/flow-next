@@ -1131,8 +1131,9 @@ def get_default_tracker_config() -> dict:
             # and persisted (`cloud-basic` = Cloud HTTP-basic `email:API_TOKEN`;
             # `bearer-pat` = DC/Server `Authorization: Bearer <PAT>`) so runtime
             # never re-infers it — credentials still read from env each run, never
-            # stored here. `apiVersion` is the REST endpoint family (`3` Cloud ADF
-            # / `2` DC/Server) the adapter branches on. `sslVerify` is an opt-in
+            # stored here. `apiVersion` is null until resolver output pins version
+            # 2 for either deployment shape; migration also converges legacy 3 to
+            # 2. `sslVerify` is an opt-in
             # escape hatch (default true) for self-hosted internal-CA / self-signed
             # certs (`JIRA_SSL_VERIFY=false` env override); never silent. `statusMap`
             # maps the FULL normalized status set → a Jira status `{name}`/`{id}`

@@ -41,11 +41,9 @@ search. Pagination is hidden by the adapter.
 
 ## Body fidelity
 
-The version 2 default applies to both deployment shapes because plain string
-bodies round-trip byte-exact in the measured shape. If an explicitly resolved Jira
-Cloud destination uses version 3, ADF converts at the adapter boundary and
-unsupported ADF nodes are preserved as an explicit opaque representation
-rather than silently discarded.
+Resolution and migration converge on version 2 for both deployment shapes
+because plain string bodies round-trip byte-exact in the measured shape.
+ADF is therefore not selected as the resolved body format.
 
 ## Status and relations
 
