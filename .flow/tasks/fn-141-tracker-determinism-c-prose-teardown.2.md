@@ -10,7 +10,7 @@ Touchpoints call the **fn-140 lifecycle facade** `flowctl tracker sync <spec-id>
 
 Explicitly enumerate the `perEvent` to verb mapping (`push`/`reconcile`/`comment`) rather than deleting it with the dispatch prose, and reassign comment content synthesis by name to each calling skill so it is not orphaned.
 
-Sweep is **enumerated, not a single grep**: every canonical calling skill by name; `scripts/sync-codex.sh` (**18** runner-specific references incl. transforms and guards); runner-specific tests; the generated mirror's agent TOML; `docs/platforms.md:120,300`.
+Sweep is **enumerated, not a single grep**: every canonical calling skill by name; `scripts/sync-codex.sh` (**19 matching lines / 29 runner-token occurrences**, including transforms and guards); runner-specific tests; the generated mirror's agent TOML; `docs/platforms.md`. Use the explicit path/token inventory in `test_tracker_caller_oracle.py`, asserted against the pinned pre-teardown tree; do not substitute a prose count. <!-- Updated by plan-sync: fn-141-tracker-determinism-c-prose-teardown.7 used an explicit 19-line/29-token inventory, not the planned 18-reference count -->
 
 ## Acceptance
 - [ ] tracker-runner agent + dispatch reference removed
