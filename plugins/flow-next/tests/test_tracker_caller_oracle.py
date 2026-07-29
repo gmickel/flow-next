@@ -46,6 +46,10 @@ REQUIRED_CALLER_FIELDS = {
     "stderr",
 }
 RUNNER_TOKENS = ("tracker-runner", "tracker_runner", "tracker-dispatch")
+CURRENT_TEARDOWN_ADDITIONS = (
+    "plugins/flow-next/docs/tracker-sync.md",
+    "plugins/flow-next/skills/flow-next-tracker-sync/references/comments-sync.md",
+)
 
 
 class TrackerCallerOracleTests(unittest.TestCase):
@@ -251,6 +255,39 @@ class TrackerCallerOracleTests(unittest.TestCase):
             and line_number not in {row["line"] for row in declared}
         ]
         self.assertEqual(undeclared, [])
+
+    def test_current_tree_uses_facade_and_has_no_runner_machinery(self) -> None:
+        sweep = self.oracle["teardown_sweep"]
+
+        for relative in sweep["runner_artifacts"]:
+            self.assertFalse((REPO_ROOT / relative).exists(), relative)
+
+        current_paths = [
+            *sweep["canonical_caller_paths"],
+            *sweep["runner_specific_tests"],
+            *sweep["documentation_paths"],
+            sweep["sync_codex_path"],
+            *CURRENT_TEARDOWN_ADDITIONS,
+        ]
+        for relative in current_paths:
+            text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+            for token in RUNNER_TOKENS:
+                self.assertNotIn(token, text, f"{relative}: {token}")
+
+        for caller in self.callers.values():
+            text = (REPO_ROOT / caller["file"]).read_text(encoding="utf-8")
+            self.assertIn("sync active --json", text, caller["id"])
+            self.assertIn("tracker sync", text, caller["id"])
+            self.assertIn(f"--event {caller['event']}", text, caller["id"])
+            for value in self.oracle["per_event_enum"]:
+                self.assertIn(value, text, f"{caller['id']}: {value}")
+
+        synthesized_comments = EVENTS - {"work.firstClaim"}
+        for caller_id in synthesized_comments:
+            text = (REPO_ROOT / self.callers[caller_id]["file"]).read_text(
+                encoding="utf-8"
+            )
+            self.assertRegex(text.lower(), r"synthesi[sz]es?", caller_id)
 
 
 if __name__ == "__main__":

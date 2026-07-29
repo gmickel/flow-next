@@ -528,6 +528,12 @@ R24 invariant: under Ralph the PR URL is the **sole stdout artefact** in machine
 
 **In Review status push rides this SAME unconditional bridge-active path (fn-66, R2).** Because an open PR for the branch is by definition the *In Review* lifecycle rung, moving the linked issue to `In Review` is part of the same PR↔issue linkage that powers Linear Diffs — it is **NOT gated behind `tracker.perEvent.makePr != off`** (that leaf gates only the optional breadcrumb comment, not the link/status that make the bridge useful). A just-created PR is `OPEN`, so the merge-evidence probe yields `open` and `reconcileStatus(spec, issue, open)` → `in-review` (status-sync.md row 4); the dispatch below reconciles the issue to that non-terminal rung (never terminal — a freshly-opened PR has no merge evidence). The dispatch uses the **`reconcile`** op (not `push`) precisely so this In Review nudge rides the body-preserving 3-way merge — a `push` would re-render and overwrite the issue body first (steps.md push() lines 134-136), clobbering human tracker-side edits.
 
+The complete `tracker.perEvent.makePr` mapping is explicit even though the
+link/status path is unconditional: `off`, `pull`, `push`, `reconcile`, and
+`comment` all resolve to facade op `reconcile` for PR linkage plus In Review.
+The leaf may tune only the optional breadcrumb. Make PR owns that comment
+synthesis by name: Make PR synthesizes the PR URL and one-line opened-PR context.
+
 The **primary linkage already happened in §4.6a** — the `Ref <identifier>` line in the PR body, which makes the host's tracker integration auto-link the PR. §5.6 is the **enhancement layer** and is **transport- and tracker-type-aware**:
 
 - **Linear (`tracker.type == linear`):** the §4.6a body ref is what makes **Linear Diffs** render the PR inside the issue (Linear's GitHub integration auto-links on the `WOR-N` identifier). On the **GraphQL rung**, additionally create the *rich* GitHub-PR attachment + status sync via `attachmentLinkURL(issueId, $PR_URL)` (Linear auto-detects the GitHub URL; do NOT use `attachmentCreate` — that yields a dumb attachment with no diff/status). On the **MCP rung** there is no URL-attach tool, so it relies entirely on the §4.6a auto-link (sufficient — the integration does the rest). Optionally also post a one-line breadcrumb comment.
@@ -537,10 +543,10 @@ The **primary linkage already happened in §4.6a** — the `Ref <identifier>` li
 ```bash
 if [[ -n "$PR_URL" ]] \
    && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
-  # Invoke the flow-next-tracker-sync skill with the canonical lifecycle dispatch
-  # grammar — `operation: <verb> <id>, event: <key>` (verbatim, no descriptors in
-  # the operation token):
-  #   skill: flow-next-tracker-sync   (operation: reconcile <spec-id>, event: makePr)
+  # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
+  # reconcile snapshots and optional 0600 breadcrumb body, then makes exactly
+  # one lifecycle call:
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op reconcile --event makePr <legal file flags>
   # The `reconcile` op (open-PR evidence) moves the issue to In Review AND links $PR_URL —
   # BOTH ride this unconditional bridge-active path (NOT gated behind perEvent.makePr):
   # the link powers Diffs and In Review is the honest lifecycle state for an open PR.
@@ -584,7 +590,7 @@ The PR is already open before this step; a tracker failure surfaces as a stderr 
 
 ### 5.7 — Tracker-sync end-of-run check — LAST action before exit (fn-57)
 
-Read-only audit: did the `makePr` touchpoint actually fire this run (receipt-backed)? It runs independently of §5.6, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the summary slot then reads `n/a (bridge inactive)` and nothing else changes. (A disabled `tracker.perEvent.makePr` leaf is never MISSING — §5.6 still fires as bridge-active hygiene, but the audit only forces opted-in events.) Join first: before running this `sync check`, await any outstanding `tracker-runner` dispatches for this spec (join-before-audit, [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md)).
+Read-only audit: did the `makePr` touchpoint actually fire this run (receipt-backed)? It runs independently of §5.6, so a wholesale-skipped facade call is still caught. With no tracker configured, `sync check` exits silently in constant time; the summary slot then reads `n/a (bridge inactive)` and nothing else changes. (A disabled `tracker.perEvent.makePr` leaf is never MISSING; §5.6 still fires as bridge-active hygiene, but the audit only forces opted-in events.)
 
 ```bash
 # --since: the PR's createdAt — on-disk anchor (bash vars do NOT survive across
@@ -601,7 +607,7 @@ SINCE=$(gh pr view "$PR_URL" --json createdAt --jq .createdAt 2>/dev/null || tru
 **Retro-fire on MISSING — exactly ONE cycle, never blocking:**
 
 1. Record the retro-fire start anchor (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
-2. Invoke the **flow-next-tracker-sync skill directly** — the same dispatch as §5.6, with its `event:` tag, in the canonical `operation: <verb> <id>, event: <key>` grammar: `skill: flow-next-tracker-sync (operation: reconcile <spec-id>, event: makePr)` (the `reconcile` op links $PR_URL + moves the issue to In Review via the body-preserving 3-way merge — never clobbers tracker-side edits, fn-66; the PR URL rides as evidence, not in the op token) — NEVER this check block as a wrapper (no recursion).
+2. Invoke the **inline flow-next-tracker-sync wrapper directly**. It prepares the same reconcile inputs and optional PR breadcrumb as §5.6, then makes exactly one `flowctl tracker sync <spec-id> --op reconcile --event makePr <legal file flags>` call. NEVER invoke this check block as a wrapper.
 3. Re-check with `--since` = the step-1 anchor:
    `"$FLOWCTL" sync check "$SPEC_ID" --events makePr --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the PR is already open; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.

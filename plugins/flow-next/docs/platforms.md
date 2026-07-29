@@ -135,7 +135,9 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 - flowctl CLI (`~/.codex/scripts/flowctl`).
 - Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/flowctl to project; Ralph hooks only if the Ralph ceremony answers yes.
 - `openai.yaml` UI metadata for Codex app display (brand color, descriptions).
-- Tracker-sync background dispatch at **Tier B (isolated-but-awaited)**: comment-shaped tracker touchpoints on linked specs run in a `tracker_runner` agent (context isolation preserved) but are **awaited** — the fire-and-forget overlap is Claude-Code-only (Tier A). Same for Cursor. See `docs/tracker-sync.md` § Background dispatch + `references/tracker-dispatch.md` (host capability ladder).
+- Tracker lifecycle touchpoints use the same deterministic `flowctl tracker sync`
+  facade as every other host. Caller-side active and `perEvent` gates remain
+  intact, so an inactive bridge stays silent.
 
 ### Model mapping (per-agent reasoning tier)
 
@@ -315,7 +317,9 @@ The interview skill's optional async fact-scout dispatch names Claude Code's `Ex
 
 - **Agents frontmatter aliases → inherit.** On Cursor, `agents/*.md` family aliases (`opus`, `sonnet`, …) are ignored; subagents inherit the session model. Caller-side in-prompt slug pins are the escape hatch — no alias-to-slug rewrite pass (marketplace import consumes canonical files as-is).
 - **Ralph autonomous mode is intentionally not built for Cursor.** Cursor has a full agent-hook set (and Claude Code hook compatibility exists upstream), but flow-next does **not** register Ralph guards on Cursor — interactive plan / work / review is the supported surface. Scaffolding `scripts/ralph/` does not enable the autonomous loop here.
-- **Tracker-sync background dispatch runs at Tier B (isolated-but-awaited).** Comment-shaped tracker touchpoints dispatch to a `tracker-runner` subagent for context isolation, but the host **awaits** it — fire-and-forget overlap is Claude-Code-only (Tier A). See `docs/tracker-sync.md` § Background dispatch.
+- **Tracker lifecycle touchpoints use the deterministic facade.** Cursor keeps
+  the same caller-side active and `perEvent` gates, then invokes
+  `flowctl tracker sync` inline with the selected operation and event.
 
 > **Status:** first-class on Cursor. Recommended path = team-marketplace repo import; local scripts = individual/fallback. Multi-agent, native asks, slash autocomplete, `review.backend host`, rules rail, and setup model-routing verified. Ralph intentionally not built for Cursor.
 

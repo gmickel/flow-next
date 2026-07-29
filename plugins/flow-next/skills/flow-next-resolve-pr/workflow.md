@@ -452,19 +452,26 @@ The linked spec id comes from the PR's spec association (the same `SPEC_ID` make
 
 ```bash
 LEAF="$($FLOWCTL config get tracker.perEvent.resolvePr --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — work SKILL.md)
+case "$LEAF" in
+  pull|push|reconcile|comment) OP="comment" ;;
+  off|null)                    OP="off" ;;
+  *)                           OP="off" ;; # malformed config stays silent
+esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
-  # Invoke the flow-next-tracker-sync skill: append a one-line resolution comment
-  # to the linked issue (e.g. "Addressed N of M review items on PR #<NUMBER>").
-  #   skill: flow-next-tracker-sync   (operation: comment <spec-id>, event: resolvePr)
-  # Unlinked spec → flow-first push (create + link) first, then comment
-  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
-  # Best-effort — never blocks the resolve-pr summary.
+   && [ "$OP" != "off" ]; then
+  # Resolve PR synthesizes the comment content by name: "Addressed N of M
+  # review items on PR #<NUMBER>" plus the terminal resolution counts. Write
+  # it to a mode 0600 temporary body file, never argv. The inline
+  # flow-next-tracker-sync wrapper makes exactly one facade call and deletes it:
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event resolvePr --body-file "$BODY_FILE"
+  # Unlinked specs create and link inside the facade. Best-effort; never blocks
+  # the resolve-pr summary.
   :
 fi
 ```
 
-Dispatch mode: when the resolved op is `comment`, the spec is already linked, and the host gate in [`plugins/flow-next/references/tracker-dispatch.md`](../../references/tracker-dispatch.md) passes, run this dispatch as a background `tracker-runner` per that reference and await its terminal line before the Phase 10 summary (no later `sync check` audits this event); otherwise run it inline exactly as above. The skill emits its own receipt, event-tagged `--event resolvePr`. When the dispatch forked, the Phase 10 summary MUST include the runner's parsed terminal outcome verbatim as a `Tracker runner: resolvePr: TRACKER_RUNNER=<status> note="..."` line — an `errored`/`queued` outcome is visible nowhere else.
+The facade emits one receipt tagged `--event resolvePr`. Structured errors are
+routed by the inline wrapper and remain best-effort.
 
 ---
 

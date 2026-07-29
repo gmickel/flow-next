@@ -211,11 +211,9 @@ else:
 `lastSyncedAt` advances on a real TWO-WAY comment reconcile (a genuine import, or
 a post made as part of a reconcile run); a run that dedups everything to a no-op
 does **not** advance it (consistent with the body echo-fence). A one-way lifecycle
-comment APPEND (a touchpoint dispatch - forked or inline) never advances
-`lastSyncedAt`: it writes its receipt and the tracker comment, nothing else. This
-scoping is what makes linked-spec comment forks safe to overlap
-(tracker-dispatch.md MUST invariant 1); the two-way reconcile path is state-shaped
-and runs alone.
+comment append never advances `lastSyncedAt`: it writes its receipt and the
+tracker comment, nothing else. The two-way reconcile path is state-shaped and
+runs alone.
 
 ## The sync log on the flow side
 

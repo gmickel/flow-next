@@ -482,6 +482,12 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    - Release completed → verdict `RELEASED`.
 4. **Tracker touchpoint — the SOLE `Done` driver (fn-66, R3/R10)** — deliberately AFTER release-follow so the verdict comment can carry the release outcome. **`land.merged` is active-by-default whenever the bridge is active** — it is NOT gated behind `tracker.perEvent.land.merged != off`. This is deliberate (fn-66, R10): a real merge is the ONLY event that legitimately projects `Done`, so leaving it opt-in would let boards stick at `In Review` forever after a merge. Like make-pr's unconditional PR-link path, the merge→Done projection rides the bridge-active predicate alone (the `land.merged` leaf, if a repo set it, only tunes the optional verdict comment — never gates the status):
 
+   The complete `tracker.perEvent.land.merged` mapping is explicit: for
+   `off`, `pull`, `push`, `reconcile`, and `comment`, a confirmed merge resolves
+   to facade op `push`; an unconfirmed merge resolves to facade op `comment`.
+   The leaf never gates the terminal status. Land synthesizes comment content by
+   name: merged PR URL plus release outcome, or the failed merge-probe diagnostic.
+
    ```bash
    TRACKER_FIRE=0
    if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
@@ -503,20 +509,25 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    fi
    ```
 
-   `TRACKER_FIRE == 1` → you MUST dispatch the tracker-sync skill via the Skill tool — this is a real skill invocation, not narration, and it uses the fn-57 lifecycle dispatch grammar (operation token + event tag, same shape as work/make-pr touchpoints). **The `TRACKER_TERMINAL_OK` self-check selects the operation** — land does NOT trust the caller's merge claim, it branches on its own GitHub-`MERGED` probe (fn-66, R3):
+   `TRACKER_FIRE == 1` → invoke the inline flow-next-tracker-sync wrapper. It
+   prepares the approved mode `0600` inputs, makes exactly one fn-140 lifecycle
+   facade call, deletes the inputs, and routes any structured recovery.
+   **The `TRACKER_TERMINAL_OK` self-check selects the operation**: land does
+   NOT trust the caller's merge claim, it branches on its own GitHub-`MERGED`
+   probe (fn-66, R3):
 
    - **`TRACKER_TERMINAL_OK == 1`** (clean GitHub `MERGED`) → dispatch the terminal `push`:
 
-     ```text
-     skill: flow-next-tracker-sync   (operation: push <spec-id>, event: land.merged)
+     ```bash
+     "$FLOWCTL" tracker sync "$SPEC_ID" --op push --event land.merged <legal file flags>
      ```
 
      The `push` projects the just-closed spec; the tracker-sync skill's own `flowToNormalized(spec, merged)` gate (status-sync.md S-I) resolves the terminal rung — `verified` if completion review shipped, else `done` — so status who-wins flips the issue to the merge-confirmed terminal state, ALSO posting the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The Done write is **double-gated** (this caller's probe AND the skill's own merge-evidence gate).
 
    - **`TRACKER_TERMINAL_OK == 0`** (no clean `MERGED` — e.g. the post-merge probe came back empty/ambiguous, a corruption signal) → do NOT dispatch a terminal `push`. Dispatch the **comment-only** path instead and surface `NEEDS_HUMAN`, so no path writes `Done` without merge evidence:
 
-     ```text
-     skill: flow-next-tracker-sync   (operation: comment <spec-id>, event: land.merged)   # verdict comment only, no terminal status
+     ```bash
+     "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event land.merged --body-file "$BODY_FILE" # verdict comment only
      ```
 
    Best-effort either way: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Persist any tracked sync state the touchpoint updated with a best-effort follow-up commit (`git add ".flow/specs/${spec}.json" .flow/sync-runs && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint" && git push` — file-scoped so pre-existing .flow dirtiness never rides along; no rollback needed, it carries this spec's sync state + receipts only).
