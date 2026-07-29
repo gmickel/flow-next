@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -20,9 +22,23 @@ SCRIPT = (
 )
 
 
+def _bash_executable() -> str:
+    """Return Git Bash on Windows, never the WSL compatibility launcher."""
+    if os.name == "nt":
+        git = shutil.which("git")
+        if git:
+            git_bash = Path(git).resolve().parent.parent / "bin" / "bash.exe"
+            if git_bash.is_file():
+                return str(git_bash)
+    bash = shutil.which("bash")
+    if bash:
+        return bash
+    raise RuntimeError("bash executable not found")
+
+
 def run(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [str(SCRIPT), *args],
+        [_bash_executable(), str(SCRIPT), *args],
         cwd=repo,
         text=True,
         capture_output=True,
