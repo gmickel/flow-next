@@ -12,24 +12,24 @@
   },
   "prompt_hashes": {
     "plugins/flow-next/skills/flow-next-work/SKILL.md": "c6b319c27827270f4bb5eeb9a7d71c96d0312266a485b31de6efc3a20702e6dd",
-    "plugins/flow-next/skills/flow-next-work/phases.md": "8e397d48c0d2a43fe5bfce6c8b36dce286dcf6bb5e11532123e0a606cd0f3cb3",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "95daffea110c8878b73c1923ff5f64e41dfd0346391de531db62098137a93ed8",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "1e72fe556e16476e2a71da32536792703a69cfc7dd5f65a4215ce595f4445858",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "9853594ad12db98edafc83780b266f5f7cc95a1090acade3a178c890e1d43a3b",
-    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "9aa1ccce1381a9df18336c6e519c60d69a9a3916765e67759b2ba553ffa09b23"
+    "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "0fb43f923444b8fd8aae5df3bc3c535dd2c9f33fcaae0c206184a7df9bfff6d2"
   },
   "metrics": {
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
       "baseline_reached_path_chars": 51330,
-      "candidate_reached_path_chars": 50784,
-      "reduction_chars": 546,
-      "reduction_percent": 1.06
+      "candidate_reached_path_chars": 50798,
+      "reduction_chars": 532,
+      "reduction_percent": 1.04
     },
     "delegation_active_path": {
       "baseline_reached_path_chars": 102426,
-      "candidate_reached_path_chars": 101880,
-      "reduction_chars": 546,
-      "reduction_percent": 0.53
+      "candidate_reached_path_chars": 101894,
+      "reduction_chars": 532,
+      "reduction_percent": 0.52
     },
     "revisions": [
       {
@@ -83,6 +83,12 @@
         "date": "2026-07-28",
         "reason": "Host-expanded Work arguments now stay literal prompt data while the standalone mode:autonomous token is stripped agentically, preventing shell glob expansion and word splitting.",
         "baseline_note": "The literal-data contract adds 49 characters to both paths and leaves a 2-character margin below the rebased ratchet baselines."
+      },
+      {
+        "spec": "fn-141-pr-review-status-only-first-claim",
+        "date": "2026-07-29",
+        "reason": "The first-claim touchpoint and retro-fire path now use push --status-only so claiming work cannot overwrite tracker-side body edits or relations.",
+        "baseline_note": "The executable modifier adds 14 characters to both always-loaded paths. The tracker-touchpoints reference hash also changes for lifecycle ownership accuracy but remains cold unless its gate activates."
       }
     ]
   },
