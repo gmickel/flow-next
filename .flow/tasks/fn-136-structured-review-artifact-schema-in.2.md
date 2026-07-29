@@ -16,10 +16,10 @@ Implement the pure-stdlib parser and finding-lineage model for the versioned `fi
 - Parse portable anchors only when path, side/line and base/head context are available. Never guess an anchor; preserve rename/original-path metadata when evidenced.
 - Preserve explicit receipt/round/supersedes context and canonical finding order.
 - Tolerate observed backend label variants. Unknown enums/unsupported versions retain prose as unsupported; wholly unparseable output emits no structured container and never raises.
-- Bound parser input and cover arbitrary-text never-throws behavior.
+- Enforce the contract's 1 MiB parser-input limit, 256 KiB encoded-container limit, 200-item limit and per-field/array limits; cover overflow fallback plus arbitrary-text never-throws behavior.
 ## Acceptance
 - [ ] Parser emits the exact versioned findings schema, canonical enums, stable lineage IDs, portable anchors and ordering (R1).
-- [ ] Real backend and ratchet fixtures prove identity carry-forward, no guessed anchors, unsupported-version behavior, degrade-to-prose and never-throws safety (R2).
+- [ ] Real backend and ratchet fixtures prove identity carry-forward, no guessed anchors, all numeric bounds, unsupported-version behavior, degrade-to-prose and never-throws safety (R2).
 ## Done summary
 TBD
 

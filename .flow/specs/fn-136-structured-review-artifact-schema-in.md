@@ -62,9 +62,10 @@ findings: {
 - Canonical severity is P0-P3. Deterministic aliases are `Critical -> P0`, `Major -> P1`, `Minor -> P2`, and `Nitpick -> P3`; QA already emits P0-P2.
 - `id` is a durable finding-lineage identity. Round 1 derives it deterministically from `sourceReceiptId + ordinal`; ratchet `Prior finding N` forms carry the prior `id`. New later-round findings receive a new ID and may not reuse an old ordinal identity. `priorFindingId` records an explicit lineage edge when a parser cannot preserve the same ID byte-for-byte.
 - `anchor` is optional. A missing file/line produces no anchor, never a guessed one. `side`, SHAs and optional `blobOid` make line ranges meaningful across renames; `originalPath` records the base-side name when relevant.
-- The current finding state comes from the newest receipt in the explicit `supersedesReceiptId` chain for the same review kind/backend/run. Its item status wins. A receipt whose `headSha` differs from the current review head is stale and remains evidence, but not current status. Read-only consumers project this chain; they never write resolution state.
+- The current finding state comes from the newest receipt in the explicit `supersedesReceiptId` chain for the same review-kind/backend lineage. Its item status wins. A receipt whose `headSha` differs from the current review head is stale and remains evidence, but not current status. Read-only consumers project this chain; they never write resolution state.
 - Canonical finding order is severity P0 -> P3, confidence descending, then ordinal. Unknown enum values or unsupported schema versions retain the prose receipt and mark structured findings unsupported; they are never silently coerced.
 - The pure-stdlib parser consumes existing reviewer markdown and convergence-ratchet forms. Unparseable output degrades to no structured container plus existing prose, never an error.
+- Findings bounds are executable: parser source input is at most 1 MiB; an encoded `findings` container is at most 256 KiB with at most 200 items. Per item, `rIds` has at most 32 entries; title is at most 240 characters; body and suggestion are at most 4,000 each; anchor paths are at most 1,024; IDs/backend/review-kind values are at most 160. Oversize input retains prose but emits no structured container; structured output overflow is rejected, never truncated.
 
 ### 2. Versioned PR cognitive-aid artifact
 
@@ -97,7 +98,7 @@ pr_cognitive_aid: {
 }
 ```
 
-- **One source table:** `sourceRefs` resolve only against the envelope's bounded `sources[]`. Allowed kinds are `spec`, `task`, `rid`, `review_receipt`, `qa_receipt`, `diff_metadata`, and `commit`. Group and file summaries require at least one source reference. File-level R-ID/task claims require file-level references; consumers may not infer every group claim onto every file.
+- **One source table:** `sourceRefs` resolve only against the envelope's bounded `sources[]`. Allowed kinds are `spec`, `task`, `rid`, `review_receipt`, `qa_receipt`, `diff_metadata`, and `commit`. Every proof cell and every non-empty group/file summary requires at least one source reference. Every group/file `rIds` or `taskIds` entry requires a same-record `sourceRef` resolving to a matching `kind=rid` or `kind=task` source whose `ref` equals that claimed ID. Orphan or unrelated evidence claims are invalid; consumers may not infer every group claim onto every file.
 - **Judgment owner:** the existing `make-pr` host agent composes thesis, intent grouping, summaries, provenance references and order from the existing cognitive-aid payload. No deterministic intent classifier, no second model, and no commit-message storytelling.
 - **Plumbing owner:** flowctl validates and atomically writes the artifact through the existing receipt/artifact storage contract. GitHub Markdown, optional HTML and downstream products consume this exact object.
 - **Currentness:** `artifactId` identifies one generation. Repeated runs form an explicit `supersedesArtifactId` chain. The current artifact is the newest chain member whose `headSha` equals the PR head and whose `baseSha` equals the current merge base. Mismatched artifacts are visibly stale and cannot supply current verification, approval or ship claims.
@@ -107,7 +108,7 @@ pr_cognitive_aid: {
 ### 3. Validation bounds and failure behavior
 
 - UTF-8 encoded artifact maximum: 512 KiB.
-- Maximums: 128 sources, 16 proof cells, 12 groups, 200 file rows per group, 500 unique files overall, and 32 entries for each `sourceRefs`, `rIds`, or `taskIds` array.
+- Maximums: 128 sources, 16 proof cells, 11 groups, 200 file rows per group, 500 unique files overall, and 32 entries for each `sourceRefs`, `rIds`, or `taskIds` array. Group cardinality is at most one `problem`, at most one `principle`, exactly 1-7 `step`, at most one `kept`, and at most one `verify`; validation rejects any other count or order.
 - String limits: thesis 4,000 characters; group summary 1,000; file summary 500; titles/labels/values/IDs 160; repository path 1,024; URL 2,048.
 - URLs are HTTPS or repository-relative only. Paths are normalized repository-relative paths without `..` traversal.
 - Validation rejects overflow, invalid references, duplicate ordinals/IDs, conflicting duplicate file membership, unsafe paths/URLs, stale SHAs presented as current, or ungrounded semantic summaries. It does not truncate and pretend the story is complete. Existing prose/compact PR rendering remains available after rejection.
@@ -116,18 +117,18 @@ pr_cognitive_aid: {
 ### 4. Deterministic rendering rules
 
 - Full walkthrough renders when `humanReviewLines >= 200` or `canonicalFileCount >= 6`. `humanReviewLines` is additions + deletions over unique canonical files only. Below threshold, render thesis, proof and one flat canonical-file table; no discretionary second threshold path.
-- Logical order is problem and principle when evidenced, then 1-7 implementation steps, then deliberately unchanged behavior, then verification/ship evidence. Missing kinds are omitted rather than invented.
-- Generated/mechanical files are aggregated in a separate collapsed group and excluded from threshold metrics.
+- Logical order is optional problem and principle, exactly 1-7 implementation steps, optional deliberately unchanged behavior, then optional verification/ship evidence. Optional kinds are omitted rather than invented; a walkthrough with zero or more than seven `step` groups is invalid.
+- Generated/mechanical rows remain in their upstream groups and are collapsed/de-emphasized there; renderers never move files or create a synthetic noise group. Global generated/mechanical counts and churn may be aggregated without changing membership. They remain excluded from threshold metrics.
 - Validation plus Markdown rendering of the golden maximum-normal fixture must complete within 50 ms p95 over 30 warm runs in CI, excluding atomic disk write. No network/model I/O is permitted.
 
 ### 5. GitHub Markdown approximation
 
 1. `## The change, top to bottom` with the grounded thesis.
 2. Compact proof table for human-review lines, canonical/total changed files, verification totals and head commit when available.
-3. Complete legend for `WHY`, `PRINCIPLE`, `STEP`, `KEPT`, `VERIFY`, `NEW`, `MODIFIED`, `DELETED`, `RENAMED`, `COPIED`, `GENERATED`, and `MECHANICAL`.
+3. Complete legend for `WHY`, `PRINCIPLE`, `STEP`, `KEPT`, `VERIFY`, `NEW`, `MODIFIED`, `DELETED`, `RENAMED`, `COPIED`, `CANONICAL`, `GENERATED`, and `MECHANICAL`.
 4. One `<details>` block per logical group. Its summary carries kind, ordinal/title and intent. The body contains a file table with change type, attention class, path, purpose, `+/-` stats and diff link.
 5. Deliberately not changed and Verification and ship are first-class groups.
-6. Generated/mechanical groups start collapsed; only the first canonical implementation step starts open.
+6. Generated/mechanical file rows start collapsed within their upstream group; only the first canonical implementation step starts open.
 7. The existing risk-ranked Review plan remains separate. The walkthrough explains how the change works; the review plan identifies where human judgment is most valuable.
 8. Raw diff excerpts remain excluded from GitHub Markdown by default.
 

@@ -12,10 +12,10 @@ Implement the shared versioned PR cognitive-aid contract and deterministic GitHu
 
 ### Approach
 - Implement `pr_cognitive_aid` identity, schema version, base/head binding, supersedes chain and source table. The existing host agent owns thesis, logical grouping, source references and order; flowctl only validates and persists.
-- Require group/file provenance references. Preserve file-level R-ID/task evidence without inheriting group claims. Separate Git `changeType` from `attentionClass`.
-- Enforce all path/URL/string/count/payload bounds and reject invalid/unsafe/ungrounded artifacts without truncation. Current selection must not mix stale or legacy fields.
+- Require non-empty proof/group/file provenance references and exact same-record source coverage for every group/file R-ID or task claim. Preserve file-level evidence without inheriting group claims. Separate Git `changeType` from `attentionClass`.
+- Enforce all path/URL/string/count/payload and per-kind cardinality bounds, including exactly 1-7 `step` groups; reject invalid/unsafe/ungrounded artifacts without truncation. Current selection must not mix stale or legacy fields.
 - Render the full GitHub walkthrough only at `humanReviewLines >= 200` or `canonicalFileCount >= 6`; otherwise use the deterministic compact form.
-- Render the complete legend, proof table, 1-7 evidenced steps, file tables and diff links. Keep generated/mechanical files collapsed, raw diffs excluded and the risk-ranked Review plan intact.
+- Render the complete legend, proof table, 1-7 evidenced steps, file tables and diff links. Keep generated/mechanical rows collapsed inside their upstream groups, never regroup files, keep raw diffs excluded and preserve the risk-ranked Review plan.
 - Benchmark validation plus rendering at 50 ms p95 over 30 warm fixture runs; no model/network I/O.
 ## Acceptance
 - [ ] Artifact identity/currentness, provenance, file-level evidence and separate change/attention dimensions validate and persist with no extra model call (R6).
