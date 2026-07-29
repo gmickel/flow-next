@@ -18,7 +18,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "a3c0b60a3993d6fe384deebd5767d80e109250f0b7ef3f050d3ef21a08784aca",
       "b1_manifest": "fixtures/b1/tracker/conflict-body.json",
       "before_reached_path_chars": 452552,
@@ -35,11 +35,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.conflict-body",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -57,7 +57,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "22606283754a3a66a335f986f4583eb82b7496ab32e2778f2a4ee0d6bfbafeb7",
       "b1_manifest": "fixtures/b1/tracker/conflict-comments.json",
       "before_reached_path_chars": 452552,
@@ -74,11 +74,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.conflict-comments",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -96,7 +96,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "a98f1b4067acba45dd13212838ada92c1768132604bd21f05cbd63ca590f129b",
       "b1_manifest": "fixtures/b1/tracker/conflict-dependency.json",
       "before_reached_path_chars": 452552,
@@ -113,11 +113,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.conflict-dependency",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -135,7 +135,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "378ee7370c4b4b7bb1a9a83f3fd7bb3f76cfa27a21d8661e7dc185198b8d2c5c",
       "b1_manifest": "fixtures/b1/tracker/conflict-status.json",
       "before_reached_path_chars": 452552,
@@ -152,11 +152,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.conflict-status",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -174,7 +174,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "28d323e0a4d307830bd5b6d7491bbe0442abc6c5ff23429984300814b9c6b731",
       "b1_manifest": "fixtures/b1/tracker/github.json",
       "before_reached_path_chars": 452552,
@@ -191,11 +191,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.github",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -213,7 +213,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "88b216e4e8a1e68f9bdf99a0b34643bfe17b9c8f952deb511fbf7df00858041c",
       "b1_manifest": "fixtures/b1/tracker/gitlab.json",
       "before_reached_path_chars": 452552,
@@ -230,11 +230,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.gitlab",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -252,7 +252,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "12c713f97f75c1afa94654e715714a055bc69045b31243d3c07847f1ac3997ee",
       "b1_manifest": "fixtures/b1/tracker/inactive.json",
       "before_reached_path_chars": 452552,
@@ -269,11 +269,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.inactive",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -291,7 +291,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "a72048307bb86592b6ac368e994f8a0009f9a9081a2b0a85feabe90822b48b5c",
       "b1_manifest": "fixtures/b1/tracker/jira.json",
       "before_reached_path_chars": 452552,
@@ -308,11 +308,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.jira",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -330,7 +330,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "32eee54d55633a588fc490b49ca832daf92b4de29a6ca4b1ea372dff2b0c7377",
       "b1_manifest": "fixtures/b1/tracker/linear-graphql.json",
       "before_reached_path_chars": 452552,
@@ -347,11 +347,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.linear-graphql",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -369,7 +369,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "1f2f0ed07156a029292a75d2d52fcc13e4e5e2832f520c223bbecace9f27e6e5",
       "b1_manifest": "fixtures/b1/tracker/linear-mcp.json",
       "before_reached_path_chars": 452552,
@@ -386,11 +386,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.linear-mcp",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -408,7 +408,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "f5570eff6b58346d0db5471c0209df790bce5406cedbb553f672a4879ff84e50",
       "b1_manifest": "fixtures/b1/tracker/malformed-config.json",
       "before_reached_path_chars": 452552,
@@ -425,11 +425,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.malformed-config",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -447,7 +447,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "1125de8d7d1d68d08735903a824ed0c597cbeed12fdeeb787d60459b7d7d248c",
       "b1_manifest": "fixtures/b1/tracker/op-create-if-unlinked.json",
       "before_reached_path_chars": 452552,
@@ -464,11 +464,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.op-create-if-unlinked",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -486,7 +486,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "188b32f310165d62aa252ca18233153007ca988765d93379ce00597f6eaab893",
       "b1_manifest": "fixtures/b1/tracker/op-pull.json",
       "before_reached_path_chars": 452552,
@@ -503,11 +503,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.op-pull",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -525,7 +525,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "c60c4a380ccb77d73334f3414b7a50698045a6343b319b79690e6fab1b3cca30",
       "b1_manifest": "fixtures/b1/tracker/op-push.json",
       "before_reached_path_chars": 452552,
@@ -542,11 +542,11 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.op-push",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     },
     {
       "activated_paths": [
@@ -564,7 +564,7 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md"
       ],
-      "after_reached_path_chars": 135344,
+      "after_reached_path_chars": 136589,
       "b1_fixture_hash": "1da8e1e08648bbf335e809f08a821999c0e2df649ddf09ab85ebbbef8dc271bb",
       "b1_manifest": "fixtures/b1/tracker/op-reconcile.json",
       "before_reached_path_chars": 452552,
@@ -581,24 +581,24 @@
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md": "3465b55f57b0d0584b965ab2d775f65ab5c0fd793aea97ad719964e03155a1b7",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md": "028ce403fa1de91b1c21badce2b258ef0bb32e1a3f734d964a62a07159130321",
         "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md": "b3a788dd2051d3b9e66a6ddaa2c345806507744c1e15c9f15f809ed50f6d6302",
-        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "5ad657cdddacb5c53bbfd094e1b47be09a0a0ae27693e9adc38c854bd244f2f1"
+        "plugins/flow-next/skills/flow-next-tracker-sync/steps.md": "c79723d9107f48af12db40cd98c310c8c7c59b6de798d3aff538327683de98e8"
       },
       "fixture_id": "tracker.op-reconcile",
-      "reduction_chars": 317208,
-      "reduction_percent": 70.09
+      "reduction_chars": 315963,
+      "reduction_percent": 69.82
     }
   ],
   "lineage": {
     "baseline": "V1/B1",
     "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
     "baseline_index_sha256": "d7cddc89b0ce53f7ce2859c82313053145296af4262d8e86c76c6b81f3c6ac27",
-    "candidate_source_commit": "6556237767bb216b650a78cb05bef769b84b32eb",
+    "candidate_source_commit": "bfcd1ed68865275f9191347447b6d6d7beee9f54",
     "rule": "B1 is immutable; candidate compares the same activated-file inventory to post-teardown source bytes"
   },
   "measurement": {
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "backend_telemetry": null,
-    "command": "python3 optimization/reached-path/tracker_candidate.py --source-commit 6556237767bb216b650a78cb05bef769b84b32eb --check",
+    "command": "python3 optimization/reached-path/tracker_candidate.py --source-commit bfcd1ed68865275f9191347447b6d6d7beee9f54 --check",
     "fixture_count": 15
   },
   "rationale": "Reduction by design, not regression: fn-141 moved deterministic tracker transport out of agent instructions while preserving the B1 fixture inventory and reached behavior.",
