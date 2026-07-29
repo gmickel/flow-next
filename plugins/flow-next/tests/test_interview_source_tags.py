@@ -77,8 +77,38 @@ EMISSION_SITE_HEADINGS = (
 )
 
 
+# The shared read-back tally artifact. Capture emits this shape; interview must
+# emit the same one. Pinned so the `·` separator cannot regress to `/`.
+TALLY_TEMPLATE = "Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L"
+
+# Header of the source-tag table in every source file. Extraction is anchored to
+# it so a sibling table (capture/phases.md's confidence markers) cannot leak in.
+_TAG_TABLE_HEADER = re.compile(r"^\|\s*Tag\s*\|\s*Meaning\s*\|", re.MULTILINE)
+_TAG_ROW = re.compile(r"^\|\s*`(\[[^\]`]+\])`\s*\|")
+
+
 def read(path: pathlib.Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def tag_table_tokens(text: str) -> set[str]:
+    """Tag tokens from the source-tag table only.
+
+    Anchors on the `| Tag | Meaning |` header, skips the `|---|` rule, then
+    consumes contiguous table rows until the table ends. Returns a set so the
+    caller can assert equality (catching additions, not just absences).
+    """
+    m = _TAG_TABLE_HEADER.search(text)
+    if not m:
+        return set()
+    tokens: set[str] = set()
+    for line in text[m.end() :].split("\n")[1:]:  # [1:] skips the |---| rule
+        if not line.startswith("|"):
+            break
+        row = _TAG_ROW.match(line)
+        if row:
+            tokens.add(row.group(1))
+    return tokens
 
 
 class InterviewSourceTagsTest(unittest.TestCase):
@@ -170,28 +200,55 @@ class InterviewSourceTagsTest(unittest.TestCase):
                     )
 
     def test_tag_vocabulary_matches_capture(self) -> None:
-        """Neither skill can rename or drop a TAG TOKEN alone.
+        """Neither skill can rename, drop, OR ADD a tag token alone.
 
         Without this, the definitions pin above passes while capture renames
-        `[user]` -> `[stated]` (or adds a fifth tag) and interview silently
-        diverges: the Meaning-column sentences carry no tag tokens, so they
-        cannot detect a rename. Asserted over BOTH capture copies and the
-        interview site so a one-sided edit fails CI in either direction.
+        `[user]` -> `[stated]` and interview silently diverges: the
+        Meaning-column sentences carry no tag tokens, so they cannot detect a
+        rename.
+
+        Set-EQUALITY, not presence: a presence-only assertion structurally
+        cannot catch an ADDITION (a fifth tag on one side leaves every existing
+        assertion green). Extraction is scoped to each file's source-tag table
+        because `capture/phases.md` carries a SECOND table of confidence
+        markers (`[high]` / `[judgment-call]` / `[your-call]`) that would
+        otherwise contaminate the set.
         """
         sources = {
             "capture/workflow.md": self.capture_workflow,
             "capture/phases.md": self.capture_phases,
             "interview/references/write-back.md": self.write_back,
         }
-        for tag in TAGS:
-            for label, text in sources.items():
-                with self.subTest(tag=tag, file=label):
-                    self.assertIn(
-                        tag,
-                        text,
-                        f"{label} no longer carries the tag token {tag} — "
-                        f"the shared vocabulary has drifted",
-                    )
+        for label, text in sources.items():
+            with self.subTest(file=label):
+                found = tag_table_tokens(text)
+                self.assertEqual(
+                    found,
+                    set(TAGS),
+                    f"{label} source-tag table is {sorted(found)}, expected "
+                    f"{sorted(TAGS)} — the shared vocabulary has drifted "
+                    f"(a renamed, dropped, or ADDED tag all land here)",
+                )
+
+    def test_tally_template_matches_capture(self) -> None:
+        """Freezes the m3 fix: the tally shape must stay byte-identical.
+
+        Interview's read-back tally is the same artifact capture emits, so the
+        separator must not regress to `/` on one side. Capture is the incumbent
+        (its files are not editable here per fn-84.2), so both sides are pinned
+        to capture's middot form.
+        """
+        for label, text in (
+            ("capture/workflow.md", self.capture_workflow),
+            ("interview/references/write-back.md", self.write_back),
+        ):
+            with self.subTest(file=label):
+                self.assertIn(
+                    TALLY_TEMPLATE,
+                    text,
+                    f"{label} no longer carries the shared tally shape "
+                    f"{TALLY_TEMPLATE!r} — separator or field order drifted",
+                )
 
     def test_strategy_long_form_matches_capture_workflow(self) -> None:
         """The `[strategy]` tail interview copied cannot drift alone.
