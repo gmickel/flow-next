@@ -4,6 +4,25 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Changed
+
+- **Project-added spec sections are now first-class to the interview passes.**
+  `flowctl scope write-policy` enumerates the seven canonical sections only, so
+  a section a project added via its own repo-root `SPEC.md` scaffold appeared in
+  neither its `writable` nor its `preserved` list. The interview prose asked the
+  agent to think in terms of that closed list, which left custom sections with
+  no stated protection and no route to ever being filled. Ownership now comes
+  from the section's own scope-owner marker in the spec body, with a three-way
+  rule: a marker naming this pass's scope makes the section **writable** (filled
+  and refined like a canonical section), a marker naming the other scope
+  preserves it byte-for-byte, and no marker (or an unparseable one) preserves it
+  byte-for-byte and says so in the read-back. `scope: both` is writable under
+  any pass. Absence from the write-policy lists is explicitly never permission
+  to drop a section. Scope-owner markers, previously strippable as authoring
+  guidance, must now be **kept on project-added sections** because for those the
+  marker is the only ownership signal a later pass has. Prose only - no
+  `flowctl` change, no new command surface, no version bump.
+
 ### Documentation
 
 - **Customizing the spec scaffold is now properly documented.** The repo-root

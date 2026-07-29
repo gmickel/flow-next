@@ -49,3 +49,11 @@ Edge Cases & Constraints, Acceptance Criteria, Boundaries,
 Decision Context) with scope-owner HTML-comment annotations. Frontmatter +
 HTML-comment scope-owner markers may be stripped from the final spec body —
 they're authoring guidance, not user-visible spec content.
+
+Exception: **keep the scope-owner marker on any section the project added** to
+its own tier-1/2 scaffold (a section outside the canonical 7). `flowctl scope
+write-policy` enumerates canonical sections only, so for a project-added
+section that marker is the sole ownership signal a later scope-aware pass has
+- stripping it silently downgrades the section to preserve-only, and it will
+never be filled. Canonical-section markers are safe to strip because the
+write-policy carries their ownership.

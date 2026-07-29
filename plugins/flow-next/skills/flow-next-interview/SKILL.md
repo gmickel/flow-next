@@ -65,7 +65,7 @@ SCOPE_DEFAULTED=$(printf '%s' "$RESOLVED_JSON" | jq -r '.defaulted // false')
 ARGUMENTS=$(printf '%s' "$RESOLVED_JSON" | jq -r '.remaining_args | join(" ")')
 ```
 
-The section-write policy for the resolved scope is computed by `flowctl scope write-policy`, called BEFORE any markdown edit. It returns which sections the pass MAY write and which it MUST preserve byte-for-byte (per the fn-44 spec Edge Cases merge contract):
+The section-write policy for the resolved scope is computed by `flowctl scope write-policy`, called BEFORE any markdown edit. It returns which sections the pass MAY write and which it MUST preserve byte-for-byte (per the fn-44 spec Edge Cases merge contract). It enumerates **canonical sections only** - a section the project added via its own repo-root `SPEC.md` scaffold appears in neither list, and its absence is never permission to drop it; ownership comes from the section's own scope-owner marker (see the project-added-section rule in [`references/write-back.md`](references/write-back.md)):
 
 ```bash
 # Build the current-sections JSON from the existing spec (T2 wires this).

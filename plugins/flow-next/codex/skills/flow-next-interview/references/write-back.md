@@ -23,6 +23,14 @@ The canonical spec section structure lives in [`plugins/flow-next/templates/spec
 
 Section-write rules from the scope-aware pass behavior (above) MUST be honored — the write-policy result from `flowctl scope write-policy` is the source of truth for which sections this scope writes vs preserves. The `## Decision Context` substructure / FLAT-vs-substructured promotion logic is in the write-policy; do not invent inline.
 
+**Project-added sections.** `write-policy` enumerates the canonical sections only, so a spec may contain sections this project added via its own repo-root `SPEC.md` scaffold (a risk register, user stories, a rollout runbook). Never treat a section's absence from the write-policy lists as permission to drop it. Decide ownership from the section's own scope-owner marker in the body, and default to caution:
+
+- marker names **your** scope (e.g. `<!-- scope: business -->` under a `--scope=business` pass) → **writable**: fill and refine it exactly as you would a canonical section of that scope.
+- marker names the **other** scope → **preserve byte-for-byte**, same as any other-scope canonical section.
+- **no marker, or a marker you cannot parse** → **preserve byte-for-byte**, and mention in the read-back that it was left untouched so the user can add a marker if they wanted it filled.
+
+`scope: both` on a project-added section is writable under any pass. A project-added section carrying an empty body is still preserved unless it is writable under this scope - an empty section you do not own is the user's placeholder, not litter.
+
 ### For NEW IDEA (text input, no Flow ID)
 
 Create spec with interview output. **DO NOT create tasks** — that's `/flow-next:plan`'s job.
@@ -124,16 +132,17 @@ $FLOWCTL tasks --spec <id> --json
 
 **If no tasks:** Update spec, then suggest `/flow-next:plan`.
 
-The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill — read the existing body, do not regenerate from a template.
+The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte, and project-added sections per the ownership rule above), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill - read the existing body, do not regenerate from a template.
 
 **Reuse the spec body already fetched at Detect Input Type** (`$FLOWCTL cat <id>` ran there) — do NOT re-fetch here. Re-fetch only if the interview mutated the spec on disk since that read (e.g. an earlier partial write-back in this run).
 
-Refine canonical sections under your scope's writable list (per write-policy) while preserving sections owned by the other scope byte-for-byte, append the auxiliary interview-audit sections (only those that fired), and Write the merged body ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md`) via the **Write tool** — per the single-emission write pattern above. The body:
+Refine canonical sections under your scope's writable list (per write-policy) while preserving sections owned by the other scope byte-for-byte, apply the project-added-section ownership rule above, append the auxiliary interview-audit sections (only those that fired), and Write the merged body ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md`) via the **Write tool** - per the single-emission write pattern above. The body:
 
 ```markdown
-<merged body: canonical sections from the Detect-Input-Type read, with this
- scope's writable sections refined from interview answers, other-scope sections
- preserved byte-for-byte per the write-policy>
+<merged body: EVERY section present in the Detect-Input-Type read, in its
+ original order, with this scope's writable sections refined from interview
+ answers, other-scope sections preserved byte-for-byte per the write-policy,
+ and project-added sections written or preserved per their scope-owner marker>
 
 ## Resolved via Codebase
 (optional — written by the technical pass when codebase-investigation resolved items)
