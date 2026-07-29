@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -24,8 +25,8 @@ VALUES = ("off", "pull", "push", "reconcile", "comment")
 WORK_EVENTS = {"work.firstClaim", "work.done", "completionReview"}
 DIRECT_EVENTS = {"capture", "interview", "plan"}
 COMMENT_EVENTS = {"resolvePr", "qa"}
-BODY_FILE_EVENTS = COMMENT_EVENTS | {"work.done", "completionReview"}
 UNCONDITIONAL_EVENTS = {"makePr", "land.merged"}
+FAKE_FLOWCTL = ORACLE_PATH.parent / "fake_flowctl.py"
 
 
 def _bash_fences(text: str) -> list[str]:
@@ -99,33 +100,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         self.import_log = self.root / "imports.txt"
         self.fake_flowctl = self.root / "flowctl"
         self.fake_gh = self.root / "gh"
-        self.fake_flowctl.write_text(
-            textwrap.dedent(
-                """\
-                #!/usr/bin/env python3
-                import json
-                import os
-                import sys
-
-                argv = sys.argv[1:]
-                with open(os.environ["CALL_LOG"], "a", encoding="utf-8") as handle:
-                    handle.write(json.dumps(argv, separators=(",", ":")) + "\\n")
-                if argv[:2] == ["config", "get"]:
-                    leaf = os.environ["TRACKER_LEAF"]
-                    if argv == ["config", "get", "--json"]:
-                        print(json.dumps({"value": {"tracker": {"perEvent": {"plan": leaf}}}}))
-                    else:
-                        print(json.dumps({"value": leaf}))
-                elif argv[:2] == ["sync", "active"]:
-                    print(json.dumps({"active": os.environ["BRIDGE_ACTIVE"] == "true"}))
-                elif argv[:2] == ["tracker", "sync"]:
-                    pass
-                else:
-                    raise SystemExit("unexpected fake flowctl argv: " + repr(argv))
-                """
-            ),
-            encoding="utf-8",
-        )
+        shutil.copyfile(FAKE_FLOWCTL, self.fake_flowctl)
         self.fake_flowctl.chmod(0o755)
         self.fake_gh.write_text(
             textwrap.dedent(
@@ -164,6 +139,9 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             }
         )
         (self.root / "comment.md").write_text("caller-owned comment\n", encoding="utf-8")
+        (self.root / "flow.md").write_text("# Flow body\n", encoding="utf-8")
+        (self.root / "source.md").write_text("Tracker source\n", encoding="utf-8")
+        (self.root / "comments.json").write_text("[]\n", encoding="utf-8")
         return env
 
     def _run_shell(
@@ -232,9 +210,55 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             "--event",
             row["event"],
         ]
-        if op == "comment" and caller_id not in {"capture", "interview", "plan"}:
-            argv.extend(["--body-file", str(self.root / "comment.md")])
+        argv.extend(self._input_argv(op))
         return argv
+
+    def _input_argv(self, op: str) -> list[str]:
+        inputs = {
+            "push": [("--flow-file", "flow.md"), ("--body-file", "comment.md")],
+            "pull": [
+                ("--flow-file", "flow.md"),
+                ("--body-file", "comment.md"),
+                ("--comments-file", "comments.json"),
+            ],
+            "reconcile": [
+                ("--flow-file", "flow.md"),
+                ("--body-file", "comment.md"),
+                ("--comments-file", "comments.json"),
+                ("--source-body-file", "source.md"),
+            ],
+            "comment": [("--body-file", "comment.md")],
+        }[op]
+        return [
+            item
+            for flag, name in inputs
+            for item in (flag, str(self.root / name))
+        ]
+
+    def _wrapper_body(self, caller_id: str, op_expression: str) -> str:
+        row = self.callers[caller_id]
+        imports = []
+        if caller_id == "plan":
+            imports.append("references/tracker-projection.md")
+        imports.append("skill:flow-next-tracker-sync")
+        return "\n".join(
+            [
+                *[
+                    f"printf '%s\\n' '{item}' >> \"$IMPORT_LOG\""
+                    for item in imports
+                ],
+                f"HARNESS_OP={op_expression}",
+                "case \"$HARNESS_OP\" in",
+                '  push) INPUT_ARGS=(--flow-file "$TMPDIR/flow.md" --body-file "$BODY_FILE") ;;',
+                '  pull) INPUT_ARGS=(--flow-file "$TMPDIR/flow.md" --body-file "$BODY_FILE" --comments-file "$TMPDIR/comments.json") ;;',
+                '  reconcile) INPUT_ARGS=(--flow-file "$TMPDIR/flow.md" --body-file "$BODY_FILE" --comments-file "$TMPDIR/comments.json" --source-body-file "$TMPDIR/source.md") ;;',
+                '  comment) INPUT_ARGS=(--body-file "$BODY_FILE") ;;',
+                "esac",
+                f'FACADE_RESULT=$("$FLOWCTL" tracker sync "$SPEC_ID" --op "$HARNESS_OP" '
+                f'--event {row["event"]} "${{INPUT_ARGS[@]}}")',
+                'printf "%s" "$FACADE_RESULT" >/dev/null',
+            ]
+        )
 
     def _instrumented_fence(self, caller_id: str, op_expression: str) -> str:
         row = self.callers[caller_id]
@@ -243,26 +267,10 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             row["config_key"],
             "tracker sync",
         )
-        imports = []
-        if caller_id == "plan":
-            imports.append("references/tracker-projection.md")
-        imports.append("skill:flow-next-tracker-sync")
-        body = "\n".join(
-            [
-                *[
-                    f"printf '%s\\n' '{item}' >> \"$IMPORT_LOG\""
-                    for item in imports
-                ],
-                f'"$FLOWCTL" tracker sync "$SPEC_ID" --op {op_expression} '
-                f'--event {row["event"]}'
-                + (
-                    ' --body-file "$BODY_FILE"'
-                    if caller_id in BODY_FILE_EVENTS
-                    else ""
-                ),
-            ]
+        return _inject_before_last_fi(
+            fence,
+            self._wrapper_body(caller_id, op_expression),
         )
-        return _inject_before_last_fi(fence, body)
 
     def _run_standard(
         self,
@@ -327,14 +335,11 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             "sync active --json",
             "tracker sync",
         )
-        body = "\n".join(
-            [
-                "printf '%s\\n' 'skill:flow-next-tracker-sync' >> \"$IMPORT_LOG\"",
-                '"$FLOWCTL" tracker sync "$SPEC_ID" --op reconcile --event makePr',
-            ]
-        )
         return self._run_shell(
-            _inject_before_last_fi(fence, body),
+            _inject_before_last_fi(
+                fence,
+                self._wrapper_body("makePr", '"reconcile"'),
+            ),
             value=value,
             active=active,
         )
@@ -349,17 +354,20 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         path = self.sources["land.merged"]
         active_fence = _indented_shell_block(path, "TRACKER_FIRE=0")
         merge_fence = _indented_shell_block(path, 'MERGED_CONFIRMED="$(gh pr list')
-        dispatch = textwrap.dedent(
-            """\
-            if [ "$TRACKER_FIRE" = "1" ]; then
-              printf '%s\\n' 'skill:flow-next-tracker-sync' >> "$IMPORT_LOG"
-              if [ "$TRACKER_TERMINAL_OK" = "1" ]; then
-                "$FLOWCTL" tracker sync "$SPEC_ID" --op push --event land.merged
-              else
-                "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event land.merged --body-file "$BODY_FILE"
-              fi
-            fi
-            """
+        dispatch = "\n".join(
+            [
+                'if [ "$TRACKER_FIRE" = "1" ]; then',
+                '  if [ "$TRACKER_TERMINAL_OK" = "1" ]; then',
+                '    HARNESS_OP="push"',
+                "  else",
+                '    HARNESS_OP="comment"',
+                "  fi",
+                textwrap.indent(
+                    self._wrapper_body("land.merged", '"$HARNESS_OP"'),
+                    "  ",
+                ),
+                "fi",
+            ]
         )
         return self._run_shell(
             "\n".join((active_fence, merge_fence, dispatch)),
