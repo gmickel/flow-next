@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-148-eval-two-spec-prose-candidates-measured",
+  "created_at": "2026-07-29T21:34:11.063590Z",
+  "depends_on_epics": [],
+  "id": "fn-148-eval-two-spec-prose-candidates-measured",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-148-eval-two-spec-prose-candidates-measured.md",
+  "status": "open",
+  "title": "Eval two spec-prose candidates - measured claims and verified-vs-inferred facts",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-29T21:35:30.903399Z"
+}

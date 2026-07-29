@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-147-source-tags-in-interview-provenance-for",
+  "created_at": "2026-07-29T21:33:06.703107Z",
+  "depends_on_epics": [],
+  "id": "fn-147-source-tags-in-interview-provenance-for",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-147-source-tags-in-interview-provenance-for.md",
+  "status": "open",
+  "title": "Source tags in interview - provenance for criteria the interview writes",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-29T21:34:10.545837Z"
+}
