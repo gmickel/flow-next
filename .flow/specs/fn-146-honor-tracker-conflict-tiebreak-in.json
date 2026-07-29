@@ -103,7 +103,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-146-honor-tracker-conflict-tiebreak-in.md",
-  "status": "open",
+  "status": "done",
   "title": "Honor tracker conflict tiebreak in deterministic status policy",
   "tracker": {
     "baseHashFlow": null,
@@ -116,5 +116,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-29T17:56:21.994959Z"
+  "updated_at": "2026-07-29T19:43:24.452098Z"
 }
