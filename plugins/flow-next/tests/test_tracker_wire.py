@@ -1559,6 +1559,7 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
         marker = "<!-- flow-next:question id=a7f96309954a181b status=open -->"
         ex = fake_execute({
             "wire-comment-list": ok([{"id": 1, "body": f"{marker}\n\nOld"}]),
+            "wire-question-parent-read": ok(GH_ISSUE),
         })
         out = W.dispatch(
             "question", gh_cfg(), locator=loc(GH_NODE, "#42"),
@@ -1566,7 +1567,60 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
             reason_code="needs-spec", question_slug="capture-or-interview",
             body="Rephrased", execute=ex)
         self.assertEqual(out["posted"], False)
-        self.assertEqual([call.op for call in ex.calls], ["wire-comment-list"])
+        self.assertEqual(
+            [call.op for call in ex.calls],
+            ["wire-comment-list", "wire-question-parent-read"],
+        )
+
+    def test_question_dedup_rejects_stale_display_addressed_parents(self) -> None:
+        marker = "<!-- flow-next:question id=a7f96309954a181b status=open -->"
+        cases = [
+            (
+                "github",
+                gh_cfg(),
+                loc(GH_NODE, "#42"),
+                {
+                    "wire-comment-list": ok([
+                        {"id": 1, "body": f"{marker}\n\nUnrelated"},
+                    ]),
+                    "wire-question-parent-read": ok(
+                        dict(GH_ISSUE, node_id="OTHER_NODE")
+                    ),
+                },
+            ),
+            (
+                "gitlab",
+                gl_cfg(),
+                loc(str(GL_ID), "g/p#12"),
+                {
+                    "wire-comment-list": ok([
+                        {
+                            "id": 1,
+                            "body": f"{marker}\n\nUnrelated",
+                            "system": False,
+                        },
+                    ]),
+                    "wire-question-parent-read": ok(
+                        dict(GL_ISSUE, id=GL_ID + 1)
+                    ),
+                },
+            ),
+        ]
+        for provider, cfg, locator, responses in cases:
+            with self.subTest(provider=provider):
+                ex = fake_execute(responses)
+                out = W.dispatch(
+                    "question", cfg, locator=locator,
+                    subject_id="subject-1", blocked_stage="triage",
+                    reason_code="needs-spec",
+                    question_slug="capture-or-interview",
+                    body="Rephrased", execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.cls, ErrorClass.CONFLICT)
+                self.assertEqual(
+                    [call.op for call in ex.calls],
+                    ["wire-comment-list", "wire-question-parent-read"],
+                )
 
     def test_question_posts_canonical_marker_and_refuses_unproven_absence(self) -> None:
         ex = fake_execute({

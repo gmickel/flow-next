@@ -467,6 +467,11 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                         [self._facade_argv("land.merged", op)],
                     )
 
+    def test_land_facade_calls_use_the_current_loop_spec(self) -> None:
+        source = self.sources["land.merged"].read_text(encoding="utf-8")
+        self.assertEqual(source.count('"$FLOWCTL" tracker sync "$spec"'), 2)
+        self.assertNotIn('"$FLOWCTL" tracker sync "$SPEC_ID"', source)
+
     def test_current_active_argv_is_a_declared_delta_from_the_oracle(self) -> None:
         for caller_id, row in self.callers.items():
             with self.subTest(caller=caller_id):

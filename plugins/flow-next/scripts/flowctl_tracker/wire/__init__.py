@@ -568,6 +568,17 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
         for comment in comments:
             comment_body = comment.get("body") if isinstance(comment, dict) else None
             if isinstance(comment_body, str) and question_pattern.search(comment_body):
+                # GitHub and GitLab comment-list routes address the parent by
+                # display number/IID. Accept a dedup match only after durable
+                # identity is proven, either by the comment payload itself or
+                # by an explicit display-addressed parent read.
+                if (provider in ("github", "gitlab")
+                        and comment.get("parent_identity") != "validated"):
+                    parent = mod.parent_read(
+                        config, parsed, execute,
+                        op="wire-question-parent-read")  # type: ignore[arg-type]
+                    if isinstance(parent, TrackerError):
+                        return parent
                 return {
                     "posted": False,
                     "question_id": question_id,

@@ -150,7 +150,7 @@
     },
     {
       "path": "flowctl_tracker/wire/__init__.py",
-      "sha256": "a3b9dcaf66cf6dfd80eea98b701cbe580c1863d80ec02e07ef5ac2c95028724e"
+      "sha256": "d4d7119087866c433121b8e0ef0e363ed28ef42476fd16ea0488674d877d3f39"
     },
     {
       "path": "flowctl_tracker/wire/github.py",

@@ -517,7 +517,7 @@ git log --oneline -1 # evidence echo: the squash commit referencing the PR
  - **`TRACKER_TERMINAL_OK == 1`** (clean GitHub `MERGED`) → dispatch the terminal `push`:
 
  ```bash
- "$FLOWCTL" tracker sync "$SPEC_ID" --op push --event land.merged <legal file flags>
+ "$FLOWCTL" tracker sync "$spec" --op push --event land.merged <legal file flags>
  ```
 
  The `push` projects the just-closed spec; the tracker-sync skill's own `flowToNormalized(spec, merged)` gate (status-sync.md S-I) resolves the terminal rung — `verified` if completion review shipped, else `done` — so status who-wins flips the issue to the merge-confirmed terminal state, ALSO posting the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The Done write is **double-gated** (this caller's probe AND the skill's own merge-evidence gate).
@@ -525,7 +525,7 @@ git log --oneline -1 # evidence echo: the squash commit referencing the PR
  - **`TRACKER_TERMINAL_OK == 0`** (no clean `MERGED` — e.g. the post-merge probe came back empty/ambiguous, a corruption signal) → do NOT dispatch a terminal `push`. Dispatch the **comment-only** path instead and surface `NEEDS_HUMAN`, so no path writes `Done` without merge evidence:
 
  ```bash
- "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event land.merged --body-file "$BODY_FILE" # verdict comment only
+ "$FLOWCTL" tracker sync "$spec" --op comment --event land.merged --body-file "$BODY_FILE" # verdict comment only
  ```
 
  Best-effort either way: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Persist any tracked sync state the touchpoint updated with a best-effort follow-up commit (`git add ".flow/specs/${spec}.json" .flow/sync-runs && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint" && git push` — file-scoped so pre-existing .flow dirtiness never rides along; no rollback needed, it carries this spec's sync state + receipts only).
