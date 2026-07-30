@@ -4,6 +4,19 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Added
+
+- **Review receipts now expose optional versioned structured findings.**
+  Plan, implementation, completion, and QA receipt writers preserve canonical
+  severity/confidence/classification/status values, durable finding and receipt
+  lineage, snapshot-bound optional anchors, deterministic ordering, and
+  immutable prior generations. Head-current selection rejects broken or
+  ambiguous chains; unsupported versions, unknown enums, unsafe/oversize data,
+  and unparseable reviewer prose fall back to the original receipt and prose
+  without raising or truncating. The portable consumer contract and its
+  separation from bug memory are documented; no extra model or network call is
+  introduced.
+
 ### Fixed
 
 - **RepoPrompt CE reviews now consume Context Builder's direct result.**

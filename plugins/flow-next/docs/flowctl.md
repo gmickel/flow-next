@@ -7,7 +7,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, models, review-rounds,
+init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, review-findings, models, review-rounds,
 memory, prospect, anchor, repo-map, prime, glossary, strategy, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
 checkpoint, rp, codex, copilot, cursor,
@@ -868,6 +868,39 @@ When a review runs **without an explicit model** (unconfigured `codex` / `copilo
 - **Hygiene.** A downgrade or floor emits **one** stderr warning naming what was tried and what ran; the receipt records the model **actually used** (else `"auto"` / `"default"`), never a fabricated name.
 
 Explicit pins anywhere in the precedence chain (`--spec` > per-task/per-spec `review` > env > config) are byte-identical to before — no probing, no cache, no retry-downgrade; an explicit unavailable model errors clearly.
+
+### review-findings attach
+
+Deterministic receipt-writer plumbing for review routes that write their base
+receipt directly. It parses an already-captured reviewer response, preserves
+the prior valid generation, attaches the optional versioned `findings`
+projection, and atomically advances the receipt pointer.
+
+```bash
+flowctl review-findings attach \
+  --receipt <final-receipt.json> \
+  --input <base-receipt.json> \
+  --review-file <reviewer-response.md> \
+  [--prior <prior-receipt.json>] \
+  [--recovery <recovery-copy.json>] \
+  [--require-prior-current] \
+  [--base <reviewed-base-ref>] \
+  [--head <reviewed-head-ref>] \
+  [--json]
+```
+
+`--prior` defaults to `--receipt`. `--require-prior-current` rejects a
+concurrent pointer change after the writer acquires its lock. `--recovery`
+writes a transaction-consistent copy before the terminal pointer advances.
+Refs resolve to literal SHAs before parsing, so anchors and currentness bind to
+the reviewed snapshot.
+
+Success reports whether structured findings were attached. Unsupported,
+unknown, oversize, or unparseable reviewer output is a successful prose
+fallback with `findings_attached: false`; receipt/history write failures remain
+errors. The portable data and consumer rules are documented in
+[`review-findings.md`](review-findings.md). Consumers should read receipts, not
+invoke this writer.
 
 ### memory
 

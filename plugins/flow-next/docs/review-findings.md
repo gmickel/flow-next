@@ -1,0 +1,220 @@
+# Structured Review Findings
+
+Review receipts may carry an optional `findings` object alongside their verdict
+and original reviewer prose. The object is a portable, versioned projection of
+the prose: consumers can render and compare findings without parsing Markdown,
+while legacy receipts and unparseable responses remain valid.
+
+This is a receipt contract, not an internal API. Consumers read stored receipts;
+they do not call parser helpers or write resolution state back into Flow-Next.
+
+## Version 1 schema
+
+```json
+{
+  "findings": {
+    "schemaVersion": 1,
+    "sourceReceiptId": "review-…",
+    "reviewKind": "implementation",
+    "backend": "rp",
+    "round": 2,
+    "baseSha": "optional-reviewed-base",
+    "headSha": "reviewed-head",
+    "supersedesReceiptId": "optional-parent-generation",
+    "items": [
+      {
+        "id": "finding-…",
+        "priorFindingId": "optional-explicit-lineage-edge",
+        "ordinal": 1,
+        "severity": "P1",
+        "confidence": 100,
+        "classification": "introduced",
+        "status": "fixed",
+        "anchor": {
+          "path": "src/example.py",
+          "originalPath": "optional/base-side-name.py",
+          "side": "head",
+          "startLine": 42,
+          "endLine": 45,
+          "baseSha": "reviewed-base",
+          "headSha": "reviewed-head",
+          "blobOid": "optional-git-object-id"
+        },
+        "title": "Short finding title",
+        "body": "Grounded explanation",
+        "suggestion": "Optional remediation",
+        "rIds": ["R3"],
+        "firstSeenReceiptId": "review-…",
+        "lastSeenReceiptId": "review-…"
+      }
+    ]
+  }
+}
+```
+
+Required container fields are `schemaVersion`, `sourceReceiptId`, `reviewKind`,
+`backend`, `round`, `headSha`, and `items`. `baseSha` and
+`supersedesReceiptId` are optional. Required item fields are `id`, `ordinal`,
+`severity`, `confidence`, `classification`, `status`, `title`, `body`, `rIds`,
+`firstSeenReceiptId`, and `lastSeenReceiptId`. `priorFindingId`, `anchor`, and
+`suggestion` are optional. Unknown fields make a v1 container unsupported;
+consumers must not reinterpret them as a compatible extension.
+
+## Canonical values
+
+| Field | Canonical values | Parser aliases |
+|---|---|---|
+| `reviewKind` | `plan`, `implementation`, `completion`, `qa` | none |
+| `severity` | `P0`, `P1`, `P2`, `P3` | `Critical` → `P0`; `Major` → `P1`; `Minor` → `P2`; `Nitpick` → `P3` |
+| `confidence` | `0`, `25`, `50`, `75`, `100` | none |
+| `classification` | `introduced`, `pre_existing` | none |
+| `status` | `open`, `fixed`, `not_fixed`, `withdrawn` | `fixed in review` / `resolved` → `fixed`; `not fixed` / `remains open` / `unresolved` → `not_fixed` |
+| `anchor.side` | `base`, `head` | none |
+
+Aliases describe deterministic ingestion of reviewer prose. Stored containers
+always use canonical values. An unknown enum value invalidates the structured
+container; it is never coerced to the nearest known value.
+
+Canonical item order is severity `P0` through `P3`, confidence descending, then
+ordinal ascending. Consumers preserve that order.
+
+## Identity and lineage
+
+`sourceReceiptId` identifies one findings generation. Round 1 derives each
+finding `id` deterministically from that receipt identity and the local
+`ordinal`. A later round carries the same `id` for the same finding and keeps
+`firstSeenReceiptId`; `lastSeenReceiptId` advances to the current generation.
+A genuinely new later-round finding receives a new ID even if its ordinal
+resembles an older item.
+
+`priorFindingId` is an explicit edge used only when a parser cannot preserve an
+older ID byte-for-byte. It does not authorize replacing or deleting the prior
+generation. Every non-root generation is a complete snapshot of the lineage:
+omitting a previously known finding makes the chain invalid rather than
+silently resolving it.
+
+Repeated writes preserve the former latest receipt in the latest pointer's
+sibling history directory:
+
+```text
+<receipt-path>
+<receipt-path>.history/<sha256(sourceReceiptId)>.json
+```
+
+The latest pointer location is selected by the calling workflow; committed
+review receipts conventionally live under `.flow/review-receipts/`, while
+bounded interactive runs may use caller-provided or temporary paths. Consumers
+start from receipt paths handed over as evidence. They must not scrape
+Flow-Next implementation files or assume that every receipt is committed.
+
+## Anchors
+
+An anchor is present only when the reviewer supplied a safe repository-relative
+path and a positive line or line range. Missing, malformed, absolute, or
+traversing locations produce no anchor; Flow-Next never guesses one.
+
+`side` says which reviewed snapshot owns the line range. `baseSha` and
+`headSha` bind it to the compared snapshots. `originalPath` records the
+base-side name for a rename, while `path` is the anchored name.
+`blobOid`, when present, binds the location to a Git object. If a finding is
+carried to a new review snapshot without fresh location evidence, the finding
+remains but its old anchor is removed.
+
+Consumers may use an anchor for navigation only after confirming its snapshot
+binding. Absence of an anchor is not absence of a finding.
+
+## Selecting the current generation
+
+Currentness is a read-only projection, not a mutable flag:
+
+1. Validate each candidate container and, when filters are known, keep only the
+   requested `reviewKind` and `backend`.
+2. Index unique `sourceReceiptId` values. Reject duplicate identities.
+3. Validate every `supersedesReceiptId`: its parent must exist in the same
+   review-kind/backend lineage and its `round` must be exactly one lower.
+4. Reject cycles, broken edges, ambiguous replacement edges, incomplete
+   snapshots, or finding identities whose first-seen record is absent.
+5. Find unsuperseded tips whose `headSha` equals the current review head.
+   Exactly one must remain.
+
+That tip's item status is current. A supported receipt bound to another
+`headSha` is stale evidence: retain and label it, but do not use it as current
+resolution, approval, or ship state. Zero or multiple matching tips means
+“no unambiguous current structured findings,” never “no findings.”
+
+Receipt verdict remains the workflow gate. The `findings` projection explains
+the finding stream; it does not independently grant `SHIP`.
+
+## Bounds
+
+| Surface | Limit |
+|---|---:|
+| Reviewer source input | 1 MiB UTF-8 |
+| Encoded `findings` container | 256 KiB UTF-8 |
+| Items per container | 200 |
+| `rIds` per item | 32, unique |
+| IDs, backend, and review-kind strings | 160 characters |
+| Anchor paths | 1,024 characters |
+| Item title | 240 characters |
+| Item body | 4,000 characters |
+| Item suggestion | 4,000 characters |
+
+R-IDs must use `R<digits>`. IDs and ordinals must be unique. Anchor paths must
+be normalized repository-relative paths without `..` traversal. Ranges use
+positive lines and `endLine >= startLine`.
+
+Limits are rejection boundaries, not truncation targets. Oversize input,
+overflowing output, duplicates, unsafe paths, invalid lineage, unknown enums,
+or unsupported schema versions produce no usable structured container.
+
+## Fallback behavior
+
+The `findings` field is additive and optional:
+
+- No field: use the receipt verdict and original prose.
+- Supported, valid, current v1 field: structured rendering is allowed.
+- Valid but stale field: show it as stale evidence; never as current state.
+- Unsupported version, invalid field, or ambiguous lineage: ignore the
+  structured projection and retain the receipt plus prose.
+- Explicit empty `items`: means the parser recognized a no-findings `SHIP`
+  response for that generation. It is not equivalent to a missing or rejected
+  container.
+
+Fallback must be labeled when a consumer presents a structured view. Never
+merge fields from a stale/invalid container with prose or another generation
+to manufacture one apparently current record.
+
+## Memory relationship
+
+Receipts and memory serve different lifetimes. A receipt records what one
+review generation found. Bug memory records a reusable lesson after a
+non-trivial `NEEDS_WORK` → `SHIP` fix cycle. Work may synthesize a bug-memory
+entry from the finding and the applied fix, but the memory entry is not a
+finding status, does not supersede a receipt, and cannot make stale evidence
+current.
+
+Consumers should therefore:
+
+- use receipt lineage for review currentness;
+- use memory as explanatory context and recurrence prevention;
+- preserve both records when they exist; and
+- never write receipt resolution state from a memory audit or memory status.
+
+## Consumer checklist
+
+- Treat receipts as the stable handover; do not depend on parser functions or
+  skill internals.
+- Preserve the original receipt and reviewer prose.
+- Validate the whole container before using any item.
+- Match the current review head and require one unambiguous lineage tip.
+- Preserve canonical order, IDs, statuses, R-IDs, and anchor snapshot binding.
+- Label stale and fallback states explicitly.
+- Ignore unsupported structured data without turning it into a pass.
+
+## See also
+
+- [`architecture.md`](architecture.md) — receipt and history locations.
+- [`memory-schema.md`](memory-schema.md) — durable learning lifecycle.
+- [`spec-template.md`](spec-template.md) — confidence and classification rules.
+- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — canonical Receipt and
+  Structured finding terms.

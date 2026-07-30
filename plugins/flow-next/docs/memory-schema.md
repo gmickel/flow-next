@@ -231,6 +231,29 @@ Point agents at `.flow/memory/` with a one-line note in `AGENTS.md` / `CLAUDE.md
 
 Config lives in `.flow/config.json`, separate from Ralph's `scripts/ralph/config.env`.
 
+## Review findings are evidence, memory is learning
+
+Review receipts may carry the versioned structured `findings` container
+documented in [`review-findings.md`](review-findings.md). That receipt stream is
+the authority for finding identity, round lineage, snapshot binding, and current
+status. Memory has a different job: preserving a reusable explanation after a
+non-trivial review fix.
+
+After a `NEEDS_WORK` → `SHIP` transition, Work may synthesize a bug-track entry
+from the review finding and the fix. The entry describes the problem, failed
+approach, solution, and prevention. It does not copy the receipt's currentness
+role:
+
+- memory `status` (`active`, `stale`, `hardened`) describes whether the lesson
+  should be re-injected, not whether a review finding is open or fixed;
+- auditing or hardening memory never mutates a receipt;
+- deleting, replacing, or consolidating memory never resolves a finding; and
+- a stale receipt remains stale even when a related memory entry is active.
+
+Consumers preserve both when available: receipt lineage for the review record,
+memory for recurrence-prevention context. They must not infer resolution state
+across the boundary.
+
 ## Upgrading from 0.32.x
 
 1. `git pull && (reinstall plugin)`.
@@ -243,6 +266,8 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 ## See also
 
 - [`architecture.md`](architecture.md) — `.flow/` directory layout including the `memory/` tree.
+- [`review-findings.md`](review-findings.md) — structured receipt identity,
+  currentness, bounds, fallback, and the consumer boundary with memory.
 - [`glossary.md`](glossary.md) — pairs naturally with the `knowledge/decisions/` subtree (terminology + load-bearing choices).
 - [`strategy.md`](strategy.md) — `/flow-next:capture` source-tags strategy-derived AC as `[strategy:<track>]`; decisions are recorded via memory when capture refuses to write against an active track.
 - [`flowctl.md`](flowctl.md) — full `flowctl memory` reference (every subcommand, flag, JSON shape).

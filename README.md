@@ -414,6 +414,7 @@ The repo holds the offline-resilient reference. [flow-next.dev](https://flow-nex
 | Live-app QA — `/flow-next:qa`, spec-derived scenarios, P0/P1/P2 findings, `qa_verdict` receipt | [`skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md) | — |
 | `.flow/` directory layout, spec-first task model, ID format | [`docs/architecture.md`](plugins/flow-next/docs/architecture.md) | — |
 | Spec template — R-ID rules, confidence anchors, receipt schema | [`docs/spec-template.md`](plugins/flow-next/docs/spec-template.md) · canonical scaffold at [`templates/spec.md`](plugins/flow-next/templates/spec.md) | — |
+| Structured review findings — versioned receipt schema, lineage/currentness, anchors, bounds, consumer fallback | [`docs/review-findings.md`](plugins/flow-next/docs/review-findings.md) | [Receipts](https://flow-next.dev/review/receipts/) |
 | Memory schema — bug / knowledge tracks, frontmatter, audit lifecycle | [`docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) | — |
 | Self-improving loops — memory, glossary, decisions, strategy | [`docs/self-improving.md`](plugins/flow-next/docs/self-improving.md) | — |
 | Tracker-sync bridge: projection model, hybrid ids, deterministic `flowctl tracker` transport, `/flow-next:tracker-sync` vs `/flow-next:sync` | [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md) | n/a |
