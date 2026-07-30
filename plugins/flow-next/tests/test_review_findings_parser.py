@@ -328,8 +328,34 @@ Problem: Rename context must survive.
             )
             self.assertIsNone(parse(text, "codex"))
         self.assertIsNone(parse("No findings.\n<verdict>SHIP</verdict>", "codex", schema_version=2))
+        self.assertIsNone(
+            parse(
+                "No findings.\n<verdict>SHIP</verdict>",
+                "codex",
+                schema_version=True,
+            )
+        )
+        self.assertIsNone(
+            parse(
+                "No findings.\n<verdict>SHIP</verdict>",
+                "codex",
+                schema_version=1.0,
+            )
+        )
         for backend in BACKENDS:
             self.assertIsNone(parse(self.fixture(backend, "unparseable"), backend))
+
+    def test_mixed_host_table_and_labeled_findings_fail_closed(self) -> None:
+        table = self.fixture("host", "catalog-sample")
+        valid_block = """
+Severity: Major
+Confidence: 100
+Classification: introduced
+Problem: A second representation must not be silently dropped.
+"""
+        unknown_block = valid_block.replace("Major", "Blocker")
+        self.assertIsNone(parse(f"{table}\n{valid_block}", "host"))
+        self.assertIsNone(parse(f"{table}\n{unknown_block}", "host"))
 
     def test_all_bounds_reject_without_truncation(self) -> None:
         base = self.fixture("codex", "catalog-sample")
@@ -370,6 +396,11 @@ Problem: Rename context must survive.
             for number in range(201)
         )
         self.assertIsNone(parse(too_many, "codex"))
+        too_many_ratchets = "\n".join(
+            f"Prior finding {number} — fixed."
+            for number in range(1, 202)
+        )
+        self.assertIsNone(parse(too_many_ratchets, "codex"))
 
         oversized_items = "\n\n".join(
             "Severity: Minor\nConfidence: 75\nClassification: introduced\n"

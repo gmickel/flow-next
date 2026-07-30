@@ -4711,6 +4711,8 @@ def _review_finding_rids(block: str, fields: dict[str, str]) -> list[str]:
         if rid not in seen:
             seen.add(rid)
             result.append(rid)
+            if len(result) > _FINDINGS_MAX_RIDS:
+                break
     return result
 
 
@@ -4745,6 +4747,8 @@ def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
         if "severity" in fields or _FINDINGS_INLINE_HOST_RE.search(line):
             starts.append(index)
             saw_severity_label = True
+            if len(starts) > _FINDINGS_MAX_ITEMS:
+                return [], True
     blocks: list[str] = []
     for position, start in enumerate(starts):
         end = starts[position + 1] if position + 1 < len(starts) else len(lines)
@@ -4819,6 +4823,8 @@ def _review_finding_host_table(output: str) -> Optional[list[dict]]:
                 "rIds": _review_finding_rids(body, {}),
             }
         )
+        if len(rows) > _FINDINGS_MAX_ITEMS:
+            return []
     return rows
 
 
@@ -4827,7 +4833,11 @@ def _review_finding_prior_items(
     prior_findings: Optional[dict],
     source_receipt_id: str,
 ) -> Optional[list[dict]]:
-    matches = list(_FINDINGS_PRIOR_RE.finditer(output))
+    matches = []
+    for match in _FINDINGS_PRIOR_RE.finditer(output):
+        matches.append(match)
+        if len(matches) > _FINDINGS_MAX_ITEMS:
+            return None
     if not matches:
         return []
     if not isinstance(prior_findings, dict):
@@ -5143,6 +5153,9 @@ def _parse_review_findings_v1(
         return None
     rows = parsed_rows or []
     blocks, saw_severity_label = _review_finding_blocks(output)
+    if parsed_rows is not None and saw_severity_label:
+        # Multiple representations make completeness/deduplication ambiguous.
+        return None
     if parsed_rows is None:
         for block in blocks:
             fields = _review_finding_fields(block)
@@ -5263,7 +5276,11 @@ def parse_review_findings(
     prose return ``None``. The public boundary intentionally never raises.
     """
     try:
-        if schema_version != _FINDINGS_SCHEMA_VERSION:
+        if (
+            not isinstance(schema_version, int)
+            or isinstance(schema_version, bool)
+            or schema_version != _FINDINGS_SCHEMA_VERSION
+        ):
             return None
         return _parse_review_findings_v1(
             output,
