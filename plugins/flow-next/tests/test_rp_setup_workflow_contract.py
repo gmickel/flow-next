@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import tempfile
@@ -95,23 +96,30 @@ class RepoPromptSetupWorkflowContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             temp = Path(tmp)
             log = temp / "calls.log"
+            stub = temp / "flowctl_stub.py"
+            stub.write_text(
+                "import json\n"
+                "import os\n"
+                "import sys\n"
+                "args = sys.argv[1:]\n"
+                "with open(os.environ['CALL_LOG'], 'a', encoding='utf-8') as handle:\n"
+                "    handle.write(' '.join(args) + '\\n')\n"
+                "pair = ' '.join(args[:2])\n"
+                "if pair == 'review-rounds increment':\n"
+                "    print(json.dumps({'round': 1, 'cap': 4}))\n"
+                "    raise SystemExit(4 if os.environ.get('FAIL_CAP') == '1' else 0)\n"
+                "if pair == 'rp setup-review':\n"
+                "    if os.environ.get('FAIL_SETUP') == '1':\n"
+                "        raise SystemExit(2)\n"
+                "    print('RP_MODE=ce W=2 T=ctx CHAT_ID=chat')\n"
+                "elif pair == 'review-rounds record':\n"
+                "    print(json.dumps({'recorded': True}))\n"
+                "elif args[:1] == ['cat']:\n"
+                "    print('# Demo spec')\n",
+                encoding="utf-8",
+            )
             prefix = (
-                "flowctl() {\n"
-                "printf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n"
-                "if [[ \"$1 $2\" == \"review-rounds increment\" ]]; then\n"
-                "  printf '%s\\n' '{\"round\":1,\"cap\":4}'\n"
-                "  [[ \"${FAIL_CAP:-0}\" == 1 ]] && return 4\n"
-                "  return 0\n"
-                "elif [[ \"$1 $2\" == \"rp setup-review\" ]]; then\n"
-                "  [[ \"${FAIL_SETUP:-0}\" == 1 ]] && return 2\n"
-                "  printf '%s\\n' 'RP_MODE=ce W=2 T=ctx CHAT_ID=chat'\n"
-                "elif [[ \"$1 $2\" == \"review-rounds record\" ]]; then\n"
-                "  printf '%s\\n' '{\"recorded\":true}'\n"
-                "elif [[ \"$1\" == \"cat\" ]]; then\n"
-                "  printf '%s\\n' '# Demo spec'\n"
-                "fi\n"
-                "}\n"
-                "FLOWCTL=flowctl\n"
+                "FLOWCTL='python flowctl_stub.py'\n"
                 "REPO_ROOT=.\n"
                 "SPEC_ID=fn-1-demo\n"
                 "CALL_LOG=calls.log\n"
@@ -120,7 +128,7 @@ class RepoPromptSetupWorkflowContractTest(unittest.TestCase):
             capped = subprocess.run(
                 ["bash", "-c", prefix + fence],
                 cwd=temp,
-                env={"PATH": "/usr/bin:/bin", "FAIL_CAP": "1"},
+                env={**os.environ, "FAIL_CAP": "1"},
                 text=True,
                 capture_output=True,
                 check=False,
@@ -132,7 +140,7 @@ class RepoPromptSetupWorkflowContractTest(unittest.TestCase):
             failed = subprocess.run(
                 ["bash", "-c", prefix + fence],
                 cwd=temp,
-                env={"PATH": "/usr/bin:/bin", "FAIL_SETUP": "1"},
+                env={**os.environ, "FAIL_SETUP": "1"},
                 text=True,
                 capture_output=True,
                 check=False,
