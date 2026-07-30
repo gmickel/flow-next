@@ -16,6 +16,18 @@ Chart is also where the evidence-first route family stops being prose and become
 
 The interaction is **prompt-first**. The command and flags are deterministic escape hatches for automation and exact selection, not the product's primary interface. A person should be able to say what they are trying to reach, what they learned, what they want to try next, or what they already know enough to skip; the host agent translates that into chart operations, recommends the smallest useful next decision, and reads back any state-changing interpretation before persisting it.
 
+### Ground before asking
+
+Chart kickoff begins with a bounded **Grounding Snapshot**, following the ordered pattern already used by prospect. The agent reads the user's prompt and attachments, the repository's strategy/instructions/current implementation, directly relevant specs and chart history, and explicitly connected knowledge sources. Outside-repository material is read only when the user supplied it or made the source available. The snapshot contains:
+
+- a candidate Outcome;
+- known facts with safe evidence references and capture revision where available;
+- conflicts, staleness, or assumptions that still require judgment;
+- the smallest visible frontier and parked fog;
+- attended/unattended cost.
+
+Grounding is not a research phase and does not search the world before the user can begin. It is a bounded pass over immediately relevant evidence so the agent does not ask questions the repository already answers. Missing, inaccessible, conflicting, or stale evidence remains uncertainty and is read back or parked; it never becomes a fact by inference. Imported background stays under `## Notes` and does not fabricate a resolved D-ID. The agent presents the snapshot and proposed frontier before persistence, and an idea with no consequential fog routes directly to capture or the smaller path.
+
 ### The adaptive discovery loop
 
 Chart is intentionally not a complete discovery plan written up front. Its operating loop is:
@@ -41,7 +53,7 @@ The route therefore adapts after every answer rather than pretending the initial
 
 ### Why this is not `prospect`
 
-`prospect` answers *"what should we do?"* across a focus area and returns ranked candidates. `chart` answers *"how do we get from this one idea to something specifiable?"*. Prospect is upstream and plural; chart is downstream and singular. A chart may legitimately begin at a prospect candidate.
+`prospect` answers *"what should we do?"* across a focus area and returns ranked candidates. `chart` answers *"how do we get from this one idea to something specifiable?"*. Prospect precedes chart and is plural; chart follows a selection and is singular. A chart may legitimately begin at a prospect candidate.
 
 ### Where chart sits -- and when to skip it
 
@@ -124,7 +136,7 @@ Body is deliberately minimal -- the question, nothing else:
 <what this decision settles>
 ```
 
-Sidecar fields: `id` (canonical external form `<chart-id>.D<n>`), `chart`, `title`, `type`, `attendance` (`attended|unattended`), `status` (`open|resolved|superseded|out-of-scope`), `blocked_by[]`, `depends_on[]`, `supersedes[]`, `superseded_by`, `claimed_by`, `claimed_at`, `claim_note`, `assets[]` (branch refs, repository-relative evidence paths, tracker URLs), `answer` (written on resolution), and append-only transition notes. D-IDs are chart-local; every parser canonicalizes the full chart-qualified form before I/O, while human output always pairs it with the decision title and record link.
+Sidecar fields: `id` (canonical external form `<chart-id>.D<n>`), `chart`, `title`, `type`, `attendance` (`attended|unattended`), `status` (`open|resolved|superseded|out-of-scope`), `blocked_by[]`, `depends_on[]`, `supersedes[]`, `superseded_by`, `claimed_by`, `claimed_at`, `claim_note`, `assets[]`, `answer` (written on resolution), and append-only transition notes. An asset entry preserves a safe kind/reference/display summary plus a revision or fingerprint when the source provides one; accepted references remain repository-relative evidence paths, branch/commit refs, and approved HTTPS URLs. D-IDs are chart-local; every parser canonicalizes the full chart-qualified form before I/O, while human output always pairs it with the decision title and record link.
 
 Sized to one worker context (~100k tokens), same budget as a task.
 
@@ -136,10 +148,10 @@ Each decision carries exactly one type. The type decides who resolves it and how
 
 | Type | Attended? | Resolves by |
 |---|---|---|
-| `research` | unattended | A scout subagent reads docs, upstream sources, or knowledge bases and returns a fact the decision waits on |
+| `research` | unattended | A scout subagent reads docs, primary external sources, or knowledge bases and returns a fact the decision waits on |
 | `probe` | unattended | Measure or reproduce against the real system: load test, profiling run, a failing test that reproduces a reported defect |
 | `eval` | unattended | Bake-off or benchmark across candidates on real fixtures; returns a winner and why |
-| `prototype` | **attended** | Throwaway code that answers a fidelity question. Reacting to the artefact *is* the work, so this type never self-resolves |
+| `prototype` | **attended** | Create or import a linked throwaway artefact that answers a fidelity question, then let the human react to the artefact. The artefact reference is persisted before the reaction; the reaction resolves or redirects the decision. Prototype code is not implementation and its later fate belongs to plan/work |
 | `interview` | **attended** | Conversation, one question at a time, via `/flow-next:interview` machinery on the chart rather than a spec. The default type |
 | `task` | explicitly either | Manual work that unblocks a *decision* (provision access, obtain credentials, move data so its shape can be seen). The one type that does rather than decides; earns its place by unblocking |
 
@@ -239,6 +251,7 @@ Estimated 4-5 working sessions with you.
 /flow-next:chart "<loose idea>"              # chart mode: name the Outcome, sketch the map
 /flow-next:chart <chart-id>                  # work mode: resolve the next frontier decision
 /flow-next:chart <chart-id> --decision <n>   # work mode, human picks the decision
+/flow-next:chart <stored tracker URL>         # re-enter the projected chart or exact decision
 /flow-next:chart <chart-id> --status         # render map + frontier + remaining cost, resolve nothing
 ```
 
@@ -262,7 +275,9 @@ On every prompt, the host agent infers the intended operation and decision type 
 | `flowctl chart create --title <t> --outcome <o> --initial-map-file <f> [--force-size --reason <r>]` | Validates initial titled decisions/parked questions, enforces the size ceiling before allocation, then atomically creates the chart; override is audited |
 | `flowctl chart show <id>` | Map body + counts (resolved / open / blocked / parked) + remaining attended-session estimate |
 | `flowctl chart frontier <id>` | Open, unblocked, unclaimed decisions, dependency-ordered |
+| `flowctl chart locate <selector>` | Resolves a local chart/D-ID, stored tracker identifier, or canonical stored tracker URL through the local provenance ledger; performs no remote search and never matches by title |
 | `flowctl chart add-decision <id> --title <t> --type <t> [--attendance <a>] --body-file <f> [--blocked-by <D,...>] [--depends-on <D,...>]` | Allocates the next D-ID; attendance is required only for `task` |
+| `flowctl chart attach-asset <id>.<D> --asset-file <f>` | Idempotently records a safe evidence/prototype asset while the decision remains open, allowing a later attended session to resume from the same artefact |
 | `flowctl chart park-question <id> --body-file <f>` | Adds a normalized parked question and returns its stable key |
 | `flowctl chart remove-question <id> --question <Q>` | Removes a parked question idempotently within a committed graduation |
 | `flowctl chart wire-decision <id>.<D> [--blocked-by <D,...>] [--depends-on <D,...>]` | Atomically replaces validated graph edges after two-pass creation |
@@ -289,15 +304,25 @@ CHART_VERDICT=<RESOLVED|BLOCKED|NEEDS_HUMAN|COMPLETE|NO_WORK> chart=<id> decisio
 
 Parallelism means parallel **invocations**, never a batch tick: the host may dispatch independent unattended frontier decisions concurrently, and each owns one claim, progress stream, recovery path, and verdict. A single invocation never aggregates mixed outcomes or claims a set, so the one-decision verdict grammar stays complete. Crashed invocations remain visible through their audited claims; stale recovery follows the explicit claim contract.
 
+### Tracker lifecycle projection and URL re-entry
+
+Tracker projection is an optional operational view of the local chart, not another chart store. Where provider capabilities permit, the parent issue shows the chart Outcome/status and compact counts for actionable, blocked, claimed, resolved, superseded, out-of-scope, and parked work; each decision child shows its D-ID/title, type, attendance, local status, blocking relation, safe resolution gist, and approved evidence references. The parent also carries the latest resolved D-ID/title/gist and current frontier summary. Full answers, unsafe assets, and secrets stay local.
+
+Every local lifecycle transition first commits locally, then passes through the post-fn-141 facade with a chart revision and idempotency marker: create/wire, claim/release, resolve, supersede, out-of-scope, briefing/done, abandon, and reopen. Claim changes do not masquerade as provider workflow status. A partial, failed, unsupported, or reordered remote update leaves a durable projection receipt and converges on retry/reconcile; it never rolls back the local transition. Provider-specific hierarchy, type, attendance, status, evidence, or rollup gaps are returned as explicit capability degradation.
+
+Pasting a projected chart or decision URL is a re-entry convenience. `chart locate` normalizes only supported provider URL forms, validates the configured host/project, and resolves strictly through the local locator/provenance ledger. It performs no network search, redirect following, or title inference. Unrecorded, ambiguous, credential-bearing, wrong-host, stale-parent, or conflicting URLs fail with structured detail and no mutation. A parent URL re-anchors on the chart; an open decision URL selects that D-ID; a resolved or superseded decision URL renders its history and replacement/frontier options rather than silently choosing different work. Human output always reads back the canonical local ID, title, and record link before proceeding.
+
 ## Edge Cases & Constraints
 <!-- scope: technical -->
 
 - **One decision per invocation.** Resolving more than one attended decision per session reintroduces the context collapse the chart exists to prevent. Independent unattended types (`research`, `probe`, `eval`, or unattended `task`) may fan out only as separate invocations, each with its own claim and verdict.
 - **No fixed route sequence.** A chart does not require research before prototype, interview before eval, or any other phase order. Each tick selects the smallest route justified by the current frontier and then re-charts. Documentation may show example journeys, but must not turn them into a canonical checklist.
 - **Prompting is the primary control surface.** Flags provide precision and automation; they must not become required vocabulary in onboarding, guide output, or examples. Free-form steering reaches the same guarded operations.
+- **Grounding is bounded and attributable.** Kickoff reads only immediately relevant in-scope sources, preserves safe references/revisions, and treats missing, conflicting, stale, secret-bearing, ignored, symlink-escaping, or outside-repository material as unavailable or uncertain. It never turns imported background into a resolved decision or an acceptance-criterion source tag.
 - **Session-sized decisions.** Every selected decision must fit one agent context. If it does not, work mode splits the question before dispatch rather than asking an agent to plan, research, prototype, and decide an entire workstream in one session.
 - **Charting resolves nothing.** Chart mode ends after the map, the first decision records, and the cost estimate exist. A charting session that starts answering its own decisions has skipped the human's scoping act.
 - **The agent never answers an attended decision.** Hard gate, not guidance. A `prototype` or `interview` decision resolved inside an unattended run is a contract violation and must terminate `NEEDS_HUMAN`.
+- **A prototype requires something reviewable.** Resolution refuses a prototype with no persisted safe asset reference. The skill creates or imports the throwaway artefact, attaches it while the D-ID remains open, presents it, and records the human reaction before resolving or superseding. If the session stops first, the same asset remains linked for resumption; no answer is invented and the artefact is not silently promoted into implementation.
 - **Chart never writes a spec.** It hands a briefing to `capture`. Letting chart author specs directly would let discovery content bypass capture's acceptance-criterion source-tagging and read-back, which is exactly the guarantee the ratchet depends on.
 - **Chart never sets `ready`.** Promotion stays a human act, unchanged.
 - **Charts are not required.** A small, well-understood effort goes straight to `capture`. Reaching for a chart on a two-day feature is the same error as running a full interview on a one-line fix. `/flow-next:chart` on an idea with nothing parked must say so and stop rather than manufacture decisions.
@@ -308,6 +333,7 @@ Parallelism means parallel **invocations**, never a batch tick: the host may dis
 - **Concurrency.** Multiple sessions may work one chart. Claims are atomic and checked before any work; a stale claim (configurable age) can be broken with a recorded note.
 - **`## Open Questions` is not a backlog.** It must not be pre-sliced into decision-shaped entries. One parked entry may graduate into several decisions, or none.
 - **No new tracker adapters.** Chart projection rides the existing four (Linear, GitHub, GitLab, Jira) or degrades to local-only.
+- **Tracker URLs never become identity.** URL selection succeeds only through the local projection ledger and reads back the canonical chart/D-ID. Unsupported or stale URLs produce a local recovery path; they never create, relink, or guess a chart.
 - **Unsafe evidence stays referenced, not copied.** If an answer contains an obvious secret or a literal guard-triggering destructive command, chart refuses to embed it. The source remains at a repository-relative evidence path or approved HTTPS reference; the decision stores a safe redacted/escaped summary and link. This applies to answer bodies, assets, normal briefings, and forced drafts. Never silently strip bytes from the cited source.
 - **Do not overload source tags.** Chart facts, decisions, assets, D-ID records, and briefing evidence do not use the acceptance-criterion trailing-tag grammar. Capture and interview tag only criteria they newly author, and never retag an existing bullet.
 - **Do not preempt fn-148.** No verified/inferred fact or decision grammar ships through chart unless fn-148 returns CONFIRMED, the human approves the ready-to-apply diff, and that guidance has landed. Null, inconclusive, or merely planned outcomes add nothing.
@@ -368,6 +394,10 @@ Parallelism means parallel **invocations**, never a batch tick: the host may dis
 - **R49:** Chart decision provenance and acceptance-criterion author provenance remain distinct: briefings preserve D-ID/evidence links, capture and interview use the settled four-tag grammar only on criteria each pass newly writes, existing criteria are never retagged, and untagged remains unknown rather than user-grounded.
 - **R50:** Capture handoff is retry-safe and admission-aware: draft/stale briefings fail closed absent explicit risk read-back, shared-context D-IDs do not become duplicated requirements by default, and interruption between spec creation and `chart link-spec` resumes against the existing B-ID/cluster/spec identity without creating a duplicate.
 - **R51:** fn-135 does not define verified/inferred marking for chart facts or decisions. Each overlapping implementation/docs task re-anchors on fn-148's final recorded outcome and consumes only human-approved guidance that has actually landed; NOT CONFIRMED or INCONCLUSIVE produces no chart contract or documentation claim.
+- **R52:** Chart kickoff produces and reads back a bounded Grounding Snapshot from approved in-scope evidence before persistence. Known facts retain safe references/revisions under Notes, conflicting or unavailable evidence remains uncertainty, no imported fact fabricates a D-ID, and no-fog work exits to the smaller route.
+- **R53:** A prototype D-ID cannot resolve without a persisted safe artefact reference and the human's recorded reaction. Artefacts attach idempotently while the decision remains open, survive interruption for resumption, and remain evidence rather than silently becoming implementation.
+- **R54:** Optional tracker projection covers the complete chart lifecycle: decision type/attendance/status/blocking/safe evidence on children plus compact counts, latest resolution, frontier, and chart status on the parent. Every transition is local-first, revisioned, idempotent, receipt-backed, reconcile-safe, and explicitly degraded per provider capability.
+- **R55:** A stored supported tracker identifier or chart/decision URL resolves locally to exactly one canonical chart/D-ID before work. Lookup performs no network/title inference, rejects unsafe/unknown/ambiguous/stale/conflicting locators without mutation, and treats resolved/superseded decision URLs as history rather than silently selecting replacement work.
 
 ## Boundaries
 <!-- scope: business -->
@@ -452,7 +482,8 @@ Before the public skill/docs sweep, prove the riskiest lifecycle as a focused de
 5. direct and transitive supersession preserve old conclusions and create the right replacement work;
 6. stale-claim release/break is audited;
 7. briefing re-run is versioned/idempotent, while capture decline and partial multi-spec linking stay resumable;
-8. one post-fn-141 tracker projection proves local-only, partial-remote reconcile, and capability-degraded behavior before the four-adapter matrix is expanded.
+8. one post-fn-141 tracker projection proves local-only, lifecycle rollup, URL re-entry, partial-remote reconcile, and capability-degraded behavior before the four-adapter matrix is expanded;
+9. one prototype persists a safe artefact before human reaction, survives an interrupted attended session, and refuses resolution without both artefact and reaction.
 
 The allocator/store foundation task and the following graph/claims task jointly own this harness. If either exposes a contradiction in the contract, update the spec before building the user-facing skill.
 
