@@ -119,6 +119,7 @@ review-rounds attempts
 review-rounds increment
 review-rounds record
 review-rounds reset
+review-findings attach
 review-walkthrough-defer
 review-walkthrough-record
 rp chat-send

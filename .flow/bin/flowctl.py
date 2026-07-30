@@ -5788,11 +5788,11 @@ def _review_receipt_history_dir(receipt_path: Path) -> Path:
 
 
 def _review_receipt_lock_path(receipt_path: Path) -> Path:
-    """Keep persistent kernel-lock files in ignored repo-local runtime state."""
+    """Keep persistent kernel-lock files outside the reviewed repository."""
     identity = str(receipt_path.resolve()).encode("utf-8")
     return (
-        get_flow_dir()
-        / "tmp"
+        Path(tempfile.gettempdir())
+        / "flow-next"
         / "review-receipt-locks"
         / f"{hashlib.sha256(identity).hexdigest()}.lock"
     )

@@ -662,6 +662,13 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             latest["sourceReceiptId"],
         )
 
+    def test_receipt_lock_lives_outside_reviewed_repository(self) -> None:
+        lock_path = FLOWCTL._review_receipt_lock_path(
+            self.repo / ".flow" / "receipts" / "impl.json"
+        )
+        self.assertFalse(lock_path.is_relative_to(self.repo))
+        self.assertEqual(lock_path.parent.name, "review-receipt-locks")
+
     def test_successful_retry_recovers_unique_history_tip(self) -> None:
         receipt = self.repo / "receipt.json"
         kwargs = dict(
