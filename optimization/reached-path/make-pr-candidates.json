@@ -9,10 +9,10 @@
     "comparison_rule": "candidate compared only to hash-verified B1; never B0"
   },
   "candidate_prompt_hashes": {
-    "plugins/flow-next/references/html-artifacts.md": "9c2cd74ef1149979d2771b295fac72d47fe77c53036c66d72f1e03e23501c82e",
+    "plugins/flow-next/references/html-artifacts.md": "32b3683a1812ced115d217ea4097fa9b3dfebaf9962f86d77cc46796c0e5329e",
     "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "91de0b794a7fcef6bfb03729afd62ae53272b6e80de9f356007bdb4d0e04e06e",
     "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md": "05e7f9e3994f897c8aede9c1e2e0a00774ce238fd363d4fd607e79864dbcb77e",
-    "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "804ebc2d31cc89f09b51333a0b5ed84987994c3b616d120116db2a2e32b625f1",
+    "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "1bac8c55b211088058ffebb3061672e307b9889bc47a03b441a4665b5069976f",
     "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md": "bf7c72d18be2764733a1d211145ff996a711b3c72994e9cd18897dbfa8acb2f0",
     "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md": "6f50fd89b5f3692d4b974ba00a26a56a1fd65954e113629f16e7f04b8ed62fda",
     "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "61c4b306b05fdfa12391f43b0ada5bcb1c58a8fdfde3b74e5c6be96a3abf9641"
@@ -26,7 +26,7 @@
     "id": "html-enabled-path-reference",
     "verdict": "keep",
     "reason": "zero loss and predeclared default-off reached-path improvement",
-    "mutation": "Keep the config/dry-run gate in workflow.md; load html-lens.md and the shared disclosure reference only when HTML_LENS=true.",
+    "mutation": "Keep the config/dry-run gate in workflow.md; load html-lens.md and the shared disclosure reference only when HTML_LENS=true. The enabled path now preserves the supported current v1 cognitive-aid object as its authoritative semantic input.",
     "accuracy": {
       "dry_run_no_writes": true,
       "ordinary_body_rendering": true,
@@ -53,9 +53,9 @@
       },
       "html-on": {
         "b1_chars": 210653,
-        "candidate_chars": 219863,
-        "delta_chars": 9210,
-        "note": "Selected HTML path pays the direct-reference router plus the shared structured cognitive-aid contract; no wall-time claim."
+        "candidate_chars": 221194,
+        "delta_chars": 10541,
+        "note": "Selected HTML path pays the direct-reference router plus the shared structured cognitive-aid and cross-render parity contract; no wall-time claim."
       },
       "create": {
         "b1_chars": 191058,

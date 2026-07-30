@@ -18011,6 +18011,8 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         "",
         "| Proof | Value | Sources |",
         "|---|---|---|",
+        f"| Artifact | `{artifact['artifactId']}` | artifact identity |",
+        f"| Base commit | `{artifact['baseSha']}` | artifact currentness |",
         f"| Head commit | `{artifact['headSha']}` | artifact identity |",
         f"| Human-review lines | {human_review_lines} | deterministic file stats |",
         f"| Canonical files | {len(canonical_files)} | deterministic membership |",

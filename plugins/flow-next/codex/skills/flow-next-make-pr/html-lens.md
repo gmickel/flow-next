@@ -10,14 +10,21 @@ captures `HEAD_SHA` — the SHA-pinned blob link then points at a commit that
 actually contains `pr.html`.
 
 1. **Load the disclosure reference** [`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md) (relative cross-link — resolves from this skill dir in every install layout). It owns ALL design and generation rules; §5 is the PR-lens contract (read-only review instrument: masthead + dials, sticky review-progress bar, 90-second read, churn map by review intent, R-ID → evidence table, where-to-look checklist, risk register). Never duplicate its rules here; follow it top to bottom.
-2. **Generate the artifact** at the fixed path (reference §1.3):
+2. **Resolve structured input, then generate the artifact.** Before generation,
+ query `flowctl pr-cognitive-aid current` with the export-time base/head
+ identity. A supported `current` v1 object is the authoritative semantic input
+ described by reference §5; preserve it exactly across the lens. Any other
+ status uses the existing visibly labeled export/diff fallback and never
+ mixes fields from the rejected/stale object.
+
+ Generate at the fixed path (reference §1.3):
 
  ```bash
  mkdir -p ".flow/artifacts/${SPEC_ID}"
  # Host agent generates .flow/artifacts/${SPEC_ID}/pr.html per reference §5.
  ```
 
- Inputs are `EXPORT_PAYLOAD` (R-IDs from `spec.spec_sections.acceptance_criteria`, `tasks[].satisfies[]` + `tasks[].evidence.commits[]`, `diff_summary` files/churn/modules) plus `git diff --stat "$MERGE_BASE"..HEAD` for any stat the payload lacks. **Diff-derived, never commit messages** — commit subjects/bodies are not lens input. The staleness stamp (reference §1.5, PR variant) uses HEAD **at payload-export time** — the code under review; the artifact commit below deliberately excludes itself from its own churn map.
+ Fallback inputs are `EXPORT_PAYLOAD` (R-IDs from `spec.spec_sections.acceptance_criteria`, `tasks[].satisfies[]` + `tasks[].evidence.commits[]`, `diff_summary` files/churn/modules) plus `git diff --stat "$MERGE_BASE"..HEAD` for any stat the payload lacks. **Diff-derived, never commit messages** — commit subjects/bodies are not lens input. The staleness stamp (reference §1.5, PR variant) uses HEAD **at payload-export time** — the code under review; the artifact commit below deliberately excludes itself from its own churn map.
 3. **R-ID verification (warn-in-artifact, never block).** Cross-check the payload before publishing: an R-ID whose owning tasks claim evidence commits absent from the diff range, an R-ID with no owning task (`tasks_summary.uncovered_r_ids`), or evidence commits touching no files in `diff_summary.files[]` — each renders as a **visibly flagged row** in the R-ID → evidence table (red R-ID cell + `mismatch` chip + one-line reason, reference §5.5). Never block make-pr on a mismatch, never silently drop the row.
 4. **Run the reference's pre-publish checklist (§8)**, including the self-containment self-check grep (§2) — it must print `OK: self-contained` before the body may link the artifact.
 5. **Link mode + narrow commit.** Link strategy follows the ignore status of the EXACT artifact file (a repo can ignore `.flow/artifacts/**`, `*.html`, or the exact path without the directory itself matching — the dir-level probe misclassifies those); committed artifacts land BEFORE Phase 2 so the blob link resolves once §4.6 pushes. Every git step is failure-guarded — the skill runs under `set -e`, so an unguarded `git add`/`git commit` (hook rejection, index lock, nothing-to-commit) would abort the whole run instead of degrading:
@@ -55,6 +62,7 @@ actually contains `pr.html`.
 ## Done when
 
 - `.flow/artifacts/<spec-id>/pr.html` exists at the fixed path, derived from the export payload + real diff (**never commit messages**), pre-publish checklist (reference §8) passed incl. the self-containment grep → `OK: self-contained`, staleness stamp present.
+- Supported current v1 input, when present, remains authoritative for identity/currentness, sources, ordered groups, file membership, change/attention dimensions, file-level links, deliberate non-changes, and verification; fallback is visibly labeled and never mixed.
 - R-ID verification ran: payload-vs-diff mismatches (claimed evidence outside the diff range, uncovered R-IDs, evidence touching no diff files) render as visibly flagged rows (red R-ID cell + `mismatch` chip + reason) — warn-in-artifact, never blocks make-pr.
 - Ignore probe ran against the EXACT artifact file (`git check-ignore --no-index -q "$ARTIFACT_PATH"` — `--no-index` so an already-tracked artifact still honors a later ignore rule), not the directory.
 - `LINK_MODE=repo`: exactly one narrow pathspec commit (`chore(flow): pr artifact <spec-id>` `--` artifact file only), landing before §2.4b's `HEAD_SHA` capture; byte-identical regeneration makes no empty commit (blob link already resolves).

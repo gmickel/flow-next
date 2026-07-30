@@ -252,7 +252,14 @@ Don't ask a human to skim a 10K-line diff. `/flow-next:make-pr` renders a PR bod
 /flow-next:make-pr <spec-id>          # auto-detects from current branch
 ```
 
-With HTML artifact mode on (`flowctl config set artifacts.html.enabled true`), make-pr also commits a self-contained `pr.html` review instrument — diff-derived churn map, R-ID → evidence table with flagged mismatches, where-to-look checklist — and links it from the PR body. Same switch gives capture/plan a spec visualizer. Opt-in; see [`docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md).
+Make PR also preserves one versioned, intent-ordered change walkthrough whose
+identity, provenance, logical groups, file membership, deliberate non-changes,
+and verification render from the same object. See the
+[`pr-cognitive-aid` consumer contract](plugins/flow-next/docs/pr-cognitive-aid.md).
+With HTML artifact mode on (`flowctl config set artifacts.html.enabled true`),
+make-pr also commits a self-contained `pr.html` review instrument and links it
+from the PR body. Same switch gives capture/plan a spec visualizer. Opt-in; see
+[`docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md).
 
 → [flow-next.dev/skills/make-pr](https://flow-next.dev/skills/make-pr)
 

@@ -902,6 +902,35 @@ errors. The portable data and consumer rules are documented in
 [`review-findings.md`](review-findings.md). Consumers should read receipts, not
 invoke this writer.
 
+### pr-cognitive-aid
+
+Validate, persist, select, or render the portable PR cognitive-aid v1 object:
+
+```bash
+flowctl pr-cognitive-aid validate --file aid.json [--json]
+flowctl pr-cognitive-aid write <spec-id> --file aid.json \
+  --base-sha <sha> --head-sha <sha> [--diff-files diff.json] [--json]
+flowctl pr-cognitive-aid current <spec-id> \
+  --base-sha <sha> --head-sha <sha> [--diff-files diff.json] [--json]
+flowctl pr-cognitive-aid render <spec-id> \
+  --base-sha <sha> --head-sha <sha> [--diff-files diff.json]
+flowctl pr-cognitive-aid render --file aid.json
+```
+
+`validate` is read-only. `write` validates and atomically creates one immutable
+generation at
+`.flow/artifacts/<spec-id>/pr-cognitive-aid/<artifactId>.json`; it never
+overwrites an existing generation. `current` returns a labeled
+`current|absent|stale|unsupported|invalid` selection and exposes no artifact on
+non-current states. `render` emits deterministic compact/full GitHub Markdown
+for a validated file or the supported current generation.
+
+`--diff-files` binds membership, Git state, and churn to a JSON map produced
+from the live diff. Validation rejects unsafe paths/URLs, ungrounded claims,
+invalid source bindings, duplicate membership, unsupported versions, broken
+chains, bounds overflow, and stale identity without truncation. Consumer,
+fixture, and vendoring rules: [`pr-cognitive-aid.md`](pr-cognitive-aid.md).
+
 ### memory
 
 Manage persistent learnings under `.flow/memory/`.

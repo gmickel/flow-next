@@ -6,6 +6,17 @@ All notable changes to the flow-next.
 
 ### Added
 
+- **Make PR now persists a portable v1 change walkthrough.** The existing host
+  composes one bounded, grounded explanation; flowctl validates, stores,
+  selects, and renders it without another model or network call. Supported
+  current artifacts keep identity/currentness, provenance, ordered groups,
+  exact file membership, separate change/attention dimensions, file-level
+  R-ID/task links, deliberate non-changes, and verification aligned across
+  structured JSON, GitHub Markdown, and optional HTML. A maximum-normal
+  canonical fixture, SHA-256 metadata, high-resolution information-architecture
+  references, and an offline byte-pinned Flow Swarm vendoring contract now
+  define downstream compatibility. No version bump.
+
 - **Review receipts now expose optional versioned structured findings.**
   Plan, implementation, completion, and QA receipt writers preserve canonical
   severity/confidence/classification/status values, durable finding and receipt

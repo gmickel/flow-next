@@ -206,6 +206,16 @@ Derived from the **diff** (`git diff --stat base...head`, file-level churn), nev
 from commit messages; verified against the spec's R-ID export before publishing.
 No annotate loop, ever — review conversation belongs to the code host.
 
+When a supported current `pr_cognitive_aid` v1 object is available, consume that
+exact validated object as the authoritative semantic input. Preserve its
+artifact identity/currentness, source bindings, group order and kinds, file
+membership, separate `changeType`/`attentionClass`, file-level R-ID/task links,
+`kept`, and `verify` semantics. The lens may add navigation, local collapse
+state, and bounded inline diff display; it must not reclassify or reorder the
+object, invent evidence, or mix stale/legacy fields into the same view. When no
+supported current object exists, use the existing visibly labeled diff-derived
+fallback.
+
 1. Masthead: PR number + title, branch → base line, dials (diff `+n −n`, files,
    R-ID coverage, tasks done, **human-review lines** — added lines minus generated/
    mechanical churn, with a one-line footnote explaining the subtraction).
