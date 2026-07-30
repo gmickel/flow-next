@@ -710,9 +710,38 @@ def make_result(stdout="", stderr=""):
     return SimpleNamespace(stdout=stdout, stderr=stderr)
 
 
+def classic_context_result(args, window, tab):
+    expected = [
+        "-w",
+        str(window),
+        "-t",
+        tab,
+        "--raw-json",
+        "-e",
+        'workspace_context include=["prompt","selection"]',
+    ]
+    if args == expected:
+        return make_result(
+            json.dumps(
+                {
+                    "prompt": "Published review prompt",
+                    "selection": {"files": ["src/example.py"]},
+                }
+            )
+        )
+    return None
+
+
 def run_setup(fake_run, repo_root: str, summary: str, fake_try_run=None):
-    flowctl.run_rp_cli = fake_run
-    flowctl.try_run_rp_cli = fake_try_run or (lambda args, timeout=None: None)
+    flowctl.run_rp_cli = (
+        lambda args, timeout=None, rp_cli=None: fake_run(args, timeout=timeout)
+    )
+    flowctl.try_run_rp_cli = (
+        lambda args, timeout=None, rp_cli=None: (
+            fake_try_run(args, timeout=timeout) if fake_try_run else None
+        )
+    )
+    flowctl.require_rp_cli = lambda: "rp-cli"
     output = io.StringIO()
     with redirect_stdout(output):
         flowctl.cmd_rp_setup_review(
@@ -742,13 +771,16 @@ def fake_bind_context(args, timeout=None):
 
 def fake_bind_context_builder(args, timeout=None):
     commands.append(args)
-    if args == ["-w", "55", "--raw-json", "-e", 'builder "Bind me"']:
+    if args == ["-w", "55", "--raw-json", "-e", "builder 'Bind me'"]:
         return make_result(json.dumps({"context_id": "tab-55"}))
+    context = classic_context_result(args, 55, "tab-55")
+    if context:
+        return context
     raise AssertionError(f"Unexpected rp-cli args: {args}")
 
 
 result = run_setup(fake_bind_context_builder, repo_root, "Bind me", fake_try_run=fake_bind_context)
-if result != "W=55 T=tab-55":
+if result != "RP_MODE=classic W=55 T=tab-55":
     errors.append(f"setup-review should prefer bind_context when available, got {result!r}")
 if any("manage_workspaces" in arg or arg == "windows" for cmd in commands for arg in cmd):
     errors.append("setup-review should not fall back to manual workspace/window discovery when bind_context succeeds")
@@ -775,13 +807,16 @@ def fake_reuse_existing(args, timeout=None):
                 "showingWindows": [42],
             }
         ]))
-    if args == ["-w", "42", "--raw-json", "-e", 'builder "Review me"']:
+    if args == ["-w", "42", "--raw-json", "-e", "builder 'Review me'"]:
         return make_result(json.dumps({"context_id": "tab-123"}))
+    context = classic_context_result(args, 42, "tab-123")
+    if context:
+        return context
     raise AssertionError(f"Unexpected rp-cli args: {args}")
 
 
 result = run_setup(fake_reuse_existing, repo_root, "Review me")
-if result != "W=42 T=tab-123":
+if result != "RP_MODE=classic W=42 T=tab-123":
     errors.append(f"setup-review should reuse visible workspace window, got {result!r}")
 if any(arg.startswith("workspace create ") for cmd in commands for arg in cmd):
     errors.append("setup-review should not create a new workspace when one with the same repo path is already visible")
@@ -814,13 +849,16 @@ def fake_reopen_hidden_workspace(args, timeout=None):
         'call manage_workspaces {"action": "switch", "workspace": "ws-hidden", "open_in_new_window": true}',
     ]:
         return make_result(json.dumps({"window_id": 84}))
-    if args == ["-w", "84", "--raw-json", "-e", 'builder "Reopen me"']:
+    if args == ["-w", "84", "--raw-json", "-e", "builder 'Reopen me'"]:
         return make_result(json.dumps({"context_id": "tab-84"}))
+    context = classic_context_result(args, 84, "tab-84")
+    if context:
+        return context
     raise AssertionError(f"Unexpected rp-cli args: {args}")
 
 
 result = run_setup(fake_reopen_hidden_workspace, repo_root, "Reopen me")
-if result != "W=84 T=tab-84":
+if result != "RP_MODE=classic W=84 T=tab-84":
     errors.append(f"setup-review should reopen an existing hidden workspace before creating a duplicate, got {result!r}")
 if any(arg.startswith("workspace create ") for cmd in commands for arg in cmd):
     errors.append("setup-review should switch an existing hidden workspace into a new window instead of creating a duplicate workspace")

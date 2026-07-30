@@ -164,11 +164,31 @@ class FixtureMetadataTests(unittest.TestCase):
             },
         )
         self.assertEqual(encoded[-1:], b"\n")
+        source = f"{metadata['sourceCommit']}:{metadata['sourcePath']}"
+        source_probe = subprocess.run(
+            ["git", "cat-file", "-e", source],
+            cwd=REPO_ROOT,
+            capture_output=True,
+        )
+        if source_probe.returncode != 0:
+            shallow = subprocess.run(
+                ["git", "rev-parse", "--is-shallow-repository"],
+                cwd=REPO_ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            self.assertEqual(
+                shallow,
+                "true",
+                f"fixture source commit is missing from a full checkout: {source}",
+            )
+            return
         source_bytes = subprocess.run(
             [
                 "git",
                 "show",
-                f"{metadata['sourceCommit']}:{metadata['sourcePath']}",
+                source,
             ],
             cwd=REPO_ROOT,
             check=True,
