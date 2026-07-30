@@ -334,6 +334,107 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             latest["sourceReceiptId"],
         )
 
+    def test_successful_retry_recovers_unique_history_tip(self) -> None:
+        receipt = self.repo / "receipt.json"
+        kwargs = dict(
+            receipt_path=str(receipt),
+            review_type="impl_review",
+            review_id="fn-136.3",
+            backend="codex",
+            verdict="NEEDS_WORK",
+            session_id="session",
+            effective_model="model",
+            effective_effort="high",
+            resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
+            include_effort=True,
+            base_branch="HEAD",
+        )
+        FLOWCTL._write_backend_review_receipt(
+            review_text=_fixture("codex"), **kwargs
+        )
+        first = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+        FLOWCTL._clear_stale_review_receipt(str(receipt))
+
+        FLOWCTL._write_backend_review_receipt(
+            review_text="Prior finding 1 — fixed.\n<verdict>SHIP</verdict>\n",
+            **kwargs,
+        )
+        second = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+        self.assertEqual(second["round"], 2)
+        self.assertEqual(
+            second["supersedesReceiptId"], first["sourceReceiptId"]
+        )
+        self.assertEqual(second["items"][0]["status"], "fixed")
+
+    def test_missing_pointer_rejects_ambiguous_history_tips(self) -> None:
+        receipt = self.repo / "receipt.json"
+        kwargs = dict(
+            receipt_path=str(receipt),
+            review_type="impl_review",
+            review_id="fn-136.3",
+            backend="codex",
+            verdict="NEEDS_WORK",
+            session_id="session",
+            effective_model="model",
+            effective_effort="high",
+            resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
+            include_effort=True,
+            base_branch="HEAD",
+        )
+        FLOWCTL._write_backend_review_receipt(
+            review_text=_fixture("codex"), **kwargs
+        )
+        first_receipt = json.loads(receipt.read_text(encoding="utf-8"))
+        FLOWCTL._clear_stale_review_receipt(str(receipt))
+        other_receipt = dict(first_receipt)
+        other_receipt["findings"] = _container(receipt_id="other-root")
+        other_id = other_receipt["findings"]["sourceReceiptId"]
+        other_path = FLOWCTL._review_receipt_history_dir(receipt) / (
+            f"{FLOWCTL.hashlib.sha256(other_id.encode()).hexdigest()}.json"
+        )
+        FLOWCTL.atomic_write_json(other_path, other_receipt)
+
+        with self.assertRaises(FLOWCTL.ReviewReceiptHistoryError):
+            FLOWCTL._write_backend_review_receipt(
+                review_text="Prior finding 1 — fixed.\n<verdict>SHIP</verdict>\n",
+                **kwargs,
+            )
+        self.assertFalse(receipt.exists())
+
+    def test_missing_pointer_rejects_corrupt_or_cross_scope_history(self) -> None:
+        receipt = self.repo / "receipt.json"
+        kwargs = dict(
+            receipt_path=str(receipt),
+            review_type="impl_review",
+            review_id="fn-136.3",
+            backend="codex",
+            verdict="NEEDS_WORK",
+            session_id="session",
+            effective_model="model",
+            effective_effort="high",
+            resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
+            review_text=_fixture("codex"),
+            include_effort=True,
+            base_branch="HEAD",
+        )
+        FLOWCTL._write_backend_review_receipt(**kwargs)
+        FLOWCTL._clear_stale_review_receipt(str(receipt))
+        history_path = next(
+            FLOWCTL._review_receipt_history_dir(receipt).glob("*.json")
+        )
+        valid_bytes = history_path.read_bytes()
+        history_path.write_text("{malformed", encoding="utf-8")
+        with self.assertRaises(FLOWCTL.ReviewReceiptHistoryError):
+            FLOWCTL._write_backend_review_receipt(**kwargs)
+        self.assertFalse(receipt.exists())
+
+        history_path.write_bytes(valid_bytes)
+        with self.assertRaises(FLOWCTL.ReviewReceiptHistoryError):
+            FLOWCTL._write_backend_review_receipt(
+                **dict(kwargs, review_id="fn-999.1")
+            )
+        self.assertFalse(receipt.exists())
+
     def test_corrupt_history_never_allows_latest_loss(self) -> None:
         receipt = self.repo / "receipt.json"
         kwargs = dict(

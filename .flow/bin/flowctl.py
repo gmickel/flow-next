@@ -5525,9 +5525,49 @@ def _load_prior_receipt_findings(
     review_id: str,
     backend: str,
 ) -> Optional[dict]:
-    """Load valid findings only from the same receipt scope."""
+    """Load valid findings only from the same receipt scope.
+
+    A failed review removes the latest pointer after preserving it. Recover
+    that prior generation only when immutable history proves one unambiguous
+    explicit lineage tip for this exact scope.
+    """
     if path is None:
         return None
+    if not path.exists():
+        history_dir = _review_receipt_history_dir(path)
+        if not history_dir.exists():
+            return None
+        generations = load_review_receipt_generations(path)
+        expected_scope = (review_type, review_id, backend)
+        if generations is None or any(
+            (receipt.get("type"), receipt.get("id"), receipt.get("mode"))
+            != expected_scope
+            for receipt in generations
+        ):
+            raise ReviewReceiptHistoryError(
+                f"cannot recover scoped receipt history: {history_dir}"
+            )
+        review_kind = _REVIEW_TYPE_TO_FINDINGS_KIND.get(review_type)
+        candidate_heads = {
+            receipt["findings"]["headSha"]
+            for receipt in generations
+            if isinstance(receipt.get("findings"), dict)
+        }
+        tips: dict[str, dict] = {}
+        for candidate_head in sorted(candidate_heads):
+            tip = select_current_review_findings(
+                generations,
+                current_head_sha=candidate_head,
+                review_kind=review_kind,
+                backend=backend,
+            )
+            if tip is not None:
+                tips[tip["sourceReceiptId"]] = tip
+        if len(tips) != 1:
+            raise ReviewReceiptHistoryError(
+                f"receipt history has no unique scoped tip: {history_dir}"
+            )
+        return next(iter(tips.values()))
     try:
         receipt = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError, TypeError, ValueError):
@@ -5816,6 +5856,15 @@ def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
             except (json.JSONDecodeError, OSError, TypeError, ValueError):
                 return None
             if not isinstance(value, dict) or not validate_review_receipt_findings(value):
+                return None
+            findings = value.get("findings")
+            if not isinstance(findings, dict):
+                return None
+            expected_name = (
+                f"{hashlib.sha256(findings['sourceReceiptId'].encode('utf-8')).hexdigest()}"
+                ".json"
+            )
+            if path.name != expected_name:
                 return None
             value_scope = (value.get("type"), value.get("id"), value.get("mode"))
             if scope is None:
