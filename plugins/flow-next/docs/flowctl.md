@@ -1523,13 +1523,16 @@ RepoPrompt wrappers (preferred for reviews). RepoPrompt CE 1.1.0+ is primary; di
 ```bash
 # CE review: one direct Context Builder result; review text goes to the file
 flowctl rp setup-review --repo-root "$REPO_ROOT" \
-  --summary "Review the current plan; end with the required verdict tag." \
+  --summary-file "$REVIEW_INSTRUCTIONS_FILE" \
   --response-type review --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
 source "$SETUP_FILE"
 # Returns: RP_MODE=ce W=<window> T=<context> CHAT_ID=<chat>
 ```
 
-`setup-review` rejects blank summaries before any RepoPrompt call. On CE it
+`--summary` and `--summary-file` are mutually exclusive; the review workflows
+use the file form so the complete substantive contract and current spec/task
+context survive fresh shell calls. `setup-review` rejects blank instructions
+before any RepoPrompt call. On CE it
 invokes the named `context_builder` tool with `response_type=review` and treats
 that direct result as authoritative: `status=completed`, non-empty rewritten
 `prompt`, non-empty formatted `selection`, positive `file_count` and
@@ -1538,6 +1541,13 @@ that direct result as authoritative: `status=completed`, non-empty rewritten
 `--response-file`; no visible compose-tab projection, selection augmentation,
 or second initial chat is required or allowed. Any CE operational/schema
 failure stops—the wrapper never downgrades to Classic.
+
+CE follow-ups use the returned chat identity without tab state:
+
+```bash
+flowctl rp chat-send --window "$W" --chat-id "$CHAT_ID" --mode review \
+  --message-file /tmp/re-review.md
+```
 
 Discontinued Classic is the isolated final fallback. It receives
 `RP_MODE=classic`, validates the published tab's prompt/selection, then uses the

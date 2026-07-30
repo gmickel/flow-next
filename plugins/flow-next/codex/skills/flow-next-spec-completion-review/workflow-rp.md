@@ -64,10 +64,29 @@ Compose a 1-2 sentence summary in agent context for the setup-review command bel
 **Only run ONCE. Type the Phase 1 summary into this block.**
 
 ```bash
-# Self-contained: fill this scalar inline; shell variables do not cross prompt turns.
-REVIEW_SUMMARY="[Verify every current spec requirement against the completed implementation and identify any coverage gaps or unrelated changes. Emit requirements, evidence, gap Confidence and Classification, and finish with exactly one of <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>.]"
+# Self-contained complete CE contract plus the current spec/task text.
+REVIEW_INSTRUCTIONS_FILE="${TMPDIR:-/tmp}/flow-completion-review-instructions-<spec-id>-<suffix>.md"
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
 SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
+cat > "$REVIEW_INSTRUCTIONS_FILE" << 'EOF'
+Verify every current spec requirement against the completed implementation.
+Read the actual code/tests and distinguish implemented, partial, missing, and
+deferred requirements. Identify unrelated scope and evidence gaps. For R-ID
+specs emit the complete coverage table and `Unaddressed R-IDs: [...]`.
+
+For each gap emit Confidence exactly 0/25/50/75/100 and Classification
+introduced or pre_existing. Suppress below 75 except P0 at 50+; only
+introduced gaps block. Never recommend deleting protected `.flow/*`, generated
+plugin mirrors, spec/task records, review receipts, or Ralph artifacts.
+Emit suppression/classification/protected-path tallies when applicable.
+End with exactly one tag: <verdict>SHIP</verdict> or
+<verdict>NEEDS_WORK</verdict>.
+EOF
+$FLOWCTL cat "$SPEC_ID" >> "$REVIEW_INSTRUCTIONS_FILE"
+for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
+ [[ -f "$task_spec" ]] && printf '\n\n' >> "$REVIEW_INSTRUCTIONS_FILE" \
+ && sed -n 'p' "$task_spec" >> "$REVIEW_INSTRUCTIONS_FILE"
+done
 
 ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
 ROUND_EXIT=$?
@@ -76,8 +95,21 @@ if [[ "$ROUND_EXIT" -ne 0 ]]; then
  exit "$ROUND_EXIT"
 fi
 $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
- --summary "$REVIEW_SUMMARY" --response-type review \
+ --summary-file "$REVIEW_INSTRUCTIONS_FILE" --response-type review \
  --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
+SETUP_EXIT=$?
+if [[ "$SETUP_EXIT" -ne 0 ]]; then
+ : > "$RESPONSE_FILE"
+ RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+ --review-type completion --backend rp --output-file "$RESPONSE_FILE" \
+ --exit-code "$SETUP_EXIT" --json)"
+ RECORD_EXIT=$?
+ printf '%s\n' "$RECORD_JSON"
+ if [[ "$RECORD_EXIT" -ne 0 ]]; then
+ exit "$RECORD_EXIT"
+ fi
+ exit "$SETUP_EXIT"
+fi
 source "$SETUP_FILE"
 
 if [[ -z "${W:-}" || -z "${T:-}" || -z "${RP_MODE:-}" ]]; then
@@ -627,7 +659,7 @@ If verdict is NEEDS_WORK:
  file contents on every message. Only use `select-add` for NEW files created during fixes:
  ```bash
  # Only if fixes created new files not in original selection
- if [[ -n "$NEW_FILES" ]]; then
+ if [[ "$RP_MODE" == "classic" && -n "$NEW_FILES" ]]; then
  $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
  fi
  ```
@@ -663,7 +695,17 @@ If verdict is NEEDS_WORK:
  **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
  EOF
 
- $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.md" > "${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
+ SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
+ source "$SETUP_FILE"
+ if [[ "$RP_MODE" == "ce" ]]; then
+ $FLOWCTL rp chat-send --window "$W" --chat-id "$CHAT_ID" --mode review \
+ --message-file "${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.md" \
+ > "${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
+ else
+ $FLOWCTL rp chat-send --window "$W" --tab "$T" \
+ --message-file "${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.md" \
+ > "${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
+ fi
  ```
 
  Re-extract the verdict from the response file (same grep as Phase 3), call

@@ -20618,6 +20618,13 @@ def cmd_rp_select_add(args: argparse.Namespace) -> None:
 def cmd_rp_chat_send(args: argparse.Namespace) -> None:
     message = read_text_or_exit(Path(args.message_file), "Message file", use_json=False)
     chat_id_arg = getattr(args, "chat_id", None)
+    tab_arg = getattr(args, "tab", None)
+    if not tab_arg and not chat_id_arg:
+        error_exit(
+            "chat-send requires --tab or --chat-id",
+            use_json=False,
+            code=2,
+        )
     mode = getattr(args, "mode", "chat") or "chat"
     oracle_payload = build_chat_payload(
         message=message,
@@ -20634,19 +20641,19 @@ def cmd_rp_chat_send(args: argparse.Namespace) -> None:
         chat_id=chat_id_arg,
         selected_paths=args.selected_paths,
     )
-    oracle_cmd = [
-        "-w",
-        str(args.window),
-        "-t",
-        args.tab,
-        "-e",
-        f"call oracle_send {oracle_payload}",
-    ]
+    oracle_cmd = ["-w", str(args.window)]
+    if tab_arg:
+        oracle_cmd.extend(("-t", tab_arg))
+    oracle_cmd.extend(("-e", f"call oracle_send {oracle_payload}"))
+    if not tab_arg:
+        res = run_rp_cli(oracle_cmd)
+        print(res.stdout, end="")
+        return
     legacy_cmd = [
         "-w",
         str(args.window),
         "-t",
-        args.tab,
+        tab_arg,
         "-e",
         f"call chat_send {legacy_payload}",
     ]
@@ -20687,7 +20694,12 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
     """
 
     repo_root = os.path.realpath(args.repo_root)
-    summary = args.summary
+    summary_file = getattr(args, "summary_file", None)
+    summary = (
+        read_text_or_exit(Path(summary_file), "Review summary", use_json=False)
+        if summary_file
+        else args.summary
+    )
     response_type = getattr(args, "response_type", None)
     response_file = getattr(args, "response_file", None)
     if not isinstance(summary, str) or not summary.strip():
@@ -33710,7 +33722,10 @@ def main() -> None:
 
     p_rp_chat = rp_sub.add_parser("chat-send", help="Send chat via rp-cli")
     p_rp_chat.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_chat.add_argument("--tab", required=True, help="Tab id or name")
+    p_rp_chat.add_argument(
+        "--tab",
+        help="Tab id or name (Classic; optional with CE --chat-id)",
+    )
     p_rp_chat.add_argument("--message-file", required=True, help="Message file")
     p_rp_chat.add_argument("--new-chat", action="store_true", help="Start new chat")
     p_rp_chat.add_argument("--chat-name", help="Chat name (with --new-chat)")
@@ -33743,7 +33758,12 @@ def main() -> None:
         "setup-review", help="Atomic: resolve window + open builder tab"
     )
     p_rp_setup.add_argument("--repo-root", required=True, help="Repo root path")
-    p_rp_setup.add_argument("--summary", required=True, help="Builder summary/instructions")
+    setup_summary = p_rp_setup.add_mutually_exclusive_group(required=True)
+    setup_summary.add_argument("--summary", help="Builder summary/instructions")
+    setup_summary.add_argument(
+        "--summary-file",
+        help="Read complete builder instructions from this file",
+    )
     p_rp_setup.add_argument(
         "--response-type",
         dest="response_type",

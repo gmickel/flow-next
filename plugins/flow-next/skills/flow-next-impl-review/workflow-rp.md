@@ -38,21 +38,64 @@ Compose a 1-2 sentence summary in agent context from these results.
 **Only run ONCE. Type the Phase 1 summary into this block.**
 
 ```bash
-# Self-contained: fill this scalar inline; shell variables do not cross tool calls.
-# Include the review contract because CE returns the review from this one call.
-REVIEW_SUMMARY="[Review the current implementation diff against its task/spec. For every finding emit Severity, Confidence, Classification, File:Line, Problem, and Suggestion; finish with exactly one of <verdict>SHIP</verdict>, <verdict>NEEDS_WORK</verdict>, or <verdict>MAJOR_RETHINK</verdict>.]"
+# Self-contained: fill the bracketed Phase 1 facts inline. CE returns the review
+# from this one call, so this file carries the complete substantive contract.
+REVIEW_INSTRUCTIONS_FILE="${TMPDIR:-/tmp}/flow-impl-review-instructions-<task-id-or-branch-slug>-<suffix>.md"
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
 SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+cat > "$REVIEW_INSTRUCTIONS_FILE" << 'EOF'
+Review the actual implementation diff [DIFF_BASE]..HEAD on branch [BRANCH].
+Changed files: [CHANGED_FILES]. Commits: [COMMIT_SUMMARY].
+
+Read the task/spec and changed code. Judge correctness, simplicity, DRY,
+architecture, edge cases, tests, security, and canonical vocabulary. Explore
+happy, invalid, boundary, concurrent, network, exhaustion, attack, corruption,
+and cascading-failure scenarios only where applicable to changed code.
+
+For specs with R-IDs, emit a met/partial/not-addressed/deferred coverage table
+and `Unaddressed R-IDs: [...]`; a non-deferred not-addressed R-ID blocks.
+Confidence must be exactly 0/25/50/75/100. Suppress below 75 except P0 at 50+.
+Classify every finding introduced or pre_existing; only introduced findings
+block. Never recommend deleting protected `.flow/*`, generated plugin mirrors,
+spec/task records, review receipts, or Ralph artifacts.
+
+For each surviving introduced finding emit Severity (P0-P3), Confidence,
+Classification, File:Line, Problem, and Suggestion. List pre-existing findings
+separately. Emit suppression/classification/protected-path tallies when
+applicable. End with exactly one tag: <verdict>SHIP</verdict>,
+<verdict>NEEDS_WORK</verdict>, or <verdict>MAJOR_RETHINK</verdict>.
+EOF
+[[ -n "$TASK_ID" ]] && $FLOWCTL show "$TASK_ID" >> "$REVIEW_INSTRUCTIONS_FILE"
 
 if [[ -n "$TASK_ID" ]]; then
-  $FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
+  ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json)"
+  ROUND_EXIT=$?
+  if [[ "$ROUND_EXIT" -ne 0 ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    exit "$ROUND_EXIT"
+  fi
 fi
 
 # CE: one context_builder review result, written directly to RESPONSE_FILE.
 # Classic: RP_MODE=classic and the old tab selection/chat flow continues below.
 $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
-  --summary "$REVIEW_SUMMARY" --response-type review \
+  --summary-file "$REVIEW_INSTRUCTIONS_FILE" --response-type review \
   --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
+SETUP_EXIT=$?
+if [[ "$SETUP_EXIT" -ne 0 ]]; then
+  : > "$RESPONSE_FILE"
+  if [[ -n "$TASK_ID" ]]; then
+    RECORD_JSON="$($FLOWCTL review-rounds record "${TASK_ID%.*}" --kind impl \
+      --review-type impl --task "$TASK_ID" --backend rp \
+      --output-file "$RESPONSE_FILE" --exit-code "$SETUP_EXIT" --json)"
+    RECORD_EXIT=$?
+    printf '%s\n' "$RECORD_JSON"
+    if [[ "$RECORD_EXIT" -ne 0 ]]; then
+      exit "$RECORD_EXIT"
+    fi
+  fi
+  exit "$SETUP_EXIT"
+fi
 source "$SETUP_FILE"
 
 # Both paths retain numeric window/context identity; CE also returns the chat.
@@ -452,7 +495,7 @@ If verdict is NEEDS_WORK:
    file contents on every message. Only use `select-add` for NEW files created during fixes:
    ```bash
    # Only if fixes created new files not in original selection
-   if [[ -n "$NEW_FILES" ]]; then
+   if [[ "$RP_MODE" == "classic" && -n "$NEW_FILES" ]]; then
      $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
    fi
    ```
@@ -467,7 +510,12 @@ If verdict is NEEDS_WORK:
 
    ```bash
    if [[ -n "$TASK_ID" ]]; then
-     $FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
+     ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json)"
+     ROUND_EXIT=$?
+     if [[ "$ROUND_EXIT" -ne 0 ]]; then
+       printf '%s\n' "$ROUND_JSON"
+       exit "$ROUND_EXIT"
+     fi
    fi
    ```
 
@@ -478,7 +526,17 @@ If verdict is NEEDS_WORK:
    **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
    EOF
 
-   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" > "${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
+   SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+   source "$SETUP_FILE"
+   if [[ "$RP_MODE" == "ce" ]]; then
+     $FLOWCTL rp chat-send --window "$W" --chat-id "$CHAT_ID" --mode review \
+       --message-file "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" \
+       > "${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
+   else
+     $FLOWCTL rp chat-send --window "$W" --tab "$T" \
+       --message-file "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" \
+       > "${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
+   fi
    ```
 
    Re-extract the verdict from the response file (same grep as Phase 3), call

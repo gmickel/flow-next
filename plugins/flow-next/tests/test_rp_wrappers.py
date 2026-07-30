@@ -265,6 +265,51 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
         bind.assert_not_called()
         run.assert_not_called()
 
+    def test_summary_file_supplies_complete_builder_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            instructions = Path(tmp) / "review.md"
+            instructions.write_text(
+                "Complete contract\n<verdict>SHIP</verdict>\n",
+                encoding="utf-8",
+            )
+            args = argparse.Namespace(
+                repo_root=tmp,
+                summary=None,
+                summary_file=str(instructions),
+                response_type="review",
+                response_file=str(Path(tmp) / "response.md"),
+                create=True,
+                json=True,
+            )
+            direct = {
+                "context_id": "ctx-1",
+                "status": "completed",
+                "prompt": "Complete contract",
+                "file_count": 1,
+                "total_tokens": 10,
+                "selection": "a.py",
+                "response_type": "review",
+                "review": {
+                    "chat_id": "chat-1",
+                    "mode": "review",
+                    "response": "<verdict>SHIP</verdict>",
+                },
+            }
+            with mock.patch.object(
+                flowctl, "require_rp_cli", return_value="/bin/rpce-cli"
+            ), mock.patch.object(
+                flowctl,
+                "try_run_rp_cli",
+                return_value=_result('{"binding":{"window_id":10}}'),
+            ), mock.patch.object(
+                flowctl, "run_rp_cli", return_value=_result(json.dumps(direct))
+            ) as run, redirect_stdout(io.StringIO()):
+                flowctl.cmd_rp_setup_review(args)
+            self.assertIn(
+                '"instructions": "Complete contract\\n<verdict>SHIP</verdict>\\n"',
+                run.call_args.args[0][-1],
+            )
+
     def test_context_id_only_is_not_success_when_builder_state_is_empty(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp).resolve()
@@ -575,6 +620,30 @@ class RepoPromptWrapperCommandTest(unittest.TestCase):
             flowctl.cmd_rp_chat_send(args)
         self.assertEqual(run.call_count, 1)
         self.assertIn("call oracle_send ", run.call_args.args[0][-1])
+
+    def test_ce_chat_continuation_uses_chat_id_without_tab(self) -> None:
+        args = argparse.Namespace(
+            window=2,
+            tab=None,
+            message_file=str(self.message),
+            chat_id="review-42",
+            mode="review",
+            new_chat=False,
+            chat_name=None,
+            selected_paths=None,
+            json=False,
+        )
+        with mock.patch.object(
+            flowctl,
+            "run_rp_cli",
+            return_value=_result('{"chat_id":"review-42"}\n'),
+        ) as run, redirect_stdout(io.StringIO()):
+            flowctl.cmd_rp_chat_send(args)
+        command = run.call_args.args[0]
+        self.assertEqual(command[:2], ["-w", "2"])
+        self.assertNotIn("-t", command)
+        self.assertIn('"chat_id":"review-42"', command[-1])
+        self.assertIn('"mode":"review"', command[-1])
 
     def test_chat_id_parser_accepts_ce_markdown_and_json(self) -> None:
         self.assertEqual(

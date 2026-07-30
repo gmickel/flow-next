@@ -69,7 +69,8 @@ for pass in $SELECTED_PASSES; do
  rp)
  # RP: same-chat session continuity is automatic. Render the
  # pass-specific prompt from deep-passes.md (inject primary
- # findings block), send via `rp chat-send` (NO --new-chat),
+ # findings block), send via `rp chat-send` (NO --new-chat). Classic uses
+ # --tab "$T"; CE uses --chat-id "$CHAT_ID" --mode review with no --tab,
  # parse findings with the same header regex flowctl uses,
  # merge into receipt manually (or via a shared helper).
  # See deep-passes.md for template markers.
@@ -202,12 +203,17 @@ case "$BACKEND" in
  rp)
  # RP: same-chat session continuity is automatic. Build a validator prompt
  # from validate-pass.md and send it via `rp chat-send` (NO --new-chat).
+ # Classic uses --tab "$T"; CE uses --chat-id "$CHAT_ID" --mode review.
  # Parse the response lines with the same regex flowctl uses:
  # `<id>: validated: <true|false> -- <reason>`
  # Then recompute dropped/kept counts and merge into the receipt by hand
  # (or via a shared helper). See validate-pass.md for the template.
  cat /path/to/validate-pass.md | sed 's|<!-- FINDINGS_BLOCK -->|'"$(cat render_findings.md)"'|' > /tmp/validator.md
+ if [[ "$RP_MODE" == "ce" ]]; then
+ VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --chat-id "$CHAT_ID" --mode review --message-file /tmp/validator.md)"
+ else
  VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/validator.md)"
+ fi
  # Parse lines matching /^[>*_` ]*<id>[\s*_`]*:[\s*_`]*validated[\s*_`]*:[\s*_`]*(true|false)/
  # and update receipt's validator block accordingly.
  ;;
