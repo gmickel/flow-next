@@ -140,6 +140,25 @@ class ReviewFindingsParserTest(unittest.TestCase):
                             )
                         self.assertEqual(set(actual), expected_keys)
 
+    def test_explicit_dash_file_line_means_no_anchor(self) -> None:
+        result = parse(
+            """
+Severity: P1
+Confidence: 100
+Classification: introduced
+File:Line: -
+R-IDs: [R3]
+Problem: The repository-wide invariant is not enforced.
+Suggestion: Add the missing invariant.
+<verdict>NEEDS_WORK</verdict>
+""",
+            "codex",
+        )
+        self.assertIsNotNone(result)
+        item = result["items"][0]
+        self.assertNotIn("anchor", item)
+        self.assertEqual(item["rIds"], ["R3"])
+
     def test_ratchet_carries_ids_and_first_seen_receipt(self) -> None:
         for backend in BACKENDS:
             prior_text = self.fixture(backend, "catalog-sample")

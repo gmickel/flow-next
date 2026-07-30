@@ -4,8 +4,9 @@ Embedded review prompts moved into skill-owned ``references/*.md`` templates.
 ``flowctl`` still ships byte-identical FALLBACK constants for installs where the
 plugin root is unavailable. Edit one, edit the other - this test fails on drift.
 
-Also pins rendered-prompt byte-identity against frozen fixtures for fixed inputs
-so template/fallback edits cannot silently change what backends receive.
+Also compares rendered prompts with frozen pre-fn-136 fixtures. Intentional
+changes may occur only inside ``## Output Format``; every other byte stays
+pinned, and the reached-path character/token proxy may not grow.
 
 Run:
     python3 -m unittest plugins.flow-next.tests.test_review_prompt_template_parity -v
@@ -102,15 +103,38 @@ class TestReviewPromptTemplateParity(unittest.TestCase):
 
 
 class TestReviewPromptRenderedFixtures(unittest.TestCase):
-    """Rendered prompts must stay byte-identical to pre-extraction fixtures."""
+    """Rendered prompt drift is confined to the output-format section."""
 
     def _assert_fixture(self, name: str, rendered: str) -> None:
         path = FIXTURES / f"{name}.txt"
         self.assertTrue(path.is_file(), f"fixture missing: {path}")
+        baseline = _normalize(path.read_text(encoding="utf-8"))
+        current = _normalize(rendered)
+
+        def without_output_format(text: str) -> str:
+            start = text.index("## Output Format\n")
+            offset = start + len("## Output Format\n")
+            in_fence = False
+            end = -1
+            for line in text[offset:].splitlines(keepends=True):
+                if line.startswith("```"):
+                    in_fence = not in_fence
+                elif not in_fence and line.startswith("## "):
+                    end = offset
+                    break
+                offset += len(line)
+            self.assertNotEqual(end, -1, f"{name}: Output Format has no boundary")
+            return text[:start] + "## Output Format\n<FORMAT>\n" + text[end:]
+
         self.assertEqual(
-            _normalize(rendered),
-            _normalize(path.read_text(encoding="utf-8")),
-            f"rendered {name} prompt drifted from fixture {path.name}",
+            without_output_format(current),
+            without_output_format(baseline),
+            f"rendered {name} changed outside ## Output Format",
+        )
+        self.assertLessEqual(
+            len(current),
+            len(baseline),
+            f"rendered {name} grew under the reached-path chars/4 token proxy",
         )
 
     def test_impl_review_prompt(self) -> None:

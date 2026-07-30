@@ -63,14 +63,16 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 ## Output Format
 
 For each issue found:
-- **Severity**: Critical / Major / Minor / Nitpick
-- **Location**: Which task or section (e.g., "fn-1.3 Description" or "Epic Acceptance #2")
+- **Severity**: P0 / P1 / P2 / P3
+- **Confidence**: 0 / 25 / 50 / 75 / 100
+- **Classification**: introduced / pre_existing
+- **File:Line**: `path:line`, or `-` when repo-wide
+- **R-IDs**: `[R1, R2]`, or `[]` when none
+- **Location**: Task or section
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-After the issues list, emit a `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
-
-Be critical. Find real issues.
+If applicable, emit `Protected-path filter: N`.
 
 {review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:

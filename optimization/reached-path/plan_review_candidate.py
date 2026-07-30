@@ -173,15 +173,48 @@ def corpus_evidence(
             / "optimization/reached-path/fixtures/b1/plan-review/codex.json"
         ).read_text(encoding="utf-8")
     )["prompt_hashes"][PROMPT.as_posix()]
+    baseline_rendered = (
+        repo_root
+        / "plugins/flow-next/tests/fixtures/review_prompts/plan.txt"
+    ).read_text(encoding="utf-8")
+    candidate_rendered = build_plan_prompt(
+        "plan",
+        "SPEC_BODY_LINE1\nSPEC_BODY_LINE2",
+        "hint-a\nhint-b",
+        task_specs="TASK1\nTASK2",
+    )
+
+    def without_output_format(text: str) -> str:
+        start = text.index("## Output Format\n")
+        offset = start + len("## Output Format\n")
+        in_fence = False
+        end = -1
+        for line in text[offset:].splitlines(keepends=True):
+            if line.startswith("```"):
+                in_fence = not in_fence
+            elif not in_fence and line.startswith("## "):
+                end = offset
+                break
+            offset += len(line)
+        if end == -1:
+            return text
+        return text[:start] + "## Output Format\n<FORMAT>\n" + text[end:]
+
+    format_only_to_b1 = (
+        without_output_format(candidate_rendered)
+        == without_output_format(baseline_rendered)
+        and len(candidate_rendered) <= len(baseline_rendered)
+    )
     rows["prompt_template"] = {
         "path": PROMPT.as_posix(),
         "b1_sha256": b1_prompt_hash,
         "candidate_sha256": file_hash(repo_root / PROMPT),
         "byte_identical_to_b1": file_hash(repo_root / PROMPT) == b1_prompt_hash,
+        "format_only_to_b1": format_only_to_b1,
+        "rendered_chars_delta": len(candidate_rendered) - len(baseline_rendered),
         "quality_baseline": (
-            "Inherited real-engine B1 cells remain applicable because the "
-            "production reviewer prompt is byte-identical; this task changes "
-            "coordinator loading only."
+            "The fn-136 guard confines the intentional delta to Output Format "
+            "and keeps the reached-path chars/4 proxy non-increasing."
         ),
     }
     return rows

@@ -4676,6 +4676,9 @@ def _review_finding_anchor(
     """Build an anchor only when every portability component is explicit."""
     combined_values: Optional[tuple[str, str, Optional[str]]] = None
     combined = fields.get("file:line")
+    explicit_no_anchor = combined == "-"
+    if explicit_no_anchor:
+        combined = None
     if combined:
         match = _FINDINGS_FILE_LINE_RE.match(combined)
         if not match:
@@ -4700,6 +4703,8 @@ def _review_finding_anchor(
         return False
     separate_values: Optional[tuple[str, str, Optional[str]]] = None
     line_value = fields.get("line")
+    if explicit_no_anchor and (separate_paths or line_value):
+        return False
     if separate_paths or line_value:
         if not separate_paths or not line_value:
             return False
@@ -8329,15 +8334,16 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 {protected_artifacts_block}
 ## Output Format
 
-For each surviving `introduced` finding:
-- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
-- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
-- **Classification**: introduced
-- **File:Line**: Exact location
+For each surviving finding:
+- **Severity**: P0 / P1 / P2 / P3
+- **Confidence**: 0 / 25 / 50 / 75 / 100
+- **Classification**: introduced / pre_existing
+- **File:Line**: `path:line`, or `-` when repo-wide
+- **R-IDs**: `[R1, R2]`, or `[]` when none
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding using the compact form `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+Put `pre_existing` findings under `## Pre-existing issues (not blocking this verdict)`; never drop them.
 
 After the findings, add (only when applicable): the `## Requirements coverage` table + `Unaddressed R-IDs:` line, and the `Suppressed findings:` / `Classification counts:` / `Protected-path filter:` tally lines named above.
 **Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
@@ -8411,15 +8417,16 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 {protected_artifacts_block}
 ## Output Format
 
-For each surviving `introduced` finding:
-- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
-- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
-- **Classification**: introduced
-- **File:Line**: Exact location
+For each surviving finding:
+- **Severity**: P0 / P1 / P2 / P3
+- **Confidence**: 0 / 25 / 50 / 75 / 100
+- **Classification**: introduced / pre_existing
+- **File:Line**: `path:line`, or `-` when repo-wide
+- **R-IDs**: `[R1, R2]`, or `[]` when none
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding as `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+Put `pre_existing` findings under `## Pre-existing issues (not blocking this verdict)`; never drop them.
 
 After the findings list, emit:
 - The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
@@ -8503,14 +8510,16 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 ## Output Format
 
 For each issue found:
-- **Severity**: Critical / Major / Minor / Nitpick
-- **Location**: Which task or section (e.g., "fn-1.3 Description" or "Epic Acceptance #2")
+- **Severity**: P0 / P1 / P2 / P3
+- **Confidence**: 0 / 25 / 50 / 75 / 100
+- **Classification**: introduced / pre_existing
+- **File:Line**: `path:line`, or `-` when repo-wide
+- **R-IDs**: `[R1, R2]`, or `[]` when none
+- **Location**: Task or section
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-After the issues list, emit a `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
-
-Be critical. Find real issues.
+If applicable, emit `Protected-path filter: N`.
 
 {review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:
@@ -8620,7 +8629,7 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 
 ## Gaps Found
 
-[For each GAP, describe what's missing and suggest fix. Include `Confidence: <0|25|50|75|100>` and `Classification: introduced | pre_existing` — `pre_existing` means the gap existed before this epic's branch touched the code and is therefore not blocking.]
+[Each GAP uses labeled lines: `Severity: P0|P1|P2|P3`; `Confidence: 0|25|50|75|100`; `Classification: introduced|pre_existing`; File:Line: `path:line` or `-`; R-IDs: `[R1, R2]` or `[]`; `Problem`; `Suggestion`.]
 ```
 
 Pre-existing gaps (code smells or missing features that predate this epic's branch) go under a separate `## Pre-existing issues (not blocking this verdict)` heading and do not gate the verdict.

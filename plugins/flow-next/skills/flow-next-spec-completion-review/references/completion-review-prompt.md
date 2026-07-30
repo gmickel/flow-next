@@ -97,7 +97,7 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 
 ## Gaps Found
 
-[For each GAP, describe what's missing and suggest fix. Include `Confidence: <0|25|50|75|100>` and `Classification: introduced | pre_existing` — `pre_existing` means the gap existed before this epic's branch touched the code and is therefore not blocking.]
+[Each GAP uses labeled lines: `Severity: P0|P1|P2|P3`; `Confidence: 0|25|50|75|100`; `Classification: introduced|pre_existing`; File:Line: `path:line` or `-`; R-IDs: `[R1, R2]` or `[]`; `Problem`; `Suggestion`.]
 ```
 
 Pre-existing gaps (code smells or missing features that predate this epic's branch) go under a separate `## Pre-existing issues (not blocking this verdict)` heading and do not gate the verdict.

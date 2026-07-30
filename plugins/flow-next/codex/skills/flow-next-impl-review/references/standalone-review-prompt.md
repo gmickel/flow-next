@@ -58,15 +58,16 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 {protected_artifacts_block}
 ## Output Format
 
-For each surviving `introduced` finding:
-- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
-- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
-- **Classification**: introduced
-- **File:Line**: Exact location
+For each surviving finding:
+- **Severity**: P0 / P1 / P2 / P3
+- **Confidence**: 0 / 25 / 50 / 75 / 100
+- **Classification**: introduced / pre_existing
+- **File:Line**: `path:line`, or `-` when repo-wide
+- **R-IDs**: `[R1, R2]`, or `[]` when none
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding as `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+Put `pre_existing` findings under `## Pre-existing issues (not blocking this verdict)`; never drop them.
 
 After the findings list, emit:
 - The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
