@@ -4470,6 +4470,676 @@ _REVIEW_JSON_FENCE_RE = re.compile(
 )
 _VALID_SUPPRESSED_ANCHORS = frozenset({"0", "25", "50", "75", "100"})
 
+# Versioned structured-review findings (fn-136).
+_FINDINGS_SCHEMA_VERSION = 1
+_FINDINGS_INPUT_MAX_BYTES = 1024 * 1024
+_FINDINGS_CONTAINER_MAX_BYTES = 256 * 1024
+_FINDINGS_MAX_ITEMS = 200
+_FINDINGS_MAX_RIDS = 32
+_FINDINGS_MAX_ID = 160
+_FINDINGS_MAX_PATH = 1024
+_FINDINGS_MAX_TITLE = 240
+_FINDINGS_MAX_BODY = 4000
+_FINDINGS_MAX_SUGGESTION = 4000
+_FINDINGS_SEVERITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+_FINDINGS_CONFIDENCE = frozenset({0, 25, 50, 75, 100})
+_FINDINGS_CLASSIFICATIONS = frozenset({"introduced", "pre_existing"})
+_FINDINGS_STATUSES = frozenset({"open", "fixed", "not_fixed", "withdrawn"})
+_FINDINGS_REVIEW_KINDS = frozenset(
+    {"plan", "implementation", "completion", "qa"}
+)
+_FINDINGS_SEVERITY_ALIASES = {
+    "p0": "P0",
+    "critical": "P0",
+    "p1": "P1",
+    "major": "P1",
+    "p2": "P2",
+    "minor": "P2",
+    "p3": "P3",
+    "nitpick": "P3",
+}
+_FINDINGS_STATUS_ALIASES = {
+    "open": "open",
+    "fixed": "fixed",
+    "fixed in review": "fixed",
+    "resolved": "fixed",
+    "not fixed": "not_fixed",
+    "not_fixed": "not_fixed",
+    "remains open": "not_fixed",
+    "unresolved": "not_fixed",
+    "withdrawn": "withdrawn",
+}
+_FINDINGS_FIELD_RE = re.compile(
+    r"""(?ix)
+    ^\s*(?:[-*]\s*)?
+    (?:\*\*)?
+    (?P<label>
+      severity|confidence|classification|problem|suggestion|suggested\ fix|
+      finding|title|file\s*:\s*line|file|path|line|side|original\s*path|
+      original\s*file|blob\s*oid|r-?ids?|prior\s*finding\s*id
+    )
+    (?:\*\*)?\s*[:=]\s*(?P<value>.*?)\s*$
+    """
+)
+_FINDINGS_INLINE_HOST_RE = re.compile(
+    r"(?i)\b(P[0-3]|critical|major|minor|nitpick)\b"
+    r"\s*[·|,-]\s*confidence\s+(\d+)"
+    r"\s*[·|,-]\s*(introduced|pre[-_ ]existing)"
+)
+_FINDINGS_PRIOR_RE = re.compile(
+    r"""(?ix)
+    \bprior[\s-]+finding(?:\s*(?:\#)?(?P<ordinal>\d+))?
+    \s*(?:[:—-]\s*)?
+    (?:\*\*)?
+    (?P<status>
+      fixed(?:\s+in\s+review)?|resolved|not[\s_]fixed|remains\s+open|
+      unresolved|withdrawn
+    )
+    """
+)
+_FINDINGS_FILE_LINE_RE = re.compile(
+    r"^(?P<path>.+?):(?P<start>[1-9]\d*)"
+    r"(?:\s*[-–]\s*(?P<end>[1-9]\d*))?$"
+)
+_FINDINGS_HOST_TABLE_SEPARATOR_RE = re.compile(
+    r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$"
+)
+
+
+def _review_finding_lineage_id(source_receipt_id: str, ordinal: int) -> str:
+    """Derive a stable, opaque finding identity from receipt + local ordinal."""
+    digest = hashlib.sha256(
+        f"flow-next-finding-v1\0{source_receipt_id}\0{ordinal}".encode("utf-8")
+    ).hexdigest()
+    return f"finding-{digest[:32]}"
+
+
+def _review_finding_clean_markdown(value: str) -> str:
+    value = value.strip()
+    if value.startswith("`") and value.endswith("`") and len(value) >= 2:
+        value = value[1:-1]
+    value = re.sub(r"^\*{1,2}|\*{1,2}$", "", value).strip()
+    return value.rstrip()
+
+
+def _review_finding_fields(block: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in block.splitlines():
+        normalized_line = re.sub(
+            r"^\s*(?:(?:[-*]|\d+[.)])\s*)?", "", line
+        ).replace("**", "")
+        match = _FINDINGS_FIELD_RE.match(normalized_line)
+        if not match:
+            continue
+        label = re.sub(r"[\s_-]+", " ", match.group("label").lower()).strip()
+        fields[label] = _review_finding_clean_markdown(match.group("value"))
+    return fields
+
+
+def _review_finding_enum(
+    fields: dict[str, str], block: str
+) -> Optional[tuple[str, int, str]]:
+    severity_value = fields.get("severity", "").strip().lower()
+    confidence_value = fields.get("confidence", "").strip()
+    classification_value = fields.get("classification", "").strip().lower()
+    inline = _FINDINGS_INLINE_HOST_RE.search(block)
+    if inline:
+        severity_value = severity_value or inline.group(1).lower()
+        confidence_value = confidence_value or inline.group(2)
+        classification_value = classification_value or inline.group(3).lower()
+    severity = _FINDINGS_SEVERITY_ALIASES.get(severity_value)
+    try:
+        confidence = int(confidence_value)
+    except (TypeError, ValueError):
+        return None
+    classification = re.sub(
+        r"[\s-]+", "_", classification_value
+    ).replace("introduced_true", "introduced")
+    if classification in {"true", "introduced=true"}:
+        classification = "introduced"
+    elif classification in {"false", "introduced=false"}:
+        classification = "pre_existing"
+    if (
+        severity is None
+        or confidence not in _FINDINGS_CONFIDENCE
+        or classification not in _FINDINGS_CLASSIFICATIONS
+    ):
+        return None
+    return severity, confidence, classification
+
+
+def _review_finding_safe_path(value: str) -> Optional[str]:
+    path = _review_finding_clean_markdown(value).replace("\\", "/")
+    if (
+        not path
+        or len(path) > _FINDINGS_MAX_PATH
+        or path.startswith("/")
+        or re.match(r"^[A-Za-z]:/", path)
+    ):
+        return None
+    parts = path.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return None
+    return path
+
+
+def _review_finding_anchor(
+    fields: dict[str, str],
+    *,
+    base_sha: Optional[str],
+    head_sha: str,
+    anchor_side: Optional[str],
+) -> Optional[dict] | bool:
+    """Build an anchor only when every portability component is explicit."""
+    path_value: Optional[str] = None
+    start_value: Optional[str] = None
+    end_value: Optional[str] = None
+    combined = fields.get("file:line")
+    if combined:
+        match = _FINDINGS_FILE_LINE_RE.match(combined)
+        if match:
+            path_value = match.group("path")
+            start_value = match.group("start")
+            end_value = match.group("end")
+    if path_value is None:
+        path_value = fields.get("path") or fields.get("file")
+        line_value = fields.get("line")
+        if line_value:
+            line_match = re.fullmatch(
+                r"([1-9]\d*)(?:\s*[-–]\s*([1-9]\d*))?", line_value
+            )
+            if line_match:
+                start_value, end_value = line_match.groups()
+            else:
+                return False
+    has_anchor_evidence = bool(
+        combined
+        or path_value
+        or start_value
+        or fields.get("path")
+        or fields.get("file")
+        or fields.get("line")
+    )
+    if not has_anchor_evidence:
+        return None
+    if not path_value or not start_value:
+        return False
+    path = _review_finding_safe_path(path_value)
+    if path is None:
+        return False
+    start_line = int(start_value)
+    if not base_sha or anchor_side not in {"base", "head"}:
+        return None
+    anchor: dict[str, Any] = {
+        "path": path,
+        "side": anchor_side,
+        "startLine": start_line,
+        "baseSha": base_sha,
+        "headSha": head_sha,
+    }
+    if end_value:
+        end_line = int(end_value)
+        if end_line < start_line:
+            return False
+        anchor["endLine"] = end_line
+    original = fields.get("original path") or fields.get("original file")
+    if original:
+        original_path = _review_finding_safe_path(original)
+        if original_path is None:
+            return False
+        anchor["originalPath"] = original_path
+    blob_oid = fields.get("blob oid")
+    if blob_oid:
+        if not re.fullmatch(r"[0-9a-fA-F]{7,64}", blob_oid):
+            return False
+        anchor["blobOid"] = blob_oid.lower()
+    return anchor
+
+
+def _review_finding_rids(block: str, fields: dict[str, str]) -> list[str]:
+    source = fields.get("r ids", "") + "\n" + block
+    seen: set[str] = set()
+    result: list[str] = []
+    for match in re.finditer(r"(?<![A-Za-z0-9])R(?:-|\s)?(\d+)(?![A-Za-z0-9])", source):
+        rid = f"R{match.group(1)}"
+        if rid not in seen:
+            seen.add(rid)
+            result.append(rid)
+    return result
+
+
+def _review_finding_text(fields: dict[str, str], block: str) -> tuple[str, str, Optional[str]]:
+    body = fields.get("problem") or fields.get("finding") or ""
+    if not body:
+        prose: list[str] = []
+        for line in block.splitlines():
+            stripped = line.strip().lstrip("-* ").strip()
+            if (
+                not stripped
+                or stripped.startswith("#")
+                or _FINDINGS_FIELD_RE.match(line)
+                or _FINDINGS_INLINE_HOST_RE.search(line)
+            ):
+                continue
+            prose.append(_review_finding_clean_markdown(stripped))
+        body = " ".join(prose)
+    body = body.strip()
+    title = (fields.get("title") or body.split(".", 1)[0]).strip()
+    suggestion = fields.get("suggestion") or fields.get("suggested fix")
+    return title, body, suggestion.strip() if suggestion else None
+
+
+def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
+    """Return severity-bearing prose blocks and whether a severity label existed."""
+    lines = output.splitlines()
+    starts: list[int] = []
+    saw_severity_label = False
+    for index, line in enumerate(lines):
+        fields = _review_finding_fields(line)
+        if "severity" in fields or _FINDINGS_INLINE_HOST_RE.search(line):
+            starts.append(index)
+            saw_severity_label = True
+    blocks: list[str] = []
+    for position, start in enumerate(starts):
+        end = starts[position + 1] if position + 1 < len(starts) else len(lines)
+        # Export fixtures put the title immediately before Severity.
+        if start > 0 and re.match(r"(?i)^\s*finding\s*[:=]", lines[start - 1]):
+            start -= 1
+        block_lines: list[str] = []
+        for line in lines[start:end]:
+            if re.search(r"<verdict>", line, re.IGNORECASE):
+                break
+            if re.match(
+                r"(?i)^\s*(classification counts|suppressed findings|unaddressed r-ids)\s*:",
+                line,
+            ):
+                break
+            block_lines.append(line)
+        blocks.append("\n".join(block_lines).strip())
+    return blocks, saw_severity_label
+
+
+def _review_finding_host_table(output: str) -> Optional[list[dict]]:
+    """Parse the observed host-review finding table, or return None."""
+    lines = output.splitlines()
+    header_index: Optional[int] = None
+    headers: list[str] = []
+    for index, line in enumerate(lines):
+        if not line.strip().startswith("|"):
+            continue
+        candidate = [cell.strip().lower() for cell in line.strip().strip("|").split("|")]
+        if {"sev", "confidence", "classification", "finding", "disposition"} <= set(candidate):
+            header_index = index
+            headers = candidate
+            break
+    if header_index is None or header_index + 1 >= len(lines):
+        return None
+    if not _FINDINGS_HOST_TABLE_SEPARATOR_RE.match(lines[header_index + 1]):
+        return None
+    rows: list[dict] = []
+    for line in lines[header_index + 2:]:
+        if not line.strip().startswith("|"):
+            break
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != len(headers):
+            return []
+        row = dict(zip(headers, cells, strict=True))
+        severity = _FINDINGS_SEVERITY_ALIASES.get(row["sev"].lower())
+        try:
+            confidence = int(row["confidence"])
+        except ValueError:
+            return []
+        classification = re.sub(
+            r"[\s-]+", "_", row["classification"].lower()
+        )
+        status_value = re.sub(r"\s+", " ", row["disposition"].lower()).strip()
+        status = _FINDINGS_STATUS_ALIASES.get(status_value)
+        if (
+            severity is None
+            or confidence not in _FINDINGS_CONFIDENCE
+            or classification not in _FINDINGS_CLASSIFICATIONS
+            or status not in _FINDINGS_STATUSES
+        ):
+            return []
+        body = _review_finding_clean_markdown(row["finding"])
+        rows.append(
+            {
+                "severity": severity,
+                "confidence": confidence,
+                "classification": classification,
+                "status": status,
+                "title": body.split(".", 1)[0].strip(),
+                "body": body,
+                "rIds": _review_finding_rids(body, {}),
+            }
+        )
+    return rows
+
+
+def _review_finding_prior_items(
+    output: str,
+    prior_findings: Optional[dict],
+    source_receipt_id: str,
+) -> Optional[list[dict]]:
+    matches = list(_FINDINGS_PRIOR_RE.finditer(output))
+    if not matches:
+        return []
+    if not isinstance(prior_findings, dict):
+        return None
+    if prior_findings.get("schemaVersion") != _FINDINGS_SCHEMA_VERSION:
+        return None
+    prior_items = prior_findings.get("items")
+    if not isinstance(prior_items, list):
+        return None
+    by_ordinal = {
+        item.get("ordinal"): item for item in prior_items if isinstance(item, dict)
+    }
+    # Some backends omit the ordinal only when exactly one prior finding exists.
+    if any(match.group("ordinal") is None for match in matches) and len(prior_items) != 1:
+        return None
+    carried: list[dict] = []
+    for match in matches:
+        ordinal = (
+            int(match.group("ordinal"))
+            if match.group("ordinal") is not None
+            else prior_items[0].get("ordinal")
+        )
+        prior = by_ordinal.get(ordinal)
+        if not isinstance(prior, dict):
+            return None
+        status_key = re.sub(r"[_\s]+", " ", match.group("status").lower()).strip()
+        status = _FINDINGS_STATUS_ALIASES.get(status_key)
+        if status is None:
+            return None
+        item = dict(prior)
+        item["status"] = status
+        item["lastSeenReceiptId"] = source_receipt_id
+        carried.append(item)
+    return carried
+
+
+def _review_finding_item_valid(item: dict) -> bool:
+    required = {
+        "id",
+        "ordinal",
+        "severity",
+        "confidence",
+        "classification",
+        "status",
+        "title",
+        "body",
+        "rIds",
+        "firstSeenReceiptId",
+        "lastSeenReceiptId",
+    }
+    if not required <= set(item):
+        return False
+    if (
+        not isinstance(item["id"], str)
+        or not item["id"]
+        or len(item["id"]) > _FINDINGS_MAX_ID
+        or not isinstance(item["ordinal"], int)
+        or isinstance(item["ordinal"], bool)
+        or item["ordinal"] < 1
+        or item["severity"] not in _FINDINGS_SEVERITY_ORDER
+        or item["confidence"] not in _FINDINGS_CONFIDENCE
+        or item["classification"] not in _FINDINGS_CLASSIFICATIONS
+        or item["status"] not in _FINDINGS_STATUSES
+        or not isinstance(item["title"], str)
+        or not item["title"]
+        or len(item["title"]) > _FINDINGS_MAX_TITLE
+        or not isinstance(item["body"], str)
+        or not item["body"]
+        or len(item["body"]) > _FINDINGS_MAX_BODY
+        or not isinstance(item["rIds"], list)
+        or len(item["rIds"]) > _FINDINGS_MAX_RIDS
+        or not all(isinstance(rid, str) and len(rid) <= _FINDINGS_MAX_ID for rid in item["rIds"])
+    ):
+        return False
+    for key in ("firstSeenReceiptId", "lastSeenReceiptId"):
+        if (
+            not isinstance(item[key], str)
+            or not item[key]
+            or len(item[key]) > _FINDINGS_MAX_ID
+        ):
+            return False
+    suggestion = item.get("suggestion")
+    if suggestion is not None and (
+        not isinstance(suggestion, str)
+        or not suggestion
+        or len(suggestion) > _FINDINGS_MAX_SUGGESTION
+    ):
+        return False
+    prior_id = item.get("priorFindingId")
+    if prior_id is not None and (
+        not isinstance(prior_id, str)
+        or not prior_id
+        or len(prior_id) > _FINDINGS_MAX_ID
+    ):
+        return False
+    anchor = item.get("anchor")
+    if anchor is not None:
+        if not isinstance(anchor, dict):
+            return False
+        if (
+            _review_finding_safe_path(str(anchor.get("path", ""))) is None
+            or anchor.get("side") not in {"base", "head"}
+            or not isinstance(anchor.get("startLine"), int)
+            or isinstance(anchor.get("startLine"), bool)
+            or anchor["startLine"] < 1
+            or not isinstance(anchor.get("baseSha"), str)
+            or not anchor["baseSha"]
+            or not isinstance(anchor.get("headSha"), str)
+            or not anchor["headSha"]
+        ):
+            return False
+    return True
+
+
+def _parse_review_findings_v1(
+    output: str,
+    *,
+    source_receipt_id: str,
+    review_kind: str,
+    backend: str,
+    round_number: int,
+    head_sha: str,
+    base_sha: Optional[str],
+    supersedes_receipt_id: Optional[str],
+    prior_findings: Optional[dict],
+    anchor_side: Optional[str],
+) -> Optional[dict]:
+    if (
+        not isinstance(output, str)
+        or len(output.encode("utf-8")) > _FINDINGS_INPUT_MAX_BYTES
+        or not isinstance(source_receipt_id, str)
+        or not source_receipt_id
+        or len(source_receipt_id) > _FINDINGS_MAX_ID
+        or review_kind not in _FINDINGS_REVIEW_KINDS
+        or not isinstance(backend, str)
+        or not backend
+        or len(backend) > _FINDINGS_MAX_ID
+        or not isinstance(round_number, int)
+        or isinstance(round_number, bool)
+        or round_number < 1
+        or not isinstance(head_sha, str)
+        or not head_sha
+        or len(head_sha) > _FINDINGS_MAX_ID
+        or (
+            base_sha is not None
+            and (not isinstance(base_sha, str) or not base_sha or len(base_sha) > _FINDINGS_MAX_ID)
+        )
+        or (
+            supersedes_receipt_id is not None
+            and (
+                not isinstance(supersedes_receipt_id, str)
+                or not supersedes_receipt_id
+                or len(supersedes_receipt_id) > _FINDINGS_MAX_ID
+            )
+        )
+    ):
+        return None
+
+    prior_items = _review_finding_prior_items(
+        output, prior_findings, source_receipt_id
+    )
+    if prior_items is None:
+        return None
+    if prior_items and (
+        supersedes_receipt_id is None
+        or prior_findings.get("sourceReceiptId") != supersedes_receipt_id
+        or prior_findings.get("reviewKind") != review_kind
+        or prior_findings.get("backend") != backend
+        or not isinstance(prior_findings.get("round"), int)
+        or prior_findings["round"] >= round_number
+    ):
+        return None
+    parsed_rows = _review_finding_host_table(output)
+    if parsed_rows == []:
+        return None
+    rows = parsed_rows or []
+    blocks, saw_severity_label = _review_finding_blocks(output)
+    if parsed_rows is None:
+        for block in blocks:
+            fields = _review_finding_fields(block)
+            enums = _review_finding_enum(fields, block)
+            if enums is None:
+                return None
+            severity, confidence, classification = enums
+            title, body, suggestion = _review_finding_text(fields, block)
+            if not title or not body:
+                return None
+            row: dict[str, Any] = {
+                "severity": severity,
+                "confidence": confidence,
+                "classification": classification,
+                "status": "open",
+                "title": title,
+                "body": body,
+                "rIds": _review_finding_rids(block, fields),
+            }
+            anchor = _review_finding_anchor(
+                fields,
+                base_sha=base_sha,
+                head_sha=head_sha,
+                anchor_side=anchor_side,
+            )
+            if anchor is False:
+                return None
+            if anchor is not None:
+                row["anchor"] = anchor
+            if suggestion:
+                row["suggestion"] = suggestion
+            prior_finding_id = fields.get("prior finding id")
+            if prior_finding_id:
+                row["priorFindingId"] = prior_finding_id
+            rows.append(row)
+
+    explicit_empty = bool(
+        re.search(
+            r"""(?ix)
+            \b(?:no\s+(?:blocking\s+)?findings?|found\s+no\s+correctness|
+            no\s+blocking\s+gaps|review\s+result:\s*no\s+findings?)\b
+            """,
+            output,
+        )
+        and re.search(r"<verdict>\s*SHIP\s*</verdict>", output, re.IGNORECASE)
+    )
+    if not rows and not prior_items and not explicit_empty:
+        # A malformed/unknown severity label must never become a false empty set.
+        return None
+    if saw_severity_label and not rows:
+        return None
+
+    items: list[dict] = list(prior_items)
+    used_ordinals = {
+        item.get("ordinal") for item in items if isinstance(item.get("ordinal"), int)
+    }
+    next_ordinal = 1
+    for row in rows:
+        while next_ordinal in used_ordinals:
+            next_ordinal += 1
+        item = {
+            "id": _review_finding_lineage_id(source_receipt_id, next_ordinal),
+            "ordinal": next_ordinal,
+            **row,
+            "firstSeenReceiptId": source_receipt_id,
+            "lastSeenReceiptId": source_receipt_id,
+        }
+        items.append(item)
+        used_ordinals.add(next_ordinal)
+        next_ordinal += 1
+    if len(items) > _FINDINGS_MAX_ITEMS:
+        return None
+    if len({item.get("id") for item in items}) != len(items):
+        return None
+    if not all(_review_finding_item_valid(item) for item in items):
+        return None
+    items.sort(
+        key=lambda item: (
+            _FINDINGS_SEVERITY_ORDER[item["severity"]],
+            -item["confidence"],
+            item["ordinal"],
+        )
+    )
+    container: dict[str, Any] = {
+        "schemaVersion": _FINDINGS_SCHEMA_VERSION,
+        "sourceReceiptId": source_receipt_id,
+        "reviewKind": review_kind,
+        "backend": backend,
+        "round": round_number,
+    }
+    if base_sha is not None:
+        container["baseSha"] = base_sha
+    container["headSha"] = head_sha
+    if supersedes_receipt_id is not None:
+        container["supersedesReceiptId"] = supersedes_receipt_id
+    container["items"] = items
+    encoded = json.dumps(
+        container, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    if len(encoded) > _FINDINGS_CONTAINER_MAX_BYTES:
+        return None
+    return container
+
+
+def parse_review_findings(
+    output: str,
+    *,
+    source_receipt_id: str,
+    review_kind: str,
+    backend: str,
+    round_number: int,
+    head_sha: str,
+    base_sha: Optional[str] = None,
+    supersedes_receipt_id: Optional[str] = None,
+    prior_findings: Optional[dict] = None,
+    anchor_side: Optional[str] = None,
+    schema_version: int = _FINDINGS_SCHEMA_VERSION,
+) -> Optional[dict]:
+    """Parse reviewer prose into the additive v1 findings container.
+
+    Unsupported versions, unknown enums, over-limit data, and unparseable
+    prose return ``None``. The public boundary intentionally never raises.
+    """
+    try:
+        if schema_version != _FINDINGS_SCHEMA_VERSION:
+            return None
+        return _parse_review_findings_v1(
+            output,
+            source_receipt_id=source_receipt_id,
+            review_kind=review_kind,
+            backend=backend,
+            round_number=round_number,
+            head_sha=head_sha,
+            base_sha=base_sha,
+            supersedes_receipt_id=supersedes_receipt_id,
+            prior_findings=prior_findings,
+            anchor_side=anchor_side,
+        )
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError, UnicodeError):
+        return None
+
 
 def _log_review_parse_path(field: str, path: str) -> None:
     """Log which tallies path fired (json vs prose-fallback)."""
