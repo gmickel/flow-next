@@ -71,6 +71,28 @@ class ReviewFindingsDocsTest(unittest.TestCase):
             " ".join(text.split()),
         )
         self.assertIn("consumers never match findings by title", " ".join(text.split()))
+        self.assertIn(
+            "Every valid successor carries the complete prior snapshot forward",
+            " ".join(text.split()),
+        )
+        self.assertIn(
+            "A `Prior finding N` ratchet record updates the carried item's status",
+            " ".join(text.split()),
+        )
+        self.assertIn("creates an additional finding and ID", " ".join(text.split()))
+
+    def test_anchor_absence_and_invalid_evidence_are_distinct(self) -> None:
+        text = CONTRACT.read_text(encoding="utf-8")
+        normalized = " ".join(text.split())
+        self.assertIn(
+            "valid location evidence without enough snapshot binding, produces no anchor",
+            normalized,
+        )
+        self.assertIn(
+            "Malformed or conflicting supplied locations, unsafe paths, invalid ranges or sides, and invalid blob OIDs reject the entire structured generation",
+            normalized,
+        )
+        self.assertIn("must not repair or truncate invalid anchor evidence", normalized)
 
     def test_receipt_memory_and_discovery_surfaces_cross_link_contract(self) -> None:
         for relative in (

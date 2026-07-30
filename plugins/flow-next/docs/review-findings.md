@@ -82,11 +82,12 @@ ordinal ascending. Consumers preserve that order.
 
 `sourceReceiptId` identifies one findings generation. Round 1 derives each
 finding `id` deterministically from that receipt identity and the local
-`ordinal`. A later round preserves an ID only when the prior complete snapshot
-and a `Prior finding N` ratchet record carry it forward;
-`firstSeenReceiptId` stays fixed and `lastSeenReceiptId` advances. Fully
-restated finding prose is not semantic identity: without an explicit lineage
-edge, it creates a new finding and ID even when its content or ordinal resembles
+`ordinal`. Every valid successor carries the complete prior snapshot forward:
+each carried item keeps its ID and `firstSeenReceiptId`, while
+`lastSeenReceiptId` advances. A `Prior finding N` ratchet record updates the
+carried item's status; it is not required for carry-forward. Fully restated
+finding prose is not semantic identity: without an explicit lineage edge, it
+creates an additional finding and ID even when its content or ordinal resembles
 an older item.
 
 `priorFindingId` is an explicit edge used only when a parser cannot preserve an
@@ -115,8 +116,12 @@ Flow-Next implementation files or assume that every receipt is committed.
 ## Anchors
 
 An anchor is present only when the reviewer supplied a safe repository-relative
-path and a positive line or line range. Missing, malformed, absolute, or
-traversing locations produce no anchor; Flow-Next never guesses one.
+path and a positive line or line range. Absent location evidence, or valid
+location evidence without enough snapshot binding, produces no anchor;
+Flow-Next never guesses one. Malformed or conflicting supplied locations,
+unsafe paths, invalid ranges or sides, and invalid blob OIDs reject the entire
+structured generation. Consumers then fall back to the receipt and prose; they
+must not repair or truncate invalid anchor evidence.
 
 `side` says which reviewed snapshot owns the line range. `baseSha` and
 `headSha` bind it to the compared snapshots. `originalPath` records the
