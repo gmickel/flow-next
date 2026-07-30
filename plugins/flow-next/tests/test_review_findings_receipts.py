@@ -619,22 +619,44 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
         self.assertFalse(FLOWCTL.validate_review_receipt_findings(invalid))
 
     def test_receipt_validation_binds_container_kind_and_backend(self) -> None:
-        findings = _container(receipt_id="round-1")
-        valid = {
-            "type": "impl_review",
-            "id": "fn-136.3",
-            "mode": "codex",
-            "findings": findings,
+        mappings = {
+            "plan_review": "plan",
+            "impl_review": "implementation",
+            "completion_review": "completion",
+            "qa_verdict": "qa",
         }
-        self.assertTrue(FLOWCTL.validate_review_receipt_findings(valid))
-        self.assertFalse(
-            FLOWCTL.validate_review_receipt_findings(
-                dict(valid, type="plan_review")
-            )
-        )
-        self.assertFalse(
-            FLOWCTL.validate_review_receipt_findings(dict(valid, mode="rp"))
-        )
+        for receipt_type, review_kind in mappings.items():
+            with self.subTest(receipt_type=receipt_type):
+                findings = _container(
+                    receipt_id=f"{receipt_type}-round-1",
+                    kind=review_kind,
+                )
+                valid = {
+                    "type": receipt_type,
+                    "id": "fn-136.3",
+                    "mode": "codex",
+                    "findings": findings,
+                }
+                self.assertTrue(FLOWCTL.validate_review_receipt_findings(valid))
+                wrong_kind = (
+                    "plan" if review_kind != "plan" else "implementation"
+                )
+                self.assertFalse(
+                    FLOWCTL.validate_review_receipt_findings(
+                        dict(
+                            valid,
+                            findings=_container(
+                                receipt_id=f"{receipt_type}-wrong-kind",
+                                kind=wrong_kind,
+                            ),
+                        )
+                    )
+                )
+                self.assertFalse(
+                    FLOWCTL.validate_review_receipt_findings(
+                        dict(valid, mode="rp")
+                    )
+                )
 
     def test_failure_cleanup_archives_latest_success(self) -> None:
         receipt = self.repo / "receipt.json"

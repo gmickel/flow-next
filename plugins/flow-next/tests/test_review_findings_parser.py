@@ -383,6 +383,15 @@ Problem: second severity but higher confidence
         anchored = parse(text, "rp", anchor_side="base")["items"][0]["anchor"]
         self.assertEqual(anchored["side"], "base")
 
+    def test_first_seen_id_pins_exact_sha256_byte_contract(self) -> None:
+        result = parse(self.fixture("rp", "catalog-sample"), "rp")
+        item = result["items"][0]
+        digest = FLOWCTL.hashlib.sha256(
+            b"flow-next-finding-v1\0receipt-round-1\0" + str(item["ordinal"]).encode()
+        ).hexdigest()
+        self.assertEqual(item["id"], f"finding-{digest[:32]}")
+        self.assertEqual(item["firstSeenReceiptId"], "receipt-round-1")
+
     def test_unbound_anchor_omits_supplemental_metadata_before_validation(self) -> None:
         text = self.fixture("rp", "catalog-sample").replace(
             "Problem:",
@@ -392,6 +401,21 @@ Problem: second severity but higher confidence
         result = parse(text, "rp", anchor_side=None)
         self.assertIsNotNone(result)
         self.assertNotIn("anchor", result["items"][0])
+
+    def test_unbound_inverted_range_is_omitted_before_bound_range_validation(
+        self,
+    ) -> None:
+        text = """
+Severity: Major
+Confidence: 100
+Classification: introduced
+File:Line: src/review.py:12-10
+Problem: The range is inverted.
+"""
+        unbound = parse(text, "rp", anchor_side=None)
+        self.assertIsNotNone(unbound)
+        self.assertNotIn("anchor", unbound["items"][0])
+        self.assertIsNone(parse(text, "rp", anchor_side="head"))
 
     def test_explicit_anchor_side_is_honored_and_conflicts_reject(self) -> None:
         text = """

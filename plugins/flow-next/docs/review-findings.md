@@ -60,6 +60,19 @@ Required container fields are `schemaVersion`, `sourceReceiptId`, `reviewKind`,
 `suggestion` are optional. Unknown fields make a v1 container unsupported;
 consumers must not reinterpret them as a compatible extension.
 
+The receipt envelope binds the projection to its workflow:
+
+| Receipt `type` | Required `findings.reviewKind` |
+|---|---|
+| `plan_review` | `plan` |
+| `impl_review` | `implementation` |
+| `completion_review` | `completion` |
+| `qa_verdict` | `qa` |
+
+The receipt `mode` must exactly equal `findings.backend`. A type/kind or
+mode/backend mismatch invalidates the structured projection, so consumers fall
+back to the receipt and original prose.
+
 ## Canonical values
 
 | Field | Canonical values | Parser aliases |
@@ -80,10 +93,12 @@ ordinal ascending. Consumers preserve that order.
 
 ## Identity and lineage
 
-`sourceReceiptId` identifies one findings generation. Round 1 derives each
-finding `id` deterministically from that receipt identity and the local
-`ordinal`. Every valid successor carries the complete prior snapshot forward:
-each carried item keeps its ID and `firstSeenReceiptId`, while
+`sourceReceiptId` identifies one findings generation. Whenever a finding is
+first seen, its ID is exactly `finding-` plus the first 32 lowercase hexadecimal
+characters of SHA-256 over the UTF-8 bytes
+`flow-next-finding-v1\0<firstSeenReceiptId>\0<ordinal>` (the `\0` separators
+are single NUL bytes). Every valid successor carries the complete prior
+snapshot forward: each carried item keeps its ID and `firstSeenReceiptId`, while
 `lastSeenReceiptId` advances. A `Prior finding N` ratchet record updates the
 carried item's status; it is not required for carry-forward. Fully restated
 finding prose is not semantic identity: without an explicit lineage edge, it
@@ -119,9 +134,12 @@ An anchor is present only when the reviewer supplied a safe repository-relative
 path and a positive line or line range. Absent location evidence produces no
 anchor. A valid primary location without enough snapshot binding omits the
 entire anchor candidate before supplemental `originalPath` or `blobOid`
-metadata is interpreted. Flow-Next never guesses the missing binding.
-Malformed or conflicting primary locations, unsafe primary paths, and invalid
-ranges or sides reject the entire structured generation. Once the primary
+metadata or range ordering is interpreted. Thus an inverted range on an
+unbound anchor candidate is omitted with that candidate. Flow-Next never
+guesses the missing binding. Malformed or conflicting primary locations,
+unsafe primary paths, and invalid sides reject the entire structured
+generation. Once the primary location is snapshot-bound, an inverted range
+(`endLine < startLine`) rejects the structured generation. Once the primary
 location is snapshot-bound, invalid supplemental paths or blob OIDs also reject
 the generation. Consumers then fall back to the receipt and prose; they must
 not repair or truncate invalid anchor evidence.
@@ -181,7 +199,9 @@ R-IDs must use `R<digits>`. IDs and ordinals must be unique. `round` and
 `ordinal` are positive JSON integers—booleans do not qualify—and a root
 generation without `supersedesReceiptId` must use round 1. Anchor paths must be
 normalized repository-relative paths without `..` traversal. Ranges use
-positive integer lines and `endLine >= startLine`. `blobOid`, when present, is
+positive integer lines. On a snapshot-bound anchor, `endLine` must be greater
+than or equal to `startLine`; an unbound anchor candidate is omitted before
+that ordering validation. `blobOid`, when present, is
 7–64 lowercase hexadecimal characters.
 
 Limits are rejection boundaries, not truncation targets. Oversize input,

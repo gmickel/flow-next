@@ -22,6 +22,11 @@ class ReviewFindingsDocsTest(unittest.TestCase):
             '"priorFindingId"',
             '"firstSeenReceiptId"',
             '"lastSeenReceiptId"',
+            "`plan_review` | `plan`",
+            "`impl_review` | `implementation`",
+            "`completion_review` | `completion`",
+            "`qa_verdict` | `qa`",
+            "receipt `mode` must exactly equal `findings.backend`",
             "`P0`, `P1`, `P2`, `P3`",
             "`introduced`, `pre_existing`",
             "`pre-existing` / `pre existing` → `pre_existing`",
@@ -80,6 +85,14 @@ class ReviewFindingsDocsTest(unittest.TestCase):
             " ".join(text.split()),
         )
         self.assertIn("creates an additional finding and ID", " ".join(text.split()))
+        self.assertIn(
+            "finding-` plus the first 32 lowercase hexadecimal characters of SHA-256",
+            " ".join(text.split()),
+        )
+        self.assertIn(
+            "`flow-next-finding-v1\\0<firstSeenReceiptId>\\0<ordinal>`",
+            text,
+        )
 
     def test_anchor_absence_and_invalid_evidence_are_distinct(self) -> None:
         text = CONTRACT.read_text(encoding="utf-8")
@@ -99,6 +112,14 @@ class ReviewFindingsDocsTest(unittest.TestCase):
         )
         self.assertIn(
             "a semantically incomplete stale sibling does not invalidate it",
+            normalized,
+        )
+        self.assertIn(
+            "an inverted range on an unbound anchor candidate is omitted",
+            normalized,
+        )
+        self.assertIn(
+            "Once the primary location is snapshot-bound, an inverted range",
             normalized,
         )
 
