@@ -156,6 +156,37 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                     self.assertEqual(findings["headSha"], findings["baseSha"])
                     self.assertTrue(FLOWCTL.validate_review_receipt_findings(data))
 
+    def test_shared_writer_attaches_classic_compact_pre_existing_finding(self) -> None:
+        receipt = self.repo / "rp-impl-review.json"
+        FLOWCTL._write_backend_review_receipt(
+            str(receipt),
+            review_type="impl_review",
+            review_id="fn-136.3",
+            backend="rp",
+            verdict="SHIP",
+            session_id="session",
+            effective_model="model",
+            effective_effort="high",
+            resolved_spec=FLOWCTL.BackendSpec("rp", "model", "high"),
+            review_text=(
+                "## Pre-existing issues (not blocking this verdict)\n\n"
+                "- [P2, confidence 75, introduced=false] "
+                "src/legacy.py:42 — Legacy issue remains visible.\n"
+                "Classification counts: 0 introduced, 1 pre_existing.\n"
+                "<verdict>SHIP</verdict>\n"
+            ),
+            include_effort=True,
+            base_branch="HEAD",
+        )
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertIn("findings", data)
+        self.assertEqual(len(data["findings"]["items"]), 1)
+        self.assertEqual(
+            data["findings"]["items"][0]["classification"],
+            "pre_existing",
+        )
+        self.assertTrue(FLOWCTL.validate_review_receipt_findings(data))
+
     def test_receipt_validation_rejects_noncontiguous_round_shapes(self) -> None:
         root = _container(receipt_id="root")
         invalid_root = json.loads(json.dumps(root))

@@ -4528,6 +4528,25 @@ _FINDINGS_INLINE_HOST_RE = re.compile(
     r"\s*[·|,-]\s*([a-z][a-z0-9_-]*(?:[ -][a-z][a-z0-9_-]*)?)"
     r"\s*(?:\*\*)?\s*$"
 )
+_FINDINGS_COMPACT_CANDIDATE_RE = re.compile(
+    r"""(?imx)
+    ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?(?:\*\*)?
+    \[[^\]\r\n]*\bconfidence\b[^\]\r\n]*\bintroduced[ \t]*=
+    """
+)
+_FINDINGS_COMPACT_RE = re.compile(
+    r"""(?imx)
+    ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?(?:\*\*)?
+    \[
+      (?P<severity>[^,\]\r\n]+),[ \t]*
+      confidence[ \t]+(?P<confidence>[^,\]\s]+),[ \t]*
+      introduced[ \t]*=[ \t]*(?P<introduced>[^,\]\s]+)
+    \]
+    [ \t]+(?P<file_line>.+?)
+    [ \t]+—[ \t]+
+    (?P<summary>.+?)(?:\*\*)?[ \t]*$
+    """
+)
 _FINDINGS_PRIOR_RE = re.compile(
     r"""(?imx)
     ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?
@@ -4778,8 +4797,66 @@ def _review_finding_anchor(
     return anchor
 
 
+def _review_finding_compact(
+    block: str,
+    *,
+    base_sha: Optional[str],
+    head_sha: str,
+    anchor_side: Optional[str],
+) -> Optional[dict] | bool:
+    """Parse Classic's compact pre-existing finding form."""
+    candidates = list(_FINDINGS_COMPACT_CANDIDATE_RE.finditer(block))
+    if not candidates:
+        return None
+    matches = list(_FINDINGS_COMPACT_RE.finditer(block))
+    if len(candidates) != 1 or len(matches) != 1:
+        return False
+    match = matches[0]
+    severity = _FINDINGS_SEVERITY_ALIASES.get(
+        match.group("severity").strip().lower()
+    )
+    try:
+        confidence = int(match.group("confidence"))
+    except ValueError:
+        return False
+    introduced = match.group("introduced").lower()
+    if (
+        severity is None
+        or confidence not in _FINDINGS_CONFIDENCE
+        or introduced not in {"true", "false"}
+    ):
+        return False
+    summary = _review_finding_clean_markdown(match.group("summary"))
+    if not summary:
+        return False
+    fields = {"file:line": _review_finding_clean_markdown(match.group("file_line"))}
+    anchor = _review_finding_anchor(
+        fields,
+        base_sha=base_sha,
+        head_sha=head_sha,
+        anchor_side=anchor_side,
+    )
+    if anchor is False:
+        return False
+    row: dict[str, Any] = {
+        "severity": severity,
+        "confidence": confidence,
+        "classification": "introduced" if introduced == "true" else "pre_existing",
+        "status": "open",
+        "title": summary.split(".", 1)[0].strip(),
+        "body": summary,
+        "rIds": _review_finding_rids(block, fields),
+    }
+    if anchor is not None:
+        row["anchor"] = anchor
+    return row
+
+
 def _review_finding_rids(block: str, fields: dict[str, str]) -> list[str]:
-    source = fields.get("r ids", "") + "\n" + block
+    # The explicit per-finding field is authoritative. Falling back to the
+    # block keeps older backend prose parseable without letting nearby
+    # aggregate metadata override an explicit finding-to-requirement link.
+    source = fields["r ids"] if "r ids" in fields else block
     seen: set[str] = set()
     result: list[str] = []
     for match in re.finditer(r"(?<![A-Za-z0-9])R(?:-|\s)?(\d+)(?![A-Za-z0-9])", source):
@@ -4865,7 +4942,11 @@ def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
                 # fields. Keep both representations in one block so semantic
                 # equality is checked instead of manufacturing two findings.
                 continue
-        if has_severity_field or _FINDINGS_INLINE_HOST_RE.search(line):
+        if (
+            has_severity_field
+            or _FINDINGS_INLINE_HOST_RE.search(line)
+            or _FINDINGS_COMPACT_CANDIDATE_RE.search(line)
+        ):
             starts.append(candidate_start)
             saw_severity_label = True
             if len(starts) > _FINDINGS_MAX_ITEMS:
@@ -4876,6 +4957,11 @@ def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
         block_lines: list[str] = []
         for line in lines[start:end]:
             if re.search(r"<verdict>", line, re.IGNORECASE):
+                break
+            if re.match(
+                r"(?i)^\s*##\s+requirements coverage\s*#*\s*$",
+                line,
+            ):
                 break
             if re.match(
                 r"(?i)^\s*(classification counts|suppressed findings|unaddressed r-ids)\s*:",
@@ -5348,6 +5434,17 @@ def _parse_review_findings_v1(
         return None
     if parsed_rows is None:
         for block in blocks:
+            compact = _review_finding_compact(
+                block,
+                base_sha=base_sha,
+                head_sha=head_sha,
+                anchor_side=anchor_side,
+            )
+            if compact is False:
+                return None
+            if compact is not None:
+                rows.append(compact)
+                continue
             fields = _review_finding_fields(block)
             if fields is None:
                 return None

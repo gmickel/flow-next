@@ -159,6 +159,28 @@ Suggestion: Add the missing invariant.
         self.assertNotIn("anchor", item)
         self.assertEqual(item["rIds"], ["R3"])
 
+    def test_requirements_coverage_does_not_leak_rids_into_last_finding(self) -> None:
+        explicit = """
+Severity: Major
+Confidence: 100
+Classification: introduced
+R-IDs: [R1]
+Problem: The R1 behavior regressed.
+
+## Requirements coverage
+
+| R-ID | Status | Evidence |
+|---|---|---|
+| R1 | met | Reviewed above. |
+| R2 | met | Covered elsewhere. |
+
+<verdict>NEEDS_WORK</verdict>
+"""
+        self.assertEqual(parse(explicit, "codex")["items"][0]["rIds"], ["R1"])
+
+        fallback = explicit.replace("R-IDs: [R1]\n", "")
+        self.assertEqual(parse(fallback, "codex")["items"][0]["rIds"], ["R1"])
+
     def test_ratchet_carries_ids_and_first_seen_receipt(self) -> None:
         for backend in BACKENDS:
             prior_text = self.fixture(backend, "catalog-sample")
@@ -599,6 +621,45 @@ Problem: Equivalent aliases describe one finding.
         for text in conflicts:
             with self.subTest(text=text):
                 self.assertIsNone(parse(text, "host"))
+
+    def test_classic_compact_pre_existing_findings_are_preserved(self) -> None:
+        text = """
+Severity: Major
+Confidence: 100
+Classification: introduced
+File:Line: src/new.py:10
+Problem: The introduced finding remains blocking.
+
+## Pre-existing issues (not blocking this verdict)
+
+- [Minor, confidence 75, introduced=false] src/legacy.py:42 — Legacy issue remains visible. R7
+Classification counts: 1 introduced, 1 pre_existing.
+<verdict>NEEDS_WORK</verdict>
+"""
+        result = parse(text, "rp")
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["items"]), 2)
+        compact = result["items"][1]
+        self.assertEqual(compact["severity"], "P2")
+        self.assertEqual(compact["confidence"], 75)
+        self.assertEqual(compact["classification"], "pre_existing")
+        self.assertEqual(compact["status"], "open")
+        self.assertEqual(compact["body"], "Legacy issue remains visible. R7")
+        self.assertEqual(compact["rIds"], ["R7"])
+        self.assertEqual(compact["anchor"]["path"], "src/legacy.py")
+        self.assertEqual(compact["anchor"]["startLine"], 42)
+
+    def test_malformed_classic_compact_finding_fails_closed(self) -> None:
+        cases = (
+            "[P4, confidence 75, introduced=false] src/legacy.py:42 — bad severity",
+            "[P2, confidence 90, introduced=false] src/legacy.py:42 — bad confidence",
+            "[P2, confidence 75, introduced=maybe] src/legacy.py:42 — bad classification",
+            "[P2, confidence 75, introduced=false] src/legacy.py:0 — bad line",
+        )
+        for compact in cases:
+            text = f"No findings.\n{compact}\n<verdict>SHIP</verdict>"
+            with self.subTest(compact=compact):
+                self.assertIsNone(parse(text, "rp"))
 
     def test_explicit_empty_with_unknown_inline_enum_fails_closed(self) -> None:
         cases = (
