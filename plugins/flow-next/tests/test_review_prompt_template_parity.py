@@ -111,6 +111,30 @@ def _without_output_format(text: str) -> str:
     return text[:start] + "## Output Format\n<FORMAT>\n" + text[end:]
 
 
+def _output_format(text: str) -> str:
+    start = text.index("## Output Format\n")
+    offset = start + len("## Output Format\n")
+    in_fence = False
+    for line in text[offset:].splitlines(keepends=True):
+        if line.startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("## "):
+            return text[start:offset]
+        offset += len(line)
+    raise AssertionError("Output Format has no following section boundary")
+
+
+def _without_plan_finding_schema(text: str) -> str:
+    section = _output_format(text)
+    starts = ("For each issue found:\n", "Severity: P0/P1/P2/P3\n")
+    start = next((section.index(marker) for marker in starts if marker in section), -1)
+    if start == -1:
+        raise AssertionError("plan finding schema start missing")
+    end_marker = "After the issues list, emit "
+    end = section.index(end_marker, start)
+    return section[:start] + "<FINDING_SCHEMA>\n" + section[end:]
+
+
 class TestReviewPromptTemplateParity(unittest.TestCase):
     def test_fallbacks_match_template_files(self) -> None:
         for const_name, rel in PARITY_PAIRS:
@@ -280,6 +304,26 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
                     evidence["prompts"][name]["baseline_masked_sha256"],
                     f"{name} changed outside ## Output Format relative to {PRE_CHANGE_COMMIT}",
                 )
+
+    def test_plan_output_changes_only_the_finding_schema(self) -> None:
+        evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
+        fixture = (FIXTURES / "plan.txt").read_text(encoding="utf-8")
+        self.assertEqual(
+            hashlib.sha256(fixture.encode("utf-8")).hexdigest(),
+            evidence["prompts"]["plan"]["baseline_sha256"],
+            "pre-change plan fixture drifted from its commit-bound SHA-256",
+        )
+        baseline = _without_plan_finding_schema(fixture)
+        prompts = self.rendered_prompts()
+        for name in (
+            "plan",
+            "plan_no_tasks",
+            "plan_corpus_risky",
+            "plan_corpus_clean",
+            "plan_corpus_user_edited",
+        ):
+            with self.subTest(prompt=name):
+                self.assertEqual(_without_plan_finding_schema(prompts[name]), baseline)
 
     def test_actual_token_measurement_is_bound_to_assembled_prompts(self) -> None:
         evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))

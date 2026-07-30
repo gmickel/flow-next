@@ -62,17 +62,18 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 {plan_quality_block}{protected_artifacts_block}
 ## Output Format
 
-Each issue uses these colon-delimited lines:
-```
-Severity: P0|P1|P2|P3
-Confidence: 0|25|50|75|100
-Classification: introduced|pre_existing
-File:Line: path:line|-
-R-IDs: [R1, R2]|[]
-Location: task or section
-Problem: what is wrong
-Suggestion: how to fix
-```
+Severity: P0/P1/P2/P3
+Confidence: 0/25/50/75/100
+Classification: introduced/pre_existing
+File:Line: path:line / -
+R-IDs: [R1, R2] / []
+Location:
+Problem:
+Suggestion:
+
+After the issues list, emit a `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
+
+Be critical. Find real issues.
 
 {review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:

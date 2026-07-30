@@ -98,11 +98,11 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 ## Gaps Found
 
 [Each GAP uses these colon-delimited lines:
-Severity: P0|P1|P2|P3
-Confidence: 0|25|50|75|100
-Classification: introduced|pre_existing
-File:Line: path:line|-
-R-IDs: [R1, R2]|[]
+Severity: P0/P1/P2/P3
+Confidence: 0/25/50/75/100
+Classification: introduced/pre_existing
+File:Line: path:line / -
+R-IDs: [R1, R2] / []
 Problem: what is wrong
 Suggestion: how to fix]
 ```

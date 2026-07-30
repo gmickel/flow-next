@@ -94,7 +94,9 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                     "Suggestion",
                 ):
                     self.assertIn(marker, output)
-                self.assertRegex(output, r"File:Line[^\n]*path:line[^\n]*(?:`-`|\|-)")
+                self.assertRegex(
+                    output, r"File:Line[^\n]*path:line[^\n]*(?:`-`|\|-|/ -)"
+                )
                 self.assertRegex(output, r"R-IDs[^\n]*\[R1, R2\][^\n]*\[\]")
                 self.assertRegex(
                     output,
@@ -103,11 +105,11 @@ class ReviewPromptConstraintTest(unittest.TestCase):
 
     def test_plan_and_completion_require_parser_compatible_lines(self) -> None:
         required = (
-            "Severity: P0|P1|P2|P3",
-            "Confidence: 0|25|50|75|100",
-            "Classification: introduced|pre_existing",
-            "File:Line: path:line|-",
-            "R-IDs: [R1, R2]|[]",
+            "Severity: P0/P1/P2/P3",
+            "Confidence: 0/25/50/75/100",
+            "Classification: introduced/pre_existing",
+            "File:Line: path:line / -",
+            "R-IDs: [R1, R2] / []",
             "Problem:",
             "Suggestion:",
         )
