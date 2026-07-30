@@ -554,6 +554,18 @@ Problem: Equivalent anchor aliases describe one location.
             with self.subTest(text=text):
                 self.assertIsNone(parse(text, "host"))
 
+    def test_explicit_empty_with_malformed_host_table_fails_closed(self) -> None:
+        text = """
+No findings.
+
+| # | Sev | Confidence | Classification | Finding | Disposition |
+| malformed separator |
+| 1 | Blocker | 100 | introduced | Hidden unknown finding. | OPEN |
+
+<verdict>SHIP</verdict>
+"""
+        self.assertIsNone(parse(text, "host"))
+
     def test_duplicate_singleton_labels_fail_closed(self) -> None:
         cases = (
             """

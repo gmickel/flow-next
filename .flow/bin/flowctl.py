@@ -4899,9 +4899,9 @@ def _review_finding_host_table(output: str) -> Optional[list[dict]]:
         return None
     header_index, headers = candidates[0]
     if header_index + 1 >= len(lines):
-        return None
+        return []
     if not _FINDINGS_HOST_TABLE_SEPARATOR_RE.match(lines[header_index + 1]):
-        return None
+        return []
     rows: list[dict] = []
     for line in lines[header_index + 2:]:
         if not line.strip().startswith("|"):
