@@ -137,6 +137,41 @@ class TestSharedUnifiedDiff(unittest.TestCase):
             json.dumps(expected, sort_keys=True, separators=(",", ":")),
         )
 
+    def test_root_level_numstat_rename_uses_destination_and_rename_status(
+        self,
+    ) -> None:
+        materialized = flowctl._ExportDiffMaterialization(
+            head_sha="head-sha",
+            numstat_rc=0,
+            numstat="2\t1\told.txt => new.txt\n",
+            name_status_rc=0,
+            name_status="R100\told.txt\tnew.txt\n",
+            unified_rc=0,
+            events=(),
+        )
+
+        summary = flowctl._export_diff_summary(
+            "origin/main",
+            "base-sha",
+            REPO_ROOT,
+            materialized=materialized,
+        )
+
+        self.assertEqual(
+            summary["files"],
+            [
+                {
+                    "path": "new.txt",
+                    "status": "R",
+                    "additions": 2,
+                    "deletions": 1,
+                    "module": "<root>",
+                    "changed_symbols": [],
+                    "derived": {"kind": "none", "source": None},
+                }
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

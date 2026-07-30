@@ -20274,8 +20274,8 @@ def _export_diff_summary(
     head_sha = diff.head_sha
 
     # numstat: per-file additions/deletions. Renames render as a tab-separated
-    # `old\tnew` path on the third column (or `{old => new}` brace form when
-    # `-M` matches a rename).
+    # `old\tnew` path on the third column, a `{old => new}` brace form, or a
+    # root-level `old => new` arrow form when `-M` matches a rename.
     files_numstat: dict[str, dict[str, Any]] = {}
     if diff.numstat_rc == 0:
         for line in diff.numstat.splitlines():
@@ -20303,6 +20303,9 @@ def _export_diff_summary(
                 # numstat may emit `old\tnew\t` for moved files; take new.
                 pieces = path_raw.split("\t")
                 path = pieces[-1] if pieces else path_raw
+            elif " => " in path_raw:
+                # Root-level rename: `old.txt => new.txt` → `new.txt`.
+                path = path_raw.rsplit(" => ", 1)[1]
             files_numstat[path] = {
                 "path": path,
                 "additions": adds,

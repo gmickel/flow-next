@@ -148,6 +148,7 @@ class FixtureMetadataTests(unittest.TestCase):
         metadata = _read_json(METADATA)
         encoded = GOLDEN.read_bytes()
         self.assertEqual(metadata["schemaVersion"], 1)
+        self.assertRegex(metadata["sourceBlob"], r"^[0-9a-f]{40}$")
         self.assertRegex(metadata["sourceCommit"], r"^[0-9a-f]{40}$")
         self.assertEqual(
             metadata["sourcePath"], GOLDEN.relative_to(REPO_ROOT).as_posix()
@@ -164,32 +165,8 @@ class FixtureMetadataTests(unittest.TestCase):
             },
         )
         self.assertEqual(encoded[-1:], b"\n")
-        source = f"{metadata['sourceCommit']}:{metadata['sourcePath']}"
-        source_probe = subprocess.run(
-            ["git", "cat-file", "-e", source],
-            cwd=REPO_ROOT,
-            capture_output=True,
-        )
-        if source_probe.returncode != 0:
-            shallow = subprocess.run(
-                ["git", "rev-parse", "--is-shallow-repository"],
-                cwd=REPO_ROOT,
-                check=True,
-                capture_output=True,
-                text=True,
-            ).stdout.strip()
-            self.assertEqual(
-                shallow,
-                "true",
-                f"fixture source commit is missing from a full checkout: {source}",
-            )
-            return
         source_bytes = subprocess.run(
-            [
-                "git",
-                "show",
-                source,
-            ],
+            ["git", "cat-file", "blob", metadata["sourceBlob"]],
             cwd=REPO_ROOT,
             check=True,
             capture_output=True,
