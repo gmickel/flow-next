@@ -15,11 +15,11 @@
     "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "804ebc2d31cc89f09b51333a0b5ed84987994c3b616d120116db2a2e32b625f1",
     "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md": "bf7c72d18be2764733a1d211145ff996a711b3c72994e9cd18897dbfa8acb2f0",
     "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md": "6f50fd89b5f3692d4b974ba00a26a56a1fd65954e113629f16e7f04b8ed62fda",
-    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "55aed458464fe6f13039e5b282b69f553472e066afce7c8cf64a5a063052d619"
+    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "61c4b306b05fdfa12391f43b0ada5bcb1c58a8fdfde3b74e5c6be96a3abf9641"
   },
   "b1_unchanged_workflow_slices": {
     "before_phase_1_5_sha256": "01e2f2cc79062068ccc23d4dc44ffeef31dd1ea72a441ca860d0ef38e51d67c9",
-    "after_phase_1_5_sha256": "05459d81ce91d7ddcd149a8fd9a3e687f84518f79e1eddba73e1e1834853ced1",
+    "after_phase_1_5_sha256": "43e4397db395b1c5d745a58955620045a8a837378f4141de19fe8b1704f05bc9",
     "meaning": "Phase 0/1 remains byte-identical to B1; Phase 1.5 now loads the structured cognitive aid and Phase 2 places its deterministic Markdown."
   },
   "kept_candidate": {
@@ -43,39 +43,39 @@
       "algorithm": "lf-full-file-on-activation-once-per-path-hash",
       "dry-run": {
         "b1_chars": 145723,
-        "candidate_chars": 146982,
-        "delta_chars": 1259
+        "candidate_chars": 147295,
+        "delta_chars": 1572
       },
       "html-off": {
         "b1_chars": 191058,
-        "candidate_chars": 192243,
-        "delta_chars": 1185
+        "candidate_chars": 192556,
+        "delta_chars": 1498
       },
       "html-on": {
         "b1_chars": 210653,
-        "candidate_chars": 219550,
-        "delta_chars": 8897,
+        "candidate_chars": 219863,
+        "delta_chars": 9210,
         "note": "Selected HTML path pays the direct-reference router plus the shared structured cognitive-aid contract; no wall-time claim."
       },
       "create": {
         "b1_chars": 191058,
-        "candidate_chars": 192243,
-        "delta_chars": 1185
+        "candidate_chars": 192556,
+        "delta_chars": 1498
       },
       "finalize": {
         "b1_chars": 179412,
-        "candidate_chars": 180597,
-        "delta_chars": 1185
+        "candidate_chars": 180910,
+        "delta_chars": 1498
       },
       "existing-pr": {
         "b1_chars": 179412,
-        "candidate_chars": 180597,
-        "delta_chars": 1185
+        "candidate_chars": 180910,
+        "delta_chars": 1498
       },
       "push-retry": {
         "b1_chars": 179412,
-        "candidate_chars": 180597,
-        "delta_chars": 1185
+        "candidate_chars": 180910,
+        "delta_chars": 1498
       }
     },
     "required_reads": {

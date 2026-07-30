@@ -591,7 +591,17 @@ Your job — the calls the pipeline can't make:
 
 Field rules:
 
-- **Mechanically-verified summary** draws from two export signals only: `tasks[].evidence.tests[]` (the same evidence §2.3b Verification renders) and R-ID coverage (acceptance-criteria count minus `tasks_summary.uncovered_r_ids`). `deferred_findings[]` is an open-items signal, not proof that a cross-model review ran. The export carries no review-verdict or suppression field, so the cross-model line says `no cross-model review recorded on this PR` rather than inferring one.
+- **Supported/current cognitive aid:** tests, R-ID coverage, and review evidence
+  draw only from the artifact proof and provenance already rendered in
+  `## The change, top to bottom`. Never read `tasks[].evidence`,
+  `tasks_summary`, or legacy review fields for this block.
+- **Labeled legacy fallback:** mechanically-verified summary draws from two
+  export signals only: `tasks[].evidence.tests[]` (the same evidence §2.3b
+  Verification renders) and R-ID coverage (acceptance-criteria count minus
+  `tasks_summary.uncovered_r_ids`). `deferred_findings[]` is an open-items
+  signal, not proof that a cross-model review ran. The export carries no
+  review-verdict or suppression field, so the cross-model line says
+  `no cross-model review recorded on this PR` rather than inferring one.
 - **No-overclaim rule (load-bearing).** Cite ONLY verification present in the payload. Absent verification is stated honestly, never implied: no test evidence → "no test evidence recorded on this PR"; no review-verdict field → "no cross-model review recorded on this PR". NEVER write "reviewed by a second model" / "fully tested" without an authoritative signal — the reviewer must be able to trust every line of this block literally. (This is §2.5 rule 11 — the same no-invented-claims discipline the Review plan rests on.)
 - **≤ ~8 rendered lines** (priorities, not a hard cap): a coaching frame, not a report. It sets up the buckets; it does NOT restate the Review plan's per-file detail (no repetition between this block and the buckets — the eval flagged length only when the two duplicated each other).
 - **No-evidence payloads (specless / manual PRs)** — all three signals may be absent; the block then honestly states each absence and still frames "your job". The eval verified this degrades cleanly (honesty stayed high with zero evidence).

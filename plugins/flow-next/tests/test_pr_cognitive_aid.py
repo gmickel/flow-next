@@ -5,11 +5,13 @@ import json
 import statistics
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -158,6 +160,18 @@ def artifact(*, canonical_files: int = 2, churn: int = 40) -> dict:
     }
 
 
+def artifact_diff_files(value: dict) -> dict[str, tuple[str, int, int]]:
+    return {
+        item["path"]: (
+            item["changeType"],
+            item.get("additions"),
+            item.get("deletions"),
+        )
+        for group in value["changeWalkthrough"]["groups"]
+        for item in group["files"]
+    }
+
+
 class ValidationTests(unittest.TestCase):
     def test_valid_contract_preserves_separate_change_and_attention_dimensions(self) -> None:
         value = artifact()
@@ -214,6 +228,34 @@ class ValidationTests(unittest.TestCase):
                     flowctl.PrCognitiveAidValidationError, message
                 ):
                     flowctl.validate_pr_cognitive_aid(value)
+
+    def test_file_membership_status_and_churn_match_bound_diff(self) -> None:
+        value = artifact()
+        expected = artifact_diff_files(value)
+        flowctl.validate_pr_cognitive_aid(value, expected_diff_files=expected)
+        mutations = []
+        nonexistent = artifact()
+        nonexistent["changeWalkthrough"]["groups"][2]["files"][0][
+            "path"
+        ] = "src/not-in-diff.py"
+        mutations.append((nonexistent, "does not belong"))
+        wrong_status = artifact()
+        wrong_status["changeWalkthrough"]["groups"][2]["files"][0][
+            "changeType"
+        ] = "added"
+        mutations.append((wrong_status, "do not match"))
+        wrong_churn = artifact()
+        wrong_churn["changeWalkthrough"]["groups"][2]["files"][0][
+            "additions"
+        ] += 1
+        mutations.append((wrong_churn, "do not match"))
+        for candidate, message in mutations:
+            with self.subTest(message=message), self.assertRaisesRegex(
+                flowctl.PrCognitiveAidValidationError, message
+            ):
+                flowctl.validate_pr_cognitive_aid(
+                    candidate, expected_diff_files=expected
+                )
 
     def test_raw_input_is_bounded_before_json_decode(self) -> None:
         with tempfile.NamedTemporaryFile() as handle:
@@ -491,6 +533,64 @@ class PersistenceAndCurrentnessTests(unittest.TestCase):
             self.assertEqual(result["status"], "invalid")
             self.assertIsNone(result["artifact"])
             self.assertIn("encoded payload exceeds", result["rejected"][0])
+
+    def test_selection_serializes_with_concurrent_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            first = artifact()
+            flowctl.write_pr_cognitive_aid(
+                flow_dir,
+                first,
+                spec_id=SPEC_ID,
+                base_sha=BASE_SHA,
+                head_sha=HEAD_SHA,
+            )
+            second = artifact()
+            second["artifactId"] = "aid-002"
+            second["supersedesArtifactId"] = "aid-001"
+            second["generatedAt"] = "2026-07-30T12:01:00Z"
+            entered_publish = threading.Event()
+            release_publish = threading.Event()
+            selected: list[dict] = []
+            original_atomic_create = flowctl.atomic_create
+
+            def blocked_create(path: Path, content: str) -> None:
+                entered_publish.set()
+                self.assertTrue(release_publish.wait(timeout=2))
+                original_atomic_create(path, content)
+
+            with mock.patch.object(
+                flowctl, "atomic_create", side_effect=blocked_create
+            ):
+                writer = threading.Thread(
+                    target=flowctl.write_pr_cognitive_aid,
+                    kwargs={
+                        "flow_dir": flow_dir,
+                        "artifact": second,
+                        "spec_id": SPEC_ID,
+                        "base_sha": BASE_SHA,
+                        "head_sha": HEAD_SHA,
+                    },
+                )
+                reader = threading.Thread(
+                    target=lambda: selected.append(
+                        flowctl.select_current_pr_cognitive_aid(
+                            flow_dir,
+                            SPEC_ID,
+                            base_sha=BASE_SHA,
+                            head_sha=HEAD_SHA,
+                        )
+                    )
+                )
+                writer.start()
+                self.assertTrue(entered_publish.wait(timeout=2))
+                reader.start()
+                time.sleep(0.05)
+                self.assertFalse(selected)
+                release_publish.set()
+                writer.join(timeout=2)
+                reader.join(timeout=2)
+            self.assertEqual(selected[0]["artifact"]["artifactId"], "aid-002")
 
 
 class MarkdownAndBudgetTests(unittest.TestCase):

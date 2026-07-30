@@ -17291,6 +17291,7 @@ def validate_pr_cognitive_aid(
     expected_spec_id: Optional[str] = None,
     expected_base_sha: Optional[str] = None,
     expected_head_sha: Optional[str] = None,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
 ) -> dict[str, Any]:
     """Validate one v1 artifact without coercion, truncation, or I/O."""
     artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
@@ -17602,6 +17603,18 @@ def validate_pr_cognitive_aid(
                     )
                 _pr_aid_fail(f"{file_path}.path", "duplicate file membership")
             files_seen[repo_path] = membership
+            if expected_diff_files is not None:
+                expected_file = expected_diff_files.get(repo_path)
+                actual_file = (change_type, additions, deletions)
+                if expected_file is None:
+                    _pr_aid_fail(
+                        f"{file_path}.path", "does not belong to the bound Git diff"
+                    )
+                if actual_file != expected_file:
+                    _pr_aid_fail(
+                        file_path,
+                        "changeType/additions/deletions do not match the bound Git diff",
+                    )
             if len(files_seen) > 500:
                 _pr_aid_fail("changeWalkthrough.groups", "exceeds 500 unique files")
     if not 1 <= kind_counts["step"] <= 7:
@@ -17612,7 +17625,40 @@ def validate_pr_cognitive_aid(
                 "changeWalkthrough.groups",
                 f"must contain at most one {optional_kind} group",
             )
+    if expected_diff_files is not None and set(files_seen) != set(expected_diff_files):
+        _pr_aid_fail(
+            "changeWalkthrough.groups",
+            "file membership does not cover the bound Git diff exactly",
+        )
     return artifact
+
+
+def _pr_aid_live_diff_files(
+    repo_root: Path, base_sha: str, head_sha: str
+) -> dict[str, tuple[str, int, int]]:
+    materialized = _export_materialize_diff(base_sha, repo_root)
+    if materialized.head_sha != head_sha:
+        _pr_aid_fail("headSha", "does not match repository HEAD")
+    if materialized.numstat_rc != 0 or materialized.name_status_rc != 0:
+        _pr_aid_fail("diff_metadata", "cannot read the bound Git diff")
+    summary = _export_diff_summary(
+        base_sha, base_sha, repo_root, materialized=materialized
+    )
+    status_names = {
+        "A": "added",
+        "M": "modified",
+        "D": "deleted",
+        "R": "renamed",
+        "C": "copied",
+    }
+    return {
+        item["path"]: (
+            status_names.get(item["status"], "modified"),
+            item["additions"],
+            item["deletions"],
+        )
+        for item in summary["files"]
+    }
 
 
 def _pr_cognitive_aid_home(flow_dir: Path, spec_id: str) -> Path:
@@ -17620,7 +17666,10 @@ def _pr_cognitive_aid_home(flow_dir: Path, spec_id: str) -> Path:
 
 
 def _load_pr_cognitive_aid_records(
-    flow_dir: Path, spec_id: str
+    flow_dir: Path,
+    spec_id: str,
+    *,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     records: list[dict[str, Any]] = []
     rejected: list[str] = []
@@ -17637,7 +17686,11 @@ def _load_pr_cognitive_aid_records(
                     f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
                 )
             raw = json.loads(raw_bytes.decode("utf-8"))
-            record = validate_pr_cognitive_aid(raw, expected_spec_id=spec_id)
+            record = validate_pr_cognitive_aid(
+                raw,
+                expected_spec_id=spec_id,
+                expected_diff_files=expected_diff_files,
+            )
             if path.name != f"{record['artifactId']}.json":
                 _pr_aid_fail(
                     path.name, "filename must equal <artifactId>.json"
@@ -17699,10 +17752,49 @@ def _pr_aid_chain_tip(records: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def select_current_pr_cognitive_aid(
-    flow_dir: Path, spec_id: str, *, base_sha: str, head_sha: str
+    flow_dir: Path,
+    spec_id: str,
+    *,
+    base_sha: str,
+    head_sha: str,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
 ) -> dict[str, Any]:
     """Project the matching chain tip; never merge stale or legacy fields."""
-    records, rejected = _load_pr_cognitive_aid_records(flow_dir, spec_id)
+    home = _pr_cognitive_aid_home(flow_dir, spec_id)
+    if not home.is_dir():
+        return {
+            "status": "absent",
+            "artifact": None,
+            "latestArtifactId": None,
+            "rejected": [],
+        }
+    try:
+        with cross_process_lock(home / ".write.lock"):
+            records, rejected = _load_pr_cognitive_aid_records(
+                flow_dir,
+                spec_id,
+                expected_diff_files=expected_diff_files,
+            )
+            return _select_current_pr_cognitive_aid_records(
+                records, rejected, base_sha=base_sha, head_sha=head_sha
+            )
+    except CrossProcessLockError as exc:
+        return {
+            "status": "invalid",
+            "artifact": None,
+            "latestArtifactId": None,
+            "rejected": [f"artifact home: cannot acquire reader lock: {exc}"],
+        }
+
+
+def _select_current_pr_cognitive_aid_records(
+    records: list[dict[str, Any]],
+    rejected: list[str],
+    *,
+    base_sha: str,
+    head_sha: str,
+) -> dict[str, Any]:
+    """Select from one writer-locked home snapshot."""
     if rejected:
         unsupported = all("unsupported schema version" in item for item in rejected)
         return {
@@ -17747,6 +17839,7 @@ def write_pr_cognitive_aid(
     spec_id: str,
     base_sha: str,
     head_sha: str,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
 ) -> Path:
     """Validate and atomically create one immutable generation."""
     artifact = validate_pr_cognitive_aid(
@@ -17754,6 +17847,7 @@ def write_pr_cognitive_aid(
         expected_spec_id=spec_id,
         expected_base_sha=base_sha,
         expected_head_sha=head_sha,
+        expected_diff_files=expected_diff_files,
     )
     home = _pr_cognitive_aid_home(flow_dir, spec_id)
     target = home / f"{artifact['artifactId']}.json"
@@ -18041,7 +18135,15 @@ def _pr_aid_cli_shas(args: argparse.Namespace) -> tuple[str, str]:
 def cmd_pr_cognitive_aid_validate(args: argparse.Namespace) -> None:
     artifact = _pr_aid_read_input(args.file)
     try:
-        artifact = validate_pr_cognitive_aid(artifact)
+        artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
+        base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
+        head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        artifact = validate_pr_cognitive_aid(
+            artifact,
+            expected_diff_files=_pr_aid_live_diff_files(
+                get_repo_root(), base_sha, head_sha
+            ),
+        )
     except PrCognitiveAidValidationError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
     if args.json:
@@ -18056,12 +18158,16 @@ def cmd_pr_cognitive_aid_write(args: argparse.Namespace) -> None:
     base_sha, head_sha = _pr_aid_cli_shas(args)
     artifact = _pr_aid_read_input(args.file)
     try:
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
         path = write_pr_cognitive_aid(
             flow_dir,
             artifact,
             spec_id=spec_id,
             base_sha=base_sha,
             head_sha=head_sha,
+            expected_diff_files=expected_diff_files,
         )
     except PrCognitiveAidValidationError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
@@ -18076,9 +18182,19 @@ def cmd_pr_cognitive_aid_current(args: argparse.Namespace) -> None:
     flow_dir = get_flow_dir()
     spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
     base_sha, head_sha = _pr_aid_cli_shas(args)
-    result = select_current_pr_cognitive_aid(
-        flow_dir, spec_id, base_sha=base_sha, head_sha=head_sha
-    )
+    try:
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
+        result = select_current_pr_cognitive_aid(
+            flow_dir,
+            spec_id,
+            base_sha=base_sha,
+            head_sha=head_sha,
+            expected_diff_files=expected_diff_files,
+        )
+    except PrCognitiveAidValidationError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
     if args.json:
         json_output(result)
     elif result["artifact"] is not None:
@@ -18094,6 +18210,15 @@ def cmd_pr_cognitive_aid_render(args: argparse.Namespace) -> None:
     if args.file:
         artifact = _pr_aid_read_input(args.file)
         try:
+            artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
+            base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
+            head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+            artifact = validate_pr_cognitive_aid(
+                artifact,
+                expected_diff_files=_pr_aid_live_diff_files(
+                    get_repo_root(), base_sha, head_sha
+                ),
+            )
             print(render_pr_cognitive_aid_markdown(artifact), end="")
         except PrCognitiveAidValidationError as exc:
             error_exit(str(exc), use_json=False, code=2)
@@ -18107,9 +18232,19 @@ def cmd_pr_cognitive_aid_render(args: argparse.Namespace) -> None:
     flow_dir = get_flow_dir()
     spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=False)
     base_sha, head_sha = _pr_aid_cli_shas(args)
-    result = select_current_pr_cognitive_aid(
-        flow_dir, spec_id, base_sha=base_sha, head_sha=head_sha
-    )
+    try:
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
+        result = select_current_pr_cognitive_aid(
+            flow_dir,
+            spec_id,
+            base_sha=base_sha,
+            head_sha=head_sha,
+            expected_diff_files=expected_diff_files,
+        )
+    except PrCognitiveAidValidationError as exc:
+        error_exit(str(exc), use_json=False, code=2)
     if result["artifact"] is None:
         error_exit(
             f"No supported current PR cognitive-aid artifact ({result['status']})",
