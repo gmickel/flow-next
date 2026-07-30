@@ -59,7 +59,7 @@
     "github": false
   },
   "tracker": {
-    "conflictTiebreak": "always-ask",
+    "conflictTiebreak": "flow-wins",
     "enabled": true,
     "perEvent": {
       "capture": "reconcile",
