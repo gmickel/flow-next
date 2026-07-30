@@ -689,7 +689,8 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         ))
         self.assertIn('mktemp "${RECEIPT_RECOVERY}.tmp.XXXXXX"', rp)
         self.assertIn('if ! cat > "$RECOVERY_TMP"', rp)
-        self.assertIn('mv -f "$RECOVERY_TMP" "$RECEIPT_RECOVERY"', rp)
+        self.assertNotIn('mv -f "$RECOVERY_TMP" "$RECEIPT_RECOVERY"', rp)
+        self.assertIn('--input "$RECOVERY_TMP"', rp)
         self.assertIn('--recovery "$RECEIPT_RECOVERY"', rp)
         self.assertNotIn(
             'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"', rp

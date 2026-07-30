@@ -565,30 +565,74 @@ with open(sys.argv[1], "w", encoding="utf-8") as fh:
     json.dump(r, fh); fh.write("\n")
 PY
 
-if [[ "${QA_FINDINGS:-[]}" == "[]" ]]; then
-  printf 'No findings.\\n<verdict>SHIP</verdict>\\n' > "$QA_REVIEW_FILE"
-else
-  $PY - "$QA_REVIEW_FILE" <<'PY'
+$PY - "$QA_REVIEW_FILE" "${PRIOR_RECEIPT:-}" <<'PY'
 import json, os, sys
 items = json.loads(os.environ.get("QA_FINDINGS") or "[]")
-lines = []
+current = {}
 for item in items:
     required = {"id", "severity", "confidence", "classification", "reason", "file"}
     if not isinstance(item, dict) or not required <= set(item):
         raise SystemExit("qa: open finding lacks v1 fields")
+    finding_id = item["id"]
+    if not isinstance(finding_id, str) or not finding_id or finding_id in current:
+        raise SystemExit("qa: finding ids must be unique non-empty strings")
+    current[finding_id] = item
+
+prior_items = []
+prior_path = sys.argv[2] if len(sys.argv) > 2 else ""
+if prior_path:
+    try:
+        with open(prior_path, encoding="utf-8") as fh:
+            prior_receipt = json.load(fh)
+        prior_findings = prior_receipt.get("findings", {})
+        if (
+            prior_receipt.get("type") == os.environ["QA_TYPE"]
+            and prior_receipt.get("id") == os.environ["QA_ID"]
+            and prior_receipt.get("mode") == os.environ["QA_MODE"]
+            and prior_findings.get("schemaVersion") == 1
+            and isinstance(prior_findings.get("items"), list)
+        ):
+            prior_items = prior_findings["items"]
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        prior_items = []
+
+lines = []
+known_ids = set()
+for prior in sorted(prior_items, key=lambda item: item.get("ordinal", 0)):
+    finding_id = prior.get("title")
+    ordinal = prior.get("ordinal")
+    if (
+        not isinstance(finding_id, str)
+        or not isinstance(ordinal, int)
+        or isinstance(ordinal, bool)
+        or ordinal < 1
+        or finding_id in known_ids
+    ):
+        prior_items = []
+        lines = []
+        known_ids = set()
+        break
+    known_ids.add(finding_id)
+    status = "not_fixed" if finding_id in current else "fixed"
+    lines.append(f"Prior finding {ordinal} — {status}.")
+
+for finding_id, item in current.items():
+    if finding_id in known_ids:
+        continue
     lines.extend([
-        f"### {item['id']}",
+        f"### {finding_id}",
         f"- **Severity**: {item['severity']}",
         f"- **Confidence**: {item['confidence']}",
         f"- **Classification**: {item['classification']}",
         f"- **Problem**: {item['reason']} (surface: {item['file']})",
         "",
     ])
+if not lines:
+    lines.append("No findings.")
 lines.append(f"<verdict>{os.environ['QA_VERDICT']}</verdict>")
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
     fh.write("\n".join(lines) + "\n")
 PY
-fi
 PRIOR_ARGS=()
 [[ -n "$PRIOR_RECEIPT" ]] && PRIOR_ARGS=(--prior "$PRIOR_RECEIPT")
 if ! "$FLOWCTL" review-findings attach \

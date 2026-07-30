@@ -306,11 +306,6 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             with self.subTest(backend=backend):
                 receipt = self.repo / f"{backend}-completion.json"
                 recovery = self.repo / f"{backend}-completion-recovery.json"
-                response = self.repo / f"{backend}-completion-review.md"
-                response.write_text(
-                    _review_text("completion_review", backend),
-                    encoding="utf-8",
-                )
 
                 def attach(
                     index: int,
@@ -318,9 +313,21 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                     route: str = backend,
                     terminal: Path = receipt,
                     recovery_copy: Path = recovery,
-                    review_output: Path = response,
                 ) -> None:
                     base_input = self.repo / f"{route}-input-{index}.json"
+                    invocation_review = (
+                        self.repo / f"{route}-review-{index}.md"
+                    )
+                    invocation_review.write_text(
+                        f"""## Gap {index}
+- **Severity**: Major
+- **Confidence**: 100
+- **Classification**: introduced
+- **Problem**: attempt-{index} metadata must stay with this review.
+<verdict>NEEDS_WORK</verdict>
+""",
+                        encoding="utf-8",
+                    )
                     base_input.write_text(
                         json.dumps(
                             {
@@ -328,6 +335,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                                 "id": "fn-136",
                                 "mode": route,
                                 "verdict": "NEEDS_WORK",
+                                "attempt_timestamp": f"attempt-{index}",
                             }
                         ),
                         encoding="utf-8",
@@ -336,7 +344,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                         argparse.Namespace(
                             input=str(base_input),
                             receipt=str(terminal),
-                            review_file=str(review_output),
+                            review_file=str(invocation_review),
                             prior=None,
                             head="HEAD",
                             base="HEAD",
@@ -361,6 +369,52 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                     )["findings"]["round"],
                     2,
                 )
+                for generation in generations:
+                    attempt = generation["attempt_timestamp"]
+                    self.assertIn(
+                        attempt,
+                        generation["findings"]["items"][-1]["body"],
+                    )
+
+    def test_qa_ratchet_preserves_identity_and_resolves_absent_findings(self) -> None:
+        first = FLOWCTL.parse_review_findings(
+            """### qa-login
+- **Severity**: P1
+- **Confidence**: 100
+- **Classification**: introduced
+- **Problem**: Login is broken.
+<verdict>NEEDS_WORK</verdict>
+""",
+            source_receipt_id="qa-round-1",
+            review_kind="qa",
+            backend="interactive",
+            round_number=1,
+            head_sha=HEAD_SHA,
+        )
+        repeated = FLOWCTL.parse_review_findings(
+            "Prior finding 1 — not_fixed.\n<verdict>NEEDS_WORK</verdict>\n",
+            source_receipt_id="qa-round-2",
+            review_kind="qa",
+            backend="interactive",
+            round_number=2,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="qa-round-1",
+            prior_findings=first,
+        )
+        resolved = FLOWCTL.parse_review_findings(
+            "Prior finding 1 — fixed.\n<verdict>SHIP</verdict>\n",
+            source_receipt_id="qa-round-3",
+            review_kind="qa",
+            backend="interactive",
+            round_number=3,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="qa-round-2",
+            prior_findings=repeated,
+        )
+        self.assertEqual(repeated["items"][0]["id"], first["items"][0]["id"])
+        self.assertEqual(len(repeated["items"]), 1)
+        self.assertEqual(resolved["items"][0]["id"], first["items"][0]["id"])
+        self.assertEqual(resolved["items"][0]["status"], "fixed")
 
     def test_legacy_and_unparseable_receipts_remain_valid(self) -> None:
         legacy = {

@@ -585,22 +585,19 @@ EOF
  echo "<promise>RETRY</promise>"
  exit 0
  fi
- if ! mv -f "$RECOVERY_TMP" "$RECEIPT_RECOVERY"; then
- rm -f "$RECOVERY_TMP"
- echo "<promise>RETRY</promise>"
- exit 0
- fi
  if ! "$FLOWCTL" review-findings attach \
- --input "$RECEIPT_RECOVERY" \
+ --input "$RECOVERY_TMP" \
  --receipt "$REVIEW_RECEIPT_PATH" \
  --recovery "$RECEIPT_RECOVERY" \
  --review-file "$RESPONSE_FILE" \
  --base "$REVIEW_BASE_SHA" \
  --head "$REVIEW_HEAD_SHA" \
  --json >/dev/null; then
+ rm -f "$RECOVERY_TMP"
  echo "<promise>RETRY</promise>"
  exit 0
  fi
+ rm -f "$RECOVERY_TMP"
  if ! jq -e --arg id "$SPEC_ID" --arg attempt_at "$ATTEMPT_AT" \
  '.type == "completion_review"
  and .id == $id
