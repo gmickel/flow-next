@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 3.8.0] - 2026-07-30
+
 ### Changed
 
 - **`/flow-next:interview` now tags the acceptance criteria it writes.** Capture
