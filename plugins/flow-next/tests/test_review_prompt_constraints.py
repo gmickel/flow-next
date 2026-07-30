@@ -8,10 +8,11 @@ therefore cannot ride along unnoticed with deterministic review plumbing.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
-import re
 import sys
 import unittest
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -100,20 +101,118 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                     r"Classification[^\n]*introduced[^\n]*pre_existing",
                 )
 
-    def test_flowctl_subprocess_and_llm_invocation_inventory_is_frozen(self) -> None:
-        source = FLOWCTL_PATH.read_text(encoding="utf-8")
-        expected = {
-            r"subprocess\.run\(": 43,
-            r"subprocess\.Popen\(": 2,
-            r"run_codex_exec\(": 2,
-            r"run_copilot_exec\(": 2,
-            r"run_cursor_exec\(": 2,
+    def test_flowctl_process_and_llm_invocation_inventory_is_frozen(self) -> None:
+        tree = ast.parse(FLOWCTL_PATH.read_text(encoding="utf-8"))
+        parents: dict[ast.AST, ast.AST] = {}
+        for parent in ast.walk(tree):
+            for child in ast.iter_child_nodes(parent):
+                parents[child] = parent
+
+        def enclosing_function(node: ast.AST) -> str:
+            parent = parents.get(node)
+            while parent and not isinstance(
+                parent, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                parent = parents.get(parent)
+            return parent.name if parent else "<module>"
+
+        process_methods = {
+            "run",
+            "Popen",
+            "call",
+            "check_call",
+            "check_output",
         }
-        observed = {
-            pattern: len(re.findall(pattern, source))
-            for pattern in expected
+        backend_bridges = {
+            "run_codex_exec",
+            "run_copilot_exec",
+            "run_cursor_exec",
         }
+        observed: Counter[tuple[str, str]] = Counter()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "subprocess"
+                and func.attr in process_methods
+            ):
+                observed[(f"subprocess.{func.attr}", enclosing_function(node))] += 1
+            elif isinstance(func, ast.Name) and func.id in backend_bridges:
+                observed[(func.id, enclosing_function(node))] += 1
+
+        expected = Counter(
+            {
+                ("run_codex_exec", "_codex_run_exec"): 1,
+                ("run_copilot_exec", "_copilot_run_exec"): 1,
+                ("run_cursor_exec", "_cursor_run_exec"): 1,
+                ("subprocess.run", "get_repo_root"): 1,
+                ("subprocess.run", "find_strategy_file"): 1,
+                ("subprocess.run", "get_state_dir"): 1,
+                ("subprocess.run", "run_rp_cli"): 1,
+                ("subprocess.run", "run_rp_cli_unchecked"): 1,
+                ("subprocess.run", "try_run_rp_cli"): 1,
+                ("subprocess.run", "get_changed_files"): 1,
+                ("subprocess.run", "find_references"): 1,
+                ("subprocess.run", "get_codex_version"): 1,
+                ("subprocess.run", "_cursor_list_models"): 1,
+                ("subprocess.run", "get_copilot_version"): 1,
+                ("subprocess.run", "get_cursor_version"): 1,
+                ("subprocess.run", "get_actor"): 2,
+                ("subprocess.run", "_spec_alloc_git"): 1,
+                ("subprocess.run", "_export_run_git"): 1,
+                ("subprocess.run", "_export_read_base_blobs"): 1,
+                ("subprocess.run", "_psp_run_git"): 1,
+                ("subprocess.run", "_gather_review_diff"): 1,
+                ("subprocess.Popen", "_gather_review_diff"): 1,
+                ("subprocess.run", "_resolve_review_sha"): 1,
+                ("subprocess.run", "_capture_review_snapshot"): 1,
+                ("subprocess.run", "_triage_chore_is_version_only"): 1,
+                ("subprocess.run", "_triage_run_codex_judge"): 1,
+                ("subprocess.run", "_triage_run_copilot_judge"): 1,
+                ("subprocess.run", "cmd_triage_skip"): 4,
+                ("subprocess.run", "_gate_repo_and_head"): 2,
+                ("subprocess.run", "_gate_status_paths"): 1,
+                ("subprocess.run", "_gate_walk_candidate_ok"): 3,
+                ("subprocess.run", "cmd_gate_classify"): 1,
+                ("subprocess.run", "_prime_git"): 1,
+                ("subprocess.Popen", "_prime_parse_ls_files_staged"): 1,
+                ("subprocess.run", "_prime_git_free_tool"): 1,
+                ("subprocess.run", "run_codex_exec"): 1,
+                ("subprocess.run", "_dispatch"): 3,
+                ("subprocess.run", "_branch_slug"): 1,
+            }
+        )
         self.assertEqual(observed, expected)
+
+    def test_no_direct_llm_sdk_imports(self) -> None:
+        tree = ast.parse(FLOWCTL_PATH.read_text(encoding="utf-8"))
+        forbidden = {"anthropic", "google.generativeai", "openai"}
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module)
+        self.assertTrue(forbidden.isdisjoint(imported), imported & forbidden)
+
+    def test_prompt_templates_match_generated_codex_mirrors(self) -> None:
+        pairs = (
+            "skills/flow-next-impl-review/references/impl-review-prompt.md",
+            "skills/flow-next-impl-review/references/standalone-review-prompt.md",
+            "skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+        )
+        plugin = REPO / "plugins" / "flow-next"
+        for rel in pairs:
+            with self.subTest(path=rel):
+                self.assertEqual(
+                    (plugin / rel).read_bytes(),
+                    (plugin / "codex" / rel).read_bytes(),
+                    f"stale Codex mirror for {rel}; run scripts/sync-codex.sh",
+                )
 
 
 if __name__ == "__main__":

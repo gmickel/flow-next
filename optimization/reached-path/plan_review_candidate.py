@@ -212,9 +212,14 @@ def corpus_evidence(
         "byte_identical_to_b1": file_hash(repo_root / PROMPT) == b1_prompt_hash,
         "format_only_to_b1": format_only_to_b1,
         "rendered_chars_delta": len(candidate_rendered) - len(baseline_rendered),
+        "actual_token_measurement": (
+            "optimization/reached-path/evidence/fn136/"
+            "review-output-format-token-delta.json"
+        ),
         "quality_baseline": (
-            "The fn-136 guard confines the intentional delta to Output Format "
-            "and keeps the reached-path chars/4 proxy non-increasing."
+            "The fn-136 guard binds assembled prompt bytes to the immutable "
+            "pre-change commit, confines the delta to Output Format, and records "
+            "non-increasing cl100k_base and o200k_base token counts."
         ),
     }
     return rows

@@ -15,6 +15,10 @@ Run:
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import json
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -46,6 +50,11 @@ HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent  # plugins/flow-next
 REPO_ROOT = PLUGIN_DIR.parent.parent
 FIXTURES = HERE.parent / "fixtures" / "review_prompts"
+PRE_CHANGE_COMMIT = "2cfef991b548ddfbae3f787911be3a3b882f031a"
+TOKEN_EVIDENCE = (
+    REPO_ROOT
+    / "optimization/reached-path/evidence/fn136/review-output-format-token-delta.json"
+)
 
 # (embedded FALLBACK constant, on-disk template relative to repo root)
 PARITY_PAIRS = [
@@ -87,6 +96,57 @@ def _normalize(text: str) -> str:
     return text.replace("\r\n", "\n")
 
 
+def _without_output_format(text: str) -> str:
+    start = text.index("## Output Format\n")
+    offset = start + len("## Output Format\n")
+    in_fence = False
+    end = -1
+    for line in text[offset:].splitlines(keepends=True):
+        if line.startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("## "):
+            end = offset
+            break
+        offset += len(line)
+    if end == -1:
+        raise AssertionError("Output Format has no following section boundary")
+    return text[:start] + "## Output Format\n<FORMAT>\n" + text[end:]
+
+
+def _load_pre_change_flowctl() -> Any:
+    """Load the immutable task pre-change source without mutable fixtures."""
+    source = subprocess.run(
+        [
+            "git",
+            "show",
+            f"{PRE_CHANGE_COMMIT}:plugins/flow-next/scripts/flowctl.py",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout
+    module_name = "flowctl_review_prompt_pre_change"
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "flowctl.py"
+        path.write_text(source, encoding="utf-8")
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+    module.load_impl_review_template = lambda: module.IMPL_REVIEW_PROMPT_FALLBACK
+    module.load_plan_review_template = lambda: module.PLAN_REVIEW_PROMPT_FALLBACK
+    module.load_standalone_review_template = (
+        lambda: module.STANDALONE_REVIEW_PROMPT_FALLBACK
+    )
+    module.load_completion_review_template = (
+        lambda: module.COMPLETION_REVIEW_PROMPT_FALLBACK
+    )
+    return module
+
+
 class TestReviewPromptTemplateParity(unittest.TestCase):
     def test_fallbacks_match_template_files(self) -> None:
         for const_name, rel in PARITY_PAIRS:
@@ -111,24 +171,9 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         baseline = _normalize(path.read_text(encoding="utf-8"))
         current = _normalize(rendered)
 
-        def without_output_format(text: str) -> str:
-            start = text.index("## Output Format\n")
-            offset = start + len("## Output Format\n")
-            in_fence = False
-            end = -1
-            for line in text[offset:].splitlines(keepends=True):
-                if line.startswith("```"):
-                    in_fence = not in_fence
-                elif not in_fence and line.startswith("## "):
-                    end = offset
-                    break
-                offset += len(line)
-            self.assertNotEqual(end, -1, f"{name}: Output Format has no boundary")
-            return text[:start] + "## Output Format\n<FORMAT>\n" + text[end:]
-
         self.assertEqual(
-            without_output_format(current),
-            without_output_format(baseline),
+            _without_output_format(current),
+            _without_output_format(baseline),
             f"rendered {name} changed outside ## Output Format",
         )
         self.assertLessEqual(
@@ -201,6 +246,102 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self.assertIn("Do not invoke Flow-Next skills", prompt)
         self.assertIn("`flowctl *-review`", prompt)
         self.assertIn("launch another reviewer", prompt)
+
+
+class TestReviewPromptPreChangeBinding(unittest.TestCase):
+    """Every assembled route variant differs only inside Output Format."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.pre_change = _load_pre_change_flowctl()
+
+    def rendered_prompts(self, module: Any) -> dict[str, str]:
+        prompts = {
+            "impl": module.build_review_prompt(
+                "impl", _SPEC, _HINTS, diff_summary=_DSUM, diff_content=_DDIFF
+            ),
+            "impl_empty_optional": module.build_review_prompt(
+                "impl", _SPEC, "", diff_summary="", diff_content=""
+            ),
+            "plan": module.build_review_prompt(
+                "plan", _SPEC, _HINTS, task_specs=_TASKS
+            ),
+            "plan_no_tasks": module.build_review_prompt("plan", _SPEC, _HINTS),
+            "standalone": module.build_standalone_review_prompt(
+                _BASE, _FOCUS, _DSUM
+            ),
+            "standalone_no_focus": module.build_standalone_review_prompt(
+                _BASE, None, _DSUM
+            ),
+            "completion": module.build_completion_review_prompt(
+                _SPEC, _TASKS, _DSUM, _DDIFF
+            ),
+            "completion_no_tasks": module.build_completion_review_prompt(
+                _SPEC, "", _DSUM, _DDIFF
+            ),
+        }
+        corpus_root = REPO_ROOT / "optimization" / "review-prompt"
+        corpus = {
+            "plan_corpus_risky": (corpus_root / "spec_corpus.md").read_text(
+                encoding="utf-8"
+            ),
+            "plan_corpus_clean": (corpus_root / "spec_clean.md").read_text(
+                encoding="utf-8"
+            ),
+            "plan_corpus_user_edited": (
+                "# User-edited plan\n\n"
+                "## Acceptance\n"
+                "- Preserve operator-authored batch size 37; do not restore generated 50.\n"
+                "## Test strategy\n"
+                "- Verify batches of exactly 37 and malformed-row rollback.\n"
+            ),
+        }
+        for name, spec in corpus.items():
+            prompts[name] = module.build_review_prompt(
+                "plan",
+                spec,
+                "Production Plan Review context hints.",
+                task_specs=(
+                    "Current task specs are supplied from persisted .flow/task files."
+                ),
+            )
+        return prompts
+
+    def test_all_route_variants_are_format_only_against_pre_change_commit(self) -> None:
+        current = self.rendered_prompts(flowctl)
+        baseline = self.rendered_prompts(self.pre_change)
+        self.assertEqual(current.keys(), baseline.keys())
+        for name in current:
+            with self.subTest(prompt=name):
+                self.assertEqual(
+                    _without_output_format(current[name]),
+                    _without_output_format(baseline[name]),
+                    f"{name} changed outside ## Output Format relative to {PRE_CHANGE_COMMIT}",
+                )
+
+    def test_actual_token_measurement_is_bound_to_assembled_prompts(self) -> None:
+        evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
+        self.assertEqual(evidence["baseline"]["commit"], PRE_CHANGE_COMMIT)
+        self.assertEqual(evidence["measurement"]["tool"], "tiktoken")
+        current = self.rendered_prompts(flowctl)
+        baseline = self.rendered_prompts(self.pre_change)
+        self.assertEqual(evidence["prompts"].keys(), current.keys())
+        for name, row in evidence["prompts"].items():
+            with self.subTest(prompt=name):
+                self.assertEqual(
+                    row["baseline_sha256"],
+                    hashlib.sha256(baseline[name].encode("utf-8")).hexdigest(),
+                )
+                self.assertEqual(
+                    row["candidate_sha256"],
+                    hashlib.sha256(current[name].encode("utf-8")).hexdigest(),
+                )
+                for counts in row["tokens"].values():
+                    self.assertEqual(
+                        counts["delta"], counts["candidate"] - counts["baseline"]
+                    )
+                    self.assertLessEqual(counts["delta"], 0)
+        self.assertTrue(evidence["acceptance"]["all_deltas_lte_zero"])
 
 
 class TestDeepPassFallbackCoverage(unittest.TestCase):

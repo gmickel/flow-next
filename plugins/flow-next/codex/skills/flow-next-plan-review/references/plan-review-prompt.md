@@ -62,17 +62,8 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 {plan_quality_block}{protected_artifacts_block}
 ## Output Format
 
-For each issue found:
-- **Severity**: P0 / P1 / P2 / P3
-- **Confidence**: 0 / 25 / 50 / 75 / 100
-- **Classification**: introduced / pre_existing
-- **File:Line**: `path:line`, or `-` when repo-wide
-- **R-IDs**: `[R1, R2]`, or `[]` when none
-- **Location**: Task or section
-- **Problem**: What's wrong
-- **Suggestion**: How to fix
-
-If applicable, emit `Protected-path filter: N`.
+Each issue uses labeled lines: Severity (P0/P1/P2/P3); Confidence (0/25/50/75/100); Classification (introduced/pre_existing); File:Line (`path:line` or `-`); R-IDs (`[R1, R2]` or `[]`); Location; Problem; Suggestion.
+When applicable, add `Protected-path filter: N`.
 
 {review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:

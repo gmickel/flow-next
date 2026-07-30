@@ -1,0 +1,108 @@
+{
+  "acceptance": {
+    "all_deltas_lte_zero": true
+  },
+  "baseline": {
+    "commit": "2cfef991b548ddfbae3f787911be3a3b882f031a",
+    "kind": "immutable_git_commit"
+  },
+  "measurement": {
+    "encodings": [
+      "cl100k_base",
+      "o200k_base"
+    ],
+    "tool": "tiktoken",
+    "version": "0.13.0"
+  },
+  "prompts": {
+    "completion": {
+      "baseline_sha256": "b53968a8b8b279e10e7cfba03da0e8c131d0616e4eacb70bd0a1a2c3cafa8af4",
+      "candidate_sha256": "0166d9b471e4dd4eabe86603a66fef46e31555f6c1165c70c61113ab13c23e1a",
+      "tokens": {
+        "cl100k_base": {"baseline": 1996, "candidate": 1990, "delta": -6},
+        "o200k_base": {"baseline": 1981, "candidate": 1977, "delta": -4}
+      }
+    },
+    "completion_no_tasks": {
+      "baseline_sha256": "8aae6e24156edde7a7ced8a6a45c6fd2d6cd92d21042c3fc2a08adfcf05b1a97",
+      "candidate_sha256": "f7aa1005509e1f675444b232df0b47fc3d100fb3d464f77edb059b27cce2c680",
+      "tokens": {
+        "cl100k_base": {"baseline": 1982, "candidate": 1976, "delta": -6},
+        "o200k_base": {"baseline": 1967, "candidate": 1963, "delta": -4}
+      }
+    },
+    "impl": {
+      "baseline_sha256": "5e5446b58e1f392cc6863ea1c8eb54bae55c099836f7eed3499dccfc3d06400e",
+      "candidate_sha256": "825fbe7dc6b4153ff39703a4ff5664562e9ac90a826b80f500e6110c9953f5f8",
+      "tokens": {
+        "cl100k_base": {"baseline": 1950, "candidate": 1934, "delta": -16},
+        "o200k_base": {"baseline": 1938, "candidate": 1925, "delta": -13}
+      }
+    },
+    "impl_empty_optional": {
+      "baseline_sha256": "5c2efc6a874ae679acf83c150689917a587712e1e706c953a7442011e1e299cc",
+      "candidate_sha256": "d67bd35b53990bf2e4451c43b93519ce44ad024024c3f8f1a56faa7e3cbc5b36",
+      "tokens": {
+        "cl100k_base": {"baseline": 1887, "candidate": 1871, "delta": -16},
+        "o200k_base": {"baseline": 1875, "candidate": 1862, "delta": -13}
+      }
+    },
+    "plan": {
+      "baseline_sha256": "451b6a726edd1148859865719c1fcb36ec340f13aa633ff70603cf37deeaed2a",
+      "candidate_sha256": "dfab7f6668150b3c7c7a6019242f916a5874e6e3ed5a0417e3a60898baae2210",
+      "tokens": {
+        "cl100k_base": {"baseline": 1199, "candidate": 1182, "delta": -17},
+        "o200k_base": {"baseline": 1190, "candidate": 1173, "delta": -17}
+      }
+    },
+    "plan_corpus_clean": {
+      "baseline_sha256": "93772f17a31305a15150c6d4a1ff010579ba5fc800491f608355533cdcff1a61",
+      "candidate_sha256": "c0302cf2d73aa679a13cc869355fbda7848a77cab9402c34f8927e98865b115f",
+      "tokens": {
+        "cl100k_base": {"baseline": 1851, "candidate": 1834, "delta": -17},
+        "o200k_base": {"baseline": 1843, "candidate": 1826, "delta": -17}
+      }
+    },
+    "plan_corpus_risky": {
+      "baseline_sha256": "0f07f3967d6cf3ea4d60bdd13e41bdc727191ea7cd27b53137dce4ef884b0193",
+      "candidate_sha256": "831214b786f3c9128ec4836b0645fe4fc0959e036c02482816ddd0d3820b42de",
+      "tokens": {
+        "cl100k_base": {"baseline": 1525, "candidate": 1508, "delta": -17},
+        "o200k_base": {"baseline": 1515, "candidate": 1498, "delta": -17}
+      }
+    },
+    "plan_corpus_user_edited": {
+      "baseline_sha256": "ba514fae460ade281207bb257713886ef693a572456a17849fb395a71a314b08",
+      "candidate_sha256": "24614989059dd871775c4643ed791884ff501173f9e979537ccec82a47c1cdf3",
+      "tokens": {
+        "cl100k_base": {"baseline": 1237, "candidate": 1220, "delta": -17},
+        "o200k_base": {"baseline": 1228, "candidate": 1211, "delta": -17}
+      }
+    },
+    "plan_no_tasks": {
+      "baseline_sha256": "ce9bf40345f80cbfabcf8473e71fe12f78db5a99bafcdb1b41f4960d79eb71c9",
+      "candidate_sha256": "06ac4572c0fb41b466ec73b24972a66e5f1c6a44900942b58a9294947b5d3a4b",
+      "tokens": {
+        "cl100k_base": {"baseline": 1185, "candidate": 1168, "delta": -17},
+        "o200k_base": {"baseline": 1176, "candidate": 1159, "delta": -17}
+      }
+    },
+    "standalone": {
+      "baseline_sha256": "e1addf671032155e27979e59fec0e21b0eb2ee80627cd787b65a77fd0d26c3c4",
+      "candidate_sha256": "dff4a6e0a40b48e029b94404fb8b3f30e389239ebce63a45be916bd6b32122e4",
+      "tokens": {
+        "cl100k_base": {"baseline": 1770, "candidate": 1757, "delta": -13},
+        "o200k_base": {"baseline": 1755, "candidate": 1745, "delta": -10}
+      }
+    },
+    "standalone_no_focus": {
+      "baseline_sha256": "9c19eddb6ef101d0eb311d9fcb41d3ac0760863de892e004ec1c91f4605db84c",
+      "candidate_sha256": "27da7257cc67181a7d40282afd994f4b2ef34b22aa4e8f3c9149b993e9c92cee",
+      "tokens": {
+        "cl100k_base": {"baseline": 1753, "candidate": 1740, "delta": -13},
+        "o200k_base": {"baseline": 1738, "candidate": 1728, "delta": -10}
+      }
+    }
+  },
+  "schema_version": 1
+}

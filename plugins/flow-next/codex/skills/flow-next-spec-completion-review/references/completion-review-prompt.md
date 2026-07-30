@@ -97,10 +97,10 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 
 ## Gaps Found
 
-[Each GAP uses labeled lines: `Severity: P0|P1|P2|P3`; `Confidence: 0|25|50|75|100`; `Classification: introduced|pre_existing`; File:Line: `path:line` or `-`; R-IDs: `[R1, R2]` or `[]`; `Problem`; `Suggestion`.]
+[Each GAP uses labeled lines: Severity (P0/P1/P2/P3); Confidence (0/25/50/75/100); Classification (introduced/pre_existing); File:Line (`path:line` or `-`); R-IDs (`[R1, R2]` or `[]`); Problem; Suggestion.]
 ```
 
-Pre-existing gaps (code smells or missing features that predate this epic's branch) go under a separate `## Pre-existing issues (not blocking this verdict)` heading and do not gate the verdict.
+Put pre_existing gaps under `## Pre-existing issues (not blocking this verdict)`; they do not gate the verdict.
 
 After the findings list, emit:
 - The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).

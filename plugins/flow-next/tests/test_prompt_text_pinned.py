@@ -75,7 +75,7 @@ PROMPT_HASHES = {
     "CLASSIFICATION_RUBRIC_BLOCK":
         "fbde8f499ba3d82b50901b12a984912490b66c6e69f1b74c38edf80c28567a06",
     "COMPLETION_REVIEW_PROMPT_FALLBACK":
-        "c87182037cdf7f1d72f81ffaab598b0872df2fdc2aa4c6a78f5b53838c5300b8",
+        "a76dc6e12d9944824257b04cc3fc3940c040c943f5e64b1c374dbd5e0f334fb3",
     "CONFIDENCE_RUBRIC_BLOCK":
         "b8cc9e9594a3fed35498040e222bc9000333f4407f48374464115a69c231ae15",
     "IMPL_REVIEW_PROMPT_FALLBACK":
@@ -83,7 +83,7 @@ PROMPT_HASHES = {
     "PLAN_QUALITY_BLOCK":
         "0cfb49bfadf0be45e5c8036950d34698b5ae3bbccf24a90564983e13d0a1192f",
     "PLAN_REVIEW_PROMPT_FALLBACK":
-        "994813332001ebdef556c3e931925d0a1a0bb2896fb6d634caeb6725b83dc244",
+        "3fb3052d7cbdff018617a1f5d9c5df636a800b1e96287eb5c2dd57f60daa1a38",
     "PROTECTED_ARTIFACTS_BLOCK":
         "e9b68af0cf36f6b2cb1b70c9bcc5ff67ccb86295f369d02ffcec4f25fd6f2d5e",
     "REVIEW_JSON_TALLY_BLOCK":
@@ -147,9 +147,9 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":
         "1898a9b1c78a96c40752442b327f29df1a0ccb6009dafa871f6b5b1da5ce7280",
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":
-        "994813332001ebdef556c3e931925d0a1a0bb2896fb6d634caeb6725b83dc244",
+        "3fb3052d7cbdff018617a1f5d9c5df636a800b1e96287eb5c2dd57f60daa1a38",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
-        "c87182037cdf7f1d72f81ffaab598b0872df2fdc2aa4c6a78f5b53838c5300b8",
+        "a76dc6e12d9944824257b04cc3fc3940c040c943f5e64b1c374dbd5e0f334fb3",
     # Rendered by ralph.sh each autonomous loop - production prompts, and the
     # ones an unattended run depends on most.
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_plan.md":
