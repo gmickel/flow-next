@@ -18,6 +18,7 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "plugins" / "flow-next" / "scripts"))
 FLOWCTL_PATH = REPO / "plugins" / "flow-next" / "scripts" / "flowctl.py"
 QA_WORKFLOW = (
     REPO
