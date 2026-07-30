@@ -1,0 +1,16 @@
+{
+  "type": "impl_review",
+  "id": "fn-136-structured-review-artifact-schema-in.8",
+  "mode": "rp",
+  "base": "c39a1dfbedd8c0ef8e297b0f096ee710af281bb2",
+  "verdict": "SHIP",
+  "session_id": "fn-136-8-rp-ce-review-re-247D11",
+  "model": null,
+  "effort": null,
+  "spec": "rp",
+  "timestamp": "2026-07-30T08:53:52.546887Z",
+  "review": "Final same-chat RepoPrompt CE convergence review. All four prior P1 findings are fixed in committed HEAD 2d238e8a: repairs are committed and distribution/manifests synchronized; Classic preserves its isolated builder <summary> command and published-tab verification; cmd_rp_setup_review resolves the RP executable once and pins it through binding, discovery, creation, builder execution, and Classic verification; plain CE review rejects a missing --response-file before window binding or any RepoPrompt operation, while JSON mode remains an explicit response channel. Focused tests, Ruff, full suite, manifests, and twice-idempotent Codex synchronization are green. No new P0/P1 findings survive.\n\nClassification counts: 0 introduced, 0 pre_existing.\nUnaddressed R-IDs: []\n\n<verdict>SHIP</verdict>\n",
+  "introduced_count": 0,
+  "pre_existing_count": 0,
+  "unaddressed": []
+}
