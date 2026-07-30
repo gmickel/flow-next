@@ -4823,24 +4823,33 @@ def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
     for index, line in enumerate(lines):
         fields = _review_finding_fields(line)
         has_severity_field = fields is not None and "severity" in fields
+        candidate_start = index
+        has_finding_heading = False
+        if has_severity_field and index > 0:
+            previous_fields = _review_finding_fields(lines[index - 1])
+            if previous_fields is not None and "finding" in previous_fields:
+                candidate_start = index - 1
+                has_finding_heading = True
         if has_severity_field and starts:
             preceding = "\n".join(lines[starts[-1]:index])
-            if _FINDINGS_INLINE_HOST_RE.search(preceding):
+            between = lines[starts[-1] + 1:index]
+            if (
+                not has_finding_heading
+                and _FINDINGS_INLINE_HOST_RE.search(preceding)
+                and all(not value.strip() for value in between)
+            ):
                 # A host heading may repeat its inline enum tuple as labeled
                 # fields. Keep both representations in one block so semantic
                 # equality is checked instead of manufacturing two findings.
                 continue
         if has_severity_field or _FINDINGS_INLINE_HOST_RE.search(line):
-            starts.append(index)
+            starts.append(candidate_start)
             saw_severity_label = True
             if len(starts) > _FINDINGS_MAX_ITEMS:
                 return [], True
     blocks: list[str] = []
     for position, start in enumerate(starts):
         end = starts[position + 1] if position + 1 < len(starts) else len(lines)
-        # Export fixtures put the title immediately before Severity.
-        if start > 0 and re.match(r"(?i)^\s*finding\s*[:=]", lines[start - 1]):
-            start -= 1
         block_lines: list[str] = []
         for line in lines[start:end]:
             if re.search(r"<verdict>", line, re.IGNORECASE):

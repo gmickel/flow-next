@@ -395,6 +395,24 @@ Problem: Equivalent aliases describe one finding.
             with self.subTest(inline=inline):
                 self.assertIsNone(parse(text, "host"))
 
+    def test_distinct_inline_then_labeled_finding_remain_separate(self) -> None:
+        text = """
+1. P1 · confidence 100 · introduced
+Problem: First inline finding.
+
+2. Finding: Second labeled finding.
+Severity: Major
+Confidence: 100
+Classification: introduced
+Problem: Second labeled finding.
+"""
+        result = parse(text, "host")
+        self.assertEqual(len(result["items"]), 2)
+        self.assertEqual(
+            [item["body"] for item in result["items"]],
+            ["First inline finding.", "Second labeled finding."],
+        )
+
     def test_textual_aliases_accept_equal_values_and_reject_conflicts(self) -> None:
         equivalent = """
 Severity: Major
