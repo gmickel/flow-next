@@ -4,6 +4,38 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Changed
+
+- **`/flow-next:interview` now tags the acceptance criteria it writes.** Capture
+  has always stamped provenance on every criterion (`[user]` / `[paraphrase]` /
+  `[inferred]` / `[strategy:<track>]`), but interview emitted nothing - so the
+  grounded-vs-guessed tally and the targeted "re-interview only the `[inferred]`
+  items" pattern silently returned empty on any interview-authored spec, which is
+  most of them for teams using the symmetric PO -> tech-lead flow. Interview now
+  emits the same four tags at all three write-back sites, with `[user]` meaning
+  the PO under a business pass and the tech lead under a technical one. A pass
+  tags only the criteria it authors and never retags an existing bullet, so
+  provenance is frozen exactly like the R-ID number; untagged criteria mean
+  unknown provenance, never `[user]`. Capture's no-self-blessing rule is
+  inherited, narrowed to `[inferred]` criteria that no question covered. Tag
+  definitions are repeated at the emission sites rather than centralised
+  (relocating them regressed accuracy once before) and a test pins the vocabulary
+  as set-equality across both skills, so a renamed, dropped, or added tag fails
+  CI in either direction. No parser or CLI change: the tag format was already
+  source-agnostic.
+
+### Fixed
+
+- **The published source-tag tally recipe dropped every `[strategy:*]`
+  criterion.** The recipe shipped in 3.7.0 used the character class `[a-z:]+`,
+  but a track name keeps its literal casing and may contain spaces or hyphens
+  (`[strategy:Cross-platform parity]`), so those criteria never matched. The
+  `awk` stage had a second, quieter version of the same bug: with the default
+  whitespace split, a spaced track name landed in the wrong field and produced a
+  phantom tag. Corrected in the repo docs and on flow-next.dev to `[^]]+` with a
+  tab-delimited `awk -F'\t'`, and the reason is documented inline so it does not
+  regress.
+
 ## [flow-next 3.7.0] - 2026-07-29
 
 ### Changed

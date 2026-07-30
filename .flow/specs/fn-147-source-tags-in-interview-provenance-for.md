@@ -73,8 +73,13 @@ No CLI surface changes required. Tag format is fixed by the existing parser:
 - **R<n+1>:** <criterion text> [inferred]
 ```
 
-Trailing token, last `[...]` on the bullet, lowercase, no spaces inside. `[strategy:<track>]`
-carries a colon and a track slug.
+Trailing token, last `[...]` on the bullet. The **tag name** is lowercase with no
+spaces (`user` / `paraphrase` / `inferred` / `strategy`). For `[strategy:<track>]`
+the part after the colon is the track's H3 heading copied **literally** - casing
+AND spaces preserved, so `### Cross-platform parity` yields
+`[strategy:Cross-platform parity]`. Never slugified, lowercased, or
+space-stripped: the literal text is the link back to `STRATEGY.md`. Consumers
+must therefore match `\[[^]]+\]`, not `\[[a-z:]+\]`.
 
 Deliberately **out of scope as an API change, but recorded as a known gap:** `flowctl spec
 export-cognitive-aid --json` does not expose parsed criteria with their tags as a top-level
@@ -179,3 +184,22 @@ go fetch.
 `[inferred]` on everything, which produces a spec that looks rigorously tagged and carries
 zero signal. R5 exists to catch exactly that, and it is the criterion most likely to fail
 first.
+
+**Decision (R6): interview inherits the no-self-blessing rule, narrowed to unasked
+guesses.** Implemented in `skills/flow-next-interview/references/write-back.md`
+§ "Source tags on acceptance criteria": if any criterion the pass wrote is `[inferred]`
+AND no interview question covered it, the write-back ask must not recommend `approve` -
+it states the count and points the user at those lines. A criterion settled by an answered
+question is verified by construction and does not suppress the recommendation.
+
+Rationale, from the evidence in front of us rather than a general principle: capture's
+blanket rule exists because capture never asks anything - every `[inferred]` item there is
+an unverified guess, so a blanket suppression has no false positives. Interview's `[inferred]`
+population is mixed: some items were asked about and answered (already verified), others the
+agent drafted while filling the acceptance section (never seen by the interviewee). Applying
+capture's blanket form here would suppress the recommendation on almost every interview run,
+which trains users to ignore the signal - the failure mode a gate that always fires always
+has. Narrowing it to "inferred AND never asked" keeps the property that matters (the agent
+never pre-blesses its own unseen guesses) and keeps the signal rare enough to read. The
+frozen fixture in `tests/fixtures/interview_source_tags/` exercises exactly this split: two
+unasked `[inferred]` criteria fire the rule, the answered ones do not.

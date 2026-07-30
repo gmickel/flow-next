@@ -437,7 +437,7 @@ Per-section write behavior (per the write-policy):
 - **`## Decision Context`** (per `decision_context` shape):
   - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == true` (FLAT body exists from a prior tech-only pass): promote the existing flat body byte-for-byte into a new `### Implementation Tradeoffs` H3 (preserve the prose verbatim — same content, just under a new H3), and write the new `### Motivation` H3 as a sibling.
   - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == false` (H3s already exist): preserve `### Implementation Tradeoffs` byte-for-byte; write/refine ONLY `### Motivation`.
-- **`## Acceptance Criteria`**: append outcome-AC R-IDs (R-IDs are append-only across passes per fn-29 rules — never renumber, never replace; take the next unused number).
+- **`## Acceptance Criteria`**: append outcome-AC R-IDs (R-IDs are append-only across passes per fn-29 rules — never renumber, never replace; take the next unused number). Source-tag each criterion you append (`[user]` = the PO answering in this pass, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion another pass wrote — see `references/write-back.md` § Source tags on acceptance criteria.
 - **Auxiliary sections**: preserve byte-for-byte per the auxiliary-sections rule above; biz pass adds `Resolved via Project Docs` only.
 
 ### Technical pass (`SCOPE == technical`, default; or second phase of `both`)
@@ -454,7 +454,7 @@ Per-section write behavior (per the write-policy):
 - **`## Decision Context`** (per `decision_context` shape):
   - When `shape == "flat"` (no H3s exist, no biz pass has run — default zero-flag-tech case on a fresh/legacy spec): write/refine the flat body in place. Do NOT introduce `### Motivation` / `### Implementation Tradeoffs` H3 substructure. Preserves R22 1.0.2 backward compat.
   - When `shape == "substructured"` (`### Motivation` already exists from a prior biz pass, or the existing spec has the substructure): preserve `### Motivation` body byte-for-byte; write/refine ONLY `### Implementation Tradeoffs`.
-- **`## Acceptance Criteria`**: append verifiable-AC R-IDs (R-IDs are append-only — never renumber).
+- **`## Acceptance Criteria`**: append verifiable-AC R-IDs (R-IDs are append-only — never renumber). Source-tag each criterion you append (`[user]` = the tech lead answering in this pass, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion another pass wrote — see `references/write-back.md` § Source tags on acceptance criteria.
 - **Auxiliary sections**: preserve byte-for-byte per the auxiliary-sections rule above; tech pass adds `Resolved via Codebase` only.
 
 ### Both pass (`SCOPE == both`)
