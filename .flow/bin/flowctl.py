@@ -4901,9 +4901,14 @@ def _review_finding_item_valid(item: dict) -> bool:
         or not isinstance(item["ordinal"], int)
         or isinstance(item["ordinal"], bool)
         or item["ordinal"] < 1
+        or not isinstance(item["severity"], str)
         or item["severity"] not in _FINDINGS_SEVERITY_ORDER
+        or not isinstance(item["confidence"], int)
+        or isinstance(item["confidence"], bool)
         or item["confidence"] not in _FINDINGS_CONFIDENCE
+        or not isinstance(item["classification"], str)
         or item["classification"] not in _FINDINGS_CLASSIFICATIONS
+        or not isinstance(item["status"], str)
         or item["status"] not in _FINDINGS_STATUSES
         or not isinstance(item["title"], str)
         or not item["title"]
@@ -4963,7 +4968,8 @@ def _review_finding_item_valid(item: dict) -> bool:
         if (
             set(anchor) - anchor_allowed
             or not anchor_required <= set(anchor)
-            or _review_finding_safe_path(str(anchor.get("path", ""))) is None
+            or not isinstance(anchor.get("path"), str)
+            or _review_finding_safe_path(anchor["path"]) is None
             or anchor.get("side") not in {"base", "head"}
             or not isinstance(anchor.get("startLine"), int)
             or isinstance(anchor.get("startLine"), bool)
@@ -5017,10 +5023,13 @@ def _review_findings_container_valid(container: dict) -> bool:
     source_id = container["sourceReceiptId"]
     supersedes = container.get("supersedesReceiptId")
     if (
-        container["schemaVersion"] != _FINDINGS_SCHEMA_VERSION
+        not isinstance(container["schemaVersion"], int)
+        or isinstance(container["schemaVersion"], bool)
+        or container["schemaVersion"] != _FINDINGS_SCHEMA_VERSION
         or not isinstance(source_id, str)
         or not source_id
         or len(source_id) > _FINDINGS_MAX_ID
+        or not isinstance(container["reviewKind"], str)
         or container["reviewKind"] not in _FINDINGS_REVIEW_KINDS
         or not isinstance(container["backend"], str)
         or not container["backend"]
@@ -5061,6 +5070,11 @@ def _review_findings_container_valid(container: dict) -> bool:
     if len({item["id"] for item in items}) != len(items):
         return False
     if len({item["ordinal"] for item in items}) != len(items):
+        return False
+    encoded = json.dumps(
+        container, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    if len(encoded) > _FINDINGS_CONTAINER_MAX_BYTES:
         return False
     return True
 

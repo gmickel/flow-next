@@ -421,6 +421,7 @@ Problem: Rename context must survive.
             {"endLine": 1},
             {"originalPath": "../outside.py"},
             {"blobOid": "not-a-blob"},
+            {"path": 123},
         ):
             corrupt = json.loads(json.dumps(prior))
             corrupt["items"][0]["anchor"].update(anchor_update)
@@ -445,6 +446,65 @@ Problem: Rename context must survive.
                 receipt="receipt-round-2",
                 round_number=2,
                 prior=extra,
+                supersedes="receipt-round-1",
+            )
+        )
+
+        for field, value in (
+            ("schemaVersion", True),
+            ("reviewKind", ["implementation"]),
+        ):
+            corrupt = json.loads(json.dumps(prior))
+            corrupt[field] = value
+            self.assertIsNone(
+                parse(
+                    ratchet,
+                    "codex",
+                    receipt="receipt-round-2",
+                    round_number=2,
+                    prior=corrupt,
+                    supersedes="receipt-round-1",
+                ),
+                field,
+            )
+        boolean_confidence = json.loads(json.dumps(prior))
+        boolean_confidence["items"][0]["confidence"] = False
+        self.assertIsNone(
+            parse(
+                ratchet,
+                "codex",
+                receipt="receipt-round-2",
+                round_number=2,
+                prior=boolean_confidence,
+                supersedes="receipt-round-1",
+            )
+        )
+
+        oversized_bytes = json.loads(json.dumps(prior))
+        oversized_bytes["items"] = [
+            {
+                **oversized_bytes["items"][0],
+                "id": f"finding-{number}",
+                "ordinal": number,
+                "title": f"item {number}",
+                "body": "x" * 3900,
+            }
+            for number in range(1, 71)
+        ]
+        encoded = json.dumps(
+            oversized_bytes,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        self.assertGreater(len(encoded), 256 * 1024)
+        self.assertIsNone(
+            parse(
+                ratchet,
+                "codex",
+                receipt="receipt-round-2",
+                round_number=2,
+                prior=oversized_bytes,
                 supersedes="receipt-round-1",
             )
         )
