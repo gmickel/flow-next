@@ -43,7 +43,9 @@ delivered in this run. Stop without writing completion status; autonomous
 callers surface `NEEDS_HUMAN`.
 
 Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
-Immediately beforehand capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
+Immediately beforehand resolve `DIFF_BASE="${BASE_COMMIT:-main}"` (fall back
+to `master` only when `main` does not resolve), fail closed unless it resolves,
+then capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
 `REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"`.
 Retain those literal anchors through receipt writing.
 
@@ -60,6 +62,8 @@ Give the subagent:
 - Task list + evidence that work claims done
 - Diff / implementation surfaces to check compliance (not code-quality taste — that is impl-review)
 - Prior findings for convergence (on re-review)
+- For every gap: Severity, Confidence `0|25|50|75|100`, and Classification
+  `introduced|pre_existing`
 - Required exact verdict tags: `<verdict>SHIP</verdict>` /
   `<verdict>NEEDS_WORK</verdict>`
 

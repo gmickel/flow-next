@@ -694,7 +694,7 @@ def find_strategy_file(start: Optional[Path] = None) -> tuple[Optional[Path], Pa
     try:
         if candidate.is_file():
             return candidate, repo_root
-    except OSError:
+    except (CrossProcessLockError, OSError):
         pass
     return None, repo_root
 
@@ -5605,9 +5605,15 @@ def validate_review_receipt_findings(receipt: object) -> bool:
     if not isinstance(receipt, dict):
         return False
     findings = receipt.get("findings")
-    return findings is None or (
+    if findings is None:
+        return True
+    expected_kind = _REVIEW_TYPE_TO_FINDINGS_KIND.get(receipt.get("type"))
+    return (
         isinstance(findings, dict)
         and _review_findings_container_valid(findings)
+        and expected_kind == findings["reviewKind"]
+        and isinstance(receipt.get("mode"), str)
+        and receipt["mode"] == findings["backend"]
     )
 
 
@@ -5732,6 +5738,17 @@ def _review_receipt_history_dir(receipt_path: Path) -> Path:
     return receipt_path.parent / f"{receipt_path.name}.history"
 
 
+def _review_receipt_lock_path(receipt_path: Path) -> Path:
+    """Keep persistent kernel-lock files in ignored repo-local runtime state."""
+    identity = str(receipt_path.resolve()).encode("utf-8")
+    return (
+        get_flow_dir()
+        / "tmp"
+        / "review-receipt-locks"
+        / f"{hashlib.sha256(identity).hexdigest()}.lock"
+    )
+
+
 def _preserve_review_receipt_generation(receipt_path: Path) -> Optional[Path]:
     """Persist the valid findings generation currently behind a latest pointer."""
     try:
@@ -5759,13 +5776,23 @@ def _preserve_review_receipt_generation(receipt_path: Path) -> Optional[Path]:
 
 def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
     """Load immutable ancestors plus the latest receipt, failing closed."""
+    latest: Optional[dict]
     try:
         latest = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        latest = None
     except (json.JSONDecodeError, OSError, TypeError, ValueError):
         return None
-    if not isinstance(latest, dict) or not validate_review_receipt_findings(latest):
+    if latest is not None and (
+        not isinstance(latest, dict)
+        or not validate_review_receipt_findings(latest)
+    ):
         return None
-    scope = (latest.get("type"), latest.get("id"), latest.get("mode"))
+    scope = (
+        (latest.get("type"), latest.get("id"), latest.get("mode"))
+        if latest is not None
+        else None
+    )
     receipts: list[dict] = []
     history_dir = _review_receipt_history_dir(receipt_path)
     if history_dir.exists():
@@ -5780,10 +5807,16 @@ def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
                 return None
             if not isinstance(value, dict) or not validate_review_receipt_findings(value):
                 return None
-            if (value.get("type"), value.get("id"), value.get("mode")) == scope:
+            value_scope = (value.get("type"), value.get("id"), value.get("mode"))
+            if scope is None:
+                scope = value_scope
+            if value_scope == scope:
                 receipts.append(value)
-    receipts.append(latest)
-    return receipts
+            elif latest is None:
+                return None
+    if latest is not None:
+        receipts.append(latest)
+    return receipts or None
 
 
 def cmd_review_findings_attach(args: argparse.Namespace) -> None:
@@ -5836,25 +5869,26 @@ def cmd_review_findings_attach(args: argparse.Namespace) -> None:
             code=2,
         )
     prior_path = Path(args.prior) if args.prior else receipt_path
-    findings = build_review_receipt_findings(
-        review_text,
-        review_type=review_type,
-        review_id=review_id,
-        backend=backend,
-        head_sha=head_sha,
-        base_sha=base_sha,
-        prior_receipt_path=prior_path,
-        anchor_side="head",
-    )
-    if findings is not None:
-        receipt["findings"] = findings
-    else:
-        receipt.pop("findings", None)
-    if prior_path != receipt_path and prior_path.exists():
-        _preserve_review_receipt_generation(prior_path)
-    if receipt_path.exists():
-        _preserve_review_receipt_generation(receipt_path)
-    atomic_write_json(receipt_path, receipt)
+    with cross_process_lock(_review_receipt_lock_path(receipt_path)):
+        findings = build_review_receipt_findings(
+            review_text,
+            review_type=review_type,
+            review_id=review_id,
+            backend=backend,
+            head_sha=head_sha,
+            base_sha=base_sha,
+            prior_receipt_path=prior_path,
+            anchor_side="head",
+        )
+        if findings is not None:
+            receipt["findings"] = findings
+        else:
+            receipt.pop("findings", None)
+        if prior_path != receipt_path and prior_path.exists():
+            _preserve_review_receipt_generation(prior_path)
+        if receipt_path.exists():
+            _preserve_review_receipt_generation(receipt_path)
+        atomic_write_json(receipt_path, receipt)
     result = {
         "success": True,
         "receipt": str(receipt_path),
@@ -26549,11 +26583,15 @@ def _gather_review_diff_cursor(
 
 
 def _clear_stale_review_receipt(receipt_path: Optional[str]) -> None:
-    """Best-effort unlink of a stale receipt (shared failure-path cleanup)."""
+    """Archive valid evidence before unlinking a stale latest pointer."""
     if not receipt_path:
         return
     try:
-        Path(receipt_path).unlink(missing_ok=True)
+        path = Path(receipt_path)
+        with cross_process_lock(_review_receipt_lock_path(path)):
+            if path.exists():
+                _preserve_review_receipt_generation(path)
+            path.unlink(missing_ok=True)
     except OSError:
         pass
 
@@ -26864,37 +26902,34 @@ def _write_backend_review_receipt(
         receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
     if unaddressed_rids is not None:
         receipt_data["unaddressed"] = unaddressed_rids
-    head_sha = reviewed_head_sha or _resolve_review_sha("HEAD")
-    if head_sha is not None:
-        base_sha = reviewed_base_sha
-        if base_sha is None and base_branch:
-            base_sha = _resolve_review_sha(base_branch)
-        findings = build_review_receipt_findings(
-            review_text,
-            review_type=review_type,
-            review_id=review_id,
-            backend=backend,
-            head_sha=head_sha,
-            base_sha=base_sha,
-            prior_receipt_path=Path(receipt_path),
-            anchor_side="head",
-        )
-        if findings is not None:
-            receipt_data["findings"] = findings
-    content = json.dumps(receipt_data, indent=2) + "\n"
-    recovery_path: Optional[Path] = None
-    if review_type == "completion_review":
-        # The verdict attempt is already durable by this point. Preserve the
-        # complete receipt payload in a repo-local ignored file before writing
-        # an explicit/autonomous receipt path that may fail transiently. The
-        # skill's pre-dispatch checkpoint restores this payload without
-        # consuming or dispatching another review round.
-        recovery_path = _completion_review_receipt_recovery_path(review_id)
-        atomic_write(recovery_path, content)
     receipt_file = Path(receipt_path)
-    if receipt_file.exists():
-        _preserve_review_receipt_generation(receipt_file)
-    atomic_write(receipt_file, content)
+    with cross_process_lock(_review_receipt_lock_path(receipt_file)):
+        head_sha = reviewed_head_sha or _resolve_review_sha("HEAD")
+        if head_sha is not None:
+            base_sha = reviewed_base_sha
+            if base_sha is None and base_branch:
+                base_sha = _resolve_review_sha(base_branch)
+            findings = build_review_receipt_findings(
+                review_text,
+                review_type=review_type,
+                review_id=review_id,
+                backend=backend,
+                head_sha=head_sha,
+                base_sha=base_sha,
+                prior_receipt_path=receipt_file,
+                anchor_side="head",
+            )
+            if findings is not None:
+                receipt_data["findings"] = findings
+        content = json.dumps(receipt_data, indent=2) + "\n"
+        if review_type == "completion_review":
+            # Preserve the payload before the terminal pointer. The skill can
+            # recover without dispatching another review round.
+            recovery_path = _completion_review_receipt_recovery_path(review_id)
+            atomic_write(recovery_path, content)
+        if receipt_file.exists():
+            _preserve_review_receipt_generation(receipt_file)
+        atomic_write(receipt_file, content)
 
 
 

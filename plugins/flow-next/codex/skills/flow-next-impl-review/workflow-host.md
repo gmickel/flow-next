@@ -25,7 +25,9 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 ## Step 2: Dispatch read-only reviewer subagent
 
 Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
-Immediately beforehand capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
+Immediately beforehand resolve `DIFF_BASE="${BASE_COMMIT:-main}"` (fall back
+to `master` only when `main` does not resolve), fail closed unless it resolves,
+then capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
 `REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"`.
 Retain those literal anchors through receipt writing.
 

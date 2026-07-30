@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
@@ -289,6 +290,78 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
         invalid = dict(legacy, findings={"schemaVersion": 99})
         self.assertFalse(FLOWCTL.validate_review_receipt_findings(invalid))
 
+    def test_receipt_validation_binds_container_kind_and_backend(self) -> None:
+        findings = _container(receipt_id="round-1")
+        valid = {
+            "type": "impl_review",
+            "id": "fn-136.3",
+            "mode": "codex",
+            "findings": findings,
+        }
+        self.assertTrue(FLOWCTL.validate_review_receipt_findings(valid))
+        self.assertFalse(
+            FLOWCTL.validate_review_receipt_findings(
+                dict(valid, type="plan_review")
+            )
+        )
+        self.assertFalse(
+            FLOWCTL.validate_review_receipt_findings(dict(valid, mode="rp"))
+        )
+
+    def test_failure_cleanup_archives_latest_success(self) -> None:
+        receipt = self.repo / "receipt.json"
+        FLOWCTL._write_backend_review_receipt(
+            str(receipt),
+            review_type="impl_review",
+            review_id="fn-136.3",
+            backend="codex",
+            verdict="NEEDS_WORK",
+            session_id="session",
+            effective_model="model",
+            effective_effort="high",
+            resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
+            review_text=_fixture("codex"),
+            include_effort=True,
+            base_branch="HEAD",
+        )
+        latest = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+        FLOWCTL._clear_stale_review_receipt(str(receipt))
+        self.assertFalse(receipt.exists())
+        generations = FLOWCTL.load_review_receipt_generations(receipt)
+        self.assertEqual(len(generations), 1)
+        self.assertEqual(
+            generations[0]["findings"]["sourceReceiptId"],
+            latest["sourceReceiptId"],
+        )
+
+    def test_concurrent_writers_materialize_every_generation(self) -> None:
+        receipt = self.repo / "receipt.json"
+
+        def write(index: int) -> None:
+            FLOWCTL._write_backend_review_receipt(
+                str(receipt),
+                review_type="impl_review",
+                review_id="fn-136.3",
+                backend="codex",
+                verdict="NEEDS_WORK",
+                session_id=f"session-{index}",
+                effective_model="model",
+                effective_effort="high",
+                resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
+                review_text=_fixture("codex"),
+                include_effort=True,
+                base_branch="HEAD",
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            list(pool.map(write, (1, 2)))
+        generations = FLOWCTL.load_review_receipt_generations(receipt)
+        self.assertEqual(len(generations), 2)
+        self.assertEqual(
+            sorted(entry["findings"]["round"] for entry in generations),
+            [1, 2],
+        )
+
     def test_direct_workflow_contracts_require_parser_complete_fields(self) -> None:
         skill_root = REPO / "plugins" / "flow-next" / "skills"
         plan_rp = (
@@ -297,12 +370,22 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
         completion_rp = (
             skill_root / "flow-next-spec-completion-review" / "workflow-rp.md"
         ).read_text(encoding="utf-8")
+        completion_host = (
+            skill_root / "flow-next-spec-completion-review" / "workflow-host.md"
+        ).read_text(encoding="utf-8")
+        impl_host = (
+            skill_root / "flow-next-impl-review" / "workflow-host.md"
+        ).read_text(encoding="utf-8")
         qa = (skill_root / "flow-next-qa" / "workflow.md").read_text(
             encoding="utf-8"
         )
         self.assertGreaterEqual(plan_rp.count("Confidence"), 2)
         self.assertGreaterEqual(plan_rp.count("Classification"), 2)
         self.assertGreaterEqual(completion_rp.count("Severity"), 2)
+        for field in ("Severity", "Confidence", "Classification"):
+            self.assertIn(field, completion_host)
+        self.assertIn('DIFF_BASE="${BASE_COMMIT:-main}"', completion_host)
+        self.assertIn('DIFF_BASE="${BASE_COMMIT:-main}"', impl_host)
         self.assertIn('QA_FINDINGS="${QA_FINDINGS:-[]}"', qa)
         self.assertIn('RECEIPT_HISTORY_DIR="${RECEIPT_PATH}.history"', qa)
 
