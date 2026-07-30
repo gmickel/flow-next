@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "sha256": "194a004fa9d3fbcbd9b17a9a6186c7aeea299ff6fd7be72af541b62383e9281a",
+  "sourceCommit": "bf959bc8d5478578066016354342423b397b07b0",
+  "sourcePath": "plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.json"
+}

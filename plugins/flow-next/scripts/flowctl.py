@@ -17150,6 +17150,16 @@ PR_COGNITIVE_AID_ATTENTION_CLASSES = frozenset(
 _PR_COGNITIVE_AID_SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
 _PR_COGNITIVE_AID_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")
 _PR_COGNITIVE_AID_RID_RE = re.compile(r"^R[1-9][0-9]*$")
+_PR_COGNITIVE_AID_WINDOWS_RESERVED = frozenset(
+    {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        *(f"COM{i}" for i in range(1, 10)),
+        *(f"LPT{i}" for i in range(1, 10)),
+    }
+)
 
 
 class PrCognitiveAidValidationError(ValueError):
@@ -17209,6 +17219,14 @@ def _pr_aid_identifier(value: Any, path: str) -> str:
     result = _pr_aid_string(value, path, maximum=160)
     if not _PR_COGNITIVE_AID_ID_RE.fullmatch(result):
         _pr_aid_fail(path, "must be a portable identifier")
+    return result
+
+
+def _pr_aid_artifact_id(value: Any, path: str) -> str:
+    result = _pr_aid_identifier(value, path)
+    basename = result.split(".", 1)[0].upper()
+    if basename in _PR_COGNITIVE_AID_WINDOWS_RESERVED:
+        _pr_aid_fail(path, "must not use a Windows reserved filename")
     return result
 
 
@@ -17299,7 +17317,7 @@ def validate_pr_cognitive_aid(
         )
     if artifact.get("schemaVersion") != PR_COGNITIVE_AID_SCHEMA_VERSION:
         _pr_aid_fail("schemaVersion", "unsupported schema version")
-    artifact_id = _pr_aid_identifier(artifact.get("artifactId"), "artifactId")
+    artifact_id = _pr_aid_artifact_id(artifact.get("artifactId"), "artifactId")
     spec_id = _pr_aid_string(artifact.get("specId"), "specId", maximum=160)
     if not is_spec_id(spec_id):
         _pr_aid_fail("specId", "must be a canonical Flow spec ID")
@@ -17316,7 +17334,7 @@ def validate_pr_cognitive_aid(
         _pr_aid_fail("generatedAt", "must include a timezone")
     supersedes = artifact.get("supersedesArtifactId")
     if supersedes is not None:
-        supersedes = _pr_aid_identifier(supersedes, "supersedesArtifactId")
+        supersedes = _pr_aid_artifact_id(supersedes, "supersedesArtifactId")
         if supersedes == artifact_id:
             _pr_aid_fail("supersedesArtifactId", "must not reference itself")
     if expected_spec_id is not None and spec_id != expected_spec_id:
@@ -17611,14 +17629,26 @@ def _load_pr_cognitive_aid_records(
         return records, rejected
     for path in sorted(home.glob("*.json")):
         try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
+            with path.open("rb") as handle:
+                raw_bytes = handle.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
+            if len(raw_bytes) > PR_COGNITIVE_AID_MAX_BYTES:
+                _pr_aid_fail(
+                    path.name,
+                    f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
+                )
+            raw = json.loads(raw_bytes.decode("utf-8"))
             record = validate_pr_cognitive_aid(raw, expected_spec_id=spec_id)
             if path.name != f"{record['artifactId']}.json":
                 _pr_aid_fail(
                     path.name, "filename must equal <artifactId>.json"
                 )
             records.append(record)
-        except (OSError, json.JSONDecodeError, PrCognitiveAidValidationError) as exc:
+        except (
+            OSError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            PrCognitiveAidValidationError,
+        ) as exc:
             rejected.append(f"{path.name}: {exc}")
     return records, rejected
 
@@ -17774,6 +17804,10 @@ def write_pr_cognitive_aid(
         raise PrCognitiveAidValidationError(
             f"artifact home: cannot acquire writer lock: {exc}"
         ) from exc
+    except OSError as exc:
+        raise PrCognitiveAidValidationError(
+            f"artifact home: cannot publish generation: {exc}"
+        ) from exc
     return target
 
 
@@ -17782,6 +17816,24 @@ def _pr_aid_plain_text(value: Any) -> str:
     for character in ("\\", "*", "[", "]", ">"):
         escaped = escaped.replace(character, f"\\{character}")
     return escaped.replace("\n", " ")
+
+
+def _pr_aid_prose(value: Any) -> str:
+    escaped = _pr_aid_plain_text(value)
+    if re.match(
+        r"^\s*(?:#{1,6}\s|[-+*]\s|\d+[.)]\s|`{3,}|~{3,}|-{3,}\s*$|"
+        r"\*{3,}\s*$|_{3,}\s*$)",
+        escaped,
+    ):
+        first = len(escaped) - len(escaped.lstrip())
+        escaped = (
+            escaped[:first]
+            + "&#"
+            + str(ord(escaped[first]))
+            + ";"
+            + escaped[first + 1 :]
+        )
+    return escaped
 
 
 def _pr_aid_markdown_cell(value: Any) -> str:
@@ -17844,7 +17896,7 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     lines = [
         "## The change, top to bottom",
         "",
-        _pr_aid_plain_text(walkthrough["thesis"]),
+        _pr_aid_prose(walkthrough["thesis"]),
         "",
         "| Proof | Value | Sources |",
         "|---|---|---|",

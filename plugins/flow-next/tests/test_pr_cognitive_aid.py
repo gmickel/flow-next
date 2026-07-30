@@ -1,5 +1,7 @@
 """PR cognitive-aid v1 validation, persistence, rendering, and budget tests."""
 
+import hashlib
+import json
 import statistics
 import sys
 import tempfile
@@ -21,6 +23,11 @@ import flowctl  # noqa: E402
 BASE_SHA = "a" * 40
 HEAD_SHA = "b" * 40
 SPEC_ID = "fn-136-cognitive-aid"
+GOLDEN = (
+    REPO_ROOT
+    / "plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.json"
+)
+GOLDEN_META = GOLDEN.with_name("golden.meta.json")
 
 
 def artifact(*, canonical_files: int = 2, churn: int = 40) -> dict:
@@ -214,6 +221,17 @@ class ValidationTests(unittest.TestCase):
             handle.flush()
             with redirect_stdout(StringIO()), self.assertRaises(SystemExit):
                 flowctl._pr_aid_read_input(handle.name)
+
+    def test_rejects_windows_reserved_artifact_filenames(self) -> None:
+        for reserved in ("CON", "nul", "LPT1.json", "com9"):
+            with self.subTest(reserved=reserved):
+                value = artifact()
+                value["artifactId"] = reserved
+                with self.assertRaisesRegex(
+                    flowctl.PrCognitiveAidValidationError,
+                    "Windows reserved filename",
+                ):
+                    flowctl.validate_pr_cognitive_aid(value)
 
     def test_rejects_bounds_order_cardinality_and_oversize_without_truncation(self) -> None:
         no_step = artifact()
@@ -459,6 +477,21 @@ class PersistenceAndCurrentnessTests(unittest.TestCase):
                 self.assertEqual(result["status"], "invalid")
                 self.assertIsNone(result["artifact"])
 
+    def test_oversize_persisted_generation_is_rejected_before_decode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            home = flowctl._pr_cognitive_aid_home(flow_dir, SPEC_ID)
+            home.mkdir(parents=True)
+            (home / "oversize.json").write_bytes(
+                b" " * (flowctl.PR_COGNITIVE_AID_MAX_BYTES + 1)
+            )
+            result = flowctl.select_current_pr_cognitive_aid(
+                flow_dir, SPEC_ID, base_sha=BASE_SHA, head_sha=HEAD_SHA
+            )
+            self.assertEqual(result["status"], "invalid")
+            self.assertIsNone(result["artifact"])
+            self.assertIn("encoded payload exceeds", result["rejected"][0])
+
 
 class MarkdownAndBudgetTests(unittest.TestCase):
     def test_compact_form_uses_only_canonical_files(self) -> None:
@@ -514,8 +547,36 @@ class MarkdownAndBudgetTests(unittest.TestCase):
         self.assertIn("&#96;", rendered)
         self.assertLess(rendered.index("generated.md"), rendered.index("change_0.py"))
 
+    def test_thesis_cannot_inject_markdown_block_structure(self) -> None:
+        cases = {
+            "heading": "## Review plan",
+            "list": "- claimed verification",
+            "ordered": "1. fake evidence",
+            "rule": "---",
+            "fence": "```python",
+        }
+        for name, thesis in cases.items():
+            with self.subTest(name=name):
+                value = artifact()
+                value["changeWalkthrough"]["thesis"] = thesis
+                rendered = flowctl.render_pr_cognitive_aid_markdown(value)
+                first_body_line = rendered.splitlines()[2]
+                self.assertNotEqual(first_body_line, thesis)
+
     def test_validation_plus_render_p95_under_50_ms_for_30_warm_runs(self) -> None:
-        maximum_normal = artifact(canonical_files=120, churn=3)
+        maximum_normal = json.loads(GOLDEN.read_text(encoding="utf-8"))
+        metadata = json.loads(GOLDEN_META.read_text(encoding="utf-8"))
+        encoded = GOLDEN.read_bytes()
+        groups = maximum_normal["changeWalkthrough"]["groups"]
+        files = [item for group in groups for item in group["files"]]
+        self.assertEqual(len(maximum_normal["sources"]), 128)
+        self.assertEqual(len(maximum_normal["changeWalkthrough"]["proof"]), 16)
+        self.assertEqual(len(groups), 11)
+        self.assertEqual(len(files), 500)
+        self.assertLessEqual(len(encoded), flowctl.PR_COGNITIVE_AID_MAX_BYTES)
+        self.assertEqual(hashlib.sha256(encoded).hexdigest(), metadata["sha256"])
+        self.assertEqual(metadata["schemaVersion"], 1)
+        self.assertEqual(metadata["sourcePath"], GOLDEN.relative_to(REPO_ROOT).as_posix())
         for _ in range(5):
             flowctl.render_pr_cognitive_aid_markdown(maximum_normal)
         durations_ms = []
