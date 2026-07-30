@@ -4802,7 +4802,7 @@ def _review_finding_text(
     fields: dict[str, str], block: str
 ) -> Optional[tuple[str, str, Optional[str]]]:
     body_valid, body_value = _review_finding_alias_value(
-        fields, "problem", "finding"
+        fields, "problem", "finding", "evidence"
     )
     suggestion_valid, suggestion = _review_finding_alias_value(
         fields, "suggestion", "suggested fix"
@@ -4824,7 +4824,11 @@ def _review_finding_text(
             prose.append(_review_finding_clean_markdown(stripped))
         body = " ".join(prose)
     body = body.strip()
-    title = (fields.get("title") or body.split(".", 1)[0]).strip()
+    title = (
+        fields.get("title")
+        or fields.get("requirement")
+        or body.split(".", 1)[0]
+    ).strip()
     return title, body, suggestion.strip() if suggestion else None
 
 
@@ -4980,7 +4984,7 @@ def _review_finding_prior_items(
         # status parsing. Otherwise an unknown status such as "pending" can
         # disappear into an explicit-empty SHIP response.
         return None
-    if not matches:
+    if not matches and prior_findings is None:
         return []
     if not isinstance(prior_findings, dict):
         return None
@@ -4999,7 +5003,24 @@ def _review_finding_prior_items(
     # Some backends omit the ordinal only when exactly one prior finding exists.
     if any(match.group("ordinal") is None for match in matches) and len(prior_items) != 1:
         return None
-    carried: list[dict] = []
+    carried: list[dict] = [
+        {
+            key: (
+                dict(value)
+                if key == "anchor"
+                else list(value)
+                if key == "rIds"
+                else value
+            )
+            for key, value in item.items()
+        }
+        for item in prior_items
+    ]
+    carried_by_ordinal = {item["ordinal"]: item for item in carried}
+    for item in carried:
+        # Every generation is a complete snapshot. An omitted prior finding
+        # remains current until the reviewer explicitly fixes or withdraws it.
+        item["lastSeenReceiptId"] = source_receipt_id
     for match in matches:
         ordinal = (
             int(match.group("ordinal"))
@@ -5013,19 +5034,9 @@ def _review_finding_prior_items(
         status = _FINDINGS_STATUS_ALIASES.get(status_key)
         if status is None:
             return None
-        item = {
-            key: (
-                dict(value)
-                if key == "anchor"
-                else list(value)
-                if key == "rIds"
-                else value
-            )
-            for key, value in prior.items()
-        }
+        item = carried_by_ordinal[ordinal]
         item["status"] = status
         item["lastSeenReceiptId"] = source_receipt_id
-        carried.append(item)
     return carried
 
 
@@ -5295,6 +5306,16 @@ def _parse_review_findings_v1(
     )
     if prior_items is None:
         return None
+    for item in prior_items:
+        anchor = item.get("anchor")
+        if isinstance(anchor, dict) and (
+            anchor.get("headSha") != head_sha
+            or anchor.get("baseSha") != base_sha
+        ):
+            # A line anchor cannot be relabeled onto a newer snapshot without
+            # re-reading the diff. Preserve the finding but omit the stale
+            # location rather than guessing.
+            item.pop("anchor", None)
     if prior_items and (
         supersedes_receipt_id is None
         or prior_findings.get("sourceReceiptId") != supersedes_receipt_id
@@ -5493,8 +5514,14 @@ def _review_receipt_findings_id(
     return f"review-{hashlib.sha256(identity).hexdigest()}"
 
 
-def _load_prior_receipt_findings(path: Optional[Path]) -> Optional[dict]:
-    """Load only a valid prior findings container; legacy/corrupt data is absent."""
+def _load_prior_receipt_findings(
+    path: Optional[Path],
+    *,
+    review_type: str,
+    review_id: str,
+    backend: str,
+) -> Optional[dict]:
+    """Load valid findings only from the same receipt scope."""
     if path is None:
         return None
     try:
@@ -5502,6 +5529,12 @@ def _load_prior_receipt_findings(path: Optional[Path]) -> Optional[dict]:
     except (json.JSONDecodeError, OSError, TypeError, ValueError):
         return None
     if not isinstance(receipt, dict):
+        return None
+    if (
+        receipt.get("type") != review_type
+        or receipt.get("id") != review_id
+        or receipt.get("mode") != backend
+    ):
         return None
     findings = receipt.get("findings")
     return (
@@ -5532,7 +5565,12 @@ def build_review_receipt_findings(
     review_kind = _REVIEW_TYPE_TO_FINDINGS_KIND.get(review_type)
     if review_kind is None:
         return None
-    prior = _load_prior_receipt_findings(prior_receipt_path)
+    prior = _load_prior_receipt_findings(
+        prior_receipt_path,
+        review_type=review_type,
+        review_id=review_id,
+        backend=backend,
+    )
     if prior is not None and (
         prior.get("reviewKind") != review_kind
         or prior.get("backend") != backend
@@ -5680,6 +5718,63 @@ def select_current_review_findings(
     return tip
 
 
+def _review_receipt_history_dir(receipt_path: Path) -> Path:
+    """Return the deterministic immutable-generation home for one latest receipt."""
+    return receipt_path.parent / f"{receipt_path.name}.history"
+
+
+def _preserve_review_receipt_generation(receipt_path: Path) -> Optional[Path]:
+    """Persist the valid findings generation currently behind a latest pointer."""
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None
+    if not isinstance(receipt, dict) or not validate_review_receipt_findings(receipt):
+        return None
+    findings = receipt.get("findings")
+    if not isinstance(findings, dict):
+        return None
+    source_id = findings["sourceReceiptId"]
+    filename = f"{hashlib.sha256(source_id.encode('utf-8')).hexdigest()}.json"
+    history_path = _review_receipt_history_dir(receipt_path) / filename
+    if history_path.exists():
+        try:
+            existing = json.loads(history_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            return None
+        return history_path if existing == receipt else None
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(history_path, receipt)
+    return history_path
+
+
+def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
+    """Load immutable ancestors plus the latest receipt, failing closed."""
+    receipts: list[dict] = []
+    history_dir = _review_receipt_history_dir(receipt_path)
+    if history_dir.exists():
+        try:
+            paths = sorted(history_dir.glob("*.json"))
+        except OSError:
+            return None
+        for path in paths:
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                return None
+            if not isinstance(value, dict) or not validate_review_receipt_findings(value):
+                return None
+            receipts.append(value)
+    try:
+        latest = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None
+    if not isinstance(latest, dict) or not validate_review_receipt_findings(latest):
+        return None
+    receipts.append(latest)
+    return receipts
+
+
 def cmd_review_findings_attach(args: argparse.Namespace) -> None:
     """Atomically attach parsed findings to a direct-writer receipt payload."""
     try:
@@ -5744,6 +5839,10 @@ def cmd_review_findings_attach(args: argparse.Namespace) -> None:
         receipt["findings"] = findings
     else:
         receipt.pop("findings", None)
+    if prior_path != receipt_path and prior_path.exists():
+        _preserve_review_receipt_generation(prior_path)
+    if receipt_path.exists():
+        _preserve_review_receipt_generation(receipt_path)
     atomic_write_json(receipt_path, receipt)
     result = {
         "success": True,
@@ -26361,7 +26460,8 @@ def spec_md_rel_path(spec_id: str) -> str:
 
 
 def _gather_review_diff(
-    base_branch: str,
+    base_sha: str,
+    head_sha: str = "HEAD",
     *,
     max_diff_bytes: int = 50000,
     truncate_marker: Optional[str] = "... [diff truncated at 50KB]",
@@ -26375,7 +26475,7 @@ def _gather_review_diff(
     diff_summary = ""
     try:
         diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
+            ["git", "diff", "--stat", f"{base_sha}..{head_sha}"],
             capture_output=True,
             text=True, encoding="utf-8",
             cwd=get_repo_root(),
@@ -26388,7 +26488,7 @@ def _gather_review_diff(
     diff_content = ""
     try:
         proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}...HEAD"],
+            ["git", "diff", f"{base_sha}..{head_sha}"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=get_repo_root(),
@@ -26418,15 +26518,20 @@ def _gather_review_diff(
     return diff_summary, diff_content
 
 
-def _gather_review_diff_capped(base_branch: str) -> tuple[str, str]:
+def _gather_review_diff_capped(
+    base_sha: str, head_sha: str = "HEAD"
+) -> tuple[str, str]:
     """Codex/copilot gather: 50KB hard cap + truncation marker."""
-    return _gather_review_diff(base_branch)
+    return _gather_review_diff(base_sha, head_sha)
 
 
-def _gather_review_diff_cursor(base_branch: str) -> tuple[str, str]:
+def _gather_review_diff_cursor(
+    base_sha: str, head_sha: str = "HEAD"
+) -> tuple[str, str]:
     """Cursor gather: generous read cap; argv-budget fit owns truncation."""
     return _gather_review_diff(
-        base_branch,
+        base_sha,
+        head_sha,
         max_diff_bytes=CURSOR_ARGV_PROMPT_MAX * 2,
         truncate_marker=None,
     )
@@ -26653,6 +26758,29 @@ def _resolve_review_sha(ref: str) -> Optional[str]:
     return value if proc.returncode == 0 and value else None
 
 
+def _capture_review_snapshot(base_ref: str) -> tuple[str, str]:
+    """Capture the exact merge-base/head pair before reviewer dispatch."""
+    head_sha = _resolve_review_sha("HEAD")
+    base_tip = _resolve_review_sha(base_ref)
+    if head_sha is None or base_tip is None:
+        raise ValueError(f"cannot resolve review snapshot: {base_ref}...HEAD")
+    try:
+        proc = subprocess.run(
+            ["git", "merge-base", base_tip, head_sha],
+            cwd=get_repo_root(),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot resolve review merge base: {exc}") from exc
+    base_sha = proc.stdout.strip()
+    if proc.returncode != 0 or not base_sha:
+        raise ValueError(f"cannot resolve review merge base: {base_ref}...HEAD")
+    return base_sha, head_sha
+
+
 def _write_backend_review_receipt(
     receipt_path: str,
     *,
@@ -26671,6 +26799,8 @@ def _write_backend_review_receipt(
     suppressed_count=None,
     classification_counts=None,
     unaddressed_rids=None,
+    reviewed_base_sha: Optional[str] = None,
+    reviewed_head_sha: Optional[str] = None,
 ) -> None:
     """Write a review receipt with stable key order (Ralph / pilot / land)."""
     receipt_data: dict = {
@@ -26723,9 +26853,11 @@ def _write_backend_review_receipt(
         receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
     if unaddressed_rids is not None:
         receipt_data["unaddressed"] = unaddressed_rids
-    head_sha = _resolve_review_sha("HEAD")
+    head_sha = reviewed_head_sha or _resolve_review_sha("HEAD")
     if head_sha is not None:
-        base_sha = _resolve_review_sha(base_branch) if base_branch else None
+        base_sha = reviewed_base_sha
+        if base_sha is None and base_branch:
+            base_sha = _resolve_review_sha(base_branch)
         findings = build_review_receipt_findings(
             review_text,
             review_type=review_type,
@@ -26748,7 +26880,10 @@ def _write_backend_review_receipt(
         # consuming or dispatching another review round.
         recovery_path = _completion_review_receipt_recovery_path(review_id)
         atomic_write(recovery_path, content)
-    atomic_write(Path(receipt_path), content)
+    receipt_file = Path(receipt_path)
+    if receipt_file.exists():
+        _preserve_review_receipt_generation(receipt_file)
+    atomic_write(receipt_file, content)
 
 
 
@@ -27080,7 +27215,14 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             error_exit(f"Task spec not found: {task_spec_path}", use_json=args.json)
         task_spec = task_spec_path.read_text(encoding="utf-8")
 
-    diff_summary, diff_content = reg["gather_diff"](base_branch)
+    resolved_spec = reg["resolve_spec"](args, task_id)
+    try:
+        reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
+    diff_summary, diff_content = reg["gather_diff"](
+        reviewed_base_sha, reviewed_head_sha
+    )
 
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
 
@@ -27138,8 +27280,6 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             is_rereview=is_rereview,
             receipt_path=receipt_path,
         )
-
-    resolved_spec = reg["resolve_spec"](args, task_id)
 
     # Cursor: persona override + final argv-cap backstop (after resolve so
     # task_id is canonicalized; order matches the pre-migration handler).
@@ -27222,6 +27362,8 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             suppressed_count=suppressed_count,
             classification_counts=classification_counts,
             unaddressed_rids=unaddressed_rids,
+            reviewed_base_sha=reviewed_base_sha,
+            reviewed_head_sha=reviewed_head_sha,
         )
 
     if args.json:
@@ -27424,6 +27566,11 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
     )
 
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
+    resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
+    try:
+        reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
     context_hints = gather_context_hints(base_branch)
     prompt = build_review_prompt(
         "plan", epic_spec, context_hints, task_specs=task_specs
@@ -27457,8 +27604,6 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             prior_findings=prior_findings,
         )
         prompt = rereview_preamble + prompt
-
-    resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
 
     if reg["prompt_fit"] == "cursor_argv":
         prompt = build_cursor_persona_override() + prompt
@@ -27523,6 +27668,8 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             review_text=review_text,
             include_effort=reg["include_effort"],
             base_branch=base_branch,
+            reviewed_base_sha=reviewed_base_sha,
+            reviewed_head_sha=reviewed_head_sha,
         )
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
@@ -27568,11 +27715,18 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     repo_root = get_repo_root()
+    resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
 
     # Cursor: resume BEFORE prompt so the preamble is reserved in argv budget.
     # Codex/copilot: gather + build prompt first (pre-migration order).
+    try:
+        reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
     if reg["prompt_fit"] == "cursor_argv":
-        diff_summary, diff_content = reg["gather_diff"](base_branch)
+        diff_summary, diff_content = reg["gather_diff"](
+            reviewed_base_sha, reviewed_head_sha
+        )
         session_id, is_rereview, prior_receipt_model, prior_receipt_effort = (
             _resume_session_from_receipt(
                 receipt_path,
@@ -27608,7 +27762,9 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             task_ids=task_ids or None,
         )
     else:
-        diff_summary, diff_content = reg["gather_diff"](base_branch)
+        diff_summary, diff_content = reg["gather_diff"](
+            reviewed_base_sha, reviewed_head_sha
+        )
         prompt = build_completion_review_prompt(
             epic_spec, task_specs, diff_summary, diff_content,
         )
@@ -27630,8 +27786,6 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
                 prior_findings=prior_findings,
             )
             prompt = rereview_preamble + prompt
-
-    resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
 
     # Completion reviews reuse the spec-scoped plan-review counter.
     enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
@@ -27694,6 +27848,8 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             suppressed_count=suppressed_count,
             classification_counts=classification_counts,
             unaddressed_rids=unaddressed_rids,
+            reviewed_base_sha=reviewed_base_sha,
+            reviewed_head_sha=reviewed_head_sha,
         )
 
     # Receipt evidence must land before terminal status. If receipt persistence

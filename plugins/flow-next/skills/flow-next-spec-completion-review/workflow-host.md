@@ -43,6 +43,9 @@ delivered in this run. Stop without writing completion status; autonomous
 callers surface `NEEDS_HUMAN`.
 
 Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
+Immediately beforehand capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
+`REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"`.
+Retain those literal anchors through receipt writing.
 
 | Host | How to pin |
 |------|------------|
@@ -118,8 +121,8 @@ using the terminal receipt as the prior lineage source:
   --receipt "$RECEIPT_RECOVERY" \
   --prior "$RECEIPT_PATH" \
   --review-file "$REVIEW_OUTPUT_FILE" \
-  --base "$DIFF_BASE" \
-  --head HEAD \
+  --base "$REVIEW_BASE_SHA" \
+  --head "$REVIEW_HEAD_SHA" \
   --json
 ```
 

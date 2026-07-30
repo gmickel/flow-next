@@ -17,6 +17,11 @@ if [[ -z "$BASE_COMMIT" ]]; then
 else
   DIFF_BASE="$BASE_COMMIT"
 fi
+REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-impl-review-snapshot-<task-id-or-branch-slug>-<suffix>.env"
+REVIEW_HEAD_SHA="$(git rev-parse HEAD)"
+REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"
+printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
+  "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
 
 git log ${DIFF_BASE}..HEAD --oneline
 CHANGED_FILES="$(git diff ${DIFF_BASE}..HEAD --name-only)"
@@ -341,6 +346,8 @@ fi
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
+  REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-impl-review-snapshot-<task-id-or-branch-slug>-<suffix>.env"
+  source "$REVIEW_SNAPSHOT_FILE"
 
   # Same literal response file from Phase 3 (path-persistence rule — type it verbatim)
   RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
@@ -438,8 +445,8 @@ EOF
     --input "$RECEIPT_INPUT" \
     --receipt "$REVIEW_RECEIPT_PATH" \
     --review-file "$RESPONSE_FILE" \
-    --base "$DIFF_BASE" \
-    --head HEAD \
+    --base "$REVIEW_BASE_SHA" \
+    --head "$REVIEW_HEAD_SHA" \
     --json >/dev/null; then
     rm -f "$RECEIPT_INPUT"
     echo "<promise>RETRY</promise>"

@@ -425,7 +425,9 @@ fi
 
 `memory add` emits `matches` as the retrieval signal (per `docs/memory-schema.md`); the host decides update-vs-create. A re-run of QA that already knows the prior entry id should pass `--update <id>` so the body folds in rather than creating a sibling. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
 
-Track every finding's id and severity in a running list for Phase 6. **Read source to assert a PASS is forbidden (R1)** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
+Track every finding's id, severity, discrete confidence
+(`0|25|50|75|100`), classification (`introduced|pre_existing`), reason, and
+surface/file in a running list for Phase 6. **Read source to assert a PASS is forbidden (R1)** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
 
 ---
 
@@ -487,7 +489,7 @@ The receipt is the **only committed persisted output** (no new artifact, no new 
 | `head_sha` | string (`git rev-parse HEAD`) | the **freshness key** the pilot idempotence gate (R1b / task .2) reads — a receipt is fresh iff `receipt.id == <spec-id>` AND `receipt.head_sha == HEAD`. |
 | `branch` | string (current branch) | which branch the pass ran against (orientation for make-pr / a human). |
 | `rid_coverage` | object `{covered, total, rids: [{id, coverage}]}` | the §2.2 coverage spine, persisted so make-pr surfaces coverage without re-deriving. `coverage ∈ {live, subtracted, no_live_scenario, backend_cli}`. `covered` counts the non-gap rows (`live` + `subtracted` + `backend_cli`); a `no_live_scenario` row on a UI R-ID is the only uncovered kind. |
-| `open_p0p1` | array of **objects** `{id, severity, reason, file}` | open P0/P1 findings (Phase 5) as structured objects — `severity ∈ {P0, P1}`, `reason` a one-line symptom, `file` the surface/route — so make-pr surfaces findings, not bare ids. (Was a bare-id array; now objects.) |
+| `open_p0p1` | array of **objects** `{id, severity, confidence, classification, reason, file}` | Open P0/P1 findings with lossless v1 enums; severity is P0/P1, confidence is a discrete anchor, and classification is introduced/pre_existing. |
 
 **Build the JSON with a probed Python interpreter (`$PY`, resolved once per the snippet below), not a `cat <<EOF` heredoc** — and this is now *load-bearing*, not just for the reasons: `rid_coverage.rids[].id`/coverage and every `open_p0p1[]` object field (`reason`, `file`) are agent-authored free-form text. Raw shell interpolation into JSON would emit malformed output (or allow field injection) the moment any value contains a quote, backslash, or newline. Pass the structured fields as **JSON strings** through `os.environ` and re-parse with `json.loads`; let `json.dump` escape everything:
 
@@ -524,7 +526,8 @@ fi
 HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
 BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
 
-# OPEN_P0P1 = JSON ARRAY OF OBJECTS from Phase 5: [{"id","severity","reason","file"}, …];
+# OPEN_P0P1 = JSON ARRAY OF OBJECTS from Phase 5:
+# [{"id","severity","confidence","classification","reason","file"}, …];
 # default "[]". RID_COVERAGE = the §2.2 spine as JSON:
 # {"covered":N,"total":M,"rids":[{"id":"R1","coverage":"live"}, …]}; default "{}".
 # Both are JSON STRINGS here — python re-parses them so free-form fields are escaped.
@@ -552,7 +555,7 @@ r = {"type": os.environ["QA_TYPE"], "id": os.environ["QA_ID"],
  "head_sha": os.environ.get("HEAD_SHA", ""), # R1b freshness key (pilot/.2 reads this)
  "branch": os.environ.get("BRANCH", ""),
  "rid_coverage": json.loads(os.environ.get("RID_COVERAGE") or "{}"),
- "open_p0p1": json.loads(os.environ.get("OPEN_P0P1") or "[]")} # array of {id,severity,reason,file}
+ "open_p0p1": json.loads(os.environ.get("OPEN_P0P1") or "[]")}
 if os.environ["QA_OUTCOME"] == "BLOCKED" and os.environ.get("BLOCKED_REASON"):
  r["blocked_reason"] = os.environ["BLOCKED_REASON"] # json.dump escapes free-form text
 if os.environ["QA_OUTCOME"] == "NA" and os.environ.get("NA_REASON"):
@@ -562,14 +565,29 @@ with open(sys.argv[1], "w", encoding="utf-8") as fh:
  json.dump(r, fh); fh.write("\n")
 PY
 
-# QA's reproduced open findings do not yet carry the confidence/classification
-# pair required by findings v1, so never guess it. Empty SHIP/NA outcomes are
-# still explicit parseable evidence; non-empty QA output safely remains a
-# legacy-shaped receipt until those fields exist.
 if [[ "$VERDICT" == "SHIP" && "${OPEN_P0P1:-[]}" == "[]" ]]; then
  printf 'No findings.\\n<verdict>SHIP</verdict>\\n' > "$QA_REVIEW_FILE"
 else
- printf 'QA findings remain in open_p0p1; no lossless v1 conversion.\\n' > "$QA_REVIEW_FILE"
+ $PY - "$QA_REVIEW_FILE" <<'PY'
+import json, os, sys
+items = json.loads(os.environ.get("OPEN_P0P1") or "[]")
+lines = []
+for item in items:
+ required = {"id", "severity", "confidence", "classification", "reason", "file"}
+ if not isinstance(item, dict) or not required <= set(item):
+ raise SystemExit("qa: open finding lacks v1 fields")
+ lines.extend([
+ f"### {item['id']}",
+ f"- **Severity**: {item['severity']}",
+ f"- **Confidence**: {item['confidence']}",
+ f"- **Classification**: {item['classification']}",
+ f"- **Problem**: {item['reason']} (surface: {item['file']})",
+ "",
+ ])
+lines.append("<verdict>NEEDS_WORK</verdict>")
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+ fh.write("\n".join(lines) + "\n")
+PY
 fi
 PRIOR_ARGS=()
 [[ -n "$PRIOR_RECEIPT" ]] && PRIOR_ARGS=(--prior "$PRIOR_RECEIPT")

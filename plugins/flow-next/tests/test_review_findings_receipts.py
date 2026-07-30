@@ -59,6 +59,30 @@ def _container(
     )
 
 
+def _review_text(review_type: str, backend: str) -> str:
+    if review_type == "impl_review":
+        return _fixture(backend)
+    if review_type == "plan_review":
+        return """## Issue
+- **Severity**: Major
+- **Confidence**: 100
+- **Classification**: introduced
+- **Location**: Task acceptance
+- **Problem**: The acceptance is not testable.
+- **Suggestion**: Add an executable assertion.
+<verdict>NEEDS_WORK</verdict>
+"""
+    return """## Gap
+- **Severity**: Critical
+- **Requirement**: R1 receipt integration
+- **Status**: Partial
+- **Confidence**: 100
+- **Classification**: introduced
+- **Evidence**: The QA writer is not integrated.
+<verdict>NEEDS_WORK</verdict>
+"""
+
+
 class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -104,7 +128,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                         effective_model="model",
                         effective_effort="high",
                         resolved_spec=FLOWCTL.BackendSpec(backend, "model", "high"),
-                        review_text=_fixture(backend),
+                        review_text=_review_text(review_type, backend),
                         include_effort=True,
                         base_branch="HEAD",
                     )
@@ -147,6 +171,65 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             first["items"][0]["firstSeenReceiptId"],
         )
         self.assertEqual(second["items"][0]["status"], "fixed")
+        generations = FLOWCTL.load_review_receipt_generations(receipt)
+        self.assertIsNotNone(generations)
+        self.assertEqual(len(generations), 2)
+        current = FLOWCTL.select_current_review_findings(
+            generations,
+            current_head_sha=second["headSha"],
+            review_kind="implementation",
+            backend="codex",
+        )
+        self.assertEqual(current["sourceReceiptId"], second["sourceReceiptId"])
+        self.assertTrue(
+            any(
+                item["sourceReceiptId"] == first["sourceReceiptId"]
+                for item in (entry["findings"] for entry in generations)
+            )
+        )
+
+    def test_reused_path_does_not_cross_review_ids(self) -> None:
+        receipt = self.repo / "receipt.json"
+        common = dict(
+            receipt_path=str(receipt),
+            review_type="impl_review",
+            backend="codex",
+            verdict="NEEDS_WORK",
+            session_id="session",
+            effective_model="model",
+            effective_effort="high",
+            resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
+            review_text=_fixture("codex"),
+            include_effort=True,
+            base_branch="HEAD",
+        )
+        FLOWCTL._write_backend_review_receipt(review_id="fn-1.1", **common)
+        FLOWCTL._write_backend_review_receipt(review_id="fn-2.1", **common)
+        findings = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+        self.assertEqual(findings["round"], 1)
+        self.assertNotIn("supersedesReceiptId", findings)
+
+    def test_writer_uses_pre_dispatch_literal_snapshot(self) -> None:
+        receipt = self.repo / "receipt.json"
+        FLOWCTL._write_backend_review_receipt(
+            str(receipt),
+            review_type="impl_review",
+            review_id="fn-136.3",
+            backend="codex",
+            verdict="NEEDS_WORK",
+            session_id="session",
+            effective_model="model",
+            effective_effort="high",
+            resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
+            review_text=_fixture("codex"),
+            include_effort=True,
+            base_branch="HEAD",
+            reviewed_base_sha=BASE_SHA,
+            reviewed_head_sha=HEAD_SHA,
+        )
+        findings = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+        self.assertEqual(findings["baseSha"], BASE_SHA)
+        self.assertEqual(findings["headSha"], HEAD_SHA)
 
     def test_direct_writer_attach_uses_prior_before_atomic_replace(self) -> None:
         receipt = self.repo / "host.json"
@@ -270,6 +353,30 @@ class ReviewFindingsCurrentnessTest(unittest.TestCase):
             )
         )
 
+    def test_omitted_open_finding_remains_current_until_explicit_resolution(self) -> None:
+        first = _container(receipt_id="round-1")
+        second = FLOWCTL.parse_review_findings(
+            "No findings.\n<verdict>SHIP</verdict>\n",
+            source_receipt_id="round-2",
+            review_kind="implementation",
+            backend="codex",
+            round_number=2,
+            base_sha=BASE_SHA,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="round-1",
+            prior_findings=first,
+            anchor_side="head",
+        )
+        self.assertIsNotNone(second)
+        self.assertEqual(len(second["items"]), len(first["items"]))
+        self.assertTrue(all(item["status"] == "open" for item in second["items"]))
+        current = FLOWCTL.select_current_review_findings(
+            [{"findings": first}, {"findings": second}],
+            current_head_sha=HEAD_SHA,
+        )
+        self.assertEqual(current["sourceReceiptId"], "round-2")
+        self.assertTrue(all(item["status"] == "open" for item in current["items"]))
+
         skipped_round = json.loads(json.dumps(second))
         skipped_round["round"] = 3
         self.assertIsNone(
@@ -281,11 +388,16 @@ class ReviewFindingsCurrentnessTest(unittest.TestCase):
 
 
 class ReviewFindingsLocalBudgetTest(unittest.TestCase):
-    def test_largest_pinned_fixture_parse_and_validate_p95_under_budget(self) -> None:
-        fixture_paths = list(CORPUS.glob("*/*.md"))
-        largest = max(fixture_paths, key=lambda path: path.stat().st_size)
-        text = largest.read_text(encoding="utf-8")
-        backend = largest.parent.name
+    def test_maximum_item_fixture_parse_and_validate_p95_under_budget(self) -> None:
+        text = "\n".join(
+            f"""### Finding {index}
+- **Severity**: Minor
+- **Confidence**: 75
+- **Classification**: introduced
+- **Problem**: Finding {index} demonstrates bounded successful parsing."""
+            for index in range(1, FLOWCTL._FINDINGS_MAX_ITEMS + 1)
+        ) + "\n<verdict>NEEDS_WORK</verdict>\n"
+        backend = "codex"
 
         def run_once() -> None:
             findings = FLOWCTL.parse_review_findings(
@@ -312,7 +424,7 @@ class ReviewFindingsLocalBudgetTest(unittest.TestCase):
         self.assertLess(
             p95_ms,
             FINDINGS_P95_BUDGET_MS,
-            f"{largest.relative_to(REPO)} p95={p95_ms:.3f}ms",
+            f"maximum-item fixture p95={p95_ms:.3f}ms",
         )
 
 

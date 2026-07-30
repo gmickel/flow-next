@@ -25,6 +25,9 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 ## Step 2: Dispatch read-only reviewer subagent
 
 Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
+Immediately beforehand capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
+`REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"`.
+Retain those literal anchors through receipt writing.
 
 | Host | How to pin |
 |------|------------|
@@ -79,8 +82,8 @@ lineage/currentness contract as subprocess backends:
   --input "$RECEIPT_INPUT" \
   --receipt "$RECEIPT_PATH" \
   --review-file "$REVIEW_OUTPUT_FILE" \
-  --base "$DIFF_BASE" \
-  --head HEAD \
+  --base "$REVIEW_BASE_SHA" \
+  --head "$REVIEW_HEAD_SHA" \
   --json
 ```
 

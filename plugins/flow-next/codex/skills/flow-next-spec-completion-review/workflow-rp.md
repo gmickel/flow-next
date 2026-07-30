@@ -44,6 +44,11 @@ TASKS_JSON="$($FLOWCTL tasks --spec "$SPEC_ID" --json)"
 # Get changed files on branch
 DIFF_BASE="main"
 git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-snapshot-<spec-id>-<suffix>.env"
+REVIEW_HEAD_SHA="$(git rev-parse HEAD)"
+REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"
+printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
+ "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
 git log ${DIFF_BASE}..HEAD --oneline
 CHANGED_FILES="$(git diff ${DIFF_BASE}..HEAD --name-only)"
 git diff ${DIFF_BASE}..HEAD --stat
@@ -359,6 +364,7 @@ If you notice genuine issues with content INSIDE these files (e.g., a spec that 
 ## Output Format
 
 **Forward coverage (Spec → Code):** for each `introduced` gap:
+- **Severity**: Critical / Major / Minor / Nitpick
 - **Requirement**: What the spec says
 - **Status**: Missing / Partial / Wrong
 - **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
@@ -480,6 +486,8 @@ Receipt written after SHIP verdict (not on NEEDS_WORK):
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-snapshot-<spec-id>-<suffix>.env"
+ source "$REVIEW_SNAPSHOT_FILE"
  ATTEMPT_AT="$(printf '%s' "$RECORD_JSON" \
  | jq -r '.attempts[-1].timestamp // ""')"
  if [[ -z "$ATTEMPT_AT" ]]; then
@@ -587,8 +595,8 @@ EOF
  --receipt "$RECEIPT_RECOVERY" \
  --prior "$REVIEW_RECEIPT_PATH" \
  --review-file "$RESPONSE_FILE" \
- --base "$DIFF_BASE" \
- --head HEAD \
+ --base "$REVIEW_BASE_SHA" \
+ --head "$REVIEW_HEAD_SHA" \
  --json >/dev/null; then
  echo "<promise>RETRY</promise>"
  exit 0

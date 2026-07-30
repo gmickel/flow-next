@@ -191,8 +191,13 @@ class ReviewFindingsParserTest(unittest.TestCase):
             prior=prior,
             supersedes=prior["sourceReceiptId"],
         )
-        self.assertNotEqual(current["items"][0]["id"], prior["items"][0]["id"])
-        self.assertEqual(current["items"][0]["firstSeenReceiptId"], "receipt-round-2")
+        new_items = [
+            item
+            for item in current["items"]
+            if item["firstSeenReceiptId"] == "receipt-round-2"
+        ]
+        self.assertEqual(len(new_items), 1)
+        self.assertNotEqual(new_items[0]["id"], prior["items"][0]["id"])
 
     def test_explicit_lineage_edge_is_preserved_for_new_identity(self) -> None:
         text = """
@@ -257,9 +262,13 @@ Problem: The prompt says "Prior finding 1 — fixed".
             prior=prior,
             supersedes="receipt-round-1",
         )
-        self.assertEqual(len(current["items"]), 1)
-        self.assertEqual(current["items"][0]["status"], "open")
-        self.assertNotEqual(current["items"][0]["id"], prior["items"][0]["id"])
+        self.assertEqual(len(current["items"]), 2)
+        carried = next(
+            item for item in current["items"] if item["id"] == prior["items"][0]["id"]
+        )
+        added = next(item for item in current["items"] if item["id"] != carried["id"])
+        self.assertEqual(carried["status"], "open")
+        self.assertEqual(added["firstSeenReceiptId"], "receipt-round-2")
 
         for suffix in ("fixed-ish", "fixedly", "withdrawnish"):
             with self.subTest(suffix=suffix):
