@@ -69,10 +69,42 @@ class ReviewFindingsParserTest(unittest.TestCase):
                     self.assertEqual(result["round"], 1)
                     self.assertEqual(result["baseSha"], BASE_SHA)
                     self.assertEqual(result["headSha"], HEAD_SHA)
+                    self.assertEqual(
+                        set(result),
+                        {
+                            "schemaVersion",
+                            "sourceReceiptId",
+                            "reviewKind",
+                            "backend",
+                            "round",
+                            "baseSha",
+                            "headSha",
+                            "items",
+                        },
+                    )
                     self.assertEqual(len(result["items"]), len(expected["items"]))
                     for actual, wanted in zip(
                         result["items"], expected["items"], strict=True
                     ):
+                        expected_keys = {
+                            "id",
+                            "ordinal",
+                            "severity",
+                            "confidence",
+                            "classification",
+                            "status",
+                            "title",
+                            "body",
+                            "rIds",
+                            "firstSeenReceiptId",
+                            "lastSeenReceiptId",
+                        }
+                        fixture_text = self.fixture(backend, case)
+                        if (
+                            "Suggestion" in fixture_text
+                            or "Suggested fix" in fixture_text
+                        ):
+                            expected_keys.add("suggestion")
                         for field in (
                             "severity",
                             "confidence",
@@ -83,6 +115,7 @@ class ReviewFindingsParserTest(unittest.TestCase):
                         if wanted["anchor"] is None:
                             self.assertNotIn("anchor", actual)
                         else:
+                            expected_keys.add("anchor")
                             self.assertEqual(
                                 actual["anchor"]["path"], wanted["anchor"]["path"]
                             )
@@ -93,6 +126,17 @@ class ReviewFindingsParserTest(unittest.TestCase):
                             self.assertEqual(actual["anchor"]["side"], "head")
                             self.assertEqual(actual["anchor"]["baseSha"], BASE_SHA)
                             self.assertEqual(actual["anchor"]["headSha"], HEAD_SHA)
+                            self.assertEqual(
+                                set(actual["anchor"]),
+                                {
+                                    "path",
+                                    "side",
+                                    "startLine",
+                                    "baseSha",
+                                    "headSha",
+                                },
+                            )
+                        self.assertEqual(set(actual), expected_keys)
 
     def test_ratchet_carries_ids_and_first_seen_receipt(self) -> None:
         for backend in BACKENDS:
@@ -235,6 +279,20 @@ Problem: second severity but higher confidence
         anchored = parse(text, "rp", anchor_side="base")["items"][0]["anchor"]
         self.assertEqual(anchored["side"], "base")
 
+    def test_explicit_anchor_side_is_honored_and_conflicts_reject(self) -> None:
+        text = """
+Severity: Major
+Confidence: 100
+Classification: introduced
+File:Line: src/review.py:12
+Side: base
+Problem: The base-side deletion is unsafe.
+"""
+        anchored = parse(text, "rp", anchor_side=None)["items"][0]["anchor"]
+        self.assertEqual(anchored["side"], "base")
+        self.assertIsNone(parse(text, "rp", anchor_side="head"))
+        self.assertIsNone(parse(text.replace("Side: base", "Side: nearby"), "rp"))
+
     def test_rename_metadata_is_preserved_only_when_evidenced(self) -> None:
         text = """
 Severity: Major
@@ -257,6 +315,17 @@ Problem: Rename context must survive.
             "Severity: Major\nConfidence: 100\nClassification: inherited\nProblem: x",
         )
         for text in unknowns:
+            self.assertIsNone(parse(text, "codex"))
+        for classification in (
+            "true",
+            "false",
+            "introduced=true",
+            "introduced=false",
+        ):
+            text = (
+                "Severity: Major\nConfidence: 100\n"
+                f"Classification: {classification}\nProblem: x"
+            )
             self.assertIsNone(parse(text, "codex"))
         self.assertIsNone(parse("No findings.\n<verdict>SHIP</verdict>", "codex", schema_version=2))
         for backend in BACKENDS:
@@ -314,6 +383,7 @@ Problem: Rename context must survive.
         self.assertIsNone(parse(base, "codex", head_sha=""))
         self.assertIsNone(parse(base, "codex", base_sha="x" * 161))
         self.assertIsNone(parse(base, "codex", supersedes="x" * 161))
+        self.assertIsNone(parse(base, "codex", supersedes="receipt-round-1"))
 
     def test_rid_array_limit_rejects_and_no_duplicate_ids(self) -> None:
         rids = " ".join(f"R{number}" for number in range(1, 34))
@@ -322,6 +392,62 @@ Problem: Rename context must survive.
             f"Problem: references {rids}"
         )
         self.assertIsNone(parse(text, "codex"))
+
+    def test_prior_container_is_bounded_and_strictly_validated_before_reuse(self) -> None:
+        prior = parse(self.fixture("codex", "catalog-sample"), "codex")
+        ratchet = "Prior finding 1 — fixed.\n<verdict>SHIP</verdict>"
+        oversized = json.loads(json.dumps(prior))
+        oversized["items"] = [
+            {
+                **oversized["items"][0],
+                "id": f"finding-{number}",
+                "ordinal": number,
+            }
+            for number in range(1, 202)
+        ]
+        self.assertIsNone(
+            parse(
+                ratchet,
+                "codex",
+                receipt="receipt-round-2",
+                round_number=2,
+                prior=oversized,
+                supersedes="receipt-round-1",
+            )
+        )
+
+        for anchor_update in (
+            {"endLine": "12"},
+            {"endLine": 1},
+            {"originalPath": "../outside.py"},
+            {"blobOid": "not-a-blob"},
+        ):
+            corrupt = json.loads(json.dumps(prior))
+            corrupt["items"][0]["anchor"].update(anchor_update)
+            self.assertIsNone(
+                parse(
+                    ratchet,
+                    "codex",
+                    receipt="receipt-round-2",
+                    round_number=2,
+                    prior=corrupt,
+                    supersedes="receipt-round-1",
+                ),
+                anchor_update,
+            )
+
+        extra = json.loads(json.dumps(prior))
+        extra["items"][0]["unknown"] = "field"
+        self.assertIsNone(
+            parse(
+                ratchet,
+                "codex",
+                receipt="receipt-round-2",
+                round_number=2,
+                prior=extra,
+                supersedes="receipt-round-1",
+            )
+        )
 
     def test_arbitrary_text_never_raises(self) -> None:
         samples = [

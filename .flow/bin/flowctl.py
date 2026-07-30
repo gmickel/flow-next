@@ -4594,11 +4594,7 @@ def _review_finding_enum(
         return None
     classification = re.sub(
         r"[\s-]+", "_", classification_value
-    ).replace("introduced_true", "introduced")
-    if classification in {"true", "introduced=true"}:
-        classification = "introduced"
-    elif classification in {"false", "introduced=false"}:
-        classification = "pre_existing"
+    )
     if (
         severity is None
         or confidence not in _FINDINGS_CONFIDENCE
@@ -4668,11 +4664,21 @@ def _review_finding_anchor(
     if path is None:
         return False
     start_line = int(start_value)
-    if not base_sha or anchor_side not in {"base", "head"}:
+    explicit_side = fields.get("side")
+    if explicit_side:
+        explicit_side = explicit_side.strip().lower()
+        if explicit_side not in {"base", "head"}:
+            return False
+        if anchor_side is not None and anchor_side != explicit_side:
+            return False
+        resolved_side = explicit_side
+    else:
+        resolved_side = anchor_side
+    if not base_sha or resolved_side not in {"base", "head"}:
         return None
     anchor: dict[str, Any] = {
         "path": path,
-        "side": anchor_side,
+        "side": resolved_side,
         "startLine": start_line,
         "baseSha": base_sha,
         "headSha": head_sha,
@@ -4829,7 +4835,11 @@ def _review_finding_prior_items(
     if prior_findings.get("schemaVersion") != _FINDINGS_SCHEMA_VERSION:
         return None
     prior_items = prior_findings.get("items")
-    if not isinstance(prior_items, list):
+    if (
+        not isinstance(prior_items, list)
+        or len(prior_items) > _FINDINGS_MAX_ITEMS
+        or not _review_findings_container_valid(prior_findings)
+    ):
         return None
     by_ordinal = {
         item.get("ordinal"): item for item in prior_items if isinstance(item, dict)
@@ -4851,7 +4861,16 @@ def _review_finding_prior_items(
         status = _FINDINGS_STATUS_ALIASES.get(status_key)
         if status is None:
             return None
-        item = dict(prior)
+        item = {
+            key: (
+                dict(value)
+                if key == "anchor"
+                else list(value)
+                if key == "rIds"
+                else value
+            )
+            for key, value in prior.items()
+        }
         item["status"] = status
         item["lastSeenReceiptId"] = source_receipt_id
         carried.append(item)
@@ -4872,7 +4891,8 @@ def _review_finding_item_valid(item: dict) -> bool:
         "firstSeenReceiptId",
         "lastSeenReceiptId",
     }
-    if not required <= set(item):
+    allowed = required | {"priorFindingId", "anchor", "suggestion"}
+    if set(item) - allowed or not required <= set(item):
         return False
     if (
         not isinstance(item["id"], str)
@@ -4893,7 +4913,13 @@ def _review_finding_item_valid(item: dict) -> bool:
         or len(item["body"]) > _FINDINGS_MAX_BODY
         or not isinstance(item["rIds"], list)
         or len(item["rIds"]) > _FINDINGS_MAX_RIDS
-        or not all(isinstance(rid, str) and len(rid) <= _FINDINGS_MAX_ID for rid in item["rIds"])
+        or len(set(item["rIds"])) != len(item["rIds"])
+        or not all(
+            isinstance(rid, str)
+            and len(rid) <= _FINDINGS_MAX_ID
+            and re.fullmatch(r"R\d+", rid)
+            for rid in item["rIds"]
+        )
     ):
         return False
     for key in ("firstSeenReceiptId", "lastSeenReceiptId"):
@@ -4915,14 +4941,29 @@ def _review_finding_item_valid(item: dict) -> bool:
         not isinstance(prior_id, str)
         or not prior_id
         or len(prior_id) > _FINDINGS_MAX_ID
+        or prior_id == item["id"]
     ):
         return False
     anchor = item.get("anchor")
     if anchor is not None:
         if not isinstance(anchor, dict):
             return False
+        anchor_required = {
+            "path",
+            "side",
+            "startLine",
+            "baseSha",
+            "headSha",
+        }
+        anchor_allowed = anchor_required | {
+            "originalPath",
+            "endLine",
+            "blobOid",
+        }
         if (
-            _review_finding_safe_path(str(anchor.get("path", ""))) is None
+            set(anchor) - anchor_allowed
+            or not anchor_required <= set(anchor)
+            or _review_finding_safe_path(str(anchor.get("path", ""))) is None
             or anchor.get("side") not in {"base", "head"}
             or not isinstance(anchor.get("startLine"), int)
             or isinstance(anchor.get("startLine"), bool)
@@ -4931,8 +4972,96 @@ def _review_finding_item_valid(item: dict) -> bool:
             or not anchor["baseSha"]
             or not isinstance(anchor.get("headSha"), str)
             or not anchor["headSha"]
+            or len(anchor["baseSha"]) > _FINDINGS_MAX_ID
+            or len(anchor["headSha"]) > _FINDINGS_MAX_ID
         ):
             return False
+        end_line = anchor.get("endLine")
+        if end_line is not None and (
+            not isinstance(end_line, int)
+            or isinstance(end_line, bool)
+            or end_line < anchor["startLine"]
+        ):
+            return False
+        original_path = anchor.get("originalPath")
+        if original_path is not None and (
+            not isinstance(original_path, str)
+            or _review_finding_safe_path(original_path) is None
+        ):
+            return False
+        blob_oid = anchor.get("blobOid")
+        if blob_oid is not None and (
+            not isinstance(blob_oid, str)
+            or not re.fullmatch(r"[0-9a-f]{7,64}", blob_oid)
+        ):
+            return False
+    return True
+
+
+def _review_findings_container_valid(container: dict) -> bool:
+    """Strictly validate one complete v1 container before reuse or emission."""
+    required = {
+        "schemaVersion",
+        "sourceReceiptId",
+        "reviewKind",
+        "backend",
+        "round",
+        "headSha",
+        "items",
+    }
+    allowed = required | {"baseSha", "supersedesReceiptId"}
+    if not isinstance(container, dict) or set(container) - allowed:
+        return False
+    if not required <= set(container):
+        return False
+    source_id = container["sourceReceiptId"]
+    supersedes = container.get("supersedesReceiptId")
+    if (
+        container["schemaVersion"] != _FINDINGS_SCHEMA_VERSION
+        or not isinstance(source_id, str)
+        or not source_id
+        or len(source_id) > _FINDINGS_MAX_ID
+        or container["reviewKind"] not in _FINDINGS_REVIEW_KINDS
+        or not isinstance(container["backend"], str)
+        or not container["backend"]
+        or len(container["backend"]) > _FINDINGS_MAX_ID
+        or not isinstance(container["round"], int)
+        or isinstance(container["round"], bool)
+        or container["round"] < 1
+        or not isinstance(container["headSha"], str)
+        or not container["headSha"]
+        or len(container["headSha"]) > _FINDINGS_MAX_ID
+        or (
+            "baseSha" in container
+            and (
+                not isinstance(container["baseSha"], str)
+                or not container["baseSha"]
+                or len(container["baseSha"]) > _FINDINGS_MAX_ID
+            )
+        )
+        or (
+            supersedes is not None
+            and (
+                not isinstance(supersedes, str)
+                or not supersedes
+                or len(supersedes) > _FINDINGS_MAX_ID
+                or supersedes == source_id
+            )
+        )
+        or not isinstance(container["items"], list)
+        or len(container["items"]) > _FINDINGS_MAX_ITEMS
+    ):
+        return False
+    items = container["items"]
+    if not all(
+        isinstance(item, dict) and _review_finding_item_valid(item)
+        for item in items
+    ):
+        return False
+    if len({item["id"] for item in items}) != len(items):
+        return False
+    if len({item["ordinal"] for item in items}) != len(items):
+        return False
     return True
 
 
@@ -4975,6 +5104,7 @@ def _parse_review_findings_v1(
                 not isinstance(supersedes_receipt_id, str)
                 or not supersedes_receipt_id
                 or len(supersedes_receipt_id) > _FINDINGS_MAX_ID
+                or supersedes_receipt_id == source_receipt_id
             )
         )
     ):
@@ -5069,12 +5199,6 @@ def _parse_review_findings_v1(
         items.append(item)
         used_ordinals.add(next_ordinal)
         next_ordinal += 1
-    if len(items) > _FINDINGS_MAX_ITEMS:
-        return None
-    if len({item.get("id") for item in items}) != len(items):
-        return None
-    if not all(_review_finding_item_valid(item) for item in items):
-        return None
     items.sort(
         key=lambda item: (
             _FINDINGS_SEVERITY_ORDER[item["severity"]],
@@ -5095,6 +5219,8 @@ def _parse_review_findings_v1(
     if supersedes_receipt_id is not None:
         container["supersedesReceiptId"] = supersedes_receipt_id
     container["items"] = items
+    if not _review_findings_container_valid(container):
+        return None
     encoded = json.dumps(
         container, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     ).encode("utf-8")
