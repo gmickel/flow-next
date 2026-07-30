@@ -31,9 +31,8 @@ Run one final live RepoPrompt CE 1.1.0 smoke after focused/full tests and Ruff a
 - [ ] Live CE smoke is visible in MCP Server Status and proves resolver choice, numeric window reuse, direct prompt/selection/file/token evidence, review verdict/chat identity, and receipt.
 - [ ] Full Python gate, Ruff 0.16.0, dogfood distribution, tracker manifest, Codex mirror twice, docs, and `## Unreleased` entry are synchronized; no version bump.
 ## Done summary
-TBD
-
+Repaired RepoPrompt CE review setup and convergence: durable full review instructions, strict direct-result validation, single-call CE review consumption, context-bound same-chat follow-ups, bounded failure accounting, and an isolated Classic compatibility path. Live RepoPrompt CE 1.1.1 smoke reused numeric window 2, returned context/chat identity plus non-empty prompt/selection and positive file/token evidence, then converged in the same chat to SHIP; receipt: `.flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.8.json`.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 24504991ede36e9c2f9fa3b9917473f1e8dc88f9, c79422b83ed295d0ce043c24784e5ca0a8cf8ac1, d42a03bec3713df5976aefac32c4c4a350dae4f6, c6f54b6e6d3485474e0008ab7e215706cd622704, ccce88aadfa857a1d903585ace1ff23b299ebc20, 2be07360f1a6c75fc4df6cdad437affad65ac060, 2d238e8acb2dbd990761315b0458aee2c42b98a6, 8b35fc33f9d4a7dd9ace791e88e10d22643374c2
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_rp_wrappers test_rp_setup_workflow_contract test_review_convergence_cap.TestRpRecorderFailureFences test_tracker_distribution test_prompt_text_pinned test_backend_spec.TestPlanReviewSelectedBackendRouting.test_tracked_candidate_evidence_matches_live_routes -q (55 passed), uvx ruff@0.16.0 check ., python3 scripts/run_tests_parallel.py (158 files, 3319 tests, 0 failures, 0 errors, 4 skipped), ./scripts/sync-codex.sh (passed twice; 28 skills, 21 agents), flowctl rp setup-review live RepoPrompt CE 1.1.1 smoke (window=2, context_id=0691CA88-A675-4ACA-8AB3-F92D1CA2BD6C, chat_id=fn-136-8-rp-ce-review-re-247D11, file_count=20, total_tokens=68834, prompt_chars=14048, selection_chars=3439, review_chars=8705), flowctl rp chat-send same-chat convergence (context-bound, final verdict SHIP, 0 introduced, 0 pre_existing)
 - PRs:
