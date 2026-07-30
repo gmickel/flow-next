@@ -93,6 +93,33 @@
     },
     "provenance": "discovery ceremony 2026-06-03; confirmed by Gordon (@gmickel); signals: Linear MCP present; team Flow Next (FLOW) / project Development",
     "readyState": "Todo",
+    "resolved": {
+      "destination": {
+        "labelIds": {
+          "bug": "1bef4599-21f5-42c8-983b-b3f0b2ca8fb1",
+          "feature": "6cde17ce-0fc0-46ce-9d56-d6fd48362d26",
+          "flow:fn-100-interview-question-rounds-frontier": "39fa15ac-2aca-454b-9f27-09b881795791",
+          "flow:fn-121-plugin-mode-zero-rerun-setup-on-claude": "978a77d8-b3c6-4c73-a60b-d4c6ae2050f4",
+          "flow:fn-122-harden-verdict-graduate-recurring": "cb7fd4d3-a7fc-4766-b0da-61eaf7cb9a7c",
+          "flow:fn-57-tracker-sync-lifecycle-hooks-forcing": "935a34f1-3b3e-47f8-8372-2168abbfa6e5",
+          "flow:fn-58-spec-readiness-signal-ready-flag": "d2a7224f-26de-40e6-80b1-b89a3fef3c7e",
+          "flow:fn-59-build-loop-skill-autonomous-spec-to-pr": "7f73cc5a-b190-44f6-8d4b-1fdad0cb4697",
+          "flow:fn-60-ship-loop-skill-autonomous-pr": "8b8e7eeb-c810-4c24-9a91-b88637938211",
+          "flow:fn-64-tracker-sync-project-flow-spec": "12b5fa1c-2e26-49d4-bcc9-bf26ee52c048",
+          "flow:fn-66-tracker-sync-reserve-linear-done-for": "347f3fe9-6f56-451a-af5a-78e532105cee",
+          "flow:fn-67-flow-nextguide-opinionated-router-over": "c1e668cf-245b-4722-b7a2-cfa5c2f379d5",
+          "flow:fn-97-multi-model-orchestration-defaults": "91140578-0c1e-49ea-b581-12aca238ffc4",
+          "flow:fn-99-setup-block-diet-evidence-schema-inline": "34f4f10c-8be5-4ac4-bf7d-1da8d1612f8f",
+          "improvement": "ac8434d9-e47f-44cf-b43e-04743afba6b1"
+        },
+        "teamId": "7c086b79-e7fc-4eee-8d2d-b2dd60eee166",
+        "teamKey": "FLOW"
+      },
+      "resolvedAt": null,
+      "scopeResolvedAt": {
+        "destination": "2026-07-30T07:15:20.340956Z"
+      }
+    },
     "staleAfterHours": 24,
     "type": "linear",
     "version": 1

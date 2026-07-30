@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "fixture_family": "review-findings",
+  "provenance": {
+    "capture_kind": "redacted_field_survey",
+    "date_utc": "2026-07-30",
+    "sources": [
+      ".flow/artifacts/fn-90-baseline/after/*.review.md",
+      ".flow/artifacts/fn-90-baseline/after/*.receipt.json",
+      ".flow/review-receipts/plan-fn-136-structured-review-artifact-schema-in.json",
+      "optimization/reached-path/evidence/fn130/plan-review-real-backend.json",
+      "optimization/reached-path/fixtures/b0/plan-review/*.json",
+      "flow-swarm fn-114..124 review audit and done evidence"
+    ],
+    "privacy": "Repository paths and finding substance are synthetic; label and layout variants mirror surveyed reviewer output."
+  },
+  "backends": {
+    "codex": {
+      "observed_variants": ["**Severity: Major**", "**Confidence:** 100", "**Issues**", "numbered findings"]
+    },
+    "copilot": {
+      "observed_variants": ["### Finding N", "Severity: Minor", "plain label blocks"]
+    },
+    "cursor": {
+      "observed_variants": ["**Severity**: Major", "Prior finding: **fixed**", "inline preamble before findings"]
+    },
+    "host": {
+      "observed_variants": ["P2 · confidence 75 · introduced", "Markdown finding table", "fixed-in-review disposition"]
+    },
+    "rp": {
+      "observed_variants": ["- Severity: Critical", "File:Line prompt label", "Classification counts tally"]
+    },
+    "export": {
+      "observed_variants": ["Severity = Nitpick", "Prior finding #N", "manually pasted prose"]
+    }
+  },
+  "cases": [
+    {
+      "id": "no-findings-ship",
+      "expected": {
+        "verdict": "SHIP",
+        "item_count": 0,
+        "structured": true
+      }
+    },
+    {
+      "id": "ratchet-only",
+      "expected": {
+        "ratchet_only": true,
+        "new_item_count": 0,
+        "structured": true
+      }
+    },
+    {
+      "id": "no-anchor",
+      "expected": {
+        "item_count": 1,
+        "anchor_count": 0,
+        "structured": true
+      }
+    },
+    {
+      "id": "unparseable",
+      "expected": {
+        "structured": false
+      }
+    }
+  ]
+}
