@@ -357,6 +357,73 @@ Problem: A second representation must not be silently dropped.
         self.assertIsNone(parse(f"{table}\n{valid_block}", "host"))
         self.assertIsNone(parse(f"{table}\n{unknown_block}", "host"))
 
+    def test_inline_and_labeled_enums_must_be_semantically_equal(self) -> None:
+        inline = "P2 · confidence 75 · introduced"
+        equivalent = f"""
+{inline}
+Severity: Minor
+Confidence: 75
+Classification: introduced
+Problem: Equivalent aliases describe one finding.
+"""
+        item = parse(equivalent, "host")["items"][0]
+        self.assertEqual(
+            (item["severity"], item["confidence"], item["classification"]),
+            ("P2", 75, "introduced"),
+        )
+        conflicts = (
+            equivalent.replace("Severity: Minor", "Severity: Major"),
+            equivalent.replace("Severity: Minor", "Severity: Blocker"),
+            equivalent.replace("Confidence: 75", "Confidence: 100"),
+            equivalent.replace(
+                "Classification: introduced",
+                "Classification: pre_existing",
+            ),
+        )
+        for text in conflicts:
+            with self.subTest(text=text):
+                self.assertIsNone(parse(text, "host"))
+
+    def test_equivalent_anchor_representations_accept_only_equal_values(self) -> None:
+        equivalent = """
+Severity: Major
+Confidence: 100
+Classification: introduced
+File:Line: src/new.py:10-12
+Path: src/new.py
+Line: 10-12
+Original Path: src/old.py
+Original File: src/old.py
+Problem: Equivalent anchor aliases describe one location.
+"""
+        anchor = parse(equivalent, "rp")["items"][0]["anchor"]
+        self.assertEqual(anchor["path"], "src/new.py")
+        self.assertEqual(anchor["startLine"], 10)
+        self.assertEqual(anchor["endLine"], 12)
+        self.assertEqual(anchor["originalPath"], "src/old.py")
+        conflicts = (
+            equivalent.replace("Path: src/new.py", "Path: src/other.py"),
+            equivalent.replace("Line: 10-12", "Line: 11-12"),
+            equivalent.replace("Original File: src/old.py", "Original File: src/older.py"),
+        )
+        for text in conflicts:
+            with self.subTest(text=text):
+                self.assertIsNone(parse(text, "rp"))
+
+    def test_multiple_host_finding_tables_fail_closed(self) -> None:
+        valid = self.fixture("host", "catalog-sample")
+        second_valid = valid.replace(
+            "Currentness ignores the reviewed head.",
+            "A second valid table must not be silently ignored.",
+        )
+        second_invalid = valid.replace("| P1 | 100 |", "| Blocker | 100 |")
+        for text in (
+            f"{valid}\n\nAdditional findings\n\n{second_valid}",
+            f"{valid}\n\nAdditional findings\n\n{second_invalid}",
+        ):
+            with self.subTest(text=text):
+                self.assertIsNone(parse(text, "host"))
+
     def test_duplicate_singleton_labels_fail_closed(self) -> None:
         cases = (
             """

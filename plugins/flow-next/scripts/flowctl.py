@@ -4589,17 +4589,41 @@ def _review_finding_enum(
     classification_value = fields.get("classification", "").strip().lower()
     inline = _FINDINGS_INLINE_HOST_RE.search(block)
     if inline:
-        severity_value = severity_value or inline.group(1).lower()
-        confidence_value = confidence_value or inline.group(2)
-        classification_value = classification_value or inline.group(3).lower()
-    severity = _FINDINGS_SEVERITY_ALIASES.get(severity_value)
+        inline_values = (
+            _FINDINGS_SEVERITY_ALIASES.get(inline.group(1).lower()),
+            int(inline.group(2)),
+            re.sub(r"[\s-]+", "_", inline.group(3).lower()),
+        )
+        if (
+            inline_values[0] is None
+            or inline_values[1] not in _FINDINGS_CONFIDENCE
+            or inline_values[2] not in _FINDINGS_CLASSIFICATIONS
+        ):
+            return None
+    else:
+        inline_values = None
+    severity = _FINDINGS_SEVERITY_ALIASES.get(severity_value) if severity_value else None
+    if severity_value and severity is None:
+        return None
     try:
-        confidence = int(confidence_value)
+        confidence = int(confidence_value) if confidence_value else None
     except (TypeError, ValueError):
         return None
-    classification = re.sub(
-        r"[\s-]+", "_", classification_value
+    classification = (
+        re.sub(r"[\s-]+", "_", classification_value)
+        if classification_value
+        else None
     )
+    labeled_values = (severity, confidence, classification)
+    if inline_values is not None:
+        for labeled, inline_value in zip(labeled_values, inline_values, strict=True):
+            if labeled is not None and labeled != inline_value:
+                return None
+        severity = severity if severity is not None else inline_values[0]
+        confidence = confidence if confidence is not None else inline_values[1]
+        classification = (
+            classification if classification is not None else inline_values[2]
+        )
     if (
         severity is None
         or confidence not in _FINDINGS_CONFIDENCE
@@ -4632,42 +4656,60 @@ def _review_finding_anchor(
     anchor_side: Optional[str],
 ) -> Optional[dict] | bool:
     """Build an anchor only when every portability component is explicit."""
-    path_value: Optional[str] = None
-    start_value: Optional[str] = None
-    end_value: Optional[str] = None
+    combined_values: Optional[tuple[str, str, Optional[str]]] = None
     combined = fields.get("file:line")
     if combined:
         match = _FINDINGS_FILE_LINE_RE.match(combined)
-        if match:
-            path_value = match.group("path")
-            start_value = match.group("start")
-            end_value = match.group("end")
-    if path_value is None:
-        path_value = fields.get("path") or fields.get("file")
-        line_value = fields.get("line")
-        if line_value:
-            line_match = re.fullmatch(
-                r"([1-9]\d*)(?:\s*[-–]\s*([1-9]\d*))?", line_value
-            )
-            if line_match:
-                start_value, end_value = line_match.groups()
-            else:
-                return False
+        if not match:
+            return False
+        combined_path = _review_finding_safe_path(match.group("path"))
+        if combined_path is None:
+            return False
+        combined_values = (
+            combined_path,
+            match.group("start"),
+            match.group("end"),
+        )
+
+    separate_paths = [
+        _review_finding_safe_path(value)
+        for value in (fields.get("path"), fields.get("file"))
+        if value
+    ]
+    if any(path is None for path in separate_paths):
+        return False
+    if len(set(separate_paths)) > 1:
+        return False
+    separate_values: Optional[tuple[str, str, Optional[str]]] = None
+    line_value = fields.get("line")
+    if separate_paths or line_value:
+        if not separate_paths or not line_value:
+            return False
+        line_match = re.fullmatch(
+            r"([1-9]\d*)(?:\s*[-–]\s*([1-9]\d*))?", line_value
+        )
+        if not line_match:
+            return False
+        separate_values = (
+            separate_paths[0],
+            line_match.group(1),
+            line_match.group(2),
+        )
+    if (
+        combined_values is not None
+        and separate_values is not None
+        and combined_values != separate_values
+    ):
+        return False
+    location = combined_values or separate_values
     has_anchor_evidence = bool(
-        combined
-        or path_value
-        or start_value
-        or fields.get("path")
-        or fields.get("file")
-        or fields.get("line")
+        combined or separate_paths or line_value
     )
     if not has_anchor_evidence:
         return None
-    if not path_value or not start_value:
+    if location is None:
         return False
-    path = _review_finding_safe_path(path_value)
-    if path is None:
-        return False
+    path, start_value, end_value = location
     start_line = int(start_value)
     explicit_side = fields.get("side")
     if explicit_side:
@@ -4693,12 +4735,17 @@ def _review_finding_anchor(
         if end_line < start_line:
             return False
         anchor["endLine"] = end_line
-    original = fields.get("original path") or fields.get("original file")
-    if original:
-        original_path = _review_finding_safe_path(original)
-        if original_path is None:
-            return False
-        anchor["originalPath"] = original_path
+    original_paths = [
+        _review_finding_safe_path(value)
+        for value in (fields.get("original path"), fields.get("original file"))
+        if value
+    ]
+    if any(original is None for original in original_paths):
+        return False
+    if len(set(original_paths)) > 1:
+        return False
+    if original_paths:
+        anchor["originalPath"] = original_paths[0]
     blob_oid = fields.get("blob oid")
     if blob_oid:
         if not re.fullmatch(r"[0-9a-fA-F]{7,64}", blob_oid):
@@ -4750,6 +4797,13 @@ def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
     for index, line in enumerate(lines):
         fields = _review_finding_fields(line)
         has_severity_field = fields is not None and "severity" in fields
+        if has_severity_field and starts:
+            preceding = "\n".join(lines[starts[-1]:index])
+            if _FINDINGS_INLINE_HOST_RE.search(preceding):
+                # A host heading may repeat its inline enum tuple as labeled
+                # fields. Keep both representations in one block so semantic
+                # equality is checked instead of manufacturing two findings.
+                continue
         if has_severity_field or _FINDINGS_INLINE_HOST_RE.search(line):
             starts.append(index)
             saw_severity_label = True
@@ -4778,8 +4832,7 @@ def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
 def _review_finding_host_table(output: str) -> Optional[list[dict]]:
     """Parse the observed host-review finding table, or return None."""
     lines = output.splitlines()
-    header_index: Optional[int] = None
-    headers: list[str] = []
+    candidates: list[tuple[int, list[str]]] = []
     for index, line in enumerate(lines):
         if not line.strip().startswith("|"):
             continue
@@ -4789,10 +4842,15 @@ def _review_finding_host_table(output: str) -> Optional[list[dict]]:
                 # Header names are singleton keys. dict(zip(...)) would
                 # otherwise silently select the last duplicate column.
                 return []
-            header_index = index
-            headers = candidate
-            break
-    if header_index is None or header_index + 1 >= len(lines):
+            candidates.append((index, candidate))
+            if len(candidates) > 1:
+                # Multiple finding tables make completeness and deduplication
+                # ambiguous. Reject rather than silently selecting the first.
+                return []
+    if not candidates:
+        return None
+    header_index, headers = candidates[0]
+    if header_index + 1 >= len(lines):
         return None
     if not _FINDINGS_HOST_TABLE_SEPARATOR_RE.match(lines[header_index + 1]):
         return None
