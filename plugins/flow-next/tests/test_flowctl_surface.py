@@ -109,6 +109,11 @@ models resolve
 next
 pilot-log append
 prime classify
+pr-cognitive-aid current
+pr-cognitive-aid html-input
+pr-cognitive-aid render
+pr-cognitive-aid validate
+pr-cognitive-aid write
 prospect archive
 prospect promote
 ready
@@ -119,6 +124,7 @@ review-rounds attempts
 review-rounds increment
 review-rounds record
 review-rounds reset
+review-findings attach
 review-walkthrough-defer
 review-walkthrough-record
 rp chat-send

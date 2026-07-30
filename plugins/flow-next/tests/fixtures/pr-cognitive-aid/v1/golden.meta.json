@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "sha256": "194a004fa9d3fbcbd9b17a9a6186c7aeea299ff6fd7be72af541b62383e9281a",
+  "sourceBlob": "e703b0a3f67af888ee1486a484623f64afe8b69f",
+  "sourceCommit": "b46ed5c9c73bc538cbcb4f94c9fbb4d6f05a83b9",
+  "sourcePath": "plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.json",
+  "performanceBudget": {
+    "operation": "validation-plus-markdown-render",
+    "p95MillisecondsExclusive": 100,
+    "warmRuns": 30
+  }
+}

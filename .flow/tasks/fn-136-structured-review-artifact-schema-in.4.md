@@ -22,9 +22,18 @@ Tighten the flowctl Output Format blocks so parsing is reliable; prove the const
 - [ ] No-new-LLM guard in place (R3).
 
 ## Done summary
-TBD
+Tightened all review prompt Output Format contracts to parser-compatible
+severity, confidence, classification, File:Line, canonical R-ID, problem, and
+suggestion fields. Added explicit repo-wide `File:Line: -` parsing, immutable
+format-only prompt guards across fn-130 corpus variants, SHA-bound real-token
+evidence, Codex mirror parity/idempotency checks, and AST-based no-new-invocation
+guards.
 
+RepoPrompt CE converged to SHIP in the same context/chat after three fix rounds.
+Final verification: 231 focused tests, 3,387 full-suite tests, and pinned Ruff
+0.16.0 all green. Actual cl100k_base/o200k_base deltas are non-positive for
+all eleven assembled prompt variants.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4d0dae0b8b93bdc39a34c86a93846bcb86197c52, 54b9e8e48863062990a12b54cc3c9c5506047a8e, d6c98db7a95251e5e7c3fe9b689b7081a067a267, 75559519730b253aba28eb4c66c90260f4b9bfea
+- Tests: baseline: none, cd plugins/flow-next/tests && python3 -m unittest test_review_prompt_template_parity test_review_prompt_constraints test_review_findings_parser test_backend_spec test_prompt_text_pinned test_tracker_distribution -q (231 passed), python3 scripts/run_tests_parallel.py (3387 passed, 0 failures, 0 errors, 4 skipped), uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh twice (idempotent)
 - PRs:

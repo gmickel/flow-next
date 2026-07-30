@@ -23,6 +23,7 @@ Standing rules that decide day-to-day build questions. Each earned its place thr
 - **The artifact is the contract.** Nothing between the plan and an executor restates content that lives in a file - prompts carry pointers and rails; every executor (native worker, `delegate:codex`, raw bridge, scout, runner) reads the spec/task files as its brief. Quality budget therefore concentrates at plan time, where the session model writes the spec; a thin artifact is refused downstream (the worker's thin-task valve), never compensated for. *(Anchor: fn-103 / decision record `composed-brief-deleted-path-handoff-2026-07-19` - an 8-run eval deleted the composed delegation brief.)*
 - **flowctl grows only under burden of proof.** flowctl is thin atomic plumbing - hashes, path membership, schema validation, receipts, git mechanics. A subcommand is added only when the operation involves zero judgment and must work with no agent in the loop; anything that reads, weighs, or decides belongs to the host agent. Deterministic proxies for judgment questions are banned outright *(anchor: `plan-sync-skip-gate-not-viable-2026-07-03`)*; the periodic audit that keeps this honest is the fn-101 pattern - classify every subcommand keep / leakage / vestigial, burden of proof on keeping, and on adding.
 - **Remember the bitter lesson.** Do not build scaffolding around a model's current weaknesses - capability grows and the scaffolding rots into cost (the composed brief was exactly this). Before adding a compensating mechanism, try stating the bar in one general sentence; before keeping one, eval it against its absence with pre-registered bars and delete on evidence. Deterministic machinery is reserved for what models should never own regardless of capability: unattended-trust rails (receipts, rollback, guard shapes, schemas), not quality compensation.
+- **Receipts are the portable product boundary.** Downstream tools consume versioned, additive receipt fields with explicit identity, snapshot binding, lineage, bounds, and labeled fallback. They never depend on Flow-Next's parser or skill internals, and they never turn stale or ambiguous evidence into current state.
 
 ## Who it's for
 
@@ -52,7 +53,7 @@ The autonomy track — now a three-loop suite (1.13.0/1.14.0). **Pilot + land ar
 
 ### flow-swarm preparation
 
-The on-disk `.flow/specs/` layout that flow-swarm reads natively. fn-43's rename is the trigger; the carrot framing in the migration banner is honest because flow-swarm literally needs the renamed layout. Coordination with flow-swarm timing is upstream of fn-43 close.
+The on-disk `.flow/specs/` layout that flow-swarm reads natively, plus portable receipt/artifact contracts that let it render review state without importing Flow-Next internals. Structured review findings preserve durable IDs, snapshot-bound anchors, and explicit currentness while legacy prose remains a safe fallback. Coordination with flow-swarm timing remains downstream product work; Flow-Next owns the stable handover objects.
 
 ### TUI
 

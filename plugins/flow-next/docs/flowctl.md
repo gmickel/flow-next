@@ -7,7 +7,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, models, review-rounds,
+init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, review-findings, models, review-rounds,
 memory, prospect, anchor, repo-map, prime, glossary, strategy, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
 checkpoint, rp, codex, copilot, cursor,
@@ -869,6 +869,73 @@ When a review runs **without an explicit model** (unconfigured `codex` / `copilo
 
 Explicit pins anywhere in the precedence chain (`--spec` > per-task/per-spec `review` > env > config) are byte-identical to before — no probing, no cache, no retry-downgrade; an explicit unavailable model errors clearly.
 
+### review-findings attach
+
+Deterministic receipt-writer plumbing for review routes that write their base
+receipt directly. It parses an already-captured reviewer response, preserves
+the prior valid generation, attaches the optional versioned `findings`
+projection, and atomically advances the receipt pointer.
+
+```bash
+flowctl review-findings attach \
+  --receipt <final-receipt.json> \
+  --input <base-receipt.json> \
+  --review-file <reviewer-response.md> \
+  [--prior <prior-receipt.json>] \
+  [--recovery <recovery-copy.json>] \
+  [--require-prior-current] \
+  [--base <reviewed-base-ref>] \
+  [--head <reviewed-head-ref>] \
+  [--json]
+```
+
+`--prior` defaults to `--receipt`. `--require-prior-current` rejects a
+concurrent pointer change after the writer acquires its lock. `--recovery`
+writes a transaction-consistent copy before the terminal pointer advances.
+Refs resolve to literal SHAs before parsing, so anchors and currentness bind to
+the reviewed snapshot.
+
+Success reports whether structured findings were attached. Unsupported,
+unknown, oversize, or unparseable reviewer output is a successful prose
+fallback with `findings_attached: false`; receipt/history write failures remain
+errors. The portable data and consumer rules are documented in
+[`review-findings.md`](review-findings.md). Consumers should read receipts, not
+invoke this writer.
+
+### pr-cognitive-aid
+
+Validate, persist, select, or render the portable PR cognitive-aid v1 object:
+
+```bash
+flowctl pr-cognitive-aid validate --file aid.json [--json]
+flowctl pr-cognitive-aid html-input --file aid.json
+flowctl pr-cognitive-aid write <spec-id> --file aid.json \
+  --base-sha <sha> --head-sha <sha> [--diff-files diff.json] [--json]
+flowctl pr-cognitive-aid current <spec-id> \
+  --base-sha <sha> --head-sha <sha> [--diff-files diff.json] [--json]
+flowctl pr-cognitive-aid render <spec-id> \
+  --base-sha <sha> --head-sha <sha> [--diff-files diff.json]
+flowctl pr-cognitive-aid render --file aid.json
+```
+
+`validate` is read-only. `html-input` validates and emits one lossless,
+HTML-safe `<script type="application/json">` semantic carrier. The optional
+HTML lens embeds that block verbatim so consumers can extract and compare the
+exact v1 object rather than infer parity from presentation markup. `write`
+validates and atomically creates one immutable
+generation at
+`.flow/artifacts/<spec-id>/pr-cognitive-aid/<artifactId>.json`; it never
+overwrites an existing generation. `current` returns a labeled
+`current|absent|stale|unsupported|invalid` selection and exposes no artifact on
+non-current states. `render` emits deterministic compact/full GitHub Markdown
+for a validated file or the supported current generation.
+
+`--diff-files` binds membership, Git state, and churn to a JSON map produced
+from the live diff. Validation rejects unsafe paths/URLs, ungrounded claims,
+invalid source bindings, duplicate membership, unsupported versions, broken
+chains, bounds overflow, and stale identity without truncation. Consumer,
+fixture, and vendoring rules: [`pr-cognitive-aid.md`](pr-cognitive-aid.md).
+
 ### memory
 
 Manage persistent learnings under `.flow/memory/`.
@@ -1521,15 +1588,41 @@ RepoPrompt wrappers (preferred for reviews). RepoPrompt CE 1.1.0+ is primary; di
 **Primary entry point** (handles window selection + builder atomically):
 
 ```bash
-# Atomic setup - reuses/resolves the repo window and opens Context Builder
-eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "Review a plan to ...")"
-# Returns: W=<window> T=<tab>
-
-# With --create: reuses a matching CE window or creates one when none matches
-eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "..." --create)"
+# CE review: one direct Context Builder result; review text goes to the file
+flowctl rp setup-review --repo-root "$REPO_ROOT" \
+  --summary-file "$REVIEW_INSTRUCTIONS_FILE" \
+  --response-type review --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
+source "$SETUP_FILE"
+# Returns: RP_MODE=ce W=<window> T=<context> CHAT_ID=<chat>
 ```
 
-**Post-setup commands** (use $W and $T from setup-review):
+`--summary` and `--summary-file` are mutually exclusive; the review workflows
+use the file form so the complete substantive contract and current spec/task
+context survive fresh shell calls. `setup-review` rejects blank instructions
+before any RepoPrompt call. On CE it
+invokes the named `context_builder` tool with `response_type=review` and treats
+that direct result as authoritative: `status=completed`, non-empty rewritten
+`prompt`, non-empty formatted `selection`, positive `file_count` and
+`total_tokens`, `context_id`, `review.chat_id`, and a non-empty
+`review.response` are all required. The response is written atomically to
+`--response-file`; no visible compose-tab projection, selection augmentation,
+or second initial chat is required or allowed. Any CE operational/schema
+failure stops—the wrapper never downgrades to Classic.
+
+CE follow-ups use the returned chat identity without tab state:
+
+```bash
+flowctl rp chat-send --window "$W" --context-id "$T" \
+  --chat-id "$CHAT_ID" --mode review \
+  --message-file /tmp/re-review.md
+```
+
+`T` is CE's canonical `context_id`; it binds the CLI call to the conversation's
+headless compose context without requiring visible-tab projection.
+
+Discontinued Classic is the isolated final fallback. It receives
+`RP_MODE=classic`, validates the published tab's prompt/selection, then uses the
+legacy post-setup commands below:
 
 ```bash
 flowctl rp prompt-get --window "$W" --tab "$T"

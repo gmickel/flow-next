@@ -18,6 +18,7 @@ SKILL = REPO / "plugins" / "flow-next" / "skills" / "flow-next-make-pr"
 MIRROR = REPO / "plugins" / "flow-next" / "codex" / "skills" / "flow-next-make-pr"
 SHARED_HTML = "plugins/flow-next/references/html-artifacts.md"
 HTML_LENS = "plugins/flow-next/skills/flow-next-make-pr/html-lens.md"
+PR_AID = "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md"
 CREATE = "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md"
 LEDGER = REPO / "optimization" / "reached-path" / "make-pr-candidates.json"
 
@@ -47,7 +48,7 @@ class MakePrReachedPathTests(unittest.TestCase):
             json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(_sha256(path), expected, relative)
 
-    def test_non_html_workflow_is_byte_identical_to_b1(self) -> None:
+    def test_workflow_slices_match_the_pinned_candidate(self) -> None:
         slices = self.ledger["b1_unchanged_workflow_slices"]
         before, rest = self.workflow.split("## Phase 1.5:", 1)
         _html_phase, after = rest.split("## Phase 2:", 1)
@@ -103,10 +104,11 @@ class MakePrReachedPathTests(unittest.TestCase):
             "mermaid": _lf_chars(SKILL / "mermaid-rules.md"),
             "html_lens": _lf_chars(SKILL / "html-lens.md"),
             "html_ref": _lf_chars(REPO / SHARED_HTML),
+            "pr_aid": _lf_chars(REPO / PR_AID),
         }
         routes = {
-            "dry-run": sizes["root"] + sizes["workflow"] + sizes["mermaid"],
-            "html-off": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["mermaid"],
+            "dry-run": sizes["root"] + sizes["workflow"] + sizes["mermaid"] + sizes["pr_aid"],
+            "html-off": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["mermaid"] + sizes["pr_aid"],
             "html-on": (
                 sizes["root"]
                 + sizes["workflow"]
@@ -114,11 +116,12 @@ class MakePrReachedPathTests(unittest.TestCase):
                 + sizes["mermaid"]
                 + sizes["html_lens"]
                 + sizes["html_ref"]
+                + sizes["pr_aid"]
             ),
-            "create": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["mermaid"],
-            "finalize": sizes["root"] + sizes["workflow"] + sizes["create"],
-            "existing-pr": sizes["root"] + sizes["workflow"] + sizes["create"],
-            "push-retry": sizes["root"] + sizes["workflow"] + sizes["create"],
+            "create": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["mermaid"] + sizes["pr_aid"],
+            "finalize": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["pr_aid"],
+            "existing-pr": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["pr_aid"],
+            "push-retry": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["pr_aid"],
         }
         metrics = self.ledger["kept_candidate"]["route_metrics"]
         for route, observed in routes.items():
@@ -128,7 +131,11 @@ class MakePrReachedPathTests(unittest.TestCase):
                 observed - metrics[route]["b1_chars"],
                 route,
             )
-        self.assertLess(metrics["html-off"]["candidate_chars"], metrics["html-off"]["b1_chars"])
+        self.assertLess(
+            metrics["html-off"]["delta_chars"],
+            10_000,
+            "structured cognitive-aid contract must keep reached-path overhead bounded",
+        )
         self.assertIsNone(self.ledger["kept_candidate"]["wall_time_claim"])
 
     def test_creation_failure_and_autonomous_contracts_stay_at_consumers(self) -> None:

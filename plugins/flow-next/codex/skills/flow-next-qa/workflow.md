@@ -425,7 +425,9 @@ fi
 
 `memory add` emits `matches` as the retrieval signal (per `docs/memory-schema.md`); the host decides update-vs-create. A re-run of QA that already knows the prior entry id should pass `--update <id>` so the body folds in rather than creating a sibling. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
 
-Track every finding's id and severity in a running list for Phase 6. **Read source to assert a PASS is forbidden (R1)** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
+Track every finding (including P2) in `QA_FINDINGS`, with id, severity, discrete confidence
+(`0|25|50|75|100`), classification (`introduced|pre_existing`), reason, and
+surface/file in a running list for Phase 6. **Read source to assert a PASS is forbidden (R1)** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
 
 ---
 
@@ -487,7 +489,7 @@ The receipt is the **only committed persisted output** (no new artifact, no new 
 | `head_sha` | string (`git rev-parse HEAD`) | the **freshness key** the pilot idempotence gate (R1b / task .2) reads — a receipt is fresh iff `receipt.id == <spec-id>` AND `receipt.head_sha == HEAD`. |
 | `branch` | string (current branch) | which branch the pass ran against (orientation for make-pr / a human). |
 | `rid_coverage` | object `{covered, total, rids: [{id, coverage}]}` | the §2.2 coverage spine, persisted so make-pr surfaces coverage without re-deriving. `coverage ∈ {live, subtracted, no_live_scenario, backend_cli}`. `covered` counts the non-gap rows (`live` + `subtracted` + `backend_cli`); a `no_live_scenario` row on a UI R-ID is the only uncovered kind. |
-| `open_p0p1` | array of **objects** `{id, severity, reason, file}` | open P0/P1 findings (Phase 5) as structured objects — `severity ∈ {P0, P1}`, `reason` a one-line symptom, `file` the surface/route — so make-pr surfaces findings, not bare ids. (Was a bare-id array; now objects.) |
+| `open_p0p1` | array of **objects** `{id, severity, confidence, classification, reason, file}` | Open P0/P1 findings with lossless v1 enums; severity is P0/P1, confidence is a discrete anchor, and classification is introduced/pre_existing. |
 
 **Build the JSON with a probed Python interpreter (`$PY`, resolved once per the snippet below), not a `cat <<EOF` heredoc** — and this is now *load-bearing*, not just for the reasons: `rid_coverage.rids[].id`/coverage and every `open_p0p1[]` object field (`reason`, `file`) are agent-authored free-form text. Raw shell interpolation into JSON would emit malformed output (or allow field injection) the moment any value contains a quote, backslash, or newline. Pass the structured fields as **JSON strings** through `os.environ` and re-parse with `json.loads`; let `json.dump` escape everything:
 
@@ -509,20 +511,32 @@ else MODE="interactive"; fi
 
 RECEIPT_PATH="${QA_RECEIPT_OVERRIDE:-${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json}}"
 mkdir -p "$(dirname "$RECEIPT_PATH")"
+RECEIPT_INPUT="$(mktemp "${TMPDIR:-/tmp}/flow-qa-receipt.XXXXXX.json")"
+QA_REVIEW_FILE="$(mktemp "${TMPDIR:-/tmp}/flow-qa-review.XXXXXX.md")"
+PRIOR_RECEIPT="$(mktemp "${TMPDIR:-/tmp}/flow-qa-prior.XXXXXX.json")"
+if [[ -f "$RECEIPT_PATH" ]]; then
+ cp "$RECEIPT_PATH" "$PRIOR_RECEIPT"
+else
+ rm -f "$PRIOR_RECEIPT"
+ PRIOR_RECEIPT=""
+fi
 
 # Freshness key (R1b) + orientation. HEAD is resolved at QA time; a detached/empty
 # HEAD yields "" (the pilot gate treats a missing/empty head_sha as never-fresh).
 HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
 BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
 
-# OPEN_P0P1 = JSON ARRAY OF OBJECTS from Phase 5: [{"id","severity","reason","file"}, …];
+# QA_FINDINGS = JSON ARRAY OF every P0/P1/P2 finding from Phase 5.
+# OPEN_P0P1 = verdict-facing subset:
+# [{"id","severity","confidence","classification","reason","file"}, …];
 # default "[]". RID_COVERAGE = the §2.2 spine as JSON:
 # {"covered":N,"total":M,"rids":[{"id":"R1","coverage":"live"}, …]}; default "{}".
 # Both are JSON STRINGS here — python re-parses them so free-form fields are escaped.
 # Reason fields are set ONLY for their outcome (BLOCKED → blocked_reason, NA → na_reason).
 export QA_TYPE="qa_verdict" QA_ID="$SPEC_ID" QA_MODE="$MODE" QA_VERDICT="$VERDICT" \
  QA_OUTCOME HEAD_SHA BRANCH \
- OPEN_P0P1="${OPEN_P0P1:-[]}" RID_COVERAGE="${RID_COVERAGE:-{}}" \
+ QA_FINDINGS="${QA_FINDINGS:-[]}" OPEN_P0P1="${OPEN_P0P1:-[]}" \
+ RID_COVERAGE="${RID_COVERAGE:-{}}" \
  BLOCKED_REASON="${BLOCKED_REASON:-}" NA_REASON="${NA_REASON:-}"
 
 # Resolve Python 3.11+ once (functionality/version probe — the Windows Store python3
@@ -535,7 +549,7 @@ for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
 done
 [ -n "$PY" ] || { echo "qa: no working Python 3.11+ interpreter found (see Windows Python troubleshooting)" >&2; exit 1; }
 
-$PY - "$RECEIPT_PATH" <<'PY'
+$PY - "$RECEIPT_INPUT" <<'PY'
 import datetime, json, os, sys
 r = {"type": os.environ["QA_TYPE"], "id": os.environ["QA_ID"],
  "mode": os.environ["QA_MODE"], "verdict": os.environ["QA_VERDICT"],
@@ -543,7 +557,7 @@ r = {"type": os.environ["QA_TYPE"], "id": os.environ["QA_ID"],
  "head_sha": os.environ.get("HEAD_SHA", ""), # R1b freshness key (pilot/.2 reads this)
  "branch": os.environ.get("BRANCH", ""),
  "rid_coverage": json.loads(os.environ.get("RID_COVERAGE") or "{}"),
- "open_p0p1": json.loads(os.environ.get("OPEN_P0P1") or "[]")} # array of {id,severity,reason,file}
+ "open_p0p1": json.loads(os.environ.get("OPEN_P0P1") or "[]")}
 if os.environ["QA_OUTCOME"] == "BLOCKED" and os.environ.get("BLOCKED_REASON"):
  r["blocked_reason"] = os.environ["BLOCKED_REASON"] # json.dump escapes free-form text
 if os.environ["QA_OUTCOME"] == "NA" and os.environ.get("NA_REASON"):
@@ -552,6 +566,97 @@ r["timestamp"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
  json.dump(r, fh); fh.write("\n")
 PY
+
+$PY - "$QA_REVIEW_FILE" "${PRIOR_RECEIPT:-}" <<'PY'
+import json, os, sys
+items = json.loads(os.environ.get("QA_FINDINGS") or "[]")
+current = {}
+for item in items:
+ required = {"id", "severity", "confidence", "classification", "reason", "file"}
+ if not isinstance(item, dict) or not required <= set(item):
+ raise SystemExit("qa: open finding lacks v1 fields")
+ finding_id = item["id"]
+ if not isinstance(finding_id, str) or not finding_id or finding_id in current:
+ raise SystemExit("qa: finding ids must be unique non-empty strings")
+ current[finding_id] = item
+
+prior_items = []
+prior_path = sys.argv[2] if len(sys.argv) > 2 else ""
+if prior_path:
+ try:
+ with open(prior_path, encoding="utf-8") as fh:
+ prior_receipt = json.load(fh)
+ prior_findings = prior_receipt.get("findings", {})
+ if (
+ prior_receipt.get("type") == os.environ["QA_TYPE"]
+ and prior_receipt.get("id") == os.environ["QA_ID"]
+ and prior_receipt.get("mode") == os.environ["QA_MODE"]
+ and prior_findings.get("schemaVersion") == 1
+ and isinstance(prior_findings.get("items"), list)
+ ):
+ prior_items = prior_findings["items"]
+ except (OSError, TypeError, ValueError, json.JSONDecodeError):
+ prior_items = []
+
+lines = []
+known_ids = set()
+for prior in sorted(prior_items, key=lambda item: item.get("ordinal", 0)):
+ finding_id = prior.get("title")
+ ordinal = prior.get("ordinal")
+ if (
+ not isinstance(finding_id, str)
+ or not isinstance(ordinal, int)
+ or isinstance(ordinal, bool)
+ or ordinal < 1
+ or finding_id in known_ids
+ ):
+ prior_items = []
+ lines = []
+ known_ids = set()
+ break
+ known_ids.add(finding_id)
+ if finding_id in current:
+ status = "not_fixed"
+ elif os.environ["QA_OUTCOME"] in {"BLOCKED", "NA"}:
+ status = prior.get("status", "open")
+ if status == "open":
+ status = "not_fixed"
+ else:
+ status = "fixed"
+ lines.append(f"Prior finding {ordinal} — {status}.")
+
+for finding_id, item in current.items():
+ if finding_id in known_ids:
+ continue
+ lines.extend([
+ f"### {finding_id}",
+ f"- **Severity**: {item['severity']}",
+ f"- **Confidence**: {item['confidence']}",
+ f"- **Classification**: {item['classification']}",
+ f"- **Title**: {finding_id}",
+ f"- **Problem**: {item['reason']} (surface: {item['file']})",
+ "",
+ ])
+if not lines:
+ lines.append("No findings.")
+lines.append(f"<verdict>{os.environ['QA_VERDICT']}</verdict>")
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+ fh.write("\n".join(lines) + "\n")
+PY
+PRIOR_ARGS=()
+[[ -n "$PRIOR_RECEIPT" ]] \
+ && PRIOR_ARGS=(--prior "$PRIOR_RECEIPT" --require-prior-current)
+if ! "$FLOWCTL" review-findings attach \
+ --input "$RECEIPT_INPUT" \
+ --receipt "$RECEIPT_PATH" \
+ "${PRIOR_ARGS[@]}" \
+ --review-file "$QA_REVIEW_FILE" \
+ --head HEAD \
+ --json >/dev/null; then
+ rm -f "$RECEIPT_INPUT" "$QA_REVIEW_FILE" ${PRIOR_RECEIPT:+"$PRIOR_RECEIPT"}
+ exit 1
+fi
+rm -f "$RECEIPT_INPUT" "$QA_REVIEW_FILE" ${PRIOR_RECEIPT:+"$PRIOR_RECEIPT"}
 echo "QA_VERDICT_WRITTEN: $RECEIPT_PATH ($QA_OUTCOME → $VERDICT)"
 ```
 
@@ -569,9 +674,12 @@ When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ra
 if [ "$QA_AUTONOMOUS" = "1" ]; then
  # Receipt always; the filed memory paths only when non-empty (SHIP/NA/BLOCKED or
  # memory.enabled=false file none). Narrow pathspec — exactly QA's own files.
- git -C "$REPO_ROOT" add -- "$RECEIPT_PATH" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
- git -C "$REPO_ROOT" diff --cached --quiet -- "$RECEIPT_PATH" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY} \
- || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SPEC_ID" -- "$RECEIPT_PATH" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
+ RECEIPT_HISTORY_DIR="${RECEIPT_PATH}.history"
+ QA_HISTORY_PATHS=()
+ [ -d "$RECEIPT_HISTORY_DIR" ] && QA_HISTORY_PATHS=("$RECEIPT_HISTORY_DIR")
+ git -C "$REPO_ROOT" add -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
+ git -C "$REPO_ROOT" diff --cached --quiet -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY} \
+ || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SPEC_ID" -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
 fi
 ```
 

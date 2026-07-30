@@ -2169,7 +2169,11 @@ class TestPlanReviewSelectedBackendRouting(unittest.TestCase):
             self.assertTrue(row["spec_grounded_verbatim"])
             self.assertTrue(row["task_specs_grounded_verbatim"])
             self.assertTrue(row["verdict_grammar_present"])
-        self.assertTrue(evidence["prompt_template"]["byte_identical_to_b1"])
+        self.assertFalse(evidence["prompt_template"]["byte_identical_to_b1"])
+        self.assertTrue(evidence["prompt_template"]["format_only_to_b1"])
+        self.assertLessEqual(
+            evidence["prompt_template"]["rendered_chars_delta"], 0
+        )
 
     def test_tracked_candidate_evidence_matches_live_routes(self) -> None:
         tracked = json.loads(

@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "fixture_family": "review-findings",
+  "provenance": {
+    "capture_kind": "redacted_field_survey",
+    "date_utc": "2026-07-30",
+    "sources": [
+      {
+        "id": "fn90-codex-x1-clean",
+        "kind": "repository_capture",
+        "path": ".flow/artifacts/fn-90-baseline/after/x1.clean.md",
+        "backends": ["codex"]
+      },
+      {
+        "id": "fn90-codex-x2-clean",
+        "kind": "repository_capture",
+        "path": ".flow/artifacts/fn-90-baseline/after/x2.clean.md",
+        "backends": ["codex"]
+      },
+      {
+        "id": "fn136-host-plan-receipt",
+        "kind": "repository_capture",
+        "path": ".flow/review-receipts/plan-fn-136-structured-review-artifact-schema-in.json",
+        "backends": ["host"]
+      },
+      {
+        "id": "fn130-real-backend-evidence",
+        "kind": "repository_capture",
+        "path": "optimization/reached-path/evidence/fn130/plan-review-real-backend.json",
+        "backends": ["codex"]
+      },
+      {
+        "id": "flow-swarm-fn114-124-audit",
+        "kind": "external_audit",
+        "path": "flow-swarm fn-114..124 review audit and done evidence",
+        "backends": ["codex"]
+      },
+      {
+        "id": "fn136-fixture-design-contract",
+        "kind": "synthetic_boundary",
+        "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.1.md",
+        "backends": ["codex", "copilot", "cursor", "host", "rp", "export"]
+      }
+    ],
+    "privacy": "Finding substance and repository paths are synthetic. Variant status distinguishes directly observed formatting from synthetic parser-boundary coverage."
+  },
+  "backends": {
+    "codex": {
+      "variants": [
+        {
+          "label": "**Severity: Major**",
+          "status": "directly_observed",
+          "source_refs": ["fn90-codex-x1-clean", "fn90-codex-x2-clean"],
+          "source_locator": "- **Severity: Major**",
+          "fixture_refs": ["codex/no-anchor.md", "codex/catalog-sample.md"]
+        },
+        {
+          "label": "**Confidence:** 100",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["codex/no-anchor.md", "codex/catalog-sample.md"]
+        },
+        {
+          "label": "**Issues**",
+          "status": "directly_observed",
+          "source_refs": ["fn90-codex-x1-clean"],
+          "source_locator": "**Issues**",
+          "fixture_refs": ["codex/no-anchor.md", "codex/catalog-sample.md"]
+        },
+        {
+          "label": "numbered findings",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["codex/catalog-sample.md"]
+        }
+      ]
+    },
+    "copilot": {
+      "variants": [
+        {
+          "label": "### Finding N",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["copilot/no-anchor.md", "copilot/catalog-sample.md"]
+        },
+        {
+          "label": "Severity: Minor",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["copilot/no-anchor.md", "copilot/catalog-sample.md"]
+        },
+        {
+          "label": "plain label blocks",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["copilot/catalog-sample.md"]
+        }
+      ]
+    },
+    "cursor": {
+      "variants": [
+        {
+          "label": "**Severity**: Major",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["cursor/no-anchor.md", "cursor/catalog-sample.md"]
+        },
+        {
+          "label": "Prior finding: **fixed**",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["cursor/ratchet-only.md"]
+        },
+        {
+          "label": "inline preamble before findings",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["cursor/catalog-sample.md"]
+        }
+      ]
+    },
+    "host": {
+      "variants": [
+        {
+          "label": "P2 · confidence 75 · introduced",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["host/no-anchor.md"]
+        },
+        {
+          "label": "Markdown finding table",
+          "status": "directly_observed",
+          "source_refs": ["fn136-host-plan-receipt"],
+          "source_locator": "| # | Sev | Finding | Disposition |",
+          "fixture_refs": ["host/catalog-sample.md"]
+        },
+        {
+          "label": "FIXED in review disposition",
+          "status": "directly_observed",
+          "source_refs": ["fn136-host-plan-receipt"],
+          "source_locator": "FIXED in review",
+          "fixture_refs": ["host/catalog-sample.md"]
+        }
+      ]
+    },
+    "rp": {
+      "variants": [
+        {
+          "label": "- Severity: Critical",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["rp/no-anchor.md", "rp/catalog-sample.md"]
+        },
+        {
+          "label": "File:Line prompt label",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["rp/catalog-sample.md"]
+        },
+        {
+          "label": "Classification counts tally",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["rp/no-anchor.md", "rp/ratchet-only.md"]
+        }
+      ]
+    },
+    "export": {
+      "variants": [
+        {
+          "label": "Severity = Nitpick",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["export/no-anchor.md", "export/catalog-sample.md"]
+        },
+        {
+          "label": "Prior finding #N",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["export/ratchet-only.md"]
+        },
+        {
+          "label": "manually pasted prose",
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
+          "fixture_refs": ["export/unparseable.md"]
+        }
+      ]
+    }
+  },
+  "cases": [
+    "no-findings-ship",
+    "ratchet-only",
+    "no-anchor",
+    "unparseable",
+    "catalog-sample"
+  ],
+  "expectations": {
+    "codex": {
+      "no-findings-ship": {"structured": true, "verdict": "SHIP", "items": []},
+      "ratchet-only": {"structured": true, "new_item_count": 0, "ordered_prior_statuses": ["fixed", "not_fixed"]},
+      "no-anchor": {"structured": true, "items": [{"severity": "P1", "confidence": 100, "classification": "introduced", "status": "open", "anchor": null}]},
+      "unparseable": {"structured": false},
+      "catalog-sample": {"structured": true, "items": [{"severity": "P1", "confidence": 100, "classification": "introduced", "status": "open", "anchor": {"path": "src/review.py", "startLine": 42}}]}
+    },
+    "copilot": {
+      "no-findings-ship": {"structured": true, "verdict": "SHIP", "items": []},
+      "ratchet-only": {"structured": true, "new_item_count": 0, "ordered_prior_statuses": ["fixed", "withdrawn"]},
+      "no-anchor": {"structured": true, "items": [{"severity": "P2", "confidence": 75, "classification": "pre_existing", "status": "open", "anchor": null}]},
+      "unparseable": {"structured": false},
+      "catalog-sample": {"structured": true, "items": [{"severity": "P2", "confidence": 75, "classification": "introduced", "status": "open", "anchor": {"path": "src/review.py", "startLine": 51}}]}
+    },
+    "cursor": {
+      "no-findings-ship": {"structured": true, "verdict": "SHIP", "items": []},
+      "ratchet-only": {"structured": true, "new_item_count": 0, "ordered_prior_statuses": ["fixed"]},
+      "no-anchor": {"structured": true, "items": [{"severity": "P1", "confidence": 100, "classification": "introduced", "status": "open", "anchor": null}]},
+      "unparseable": {"structured": false},
+      "catalog-sample": {"structured": true, "items": [{"severity": "P1", "confidence": 100, "classification": "introduced", "status": "open", "anchor": {"path": "src/review.py", "startLine": 63}}]}
+    },
+    "host": {
+      "no-findings-ship": {"structured": true, "verdict": "SHIP", "items": []},
+      "ratchet-only": {"structured": true, "new_item_count": 0, "ordered_prior_statuses": ["fixed", "withdrawn"]},
+      "no-anchor": {"structured": true, "items": [{"severity": "P2", "confidence": 75, "classification": "introduced", "status": "open", "anchor": null}]},
+      "unparseable": {"structured": false},
+      "catalog-sample": {"structured": true, "items": [{"severity": "P1", "confidence": 100, "classification": "introduced", "status": "open", "anchor": null}, {"severity": "P2", "confidence": 75, "classification": "introduced", "status": "fixed", "anchor": null}]}
+    },
+    "rp": {
+      "no-findings-ship": {"structured": true, "verdict": "SHIP", "items": []},
+      "ratchet-only": {"structured": true, "new_item_count": 0, "ordered_prior_statuses": ["fixed", "not_fixed"]},
+      "no-anchor": {"structured": true, "items": [{"severity": "P0", "confidence": 100, "classification": "introduced", "status": "open", "anchor": null}]},
+      "unparseable": {"structured": false},
+      "catalog-sample": {"structured": true, "items": [{"severity": "P0", "confidence": 100, "classification": "introduced", "status": "open", "anchor": {"path": "src/review.py", "startLine": 77}}]}
+    },
+    "export": {
+      "no-findings-ship": {"structured": true, "verdict": "SHIP", "items": []},
+      "ratchet-only": {"structured": true, "new_item_count": 0, "ordered_prior_statuses": ["fixed", "not_fixed"]},
+      "no-anchor": {"structured": true, "items": [{"severity": "P3", "confidence": 50, "classification": "pre_existing", "status": "open", "anchor": null}]},
+      "unparseable": {"structured": false},
+      "catalog-sample": {"structured": true, "items": [{"severity": "P3", "confidence": 50, "classification": "pre_existing", "status": "open", "anchor": {"path": "src/review.py", "startLine": 88}}]}
+    }
+  }
+}

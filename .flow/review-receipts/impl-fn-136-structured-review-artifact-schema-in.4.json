@@ -1,0 +1,10 @@
+{
+  "id": "fn-136-structured-review-artifact-schema-in.4",
+  "introduced_count": 0,
+  "mode": "rp",
+  "pre_existing_count": 0,
+  "timestamp": "2026-07-30T13:12:25Z",
+  "type": "impl_review",
+  "unaddressed": [],
+  "verdict": "SHIP"
+}

@@ -53,8 +53,11 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 │   │   ├── workflow/
 │   │   └── best-practices/
 │   └── legacy/            # (optional) archived flat files after migrate
-├── artifacts/             # Opt-in HTML render lenses (spec.html / pr.html)
+├── artifacts/             # HTML lenses + immutable PR cognitive-aid generations
+│   └── <spec-id>/pr-cognitive-aid/<artifactId>.json
 ├── review-receipts/       # Review receipt copies kept under .flow/
+│   └── <receipt>.json.history/
+│       └── <digest>.json  # Immutable structured-finding generations
 ├── receipts/              # (auto-gitignored) Ralph/runtime receipt scratch
 ├── sync-runs/             # (auto-gitignored) tracker-sync run receipts
 ├── pilot-runs/            # (auto-gitignored) pilot backlog decision-log rows
@@ -64,6 +67,20 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 ```
 
 `flowctl init` creates `specs/`, `tasks/`, `memory/`, `meta.json`, `config.json`, and the auto-managed `.gitignore`. `/flow-next:setup` additionally stamps `bin/`, `templates/`, and `usage.md`. Runtime dirs (`sync-runs/`, `pilot-runs/`, `locks/`, `tmp/`, `receipts/`, `.cache/`) appear on first use and stay gitignored.
+
+Review receipts may contain the optional versioned `findings` projection. Before
+advancing a latest receipt pointer, Flow-Next preserves its valid prior
+generation in `<receipt-path>.history/<sha256(sourceReceiptId)>.json`. The
+history is an immutable evidence chain, not a second current-state store.
+Consumers select one head-current chain tip and fail closed on ambiguity; see
+[`review-findings.md`](review-findings.md).
+
+PR cognitive-aid generations use a separate immutable chain under
+`.flow/artifacts/<spec-id>/pr-cognitive-aid/`. The newest valid chain tip is
+current only when both its base and head SHAs match the live PR identity.
+Consumers enumerate that documented home and use labeled fallback states on
+stale, unsupported, or invalid input; see
+[`pr-cognitive-aid.md`](pr-cognitive-aid.md).
 
 Pre-1.0 repos that still have `.flow/epics/<id>.json` must port by hand: see `.flow/usage.md` "Pre-1.0 layout porting" (and `docs/troubleshooting.md`). The automated `migrate-rename` path was removed in fn-111.
 
@@ -142,6 +159,8 @@ The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The 
 
 - [`spec-template.md`](spec-template.md) - canonical scaffold + acceptance-criteria discipline.
 - [`memory-schema.md`](memory-schema.md) - categorized `.flow/memory/` schema.
+- [`review-findings.md`](review-findings.md) - portable structured-review
+  receipt contract and currentness rules.
 - [`flowctl.md`](flowctl.md) - full CLI reference.
 - [`../README.md`](../README.md) - plugin overview.
 - [`../../../GLOSSARY.md`](../../../GLOSSARY.md) - Spec, Task, Handover object, Receipt.

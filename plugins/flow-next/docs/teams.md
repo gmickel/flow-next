@@ -210,7 +210,12 @@ The QA discipline (P0/P1/P2 taxonomy, evidence rules, session hygiene) is a lean
 8. Deferred review findings (`.flow/review-deferred/<branch>.md`)
 9. The `git diff` itself
 
-Body sections: TL;DR · R-ID coverage table · Critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible) · How to review this PR (trust-calibration coaching block — what the pipeline already verified mechanically vs the human's job) · Review plan (every changed area risk-bucketed into Must review / Spot-check / Safe to skim, ≤~30% focus budget) · Decisions · Memory · Glossary/strategy deltas · Open items.
+Body sections include a versioned, intent-ordered change walkthrough (thesis,
+proof, logical groups, file membership, deliberate non-changes, and
+verification) plus Critical changes, How to review this PR, the separate
+risk-ranked Review plan, Decisions, Memory, Glossary/strategy deltas, and open
+items. The walkthrough's portable consumer and fixture contract is documented
+in [`pr-cognitive-aid.md`](pr-cognitive-aid.md).
 
 Mermaid codefences emit when the diff crosses ≥2 modules (max 3 diagrams × 12 nodes; markdown codefence — GitHub / GitLab / Gitea render natively). Default `--draft` if open items > 0 or under Ralph; `--ready` overrides.
 

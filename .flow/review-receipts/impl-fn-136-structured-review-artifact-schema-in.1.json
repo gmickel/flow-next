@@ -1,0 +1,16 @@
+{
+  "type": "impl_review",
+  "id": "fn-136-structured-review-artifact-schema-in.1",
+  "mode": "rp",
+  "base": "c39a1dfbedd8c0ef8e297b0f096ee710af281bb2",
+  "verdict": "SHIP",
+  "session_id": "review-fixture-corpus-96EEF1",
+  "model": null,
+  "effort": null,
+  "spec": "rp",
+  "timestamp": "2026-07-30T09:16:56Z",
+  "review": "## Chat Send ✅\n- **Chat**: `review-fixture-corpus-96EEF1` | **Mode**: review\n\n### Response\n\n\nThe fixes complete the backend fixture corpus: all six backends contain the four required scenarios plus catalog samples, with normalized per-fixture oracles covering severity aliases, allowed confidence/classification values, optional anchors, and ratchet statuses. Direct observations now resolve to exact repository captures and verified locators, synthetic variants are clearly labeled, and the task survey summary records the completed work. No task-scoped issues remain.\n\nUnaddressed R-IDs: []\n\nSuppressed findings: none.  \nClassification counts: 0 introduced, 0 pre_existing.  \nProtected-path filter: 0 findings dropped.\n\n<verdict>SHIP</verdict>\n",
+  "introduced_count": 0,
+  "pre_existing_count": 0,
+  "unaddressed": []
+}

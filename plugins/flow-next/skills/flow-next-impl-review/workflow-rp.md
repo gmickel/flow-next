@@ -17,6 +17,11 @@ if [[ -z "$BASE_COMMIT" ]]; then
 else
   DIFF_BASE="$BASE_COMMIT"
 fi
+REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-impl-review-snapshot-<task-id-or-branch-slug>-<suffix>.env"
+REVIEW_HEAD_SHA="$(git rev-parse HEAD)"
+REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"
+printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
+  "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
 
 git log ${DIFF_BASE}..HEAD --oneline
 CHANGED_FILES="$(git diff ${DIFF_BASE}..HEAD --name-only)"
@@ -29,25 +34,86 @@ Save:
 - Commit summary
 - DIFF_BASE (for reference in review prompt)
 
-Compose a 1-2 sentence `REVIEW_SUMMARY` describing the changes for the setup-review command below.
+Compose a 1-2 sentence summary in agent context from these results.
 
 ---
 
 ### Atomic Setup Block
 
-**Only run ONCE. Uses the summary composed in Phase 1.**
+**Only run ONCE. Type the Phase 1 summary into this block.**
 
 ```bash
-# Atomic: resolve/reuse window + open Context Builder (uses REVIEW_SUMMARY from Phase 1)
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUMMARY" --create)"
+# Self-contained: fill the bracketed Phase 1 facts inline. CE returns the review
+# from this one call, so this file carries the complete substantive contract.
+REVIEW_INSTRUCTIONS_FILE="${TMPDIR:-/tmp}/flow-impl-review-instructions-<task-id-or-branch-slug>-<suffix>.md"
+RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
+SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+cat > "$REVIEW_INSTRUCTIONS_FILE" << 'EOF'
+Review the actual implementation diff [DIFF_BASE]..HEAD on branch [BRANCH].
+Changed files: [CHANGED_FILES]. Commits: [COMMIT_SUMMARY].
 
-# Verify we have W and T
-if [[ -z "${W:-}" || -z "${T:-}" ]]; then
+Read the task/spec and changed code. Judge correctness, simplicity, DRY,
+architecture, edge cases, tests, security, and canonical vocabulary. Explore
+happy, invalid, boundary, concurrent, network, exhaustion, attack, corruption,
+and cascading-failure scenarios only where applicable to changed code.
+
+For specs with R-IDs, emit a met/partial/not-addressed/deferred coverage table
+and `Unaddressed R-IDs: [...]`; a non-deferred not-addressed R-ID blocks.
+Confidence must be exactly 0/25/50/75/100. Suppress below 75 except P0 at 50+.
+Classify every finding introduced or pre_existing; only introduced findings
+block. Never recommend deleting protected `.flow/*`, generated plugin mirrors,
+spec/task records, review receipts, or Ralph artifacts.
+
+For each surviving introduced finding emit Severity (P0-P3), Confidence,
+Classification, File:Line, Problem, and Suggestion. List pre-existing findings
+separately. Emit suppression/classification/protected-path tallies when
+applicable. End with exactly one tag: <verdict>SHIP</verdict>,
+<verdict>NEEDS_WORK</verdict>, or <verdict>MAJOR_RETHINK</verdict>.
+EOF
+[[ -n "$TASK_ID" ]] && $FLOWCTL show "$TASK_ID" >> "$REVIEW_INSTRUCTIONS_FILE"
+
+if [[ -n "$TASK_ID" ]]; then
+  ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json)"
+  ROUND_EXIT=$?
+  if [[ "$ROUND_EXIT" -ne 0 ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    exit "$ROUND_EXIT"
+  fi
+fi
+
+# CE: one context_builder review result, written directly to RESPONSE_FILE.
+# Classic: RP_MODE=classic and the old tab selection/chat flow continues below.
+$FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
+  --summary-file "$REVIEW_INSTRUCTIONS_FILE" --response-type review \
+  --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
+SETUP_EXIT=$?
+if [[ "$SETUP_EXIT" -ne 0 ]]; then
+  : > "$RESPONSE_FILE"
+  if [[ -n "$TASK_ID" ]]; then
+    RECORD_JSON="$($FLOWCTL review-rounds record "${TASK_ID%.*}" --kind impl \
+      --review-type impl --task "$TASK_ID" --backend rp \
+      --output-file "$RESPONSE_FILE" --exit-code "$SETUP_EXIT" --json)"
+    RECORD_EXIT=$?
+    printf '%s\n' "$RECORD_JSON"
+    if [[ "$RECORD_EXIT" -ne 0 ]]; then
+      exit "$RECORD_EXIT"
+    fi
+  fi
+  exit "$SETUP_EXIT"
+fi
+source "$SETUP_FILE"
+
+# Both paths retain numeric window/context identity; CE also returns the chat.
+if [[ -z "${W:-}" || -z "${T:-}" || -z "${RP_MODE:-}" ]]; then
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
+if [[ "$RP_MODE" == "ce" && ( -z "${CHAT_ID:-}" || ! -s "$RESPONSE_FILE" ) ]]; then
   echo "<promise>RETRY</promise>"
   exit 0
 fi
 
-echo "Setup complete: W=$W T=$T"
+echo "Setup complete: mode=$RP_MODE W=$W T=$T"
 ```
 
 If this block fails, output `<promise>RETRY</promise>` and stop. Do not improvise.
@@ -57,19 +123,19 @@ If this block fails, output `<promise>RETRY</promise>` and stop. Do not improvis
 
 ## Phase 2: Augment Selection (RP)
 
-Builder selects context automatically. Review and add must-haves:
+CE already returned the terminal review and MUST skip this phase. Classic alone
+uses its published-tab selection:
 
 ```bash
-# See what builder selected
-$FLOWCTL rp select-get --window "$W" --tab "$T"
-
-# Add ALL changed files
-for f in $CHANGED_FILES; do
-  $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
-done
-
-# Add task spec if known
-$FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<task-id>.md
+SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+source "$SETUP_FILE"
+if [[ "$RP_MODE" == "classic" ]]; then
+  $FLOWCTL rp select-get --window "$W" --tab "$T"
+  for f in $CHANGED_FILES; do
+    $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
+  done
+  $FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<task-id>.md
+fi
 ```
 
 **Why this matters:** Chat only sees selected files.
@@ -88,7 +154,10 @@ $FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<task-id>.md
 Build the prompt by deterministic composition — redirect command output into the file, never paste it into a heredoc. Only cheap **scalar** slots (branch, file list, commit summary, focus areas — values you already hold from Phase 1) are filled inline while typing the quoted heredocs below; multi-line command output is always appended via redirection.
 
 ```bash
+SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+source "$SETUP_FILE"
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-impl-review-prompt-<task-id-or-branch-slug>-<suffix>.md"   # literal path
+if [[ "$RP_MODE" == "classic" ]]; then
 
 # 1. Builder handoff — captured via redirection, never re-typed
 $FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"
@@ -196,19 +265,14 @@ After the findings, add (only when applicable): the `## Requirements coverage` t
 
 Do NOT skip this tag. The automation depends on it.
 EOF
+fi
 ```
 
 ### Send to RepoPrompt (single-entry response)
 
-**fn-90 R5 — deterministic cap gate (run BEFORE every review dispatch, including this first one; task-scoped reviews only — standalone/branch reviews have no spec state, so no cap):**
-
-```bash
-if [[ -n "$TASK_ID" ]]; then
-  $FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
-fi
-```
-
-At the cap this refuses with an `ESCALATE:` marker + exit 4. That is NOT a retryable error: do NOT dispatch the review, do NOT retry — surface the ESCALATE message to the caller and stop (Ralph/autonomous: NEEDS_HUMAN). Only proceed to `chat-send` when the increment succeeds.
+The deterministic review-round cap was reserved immediately before the
+single CE builder/review call (or before Classic setup). At the cap, stop
+without invoking RepoPrompt.
 
 Redirect the review response to the literal response file — it must enter context exactly ONCE, via a single Read of that file (command substitution + `echo` would be the second copy; redirection keeps stdout out of context entirely):
 
@@ -217,9 +281,16 @@ Redirect the review response to the literal response file — it must enter cont
 # build block, and bash vars do not survive across tool calls (type them verbatim)
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-impl-review-prompt-<task-id-or-branch-slug>-<suffix>.md"      # same literal path from the build block
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"  # literal path
+SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+source "$SETUP_FILE"
 
-$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Impl Review: $BRANCH" > "$RESPONSE_FILE"
-RP_EXIT=$?
+if [[ "$RP_MODE" == "classic" ]]; then
+  $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Impl Review: $BRANCH" > "$RESPONSE_FILE"
+  RP_EXIT=$?
+else
+  # CE's one context_builder call already wrote the terminal response.
+  RP_EXIT=0
+fi
 
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
   | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
@@ -275,6 +346,8 @@ fi
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
+  REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-impl-review-snapshot-<task-id-or-branch-slug>-<suffix>.env"
+  source "$REVIEW_SNAPSHOT_FILE"
 
   # Same literal response file from Phase 3 (path-persistence rule — type it verbatim)
   RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
@@ -361,9 +434,25 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
     EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
   fi
 
-  cat > "$REVIEW_RECEIPT_PATH" <<EOF
+  RECEIPT_INPUT="$(mktemp "${TMPDIR:-/tmp}/flow-impl-review-receipt.XXXXXX.json")"
+  cat > "$RECEIPT_INPUT" <<EOF
 {"type":"impl_review","id":"<TASK_ID>","mode":"rp","verdict":"$VERDICT"$EXTRA_FIELDS,"timestamp":"$ts"}
 EOF
+  # The reviewer response is already local. This deterministic attach reads
+  # the prior receipt before atomically replacing it, preserving explicit
+  # supersedes lineage without another model/network call.
+  if ! "$FLOWCTL" review-findings attach \
+    --input "$RECEIPT_INPUT" \
+    --receipt "$REVIEW_RECEIPT_PATH" \
+    --review-file "$RESPONSE_FILE" \
+    --base "$REVIEW_BASE_SHA" \
+    --head "$REVIEW_HEAD_SHA" \
+    --json >/dev/null; then
+    rm -f "$RECEIPT_INPUT"
+    echo "<promise>RETRY</promise>"
+    exit 0
+  fi
+  rm -f "$RECEIPT_INPUT"
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```
@@ -429,7 +518,7 @@ If verdict is NEEDS_WORK:
    file contents on every message. Only use `select-add` for NEW files created during fixes:
    ```bash
    # Only if fixes created new files not in original selection
-   if [[ -n "$NEW_FILES" ]]; then
+   if [[ "$RP_MODE" == "classic" && -n "$NEW_FILES" ]]; then
      $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
    fi
    ```
@@ -444,7 +533,12 @@ If verdict is NEEDS_WORK:
 
    ```bash
    if [[ -n "$TASK_ID" ]]; then
-     $FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
+     ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json)"
+     ROUND_EXIT=$?
+     if [[ "$ROUND_EXIT" -ne 0 ]]; then
+       printf '%s\n' "$ROUND_JSON"
+       exit "$ROUND_EXIT"
+     fi
    fi
    ```
 
@@ -455,7 +549,30 @@ If verdict is NEEDS_WORK:
    **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
    EOF
 
-   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" > "${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
+   if [[ -z "$BASE_COMMIT" ]]; then
+     DIFF_BASE="main"
+     git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+   else
+     DIFF_BASE="$BASE_COMMIT"
+   fi
+   REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-impl-review-snapshot-<task-id-or-branch-slug>-<suffix>.env"
+   REVIEW_HEAD_SHA="$(git rev-parse HEAD)"
+   REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"
+   printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
+     "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+
+   SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+   source "$SETUP_FILE"
+   if [[ "$RP_MODE" == "ce" ]]; then
+     $FLOWCTL rp chat-send --window "$W" --context-id "$T" \
+       --chat-id "$CHAT_ID" --mode review \
+       --message-file "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" \
+       > "${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
+   else
+     $FLOWCTL rp chat-send --window "$W" --tab "$T" \
+       --message-file "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" \
+       > "${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
+   fi
    ```
 
    Re-extract the verdict from the response file (same grep as Phase 3), call

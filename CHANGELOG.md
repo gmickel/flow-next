@@ -4,6 +4,60 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Added
+
+- **Make PR now persists a portable v1 change walkthrough.** The existing host
+  composes one bounded, grounded explanation; flowctl validates, stores,
+  selects, and renders it without another model or network call. Supported
+  current artifacts keep identity/currentness, provenance, ordered groups,
+  exact file membership, separate change/attention dimensions, file-level
+  R-ID/task links, deliberate non-changes, and verification aligned across
+  structured JSON, GitHub Markdown, and optional HTML. A maximum-normal
+  canonical fixture, SHA-256 metadata, high-resolution information-architecture
+  references, and an offline byte-pinned Flow Swarm vendoring contract now
+  define downstream compatibility. No version bump.
+
+- **Structured review benchmarks now use a strict `<100 ms p95` ceiling.**
+  Both the maximum-item findings parser and maximum-normal cognitive-aid
+  validation/render path run 30 warm measurements. This supersedes the original
+  50 ms target after a representative parallel-suite observation of 90.57 ms;
+  the cost is operationally negligible within the end-to-end workflow. The
+  fixture metadata and consumer contracts pin the exclusive bound.
+
+- **Current v1 HTML lenses no longer stale their own cognitive-aid input.**
+  Make PR now persists the head-bound structured object before optional HTML,
+  embeds a lossless script-safe semantic carrier for executable parity, and
+  keeps that current lens local-only so `HEAD` remains unchanged. Only a
+  visibly labeled legacy fallback may use the narrow artifact commit.
+
+- **Review receipts now expose optional versioned structured findings.**
+  Plan, implementation, completion, and QA receipt writers preserve canonical
+  severity/confidence/classification/status values, durable finding and receipt
+  lineage, snapshot-bound optional anchors, deterministic ordering, and
+  immutable prior generations. Head-current selection rejects broken or
+  ambiguous chains; unsupported versions, unknown enums, unsafe/oversize data,
+  and unparseable reviewer prose fall back to the original receipt and prose
+  without raising or truncating. The portable consumer contract and its
+  separation from bug memory are documented; no extra model or network call is
+  introduced.
+
+### Fixed
+
+- **RepoPrompt CE reviews now consume Context Builder's direct result.**
+  Review setup fences keep substantive instructions self-contained and reject
+  blank input before RepoPrompt runs. CE invokes the named `context_builder`
+  tool once with `response_type=review`, validates its direct prompt, formatted
+  selection, file/token counts, context/chat identities, and review response,
+  then feeds that response into the normal Flow verdict/receipt path. It no
+  longer queries an unprojected visible tab, augments selection, or sends a
+  second initial chat. Discontinued Classic remains an isolated final fallback
+  using its published-tab selection/chat workflow; CE failures never downgrade.
+  Complete review contracts now travel through a durable instructions file,
+  setup/cap failures finalize their reserved review round, and CE fix-loop or
+  optional-pass continuations bind the returned canonical context and chat
+  identities without treating the direct context identifier as Classic
+  visible-tab projection.
+
 ## [flow-next 3.8.0] - 2026-07-30
 
 ### Changed

@@ -9,6 +9,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 import argparse
 import errno
 import hashlib
+import html
 import io
 import json
 import math
@@ -1793,7 +1794,7 @@ def require_rp_cli() -> str:
 
 
 def run_rp_cli(
-    args: list[str], timeout: Optional[int] = None
+    args: list[str], timeout: Optional[int] = None, *, rp_cli: Optional[str] = None
 ) -> subprocess.CompletedProcess:
     """Run the selected RepoPrompt CLI with safe error handling and timeout.
 
@@ -1803,7 +1804,7 @@ def run_rp_cli(
     """
     if timeout is None:
         timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
-    rp = require_rp_cli()
+    rp = rp_cli or require_rp_cli()
     cmd = [rp] + args
     try:
         return subprocess.run(
@@ -1817,7 +1818,7 @@ def run_rp_cli(
 
 
 def run_rp_cli_unchecked(
-    args: list[str], timeout: Optional[int] = None
+    args: list[str], timeout: Optional[int] = None, *, rp_cli: Optional[str] = None
 ) -> subprocess.CompletedProcess:
     """Run the selected RepoPrompt CLI without collapsing command failures.
 
@@ -1826,7 +1827,7 @@ def run_rp_cli_unchecked(
     """
     if timeout is None:
         timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
-    rp = require_rp_cli()
+    rp = rp_cli or require_rp_cli()
     cmd = [rp] + args
     try:
         return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
@@ -1835,7 +1836,7 @@ def run_rp_cli_unchecked(
 
 
 def try_run_rp_cli(
-    args: list[str], timeout: Optional[int] = None
+    args: list[str], timeout: Optional[int] = None, *, rp_cli: Optional[str] = None
 ) -> Optional[subprocess.CompletedProcess]:
     """Run optional Classic capability probes without masking real failures.
 
@@ -1845,7 +1846,7 @@ def try_run_rp_cli(
     """
     if timeout is None:
         timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
-    rp = require_rp_cli()
+    rp = rp_cli or require_rp_cli()
     cmd = [rp] + args
     try:
         return subprocess.run(
@@ -2126,15 +2127,177 @@ def extract_builder_tab_from_payload(data: Any) -> Optional[str]:
     return None
 
 
+def validate_rp_classic_builder_context(data: Any) -> None:
+    """Reject Classic builder tabs without a published prompt or selection."""
+    for _ in range(4):
+        if not isinstance(data, dict):
+            break
+        if "prompt" in data or "selection" in data:
+            break
+        for key in ("result", "data", "context"):
+            nested = data.get(key)
+            if isinstance(nested, dict):
+                data = nested
+                break
+        else:
+            break
+
+    if not isinstance(data, dict):
+        error_exit(
+            "Builder context JSON has unexpected shape", use_json=False, code=2
+        )
+
+    prompt = data.get("prompt")
+    selection = data.get("selection")
+    files = selection.get("files") if isinstance(selection, dict) else None
+    if not isinstance(prompt, str) or not prompt.strip():
+        error_exit(
+            "Builder returned an empty prompt; setup is unusable",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(files, list) or not files:
+        error_exit(
+            "Builder returned an empty selection; setup is unusable",
+            use_json=False,
+            code=2,
+        )
+
+
+def verify_rp_classic_builder_context(
+    window: int, tab: str, *, rp_cli: Optional[str] = None
+) -> None:
+    """Read Classic's published builder tab and require usable context."""
+    expression = 'workspace_context include=["prompt","selection"]'
+    result = run_rp_cli(
+        ["-w", str(window), "-t", tab, "--raw-json", "-e", expression],
+        rp_cli=rp_cli,
+    )
+    try:
+        data = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        error_exit(
+            f"Builder context JSON parse failed: {exc}", use_json=False, code=2
+        )
+    validate_rp_classic_builder_context(data)
+
+
+def validate_rp_ce_builder_review(data: Any) -> dict[str, Any]:
+    """Validate CE's authoritative direct ``context_builder`` review result.
+
+    RepoPrompt CE intentionally need not publish an explicitly targeted
+    Context Builder run into the visible compose tab.  The MCP tool result is
+    therefore the only success oracle on the CE path.
+    """
+    if not isinstance(data, dict):
+        error_exit(
+            "CE context_builder JSON has unexpected shape",
+            use_json=False,
+            code=2,
+        )
+
+    context_id = data.get("context_id")
+    status = data.get("status")
+    prompt = data.get("prompt")
+    selection = data.get("selection")
+    file_count = data.get("file_count")
+    total_tokens = data.get("total_tokens")
+    response_type = data.get("response_type")
+    review = data.get("review")
+
+    if not isinstance(context_id, str) or not context_id.strip():
+        error_exit(
+            "CE context_builder response missing context_id",
+            use_json=False,
+            code=2,
+        )
+    if status != "completed":
+        error_exit(
+            f"CE context_builder did not complete: {status!r}",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(prompt, str) or not prompt.strip():
+        error_exit(
+            "CE context_builder returned an empty prompt",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(selection, str) or not selection.strip():
+        error_exit(
+            "CE context_builder returned an empty formatted selection",
+            use_json=False,
+            code=2,
+        )
+    if (
+        isinstance(file_count, bool)
+        or not isinstance(file_count, int)
+        or file_count <= 0
+    ):
+        error_exit(
+            "CE context_builder returned non-positive file_count",
+            use_json=False,
+            code=2,
+        )
+    if (
+        isinstance(total_tokens, bool)
+        or not isinstance(total_tokens, int)
+        or total_tokens <= 0
+    ):
+        error_exit(
+            "CE context_builder returned non-positive total_tokens",
+            use_json=False,
+            code=2,
+        )
+    if response_type != "review":
+        error_exit(
+            "CE context_builder response_type is not review",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(review, dict):
+        error_exit(
+            "CE context_builder response missing review result",
+            use_json=False,
+            code=2,
+        )
+    chat_id = review.get("chat_id")
+    review_mode = review.get("mode")
+    review_response = review.get("response")
+    if not isinstance(chat_id, str) or not chat_id.strip():
+        error_exit(
+            "CE context_builder review missing chat_id",
+            use_json=False,
+            code=2,
+        )
+    if review_mode != "review":
+        error_exit(
+            "CE context_builder review mode is not review",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(review_response, str) or not review_response.strip():
+        error_exit(
+            "CE context_builder review returned an empty response",
+            use_json=False,
+            code=2,
+        )
+    return data
+
+
 def bind_context_window(
-    repo_root: str, *, create_if_missing: bool = False
+    repo_root: str,
+    *,
+    create_if_missing: bool = False,
+    rp_cli: Optional[str] = None,
 ) -> Optional[int]:
     """Prefer RepoPrompt's bind_context repo-path matching when available."""
     payload = {"op": "bind", "working_dirs": normalize_repo_root(repo_root)}
     if create_if_missing:
         payload["create_if_missing"] = True
     result = try_run_rp_cli(
-        ["--raw-json", "-e", f"call bind_context {json.dumps(payload)}"]
+        ["--raw-json", "-e", f"call bind_context {json.dumps(payload)}"],
+        rp_cli=rp_cli,
     )
     if result is None:
         return None
@@ -2462,7 +2625,7 @@ def _setup_block_write(target: Path, content: str) -> None:
             umask = os.umask(0)
             os.umask(umask)
             os.chmod(target, 0o666 & ~umask)
-    except OSError:
+    except (CrossProcessLockError, OSError, ReviewReceiptHistoryError):
         pass
 
 
@@ -4307,6 +4470,1660 @@ _REVIEW_JSON_FENCE_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 _VALID_SUPPRESSED_ANCHORS = frozenset({"0", "25", "50", "75", "100"})
+
+# Versioned structured-review findings (fn-136).
+_FINDINGS_SCHEMA_VERSION = 1
+_FINDINGS_INPUT_MAX_BYTES = 1024 * 1024
+_FINDINGS_CONTAINER_MAX_BYTES = 256 * 1024
+_FINDINGS_MAX_ITEMS = 200
+_FINDINGS_MAX_RIDS = 32
+_FINDINGS_MAX_ID = 160
+_FINDINGS_MAX_PATH = 1024
+_FINDINGS_MAX_TITLE = 240
+_FINDINGS_MAX_BODY = 4000
+_FINDINGS_MAX_SUGGESTION = 4000
+_FINDINGS_SEVERITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+_FINDINGS_CONFIDENCE = frozenset({0, 25, 50, 75, 100})
+_FINDINGS_CLASSIFICATIONS = frozenset({"introduced", "pre_existing"})
+_FINDINGS_STATUSES = frozenset({"open", "fixed", "not_fixed", "withdrawn"})
+_FINDINGS_REVIEW_KINDS = frozenset(
+    {"plan", "implementation", "completion", "qa"}
+)
+_FINDINGS_SEVERITY_ALIASES = {
+    "p0": "P0",
+    "critical": "P0",
+    "p1": "P1",
+    "major": "P1",
+    "p2": "P2",
+    "minor": "P2",
+    "p3": "P3",
+    "nitpick": "P3",
+}
+_FINDINGS_STATUS_ALIASES = {
+    "open": "open",
+    "fixed": "fixed",
+    "fixed in review": "fixed",
+    "resolved": "fixed",
+    "not fixed": "not_fixed",
+    "not_fixed": "not_fixed",
+    "remains open": "not_fixed",
+    "unresolved": "not_fixed",
+    "withdrawn": "withdrawn",
+}
+_FINDINGS_FIELD_RE = re.compile(
+    r"""(?ix)
+    ^\s*(?:[-*]\s*)?
+    (?:\*\*)?
+    (?P<label>
+      severity|confidence|classification|problem|suggestion|suggested\ fix|
+      finding|title|file\s*:\s*line|file|path|line|side|original\s*path|
+      original\s*file|blob\s*oid|r-?ids?|prior\s*finding\s*id
+    )
+    (?:\*\*)?\s*[:=]\s*(?P<value>.*?)\s*$
+    """
+)
+_FINDINGS_INLINE_HOST_RE = re.compile(
+    r"(?im)\b([a-z][a-z0-9_-]*)\b"
+    r"\s*[·|,-]\s*confidence\s+([^\s·|,]+)"
+    r"\s*[·|,-]\s*([a-z][a-z0-9_-]*(?:[ -][a-z][a-z0-9_-]*)?)"
+    r"\s*(?:\*\*)?\s*$"
+)
+_FINDINGS_COMPACT_CANDIDATE_RE = re.compile(
+    r"""(?imx)
+    ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?(?:\*\*)?
+    \[[^\]\r\n]*\bconfidence\b[^\]\r\n]*\bintroduced[ \t]*=
+    """
+)
+_FINDINGS_COMPACT_RE = re.compile(
+    r"""(?imx)
+    ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?(?:\*\*)?
+    \[
+      (?P<severity>[^,\]\r\n]+),[ \t]*
+      confidence[ \t]+(?P<confidence>[^,\]\s]+),[ \t]*
+      introduced[ \t]*=[ \t]*(?P<introduced>[^,\]\s]+)
+    \]
+    [ \t]+(?P<file_line>.+?)
+    [ \t]+—[ \t]+
+    (?P<summary>.+?)(?:\*\*)?[ \t]*$
+    """
+)
+_FINDINGS_PRIOR_RE = re.compile(
+    r"""(?imx)
+    ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?
+    prior[ \t-]+finding(?:[ \t]*(?:\#)?(?P<ordinal>\d+))?
+    [ \t]*(?:[:—-][ \t]*)?
+    (?:\*\*)?
+    (?P<status>
+      fixed(?:[ \t]+in[ \t]+review)?|resolved|not[\s_]fixed|remains[ \t]+open|
+      unresolved|withdrawn
+    )
+    (?:\*\*)?
+    (?![A-Za-z0-9_-])
+    """
+)
+_FINDINGS_PRIOR_RECORD_RE = re.compile(
+    r"""(?imx)
+    ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?
+    prior[ \t-]+finding(?![ \t]+id[ \t]*[:=])(?:[ \t]*(?:\#)?\d+)?
+    [ \t]*(?:[:—-][ \t]*)?
+    (?:\*\*)?
+    [A-Za-z][^\r\n]*
+    $
+    """
+)
+_FINDINGS_FILE_LINE_RE = re.compile(
+    r"^(?P<path>.+?):(?P<start>[1-9]\d*)"
+    r"(?:\s*[-–]\s*(?P<end>[1-9]\d*))?$"
+)
+_FINDINGS_HOST_TABLE_SEPARATOR_RE = re.compile(
+    r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$"
+)
+
+
+def _review_finding_lineage_id(source_receipt_id: str, ordinal: int) -> str:
+    """Derive a stable, opaque finding identity from receipt + local ordinal."""
+    digest = hashlib.sha256(
+        f"flow-next-finding-v1\0{source_receipt_id}\0{ordinal}".encode("utf-8")
+    ).hexdigest()
+    return f"finding-{digest[:32]}"
+
+
+def _review_finding_clean_markdown(value: str) -> str:
+    value = value.strip()
+    if value.startswith("`") and value.endswith("`") and len(value) >= 2:
+        value = value[1:-1]
+    value = re.sub(r"^\*{1,2}|\*{1,2}$", "", value).strip()
+    return value.rstrip()
+
+
+def _review_finding_fields(block: str) -> Optional[dict[str, str]]:
+    fields: dict[str, str] = {}
+    for line in block.splitlines():
+        normalized_line = re.sub(
+            r"^\s*(?:(?:[-*]|\d+[.)])\s*)?", "", line
+        ).replace("**", "")
+        match = _FINDINGS_FIELD_RE.match(normalized_line)
+        if not match:
+            continue
+        label = re.sub(r"[\s_-]+", " ", match.group("label").lower()).strip()
+        if label in fields:
+            # Finding fields are singletons. Accepting a duplicate would make
+            # line order choose which value survives, potentially hiding an
+            # unsupported enum or conflicting anchor.
+            return None
+        fields[label] = _review_finding_clean_markdown(match.group("value"))
+    return fields
+
+
+def _review_finding_enum(
+    fields: dict[str, str], block: str
+) -> Optional[tuple[str, int, str]]:
+    severity_value = fields.get("severity", "").strip().lower()
+    confidence_value = fields.get("confidence", "").strip()
+    classification_value = fields.get("classification", "").strip().lower()
+    inline = _FINDINGS_INLINE_HOST_RE.search(block)
+    if inline:
+        try:
+            inline_confidence = int(inline.group(2))
+        except ValueError:
+            return None
+        inline_values = (
+            _FINDINGS_SEVERITY_ALIASES.get(inline.group(1).lower()),
+            inline_confidence,
+            re.sub(r"[\s-]+", "_", inline.group(3).lower()),
+        )
+        if (
+            inline_values[0] is None
+            or inline_values[1] not in _FINDINGS_CONFIDENCE
+            or inline_values[2] not in _FINDINGS_CLASSIFICATIONS
+        ):
+            return None
+    else:
+        inline_values = None
+    severity = _FINDINGS_SEVERITY_ALIASES.get(severity_value) if severity_value else None
+    if severity_value and severity is None:
+        return None
+    try:
+        confidence = int(confidence_value) if confidence_value else None
+    except (TypeError, ValueError):
+        return None
+    classification = (
+        re.sub(r"[\s-]+", "_", classification_value)
+        if classification_value
+        else None
+    )
+    labeled_values = (severity, confidence, classification)
+    if inline_values is not None:
+        for labeled, inline_value in zip(labeled_values, inline_values, strict=True):
+            if labeled is not None and labeled != inline_value:
+                return None
+        severity = severity if severity is not None else inline_values[0]
+        confidence = confidence if confidence is not None else inline_values[1]
+        classification = (
+            classification if classification is not None else inline_values[2]
+        )
+    if (
+        severity is None
+        or confidence not in _FINDINGS_CONFIDENCE
+        or classification not in _FINDINGS_CLASSIFICATIONS
+    ):
+        return None
+    return severity, confidence, classification
+
+
+def _review_finding_safe_path(value: str) -> Optional[str]:
+    path = _review_finding_clean_markdown(value).replace("\\", "/")
+    if (
+        not path
+        or len(path) > _FINDINGS_MAX_PATH
+        or path.startswith("/")
+        or re.match(r"^[A-Za-z]:/", path)
+    ):
+        return None
+    parts = path.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return None
+    return path
+
+
+def _review_finding_anchor(
+    fields: dict[str, str],
+    *,
+    base_sha: Optional[str],
+    head_sha: str,
+    anchor_side: Optional[str],
+) -> Optional[dict] | bool:
+    """Build an anchor only when every portability component is explicit."""
+    combined_values: Optional[tuple[str, str, Optional[str]]] = None
+    combined = fields.get("file:line")
+    explicit_no_anchor = combined == "-"
+    if explicit_no_anchor:
+        combined = None
+    if combined:
+        match = _FINDINGS_FILE_LINE_RE.match(combined)
+        if not match:
+            return False
+        combined_path = _review_finding_safe_path(match.group("path"))
+        if combined_path is None:
+            return False
+        combined_values = (
+            combined_path,
+            match.group("start"),
+            match.group("end"),
+        )
+
+    separate_paths = [
+        _review_finding_safe_path(value)
+        for value in (fields.get("path"), fields.get("file"))
+        if value
+    ]
+    if any(path is None for path in separate_paths):
+        return False
+    if len(set(separate_paths)) > 1:
+        return False
+    separate_values: Optional[tuple[str, str, Optional[str]]] = None
+    line_value = fields.get("line")
+    if explicit_no_anchor and (separate_paths or line_value):
+        return False
+    if separate_paths or line_value:
+        if not separate_paths or not line_value:
+            return False
+        line_match = re.fullmatch(
+            r"([1-9]\d*)(?:\s*[-–]\s*([1-9]\d*))?", line_value
+        )
+        if not line_match:
+            return False
+        separate_values = (
+            separate_paths[0],
+            line_match.group(1),
+            line_match.group(2),
+        )
+    if (
+        combined_values is not None
+        and separate_values is not None
+        and combined_values != separate_values
+    ):
+        return False
+    location = combined_values or separate_values
+    has_anchor_evidence = bool(
+        combined or separate_paths or line_value
+    )
+    if not has_anchor_evidence:
+        return None
+    if location is None:
+        return False
+    path, start_value, end_value = location
+    start_line = int(start_value)
+    explicit_side = fields.get("side")
+    if explicit_side:
+        explicit_side = explicit_side.strip().lower()
+        if explicit_side not in {"base", "head"}:
+            return False
+        if anchor_side is not None and anchor_side != explicit_side:
+            return False
+        resolved_side = explicit_side
+    else:
+        resolved_side = anchor_side
+    if not base_sha or resolved_side not in {"base", "head"}:
+        return None
+    anchor: dict[str, Any] = {
+        "path": path,
+        "side": resolved_side,
+        "startLine": start_line,
+        "baseSha": base_sha,
+        "headSha": head_sha,
+    }
+    if end_value:
+        end_line = int(end_value)
+        if end_line < start_line:
+            return False
+        anchor["endLine"] = end_line
+    original_paths = [
+        _review_finding_safe_path(value)
+        for value in (fields.get("original path"), fields.get("original file"))
+        if value
+    ]
+    if any(original is None for original in original_paths):
+        return False
+    if len(set(original_paths)) > 1:
+        return False
+    if original_paths:
+        anchor["originalPath"] = original_paths[0]
+    blob_oid = fields.get("blob oid")
+    if blob_oid:
+        if not re.fullmatch(r"[0-9a-fA-F]{7,64}", blob_oid):
+            return False
+        anchor["blobOid"] = blob_oid.lower()
+    return anchor
+
+
+def _review_finding_compact(
+    block: str,
+    *,
+    base_sha: Optional[str],
+    head_sha: str,
+    anchor_side: Optional[str],
+) -> Optional[dict] | bool:
+    """Parse Classic's compact pre-existing finding form."""
+    candidates = list(_FINDINGS_COMPACT_CANDIDATE_RE.finditer(block))
+    if not candidates:
+        return None
+    matches = list(_FINDINGS_COMPACT_RE.finditer(block))
+    if len(candidates) != 1 or len(matches) != 1:
+        return False
+    match = matches[0]
+    severity = _FINDINGS_SEVERITY_ALIASES.get(
+        match.group("severity").strip().lower()
+    )
+    try:
+        confidence = int(match.group("confidence"))
+    except ValueError:
+        return False
+    introduced = match.group("introduced").lower()
+    if (
+        severity is None
+        or confidence not in _FINDINGS_CONFIDENCE
+        or introduced not in {"true", "false"}
+    ):
+        return False
+    summary = _review_finding_clean_markdown(match.group("summary"))
+    if not summary:
+        return False
+    fields = {"file:line": _review_finding_clean_markdown(match.group("file_line"))}
+    anchor = _review_finding_anchor(
+        fields,
+        base_sha=base_sha,
+        head_sha=head_sha,
+        anchor_side=anchor_side,
+    )
+    if anchor is False:
+        return False
+    row: dict[str, Any] = {
+        "severity": severity,
+        "confidence": confidence,
+        "classification": "introduced" if introduced == "true" else "pre_existing",
+        "status": "open",
+        "title": summary.split(".", 1)[0].strip(),
+        "body": summary,
+        "rIds": _review_finding_rids(block, fields),
+    }
+    if anchor is not None:
+        row["anchor"] = anchor
+    return row
+
+
+def _review_finding_rids(block: str, fields: dict[str, str]) -> list[str]:
+    # The explicit per-finding field is authoritative. Falling back to the
+    # block keeps older backend prose parseable without letting nearby
+    # aggregate metadata override an explicit finding-to-requirement link.
+    source = fields["r ids"] if "r ids" in fields else block
+    seen: set[str] = set()
+    result: list[str] = []
+    for match in re.finditer(r"(?<![A-Za-z0-9])R(?:-|\s)?(\d+)(?![A-Za-z0-9])", source):
+        rid = f"R{match.group(1)}"
+        if rid not in seen:
+            seen.add(rid)
+            result.append(rid)
+            if len(result) > _FINDINGS_MAX_RIDS:
+                break
+    return result
+
+
+def _review_finding_alias_value(
+    fields: dict[str, str], *labels: str
+) -> tuple[bool, Optional[str]]:
+    values = [fields[label] for label in labels if label in fields]
+    if not values:
+        return True, None
+    normalized = {re.sub(r"\s+", " ", value).strip() for value in values}
+    if len(normalized) != 1:
+        return False, None
+    return True, values[0]
+
+
+def _review_finding_text(
+    fields: dict[str, str], block: str
+) -> Optional[tuple[str, str, Optional[str]]]:
+    body_valid, body_value = _review_finding_alias_value(
+        fields, "problem", "finding", "evidence"
+    )
+    suggestion_valid, suggestion = _review_finding_alias_value(
+        fields, "suggestion", "suggested fix"
+    )
+    if not body_valid or not suggestion_valid:
+        return None
+    body = body_value or ""
+    if not body:
+        prose: list[str] = []
+        for line in block.splitlines():
+            stripped = line.strip().lstrip("-* ").strip()
+            if (
+                not stripped
+                or stripped.startswith("#")
+                or _FINDINGS_FIELD_RE.match(line)
+                or _FINDINGS_INLINE_HOST_RE.search(line)
+            ):
+                continue
+            prose.append(_review_finding_clean_markdown(stripped))
+        body = " ".join(prose)
+    body = body.strip()
+    title = (
+        fields.get("title")
+        or fields.get("requirement")
+        or body.split(".", 1)[0]
+    ).strip()
+    return title, body, suggestion.strip() if suggestion else None
+
+
+def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
+    """Return severity-bearing prose blocks and whether a severity label existed."""
+    lines = output.splitlines()
+    starts: list[int] = []
+    saw_severity_label = False
+    for index, line in enumerate(lines):
+        fields = _review_finding_fields(line)
+        has_severity_field = fields is not None and "severity" in fields
+        candidate_start = index
+        has_finding_heading = False
+        if has_severity_field and index > 0:
+            previous_fields = _review_finding_fields(lines[index - 1])
+            if previous_fields is not None and "finding" in previous_fields:
+                candidate_start = index - 1
+                has_finding_heading = True
+        if has_severity_field and starts:
+            preceding = "\n".join(lines[starts[-1]:index])
+            between = lines[starts[-1] + 1:index]
+            if (
+                not has_finding_heading
+                and _FINDINGS_INLINE_HOST_RE.search(preceding)
+                and all(not value.strip() for value in between)
+            ):
+                # A host heading may repeat its inline enum tuple as labeled
+                # fields. Keep both representations in one block so semantic
+                # equality is checked instead of manufacturing two findings.
+                continue
+        if (
+            has_severity_field
+            or _FINDINGS_INLINE_HOST_RE.search(line)
+            or _FINDINGS_COMPACT_CANDIDATE_RE.search(line)
+        ):
+            starts.append(candidate_start)
+            saw_severity_label = True
+            if len(starts) > _FINDINGS_MAX_ITEMS:
+                return [], True
+    blocks: list[str] = []
+    for position, start in enumerate(starts):
+        end = starts[position + 1] if position + 1 < len(starts) else len(lines)
+        block_lines: list[str] = []
+        for line in lines[start:end]:
+            if re.search(r"<verdict>", line, re.IGNORECASE):
+                break
+            if re.match(
+                r"(?i)^\s*##\s+requirements coverage\s*#*\s*$",
+                line,
+            ):
+                break
+            if re.match(
+                r"(?i)^\s*(classification counts|suppressed findings|unaddressed r-ids)\s*:",
+                line,
+            ):
+                break
+            block_lines.append(line)
+        blocks.append("\n".join(block_lines).strip())
+    return blocks, saw_severity_label
+
+
+def _review_finding_host_table(output: str) -> Optional[list[dict]]:
+    """Parse the observed host-review finding table, or return None."""
+    lines = output.splitlines()
+    candidates: list[tuple[int, list[str]]] = []
+    required_headers = {
+        "sev",
+        "confidence",
+        "classification",
+        "finding",
+        "disposition",
+    }
+    saw_malformed_header = False
+    for index, line in enumerate(lines):
+        if not line.strip().startswith("|"):
+            continue
+        candidate = [cell.strip().lower() for cell in line.strip().strip("|").split("|")]
+        present_headers = set(candidate)
+        if required_headers <= present_headers:
+            if len(candidate) != len(set(candidate)):
+                # Header names are singleton keys. dict(zip(...)) would
+                # otherwise silently select the last duplicate column.
+                return []
+            candidates.append((index, candidate))
+            if len(candidates) > 1:
+                # Multiple finding tables make completeness and deduplication
+                # ambiguous. Reject rather than silently selecting the first.
+                return []
+        elif len(required_headers & present_headers) >= 4 or (
+            "finding" in present_headers
+            and len(required_headers & present_headers) >= 3
+        ):
+            saw_malformed_header = True
+    if saw_malformed_header:
+        return []
+    if not candidates:
+        return None
+    header_index, headers = candidates[0]
+    if header_index + 1 >= len(lines):
+        return []
+    if not _FINDINGS_HOST_TABLE_SEPARATOR_RE.match(lines[header_index + 1]):
+        return []
+    rows: list[dict] = []
+    for line in lines[header_index + 2:]:
+        if not line.strip().startswith("|"):
+            break
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != len(headers):
+            return []
+        row = dict(zip(headers, cells, strict=True))
+        severity = _FINDINGS_SEVERITY_ALIASES.get(row["sev"].lower())
+        try:
+            confidence = int(row["confidence"])
+        except ValueError:
+            return []
+        classification = re.sub(
+            r"[\s-]+", "_", row["classification"].lower()
+        )
+        status_value = re.sub(r"\s+", " ", row["disposition"].lower()).strip()
+        status = _FINDINGS_STATUS_ALIASES.get(status_value)
+        if (
+            severity is None
+            or confidence not in _FINDINGS_CONFIDENCE
+            or classification not in _FINDINGS_CLASSIFICATIONS
+            or status not in _FINDINGS_STATUSES
+        ):
+            return []
+        body = _review_finding_clean_markdown(row["finding"])
+        rows.append(
+            {
+                "severity": severity,
+                "confidence": confidence,
+                "classification": classification,
+                "status": status,
+                "title": body.split(".", 1)[0].strip(),
+                "body": body,
+                "rIds": _review_finding_rids(body, {}),
+            }
+        )
+        if len(rows) > _FINDINGS_MAX_ITEMS:
+            return []
+    return rows
+
+
+def _review_finding_prior_items(
+    output: str,
+    prior_findings: Optional[dict],
+    source_receipt_id: str,
+) -> Optional[list[dict]]:
+    record_count = 0
+    for _match in _FINDINGS_PRIOR_RECORD_RE.finditer(output):
+        record_count += 1
+        if record_count > _FINDINGS_MAX_ITEMS:
+            return None
+    matches = []
+    for match in _FINDINGS_PRIOR_RE.finditer(output):
+        matches.append(match)
+        if len(matches) > _FINDINGS_MAX_ITEMS:
+            return None
+    if record_count != len(matches):
+        # Detect line-level prior-finding records independently of canonical
+        # status parsing. Otherwise an unknown status such as "pending" can
+        # disappear into an explicit-empty SHIP response.
+        return None
+    if not matches and prior_findings is None:
+        return []
+    if not isinstance(prior_findings, dict):
+        return None
+    if prior_findings.get("schemaVersion") != _FINDINGS_SCHEMA_VERSION:
+        return None
+    prior_items = prior_findings.get("items")
+    if (
+        not isinstance(prior_items, list)
+        or len(prior_items) > _FINDINGS_MAX_ITEMS
+        or not _review_findings_container_valid(prior_findings)
+    ):
+        return None
+    by_ordinal = {
+        item.get("ordinal"): item for item in prior_items if isinstance(item, dict)
+    }
+    # Some backends omit the ordinal only when exactly one prior finding exists.
+    if any(match.group("ordinal") is None for match in matches) and len(prior_items) != 1:
+        return None
+    carried: list[dict] = [
+        {
+            key: (
+                dict(value)
+                if key == "anchor"
+                else list(value)
+                if key == "rIds"
+                else value
+            )
+            for key, value in item.items()
+        }
+        for item in prior_items
+    ]
+    carried_by_ordinal = {item["ordinal"]: item for item in carried}
+    for item in carried:
+        # Every generation is a complete snapshot. An omitted prior finding
+        # remains current until the reviewer explicitly fixes or withdraws it.
+        item["lastSeenReceiptId"] = source_receipt_id
+    for match in matches:
+        ordinal = (
+            int(match.group("ordinal"))
+            if match.group("ordinal") is not None
+            else prior_items[0].get("ordinal")
+        )
+        prior = by_ordinal.get(ordinal)
+        if not isinstance(prior, dict):
+            return None
+        status_key = re.sub(r"[_\s]+", " ", match.group("status").lower()).strip()
+        status = _FINDINGS_STATUS_ALIASES.get(status_key)
+        if status is None:
+            return None
+        item = carried_by_ordinal[ordinal]
+        item["status"] = status
+        item["lastSeenReceiptId"] = source_receipt_id
+    return carried
+
+
+def _review_finding_item_valid(item: dict) -> bool:
+    required = {
+        "id",
+        "ordinal",
+        "severity",
+        "confidence",
+        "classification",
+        "status",
+        "title",
+        "body",
+        "rIds",
+        "firstSeenReceiptId",
+        "lastSeenReceiptId",
+    }
+    allowed = required | {"priorFindingId", "anchor", "suggestion"}
+    if set(item) - allowed or not required <= set(item):
+        return False
+    if (
+        not isinstance(item["id"], str)
+        or not item["id"]
+        or len(item["id"]) > _FINDINGS_MAX_ID
+        or not isinstance(item["ordinal"], int)
+        or isinstance(item["ordinal"], bool)
+        or item["ordinal"] < 1
+        or not isinstance(item["severity"], str)
+        or item["severity"] not in _FINDINGS_SEVERITY_ORDER
+        or not isinstance(item["confidence"], int)
+        or isinstance(item["confidence"], bool)
+        or item["confidence"] not in _FINDINGS_CONFIDENCE
+        or not isinstance(item["classification"], str)
+        or item["classification"] not in _FINDINGS_CLASSIFICATIONS
+        or not isinstance(item["status"], str)
+        or item["status"] not in _FINDINGS_STATUSES
+        or not isinstance(item["title"], str)
+        or not item["title"]
+        or len(item["title"]) > _FINDINGS_MAX_TITLE
+        or not isinstance(item["body"], str)
+        or not item["body"]
+        or len(item["body"]) > _FINDINGS_MAX_BODY
+        or not isinstance(item["rIds"], list)
+        or len(item["rIds"]) > _FINDINGS_MAX_RIDS
+        or len(set(item["rIds"])) != len(item["rIds"])
+        or not all(
+            isinstance(rid, str)
+            and len(rid) <= _FINDINGS_MAX_ID
+            and re.fullmatch(r"R\d+", rid)
+            for rid in item["rIds"]
+        )
+    ):
+        return False
+    for key in ("firstSeenReceiptId", "lastSeenReceiptId"):
+        if (
+            not isinstance(item[key], str)
+            or not item[key]
+            or len(item[key]) > _FINDINGS_MAX_ID
+        ):
+            return False
+    suggestion = item.get("suggestion")
+    if suggestion is not None and (
+        not isinstance(suggestion, str)
+        or not suggestion
+        or len(suggestion) > _FINDINGS_MAX_SUGGESTION
+    ):
+        return False
+    prior_id = item.get("priorFindingId")
+    if prior_id is not None and (
+        not isinstance(prior_id, str)
+        or not prior_id
+        or len(prior_id) > _FINDINGS_MAX_ID
+        or prior_id == item["id"]
+    ):
+        return False
+    anchor = item.get("anchor")
+    if anchor is not None:
+        if not isinstance(anchor, dict):
+            return False
+        anchor_required = {
+            "path",
+            "side",
+            "startLine",
+            "baseSha",
+            "headSha",
+        }
+        anchor_allowed = anchor_required | {
+            "originalPath",
+            "endLine",
+            "blobOid",
+        }
+        if (
+            set(anchor) - anchor_allowed
+            or not anchor_required <= set(anchor)
+            or not isinstance(anchor.get("path"), str)
+            or _review_finding_safe_path(anchor["path"]) is None
+            or anchor.get("side") not in {"base", "head"}
+            or not isinstance(anchor.get("startLine"), int)
+            or isinstance(anchor.get("startLine"), bool)
+            or anchor["startLine"] < 1
+            or not isinstance(anchor.get("baseSha"), str)
+            or not anchor["baseSha"]
+            or not isinstance(anchor.get("headSha"), str)
+            or not anchor["headSha"]
+            or len(anchor["baseSha"]) > _FINDINGS_MAX_ID
+            or len(anchor["headSha"]) > _FINDINGS_MAX_ID
+        ):
+            return False
+        end_line = anchor.get("endLine")
+        if end_line is not None and (
+            not isinstance(end_line, int)
+            or isinstance(end_line, bool)
+            or end_line < anchor["startLine"]
+        ):
+            return False
+        original_path = anchor.get("originalPath")
+        if original_path is not None and (
+            not isinstance(original_path, str)
+            or _review_finding_safe_path(original_path) is None
+        ):
+            return False
+        blob_oid = anchor.get("blobOid")
+        if blob_oid is not None and (
+            not isinstance(blob_oid, str)
+            or not re.fullmatch(r"[0-9a-f]{7,64}", blob_oid)
+        ):
+            return False
+    return True
+
+
+def _review_findings_container_valid(container: dict) -> bool:
+    """Strictly validate one complete v1 container before reuse or emission."""
+    required = {
+        "schemaVersion",
+        "sourceReceiptId",
+        "reviewKind",
+        "backend",
+        "round",
+        "headSha",
+        "items",
+    }
+    allowed = required | {"baseSha", "supersedesReceiptId"}
+    if not isinstance(container, dict) or set(container) - allowed:
+        return False
+    if not required <= set(container):
+        return False
+    source_id = container["sourceReceiptId"]
+    supersedes = container.get("supersedesReceiptId")
+    if (
+        not isinstance(container["schemaVersion"], int)
+        or isinstance(container["schemaVersion"], bool)
+        or container["schemaVersion"] != _FINDINGS_SCHEMA_VERSION
+        or not isinstance(source_id, str)
+        or not source_id
+        or len(source_id) > _FINDINGS_MAX_ID
+        or not isinstance(container["reviewKind"], str)
+        or container["reviewKind"] not in _FINDINGS_REVIEW_KINDS
+        or not isinstance(container["backend"], str)
+        or not container["backend"]
+        or len(container["backend"]) > _FINDINGS_MAX_ID
+        or not isinstance(container["round"], int)
+        or isinstance(container["round"], bool)
+        or container["round"] < 1
+        or (supersedes is None and container["round"] != 1)
+        or (supersedes is not None and container["round"] <= 1)
+        or not isinstance(container["headSha"], str)
+        or not container["headSha"]
+        or len(container["headSha"]) > _FINDINGS_MAX_ID
+        or (
+            "baseSha" in container
+            and (
+                not isinstance(container["baseSha"], str)
+                or not container["baseSha"]
+                or len(container["baseSha"]) > _FINDINGS_MAX_ID
+            )
+        )
+        or (
+            supersedes is not None
+            and (
+                not isinstance(supersedes, str)
+                or not supersedes
+                or len(supersedes) > _FINDINGS_MAX_ID
+                or supersedes == source_id
+            )
+        )
+        or not isinstance(container["items"], list)
+        or len(container["items"]) > _FINDINGS_MAX_ITEMS
+    ):
+        return False
+    items = container["items"]
+    if not all(
+        isinstance(item, dict) and _review_finding_item_valid(item)
+        for item in items
+    ):
+        return False
+    if len({item["id"] for item in items}) != len(items):
+        return False
+    if len({item["ordinal"] for item in items}) != len(items):
+        return False
+    if any(
+        item["id"]
+        != _review_finding_lineage_id(item["firstSeenReceiptId"], item["ordinal"])
+        or item["lastSeenReceiptId"] != source_id
+        or (
+            "anchor" in item
+            and (
+                item["anchor"]["headSha"] != container["headSha"]
+                or item["anchor"]["baseSha"] != container.get("baseSha")
+            )
+        )
+        for item in items
+    ):
+        return False
+    encoded = json.dumps(
+        container, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    if len(encoded) > _FINDINGS_CONTAINER_MAX_BYTES:
+        return False
+    return True
+
+
+def _parse_review_findings_v1(
+    output: str,
+    *,
+    source_receipt_id: str,
+    review_kind: str,
+    backend: str,
+    round_number: int,
+    head_sha: str,
+    base_sha: Optional[str],
+    supersedes_receipt_id: Optional[str],
+    prior_findings: Optional[dict],
+    anchor_side: Optional[str],
+) -> Optional[dict]:
+    if (
+        not isinstance(output, str)
+        or len(output.encode("utf-8")) > _FINDINGS_INPUT_MAX_BYTES
+        or not isinstance(source_receipt_id, str)
+        or not source_receipt_id
+        or len(source_receipt_id) > _FINDINGS_MAX_ID
+        or review_kind not in _FINDINGS_REVIEW_KINDS
+        or not isinstance(backend, str)
+        or not backend
+        or len(backend) > _FINDINGS_MAX_ID
+        or not isinstance(round_number, int)
+        or isinstance(round_number, bool)
+        or round_number < 1
+        or (supersedes_receipt_id is None and round_number != 1)
+        or (supersedes_receipt_id is not None and round_number <= 1)
+        or (supersedes_receipt_id is None and prior_findings is not None)
+        or not isinstance(head_sha, str)
+        or not head_sha
+        or len(head_sha) > _FINDINGS_MAX_ID
+        or (
+            base_sha is not None
+            and (not isinstance(base_sha, str) or not base_sha or len(base_sha) > _FINDINGS_MAX_ID)
+        )
+        or (
+            supersedes_receipt_id is not None
+            and (
+                not isinstance(supersedes_receipt_id, str)
+                or not supersedes_receipt_id
+                or len(supersedes_receipt_id) > _FINDINGS_MAX_ID
+                or supersedes_receipt_id == source_receipt_id
+            )
+        )
+    ):
+        return None
+
+    prior_items = _review_finding_prior_items(
+        output, prior_findings, source_receipt_id
+    )
+    if prior_items is None:
+        return None
+    for item in prior_items:
+        anchor = item.get("anchor")
+        if isinstance(anchor, dict) and (
+            anchor.get("headSha") != head_sha
+            or anchor.get("baseSha") != base_sha
+        ):
+            # A line anchor cannot be relabeled onto a newer snapshot without
+            # re-reading the diff. Preserve the finding but omit the stale
+            # location rather than guessing.
+            item.pop("anchor", None)
+    if supersedes_receipt_id is not None:
+        if (
+            not isinstance(prior_findings, dict)
+            or prior_findings.get("sourceReceiptId") != supersedes_receipt_id
+            or prior_findings.get("reviewKind") != review_kind
+            or prior_findings.get("backend") != backend
+            or not isinstance(prior_findings.get("round"), int)
+            or isinstance(prior_findings.get("round"), bool)
+            or prior_findings["round"] + 1 != round_number
+        ):
+            return None
+    parsed_rows = _review_finding_host_table(output)
+    if parsed_rows == []:
+        return None
+    rows = parsed_rows or []
+    blocks, saw_severity_label = _review_finding_blocks(output)
+    if parsed_rows is not None and saw_severity_label:
+        # Multiple representations make completeness/deduplication ambiguous.
+        return None
+    if parsed_rows is None:
+        for block in blocks:
+            compact = _review_finding_compact(
+                block,
+                base_sha=base_sha,
+                head_sha=head_sha,
+                anchor_side=anchor_side,
+            )
+            if compact is False:
+                return None
+            if compact is not None:
+                rows.append(compact)
+                continue
+            fields = _review_finding_fields(block)
+            if fields is None:
+                return None
+            enums = _review_finding_enum(fields, block)
+            if enums is None:
+                return None
+            severity, confidence, classification = enums
+            text_fields = _review_finding_text(fields, block)
+            if text_fields is None:
+                return None
+            title, body, suggestion = text_fields
+            if not title or not body:
+                return None
+            row: dict[str, Any] = {
+                "severity": severity,
+                "confidence": confidence,
+                "classification": classification,
+                "status": "open",
+                "title": title,
+                "body": body,
+                "rIds": _review_finding_rids(block, fields),
+            }
+            anchor = _review_finding_anchor(
+                fields,
+                base_sha=base_sha,
+                head_sha=head_sha,
+                anchor_side=anchor_side,
+            )
+            if anchor is False:
+                return None
+            if anchor is not None:
+                row["anchor"] = anchor
+            if suggestion:
+                row["suggestion"] = suggestion
+            prior_finding_id = fields.get("prior finding id")
+            if prior_finding_id:
+                row["priorFindingId"] = prior_finding_id
+            rows.append(row)
+
+    prior_item_ids = (
+        {
+            item["id"]
+            for item in prior_findings["items"]
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+        if isinstance(prior_findings, dict)
+        and isinstance(prior_findings.get("items"), list)
+        else set()
+    )
+    prior_references = [
+        row["priorFindingId"] for row in rows if "priorFindingId" in row
+    ]
+    if (
+        any(prior_id not in prior_item_ids for prior_id in prior_references)
+        or len(prior_references) != len(set(prior_references))
+    ):
+        return None
+
+    explicit_empty = bool(
+        re.search(
+            r"""(?ix)
+            \b(?:no\s+(?:blocking\s+)?findings?|found\s+no\s+correctness|
+            no\s+blocking\s+gaps|review\s+result:\s*no\s+findings?)\b
+            """,
+            output,
+        )
+        and re.search(r"<verdict>\s*SHIP\s*</verdict>", output, re.IGNORECASE)
+    )
+    has_prior_records = _FINDINGS_PRIOR_RE.search(output) is not None
+    if not rows and not has_prior_records and not explicit_empty:
+        # Prior state is context, not evidence that this generation parsed.
+        # Arbitrary re-review prose must not advance the structured lineage.
+        return None
+    if saw_severity_label and not rows:
+        return None
+
+    items: list[dict] = list(prior_items)
+    used_ordinals = {
+        item.get("ordinal") for item in items if isinstance(item.get("ordinal"), int)
+    }
+    next_ordinal = 1
+    for row in rows:
+        while next_ordinal in used_ordinals:
+            next_ordinal += 1
+        item = {
+            "id": _review_finding_lineage_id(source_receipt_id, next_ordinal),
+            "ordinal": next_ordinal,
+            **row,
+            "firstSeenReceiptId": source_receipt_id,
+            "lastSeenReceiptId": source_receipt_id,
+        }
+        items.append(item)
+        used_ordinals.add(next_ordinal)
+        next_ordinal += 1
+    items.sort(
+        key=lambda item: (
+            _FINDINGS_SEVERITY_ORDER[item["severity"]],
+            -item["confidence"],
+            item["ordinal"],
+        )
+    )
+    container: dict[str, Any] = {
+        "schemaVersion": _FINDINGS_SCHEMA_VERSION,
+        "sourceReceiptId": source_receipt_id,
+        "reviewKind": review_kind,
+        "backend": backend,
+        "round": round_number,
+    }
+    if base_sha is not None:
+        container["baseSha"] = base_sha
+    container["headSha"] = head_sha
+    if supersedes_receipt_id is not None:
+        container["supersedesReceiptId"] = supersedes_receipt_id
+    container["items"] = items
+    if not _review_findings_container_valid(container):
+        return None
+    encoded = json.dumps(
+        container, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    if len(encoded) > _FINDINGS_CONTAINER_MAX_BYTES:
+        return None
+    return container
+
+
+def parse_review_findings(
+    output: str,
+    *,
+    source_receipt_id: str,
+    review_kind: str,
+    backend: str,
+    round_number: int,
+    head_sha: str,
+    base_sha: Optional[str] = None,
+    supersedes_receipt_id: Optional[str] = None,
+    prior_findings: Optional[dict] = None,
+    anchor_side: Optional[str] = None,
+    schema_version: int = _FINDINGS_SCHEMA_VERSION,
+) -> Optional[dict]:
+    """Parse reviewer prose into the additive v1 findings container.
+
+    Unsupported versions, unknown enums, over-limit data, and unparseable
+    prose return ``None``. The public boundary intentionally never raises.
+    """
+    try:
+        if (
+            not isinstance(schema_version, int)
+            or isinstance(schema_version, bool)
+            or schema_version != _FINDINGS_SCHEMA_VERSION
+        ):
+            return None
+        return _parse_review_findings_v1(
+            output,
+            source_receipt_id=source_receipt_id,
+            review_kind=review_kind,
+            backend=backend,
+            round_number=round_number,
+            head_sha=head_sha,
+            base_sha=base_sha,
+            supersedes_receipt_id=supersedes_receipt_id,
+            prior_findings=prior_findings,
+            anchor_side=anchor_side,
+        )
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError, UnicodeError):
+        return None
+
+
+_REVIEW_TYPE_TO_FINDINGS_KIND = {
+    "plan_review": "plan",
+    "impl_review": "implementation",
+    "completion_review": "completion",
+    "qa_verdict": "qa",
+}
+
+
+class ReviewReceiptHistoryError(RuntimeError):
+    """A valid findings generation could not be preserved immutably."""
+
+
+def _review_receipt_findings_id(
+    *,
+    review_kind: str,
+    review_id: str,
+    backend: str,
+    round_number: int,
+    head_sha: str,
+    review_text: str,
+) -> str:
+    """Return a deterministic, bounded identity for one receipt generation."""
+    identity = json.dumps(
+        [
+            _FINDINGS_SCHEMA_VERSION,
+            review_kind,
+            review_id,
+            backend,
+            round_number,
+            head_sha,
+            review_text,
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"review-{hashlib.sha256(identity).hexdigest()}"
+
+
+def _load_prior_receipt_findings(
+    path: Optional[Path],
+    *,
+    review_type: str,
+    review_id: str,
+    backend: str,
+) -> Optional[dict]:
+    """Load valid findings only from the same receipt scope.
+
+    A failed review removes the latest pointer after preserving it. Recover
+    that prior generation only when immutable history proves one unambiguous
+    explicit lineage tip for this exact scope.
+    """
+    if path is None:
+        return None
+    if not path.exists():
+        history_dir = _review_receipt_history_dir(path)
+        if not history_dir.exists():
+            return None
+        generations = load_review_receipt_generations(path)
+        expected_scope = (review_type, review_id, backend)
+        if generations is None or any(
+            (receipt.get("type"), receipt.get("id"), receipt.get("mode"))
+            != expected_scope
+            for receipt in generations
+        ):
+            raise ReviewReceiptHistoryError(
+                f"cannot recover scoped receipt history: {history_dir}"
+            )
+        review_kind = _REVIEW_TYPE_TO_FINDINGS_KIND.get(review_type)
+        candidate_heads = {
+            receipt["findings"]["headSha"]
+            for receipt in generations
+            if isinstance(receipt.get("findings"), dict)
+        }
+        tips: dict[str, dict] = {}
+        for candidate_head in sorted(candidate_heads):
+            tip = select_current_review_findings(
+                generations,
+                current_head_sha=candidate_head,
+                review_kind=review_kind,
+                backend=backend,
+            )
+            if tip is not None:
+                tips[tip["sourceReceiptId"]] = tip
+        if len(tips) != 1:
+            raise ReviewReceiptHistoryError(
+                f"receipt history has no unique scoped tip: {history_dir}"
+            )
+        return next(iter(tips.values()))
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None
+    if not isinstance(receipt, dict):
+        return None
+    if (
+        receipt.get("type") != review_type
+        or receipt.get("id") != review_id
+        or receipt.get("mode") != backend
+    ):
+        return None
+    findings = receipt.get("findings")
+    return (
+        findings
+        if isinstance(findings, dict)
+        and _review_findings_container_valid(findings)
+        else None
+    )
+
+
+def build_review_receipt_findings(
+    review_text: str,
+    *,
+    review_type: str,
+    review_id: str,
+    backend: str,
+    head_sha: str,
+    base_sha: Optional[str] = None,
+    prior_receipt_path: Optional[Path] = None,
+    anchor_side: Optional[str] = "head",
+) -> Optional[dict]:
+    """Build the optional findings field while receipt inputs are already held.
+
+    The only read is the receipt path the caller is about to replace. No model,
+    network, or reviewer dispatch occurs. A legacy, malformed, stale-lineage,
+    or unparseable input simply leaves the additive field absent.
+    """
+    review_kind = _REVIEW_TYPE_TO_FINDINGS_KIND.get(review_type)
+    if review_kind is None:
+        return None
+    prior = _load_prior_receipt_findings(
+        prior_receipt_path,
+        review_type=review_type,
+        review_id=review_id,
+        backend=backend,
+    )
+    if prior is not None and (
+        prior.get("reviewKind") != review_kind
+        or prior.get("backend") != backend
+    ):
+        prior = None
+    round_number = prior["round"] + 1 if prior is not None else 1
+    supersedes = prior["sourceReceiptId"] if prior is not None else None
+    source_receipt_id = _review_receipt_findings_id(
+        review_kind=review_kind,
+        review_id=review_id,
+        backend=backend,
+        round_number=round_number,
+        head_sha=head_sha,
+        review_text=review_text,
+    )
+    return parse_review_findings(
+        review_text,
+        source_receipt_id=source_receipt_id,
+        review_kind=review_kind,
+        backend=backend,
+        round_number=round_number,
+        head_sha=head_sha,
+        base_sha=base_sha,
+        supersedes_receipt_id=supersedes,
+        prior_findings=prior,
+        anchor_side=anchor_side,
+    )
+
+
+def validate_review_receipt_findings(receipt: object) -> bool:
+    """Validate the optional additive field; legacy receipts remain valid."""
+    if not isinstance(receipt, dict):
+        return False
+    findings = receipt.get("findings")
+    if findings is None:
+        return True
+    expected_kind = _REVIEW_TYPE_TO_FINDINGS_KIND.get(receipt.get("type"))
+    return (
+        isinstance(findings, dict)
+        and _review_findings_container_valid(findings)
+        and expected_kind == findings["reviewKind"]
+        and isinstance(receipt.get("mode"), str)
+        and receipt["mode"] == findings["backend"]
+    )
+
+
+def select_current_review_findings(
+    receipts: list[object],
+    *,
+    current_head_sha: str,
+    review_kind: Optional[str] = None,
+    backend: Optional[str] = None,
+) -> Optional[dict]:
+    """Project one unambiguous current explicit lineage tip.
+
+    Every valid receipt remains caller-owned evidence. This read-only projector
+    returns only a supported chain tip bound to ``current_head_sha``. Duplicate
+    identities, broken/cross-lineage supersedes edges, cycles, duplicate
+    finding lineage within a chain, or multiple current tips fail closed.
+    """
+    if (
+        not isinstance(receipts, list)
+        or not isinstance(current_head_sha, str)
+        or not current_head_sha
+        or (review_kind is not None and review_kind not in _FINDINGS_REVIEW_KINDS)
+        or (backend is not None and (not isinstance(backend, str) or not backend))
+    ):
+        return None
+    containers: list[dict] = []
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            continue
+        findings = receipt.get("findings")
+        if not isinstance(findings, dict):
+            continue
+        if not _review_findings_container_valid(findings):
+            return None
+        if review_kind is not None and findings["reviewKind"] != review_kind:
+            continue
+        if backend is not None and findings["backend"] != backend:
+            continue
+        containers.append(findings)
+    by_id: dict[str, dict] = {}
+    for container in containers:
+        source_id = container["sourceReceiptId"]
+        if source_id in by_id:
+            return None
+        by_id[source_id] = container
+    if not by_id:
+        return None
+
+    superseded: set[str] = set()
+    for container in containers:
+        parent_id = container.get("supersedesReceiptId")
+        if parent_id is None:
+            if container["round"] != 1:
+                return None
+            continue
+        parent = by_id.get(parent_id)
+        if (
+            parent is None
+            or parent["reviewKind"] != container["reviewKind"]
+            or parent["backend"] != container["backend"]
+            or parent["round"] + 1 != container["round"]
+        ):
+            return None
+        superseded.add(parent_id)
+
+    tips = [
+        container
+        for container in containers
+        if container["sourceReceiptId"] not in superseded
+        and container["headSha"] == current_head_sha
+    ]
+    if len(tips) != 1:
+        return None
+    tip = tips[0]
+
+    seen_receipts: set[str] = set()
+    chain: list[dict] = []
+    cursor = tip
+    while True:
+        source_id = cursor["sourceReceiptId"]
+        if source_id in seen_receipts:
+            return None
+        seen_receipts.add(source_id)
+        chain.append(cursor)
+        parent_id = cursor.get("supersedesReceiptId")
+        if parent_id is None:
+            break
+        cursor = by_id[parent_id]
+    known_findings: set[str] = set()
+    prior_edge_owners: dict[str, str] = {}
+    seen_chain_receipts: set[str] = set()
+    for container in reversed(chain):
+        source_id = container["sourceReceiptId"]
+        seen_chain_receipts.add(source_id)
+        child_ids = {item["id"] for item in container["items"]}
+        if known_findings and not known_findings <= child_ids:
+            # Every non-root generation is a complete snapshot. A missing
+            # lineage would otherwise silently erase unresolved state.
+            return None
+        for item in container["items"]:
+            finding_id = item["id"]
+            first_seen = item["firstSeenReceiptId"]
+            prior_id = item.get("priorFindingId")
+            if first_seen not in seen_chain_receipts:
+                return None
+            if first_seen != source_id and finding_id not in known_findings:
+                # Merely naming an ancestor receipt is not proof that the
+                # ancestor contained this durable finding identity.
+                return None
+            if finding_id in known_findings and first_seen == source_id:
+                return None
+            if prior_id is not None:
+                owner = prior_edge_owners.get(prior_id)
+                if prior_id not in known_findings or (
+                    owner is not None and owner != finding_id
+                ):
+                    return None
+                prior_edge_owners[prior_id] = finding_id
+            known_findings.add(finding_id)
+    return tip
+
+
+def _review_receipt_history_dir(receipt_path: Path) -> Path:
+    """Return the deterministic immutable-generation home for one latest receipt."""
+    return receipt_path.parent / f"{receipt_path.name}.history"
+
+
+def _review_receipt_lock_path(receipt_path: Path) -> Path:
+    """Keep persistent kernel-lock files outside the reviewed repository."""
+    identity = str(receipt_path.resolve()).encode("utf-8")
+    return (
+        Path(tempfile.gettempdir())
+        / "flow-next"
+        / "review-receipt-locks"
+        / f"{hashlib.sha256(identity).hexdigest()}.lock"
+    )
+
+
+def _preserve_review_receipt_generation(receipt_path: Path) -> Optional[Path]:
+    """Persist the valid findings generation currently behind a latest pointer."""
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None
+    if not isinstance(receipt, dict) or not validate_review_receipt_findings(receipt):
+        return None
+    findings = receipt.get("findings")
+    if not isinstance(findings, dict):
+        return None
+    source_id = findings["sourceReceiptId"]
+    filename = f"{hashlib.sha256(source_id.encode('utf-8')).hexdigest()}.json"
+    history_path = _review_receipt_history_dir(receipt_path) / filename
+    if history_path.exists():
+        try:
+            existing = json.loads(history_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+            raise ReviewReceiptHistoryError(
+                f"cannot read receipt history generation: {history_path}"
+            ) from exc
+        if existing != receipt:
+            raise ReviewReceiptHistoryError(
+                f"receipt history generation conflicts: {history_path}"
+            )
+        return history_path
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(history_path, receipt)
+    return history_path
+
+
+def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
+    """Load immutable ancestors plus the latest receipt, failing closed."""
+    latest: Optional[dict]
+    try:
+        latest = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        latest = None
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None
+    if latest is not None and (
+        not isinstance(latest, dict)
+        or not validate_review_receipt_findings(latest)
+    ):
+        return None
+    scope = (
+        (latest.get("type"), latest.get("id"), latest.get("mode"))
+        if latest is not None
+        else None
+    )
+    receipts: list[dict] = []
+    history_dir = _review_receipt_history_dir(receipt_path)
+    if history_dir.exists():
+        try:
+            paths = sorted(history_dir.glob("*.json"))
+        except OSError:
+            return None
+        for path in paths:
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                return None
+            if not isinstance(value, dict) or not validate_review_receipt_findings(value):
+                return None
+            findings = value.get("findings")
+            if not isinstance(findings, dict):
+                return None
+            expected_name = (
+                f"{hashlib.sha256(findings['sourceReceiptId'].encode('utf-8')).hexdigest()}"
+                ".json"
+            )
+            if path.name != expected_name:
+                return None
+            value_scope = (value.get("type"), value.get("id"), value.get("mode"))
+            if scope is None:
+                scope = value_scope
+            if value_scope == scope:
+                receipts.append(value)
+            elif latest is None:
+                return None
+    if latest is not None:
+        receipts.append(latest)
+    return receipts or None
+
+
+def cmd_review_findings_attach(args: argparse.Namespace) -> None:
+    """Atomically attach parsed findings and advance a direct-writer receipt."""
+    try:
+        input_path = Path(args.input)
+        receipt_path = Path(args.receipt)
+        review_path = Path(args.review_file)
+        receipt = json.loads(input_path.read_text(encoding="utf-8"))
+        review_text = review_path.read_text(encoding="utf-8")
+    except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+        error_exit(
+            f"review-findings attach input error: {exc}",
+            use_json=args.json,
+            code=2,
+        )
+    if not isinstance(receipt, dict):
+        error_exit(
+            "review-findings attach input must be a JSON object",
+            use_json=args.json,
+            code=2,
+        )
+    review_type = receipt.get("type")
+    review_id = receipt.get("id")
+    backend = receipt.get("mode")
+    if (
+        review_type not in _REVIEW_TYPE_TO_FINDINGS_KIND
+        or not isinstance(review_id, str)
+        or not review_id
+        or not isinstance(backend, str)
+        or not backend
+    ):
+        error_exit(
+            "review-findings attach requires input type/id/mode",
+            use_json=args.json,
+            code=2,
+        )
+    head_sha = _resolve_review_sha(args.head)
+    if head_sha is None:
+        error_exit(
+            f"review-findings attach cannot resolve head: {args.head}",
+            use_json=args.json,
+            code=2,
+        )
+    base_sha = _resolve_review_sha(args.base) if args.base else None
+    if args.base and base_sha is None:
+        error_exit(
+            f"review-findings attach cannot resolve base: {args.base}",
+            use_json=args.json,
+            code=2,
+        )
+    prior_path = Path(args.prior) if args.prior else receipt_path
+    recovery_arg = getattr(args, "recovery", None)
+    recovery_path = Path(recovery_arg) if recovery_arg else None
+    if recovery_path is not None and recovery_path.resolve() == receipt_path.resolve():
+        error_exit(
+            "review-findings attach recovery path must differ from receipt path",
+            use_json=args.json,
+            code=2,
+        )
+    with cross_process_lock(_review_receipt_lock_path(receipt_path)):
+        if getattr(args, "require_prior_current", False) and prior_path != receipt_path:
+            try:
+                prior_snapshot = json.loads(
+                    prior_path.read_text(encoding="utf-8")
+                )
+                current_receipt = json.loads(
+                    receipt_path.read_text(encoding="utf-8")
+                )
+            except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+                raise ReviewReceiptHistoryError(
+                    "cannot verify direct-writer prior snapshot currentness"
+                ) from exc
+            if prior_snapshot != current_receipt:
+                raise ReviewReceiptHistoryError(
+                    "direct-writer prior snapshot is no longer current"
+                )
+        findings = build_review_receipt_findings(
+            review_text,
+            review_type=review_type,
+            review_id=review_id,
+            backend=backend,
+            head_sha=head_sha,
+            base_sha=base_sha,
+            prior_receipt_path=prior_path,
+            anchor_side="head",
+        )
+        if findings is not None:
+            receipt["findings"] = findings
+        else:
+            receipt.pop("findings", None)
+        if recovery_path is not None:
+            atomic_write_json(recovery_path, receipt)
+        if prior_path != receipt_path and prior_path.exists():
+            _preserve_review_receipt_generation(prior_path)
+        if receipt_path.exists():
+            _preserve_review_receipt_generation(receipt_path)
+        atomic_write_json(receipt_path, receipt)
+    result = {
+        "success": True,
+        "receipt": str(receipt_path),
+        "findings_attached": findings is not None,
+    }
+    if recovery_path is not None:
+        result["recovery"] = str(recovery_path)
+    if findings is not None:
+        result["source_receipt_id"] = findings["sourceReceiptId"]
+    if args.json:
+        json_output(result)
+    else:
+        print(
+            f"review findings {'attached' if findings is not None else 'unsupported'}: "
+            f"{receipt_path}"
+        )
 
 
 def _log_review_parse_path(field: str, path: str) -> None:
@@ -6641,15 +8458,16 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 {protected_artifacts_block}
 ## Output Format
 
-For each surviving `introduced` finding:
-- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
-- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
-- **Classification**: introduced
-- **File:Line**: Exact location
+For each surviving finding:
+- **Severity**: P0 / P1 / P2 / P3
+- **Confidence**: 0 / 25 / 50 / 75 / 100
+- **Classification**: introduced / pre_existing
+- **File:Line**: `path:line`, or `-` when repo-wide
+- **R-IDs**: `[R1, R2]`, or `[]` when none
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding using the compact form `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+Put `pre_existing` findings under `## Pre-existing issues (not blocking this verdict)`; never drop them.
 
 After the findings, add (only when applicable): the `## Requirements coverage` table + `Unaddressed R-IDs:` line, and the `Suppressed findings:` / `Classification counts:` / `Protected-path filter:` tally lines named above.
 **Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
@@ -6723,15 +8541,16 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 {protected_artifacts_block}
 ## Output Format
 
-For each surviving `introduced` finding:
-- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
-- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
-- **Classification**: introduced
-- **File:Line**: Exact location
+For each surviving finding:
+- **Severity**: P0 / P1 / P2 / P3
+- **Confidence**: 0 / 25 / 50 / 75 / 100
+- **Classification**: introduced / pre_existing
+- **File:Line**: `path:line`, or `-` when repo-wide
+- **R-IDs**: `[R1, R2]`, or `[]` when none
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding as `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+Put `pre_existing` findings under `## Pre-existing issues (not blocking this verdict)`; never drop them.
 
 After the findings list, emit:
 - The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
@@ -6814,11 +8633,14 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 {plan_quality_block}{protected_artifacts_block}
 ## Output Format
 
-For each issue found:
-- **Severity**: Critical / Major / Minor / Nitpick
-- **Location**: Which task or section (e.g., "fn-1.3 Description" or "Epic Acceptance #2")
-- **Problem**: What's wrong
-- **Suggestion**: How to fix
+Severity: P0/P1/P2/P3
+Confidence: 0/25/50/75/100
+Classification: introduced/pre_existing
+File:Line: path:line / -
+R-IDs: [R1, R2] / []
+Location:
+Problem:
+Suggestion:
 
 After the issues list, emit a `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
 
@@ -6932,16 +8754,21 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 
 ## Gaps Found
 
-[For each GAP, describe what's missing and suggest fix. Include `Confidence: <0|25|50|75|100>` and `Classification: introduced | pre_existing` — `pre_existing` means the gap existed before this epic's branch touched the code and is therefore not blocking.]
+[Each GAP uses these colon-delimited lines:
+Severity: P0/P1/P2/P3
+Confidence: 0/25/50/75/100
+Classification: introduced/pre_existing
+File:Line: path:line / -
+R-IDs: [R1, R2] / []
+Problem: what is wrong
+Suggestion: how to fix]
 ```
 
-Pre-existing gaps (code smells or missing features that predate this epic's branch) go under a separate `## Pre-existing issues (not blocking this verdict)` heading and do not gate the verdict.
+Put pre_existing gaps under `## Pre-existing issues`; they do not gate the verdict.
 
-After the findings list, emit:
-- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
-- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
-- A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
-- A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
+When applicable, add the Requirements coverage / Unaddressed R-IDs,
+Suppressed findings, Classification counts, and Protected-path filter outputs
+defined above.
 
 ## Verdict
 
@@ -15429,6 +17256,1188 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         print(f"Spec {spec_id} created: {args.title}")
 
 
+# ---------- PR cognitive-aid artifact (fn-136.6) ------------------------
+
+PR_COGNITIVE_AID_SCHEMA_VERSION = 1
+PR_COGNITIVE_AID_MAX_BYTES = 512 * 1024
+PR_COGNITIVE_AID_SOURCE_KINDS = frozenset(
+    {"spec", "task", "rid", "review_receipt", "qa_receipt", "diff_metadata", "commit"}
+)
+PR_COGNITIVE_AID_GROUP_KINDS = ("problem", "principle", "step", "kept", "verify")
+PR_COGNITIVE_AID_CHANGE_TYPES = frozenset(
+    {"added", "modified", "deleted", "renamed", "copied"}
+)
+PR_COGNITIVE_AID_ATTENTION_CLASSES = frozenset(
+    {"canonical", "generated", "mechanical"}
+)
+_PR_COGNITIVE_AID_SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
+_PR_COGNITIVE_AID_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")
+_PR_COGNITIVE_AID_RID_RE = re.compile(r"^R[1-9][0-9]*$")
+_PR_COGNITIVE_AID_WINDOWS_RESERVED = frozenset(
+    {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        *(f"COM{i}" for i in range(1, 10)),
+        *(f"LPT{i}" for i in range(1, 10)),
+    }
+)
+
+
+class PrCognitiveAidValidationError(ValueError):
+    """The portable PR cognitive-aid contract was violated."""
+
+
+def _pr_aid_fail(path: str, message: str) -> None:
+    raise PrCognitiveAidValidationError(f"{path}: {message}")
+
+
+def _pr_aid_object(value: Any, path: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        _pr_aid_fail(path, "must be an object")
+    return value
+
+
+def _pr_aid_keys(
+    value: dict[str, Any],
+    path: str,
+    *,
+    required: set[str],
+    optional: set[str] = frozenset(),
+) -> None:
+    missing = required - set(value)
+    if missing:
+        _pr_aid_fail(path, f"missing fields: {', '.join(sorted(missing))}")
+    unknown = set(value) - required - optional
+    if unknown:
+        _pr_aid_fail(path, f"unknown fields: {', '.join(sorted(unknown))}")
+
+
+def _pr_aid_array(
+    value: Any, path: str, *, maximum: int, minimum: int = 0
+) -> list[Any]:
+    if not isinstance(value, list):
+        _pr_aid_fail(path, "must be an array")
+    if not minimum <= len(value) <= maximum:
+        _pr_aid_fail(path, f"must contain {minimum}-{maximum} entries")
+    return value
+
+
+def _pr_aid_string(
+    value: Any, path: str, *, maximum: int, allow_empty: bool = False
+) -> str:
+    if not isinstance(value, str):
+        _pr_aid_fail(path, "must be a string")
+    if not allow_empty and not value:
+        _pr_aid_fail(path, "must not be empty")
+    if len(value) > maximum:
+        _pr_aid_fail(path, f"exceeds {maximum} characters")
+    if any(ord(char) < 32 and char not in "\t\n" for char in value):
+        _pr_aid_fail(path, "contains a control character")
+    return value
+
+
+def _pr_aid_identifier(value: Any, path: str) -> str:
+    result = _pr_aid_string(value, path, maximum=160)
+    if not _PR_COGNITIVE_AID_ID_RE.fullmatch(result):
+        _pr_aid_fail(path, "must be a portable identifier")
+    return result
+
+
+def _pr_aid_artifact_id(value: Any, path: str) -> str:
+    result = _pr_aid_identifier(value, path)
+    basename = result.split(".", 1)[0].upper()
+    if basename in _PR_COGNITIVE_AID_WINDOWS_RESERVED:
+        _pr_aid_fail(path, "must not use a Windows reserved filename")
+    return result
+
+
+def _pr_aid_sha(value: Any, path: str) -> str:
+    result = _pr_aid_string(value, path, maximum=64)
+    if not _PR_COGNITIVE_AID_SHA_RE.fullmatch(result):
+        _pr_aid_fail(path, "must be a lowercase 40-64 character Git SHA")
+    return result
+
+
+def _pr_aid_repo_path(value: Any, path: str) -> str:
+    result = _pr_aid_string(value, path, maximum=1024)
+    if (
+        result.startswith(("/", "\\"))
+        or "\\" in result
+        or result.endswith("/")
+        or "//" in result
+    ):
+        _pr_aid_fail(path, "must be a normalized repository-relative path")
+    if any(part in ("", ".", "..") for part in result.split("/")):
+        _pr_aid_fail(path, "must not contain empty, dot, or traversal segments")
+    return result
+
+
+def _pr_aid_url(value: Any, path: str) -> str:
+    result = _pr_aid_string(value, path, maximum=2048)
+    if any(char.isspace() for char in result) or any(
+        char in result for char in ("(", ")", "[", "]", "|", "<", ">")
+    ):
+        _pr_aid_fail(path, "contains unsafe URL characters")
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", result):
+        if not re.match(r"^https://[^/\s]+(?:/|$)", result):
+            _pr_aid_fail(path, "must use HTTPS")
+    elif result.startswith("//") or any(part == ".." for part in result.split("/")):
+        _pr_aid_fail(path, "must be HTTPS or repository-relative")
+    return result
+
+
+def _pr_aid_string_array(value: Any, path: str) -> list[str]:
+    values = _pr_aid_array(value, path, maximum=32)
+    result = [
+        _pr_aid_string(item, f"{path}[{index}]", maximum=160)
+        for index, item in enumerate(values)
+    ]
+    if len(set(result)) != len(result):
+        _pr_aid_fail(path, "must not contain duplicates")
+    return result
+
+
+def _pr_aid_nonnegative_int(value: Any, path: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        _pr_aid_fail(path, "must be a non-negative integer")
+    return value
+
+
+def _pr_aid_serialized_text(artifact: Any) -> str:
+    """Return the one canonical representation used for limits and persistence."""
+    return json.dumps(artifact, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def validate_pr_cognitive_aid(
+    artifact: Any,
+    *,
+    expected_spec_id: Optional[str] = None,
+    expected_base_sha: Optional[str] = None,
+    expected_head_sha: Optional[str] = None,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
+) -> dict[str, Any]:
+    """Validate one v1 artifact without coercion, truncation, or I/O."""
+    artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
+    _pr_aid_keys(
+        artifact,
+        "pr_cognitive_aid",
+        required={
+            "schemaVersion",
+            "artifactId",
+            "specId",
+            "baseSha",
+            "headSha",
+            "generatedAt",
+            "sources",
+            "changeWalkthrough",
+        },
+        optional={"supersedesArtifactId"},
+    )
+    encoded = _pr_aid_serialized_text(artifact).encode("utf-8")
+    if len(encoded) > PR_COGNITIVE_AID_MAX_BYTES:
+        _pr_aid_fail(
+            "pr_cognitive_aid",
+            f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
+        )
+    schema_version = artifact.get("schemaVersion")
+    if (
+        not isinstance(schema_version, int)
+        or isinstance(schema_version, bool)
+        or schema_version != PR_COGNITIVE_AID_SCHEMA_VERSION
+    ):
+        _pr_aid_fail("schemaVersion", "unsupported schema version")
+    artifact_id = _pr_aid_artifact_id(artifact.get("artifactId"), "artifactId")
+    spec_id = _pr_aid_string(artifact.get("specId"), "specId", maximum=160)
+    if not is_spec_id(spec_id):
+        _pr_aid_fail("specId", "must be a canonical Flow spec ID")
+    base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
+    head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+    generated_at = _pr_aid_string(
+        artifact.get("generatedAt"), "generatedAt", maximum=160
+    )
+    try:
+        parsed_generated_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+    except ValueError:
+        _pr_aid_fail("generatedAt", "must be an ISO-8601 timestamp")
+    if parsed_generated_at.tzinfo is None:
+        _pr_aid_fail("generatedAt", "must include a timezone")
+    supersedes = artifact.get("supersedesArtifactId")
+    if supersedes is not None:
+        supersedes = _pr_aid_artifact_id(supersedes, "supersedesArtifactId")
+        if supersedes == artifact_id:
+            _pr_aid_fail("supersedesArtifactId", "must not reference itself")
+    if expected_spec_id is not None and spec_id != expected_spec_id:
+        _pr_aid_fail("specId", f"does not match expected {expected_spec_id}")
+    if expected_base_sha is not None and base_sha != expected_base_sha:
+        _pr_aid_fail("baseSha", "does not match the current merge base")
+    if expected_head_sha is not None and head_sha != expected_head_sha:
+        _pr_aid_fail("headSha", "does not match the current PR head")
+
+    sources = _pr_aid_array(
+        artifact.get("sources"), "sources", minimum=1, maximum=128
+    )
+    source_by_id: dict[str, dict[str, Any]] = {}
+    for index, raw_source in enumerate(sources):
+        source_path = f"sources[{index}]"
+        source = _pr_aid_object(raw_source, source_path)
+        _pr_aid_keys(
+            source,
+            source_path,
+            required={"id", "kind", "ref"},
+            optional={"digest"},
+        )
+        source_id = _pr_aid_identifier(source.get("id"), f"{source_path}.id")
+        if source_id in source_by_id:
+            _pr_aid_fail(f"{source_path}.id", "duplicate source ID")
+        kind = _pr_aid_string(source.get("kind"), f"{source_path}.kind", maximum=160)
+        if kind not in PR_COGNITIVE_AID_SOURCE_KINDS:
+            _pr_aid_fail(f"{source_path}.kind", "unsupported source kind")
+        source_ref = _pr_aid_string(
+            source.get("ref"), f"{source_path}.ref", maximum=1024
+        )
+        if kind == "spec" and source_ref != spec_id:
+            _pr_aid_fail(f"{source_path}.ref", "must identify artifact.specId")
+        if kind == "task":
+            if not is_task_id(source_ref) or spec_id_from_task(source_ref) != spec_id:
+                _pr_aid_fail(
+                    f"{source_path}.ref", "must identify a task of artifact.specId"
+                )
+        if kind == "rid" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(source_ref):
+            _pr_aid_fail(f"{source_path}.ref", "must be a canonical R-ID")
+        if kind == "diff_metadata" and source_ref != f"{base_sha}..{head_sha}":
+            _pr_aid_fail(
+                f"{source_path}.ref", "must identify artifact baseSha..headSha"
+            )
+        if kind == "commit":
+            _pr_aid_sha(source_ref, f"{source_path}.ref")
+        digest = source.get("digest")
+        if digest is not None:
+            digest = _pr_aid_string(digest, f"{source_path}.digest", maximum=160)
+            if not re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", digest):
+                _pr_aid_fail(f"{source_path}.digest", "must be a SHA-256 digest")
+        source_by_id[source_id] = source
+
+    walkthrough = _pr_aid_object(
+        artifact.get("changeWalkthrough"), "changeWalkthrough"
+    )
+    _pr_aid_keys(
+        walkthrough,
+        "changeWalkthrough",
+        required={"thesis", "proof", "groups"},
+    )
+    _pr_aid_string(
+        walkthrough.get("thesis"), "changeWalkthrough.thesis", maximum=4000
+    )
+
+    def validate_refs(
+        record: dict[str, Any], record_path: str, *, require_grounding: bool
+    ) -> tuple[list[str], list[str], list[str]]:
+        refs = _pr_aid_string_array(
+            record.get("sourceRefs"), f"{record_path}.sourceRefs"
+        )
+        if require_grounding and not refs:
+            _pr_aid_fail(
+                f"{record_path}.sourceRefs", "must ground the semantic summary"
+            )
+        for ref_index, source_id in enumerate(refs):
+            if source_id not in source_by_id:
+                _pr_aid_fail(
+                    f"{record_path}.sourceRefs[{ref_index}]",
+                    "does not resolve to sources[]",
+                )
+        r_ids = _pr_aid_string_array(
+            record.get("rIds", []), f"{record_path}.rIds"
+        )
+        task_ids = _pr_aid_string_array(
+            record.get("taskIds", []), f"{record_path}.taskIds"
+        )
+        for r_index, r_id in enumerate(r_ids):
+            if not _PR_COGNITIVE_AID_RID_RE.fullmatch(r_id):
+                _pr_aid_fail(
+                    f"{record_path}.rIds[{r_index}]", "must be a canonical R-ID"
+                )
+        for task_index, task_id in enumerate(task_ids):
+            if not is_task_id(task_id) or spec_id_from_task(task_id) != spec_id:
+                _pr_aid_fail(
+                    f"{record_path}.taskIds[{task_index}]",
+                    "must identify a task of artifact.specId",
+                )
+        referenced_sources = [source_by_id[source_id] for source_id in refs]
+        for r_id in r_ids:
+            if not any(
+                source.get("kind") == "rid" and source.get("ref") == r_id
+                for source in referenced_sources
+            ):
+                _pr_aid_fail(
+                    f"{record_path}.rIds",
+                    f"{r_id} lacks a same-record rid sourceRef",
+                )
+        for task_id in task_ids:
+            if not any(
+                source.get("kind") == "task" and source.get("ref") == task_id
+                for source in referenced_sources
+            ):
+                _pr_aid_fail(
+                    f"{record_path}.taskIds",
+                    f"{task_id} lacks a same-record task sourceRef",
+                )
+        return refs, r_ids, task_ids
+
+    proof = _pr_aid_array(
+        walkthrough.get("proof"), "changeWalkthrough.proof", maximum=16
+    )
+    for index, raw_cell in enumerate(proof):
+        cell_path = f"changeWalkthrough.proof[{index}]"
+        cell = _pr_aid_object(raw_cell, cell_path)
+        _pr_aid_keys(
+            cell,
+            cell_path,
+            required={"label", "value", "sourceRefs"},
+        )
+        _pr_aid_string(cell.get("label"), f"{cell_path}.label", maximum=160)
+        _pr_aid_string(cell.get("value"), f"{cell_path}.value", maximum=160)
+        validate_refs(cell, cell_path, require_grounding=True)
+
+    groups = _pr_aid_array(
+        walkthrough.get("groups"),
+        "changeWalkthrough.groups",
+        minimum=1,
+        maximum=11,
+    )
+    kind_positions = {
+        kind: index for index, kind in enumerate(PR_COGNITIVE_AID_GROUP_KINDS)
+    }
+    kind_counts = {kind: 0 for kind in PR_COGNITIVE_AID_GROUP_KINDS}
+    last_kind_position = -1
+    last_ordinal = -1
+    ordinals: set[int] = set()
+    files_seen: dict[str, tuple[Any, ...]] = {}
+    for group_index, raw_group in enumerate(groups):
+        group_path = f"changeWalkthrough.groups[{group_index}]"
+        group = _pr_aid_object(raw_group, group_path)
+        _pr_aid_keys(
+            group,
+            group_path,
+            required={
+                "ordinal",
+                "kind",
+                "title",
+                "summary",
+                "sourceRefs",
+                "rIds",
+                "taskIds",
+                "files",
+            },
+        )
+        ordinal = _pr_aid_nonnegative_int(
+            group.get("ordinal"), f"{group_path}.ordinal"
+        )
+        if ordinal in ordinals:
+            _pr_aid_fail(f"{group_path}.ordinal", "duplicate ordinal")
+        if ordinal <= last_ordinal:
+            _pr_aid_fail(f"{group_path}.ordinal", "must increase in render order")
+        last_ordinal = ordinal
+        ordinals.add(ordinal)
+        kind = _pr_aid_string(group.get("kind"), f"{group_path}.kind", maximum=160)
+        if kind not in kind_positions:
+            _pr_aid_fail(f"{group_path}.kind", "unsupported group kind")
+        if kind_positions[kind] < last_kind_position:
+            _pr_aid_fail(f"{group_path}.kind", "violates logical group order")
+        last_kind_position = kind_positions[kind]
+        kind_counts[kind] += 1
+        _pr_aid_string(group.get("title"), f"{group_path}.title", maximum=160)
+        summary = _pr_aid_string(
+            group.get("summary"), f"{group_path}.summary", maximum=1000
+        )
+        validate_refs(group, group_path, require_grounding=bool(summary))
+        files = _pr_aid_array(
+            group.get("files", []), f"{group_path}.files", maximum=200
+        )
+        for file_index, raw_file in enumerate(files):
+            file_path = f"{group_path}.files[{file_index}]"
+            file_record = _pr_aid_object(raw_file, file_path)
+            _pr_aid_keys(
+                file_record,
+                file_path,
+                required={
+                    "path",
+                    "changeType",
+                    "attentionClass",
+                    "summary",
+                    "sourceRefs",
+                    "rIds",
+                    "taskIds",
+                },
+                optional={"additions", "deletions", "diffUrl"},
+            )
+            repo_path = _pr_aid_repo_path(
+                file_record.get("path"), f"{file_path}.path"
+            )
+            change_type = _pr_aid_string(
+                file_record.get("changeType"),
+                f"{file_path}.changeType",
+                maximum=160,
+            )
+            if change_type not in PR_COGNITIVE_AID_CHANGE_TYPES:
+                _pr_aid_fail(f"{file_path}.changeType", "unsupported Git change type")
+            attention = _pr_aid_string(
+                file_record.get("attentionClass"),
+                f"{file_path}.attentionClass",
+                maximum=160,
+            )
+            if attention not in PR_COGNITIVE_AID_ATTENTION_CLASSES:
+                _pr_aid_fail(
+                    f"{file_path}.attentionClass", "unsupported attention class"
+                )
+            file_summary = _pr_aid_string(
+                file_record.get("summary"), f"{file_path}.summary", maximum=500
+            )
+            file_refs, _, _ = validate_refs(
+                file_record, file_path, require_grounding=bool(file_summary)
+            )
+            if not any(
+                source_by_id[source_id]["kind"] == "diff_metadata"
+                for source_id in file_refs
+            ):
+                _pr_aid_fail(
+                    f"{file_path}.sourceRefs",
+                    "must cite the artifact diff_metadata source",
+                )
+            additions = file_record.get("additions")
+            deletions = file_record.get("deletions")
+            if additions is not None:
+                additions = _pr_aid_nonnegative_int(
+                    additions, f"{file_path}.additions"
+                )
+            if deletions is not None:
+                deletions = _pr_aid_nonnegative_int(
+                    deletions, f"{file_path}.deletions"
+                )
+            diff_url = file_record.get("diffUrl")
+            if diff_url is not None:
+                _pr_aid_url(diff_url, f"{file_path}.diffUrl")
+            membership = (
+                ordinal,
+                change_type,
+                attention,
+                additions,
+                deletions,
+                diff_url,
+            )
+            if repo_path in files_seen:
+                if files_seen[repo_path] != membership:
+                    _pr_aid_fail(
+                        f"{file_path}.path", "conflicts with duplicate file membership"
+                    )
+                _pr_aid_fail(f"{file_path}.path", "duplicate file membership")
+            files_seen[repo_path] = membership
+            if expected_diff_files is not None:
+                expected_file = expected_diff_files.get(repo_path)
+                actual_file = (change_type, additions, deletions)
+                if expected_file is None:
+                    _pr_aid_fail(
+                        f"{file_path}.path", "does not belong to the bound Git diff"
+                    )
+                if actual_file != expected_file:
+                    _pr_aid_fail(
+                        file_path,
+                        "changeType/additions/deletions do not match the bound Git diff",
+                    )
+            if len(files_seen) > 500:
+                _pr_aid_fail("changeWalkthrough.groups", "exceeds 500 unique files")
+    if not 1 <= kind_counts["step"] <= 7:
+        _pr_aid_fail("changeWalkthrough.groups", "must contain exactly 1-7 step groups")
+    for optional_kind in ("problem", "principle", "kept", "verify"):
+        if kind_counts[optional_kind] > 1:
+            _pr_aid_fail(
+                "changeWalkthrough.groups",
+                f"must contain at most one {optional_kind} group",
+            )
+    if expected_diff_files is not None and set(files_seen) != set(expected_diff_files):
+        _pr_aid_fail(
+            "changeWalkthrough.groups",
+            "file membership does not cover the bound Git diff exactly",
+        )
+    return artifact
+
+
+def _pr_aid_live_diff_files(
+    repo_root: Path, base_sha: str, head_sha: str
+) -> dict[str, tuple[str, int, int]]:
+    materialized = _export_materialize_diff(base_sha, repo_root)
+    if materialized.head_sha != head_sha:
+        _pr_aid_fail("headSha", "does not match repository HEAD")
+    if materialized.numstat_rc != 0 or materialized.name_status_rc != 0:
+        _pr_aid_fail("diff_metadata", "cannot read the bound Git diff")
+    summary = _export_diff_summary(
+        base_sha, base_sha, repo_root, materialized=materialized
+    )
+    status_names = {
+        "A": "added",
+        "M": "modified",
+        "D": "deleted",
+        "R": "renamed",
+        "C": "copied",
+    }
+    return {
+        item["path"]: (
+            status_names.get(item["status"], "modified"),
+            item["additions"],
+            item["deletions"],
+        )
+        for item in summary["files"]
+    }
+
+
+def _pr_cognitive_aid_home(flow_dir: Path, spec_id: str) -> Path:
+    return flow_dir / "artifacts" / spec_id / "pr-cognitive-aid"
+
+
+def _load_pr_cognitive_aid_records(
+    flow_dir: Path,
+    spec_id: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Load and structurally validate every immutable generation."""
+    records: list[dict[str, Any]] = []
+    rejected: list[str] = []
+    home = _pr_cognitive_aid_home(flow_dir, spec_id)
+    if not home.is_dir():
+        return records, rejected
+    for path in sorted(home.glob("*.json")):
+        try:
+            with path.open("rb") as handle:
+                raw_bytes = handle.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
+            if len(raw_bytes) > PR_COGNITIVE_AID_MAX_BYTES:
+                _pr_aid_fail(
+                    path.name,
+                    f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
+                )
+            raw = json.loads(raw_bytes.decode("utf-8"))
+            record = validate_pr_cognitive_aid(
+                raw,
+                expected_spec_id=spec_id,
+            )
+            if path.name != f"{record['artifactId']}.json":
+                _pr_aid_fail(
+                    path.name, "filename must equal <artifactId>.json"
+                )
+            records.append(record)
+        except (
+            OSError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            PrCognitiveAidValidationError,
+        ) as exc:
+            rejected.append(f"{path.name}: {exc}")
+    return records, rejected
+
+
+def _pr_aid_chain_tip(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Validate one linear, connected generation chain and return its sole tip."""
+    if not records:
+        return None
+    by_id: dict[str, dict[str, Any]] = {}
+    for record in records:
+        artifact_id = record["artifactId"]
+        if artifact_id in by_id:
+            _pr_aid_fail("artifact home", f"duplicate artifactId {artifact_id}")
+        by_id[artifact_id] = record
+    genesis = [
+        record for record in records if not record.get("supersedesArtifactId")
+    ]
+    if len(genesis) != 1:
+        _pr_aid_fail("artifact home", "must contain exactly one genesis")
+    children: dict[str, list[str]] = {artifact_id: [] for artifact_id in by_id}
+    for record in records:
+        parent = record.get("supersedesArtifactId")
+        if not parent:
+            continue
+        if parent not in by_id:
+            _pr_aid_fail(
+                "artifact home", f"dangling supersedesArtifactId {parent}"
+            )
+        children[parent].append(record["artifactId"])
+        if len(children[parent]) > 1:
+            _pr_aid_fail("artifact home", f"fork at artifactId {parent}")
+    visited: set[str] = set()
+    cursor = genesis[0]["artifactId"]
+    while True:
+        if cursor in visited:
+            _pr_aid_fail("artifact home", "supersedes cycle")
+        visited.add(cursor)
+        next_ids = children[cursor]
+        if not next_ids:
+            break
+        cursor = next_ids[0]
+    if len(visited) != len(records):
+        _pr_aid_fail("artifact home", "contains a cycle or disconnected generation")
+    tips = [artifact_id for artifact_id, next_ids in children.items() if not next_ids]
+    if len(tips) != 1 or tips[0] != cursor:
+        _pr_aid_fail("artifact home", "must contain exactly one chain tip")
+    return by_id[cursor]
+
+
+def select_current_pr_cognitive_aid(
+    flow_dir: Path,
+    spec_id: str,
+    *,
+    base_sha: str,
+    head_sha: str,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
+) -> dict[str, Any]:
+    """Project the matching chain tip; never merge stale or legacy fields."""
+    home = _pr_cognitive_aid_home(flow_dir, spec_id)
+    if not home.is_dir():
+        return {
+            "status": "absent",
+            "artifact": None,
+            "latestArtifactId": None,
+            "rejected": [],
+        }
+    try:
+        with cross_process_lock(home / ".write.lock"):
+            records, rejected = _load_pr_cognitive_aid_records(
+                flow_dir,
+                spec_id,
+            )
+            return _select_current_pr_cognitive_aid_records(
+                records,
+                rejected,
+                base_sha=base_sha,
+                head_sha=head_sha,
+                expected_diff_files=expected_diff_files,
+            )
+    except CrossProcessLockError as exc:
+        return {
+            "status": "invalid",
+            "artifact": None,
+            "latestArtifactId": None,
+            "rejected": [f"artifact home: cannot acquire reader lock: {exc}"],
+        }
+
+
+def _select_current_pr_cognitive_aid_records(
+    records: list[dict[str, Any]],
+    rejected: list[str],
+    *,
+    base_sha: str,
+    head_sha: str,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
+) -> dict[str, Any]:
+    """Select from one writer-locked home snapshot."""
+    if rejected:
+        unsupported = all("unsupported schema version" in item for item in rejected)
+        return {
+            "status": "unsupported" if unsupported else "invalid",
+            "artifact": None,
+            "latestArtifactId": None,
+            "rejected": rejected,
+        }
+    try:
+        latest = _pr_aid_chain_tip(records)
+    except PrCognitiveAidValidationError as exc:
+        return {
+            "status": "invalid",
+            "artifact": None,
+            "latestArtifactId": None,
+            "rejected": [str(exc)],
+        }
+    latest_artifact_id = latest["artifactId"] if latest else None
+    if (
+        latest is None
+        or latest["baseSha"] != base_sha
+        or latest["headSha"] != head_sha
+    ):
+        return {
+            "status": "stale" if records else ("invalid" if rejected else "absent"),
+            "artifact": None,
+            "latestArtifactId": latest_artifact_id,
+            "rejected": rejected,
+        }
+    try:
+        latest = validate_pr_cognitive_aid(
+            latest,
+            expected_spec_id=latest["specId"],
+            expected_base_sha=base_sha,
+            expected_head_sha=head_sha,
+            expected_diff_files=expected_diff_files,
+        )
+    except PrCognitiveAidValidationError as exc:
+        return {
+            "status": "invalid",
+            "artifact": None,
+            "latestArtifactId": latest_artifact_id,
+            "rejected": [str(exc)],
+        }
+    return {
+        "status": "current",
+        "artifact": latest,
+        "latestArtifactId": latest_artifact_id,
+        "rejected": rejected,
+    }
+
+
+def write_pr_cognitive_aid(
+    flow_dir: Path,
+    artifact: Any,
+    *,
+    spec_id: str,
+    base_sha: str,
+    head_sha: str,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
+) -> Path:
+    """Validate and atomically create one immutable generation."""
+    artifact = validate_pr_cognitive_aid(
+        artifact,
+        expected_spec_id=spec_id,
+        expected_base_sha=base_sha,
+        expected_head_sha=head_sha,
+        expected_diff_files=expected_diff_files,
+    )
+    home = _pr_cognitive_aid_home(flow_dir, spec_id)
+    target = home / f"{artifact['artifactId']}.json"
+    try:
+        with cross_process_lock(home / ".write.lock"):
+            existing, rejected = _load_pr_cognitive_aid_records(flow_dir, spec_id)
+            if rejected:
+                _pr_aid_fail(
+                    "artifact home", "contains invalid or unsupported generations"
+                )
+            existing_tip = _pr_aid_chain_tip(existing)
+            by_id = {record["artifactId"]: record for record in existing}
+            if artifact["artifactId"] in by_id or target.exists():
+                _pr_aid_fail("artifactId", f"generation already exists at {target}")
+            supersedes = artifact.get("supersedesArtifactId")
+            if existing and not supersedes:
+                _pr_aid_fail(
+                    "supersedesArtifactId", "is required after the first generation"
+                )
+            if not existing and supersedes:
+                _pr_aid_fail(
+                    "supersedesArtifactId",
+                    "cannot reference a generation outside this home",
+                )
+            if supersedes and supersedes not in by_id:
+                _pr_aid_fail(
+                    "supersedesArtifactId",
+                    "does not identify an existing generation",
+                )
+            if supersedes:
+                if existing_tip is None or supersedes != existing_tip["artifactId"]:
+                    _pr_aid_fail(
+                        "supersedesArtifactId",
+                        "must extend an existing chain tip",
+                    )
+            serialized = _pr_aid_serialized_text(artifact)
+            if len(serialized.encode("utf-8")) > PR_COGNITIVE_AID_MAX_BYTES:
+                _pr_aid_fail(
+                    "pr_cognitive_aid",
+                    f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
+                )
+            atomic_create(target, serialized)
+    except FileExistsError as exc:
+        raise PrCognitiveAidValidationError(
+            f"artifactId: generation already exists at {target}"
+        ) from exc
+    except CrossProcessLockError as exc:
+        raise PrCognitiveAidValidationError(
+            f"artifact home: cannot acquire writer lock: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise PrCognitiveAidValidationError(
+            f"artifact home: cannot publish generation: {exc}"
+        ) from exc
+    return target
+
+
+def _pr_aid_plain_text(value: Any) -> str:
+    escaped = html.escape(str(value), quote=True).replace("`", "&#96;")
+    for character in ("\\", "*", "[", "]", ">"):
+        escaped = escaped.replace(character, f"\\{character}")
+    return escaped.replace("\n", " ")
+
+
+def _pr_aid_prose(value: Any) -> str:
+    escaped = _pr_aid_plain_text(value)
+    if re.match(
+        r"^\s*(?:#{1,6}\s|[-+*]\s|\d+[.)]\s|`{3,}|~{3,}|-{3,}\s*$|"
+        r"\*{3,}\s*$|_{3,}\s*$)",
+        escaped,
+    ):
+        first = len(escaped) - len(escaped.lstrip())
+        escaped = (
+            escaped[:first]
+            + "&#"
+            + str(ord(escaped[first]))
+            + ";"
+            + escaped[first + 1 :]
+        )
+    return escaped
+
+
+def _pr_aid_markdown_cell(value: Any) -> str:
+    return _pr_aid_plain_text(value).replace("|", "\\|")
+
+
+def _pr_aid_links(record: dict[str, Any]) -> str:
+    parts = [
+        *(f"source:{item}" for item in record.get("sourceRefs", [])),
+        *(f"R-ID:{item}" for item in record.get("rIds", [])),
+        *(f"task:{item}" for item in record.get("taskIds", [])),
+    ]
+    return _pr_aid_markdown_cell(", ".join(parts) or "—")
+
+
+def _pr_aid_file_row(file_record: dict[str, Any]) -> str:
+    additions = file_record.get("additions")
+    deletions = file_record.get("deletions")
+    stats = (
+        "—"
+        if additions is None and deletions is None
+        else f"+{additions or 0}/-{deletions or 0}"
+    )
+    diff_url = file_record.get("diffUrl")
+    diff = (
+        f"[diff]({html.escape(diff_url, quote=True)})" if diff_url else "—"
+    )
+    change_badges = {
+        "added": "NEW",
+        "modified": "MODIFIED",
+        "deleted": "DELETED",
+        "renamed": "RENAMED",
+        "copied": "COPIED",
+    }
+    return (
+        f"| `{change_badges[file_record['changeType']]}` | "
+        f"`{file_record['attentionClass'].upper()}` | "
+        f"`{_pr_aid_markdown_cell(file_record['path'])}` | "
+        f"{_pr_aid_markdown_cell(file_record['summary'])} | {stats} | {diff} | "
+        f"{_pr_aid_links(file_record)} |"
+    )
+
+
+def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
+    """Render the validated v1 object with deterministic compact/full rules."""
+    artifact = validate_pr_cognitive_aid(artifact)
+    walkthrough = artifact["changeWalkthrough"]
+    groups = walkthrough["groups"]
+    files = [file_record for group in groups for file_record in group.get("files", [])]
+    canonical_files = [
+        file_record
+        for file_record in files
+        if file_record["attentionClass"] == "canonical"
+    ]
+    human_review_lines = sum(
+        (file_record.get("additions") or 0) + (file_record.get("deletions") or 0)
+        for file_record in canonical_files
+    )
+    full = human_review_lines >= 200 or len(canonical_files) >= 6
+    lines = [
+        "## The change, top to bottom",
+        "",
+        _pr_aid_prose(walkthrough["thesis"]),
+        "",
+        "| Proof | Value | Sources |",
+        "|---|---|---|",
+        f"| Artifact | `{artifact['artifactId']}` | artifact identity |",
+        f"| Base commit | `{artifact['baseSha']}` | artifact currentness |",
+        f"| Head commit | `{artifact['headSha']}` | artifact identity |",
+        f"| Human-review lines | {human_review_lines} | deterministic file stats |",
+        f"| Canonical files | {len(canonical_files)} | deterministic membership |",
+        f"| Total files | {len(files)} | deterministic membership |",
+    ]
+    if walkthrough["proof"]:
+        for cell in walkthrough["proof"]:
+            lines.append(
+                f"| {_pr_aid_markdown_cell(cell['label'])} | "
+                f"{_pr_aid_markdown_cell(cell['value'])} | "
+                f"{_pr_aid_links(cell)} |"
+            )
+    lines.append("")
+    if not full:
+        lines.extend(
+            [
+                "| Change | Attention | File | Purpose | +/- | Diff | Evidence |",
+                "|---|---|---|---|---:|---|---|",
+                *(_pr_aid_file_row(file_record) for file_record in canonical_files),
+                "",
+            ]
+        )
+        return "\n".join(lines).rstrip() + "\n"
+
+    lines.extend(
+        [
+            "**Legend:** `WHY` `PRINCIPLE` `STEP` `KEPT` `VERIFY` · "
+            "`NEW` `MODIFIED` `DELETED` `RENAMED` `COPIED` · "
+            "`CANONICAL` `GENERATED` `MECHANICAL`",
+            "",
+        ]
+    )
+    first_open_step = next(
+        (
+            group["ordinal"]
+            for group in groups
+            if group["kind"] == "step"
+            and any(
+                file_record["attentionClass"] == "canonical"
+                for file_record in group.get("files", [])
+            )
+        ),
+        None,
+    )
+    kind_badges = {
+        "problem": "WHY",
+        "principle": "PRINCIPLE",
+        "step": "STEP",
+        "kept": "KEPT",
+        "verify": "VERIFY",
+    }
+    for group in groups:
+        open_attr = " open" if group["ordinal"] == first_open_step else ""
+        lines.extend(
+            [
+                f"<details{open_attr}>",
+                f"<summary><code>{kind_badges[group['kind']]}</code> "
+                f"{group['ordinal']}. {_pr_aid_plain_text(group['title'])} — "
+                f"{_pr_aid_plain_text(group['summary'])}</summary>",
+                "",
+                f"Evidence: {_pr_aid_links(group)}",
+                "",
+            ]
+        )
+        group_files = group.get("files", [])
+        run_start = 0
+        while run_start < len(group_files):
+            secondary = (
+                group_files[run_start]["attentionClass"] != "canonical"
+            )
+            run_end = run_start + 1
+            while (
+                run_end < len(group_files)
+                and (
+                    group_files[run_end]["attentionClass"] != "canonical"
+                )
+                == secondary
+            ):
+                run_end += 1
+            run = group_files[run_start:run_end]
+            if secondary:
+                lines.extend(
+                    [
+                        "<details>",
+                        f"<summary>Generated/mechanical files ({len(run)})</summary>",
+                        "",
+                    ]
+                )
+            lines.extend(
+                [
+                    "| Change | Attention | File | Purpose | +/- | Diff | Evidence |",
+                    "|---|---|---|---|---:|---|---|",
+                    *(_pr_aid_file_row(file_record) for file_record in run),
+                    "",
+                ]
+            )
+            if secondary:
+                lines.extend(["</details>", ""])
+            run_start = run_end
+        lines.extend(["</details>", ""])
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _pr_aid_read_input(path_arg: str) -> Any:
+    try:
+        if path_arg == "-":
+            raw_bytes = sys.stdin.buffer.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
+        else:
+            with Path(path_arg).open("rb") as handle:
+                raw_bytes = handle.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
+    except OSError as exc:
+        error_exit(
+            f"Cannot read PR cognitive-aid artifact: {exc}", use_json=True, code=2
+        )
+    if len(raw_bytes) > PR_COGNITIVE_AID_MAX_BYTES:
+        error_exit(
+            f"PR cognitive-aid artifact exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
+            use_json=True,
+            code=2,
+        )
+    try:
+        return json.loads(raw_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        error_exit(
+            f"PR cognitive-aid artifact invalid JSON: {exc}", use_json=True, code=2
+        )
+
+
+def _pr_aid_cli_shas(args: argparse.Namespace) -> tuple[str, str]:
+    try:
+        return (
+            _pr_aid_sha(args.base_sha, "--base-sha"),
+            _pr_aid_sha(args.head_sha, "--head-sha"),
+        )
+    except PrCognitiveAidValidationError as exc:
+        error_exit(str(exc), use_json=bool(getattr(args, "json", False)), code=2)
+
+
+def cmd_pr_cognitive_aid_validate(args: argparse.Namespace) -> None:
+    artifact = _pr_aid_read_input(args.file)
+    try:
+        artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
+        base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
+        head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        artifact = validate_pr_cognitive_aid(
+            artifact,
+            expected_diff_files=_pr_aid_live_diff_files(
+                get_repo_root(), base_sha, head_sha
+            ),
+        )
+    except PrCognitiveAidValidationError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
+    if args.json:
+        json_output({"valid": True, "artifact": artifact})
+    else:
+        print("valid")
+
+
+def cmd_pr_cognitive_aid_write(args: argparse.Namespace) -> None:
+    flow_dir = get_flow_dir()
+    spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+    base_sha, head_sha = _pr_aid_cli_shas(args)
+    artifact = _pr_aid_read_input(args.file)
+    try:
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
+        path = write_pr_cognitive_aid(
+            flow_dir,
+            artifact,
+            spec_id=spec_id,
+            base_sha=base_sha,
+            head_sha=head_sha,
+            expected_diff_files=expected_diff_files,
+        )
+    except PrCognitiveAidValidationError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
+    result = {"path": path.as_posix(), "artifactId": artifact["artifactId"]}
+    if args.json:
+        json_output(result)
+    else:
+        print(result["path"])
+
+
+def cmd_pr_cognitive_aid_current(args: argparse.Namespace) -> None:
+    flow_dir = get_flow_dir()
+    spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+    base_sha, head_sha = _pr_aid_cli_shas(args)
+    try:
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
+        result = select_current_pr_cognitive_aid(
+            flow_dir,
+            spec_id,
+            base_sha=base_sha,
+            head_sha=head_sha,
+            expected_diff_files=expected_diff_files,
+        )
+    except PrCognitiveAidValidationError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
+    if args.json:
+        json_output(result)
+    elif result["artifact"] is not None:
+        print(
+            _pr_cognitive_aid_home(flow_dir, spec_id)
+            / f"{result['artifact']['artifactId']}.json"
+        )
+    else:
+        print(result["status"])
+
+
+def cmd_pr_cognitive_aid_render(args: argparse.Namespace) -> None:
+    if args.file:
+        artifact = _pr_aid_read_input(args.file)
+        try:
+            artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
+            base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
+            head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+            artifact = validate_pr_cognitive_aid(
+                artifact,
+                expected_diff_files=_pr_aid_live_diff_files(
+                    get_repo_root(), base_sha, head_sha
+                ),
+            )
+            print(render_pr_cognitive_aid_markdown(artifact), end="")
+        except PrCognitiveAidValidationError as exc:
+            error_exit(str(exc), use_json=False, code=2)
+        return
+    if not args.id or not args.base_sha or not args.head_sha:
+        error_exit(
+            "render requires either --file or ID with --base-sha and --head-sha",
+            use_json=False,
+            code=2,
+        )
+    flow_dir = get_flow_dir()
+    spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=False)
+    base_sha, head_sha = _pr_aid_cli_shas(args)
+    try:
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
+        result = select_current_pr_cognitive_aid(
+            flow_dir,
+            spec_id,
+            base_sha=base_sha,
+            head_sha=head_sha,
+            expected_diff_files=expected_diff_files,
+        )
+    except PrCognitiveAidValidationError as exc:
+        error_exit(str(exc), use_json=False, code=2)
+    if result["artifact"] is None:
+        error_exit(
+            f"No supported current PR cognitive-aid artifact ({result['status']})",
+            use_json=False,
+            code=3,
+        )
+    print(render_pr_cognitive_aid_markdown(result["artifact"]), end="")
+
+
+def render_pr_cognitive_aid_html_input(artifact: Any) -> str:
+    """Return an HTML-safe, lossless semantic carrier for the validated v1 object."""
+    artifact = validate_pr_cognitive_aid(artifact)
+    encoded = json.dumps(
+        artifact, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
+    encoded = (
+        encoded.replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
+    return (
+        '<script id="flow-next-pr-cognitive-aid" '
+        'type="application/json">'
+        f"{encoded}</script>\n"
+    )
+
+
+def cmd_pr_cognitive_aid_html_input(args: argparse.Namespace) -> None:
+    artifact = _pr_aid_read_input(args.file)
+    try:
+        artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
+        base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
+        head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        artifact = validate_pr_cognitive_aid(
+            artifact,
+            expected_diff_files=_pr_aid_live_diff_files(
+                get_repo_root(), base_sha, head_sha
+            ),
+        )
+        print(render_pr_cognitive_aid_html_input(artifact), end="")
+    except PrCognitiveAidValidationError as exc:
+        error_exit(str(exc), use_json=False, code=2)
+
+
 # Backward-compat alias (T2 layers the deprecation warning).
 
 
@@ -17138,18 +20147,31 @@ def _export_materialize_diff(
         [
             "diff",
             "--numstat",
-            "-M",
-            "--diff-filter=AMRD",
+            "-C",
+            "--find-copies-harder",
+            "--diff-filter=AMRDC",
             f"{merge_base_sha}..HEAD",
         ],
         cwd=repo_root,
     )
     name_status_rc, name_status, _ = _export_run_git(
-        ["diff", "--name-status", "-M", f"{merge_base_sha}..HEAD"],
+        [
+            "diff",
+            "--name-status",
+            "-C",
+            "--find-copies-harder",
+            f"{merge_base_sha}..HEAD",
+        ],
         cwd=repo_root,
     )
     unified_rc, unified, _ = _export_run_git(
-        ["diff", "-M", "--unified=0", f"{merge_base_sha}..HEAD"],
+        [
+            "diff",
+            "-C",
+            "--find-copies-harder",
+            "--unified=0",
+            f"{merge_base_sha}..HEAD",
+        ],
         cwd=repo_root,
     )
     return _ExportDiffMaterialization(
@@ -17354,16 +20376,15 @@ def _export_diff_summary(
 ) -> dict[str, Any]:
     """Build the diff_summary block from git diff output.
 
-    Uses `git diff --numstat -M --diff-filter=AMRD <merge_base>..HEAD` for
-    per-file additions/deletions, `--name-status -M` for status (A/M/R/D),
-    and a unified-diff scan for added export lines.
+    Uses copy-aware Git diff materialization for per-file additions/deletions,
+    status (A/M/R/C/D), and a unified-diff scan for added export lines.
     """
     diff = materialized or _export_materialize_diff(merge_base_sha, repo_root)
     head_sha = diff.head_sha
 
     # numstat: per-file additions/deletions. Renames render as a tab-separated
-    # `old\tnew` path on the third column (or `{old => new}` brace form when
-    # `-M` matches a rename).
+    # `old\tnew` path on the third column, a `{old => new}` brace form, or a
+    # root-level `old => new` arrow form when `-M` matches a rename.
     files_numstat: dict[str, dict[str, Any]] = {}
     if diff.numstat_rc == 0:
         for line in diff.numstat.splitlines():
@@ -17391,13 +20412,17 @@ def _export_diff_summary(
                 # numstat may emit `old\tnew\t` for moved files; take new.
                 pieces = path_raw.split("\t")
                 path = pieces[-1] if pieces else path_raw
+            elif " => " in path_raw:
+                # Root-level rename: `old.txt => new.txt` → `new.txt`.
+                path = path_raw.rsplit(" => ", 1)[1]
             files_numstat[path] = {
                 "path": path,
                 "additions": adds,
                 "deletions": dels,
             }
 
-    # name-status: A/M/D/R. Renames appear as `R<score>\told\tnew`.
+    # name-status: A/M/D/R/C. Renames and copies appear as
+    # `<status><score>\told\tnew`.
     file_status: dict[str, str] = {}
     if diff.name_status_rc == 0:
         for line in diff.name_status.splitlines():
@@ -20463,6 +23488,20 @@ def cmd_rp_select_add(args: argparse.Namespace) -> None:
 def cmd_rp_chat_send(args: argparse.Namespace) -> None:
     message = read_text_or_exit(Path(args.message_file), "Message file", use_json=False)
     chat_id_arg = getattr(args, "chat_id", None)
+    tab_arg = getattr(args, "tab", None)
+    context_id_arg = getattr(args, "context_id", None)
+    if not tab_arg and not context_id_arg:
+        error_exit(
+            "chat-send requires Classic --tab or CE --context-id",
+            use_json=False,
+            code=2,
+        )
+    if context_id_arg and not chat_id_arg:
+        error_exit(
+            "chat-send --context-id requires --chat-id",
+            use_json=False,
+            code=2,
+        )
     mode = getattr(args, "mode", "chat") or "chat"
     oracle_payload = build_chat_payload(
         message=message,
@@ -20479,19 +23518,23 @@ def cmd_rp_chat_send(args: argparse.Namespace) -> None:
         chat_id=chat_id_arg,
         selected_paths=args.selected_paths,
     )
-    oracle_cmd = [
-        "-w",
-        str(args.window),
-        "-t",
-        args.tab,
-        "-e",
-        f"call oracle_send {oracle_payload}",
-    ]
+    oracle_cmd = (
+        ["--context-id", context_id_arg]
+        if context_id_arg
+        else ["-w", str(args.window)]
+    )
+    if tab_arg:
+        oracle_cmd.extend(("-t", tab_arg))
+    oracle_cmd.extend(("-e", f"call oracle_send {oracle_payload}"))
+    if context_id_arg:
+        res = run_rp_cli(oracle_cmd)
+        print(res.stdout, end="")
+        return
     legacy_cmd = [
         "-w",
         str(args.window),
         "-t",
-        args.tab,
+        tab_arg,
         "-e",
         f"call chat_send {legacy_payload}",
     ]
@@ -20525,26 +23568,47 @@ def cmd_rp_prompt_export(args: argparse.Namespace) -> None:
 
 
 def cmd_rp_setup_review(args: argparse.Namespace) -> None:
-    """Atomic RP setup: resolve matching window, then open a builder tab.
+    """Atomic RP setup: resolve a window, then run Context Builder.
 
-    Returns W=<window> T=<tab> on success, exits non-zero on failure.
-    With --response-type review, also returns CHAT_ID and review findings.
-
-    Requires RepoPrompt 1.6.0+ for --response-type review.
+    CE review mode consumes the authoritative direct tool result. Classic is
+    the isolated compatibility fallback and retains its published-tab flow.
     """
 
     repo_root = os.path.realpath(args.repo_root)
-    summary = args.summary
+    summary_file = getattr(args, "summary_file", None)
+    summary = (
+        read_text_or_exit(Path(summary_file), "Review summary", use_json=False)
+        if summary_file
+        else args.summary
+    )
     response_type = getattr(args, "response_type", None)
+    response_file = getattr(args, "response_file", None)
+    if not isinstance(summary, str) or not summary.strip():
+        error_exit(
+            "setup-review requires a non-blank --summary",
+            use_json=False,
+            code=2,
+        )
+    rp_cli = require_rp_cli()
+    is_ce = Path(rp_cli).name != "rp-cli"
+    if is_ce and response_type == "review" and not args.json and not response_file:
+        error_exit(
+            "CE setup-review with --response-type review requires "
+            "--response-file unless --json is used",
+            use_json=False,
+            code=2,
+        )
 
     # Step 1: pick-window
     roots = normalize_repo_root(repo_root)
     win_id = bind_context_window(
-        repo_root, create_if_missing=bool(getattr(args, "create", False))
+        repo_root,
+        create_if_missing=bool(getattr(args, "create", False)),
+        rp_cli=rp_cli,
     )
     windows: list[dict[str, Any]] = []
     if win_id is None:
-        result = run_rp_cli(["--raw-json", "-e", "windows"])
+        result = run_rp_cli(["--raw-json", "-e", "windows"], rp_cli=rp_cli)
         windows = parse_windows(result.stdout or "")
 
     # Single window with no root paths - use it
@@ -20571,7 +23635,8 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
                 "--raw-json",
                 "-e",
                 f"call manage_workspaces {json.dumps({'action': 'list'})}",
-            ]
+            ],
+            rp_cli=rp_cli,
         )
         workspace = find_workspace_for_repo(
             parse_manage_workspaces(workspaces_res.stdout or ""),
@@ -20595,7 +23660,8 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
                             "--raw-json",
                             "-e",
                             f"call manage_workspaces {json.dumps(switch_cmd)}",
-                        ]
+                        ],
+                        rp_cli=rp_cli,
                     )
                     try:
                         switch_data = json.loads(switch_res.stdout or "{}")
@@ -20613,7 +23679,9 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
             create_cmd = (
                 f"workspace create {shlex.quote(ws_name)} --new-window --folder-path {shlex.quote(repo_root)}"
             )
-            create_res = run_rp_cli(["--raw-json", "-e", create_cmd])
+            create_res = run_rp_cli(
+                ["--raw-json", "-e", create_cmd], rp_cli=rp_cli
+            )
             try:
                 data = json.loads(create_res.stdout or "{}")
                 win_id = extract_response_window_id(data)
@@ -20628,10 +23696,15 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         else:
             error_exit("No RepoPrompt window matches repo root", use_json=False, code=2)
 
-    # Step 2: builder (with optional --type flag for RP 1.6.0+)
-    builder_expr = f"builder {json.dumps(summary)}"
-    if response_type:
-        builder_expr += f" --type {response_type}"
+    # Step 2: builder. CE requires the named-tool instructions field. Classic
+    # retains its established positional command and published-tab contract.
+    if is_ce:
+        builder_payload: dict[str, Any] = {"instructions": summary}
+        if response_type:
+            builder_payload["response_type"] = response_type
+        builder_expr = f"call context_builder {json.dumps(builder_payload)}"
+    else:
+        builder_expr = f"builder {shlex.quote(summary)}"
 
     builder_cmd = [
         "-w",
@@ -20640,44 +23713,62 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         "-e",
         builder_expr,
     ]
-    builder_res = run_rp_cli(builder_cmd)
+    builder_res = run_rp_cli(builder_cmd, rp_cli=rp_cli)
     output = (builder_res.stdout or "") + (
         "\n" + builder_res.stderr if builder_res.stderr else ""
     )
 
-    # Parse response based on response-type
-    if response_type == "review":
+    # CE review is a single direct tool result. It may intentionally have no
+    # visible compose-tab projection, so never query workspace_context here.
+    if is_ce and response_type == "review":
         try:
             data = json.loads(builder_res.stdout or "{}")
-            tab = extract_builder_tab_from_payload(data) or ""
-            chat_id = data.get("review", {}).get("chat_id", "")
-            review_response = data.get("review", {}).get("response", "")
+        except json.JSONDecodeError as exc:
+            error_exit(
+                f"CE context_builder review JSON parse failed: {exc}",
+                use_json=False,
+                code=2,
+            )
+        data = validate_rp_ce_builder_review(data)
+        tab = str(data["context_id"])
+        review = data["review"]
+        chat_id = str(review["chat_id"])
+        review_response = str(review["response"])
+        if response_file:
+            atomic_write(Path(response_file), review_response)
 
-            if not tab:
-                error_exit("Builder did not return a tab/context id", use_json=False, code=2)
-
-            if args.json:
-                print(
-                    json.dumps(
-                        {
-                            "window": win_id,
-                            "tab": tab,
-                            "chat_id": chat_id,
-                            "review": review_response,
-                            "repo_root": repo_root,
-                            "file_count": data.get("file_count", 0),
-                            "total_tokens": data.get("total_tokens", 0),
-                        }
+        result = {
+            "mode": "ce",
+            "window": win_id,
+            "tab": tab,
+            "context_id": tab,
+            "chat_id": chat_id,
+            "review": review_response,
+            "repo_root": repo_root,
+            "status": data["status"],
+            "prompt": data["prompt"],
+            "selection": data["selection"],
+            "file_count": data["file_count"],
+            "total_tokens": data["total_tokens"],
+            "response_type": data["response_type"],
+            "follow_up_hint": data.get("follow_up_hint"),
+        }
+        if args.json:
+            print(json.dumps(result))
+        else:
+            print(
+                " ".join(
+                    (
+                        "RP_MODE=ce",
+                        f"W={win_id}",
+                        f"T={shlex.quote(tab)}",
+                        f"CHAT_ID={shlex.quote(chat_id)}",
                     )
                 )
-            else:
-                print(f"W={win_id} T={tab} CHAT_ID={chat_id}")
-                if review_response:
-                    print(review_response)
-        except json.JSONDecodeError:
-            error_exit("Failed to parse builder review response", use_json=False, code=2)
+            )
     else:
-        # Try JSON first (RP 2.1.4+), fall back to regex for older versions
+        # Classic compatibility: Context Builder publishes a tab which the
+        # caller augments before a separate chat dispatch.
         tab = ""
         try:
             data = json.loads(builder_res.stdout or "{}")
@@ -20689,10 +23780,22 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         if not tab:
             error_exit("Builder did not return a tab/context id", use_json=False, code=2)
 
+        verify_rp_classic_builder_context(win_id, tab, rp_cli=rp_cli)
+
         if args.json:
-            print(json.dumps({"window": win_id, "tab": tab, "repo_root": repo_root}))
+            print(
+                json.dumps(
+                    {
+                        "mode": "classic" if not is_ce else "context",
+                        "window": win_id,
+                        "tab": tab,
+                        "repo_root": repo_root,
+                    }
+                )
+            )
         else:
-            print(f"W={win_id} T={tab}")
+            mode = "classic" if not is_ce else "context"
+            print(f"RP_MODE={mode} W={win_id} T={shlex.quote(tab)}")
 
 
 # --- Codex Commands ---
@@ -24831,7 +27934,8 @@ def spec_md_rel_path(spec_id: str) -> str:
 
 
 def _gather_review_diff(
-    base_branch: str,
+    base_sha: str,
+    head_sha: str = "HEAD",
     *,
     max_diff_bytes: int = 50000,
     truncate_marker: Optional[str] = "... [diff truncated at 50KB]",
@@ -24845,7 +27949,7 @@ def _gather_review_diff(
     diff_summary = ""
     try:
         diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
+            ["git", "diff", "--stat", f"{base_sha}..{head_sha}"],
             capture_output=True,
             text=True, encoding="utf-8",
             cwd=get_repo_root(),
@@ -24858,7 +27962,7 @@ def _gather_review_diff(
     diff_content = ""
     try:
         proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}...HEAD"],
+            ["git", "diff", f"{base_sha}..{head_sha}"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=get_repo_root(),
@@ -24888,27 +27992,36 @@ def _gather_review_diff(
     return diff_summary, diff_content
 
 
-def _gather_review_diff_capped(base_branch: str) -> tuple[str, str]:
+def _gather_review_diff_capped(
+    base_sha: str, head_sha: str = "HEAD"
+) -> tuple[str, str]:
     """Codex/copilot gather: 50KB hard cap + truncation marker."""
-    return _gather_review_diff(base_branch)
+    return _gather_review_diff(base_sha, head_sha)
 
 
-def _gather_review_diff_cursor(base_branch: str) -> tuple[str, str]:
+def _gather_review_diff_cursor(
+    base_sha: str, head_sha: str = "HEAD"
+) -> tuple[str, str]:
     """Cursor gather: generous read cap; argv-budget fit owns truncation."""
     return _gather_review_diff(
-        base_branch,
+        base_sha,
+        head_sha,
         max_diff_bytes=CURSOR_ARGV_PROMPT_MAX * 2,
         truncate_marker=None,
     )
 
 
 def _clear_stale_review_receipt(receipt_path: Optional[str]) -> None:
-    """Best-effort unlink of a stale receipt (shared failure-path cleanup)."""
+    """Archive valid evidence before unlinking a stale latest pointer."""
     if not receipt_path:
         return
     try:
-        Path(receipt_path).unlink(missing_ok=True)
-    except OSError:
+        path = Path(receipt_path)
+        with cross_process_lock(_review_receipt_lock_path(path)):
+            if path.exists():
+                _preserve_review_receipt_generation(path)
+            path.unlink(missing_ok=True)
+    except (CrossProcessLockError, OSError, ReviewReceiptHistoryError):
         pass
 
 
@@ -25106,6 +28219,46 @@ def _completion_review_receipt_recovery_path(review_id: str) -> Path:
     )
 
 
+def _resolve_review_sha(ref: str) -> Optional[str]:
+    """Resolve a review anchor locally; never dispatch or contact a remote."""
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+            cwd=get_repo_root(),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = proc.stdout.strip()
+    return value if proc.returncode == 0 and value else None
+
+
+def _capture_review_snapshot(base_ref: str) -> tuple[str, str]:
+    """Capture the exact merge-base/head pair before reviewer dispatch."""
+    head_sha = _resolve_review_sha("HEAD")
+    base_tip = _resolve_review_sha(base_ref)
+    if head_sha is None or base_tip is None:
+        raise ValueError(f"cannot resolve review snapshot: {base_ref}...HEAD")
+    try:
+        proc = subprocess.run(
+            ["git", "merge-base", base_tip, head_sha],
+            cwd=get_repo_root(),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot resolve review merge base: {exc}") from exc
+    base_sha = proc.stdout.strip()
+    if proc.returncode != 0 or not base_sha:
+        raise ValueError(f"cannot resolve review merge base: {base_ref}...HEAD")
+    return base_sha, head_sha
+
+
 def _write_backend_review_receipt(
     receipt_path: str,
     *,
@@ -25124,6 +28277,8 @@ def _write_backend_review_receipt(
     suppressed_count=None,
     classification_counts=None,
     unaddressed_rids=None,
+    reviewed_base_sha: Optional[str] = None,
+    reviewed_head_sha: Optional[str] = None,
 ) -> None:
     """Write a review receipt with stable key order (Ralph / pilot / land)."""
     receipt_data: dict = {
@@ -25176,17 +28331,34 @@ def _write_backend_review_receipt(
         receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
     if unaddressed_rids is not None:
         receipt_data["unaddressed"] = unaddressed_rids
-    content = json.dumps(receipt_data, indent=2) + "\n"
-    recovery_path: Optional[Path] = None
-    if review_type == "completion_review":
-        # The verdict attempt is already durable by this point. Preserve the
-        # complete receipt payload in a repo-local ignored file before writing
-        # an explicit/autonomous receipt path that may fail transiently. The
-        # skill's pre-dispatch checkpoint restores this payload without
-        # consuming or dispatching another review round.
-        recovery_path = _completion_review_receipt_recovery_path(review_id)
-        atomic_write(recovery_path, content)
-    atomic_write(Path(receipt_path), content)
+    receipt_file = Path(receipt_path)
+    with cross_process_lock(_review_receipt_lock_path(receipt_file)):
+        head_sha = reviewed_head_sha or _resolve_review_sha("HEAD")
+        if head_sha is not None:
+            base_sha = reviewed_base_sha
+            if base_sha is None and base_branch:
+                base_sha = _resolve_review_sha(base_branch)
+            findings = build_review_receipt_findings(
+                review_text,
+                review_type=review_type,
+                review_id=review_id,
+                backend=backend,
+                head_sha=head_sha,
+                base_sha=base_sha,
+                prior_receipt_path=receipt_file,
+                anchor_side="head",
+            )
+            if findings is not None:
+                receipt_data["findings"] = findings
+        content = json.dumps(receipt_data, indent=2) + "\n"
+        if review_type == "completion_review":
+            # Preserve the payload before the terminal pointer. The skill can
+            # recover without dispatching another review round.
+            recovery_path = _completion_review_receipt_recovery_path(review_id)
+            atomic_write(recovery_path, content)
+        if receipt_file.exists():
+            _preserve_review_receipt_generation(receipt_file)
+        atomic_write(receipt_file, content)
 
 
 
@@ -25518,7 +28690,14 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             error_exit(f"Task spec not found: {task_spec_path}", use_json=args.json)
         task_spec = task_spec_path.read_text(encoding="utf-8")
 
-    diff_summary, diff_content = reg["gather_diff"](base_branch)
+    resolved_spec = reg["resolve_spec"](args, task_id)
+    try:
+        reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
+    diff_summary, diff_content = reg["gather_diff"](
+        reviewed_base_sha, reviewed_head_sha
+    )
 
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
 
@@ -25576,8 +28755,6 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             is_rereview=is_rereview,
             receipt_path=receipt_path,
         )
-
-    resolved_spec = reg["resolve_spec"](args, task_id)
 
     # Cursor: persona override + final argv-cap backstop (after resolve so
     # task_id is canonicalized; order matches the pre-migration handler).
@@ -25660,6 +28837,8 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             suppressed_count=suppressed_count,
             classification_counts=classification_counts,
             unaddressed_rids=unaddressed_rids,
+            reviewed_base_sha=reviewed_base_sha,
+            reviewed_head_sha=reviewed_head_sha,
         )
 
     if args.json:
@@ -25862,6 +29041,11 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
     )
 
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
+    resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
+    try:
+        reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
     context_hints = gather_context_hints(base_branch)
     prompt = build_review_prompt(
         "plan", epic_spec, context_hints, task_specs=task_specs
@@ -25895,8 +29079,6 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             prior_findings=prior_findings,
         )
         prompt = rereview_preamble + prompt
-
-    resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
 
     if reg["prompt_fit"] == "cursor_argv":
         prompt = build_cursor_persona_override() + prompt
@@ -25960,6 +29142,9 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             resolved_spec=resolved_spec,
             review_text=review_text,
             include_effort=reg["include_effort"],
+            base_branch=base_branch,
+            reviewed_base_sha=reviewed_base_sha,
+            reviewed_head_sha=reviewed_head_sha,
         )
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
@@ -26005,11 +29190,18 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     repo_root = get_repo_root()
+    resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
 
     # Cursor: resume BEFORE prompt so the preamble is reserved in argv budget.
     # Codex/copilot: gather + build prompt first (pre-migration order).
+    try:
+        reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
     if reg["prompt_fit"] == "cursor_argv":
-        diff_summary, diff_content = reg["gather_diff"](base_branch)
+        diff_summary, diff_content = reg["gather_diff"](
+            reviewed_base_sha, reviewed_head_sha
+        )
         session_id, is_rereview, prior_receipt_model, prior_receipt_effort = (
             _resume_session_from_receipt(
                 receipt_path,
@@ -26045,7 +29237,9 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             task_ids=task_ids or None,
         )
     else:
-        diff_summary, diff_content = reg["gather_diff"](base_branch)
+        diff_summary, diff_content = reg["gather_diff"](
+            reviewed_base_sha, reviewed_head_sha
+        )
         prompt = build_completion_review_prompt(
             epic_spec, task_specs, diff_summary, diff_content,
         )
@@ -26067,8 +29261,6 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
                 prior_findings=prior_findings,
             )
             prompt = rereview_preamble + prompt
-
-    resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
 
     # Completion reviews reuse the spec-scoped plan-review counter.
     enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
@@ -26131,6 +29323,8 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             suppressed_count=suppressed_count,
             classification_counts=classification_counts,
             unaddressed_rids=unaddressed_rids,
+            reviewed_base_sha=reviewed_base_sha,
+            reviewed_head_sha=reviewed_head_sha,
         )
 
     # Receipt evidence must land before terminal status. If receipt persistence
@@ -32173,6 +35367,59 @@ def main() -> None:
     p_review_backend.add_argument("--json", action="store_true", help="JSON output")
     p_review_backend.set_defaults(func=cmd_review_backend)
 
+    # review-findings — deterministic receipt-write plumbing. Direct skill
+    # writers use the same parser/currentness contract as subprocess backends.
+    p_review_findings = subparsers.add_parser(
+        "review-findings",
+        help="Attach versioned structured findings to a direct-writer receipt",
+    )
+    review_findings_sub = p_review_findings.add_subparsers(
+        dest="review_findings_cmd", required=True
+    )
+    p_findings_attach = review_findings_sub.add_parser(
+        "attach",
+        help="Parse an existing reviewer response and atomically write the receipt",
+    )
+    p_findings_attach.add_argument(
+        "--receipt", required=True, help="Final receipt path"
+    )
+    p_findings_attach.add_argument(
+        "--input", required=True, help="Base receipt JSON payload"
+    )
+    p_findings_attach.add_argument(
+        "--review-file", required=True, dest="review_file",
+        help="Reviewer output already captured by the caller",
+    )
+    p_findings_attach.add_argument(
+        "--prior",
+        default=None,
+        help="Prior receipt path for lineage (defaults to --receipt)",
+    )
+    p_findings_attach.add_argument(
+        "--recovery",
+        default=None,
+        help=(
+            "Optional recovery copy written inside the receipt transaction "
+            "before the terminal pointer advances"
+        ),
+    )
+    p_findings_attach.add_argument(
+        "--require-prior-current",
+        action="store_true",
+        help=(
+            "Reject when an explicit --prior snapshot no longer equals the "
+            "terminal receipt after acquiring its lock"
+        ),
+    )
+    p_findings_attach.add_argument(
+        "--head", default="HEAD", help="Reviewed head ref (default: HEAD)"
+    )
+    p_findings_attach.add_argument(
+        "--base", default=None, help="Optional reviewed base ref"
+    )
+    p_findings_attach.add_argument("--json", action="store_true", help="JSON output")
+    p_findings_attach.set_defaults(func=cmd_review_findings_attach)
+
     # models resolve (fn-115.3) — pure map + precedence lookup for skills
     p_models = subparsers.add_parser(
         "models",
@@ -33145,6 +36392,68 @@ def main() -> None:
     )
     p_scope_wp.set_defaults(func=cmd_scope_write_policy)
 
+    # pr-cognitive-aid — host composes intent; flowctl owns only the portable
+    # contract, immutable generations, current projection, and Markdown.
+    p_pr_aid = subparsers.add_parser(
+        "pr-cognitive-aid",
+        help="Validate, persist, select, and render a v1 PR cognitive-aid artifact",
+    )
+    pr_aid_sub = p_pr_aid.add_subparsers(dest="pr_aid_cmd", required=True)
+    p_pr_aid_validate = pr_aid_sub.add_parser(
+        "validate", help="Validate one artifact without writing it"
+    )
+    p_pr_aid_validate.add_argument("--file", required=True, help="JSON file or -")
+    p_pr_aid_validate.add_argument("--json", action="store_true", help="JSON output")
+    p_pr_aid_validate.set_defaults(func=cmd_pr_cognitive_aid_validate)
+    p_pr_aid_html_input = pr_aid_sub.add_parser(
+        "html-input",
+        help="Emit a lossless HTML-safe semantic carrier for one validated artifact",
+    )
+    p_pr_aid_html_input.add_argument("--file", required=True, help="JSON file or -")
+    p_pr_aid_html_input.set_defaults(func=cmd_pr_cognitive_aid_html_input)
+    for command, handler, help_text in (
+        (
+            "write",
+            cmd_pr_cognitive_aid_write,
+            "Validate and atomically persist one generation",
+        ),
+        (
+            "current",
+            cmd_pr_cognitive_aid_current,
+            "Select the current base/head-bound generation",
+        ),
+        (
+            "render",
+            cmd_pr_cognitive_aid_render,
+            "Render the supported current generation as Markdown",
+        ),
+    ):
+        pr_aid_parser = pr_aid_sub.add_parser(command, help=help_text)
+        pr_aid_parser.add_argument(
+            "id", nargs="?" if command == "render" else None, help="Canonical spec ID"
+        )
+        pr_aid_parser.add_argument(
+            "--base-sha",
+            required=command != "render",
+            help="Current merge-base SHA",
+        )
+        pr_aid_parser.add_argument(
+            "--head-sha",
+            required=command != "render",
+            help="Current PR-head SHA",
+        )
+        if command == "write":
+            pr_aid_parser.add_argument("--file", required=True, help="JSON file or -")
+        elif command == "render":
+            pr_aid_parser.add_argument(
+                "--file", help="Validate and render this JSON file without persistence"
+            )
+        if command != "render":
+            pr_aid_parser.add_argument(
+                "--json", action="store_true", help="JSON output"
+            )
+        pr_aid_parser.set_defaults(func=handler)
+
     # task create
     p_task = subparsers.add_parser("task", help="Task commands")
     task_sub = p_task.add_subparsers(dest="task_cmd", required=True)
@@ -33515,7 +36824,15 @@ def main() -> None:
 
     p_rp_chat = rp_sub.add_parser("chat-send", help="Send chat via rp-cli")
     p_rp_chat.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_chat.add_argument("--tab", required=True, help="Tab id or name")
+    p_rp_chat.add_argument(
+        "--tab",
+        help="Tab id or name (Classic)",
+    )
+    p_rp_chat.add_argument(
+        "--context-id",
+        dest="context_id",
+        help="Canonical CE context returned by setup-review",
+    )
     p_rp_chat.add_argument("--message-file", required=True, help="Message file")
     p_rp_chat.add_argument("--new-chat", action="store_true", help="Start new chat")
     p_rp_chat.add_argument("--chat-name", help="Chat name (with --new-chat)")
@@ -33548,12 +36865,22 @@ def main() -> None:
         "setup-review", help="Atomic: resolve window + open builder tab"
     )
     p_rp_setup.add_argument("--repo-root", required=True, help="Repo root path")
-    p_rp_setup.add_argument("--summary", required=True, help="Builder summary/instructions")
+    setup_summary = p_rp_setup.add_mutually_exclusive_group(required=True)
+    setup_summary.add_argument("--summary", help="Builder summary/instructions")
+    setup_summary.add_argument(
+        "--summary-file",
+        help="Read complete builder instructions from this file",
+    )
     p_rp_setup.add_argument(
         "--response-type",
         dest="response_type",
         choices=["review"],
-        help="Use builder review mode (requires RP 1.6.0+)",
+        help="Use CE Context Builder review mode; Classic keeps its compatibility flow",
+    )
+    p_rp_setup.add_argument(
+        "--response-file",
+        dest="response_file",
+        help="Write the CE direct review response to this file",
     )
     p_rp_setup.add_argument(
         "--create",

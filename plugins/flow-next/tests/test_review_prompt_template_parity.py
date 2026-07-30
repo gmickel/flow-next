@@ -4,8 +4,9 @@ Embedded review prompts moved into skill-owned ``references/*.md`` templates.
 ``flowctl`` still ships byte-identical FALLBACK constants for installs where the
 plugin root is unavailable. Edit one, edit the other - this test fails on drift.
 
-Also pins rendered-prompt byte-identity against frozen fixtures for fixed inputs
-so template/fallback edits cannot silently change what backends receive.
+Also compares rendered prompts with frozen pre-fn-136 fixtures. Intentional
+changes may occur only inside ``## Output Format``; every other byte stays
+pinned, and the reached-path character/token proxy may not grow.
 
 Run:
     python3 -m unittest plugins.flow-next.tests.test_review_prompt_template_parity -v
@@ -14,6 +15,8 @@ Run:
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import json
 import unittest
 from pathlib import Path
 from typing import Any
@@ -45,6 +48,11 @@ HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent  # plugins/flow-next
 REPO_ROOT = PLUGIN_DIR.parent.parent
 FIXTURES = HERE.parent / "fixtures" / "review_prompts"
+PRE_CHANGE_COMMIT = "2cfef991b548ddfbae3f787911be3a3b882f031a"
+TOKEN_EVIDENCE = (
+    REPO_ROOT
+    / "optimization/reached-path/evidence/fn136/review-output-format-token-delta.json"
+)
 
 # (embedded FALLBACK constant, on-disk template relative to repo root)
 PARITY_PAIRS = [
@@ -86,6 +94,47 @@ def _normalize(text: str) -> str:
     return text.replace("\r\n", "\n")
 
 
+def _without_output_format(text: str) -> str:
+    start = text.index("## Output Format\n")
+    offset = start + len("## Output Format\n")
+    in_fence = False
+    end = -1
+    for line in text[offset:].splitlines(keepends=True):
+        if line.startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("## "):
+            end = offset
+            break
+        offset += len(line)
+    if end == -1:
+        raise AssertionError("Output Format has no following section boundary")
+    return text[:start] + "## Output Format\n<FORMAT>\n" + text[end:]
+
+
+def _output_format(text: str) -> str:
+    start = text.index("## Output Format\n")
+    offset = start + len("## Output Format\n")
+    in_fence = False
+    for line in text[offset:].splitlines(keepends=True):
+        if line.startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("## "):
+            return text[start:offset]
+        offset += len(line)
+    raise AssertionError("Output Format has no following section boundary")
+
+
+def _without_plan_finding_schema(text: str) -> str:
+    section = _output_format(text)
+    starts = ("For each issue found:\n", "Severity: P0/P1/P2/P3\n")
+    start = next((section.index(marker) for marker in starts if marker in section), -1)
+    if start == -1:
+        raise AssertionError("plan finding schema start missing")
+    end_marker = "After the issues list, emit "
+    end = section.index(end_marker, start)
+    return section[:start] + "<FINDING_SCHEMA>\n" + section[end:]
+
+
 class TestReviewPromptTemplateParity(unittest.TestCase):
     def test_fallbacks_match_template_files(self) -> None:
         for const_name, rel in PARITY_PAIRS:
@@ -102,15 +151,23 @@ class TestReviewPromptTemplateParity(unittest.TestCase):
 
 
 class TestReviewPromptRenderedFixtures(unittest.TestCase):
-    """Rendered prompts must stay byte-identical to pre-extraction fixtures."""
+    """Rendered prompt drift is confined to the output-format section."""
 
     def _assert_fixture(self, name: str, rendered: str) -> None:
         path = FIXTURES / f"{name}.txt"
         self.assertTrue(path.is_file(), f"fixture missing: {path}")
+        baseline = _normalize(path.read_text(encoding="utf-8"))
+        current = _normalize(rendered)
+
         self.assertEqual(
-            _normalize(rendered),
-            _normalize(path.read_text(encoding="utf-8")),
-            f"rendered {name} prompt drifted from fixture {path.name}",
+            _without_output_format(current),
+            _without_output_format(baseline),
+            f"rendered {name} changed outside ## Output Format",
+        )
+        self.assertLessEqual(
+            len(current),
+            len(baseline),
+            f"rendered {name} grew under the reached-path chars/4 token proxy",
         )
 
     def test_impl_review_prompt(self) -> None:
@@ -177,6 +234,115 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self.assertIn("Do not invoke Flow-Next skills", prompt)
         self.assertIn("`flowctl *-review`", prompt)
         self.assertIn("launch another reviewer", prompt)
+
+
+class TestReviewPromptPreChangeBinding(unittest.TestCase):
+    """Every assembled route variant differs only inside Output Format."""
+
+    def rendered_prompts(self) -> dict[str, str]:
+        prompts = {
+            "impl": flowctl.build_review_prompt(
+                "impl", _SPEC, _HINTS, diff_summary=_DSUM, diff_content=_DDIFF
+            ),
+            "impl_empty_optional": flowctl.build_review_prompt(
+                "impl", _SPEC, "", diff_summary="", diff_content=""
+            ),
+            "plan": flowctl.build_review_prompt(
+                "plan", _SPEC, _HINTS, task_specs=_TASKS
+            ),
+            "plan_no_tasks": flowctl.build_review_prompt("plan", _SPEC, _HINTS),
+            "standalone": flowctl.build_standalone_review_prompt(
+                _BASE, _FOCUS, _DSUM
+            ),
+            "standalone_no_focus": flowctl.build_standalone_review_prompt(
+                _BASE, None, _DSUM
+            ),
+            "completion": flowctl.build_completion_review_prompt(
+                _SPEC, _TASKS, _DSUM, _DDIFF
+            ),
+            "completion_no_tasks": flowctl.build_completion_review_prompt(
+                _SPEC, "", _DSUM, _DDIFF
+            ),
+        }
+        corpus_root = REPO_ROOT / "optimization" / "review-prompt"
+        corpus = {
+            "plan_corpus_risky": (corpus_root / "spec_corpus.md").read_text(
+                encoding="utf-8"
+            ),
+            "plan_corpus_clean": (corpus_root / "spec_clean.md").read_text(
+                encoding="utf-8"
+            ),
+            "plan_corpus_user_edited": (
+                "# User-edited plan\n\n"
+                "## Acceptance\n"
+                "- Preserve operator-authored batch size 37; do not restore generated 50.\n"
+                "## Test strategy\n"
+                "- Verify batches of exactly 37 and malformed-row rollback.\n"
+            ),
+        }
+        for name, spec in corpus.items():
+            prompts[name] = flowctl.build_review_prompt(
+                "plan",
+                spec,
+                "Production Plan Review context hints.",
+                task_specs=(
+                    "Current task specs are supplied from persisted .flow/task files."
+                ),
+            )
+        return prompts
+
+    def test_all_route_variants_are_format_only_against_pre_change_commit(self) -> None:
+        evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
+        current = self.rendered_prompts()
+        self.assertEqual(current.keys(), evidence["prompts"].keys())
+        for name, prompt in current.items():
+            with self.subTest(prompt=name):
+                self.assertEqual(
+                    hashlib.sha256(
+                        _without_output_format(prompt).encode("utf-8")
+                    ).hexdigest(),
+                    evidence["prompts"][name]["baseline_masked_sha256"],
+                    f"{name} changed outside ## Output Format relative to {PRE_CHANGE_COMMIT}",
+                )
+
+    def test_plan_output_changes_only_the_finding_schema(self) -> None:
+        evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
+        fixture = (FIXTURES / "plan.txt").read_text(encoding="utf-8")
+        self.assertEqual(
+            hashlib.sha256(fixture.encode("utf-8")).hexdigest(),
+            evidence["prompts"]["plan"]["baseline_sha256"],
+            "pre-change plan fixture drifted from its commit-bound SHA-256",
+        )
+        baseline = _without_plan_finding_schema(fixture)
+        prompts = self.rendered_prompts()
+        for name in (
+            "plan",
+            "plan_no_tasks",
+            "plan_corpus_risky",
+            "plan_corpus_clean",
+            "plan_corpus_user_edited",
+        ):
+            with self.subTest(prompt=name):
+                self.assertEqual(_without_plan_finding_schema(prompts[name]), baseline)
+
+    def test_actual_token_measurement_is_bound_to_assembled_prompts(self) -> None:
+        evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
+        self.assertEqual(evidence["baseline"]["commit"], PRE_CHANGE_COMMIT)
+        self.assertEqual(evidence["measurement"]["tool"], "tiktoken")
+        current = self.rendered_prompts()
+        self.assertEqual(evidence["prompts"].keys(), current.keys())
+        for name, row in evidence["prompts"].items():
+            with self.subTest(prompt=name):
+                self.assertEqual(
+                    row["candidate_sha256"],
+                    hashlib.sha256(current[name].encode("utf-8")).hexdigest(),
+                )
+                for counts in row["tokens"].values():
+                    self.assertEqual(
+                        counts["delta"], counts["candidate"] - counts["baseline"]
+                    )
+                    self.assertLessEqual(counts["delta"], 0)
+        self.assertTrue(evidence["acceptance"]["all_deltas_lte_zero"])
 
 
 class TestDeepPassFallbackCoverage(unittest.TestCase):

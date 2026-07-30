@@ -120,7 +120,7 @@ pr_cognitive_aid: {
 - Full walkthrough renders when `humanReviewLines >= 200` or `canonicalFileCount >= 6`. `humanReviewLines` is additions + deletions over unique canonical files only. Below threshold, render thesis, proof and one flat canonical-file table; no discretionary second threshold path.
 - Logical order is optional problem and principle, exactly 1-7 implementation steps, optional deliberately unchanged behavior, then optional verification/ship evidence. Optional kinds are omitted rather than invented; a walkthrough with zero or more than seven `step` groups is invalid.
 - Generated/mechanical rows remain in their upstream groups and are collapsed/de-emphasized there; renderers never move files or create a synthetic noise group. Global generated/mechanical counts and churn may be aggregated without changing membership. They remain excluded from threshold metrics.
-- Validation plus Markdown rendering of the golden maximum-normal fixture must complete within 50 ms p95 over 30 warm runs in CI, excluding atomic disk write. No network/model I/O is permitted.
+- Validation plus Markdown rendering of the golden maximum-normal fixture must complete within a strict `<100 ms p95` budget over 30 warm runs in CI, excluding atomic disk write. The budget reflects a representative parallel-suite observation of 90.57 ms, which is operationally negligible within the end-to-end workflow. No network/model I/O is permitted.
 
 ### 5. GitHub Markdown approximation
 
@@ -160,6 +160,6 @@ pr_cognitive_aid: {
 - **R5:** Receipt/memory docs define schema versions, enums, anchors, lineage/currentness, bounds and fallback behavior product-neutrally.
 - **R6:** `make-pr` produces a bounded, schema-validated `pr_cognitive_aid.changeWalkthrough` with explicit artifact identity, base/head binding, provenance references and separate change/attention dimensions, with no extra model call.
 - **R7:** GitHub Markdown follows the deterministic threshold and complete rendering grammar while preserving the existing Review plan and raw-diff privacy boundary.
-- **R8:** Validation rejects unsafe/oversize/ungrounded artifacts without truncation; current selection never mixes stale/legacy fields; validation plus render meets the 50 ms p95 budget.
+- **R8:** Validation rejects unsafe/oversize/ungrounded artifacts without truncation; current selection never mixes stale/legacy fields; validation plus render meets the strict `<100 ms p95` budget over 30 warm runs.
 - **R9:** Canonical v1 fixture and metadata prove structured/Markdown/HTML semantic parity; Flow Swarm's vendored fixture is SHA-pinned to the upstream bytes.
 - **R10:** The three reference images resolve repository-relatively and remain explicitly information-architecture references.

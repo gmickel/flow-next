@@ -54,9 +54,15 @@ Optional scout output field listing feature slices from the feature map that ove
 
 ## Receipt
 
-A review-layer JSON artefact that gates Ralph state transitions. `flowctl impl-review` writes a receipt at `.flow/review-receipts/<branch>.json` with verdict (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`), confidence anchors, introduced vs pre-existing finding counts, and deferred / suppressed counts. Ralph reads review receipts to decide loop progression. A Green receipt is the gate-layer counterpart, not a review-layer receipt.
+A review-layer JSON artefact that gates workflow state transitions. It carries a verdict (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`), confidence and classification evidence, and may carry the optional versioned [`findings`](plugins/flow-next/docs/review-findings.md) projection. The receipt and original reviewer prose remain authoritative handover evidence when that additive projection is absent, stale, invalid, or unsupported. A Green receipt is the gate-layer counterpart, not a review-layer receipt.
 
 _Relates to_: Green receipt
+
+## Structured finding
+
+A versioned, portable projection of one issue reported in review prose. Its durable `id` survives review rounds; canonical severity (`P0`-`P3`), confidence, classification, and status values make it renderable without Markdown regexes; an optional anchor binds a safe repository-relative line range to reviewed base/head snapshots. Finding currentness comes only from one unambiguous, head-current receipt lineage tip. Memory may preserve the lesson from a fixed finding, but it never owns the finding's status.
+
+_Relates to_: Receipt, R-ID, Carmack-level review
 
 ## Green receipt
 

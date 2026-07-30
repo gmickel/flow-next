@@ -252,7 +252,14 @@ Don't ask a human to skim a 10K-line diff. `/flow-next:make-pr` renders a PR bod
 /flow-next:make-pr <spec-id>          # auto-detects from current branch
 ```
 
-With HTML artifact mode on (`flowctl config set artifacts.html.enabled true`), make-pr also commits a self-contained `pr.html` review instrument — diff-derived churn map, R-ID → evidence table with flagged mismatches, where-to-look checklist — and links it from the PR body. Same switch gives capture/plan a spec visualizer. Opt-in; see [`docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md).
+Make PR also preserves one versioned, intent-ordered change walkthrough whose
+identity, provenance, logical groups, file membership, deliberate non-changes,
+and verification render from the same object. See the
+[`pr-cognitive-aid` consumer contract](plugins/flow-next/docs/pr-cognitive-aid.md).
+With HTML artifact mode on (`flowctl config set artifacts.html.enabled true`),
+make-pr also commits a self-contained `pr.html` review instrument and links it
+from the PR body. Same switch gives capture/plan a spec visualizer. Opt-in; see
+[`docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md).
 
 → [flow-next.dev/skills/make-pr](https://flow-next.dev/skills/make-pr)
 
@@ -414,6 +421,7 @@ The repo holds the offline-resilient reference. [flow-next.dev](https://flow-nex
 | Live-app QA — `/flow-next:qa`, spec-derived scenarios, P0/P1/P2 findings, `qa_verdict` receipt | [`skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md) | — |
 | `.flow/` directory layout, spec-first task model, ID format | [`docs/architecture.md`](plugins/flow-next/docs/architecture.md) | — |
 | Spec template — R-ID rules, confidence anchors, receipt schema | [`docs/spec-template.md`](plugins/flow-next/docs/spec-template.md) · canonical scaffold at [`templates/spec.md`](plugins/flow-next/templates/spec.md) | — |
+| Structured review findings — versioned receipt schema, lineage/currentness, anchors, bounds, consumer fallback | [`docs/review-findings.md`](plugins/flow-next/docs/review-findings.md) | [Receipts](https://flow-next.dev/review/receipts/) |
 | Memory schema — bug / knowledge tracks, frontmatter, audit lifecycle | [`docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) | — |
 | Self-improving loops — memory, glossary, decisions, strategy | [`docs/self-improving.md`](plugins/flow-next/docs/self-improving.md) | — |
 | Tracker-sync bridge: projection model, hybrid ids, deterministic `flowctl tracker` transport, `/flow-next:tracker-sync` vs `/flow-next:sync` | [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md) | n/a |

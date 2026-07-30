@@ -28,6 +28,8 @@ If no cross-family pin is available:
  `NEEDS_HUMAN: host review needs a cross-family model pin in AGENTS.md model-routing`.
 
 Dispatch one fresh read-only reviewer using the host primitive:
+Immediately beforehand capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
+retain that literal through receipt writing.
 
 | Host | Pin/read-only contract |
 |---|---|
@@ -66,6 +68,21 @@ Write:
  "timestamp": "<ISO-8601>"
 }
 ```
+
+Write the base JSON and full reviewer output to temporary files, then make the
+terminal receipt write through the shared deterministic attachment command:
+
+```bash
+"$FLOWCTL" review-findings attach \
+ --input "$RECEIPT_INPUT" \
+ --receipt "$RECEIPT_PATH" \
+ --review-file "$REVIEW_OUTPUT_FILE" \
+ --head "$REVIEW_HEAD_SHA" \
+ --json
+```
+
+It reads any prior receipt before atomic replacement, carries only valid
+same-backend plan lineage, and adds no reviewer/model/network call.
 
 After every verdict, including re-review, write latest status:
 

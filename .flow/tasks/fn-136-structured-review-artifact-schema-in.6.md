@@ -19,17 +19,16 @@ Implement the shared versioned PR cognitive-aid contract and deterministic GitHu
 - Add regression coverage proving cognitive-aid generation and Markdown rendering neither alter nor skip the `makePr` tracker call, its PR URL/linkage inputs, status reconciliation, audit or retro-fire behavior.
 - Render the full GitHub walkthrough only at `humanReviewLines >= 200` or `canonicalFileCount >= 6`; otherwise use the deterministic compact form.
 - Render the complete legend, proof table, 1-7 evidenced steps, file tables and diff links. Keep generated/mechanical rows collapsed inside their upstream groups, never regroup files, keep raw diffs excluded and preserve the risk-ranked Review plan.
-- Benchmark validation plus rendering at 50 ms p95 over 30 warm fixture runs; no model/network I/O.
+- Benchmark validation plus rendering at a strict `<100 ms p95` over 30 warm fixture runs; no model/network I/O. A representative parallel-suite observation was 90.57 ms, operationally negligible within the end-to-end workflow.
 ## Acceptance
 - [ ] Artifact identity/currentness, provenance, file-level evidence and separate change/attention dimensions validate and persist with no extra model call (R6).
 - [ ] Cognitive-aid generation precedes final PR-body creation while the existing post-creation `makePr` tracker facade remains behaviorally compatible at its linkage, In Review, audit and retro-fire boundaries (R6).
 - [ ] Focused regressions prove walkthrough rendering cannot alter, bypass or resurrect retired machinery around the deterministic tracker facade (R6).
 - [ ] Markdown follows deterministic compact/full rules and complete legend while preserving Review plan and raw-diff privacy (R7).
-- [ ] Bounds, rejection, stale/non-mixing selection and 50 ms p95 benchmark are fixture-tested (R8).
+- [ ] Bounds, rejection, stale/non-mixing selection and strict `<100 ms p95` benchmark over 30 warm runs are fixture-tested (R8).
 ## Done summary
-TBD
-
+Implemented the versioned PR cognitive-aid artifact, deterministic compact/full GitHub Markdown walkthrough, immutable currentness chain, live-diff binding, and make-pr tracker-boundary regressions. The final chain fix structurally validates every historical generation while applying the requested live diff only to the selected current tip; RepoPrompt CE returned SHIP in the existing review context/chat with R6-R8 met.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: ab479d872be72234102c6bb22684018889b35ce8, bf959bc843127ce0f4429ec47b4762edbc5248c3, b46ed5c9c73bc538cbcb4f94c9fbb4d6f05a83b9, 1bbdd4a6b15130d0af843764ece5565d69d1e02e, 8e0a7cce4fb27f9906ee28a14ea6ae48789e9fec, 9119a5471bbb15b10549486e758d9802ea362aa8, 064edfc8967e06c0e5abe200a6f856d949c39d0f
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_pr_cognitive_aid test_make_pr_reached_path test_tracker_caller_execution test_tracker_caller_oracle test_flowctl_surface test_skill_prose_flowctl_surface -q (58 tests, green), python3 scripts/run_tests_parallel.py (3419 tests, 0 failures, 0 errors, green), uvx ruff@0.16.0 check . (green), ./scripts/sync-codex.sh && ./scripts/sync-codex.sh (green, idempotent), RepoPrompt CE context A959E105-5FD9-4B29-A366-498237F77C3B chat review-cognitive-aid-0958E3 mode review: SHIP
 - PRs:

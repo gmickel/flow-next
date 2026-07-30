@@ -25,6 +25,11 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 ## Step 2: Dispatch read-only reviewer subagent
 
 Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
+Immediately beforehand resolve `DIFF_BASE="${BASE_COMMIT:-main}"` (fall back
+to `master` only when `main` does not resolve), fail closed unless it resolves,
+then capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
+`REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"`.
+Retain those literal anchors through receipt writing.
 
 | Host | How to pin |
 |------|------------|
@@ -68,6 +73,25 @@ Write a receipt compatible with existing consumers:
 ```
 
 `session_id` is literal `null` — deliberate: host re-reviews are always fresh subagents, and `null` distinguishes "no resumable session by design" from an accidentally incomplete receipt. `review` carries the reviewer's full output — the re-review ratchet reads it to inject prior findings into the next fresh subagent (convergence), so it is REQUIRED, not optional.
+
+Write that base JSON to a temporary input file and persist the full reviewer
+output to a second temporary file. The terminal receipt write MUST use the
+shared deterministic attachment command so host receipts follow the same
+lineage/currentness contract as subprocess backends:
+
+```bash
+"$FLOWCTL" review-findings attach \
+ --input "$RECEIPT_INPUT" \
+ --receipt "$RECEIPT_PATH" \
+ --review-file "$REVIEW_OUTPUT_FILE" \
+ --base "$REVIEW_BASE_SHA" \
+ --head "$REVIEW_HEAD_SHA" \
+ --json
+```
+
+The command reads the prior receipt before atomically replacing it. Unsupported
+or legacy prose preserves the base receipt without a `findings` field; no extra
+reviewer, model, or network call occurs.
 
 Do **not** invent a `session_id` for resume — host re-reviews always spawn a new subagent. Shape stays compatible with convergence/cap/pilot/land consumers (`mode`, `verdict`, `model`, `timestamp`).
 

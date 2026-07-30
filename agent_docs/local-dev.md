@@ -238,8 +238,8 @@ Some smokes here require manual probing in a real repo (operator-level); deferre
 ## RP gotchas (must follow)
 
 - Use `flowctl rp` wrappers only (no direct RepoPrompt CLI calls).
-- Initialize review state atomically with `eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "$SUMMARY" --create)"`; it resolves or reuses the numeric window and opens Context Builder.
-- Use the returned `W` and `T` with the prompt, selection, export, and chat wrappers; `setup-review` is the only supported initialization path.
+- Initialize CE review state once with `flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "$SUMMARY" --response-type review --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"`. Source the setup file in each fresh shell block.
+- CE validates and consumes the direct `context_builder` result (prompt, formatted selection, positive file/token counts, context/chat identity, and terminal review response). Do not inspect a visible compose tab, augment selection, or send a second initial chat. Classic alone uses the returned `W`/`T` with the legacy selection/chat wrappers.
 - Write receipt JSON after chat returns when `REVIEW_RECEIPT_PATH` is set.
 
 ## Debug envs (optional, Ralph only)

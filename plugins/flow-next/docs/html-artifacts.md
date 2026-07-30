@@ -77,8 +77,9 @@ Generation failure is non-fatal everywhere: skip the link line, one stderr note,
 `/flow-next:make-pr` Phase 1.5 (between the export-payload gather and body rendering) generates `pr.html` — a **read-only review instrument**: masthead + dials, sticky review-progress bar, the 90-second read, a churn map grouped by review intent, the R-ID → evidence table, a where-to-look checklist, and a risk register.
 
 - **Diff-derived, never commit messages.** Inputs are the `flowctl spec export-cognitive-aid` payload plus the real diff stat; commit subjects/bodies are not lens input.
+- **Structured walkthrough parity.** When a supported current v1 PR cognitive-aid object is available, the HTML lens consumes that exact validated object as the authoritative source for artifact identity/currentness, sources, ordered groups, file membership, separate change/attention dimensions, file-level R-ID/task links, deliberate non-changes, and verification. It embeds flowctl's lossless HTML-safe JSON carrier, so tests and consumers can recover the exact object. It may enrich interaction but cannot reclassify, reorder, or mix stale/legacy semantics. See [`pr-cognitive-aid.md`](pr-cognitive-aid.md).
 - **R-ID verification — warn-in-artifact, never block.** Payload-vs-diff mismatches (claimed evidence outside the diff range, uncovered R-IDs, evidence touching no diff files) render as visibly flagged rows (red R-ID cell + `mismatch` chip + reason). A mismatch never blocks PR creation and is never silently dropped.
-- **Narrow commit.** When the artifact file is tracked, it lands in exactly one pathspec-confined commit — `chore(flow): pr artifact <spec-id>`, the artifact file only, never `git add -A` — before the PR body captures `HEAD_SHA`, so the SHA-pinned blob link in the body resolves once the branch pushes. Byte-identical regeneration makes no empty commit.
+- **Current v1 stays local-only.** Committing HTML that embeds a head-bound current object would advance `HEAD` and stale its own input. The v1 lens therefore leaves `HEAD` unchanged and emits local-open guidance. Only the visibly labeled legacy fallback may use the pathspec-confined `chore(flow): pr artifact <spec-id>` commit and SHA-pinned blob link. Byte-identical fallback regeneration makes no empty commit.
 - **Failure-guarded git.** Every git step is guarded (`LENS_OK` flag): a hook rejection or stage failure degrades to no-body-line + one stderr note; the PR is still created.
 - **`--dry-run` writes nothing.** No artifact, no commit, no body line — the dry-run no-state-change promise holds.
 - **Ralph stdout contract untouched.** Under Ralph the stdout stays exactly `PR_URL=<url>`; all artifact messaging routes to stderr.
@@ -92,11 +93,19 @@ GitHub renders committed `.html` files as raw source and rejects `.html` attachm
 open .flow/artifacts/<spec-id>/spec.html        # macOS; xdg-open on Linux
 ```
 
-The PR body links the committed artifact as a SHA-pinned blob URL with the note "GitHub renders committed HTML as source — open locally in a browser". Optionally, a third-party raw-preview service (e.g. raw.githack.com) can render a committed blob URL directly in the browser — useful for remote reviewers, but third-party and entirely optional; flow-next never embeds such links in generated output. Don't over-engineer hosting: the artifacts are local-first by design.
+For a supported current v1 lens, the PR body gives local-open guidance and does
+not link a stale committed copy. A legacy fallback may link its committed
+artifact as a SHA-pinned blob URL with the note "GitHub renders committed HTML
+as source — open locally in a browser". Optionally, a third-party raw-preview
+service can render that fallback blob directly; flow-next never embeds such
+links in generated output. Don't over-engineer hosting: the artifacts are
+local-first by design.
 
 ## Commit or gitignore
 
-Artifacts are **committed by default** — that is what makes the make-pr blob links resolve for remote reviewers. The setup ceremony offers the alternative:
+Spec and legacy-fallback artifacts are **committed by default**. A current v1
+PR lens is the exception: it stays local-only to preserve its head binding. The
+setup ceremony otherwise offers:
 
 | Choice | Trade-off |
 |---|---|
