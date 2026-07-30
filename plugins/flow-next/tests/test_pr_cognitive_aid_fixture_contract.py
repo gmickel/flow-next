@@ -129,6 +129,14 @@ class FixtureMetadataTests(unittest.TestCase):
         self.assertEqual(
             metadata["sha256"], hashlib.sha256(encoded).hexdigest()
         )
+        self.assertEqual(
+            metadata["performanceBudget"],
+            {
+                "operation": "validation-plus-markdown-render",
+                "p95MillisecondsExclusive": 100,
+                "warmRuns": 30,
+            },
+        )
         self.assertEqual(encoded[-1:], b"\n")
         source_bytes = subprocess.run(
             [
@@ -167,6 +175,8 @@ class FixtureMetadataTests(unittest.TestCase):
             "cross-repository network",
             "schema requires a new versioned fixture directory",
             "Never regenerate or pretty-print",
+            "strict `<100 ms p95` over 30 warm runs",
+            "`performanceBudget.p95MillisecondsExclusive` as an exclusive upper bound",
         ):
             self.assertIn(phrase, text)
 

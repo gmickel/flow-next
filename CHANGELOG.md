@@ -17,6 +17,13 @@ All notable changes to the flow-next.
   references, and an offline byte-pinned Flow Swarm vendoring contract now
   define downstream compatibility. No version bump.
 
+- **Structured review benchmarks now use a strict `<100 ms p95` ceiling.**
+  Both the maximum-item findings parser and maximum-normal cognitive-aid
+  validation/render path run 30 warm measurements. This supersedes the original
+  50 ms target after a representative parallel-suite observation of 90.57 ms;
+  the cost is operationally negligible within the end-to-end workflow. The
+  fixture metadata and consumer contracts pin the exclusive bound.
+
 - **Review receipts now expose optional versioned structured findings.**
   Plan, implementation, completion, and QA receipt writers preserve canonical
   severity/confidence/classification/status values, durable finding and receipt

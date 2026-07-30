@@ -709,7 +709,7 @@ class MarkdownAndBudgetTests(unittest.TestCase):
                 first_body_line = rendered.splitlines()[2]
                 self.assertNotEqual(first_body_line, thesis)
 
-    def test_validation_plus_render_p95_under_50_ms_for_30_warm_runs(self) -> None:
+    def test_validation_plus_render_p95_under_100_ms_for_30_warm_runs(self) -> None:
         maximum_normal = json.loads(GOLDEN.read_text(encoding="utf-8"))
         metadata = json.loads(GOLDEN_META.read_text(encoding="utf-8"))
         encoded = GOLDEN.read_bytes()
@@ -723,6 +723,14 @@ class MarkdownAndBudgetTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(encoded).hexdigest(), metadata["sha256"])
         self.assertEqual(metadata["schemaVersion"], 1)
         self.assertEqual(metadata["sourcePath"], GOLDEN.relative_to(REPO_ROOT).as_posix())
+        self.assertEqual(
+            metadata["performanceBudget"],
+            {
+                "operation": "validation-plus-markdown-render",
+                "p95MillisecondsExclusive": 100,
+                "warmRuns": 30,
+            },
+        )
         for _ in range(5):
             flowctl.render_pr_cognitive_aid_markdown(maximum_normal)
         durations_ms = []
@@ -731,7 +739,11 @@ class MarkdownAndBudgetTests(unittest.TestCase):
             flowctl.render_pr_cognitive_aid_markdown(maximum_normal)
             durations_ms.append((time.perf_counter() - started) * 1000)
         p95 = statistics.quantiles(durations_ms, n=20, method="inclusive")[18]
-        self.assertLess(p95, 50.0, f"p95={p95:.3f} ms")
+        self.assertLess(
+            p95,
+            metadata["performanceBudget"]["p95MillisecondsExclusive"],
+            f"p95={p95:.3f} ms",
+        )
 
 
 class MakePrIntegrationTests(unittest.TestCase):

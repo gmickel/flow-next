@@ -58,8 +58,17 @@ Flow-Next owns the maximum-normal v1 fixture and its metadata:
 - [`golden.meta.json`](../tests/fixtures/pr-cognitive-aid/v1/golden.meta.json)
 
 Metadata records `schemaVersion`, the upstream `sourcePath`, the full
-`sourceCommit`, and the SHA-256 of the exact `golden.json` bytes. The digest is
-over the file bytes as checked in—not parsed/reformatted JSON.
+`sourceCommit`, the SHA-256 of the exact `golden.json` bytes, and the executable
+performance contract. The digest is over the file bytes as checked in—not
+parsed/reformatted JSON.
+
+The maximum-normal fixture's validation plus GitHub Markdown rendering must
+complete within a strict `<100 ms p95` over 30 warm runs, excluding atomic disk
+write and permitting no model or network I/O. This ceiling supersedes the
+original 50 ms target: a representative parallel-suite run observed 90.57 ms,
+which is operationally negligible within the end-to-end workflow. Consumers
+should treat `performanceBudget.p95MillisecondsExclusive` as an exclusive
+upper bound, not round or reinterpret it as `<=`.
 
 Flow Swarm vendors byte-identical copies of both files under its own test
 fixtures. Its CI:

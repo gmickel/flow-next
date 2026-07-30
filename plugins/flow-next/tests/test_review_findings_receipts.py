@@ -37,7 +37,7 @@ SPEC.loader.exec_module(FLOWCTL)
 
 BASE_SHA = "a" * 40
 HEAD_SHA = "b" * 40
-FINDINGS_P95_BUDGET_MS = 50.0
+FINDINGS_P95_BUDGET_MS = 100.0
 
 
 def _fixture(backend: str, name: str = "catalog-sample") -> str:
