@@ -613,7 +613,14 @@ for prior in sorted(prior_items, key=lambda item: item.get("ordinal", 0)):
         known_ids = set()
         break
     known_ids.add(finding_id)
-    status = "not_fixed" if finding_id in current else "fixed"
+    if finding_id in current:
+        status = "not_fixed"
+    elif os.environ["QA_OUTCOME"] in {"BLOCKED", "NA"}:
+        status = prior.get("status", "open")
+        if status == "open":
+            status = "not_fixed"
+    else:
+        status = "fixed"
     lines.append(f"Prior finding {ordinal} — {status}.")
 
 for finding_id, item in current.items():
@@ -624,6 +631,7 @@ for finding_id, item in current.items():
         f"- **Severity**: {item['severity']}",
         f"- **Confidence**: {item['confidence']}",
         f"- **Classification**: {item['classification']}",
+        f"- **Title**: {finding_id}",
         f"- **Problem**: {item['reason']} (surface: {item['file']})",
         "",
     ])
@@ -634,7 +642,8 @@ with open(sys.argv[1], "w", encoding="utf-8") as fh:
     fh.write("\n".join(lines) + "\n")
 PY
 PRIOR_ARGS=()
-[[ -n "$PRIOR_RECEIPT" ]] && PRIOR_ARGS=(--prior "$PRIOR_RECEIPT")
+[[ -n "$PRIOR_RECEIPT" ]] \
+  && PRIOR_ARGS=(--prior "$PRIOR_RECEIPT" --require-prior-current)
 if ! "$FLOWCTL" review-findings attach \
   --input "$RECEIPT_INPUT" \
   --receipt "$RECEIPT_PATH" \

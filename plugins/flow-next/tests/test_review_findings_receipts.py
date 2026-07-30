@@ -19,6 +19,14 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 FLOWCTL_PATH = REPO / "plugins" / "flow-next" / "scripts" / "flowctl.py"
+QA_WORKFLOW = (
+    REPO
+    / "plugins"
+    / "flow-next"
+    / "skills"
+    / "flow-next-qa"
+    / "workflow.md"
+)
 CORPUS = REPO / "optimization" / "reached-path" / "fixtures" / "review-findings" / "v1"
 SPEC = importlib.util.spec_from_file_location("flowctl_findings_receipts", FLOWCTL_PATH)
 assert SPEC and SPEC.loader
@@ -82,6 +90,12 @@ def _review_text(review_type: str, backend: str) -> str:
 - **Evidence**: The QA writer is not integrated.
 <verdict>NEEDS_WORK</verdict>
 """
+
+
+def _qa_review_renderer_script() -> str:
+    source = QA_WORKFLOW.read_text(encoding="utf-8")
+    marker = '$PY - "$QA_REVIEW_FILE" "${PRIOR_RECEIPT:-}" <<\'PY\'\n'
+    return source.split(marker, 1)[1].split("\nPY\n", 1)[0]
 
 
 class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
@@ -382,6 +396,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
 - **Severity**: P1
 - **Confidence**: 100
 - **Classification**: introduced
+- **Title**: qa-login
 - **Problem**: Login is broken.
 <verdict>NEEDS_WORK</verdict>
 """,
@@ -415,6 +430,182 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
         self.assertEqual(len(repeated["items"]), 1)
         self.assertEqual(resolved["items"][0]["id"], first["items"][0]["id"])
         self.assertEqual(resolved["items"][0]["status"], "fixed")
+
+        blocked = FLOWCTL.parse_review_findings(
+            "Prior finding 1 — not_fixed.\n<verdict>NEEDS_WORK</verdict>\n",
+            source_receipt_id="qa-round-blocked",
+            review_kind="qa",
+            backend="interactive",
+            round_number=2,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="qa-round-1",
+            prior_findings=first,
+        )
+        self.assertEqual(blocked["items"][0]["id"], first["items"][0]["id"])
+        self.assertEqual(blocked["items"][0]["status"], "not_fixed")
+
+    def test_qa_workflow_renderer_repeats_blocks_and_resolves_identity(self) -> None:
+        first = FLOWCTL.parse_review_findings(
+            """### qa-login
+- **Severity**: P1
+- **Confidence**: 100
+- **Classification**: introduced
+- **Title**: qa-login
+- **Problem**: Login is broken.
+<verdict>NEEDS_WORK</verdict>
+""",
+            source_receipt_id="qa-workflow-1",
+            review_kind="qa",
+            backend="interactive",
+            round_number=1,
+            head_sha=HEAD_SHA,
+        )
+        prior_path = self.repo / "qa-prior.json"
+        prior_path.write_text(
+            json.dumps(
+                {
+                    "type": "qa_verdict",
+                    "id": "fn-136",
+                    "mode": "interactive",
+                    "findings": first,
+                }
+            ),
+            encoding="utf-8",
+        )
+        renderer = _qa_review_renderer_script()
+        current_finding = {
+            "id": "qa-login",
+            "severity": "P1",
+            "confidence": 100,
+            "classification": "introduced",
+            "reason": "Login is broken.",
+            "file": "login",
+        }
+
+        def render(outcome: str, findings: list[dict]) -> str:
+            output_path = self.repo / f"qa-{outcome}.md"
+            env = {
+                **os.environ,
+                "QA_TYPE": "qa_verdict",
+                "QA_ID": "fn-136",
+                "QA_MODE": "interactive",
+                "QA_OUTCOME": outcome,
+                "QA_VERDICT": (
+                    "SHIP" if outcome in {"SHIP", "NA"} else "NEEDS_WORK"
+                ),
+                "QA_FINDINGS": json.dumps(findings),
+            }
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-",
+                    str(output_path),
+                    str(prior_path),
+                ],
+                input=renderer,
+                text=True,
+                env=env,
+                check=True,
+            )
+            return output_path.read_text(encoding="utf-8")
+
+        repeated = FLOWCTL.parse_review_findings(
+            render("NEEDS_WORK", [current_finding]),
+            source_receipt_id="qa-workflow-2",
+            review_kind="qa",
+            backend="interactive",
+            round_number=2,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="qa-workflow-1",
+            prior_findings=first,
+        )
+        blocked = FLOWCTL.parse_review_findings(
+            render("BLOCKED", []),
+            source_receipt_id="qa-workflow-blocked",
+            review_kind="qa",
+            backend="interactive",
+            round_number=2,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="qa-workflow-1",
+            prior_findings=first,
+        )
+        resolved = FLOWCTL.parse_review_findings(
+            render("SHIP", []),
+            source_receipt_id="qa-workflow-resolved",
+            review_kind="qa",
+            backend="interactive",
+            round_number=2,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="qa-workflow-1",
+            prior_findings=first,
+        )
+        self.assertEqual(len(repeated["items"]), 1)
+        self.assertEqual(repeated["items"][0]["id"], first["items"][0]["id"])
+        self.assertEqual(blocked["items"][0]["status"], "not_fixed")
+        self.assertEqual(resolved["items"][0]["status"], "fixed")
+
+    def test_direct_attach_rejects_stale_explicit_prior_snapshot(self) -> None:
+        receipt = self.repo / "qa.json"
+        response = self.repo / "qa-review.md"
+        base_input = self.repo / "qa-input.json"
+        response.write_text(_fixture("host"), encoding="utf-8")
+        base_input.write_text(
+            json.dumps(
+                {
+                    "type": "qa_verdict",
+                    "id": "fn-136",
+                    "mode": "interactive",
+                    "verdict": "NEEDS_WORK",
+                }
+            ),
+            encoding="utf-8",
+        )
+        initial = argparse.Namespace(
+            input=str(base_input),
+            receipt=str(receipt),
+            review_file=str(response),
+            prior=None,
+            head="HEAD",
+            base=None,
+            recovery=None,
+            require_prior_current=False,
+            json=True,
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            FLOWCTL.cmd_review_findings_attach(initial)
+        prior_one = self.repo / "prior-one.json"
+        prior_two = self.repo / "prior-two.json"
+        prior_one.write_bytes(receipt.read_bytes())
+        prior_two.write_bytes(receipt.read_bytes())
+        response.write_text(
+            "Prior finding 1 — not_fixed.\n<verdict>NEEDS_WORK</verdict>\n",
+            encoding="utf-8",
+        )
+
+        def advance(prior: Path) -> bool:
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    FLOWCTL.cmd_review_findings_attach(
+                        argparse.Namespace(
+                            **{
+                                **vars(initial),
+                                "prior": str(prior),
+                                "require_prior_current": True,
+                            }
+                        )
+                    )
+            except FLOWCTL.ReviewReceiptHistoryError:
+                return False
+            return True
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(advance, (prior_one, prior_two)))
+        self.assertEqual(sorted(results), [False, True])
+        generations = FLOWCTL.load_review_receipt_generations(receipt)
+        self.assertEqual(
+            sorted(entry["findings"]["round"] for entry in generations),
+            [1, 2],
+        )
 
     def test_legacy_and_unparseable_receipts_remain_valid(self) -> None:
         legacy = {

@@ -5937,6 +5937,22 @@ def cmd_review_findings_attach(args: argparse.Namespace) -> None:
             code=2,
         )
     with cross_process_lock(_review_receipt_lock_path(receipt_path)):
+        if getattr(args, "require_prior_current", False) and prior_path != receipt_path:
+            try:
+                prior_snapshot = json.loads(
+                    prior_path.read_text(encoding="utf-8")
+                )
+                current_receipt = json.loads(
+                    receipt_path.read_text(encoding="utf-8")
+                )
+            except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+                raise ReviewReceiptHistoryError(
+                    "cannot verify direct-writer prior snapshot currentness"
+                ) from exc
+            if prior_snapshot != current_receipt:
+                raise ReviewReceiptHistoryError(
+                    "direct-writer prior snapshot is no longer current"
+                )
         findings = build_review_receipt_findings(
             review_text,
             review_type=review_type,
@@ -34043,6 +34059,14 @@ def main() -> None:
         help=(
             "Optional recovery copy written inside the receipt transaction "
             "before the terminal pointer advances"
+        ),
+    )
+    p_findings_attach.add_argument(
+        "--require-prior-current",
+        action="store_true",
+        help=(
+            "Reject when an explicit --prior snapshot no longer equals the "
+            "terminal receipt after acquiring its lock"
         ),
     )
     p_findings_attach.add_argument(
