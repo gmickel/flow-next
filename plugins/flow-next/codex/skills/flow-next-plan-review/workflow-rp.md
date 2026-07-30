@@ -202,6 +202,8 @@ NEVER recommend deleting / gitignoring / removing these committed pipeline paths
 
 For each issue:
 - **Severity**: Critical / Major / Minor / Nitpick
+- **Confidence**: 0 / 25 / 50 / 75 / 100
+- **Classification**: introduced / pre_existing
 - **Location**: Which task or section (e.g., "fn-1.3 Description" or "Spec Acceptance #2")
 - **Problem**: What's wrong
 - **Suggestion**: How to fix

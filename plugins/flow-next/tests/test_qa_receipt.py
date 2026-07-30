@@ -23,7 +23,7 @@ make-pr read from the persisted receipt (workflow.md §6.3):
   * `head_sha`  — the R1b freshness key (`git rev-parse HEAD` at QA time);
   * `branch`    — the branch the pass ran against;
   * `rid_coverage` — `{covered, total, rids: [{id, coverage}]}`, the §2.2 spine;
-  * `open_p0p1` — now an array of OBJECTS `{id, severity, reason, file}`
+  * `open_p0p1` — now an array of OBJECTS with v1 severity/confidence/classification
                   (was bare ids), so make-pr surfaces structured findings.
 
 The additive fields must be **additive only** — the receipt still passes the
@@ -94,6 +94,8 @@ def _project(qa_outcome: str) -> str:
 _OPEN_FINDING = {
     "id": "S2-F1",
     "severity": "P0",
+    "confidence": 100,
+    "classification": "introduced",
     "reason": "checkout submit throws; cart never clears",
     "file": "app/routes/checkout.tsx",
 }
@@ -248,13 +250,25 @@ class TestQaReceiptAdditiveFields(unittest.TestCase):
                     self.assertIn(row["coverage"], valid_coverage)
 
     def test_open_p0p1_entries_are_objects(self) -> None:
-        """Open findings are {id, severity, reason, file} objects, not bare ids (fn-72.1)."""
+        """Open findings carry the lossless v1 enum fields, not bare ids."""
         receipt = _build_receipt("NEEDS_WORK")
         self.assertTrue(receipt["open_p0p1"], "NEEDS_WORK fixture must carry an open finding")
         for finding in receipt["open_p0p1"]:
             self.assertIsInstance(finding, dict)
-            self.assertEqual({"id", "severity", "reason", "file"}, set(finding))
+            self.assertEqual(
+                {
+                    "id",
+                    "severity",
+                    "confidence",
+                    "classification",
+                    "reason",
+                    "file",
+                },
+                set(finding),
+            )
             self.assertIn(finding["severity"], {"P0", "P1"})
+            self.assertIn(finding["confidence"], {0, 25, 50, 75, 100})
+            self.assertIn(finding["classification"], {"introduced", "pre_existing"})
 
     def test_additive_fields_do_not_break_the_guard(self) -> None:
         """The extra fields are additive — the guard (gates on verdict only) still accepts."""

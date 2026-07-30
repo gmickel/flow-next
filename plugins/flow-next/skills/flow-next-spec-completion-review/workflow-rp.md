@@ -52,9 +52,9 @@ Read the actual code/tests and distinguish implemented, partial, missing, and
 deferred requirements. Identify unrelated scope and evidence gaps. For R-ID
 specs emit the complete coverage table and `Unaddressed R-IDs: [...]`.
 
-For each gap emit Confidence exactly 0/25/50/75/100 and Classification
-introduced or pre_existing. Suppress below 75 except P0 at 50+; only
-introduced gaps block. Never recommend deleting protected `.flow/*`, generated
+For each gap emit Severity, Confidence exactly 0/25/50/75/100, and
+Classification introduced or pre_existing. Suppress below 75 except P0 at
+50+; only introduced gaps block. Never recommend deleting protected `.flow/*`, generated
 plugin mirrors, spec/task records, review receipts, or Ralph artifacts.
 Emit suppression/classification/protected-path tallies when applicable.
 End with exactly one tag: <verdict>SHIP</verdict> or

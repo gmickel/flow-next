@@ -208,6 +208,15 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
         findings = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
         self.assertEqual(findings["round"], 1)
         self.assertNotIn("supersedesReceiptId", findings)
+        generations = FLOWCTL.load_review_receipt_generations(receipt)
+        self.assertEqual(len(generations), 1)
+        current = FLOWCTL.select_current_review_findings(
+            generations,
+            current_head_sha=findings["headSha"],
+            review_kind="implementation",
+            backend="codex",
+        )
+        self.assertEqual(current["sourceReceiptId"], findings["sourceReceiptId"])
 
     def test_writer_uses_pre_dispatch_literal_snapshot(self) -> None:
         receipt = self.repo / "receipt.json"
@@ -279,6 +288,23 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
         self.assertTrue(FLOWCTL.validate_review_receipt_findings(legacy))
         invalid = dict(legacy, findings={"schemaVersion": 99})
         self.assertFalse(FLOWCTL.validate_review_receipt_findings(invalid))
+
+    def test_direct_workflow_contracts_require_parser_complete_fields(self) -> None:
+        skill_root = REPO / "plugins" / "flow-next" / "skills"
+        plan_rp = (
+            skill_root / "flow-next-plan-review" / "workflow-rp.md"
+        ).read_text(encoding="utf-8")
+        completion_rp = (
+            skill_root / "flow-next-spec-completion-review" / "workflow-rp.md"
+        ).read_text(encoding="utf-8")
+        qa = (skill_root / "flow-next-qa" / "workflow.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertGreaterEqual(plan_rp.count("Confidence"), 2)
+        self.assertGreaterEqual(plan_rp.count("Classification"), 2)
+        self.assertGreaterEqual(completion_rp.count("Severity"), 2)
+        self.assertIn('QA_FINDINGS="${QA_FINDINGS:-[]}"', qa)
+        self.assertIn('RECEIPT_HISTORY_DIR="${RECEIPT_PATH}.history"', qa)
 
 
 class ReviewFindingsCurrentnessTest(unittest.TestCase):
@@ -376,6 +402,37 @@ class ReviewFindingsCurrentnessTest(unittest.TestCase):
         )
         self.assertEqual(current["sourceReceiptId"], "round-2")
         self.assertTrue(all(item["status"] == "open" for item in current["items"]))
+
+    def test_incomplete_snapshot_and_forged_first_seen_fail_closed(self) -> None:
+        first = _container(receipt_id="round-1")
+        second = _container(receipt_id="round-2", round_number=2, prior=first)
+        omitted = json.loads(json.dumps(second))
+        omitted["items"] = [
+            item for item in omitted["items"] if item["id"] != first["items"][0]["id"]
+        ]
+        self.assertTrue(FLOWCTL._review_findings_container_valid(omitted))
+        self.assertIsNone(
+            FLOWCTL.select_current_review_findings(
+                [{"findings": first}, {"findings": omitted}],
+                current_head_sha=HEAD_SHA,
+            )
+        )
+
+        forged = json.loads(json.dumps(second))
+        forged_item = next(
+            item for item in forged["items"] if item["firstSeenReceiptId"] == "round-2"
+        )
+        forged_item["firstSeenReceiptId"] = "round-1"
+        forged_item["id"] = FLOWCTL._review_finding_lineage_id(
+            "round-1", forged_item["ordinal"]
+        )
+        self.assertTrue(FLOWCTL._review_findings_container_valid(forged))
+        self.assertIsNone(
+            FLOWCTL.select_current_review_findings(
+                [{"findings": first}, {"findings": forged}],
+                current_head_sha=HEAD_SHA,
+            )
+        )
 
         skipped_round = json.loads(json.dumps(second))
         skipped_round["round"] = 3

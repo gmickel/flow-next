@@ -423,7 +423,7 @@ fi
 
 `memory add` emits `matches` as the retrieval signal (per `docs/memory-schema.md`); the host decides update-vs-create. A re-run of QA that already knows the prior entry id should pass `--update <id>` so the body folds in rather than creating a sibling. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
 
-Track every finding's id, severity, discrete confidence
+Track every finding (including P2) in `QA_FINDINGS`, with id, severity, discrete confidence
 (`0|25|50|75|100`), classification (`introduced|pre_existing`), reason, and
 surface/file in a running list for Phase 6. **Read source to assert a PASS is forbidden (R1)** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
 
@@ -524,7 +524,8 @@ fi
 HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
 BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
 
-# OPEN_P0P1 = JSON ARRAY OF OBJECTS from Phase 5:
+# QA_FINDINGS = JSON ARRAY OF every P0/P1/P2 finding from Phase 5.
+# OPEN_P0P1 = verdict-facing subset:
 #   [{"id","severity","confidence","classification","reason","file"}, …];
 #   default "[]". RID_COVERAGE = the §2.2 spine as JSON:
 #   {"covered":N,"total":M,"rids":[{"id":"R1","coverage":"live"}, …]}; default "{}".
@@ -532,7 +533,8 @@ BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
 # Reason fields are set ONLY for their outcome (BLOCKED → blocked_reason, NA → na_reason).
 export QA_TYPE="qa_verdict" QA_ID="$SPEC_ID" QA_MODE="$MODE" QA_VERDICT="$VERDICT" \
        QA_OUTCOME HEAD_SHA BRANCH \
-       OPEN_P0P1="${OPEN_P0P1:-[]}" RID_COVERAGE="${RID_COVERAGE:-{}}" \
+       QA_FINDINGS="${QA_FINDINGS:-[]}" OPEN_P0P1="${OPEN_P0P1:-[]}" \
+       RID_COVERAGE="${RID_COVERAGE:-{}}" \
        BLOCKED_REASON="${BLOCKED_REASON:-}" NA_REASON="${NA_REASON:-}"
 
 # Resolve Python 3.11+ once (functionality/version probe — the Windows Store python3
@@ -563,12 +565,12 @@ with open(sys.argv[1], "w", encoding="utf-8") as fh:
     json.dump(r, fh); fh.write("\n")
 PY
 
-if [[ "$VERDICT" == "SHIP" && "${OPEN_P0P1:-[]}" == "[]" ]]; then
+if [[ "${QA_FINDINGS:-[]}" == "[]" ]]; then
   printf 'No findings.\\n<verdict>SHIP</verdict>\\n' > "$QA_REVIEW_FILE"
 else
   $PY - "$QA_REVIEW_FILE" <<'PY'
 import json, os, sys
-items = json.loads(os.environ.get("OPEN_P0P1") or "[]")
+items = json.loads(os.environ.get("QA_FINDINGS") or "[]")
 lines = []
 for item in items:
     required = {"id", "severity", "confidence", "classification", "reason", "file"}
@@ -582,7 +584,7 @@ for item in items:
         f"- **Problem**: {item['reason']} (surface: {item['file']})",
         "",
     ])
-lines.append("<verdict>NEEDS_WORK</verdict>")
+lines.append(f"<verdict>{os.environ['QA_VERDICT']}</verdict>")
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
     fh.write("\n".join(lines) + "\n")
 PY
@@ -617,9 +619,12 @@ When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ra
 if [ "$QA_AUTONOMOUS" = "1" ]; then
   # Receipt always; the filed memory paths only when non-empty (SHIP/NA/BLOCKED or
   # memory.enabled=false file none). Narrow pathspec — exactly QA's own files.
-  git -C "$REPO_ROOT" add -- "$RECEIPT_PATH" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
-  git -C "$REPO_ROOT" diff --cached --quiet -- "$RECEIPT_PATH" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY} \
-    || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SPEC_ID" -- "$RECEIPT_PATH" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
+  RECEIPT_HISTORY_DIR="${RECEIPT_PATH}.history"
+  QA_HISTORY_PATHS=()
+  [ -d "$RECEIPT_HISTORY_DIR" ] && QA_HISTORY_PATHS=("$RECEIPT_HISTORY_DIR")
+  git -C "$REPO_ROOT" add -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
+  git -C "$REPO_ROOT" diff --cached --quiet -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY} \
+    || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SPEC_ID" -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
 fi
 ```
 

@@ -5702,11 +5702,20 @@ def select_current_review_findings(
     for container in reversed(chain):
         source_id = container["sourceReceiptId"]
         seen_chain_receipts.add(source_id)
+        child_ids = {item["id"] for item in container["items"]}
+        if known_findings and not known_findings <= child_ids:
+            # Every non-root generation is a complete snapshot. A missing
+            # lineage would otherwise silently erase unresolved state.
+            return None
         for item in container["items"]:
             finding_id = item["id"]
             first_seen = item["firstSeenReceiptId"]
             prior_id = item.get("priorFindingId")
             if first_seen not in seen_chain_receipts:
+                return None
+            if first_seen != source_id and finding_id not in known_findings:
+                # Merely naming an ancestor receipt is not proof that the
+                # ancestor contained this durable finding identity.
                 return None
             if finding_id in known_findings and first_seen == source_id:
                 return None
@@ -5750,6 +5759,13 @@ def _preserve_review_receipt_generation(receipt_path: Path) -> Optional[Path]:
 
 def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
     """Load immutable ancestors plus the latest receipt, failing closed."""
+    try:
+        latest = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None
+    if not isinstance(latest, dict) or not validate_review_receipt_findings(latest):
+        return None
+    scope = (latest.get("type"), latest.get("id"), latest.get("mode"))
     receipts: list[dict] = []
     history_dir = _review_receipt_history_dir(receipt_path)
     if history_dir.exists():
@@ -5764,13 +5780,8 @@ def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
                 return None
             if not isinstance(value, dict) or not validate_review_receipt_findings(value):
                 return None
-            receipts.append(value)
-    try:
-        latest = json.loads(receipt_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError, TypeError, ValueError):
-        return None
-    if not isinstance(latest, dict) or not validate_review_receipt_findings(latest):
-        return None
+            if (value.get("type"), value.get("id"), value.get("mode")) == scope:
+                receipts.append(value)
     receipts.append(latest)
     return receipts
 
