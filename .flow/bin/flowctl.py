@@ -4522,9 +4522,10 @@ _FINDINGS_FIELD_RE = re.compile(
     """
 )
 _FINDINGS_INLINE_HOST_RE = re.compile(
-    r"(?i)\b(P[0-3]|critical|major|minor|nitpick)\b"
-    r"\s*[·|,-]\s*confidence\s+(\d+)"
-    r"\s*[·|,-]\s*(introduced|pre[-_ ]existing)"
+    r"(?im)\b([a-z][a-z0-9_-]*)\b"
+    r"\s*[·|,-]\s*confidence\s+([^\s·|,]+)"
+    r"\s*[·|,-]\s*([a-z][a-z0-9_-]*(?:[ -][a-z][a-z0-9_-]*)?)"
+    r"\s*(?:\*\*)?\s*$"
 )
 _FINDINGS_PRIOR_RE = re.compile(
     r"""(?ix)
@@ -4589,9 +4590,13 @@ def _review_finding_enum(
     classification_value = fields.get("classification", "").strip().lower()
     inline = _FINDINGS_INLINE_HOST_RE.search(block)
     if inline:
+        try:
+            inline_confidence = int(inline.group(2))
+        except ValueError:
+            return None
         inline_values = (
             _FINDINGS_SEVERITY_ALIASES.get(inline.group(1).lower()),
-            int(inline.group(2)),
+            inline_confidence,
             re.sub(r"[\s-]+", "_", inline.group(3).lower()),
         )
         if (
@@ -4768,8 +4773,30 @@ def _review_finding_rids(block: str, fields: dict[str, str]) -> list[str]:
     return result
 
 
-def _review_finding_text(fields: dict[str, str], block: str) -> tuple[str, str, Optional[str]]:
-    body = fields.get("problem") or fields.get("finding") or ""
+def _review_finding_alias_value(
+    fields: dict[str, str], *labels: str
+) -> tuple[bool, Optional[str]]:
+    values = [fields[label] for label in labels if label in fields]
+    if not values:
+        return True, None
+    normalized = {re.sub(r"\s+", " ", value).strip() for value in values}
+    if len(normalized) != 1:
+        return False, None
+    return True, values[0]
+
+
+def _review_finding_text(
+    fields: dict[str, str], block: str
+) -> Optional[tuple[str, str, Optional[str]]]:
+    body_valid, body_value = _review_finding_alias_value(
+        fields, "problem", "finding"
+    )
+    suggestion_valid, suggestion = _review_finding_alias_value(
+        fields, "suggestion", "suggested fix"
+    )
+    if not body_valid or not suggestion_valid:
+        return None
+    body = body_value or ""
     if not body:
         prose: list[str] = []
         for line in block.splitlines():
@@ -4785,7 +4812,6 @@ def _review_finding_text(fields: dict[str, str], block: str) -> tuple[str, str, 
         body = " ".join(prose)
     body = body.strip()
     title = (fields.get("title") or body.split(".", 1)[0]).strip()
-    suggestion = fields.get("suggestion") or fields.get("suggested fix")
     return title, body, suggestion.strip() if suggestion else None
 
 
@@ -5149,6 +5175,13 @@ def _review_findings_container_valid(container: dict) -> bool:
         return False
     if len({item["ordinal"] for item in items}) != len(items):
         return False
+    if any(
+        item["id"]
+        != _review_finding_lineage_id(item["firstSeenReceiptId"], item["ordinal"])
+        or item["lastSeenReceiptId"] != source_id
+        for item in items
+    ):
+        return False
     encoded = json.dumps(
         container, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     ).encode("utf-8")
@@ -5233,7 +5266,10 @@ def _parse_review_findings_v1(
             if enums is None:
                 return None
             severity, confidence, classification = enums
-            title, body, suggestion = _review_finding_text(fields, block)
+            text_fields = _review_finding_text(fields, block)
+            if text_fields is None:
+                return None
+            title, body, suggestion = text_fields
             if not title or not body:
                 return None
             row: dict[str, Any] = {

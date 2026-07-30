@@ -384,6 +384,44 @@ Problem: Equivalent aliases describe one finding.
             with self.subTest(text=text):
                 self.assertIsNone(parse(text, "host"))
 
+    def test_explicit_empty_with_unknown_inline_enum_fails_closed(self) -> None:
+        cases = (
+            "P4 · confidence 100 · introduced",
+            "P1 · confidence 90 · introduced",
+            "P1 · confidence 100 · inherited",
+        )
+        for inline in cases:
+            text = f"No findings.\n{inline}\n<verdict>SHIP</verdict>"
+            with self.subTest(inline=inline):
+                self.assertIsNone(parse(text, "host"))
+
+    def test_textual_aliases_accept_equal_values_and_reject_conflicts(self) -> None:
+        equivalent = """
+Severity: Major
+Confidence: 100
+Classification: introduced
+Problem: Preserve one body.
+Finding: Preserve one body.
+Suggestion: Apply one fix.
+Suggested fix: Apply one fix.
+"""
+        item = parse(equivalent, "codex")["items"][0]
+        self.assertEqual(item["body"], "Preserve one body.")
+        self.assertEqual(item["suggestion"], "Apply one fix.")
+        conflicts = (
+            equivalent.replace(
+                "Finding: Preserve one body.",
+                "Finding: Conflicting body.",
+            ),
+            equivalent.replace(
+                "Suggested fix: Apply one fix.",
+                "Suggested fix: Conflicting fix.",
+            ),
+        )
+        for text in conflicts:
+            with self.subTest(text=text):
+                self.assertIsNone(parse(text, "codex"))
+
     def test_equivalent_anchor_representations_accept_only_equal_values(self) -> None:
         equivalent = """
 Severity: Major
@@ -565,6 +603,25 @@ Problem: Conflicting second body.
                 supersedes="receipt-round-1",
             )
         )
+
+        for field, value in (
+            ("id", "finding-forged"),
+            ("firstSeenReceiptId", "receipt-forged"),
+            ("lastSeenReceiptId", "receipt-forged"),
+        ):
+            corrupt = json.loads(json.dumps(prior))
+            corrupt["items"][0][field] = value
+            self.assertIsNone(
+                parse(
+                    ratchet,
+                    "codex",
+                    receipt="receipt-round-2",
+                    round_number=2,
+                    prior=corrupt,
+                    supersedes="receipt-round-1",
+                ),
+                field,
+            )
 
         for anchor_update in (
             {"endLine": "12"},
