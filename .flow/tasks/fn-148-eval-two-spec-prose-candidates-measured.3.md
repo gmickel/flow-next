@@ -29,9 +29,8 @@ INCONCLUSIVE (effect real but within draw noise) is a reportable outcome, not a 
 
 
 ## Done summary
-TBD
-
+Closed by human decision on 2026-07-30 without execution. No candidate was nominated, paired replication did not begin, and no pre-registered verdict exists. Terminal outcome: STOPPED — NO VERDICT. Human handover: no Flow-Next template or documentation change; fn-148 licenses no downstream guidance.
 ## Evidence
-- Commits:
+- Commits: agent-evals:c7b6dc2
 - Tests:
 - PRs:

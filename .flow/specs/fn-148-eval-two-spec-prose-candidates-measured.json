@@ -9,7 +9,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-148-eval-two-spec-prose-candidates-measured.md",
-  "status": "open",
+  "status": "done",
   "title": "Eval two spec-prose candidates - measured claims and verified-vs-inferred facts",
   "tracker": {
     "baseHashFlow": null,
@@ -22,5 +22,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-29T21:38:01.990438Z"
+  "updated_at": "2026-07-30T07:09:32.836010Z"
 }
