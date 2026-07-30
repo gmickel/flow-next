@@ -5206,6 +5206,8 @@ def _review_findings_container_valid(container: dict) -> bool:
         or not isinstance(container["round"], int)
         or isinstance(container["round"], bool)
         or container["round"] < 1
+        or (supersedes is None and container["round"] != 1)
+        or (supersedes is not None and container["round"] <= 1)
         or not isinstance(container["headSha"], str)
         or not container["headSha"]
         or len(container["headSha"]) > _FINDINGS_MAX_ID
@@ -5288,6 +5290,8 @@ def _parse_review_findings_v1(
         or not isinstance(round_number, int)
         or isinstance(round_number, bool)
         or round_number < 1
+        or (supersedes_receipt_id is None and round_number != 1)
+        or (supersedes_receipt_id is not None and round_number <= 1)
         or not isinstance(head_sha, str)
         or not head_sha
         or len(head_sha) > _FINDINGS_MAX_ID
@@ -5322,15 +5326,17 @@ def _parse_review_findings_v1(
             # re-reading the diff. Preserve the finding but omit the stale
             # location rather than guessing.
             item.pop("anchor", None)
-    if prior_items and (
-        supersedes_receipt_id is None
-        or prior_findings.get("sourceReceiptId") != supersedes_receipt_id
-        or prior_findings.get("reviewKind") != review_kind
-        or prior_findings.get("backend") != backend
-        or not isinstance(prior_findings.get("round"), int)
-        or prior_findings["round"] >= round_number
-    ):
-        return None
+    if supersedes_receipt_id is not None:
+        if (
+            not isinstance(prior_findings, dict)
+            or prior_findings.get("sourceReceiptId") != supersedes_receipt_id
+            or prior_findings.get("reviewKind") != review_kind
+            or prior_findings.get("backend") != backend
+            or not isinstance(prior_findings.get("round"), int)
+            or isinstance(prior_findings.get("round"), bool)
+            or prior_findings["round"] + 1 != round_number
+        ):
+            return None
     parsed_rows = _review_finding_host_table(output)
     if parsed_rows == []:
         return None
@@ -17253,7 +17259,9 @@ def _pr_aid_repo_path(value: Any, path: str) -> str:
 
 def _pr_aid_url(value: Any, path: str) -> str:
     result = _pr_aid_string(value, path, maximum=2048)
-    if any(char.isspace() for char in result) or ")" in result:
+    if any(char.isspace() for char in result) or any(
+        char in result for char in ("(", ")", "[", "]", "|", "<", ">")
+    ):
         _pr_aid_fail(path, "contains unsafe URL characters")
     if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", result):
         if not re.match(r"^https://[^/\s]+(?:/|$)", result):

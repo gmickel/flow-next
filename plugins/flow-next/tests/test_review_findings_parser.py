@@ -218,7 +218,33 @@ Suggestion: Add the missing invariant.
         self.assertEqual(len(new_items), 1)
         self.assertNotEqual(new_items[0]["id"], prior["items"][0]["id"])
 
+    def test_round_lineage_requires_root_one_and_contiguous_successors(self) -> None:
+        text = self.fixture("codex", "catalog-sample")
+        prior = parse(text, "codex")
+        self.assertIsNone(parse(text, "codex", round_number=2))
+        self.assertIsNone(
+            parse(
+                text,
+                "codex",
+                receipt="receipt-round-1-successor",
+                round_number=1,
+                prior=prior,
+                supersedes=prior["sourceReceiptId"],
+            )
+        )
+        self.assertIsNone(
+            parse(
+                text,
+                "codex",
+                receipt="receipt-round-3",
+                round_number=3,
+                prior=prior,
+                supersedes=prior["sourceReceiptId"],
+            )
+        )
+
     def test_explicit_lineage_edge_is_preserved_for_new_identity(self) -> None:
+        prior = parse(self.fixture("codex", "no-findings-ship"), "codex")
         text = """
 Severity: Major
 Confidence: 100
@@ -231,7 +257,8 @@ Problem: The replacement finding has materially different scope.
             "codex",
             receipt="receipt-round-2",
             round_number=2,
-            supersedes="receipt-round-1",
+            prior=prior,
+            supersedes=prior["sourceReceiptId"],
         )["items"][0]
         self.assertEqual(item["priorFindingId"], "finding-prior-123")
         self.assertNotEqual(item["id"], item["priorFindingId"])

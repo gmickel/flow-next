@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import statistics
 import sys
 import tempfile
 import threading
@@ -349,6 +348,12 @@ class ValidationTests(unittest.TestCase):
             "diffUrl"
         ] = "http://example.test/diff"
         mutations.append((unsafe_url, "HTTPS"))
+
+        markdown_structural_url = artifact()
+        markdown_structural_url["changeWalkthrough"]["groups"][2]["files"][0][
+            "diffUrl"
+        ] = "https://example.test/diff|extra"
+        mutations.append((markdown_structural_url, "unsafe URL"))
 
         legacy_field = artifact()
         legacy_field["legacyWalkthrough"] = {"summary": "parallel truth"}
@@ -747,12 +752,17 @@ class MarkdownAndBudgetTests(unittest.TestCase):
             started = time.perf_counter()
             flowctl.render_pr_cognitive_aid_markdown(maximum_normal)
             durations_ms.append((time.perf_counter() - started) * 1000)
-        p95 = statistics.quantiles(durations_ms, n=20, method="inclusive")[18]
+        p95 = sorted(durations_ms)[28]
         self.assertLess(
             p95,
             metadata["performanceBudget"]["p95MillisecondsExclusive"],
             f"p95={p95:.3f} ms",
         )
+
+    def test_30_sample_p95_uses_strict_nearest_rank(self) -> None:
+        durations_ms = [1.0] * 28 + [100.1, 500.0]
+        p95 = sorted(durations_ms)[28]
+        self.assertGreaterEqual(p95, 100.0)
 
 
 class MakePrIntegrationTests(unittest.TestCase):

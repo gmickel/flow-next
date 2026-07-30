@@ -130,7 +130,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             "plan_review": "plan",
             "completion_review": "completion",
         }
-        for backend in ("codex", "copilot", "cursor"):
+        for backend in ("codex", "copilot", "cursor", "export"):
             for review_type, review_kind in type_to_kind.items():
                 with self.subTest(backend=backend, review_type=review_type):
                     receipt = self.repo / f"{backend}-{review_type}.json"
@@ -155,6 +155,20 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                     self.assertEqual(findings["round"], 1)
                     self.assertEqual(findings["headSha"], findings["baseSha"])
                     self.assertTrue(FLOWCTL.validate_review_receipt_findings(data))
+
+    def test_receipt_validation_rejects_noncontiguous_round_shapes(self) -> None:
+        root = _container(receipt_id="root")
+        invalid_root = json.loads(json.dumps(root))
+        invalid_root["round"] = 2
+        self.assertFalse(
+            FLOWCTL.validate_review_receipt_findings({"findings": invalid_root})
+        )
+
+        invalid_successor = json.loads(json.dumps(root))
+        invalid_successor["supersedesReceiptId"] = "prior"
+        self.assertFalse(
+            FLOWCTL.validate_review_receipt_findings({"findings": invalid_successor})
+        )
 
     def test_shared_writer_carries_explicit_supersedes_lineage(self) -> None:
         receipt = self.repo / "receipt.json"
