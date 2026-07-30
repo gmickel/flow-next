@@ -109,6 +109,10 @@ models resolve
 next
 pilot-log append
 prime classify
+pr-cognitive-aid current
+pr-cognitive-aid render
+pr-cognitive-aid validate
+pr-cognitive-aid write
 prospect archive
 prospect promote
 ready

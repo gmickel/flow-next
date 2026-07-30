@@ -10,16 +10,17 @@
   },
   "candidate_prompt_hashes": {
     "plugins/flow-next/references/html-artifacts.md": "9c2cd74ef1149979d2771b295fac72d47fe77c53036c66d72f1e03e23501c82e",
-    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "5130d4129574121f2f09c81a7ba7ecbaf8540e23802d6cfe69fe8df201f8c51f",
+    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "e0d3f66f1e15aab6e7bcb09ce5e1a1906f4cdb845cf2b34f6c2e902e843b983c",
     "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md": "05e7f9e3994f897c8aede9c1e2e0a00774ce238fd363d4fd607e79864dbcb77e",
     "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "804ebc2d31cc89f09b51333a0b5ed84987994c3b616d120116db2a2e32b625f1",
     "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md": "bf7c72d18be2764733a1d211145ff996a711b3c72994e9cd18897dbfa8acb2f0",
-    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "031f8eeffd8847b986244eb2cf7c196f8936d7c34ef04a0049b64a6eacba9fbd"
+    "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md": "d4b2aff71fbd05887f71ee7de38067642d7904d1a8b44991e97ebc69adc6a833",
+    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "80bfd66a1ef73422f92fdab1832c1b7a3f58bbf330726e07af8ed1e0fb03d794"
   },
   "b1_unchanged_workflow_slices": {
     "before_phase_1_5_sha256": "01e2f2cc79062068ccc23d4dc44ffeef31dd1ea72a441ca860d0ef38e51d67c9",
-    "after_phase_1_5_sha256": "cda777e3288add90329b1748631c8d76b8c67b8c7908d3a8c7c74d11a7ee5af4",
-    "meaning": "Phase 0/1 and Phase 2 onward are byte-identical to B1; only the Phase 1.5 HTML router surface changed."
+    "after_phase_1_5_sha256": "146cfb6e5803804439dc476a3785789704a9a08b37e1142c7228c388eca2d970",
+    "meaning": "Phase 0/1 remains byte-identical to B1; Phase 1.5 now loads the structured cognitive aid and Phase 2 places its deterministic Markdown."
   },
   "kept_candidate": {
     "id": "html-enabled-path-reference",
@@ -42,51 +43,53 @@
       "algorithm": "lf-full-file-on-activation-once-per-path-hash",
       "dry-run": {
         "b1_chars": 145723,
-        "candidate_chars": 138461,
-        "delta_chars": -7262
+        "candidate_chars": 145584,
+        "delta_chars": -139
       },
       "html-off": {
         "b1_chars": 191058,
-        "candidate_chars": 183722,
-        "delta_chars": -7336
+        "candidate_chars": 190845,
+        "delta_chars": -213
       },
       "html-on": {
         "b1_chars": 210653,
-        "candidate_chars": 211029,
-        "delta_chars": 376,
-        "note": "Selected HTML path pays the direct-reference router overhead; no wall-time claim."
+        "candidate_chars": 218152,
+        "delta_chars": 7499,
+        "note": "Selected HTML path pays the direct-reference router plus the shared structured cognitive-aid contract; no wall-time claim."
       },
       "create": {
         "b1_chars": 191058,
-        "candidate_chars": 183722,
-        "delta_chars": -7336
+        "candidate_chars": 190845,
+        "delta_chars": -213
       },
       "finalize": {
         "b1_chars": 179412,
-        "candidate_chars": 172076,
-        "delta_chars": -7336
+        "candidate_chars": 179199,
+        "delta_chars": -213
       },
       "existing-pr": {
         "b1_chars": 179412,
-        "candidate_chars": 172076,
-        "delta_chars": -7336
+        "candidate_chars": 179199,
+        "delta_chars": -213
       },
       "push-retry": {
         "b1_chars": 179412,
-        "candidate_chars": 172076,
-        "delta_chars": -7336
+        "candidate_chars": 179199,
+        "delta_chars": -213
       }
     },
     "required_reads": {
       "html-off": [
         "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
-        "plugins/flow-next/skills/flow-next-make-pr/workflow.md"
+        "plugins/flow-next/skills/flow-next-make-pr/workflow.md",
+        "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md"
       ],
       "html-on": [
         "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
         "plugins/flow-next/skills/flow-next-make-pr/workflow.md",
         "plugins/flow-next/skills/flow-next-make-pr/html-lens.md",
-        "plugins/flow-next/references/html-artifacts.md"
+        "plugins/flow-next/references/html-artifacts.md",
+        "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md"
       ]
     },
     "forbidden_reads": {

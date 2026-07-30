@@ -1,0 +1,438 @@
+"""PR cognitive-aid v1 validation, persistence, rendering, and budget tests."""
+
+import statistics
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+import flowctl  # noqa: E402
+
+
+BASE_SHA = "a" * 40
+HEAD_SHA = "b" * 40
+SPEC_ID = "fn-136-cognitive-aid"
+
+
+def artifact(*, canonical_files: int = 2, churn: int = 40) -> dict:
+    sources = [
+        {"id": "spec", "kind": "spec", "ref": SPEC_ID},
+        {"id": "task", "kind": "task", "ref": f"{SPEC_ID}.1"},
+        {"id": "rid", "kind": "rid", "ref": "R6"},
+        {"id": "diff", "kind": "diff_metadata", "ref": f"{BASE_SHA}..{HEAD_SHA}"},
+        {"id": "commit", "kind": "commit", "ref": HEAD_SHA},
+    ]
+    files = []
+    for index in range(canonical_files):
+        files.append(
+            {
+                "path": f"src/change_{index}.py",
+                "changeType": "modified",
+                "attentionClass": "canonical",
+                "summary": f"Implements bounded behavior {index}.",
+                "additions": churn,
+                "deletions": 0,
+                "diffUrl": f"https://github.com/acme/repo/pull/1/files#diff-{index}",
+                "sourceRefs": ["diff", "task", "rid"],
+                "rIds": ["R6"],
+                "taskIds": [f"{SPEC_ID}.1"],
+            }
+        )
+    files.extend(
+        [
+            {
+                "path": "plugins/flow-next/codex/generated.md",
+                "changeType": "modified",
+                "attentionClass": "generated",
+                "summary": "Regenerated mirror.",
+                "additions": 500,
+                "deletions": 500,
+                "sourceRefs": ["diff"],
+                "rIds": [],
+                "taskIds": [],
+            },
+            {
+                "path": ".flow/bin/flowctl.py",
+                "changeType": "modified",
+                "attentionClass": "mechanical",
+                "summary": "Byte-identical distribution copy.",
+                "additions": 500,
+                "deletions": 500,
+                "sourceRefs": ["diff"],
+                "rIds": [],
+                "taskIds": [],
+            },
+        ]
+    )
+    return {
+        "schemaVersion": 1,
+        "artifactId": "aid-001",
+        "specId": SPEC_ID,
+        "baseSha": BASE_SHA,
+        "headSha": HEAD_SHA,
+        "generatedAt": "2026-07-30T12:00:00Z",
+        "sources": sources,
+        "changeWalkthrough": {
+            "thesis": "Preserve one grounded, intent-ordered explanation.",
+            "proof": [
+                {
+                    "label": "Head commit",
+                    "value": HEAD_SHA[:7],
+                    "sourceRefs": ["commit"],
+                },
+                {
+                    "label": "Verification",
+                    "value": "42 tests",
+                    "sourceRefs": ["task"],
+                },
+            ],
+            "groups": [
+                {
+                    "ordinal": 1,
+                    "kind": "problem",
+                    "title": "Why this changes",
+                    "summary": "Free prose is not portable.",
+                    "sourceRefs": ["spec", "rid"],
+                    "rIds": ["R6"],
+                    "taskIds": [],
+                    "files": [],
+                },
+                {
+                    "ordinal": 2,
+                    "kind": "principle",
+                    "title": "One source table",
+                    "summary": "Every semantic claim resolves to evidence.",
+                    "sourceRefs": ["spec"],
+                    "rIds": [],
+                    "taskIds": [],
+                    "files": [],
+                },
+                {
+                    "ordinal": 3,
+                    "kind": "step",
+                    "title": "Validate and render",
+                    "summary": "Separate Git state from review attention.",
+                    "sourceRefs": ["task", "rid"],
+                    "rIds": ["R6"],
+                    "taskIds": [f"{SPEC_ID}.1"],
+                    "files": files,
+                },
+                {
+                    "ordinal": 4,
+                    "kind": "kept",
+                    "title": "Tracker facade",
+                    "summary": "PR creation still precedes tracker projection.",
+                    "sourceRefs": ["spec"],
+                    "rIds": [],
+                    "taskIds": [],
+                    "files": [],
+                },
+                {
+                    "ordinal": 5,
+                    "kind": "verify",
+                    "title": "Verification and ship",
+                    "summary": "Recorded task evidence remains authoritative.",
+                    "sourceRefs": ["task"],
+                    "rIds": [],
+                    "taskIds": [f"{SPEC_ID}.1"],
+                    "files": [],
+                },
+            ],
+        },
+    }
+
+
+class ValidationTests(unittest.TestCase):
+    def test_valid_contract_preserves_separate_change_and_attention_dimensions(self) -> None:
+        value = artifact()
+        self.assertIs(flowctl.validate_pr_cognitive_aid(value), value)
+        generated = value["changeWalkthrough"]["groups"][2]["files"][-2]
+        self.assertEqual(generated["changeType"], "modified")
+        self.assertEqual(generated["attentionClass"], "generated")
+
+    def test_rejects_unsafe_ungrounded_and_unrelated_claims(self) -> None:
+        cases = []
+        unsafe = artifact()
+        unsafe["changeWalkthrough"]["groups"][2]["files"][0]["path"] = "../secret"
+        cases.append((unsafe, "traversal"))
+        ungrounded = artifact()
+        ungrounded["changeWalkthrough"]["groups"][2]["sourceRefs"] = []
+        cases.append((ungrounded, "ground"))
+        unrelated = artifact()
+        unrelated["changeWalkthrough"]["groups"][2]["files"][0]["sourceRefs"] = [
+            "diff"
+        ]
+        cases.append((unrelated, "same-record"))
+        for value, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(
+                    flowctl.PrCognitiveAidValidationError, message
+                ):
+                    flowctl.validate_pr_cognitive_aid(value)
+
+    def test_rejects_bounds_order_cardinality_and_oversize_without_truncation(self) -> None:
+        no_step = artifact()
+        no_step["changeWalkthrough"]["groups"] = [
+            group
+            for group in no_step["changeWalkthrough"]["groups"]
+            if group["kind"] != "step"
+        ]
+        with self.assertRaisesRegex(
+            flowctl.PrCognitiveAidValidationError, "1-7 step"
+        ):
+            flowctl.validate_pr_cognitive_aid(no_step)
+
+        wrong_order = artifact()
+        wrong_order["changeWalkthrough"]["groups"][0]["kind"] = "verify"
+        with self.assertRaisesRegex(
+            flowctl.PrCognitiveAidValidationError, "logical group order"
+        ):
+            flowctl.validate_pr_cognitive_aid(wrong_order)
+
+        oversize = artifact()
+        oversize["changeWalkthrough"]["thesis"] = "x" * (512 * 1024)
+        with self.assertRaisesRegex(
+            flowctl.PrCognitiveAidValidationError, "encoded payload exceeds"
+        ):
+            flowctl.validate_pr_cognitive_aid(oversize)
+        self.assertEqual(
+            len(oversize["changeWalkthrough"]["thesis"]), 512 * 1024
+        )
+
+    def test_collection_and_string_bounds_are_executable(self) -> None:
+        mutations = []
+
+        too_many_sources = artifact()
+        source_template = too_many_sources["sources"][0]
+        too_many_sources["sources"] = [
+            {**source_template, "id": f"source-{index}"}
+            for index in range(129)
+        ]
+        mutations.append((too_many_sources, "128"))
+
+        too_many_proof = artifact()
+        proof_template = too_many_proof["changeWalkthrough"]["proof"][0]
+        too_many_proof["changeWalkthrough"]["proof"] = [
+            {**proof_template, "label": f"proof-{index}"} for index in range(17)
+        ]
+        mutations.append((too_many_proof, "16"))
+
+        too_many_refs = artifact()
+        too_many_refs["changeWalkthrough"]["groups"][2]["sourceRefs"] = [
+            "task"
+        ] * 33
+        mutations.append((too_many_refs, "32"))
+
+        long_title = artifact()
+        long_title["changeWalkthrough"]["groups"][2]["title"] = "x" * 161
+        mutations.append((long_title, "160"))
+
+        long_group_summary = artifact()
+        long_group_summary["changeWalkthrough"]["groups"][2]["summary"] = (
+            "x" * 1001
+        )
+        mutations.append((long_group_summary, "1000"))
+
+        long_file_summary = artifact()
+        long_file_summary["changeWalkthrough"]["groups"][2]["files"][0][
+            "summary"
+        ] = "x" * 501
+        mutations.append((long_file_summary, "500"))
+
+        unsafe_url = artifact()
+        unsafe_url["changeWalkthrough"]["groups"][2]["files"][0][
+            "diffUrl"
+        ] = "http://example.test/diff"
+        mutations.append((unsafe_url, "HTTPS"))
+
+        legacy_field = artifact()
+        legacy_field["legacyWalkthrough"] = {"summary": "parallel truth"}
+        mutations.append((legacy_field, "unknown fields"))
+
+        for value, message in mutations:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(
+                    flowctl.PrCognitiveAidValidationError, message
+                ):
+                    flowctl.validate_pr_cognitive_aid(value)
+
+
+class PersistenceAndCurrentnessTests(unittest.TestCase):
+    def test_immutable_generations_form_a_materialized_supersedes_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            first = artifact()
+            first_path = flowctl.write_pr_cognitive_aid(
+                flow_dir,
+                first,
+                spec_id=SPEC_ID,
+                base_sha=BASE_SHA,
+                head_sha=HEAD_SHA,
+            )
+            second = artifact()
+            second["artifactId"] = "aid-002"
+            second["generatedAt"] = "2026-07-30T12:01:00Z"
+            second["supersedesArtifactId"] = "aid-001"
+            second_path = flowctl.write_pr_cognitive_aid(
+                flow_dir,
+                second,
+                spec_id=SPEC_ID,
+                base_sha=BASE_SHA,
+                head_sha=HEAD_SHA,
+            )
+            self.assertTrue(first_path.is_file())
+            self.assertTrue(second_path.is_file())
+            current = flowctl.select_current_pr_cognitive_aid(
+                flow_dir, SPEC_ID, base_sha=BASE_SHA, head_sha=HEAD_SHA
+            )
+            self.assertEqual(current["status"], "current")
+            self.assertEqual(current["artifact"]["artifactId"], "aid-002")
+            with self.assertRaisesRegex(
+                flowctl.PrCognitiveAidValidationError, "already exists"
+            ):
+                flowctl.write_pr_cognitive_aid(
+                    flow_dir,
+                    second,
+                    spec_id=SPEC_ID,
+                    base_sha=BASE_SHA,
+                    head_sha=HEAD_SHA,
+                )
+
+    def test_stale_or_invalid_artifact_never_supplies_current_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            flowctl.write_pr_cognitive_aid(
+                flow_dir,
+                artifact(),
+                spec_id=SPEC_ID,
+                base_sha=BASE_SHA,
+                head_sha=HEAD_SHA,
+            )
+            stale = flowctl.select_current_pr_cognitive_aid(
+                flow_dir, SPEC_ID, base_sha="c" * 40, head_sha=HEAD_SHA
+            )
+            self.assertEqual(stale["status"], "stale")
+            self.assertIsNone(stale["artifact"])
+
+    def test_newer_stale_chain_tip_invalidates_older_matching_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            first = artifact()
+            flowctl.write_pr_cognitive_aid(
+                flow_dir,
+                first,
+                spec_id=SPEC_ID,
+                base_sha=BASE_SHA,
+                head_sha=HEAD_SHA,
+            )
+            second = artifact()
+            second.update(
+                {
+                    "artifactId": "aid-002",
+                    "generatedAt": "2026-07-30T12:01:00Z",
+                    "supersedesArtifactId": "aid-001",
+                    "headSha": "c" * 40,
+                }
+            )
+            flowctl.write_pr_cognitive_aid(
+                flow_dir,
+                second,
+                spec_id=SPEC_ID,
+                base_sha=BASE_SHA,
+                head_sha="c" * 40,
+            )
+            current = flowctl.select_current_pr_cognitive_aid(
+                flow_dir, SPEC_ID, base_sha=BASE_SHA, head_sha=HEAD_SHA
+            )
+            self.assertEqual(current["status"], "stale")
+            self.assertIsNone(current["artifact"])
+            self.assertEqual(current["latestArtifactId"], "aid-002")
+
+
+class MarkdownAndBudgetTests(unittest.TestCase):
+    def test_compact_form_uses_only_canonical_files(self) -> None:
+        rendered = flowctl.render_pr_cognitive_aid_markdown(
+            artifact(canonical_files=2, churn=20)
+        )
+        self.assertIn("## The change, top to bottom", rendered)
+        self.assertIn("src/change_0.py", rendered)
+        self.assertNotIn("generated.md", rendered)
+        self.assertNotIn("**Legend:**", rendered)
+
+    def test_full_form_has_complete_legend_groups_and_collapsed_noise(self) -> None:
+        rendered = flowctl.render_pr_cognitive_aid_markdown(
+            artifact(canonical_files=6, churn=1)
+        )
+        for badge in (
+            "WHY",
+            "PRINCIPLE",
+            "STEP",
+            "KEPT",
+            "VERIFY",
+            "NEW",
+            "MODIFIED",
+            "DELETED",
+            "RENAMED",
+            "COPIED",
+            "CANONICAL",
+            "GENERATED",
+            "MECHANICAL",
+        ):
+            self.assertIn(f"`{badge}`", rendered)
+        self.assertEqual(rendered.count("<details open>"), 1)
+        self.assertIn("<summary>Generated/mechanical files (2)</summary>", rendered)
+        self.assertIn("Tracker facade", rendered)
+        self.assertIn("Verification and ship", rendered)
+        self.assertNotIn("@@", rendered)
+
+    def test_validation_plus_render_p95_under_50_ms_for_30_warm_runs(self) -> None:
+        maximum_normal = artifact(canonical_files=120, churn=3)
+        for _ in range(5):
+            flowctl.render_pr_cognitive_aid_markdown(maximum_normal)
+        durations_ms = []
+        for _ in range(30):
+            started = time.perf_counter()
+            flowctl.render_pr_cognitive_aid_markdown(maximum_normal)
+            durations_ms.append((time.perf_counter() - started) * 1000)
+        p95 = statistics.quantiles(durations_ms, n=20, method="inclusive")[18]
+        self.assertLess(p95, 50.0, f"p95={p95:.3f} ms")
+
+
+class MakePrIntegrationTests(unittest.TestCase):
+    def test_artifact_precedes_body_and_tracker_pr_url_boundary_is_unchanged(self) -> None:
+        workflow = (
+            REPO_ROOT
+            / "plugins/flow-next/skills/flow-next-make-pr/workflow.md"
+        ).read_text(encoding="utf-8")
+        artifact_reference = (
+            REPO_ROOT
+            / "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md"
+        ).read_text(encoding="utf-8")
+        finalize = (
+            REPO_ROOT
+            / "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md"
+        ).read_text(encoding="utf-8")
+        self.assertLess(
+            workflow.index("### 1.5b — Structured PR cognitive-aid"),
+            workflow.index("## Phase 2: Render body header sections"),
+        )
+        self.assertIn(
+            "This phase ends before PR creation", artifact_reference
+        )
+        self.assertNotIn("skill: flow-next-tracker-sync", artifact_reference)
+        self.assertIn('PR_URL=""', finalize)
+        self.assertIn("--pr-url \"$PR_URL\"", finalize)
+        self.assertIn("--op reconcile", finalize)
+        self.assertIn("sync check", finalize)
+        self.assertIn("Retro-fire", finalize)
+
+
+if __name__ == "__main__":
+    unittest.main()
