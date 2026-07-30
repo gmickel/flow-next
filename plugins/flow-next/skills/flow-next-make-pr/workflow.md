@@ -312,7 +312,33 @@ This phase is implemented in dependent tasks. Scaffold-task notes:
 
 ---
 
-## Phase 1.5: HTML render lens (opt-in) — PR artifact
+## Phase 1.5: Structured PR cognitive-aid
+
+Read [pr-cognitive-aid.md](pr-cognitive-aid.md) in full and execute it before
+the optional HTML lens and final body composition. This is the shared v1 object
+behind the GitHub walkthrough: the existing host composes from
+`EXPORT_PAYLOAD`; flowctl validates, atomically persists, selects by
+merge-base/head, and renders. It adds no model/network call.
+
+When a supported current artifact renders, insert its contiguous
+`## The change, top to bottom` section before Critical changes. Its thesis,
+proof, R-ID/task links, verification claims, order, and file membership are
+authoritative: suppress the legacy R-ID coverage and Verification sections and
+derive the summary coverage ratio from the artifact. The legacy fields are
+fallback-only for those claims. Keep Critical changes, How to review, and the
+risk-ranked Review plan separate. Artifact rejection prints one note and
+preserves the existing compact body without mixing stale or rejected fields.
+
+Done when:
+
+- `pr-cognitive-aid.md` Done-when checklist passes.
+- The artifact is composed/validated before optional HTML and final PR-body
+  creation.
+- `create-and-finalize.md` remains the later `$PR_URL` + tracker-facade boundary.
+
+---
+
+## Phase 1.5b: HTML render lens (opt-in) — PR artifact
 
 **Gate before loading the enabled-path instructions.** This config read is the
 ONLY addition when the mode is off:
@@ -333,30 +359,6 @@ write no artifact, add no body line, and print no artifact-related output.
 - Off/unset/`--dry-run`: exactly one config read; neither HTML reference loaded;
   no artifact, commit, body line, or output change.
 - Enabled: every `html-lens.md` Done-when item passes before Phase 2.
-
-### 1.5b — Structured PR cognitive-aid
-
-After the optional HTML lens, read
-[pr-cognitive-aid.md](pr-cognitive-aid.md) in full and execute it before final
-body composition. This is the shared v1 object behind the GitHub walkthrough:
-the existing host composes from `EXPORT_PAYLOAD`; flowctl validates, atomically
-persists, selects by merge-base/head, and renders. It adds no model/network
-call.
-
-When a supported current artifact renders, insert its contiguous
-`## The change, top to bottom` section before Critical changes. Its thesis,
-proof, R-ID/task links, verification claims, order, and file membership are
-authoritative: suppress the legacy R-ID coverage and Verification sections and
-derive the summary coverage ratio from the artifact. The legacy fields are
-fallback-only for those claims. Keep Critical changes, How to review, and the
-risk-ranked Review plan separate. Artifact rejection prints one note and
-preserves the existing compact body without mixing stale or rejected fields.
-
-Done when:
-
-- `pr-cognitive-aid.md` Done-when checklist passes.
-- The artifact is composed/validated before final PR-body creation.
-- `create-and-finalize.md` remains the later `$PR_URL` + tracker-facade boundary.
 
 ---
 
@@ -410,7 +412,11 @@ The body sections appear in this exact order. Skip any section whose source cont
 > **Render lens:** [`.flow/artifacts/<spec-id>/pr.html`](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/artifacts/<spec-id>/pr.html) — GitHub renders committed HTML as source; open locally in a browser. Regenerable; markdown is the record.
 ```
 
-Gitignored artifacts (`LINK_MODE=local`) get local-open guidance only — `` > **Render lens:** `.flow/artifacts/<spec-id>/pr.html` (gitignored — open locally in a browser; regenerable) `` — never a blob link that 404s. With the mode off/unset (or `--dry-run`, or Phase 1.5 failed) this line is absent entirely.
+Local artifacts (`LINK_MODE=local`) get local-open guidance only — either
+`` > **Render lens:** `.flow/artifacts/<spec-id>/pr.html` (v1 currentness preserved — open locally in a browser; regenerable) ``
+or the existing `gitignored — open locally` variant — never a blob link that
+404s. With the mode off/unset (or `--dry-run`, or Phase 1.5b failed) this line
+is absent entirely.
 
 All four values come from the payload directly:
 
@@ -1320,7 +1326,8 @@ The skill itself is markdown — no unit-test surface. Phase 0 validation is exe
 - Branch with no PR history at all (`gh pr view` exits 1) → continues cleanly.
 - Ralph mode (`FLOW_RALPH=1`) → no `AskUserQuestion` calls in Phase 0; deterministic exit codes on missing context.
 - `artifacts.html.enabled` unset/false → Phase 1.5 is a single config read; no reference load, no `.flow/artifacts/` write, no commit, no render-lens body line, byte-identical body vs pre-feature.
-- `artifacts.html.enabled` true → `.flow/artifacts/<spec-id>/pr.html` written, self-check grep prints `OK: self-contained`, exactly one `chore(flow): pr artifact <spec-id>` commit (artifact file only — `git show --stat` lists one path) before `gh pr create`, blob link in the body resolves on the remote branch.
+- `artifacts.html.enabled` true + supported current v1 input → `.flow/artifacts/<spec-id>/pr.html` written with the exact semantic carrier, self-check grep prints `OK: self-contained`, no artifact commit advances `HEAD`, and the body carries local-open guidance.
+- `artifacts.html.enabled` true + labeled legacy fallback + tracked artifact → exactly one `chore(flow): pr artifact <spec-id>` commit (artifact file only — `git show --stat` lists one path) before `gh pr create`, and the blob link resolves on the remote branch.
 - `artifacts.html.enabled` true + `--dry-run` → no artifact written, no commit, no render-lens line in the stdout body.
 - `artifacts.html.enabled` true + the artifact file ignored by ANY rule (`.flow/artifacts/`, `.flow/artifacts/**`, `*.html`, or the exact path) → no commit, body carries local-open guidance, no blob link.
 - `artifacts.html.enabled` true + artifact commit fails (e.g. rejecting pre-commit hook) → PR still created, no render-lens body line, exactly one stderr note.

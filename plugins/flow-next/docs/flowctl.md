@@ -908,6 +908,7 @@ Validate, persist, select, or render the portable PR cognitive-aid v1 object:
 
 ```bash
 flowctl pr-cognitive-aid validate --file aid.json [--json]
+flowctl pr-cognitive-aid html-input --file aid.json
 flowctl pr-cognitive-aid write <spec-id> --file aid.json \
   --base-sha <sha> --head-sha <sha> [--diff-files diff.json] [--json]
 flowctl pr-cognitive-aid current <spec-id> \
@@ -917,7 +918,11 @@ flowctl pr-cognitive-aid render <spec-id> \
 flowctl pr-cognitive-aid render --file aid.json
 ```
 
-`validate` is read-only. `write` validates and atomically creates one immutable
+`validate` is read-only. `html-input` validates and emits one lossless,
+HTML-safe `<script type="application/json">` semantic carrier. The optional
+HTML lens embeds that block verbatim so consumers can extract and compare the
+exact v1 object rather than infer parity from presentation markup. `write`
+validates and atomically creates one immutable
 generation at
 `.flow/artifacts/<spec-id>/pr-cognitive-aid/<artifactId>.json`; it never
 overwrites an existing generation. `current` returns a labeled

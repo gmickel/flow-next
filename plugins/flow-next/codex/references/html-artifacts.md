@@ -214,7 +214,12 @@ membership, separate `changeType`/`attentionClass`, file-level R-ID/task links,
 state, and bounded inline diff display; it must not reclassify or reorder the
 object, invent evidence, or mix stale/legacy fields into the same view. When no
 supported current object exists, use the existing visibly labeled diff-derived
-fallback.
+fallback. Embed the verbatim output of
+`flowctl pr-cognitive-aid html-input --file <validated-object>` as
+`<script id="flow-next-pr-cognitive-aid" type="application/json">`; this
+lossless carrier is the executable parity surface. A current v1 lens remains
+local-only and must not advance `HEAD`, because committing it would immediately
+stale its own head-bound input.
 
 1. Masthead: PR number + title, branch → base line, dials (diff `+n −n`, files,
    R-ID coverage, tasks done, **human-review lines** — added lines minus generated/

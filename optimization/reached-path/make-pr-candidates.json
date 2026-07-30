@@ -9,17 +9,17 @@
     "comparison_rule": "candidate compared only to hash-verified B1; never B0"
   },
   "candidate_prompt_hashes": {
-    "plugins/flow-next/references/html-artifacts.md": "32b3683a1812ced115d217ea4097fa9b3dfebaf9962f86d77cc46796c0e5329e",
-    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "91de0b794a7fcef6bfb03729afd62ae53272b6e80de9f356007bdb4d0e04e06e",
+    "plugins/flow-next/references/html-artifacts.md": "0e4a4e7b48ad592ac3e6f4f5029548233e8403f167efcebaae8a733066aeb185",
+    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "05de96221799b4c755b56785e515ab2a1a79f8b9959b8b269a644d568d118e8c",
     "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md": "05e7f9e3994f897c8aede9c1e2e0a00774ce238fd363d4fd607e79864dbcb77e",
-    "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "1bac8c55b211088058ffebb3061672e307b9889bc47a03b441a4665b5069976f",
+    "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "af599ae9b45560ed2a3a94a8d3c0f06867c042802c529be97445601e7883f913",
     "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md": "bf7c72d18be2764733a1d211145ff996a711b3c72994e9cd18897dbfa8acb2f0",
-    "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md": "6f50fd89b5f3692d4b974ba00a26a56a1fd65954e113629f16e7f04b8ed62fda",
-    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "61c4b306b05fdfa12391f43b0ada5bcb1c58a8fdfde3b74e5c6be96a3abf9641"
+    "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md": "42e1bd4aa3eda6bec0dcc2d066e963d98d6f8d13c2df47ff2632d0593e9f8830",
+    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "0b5a6c804de4fd0c22c8e9fd7328cf3938d72bbab12c56398551b6bf316dd26e"
   },
   "b1_unchanged_workflow_slices": {
     "before_phase_1_5_sha256": "01e2f2cc79062068ccc23d4dc44ffeef31dd1ea72a441ca860d0ef38e51d67c9",
-    "after_phase_1_5_sha256": "43e4397db395b1c5d745a58955620045a8a837378f4141de19fe8b1704f05bc9",
+    "after_phase_1_5_sha256": "d55d0827861152dce566dbbb8b55f51485c2369dbcfcc51b4ccc20494bdf7476",
     "meaning": "Phase 0/1 remains byte-identical to B1; Phase 1.5 now loads the structured cognitive aid and Phase 2 places its deterministic Markdown."
   },
   "kept_candidate": {
@@ -43,39 +43,39 @@
       "algorithm": "lf-full-file-on-activation-once-per-path-hash",
       "dry-run": {
         "b1_chars": 145723,
-        "candidate_chars": 147295,
-        "delta_chars": 1572
+        "candidate_chars": 147392,
+        "delta_chars": 1669
       },
       "html-off": {
         "b1_chars": 191058,
-        "candidate_chars": 192556,
-        "delta_chars": 1498
+        "candidate_chars": 192653,
+        "delta_chars": 1595
       },
       "html-on": {
         "b1_chars": 210653,
-        "candidate_chars": 221194,
-        "delta_chars": 10541,
+        "candidate_chars": 222998,
+        "delta_chars": 12345,
         "note": "Selected HTML path pays the direct-reference router plus the shared structured cognitive-aid and cross-render parity contract; no wall-time claim."
       },
       "create": {
         "b1_chars": 191058,
-        "candidate_chars": 192556,
-        "delta_chars": 1498
+        "candidate_chars": 192653,
+        "delta_chars": 1595
       },
       "finalize": {
         "b1_chars": 179412,
-        "candidate_chars": 180910,
-        "delta_chars": 1498
+        "candidate_chars": 181007,
+        "delta_chars": 1595
       },
       "existing-pr": {
         "b1_chars": 179412,
-        "candidate_chars": 180910,
-        "delta_chars": 1498
+        "candidate_chars": 181007,
+        "delta_chars": 1595
       },
       "push-retry": {
         "b1_chars": 179412,
-        "candidate_chars": 180910,
-        "delta_chars": 1498
+        "candidate_chars": 181007,
+        "delta_chars": 1595
       }
     },
     "required_reads": {

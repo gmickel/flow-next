@@ -24,6 +24,12 @@ All notable changes to the flow-next.
   the cost is operationally negligible within the end-to-end workflow. The
   fixture metadata and consumer contracts pin the exclusive bound.
 
+- **Current v1 HTML lenses no longer stale their own cognitive-aid input.**
+  Make PR now persists the head-bound structured object before optional HTML,
+  embeds a lossless script-safe semantic carrier for executable parity, and
+  keeps that current lens local-only so `HEAD` remains unchanged. Only a
+  visibly labeled legacy fallback may use the narrow artifact commit.
+
 - **Review receipts now expose optional versioned structured findings.**
   Plan, implementation, completion, and QA receipt writers preserve canonical
   severity/confidence/classification/status values, durable finding and receipt

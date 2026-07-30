@@ -709,6 +709,15 @@ class MarkdownAndBudgetTests(unittest.TestCase):
                 first_body_line = rendered.splitlines()[2]
                 self.assertNotEqual(first_body_line, thesis)
 
+    def test_html_input_is_lossless_and_script_safe(self) -> None:
+        value = artifact()
+        value["changeWalkthrough"]["thesis"] = "</script><script>alert('&')</script>"
+        carrier = flowctl.render_pr_cognitive_aid_html_input(value)
+        self.assertNotIn("</script><script>", carrier)
+        self.assertIn("\\u003c/script\\u003e", carrier)
+        encoded = carrier.split(">", 1)[1].rsplit("</script>", 1)[0]
+        self.assertEqual(json.loads(encoded), value)
+
     def test_validation_plus_render_p95_under_100_ms_for_30_warm_runs(self) -> None:
         maximum_normal = json.loads(GOLDEN.read_text(encoding="utf-8"))
         metadata = json.loads(GOLDEN_META.read_text(encoding="utf-8"))
@@ -761,7 +770,11 @@ class MakePrIntegrationTests(unittest.TestCase):
             / "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md"
         ).read_text(encoding="utf-8")
         self.assertLess(
-            workflow.index("### 1.5b — Structured PR cognitive-aid"),
+            workflow.index("## Phase 1.5: Structured PR cognitive-aid"),
+            workflow.index("## Phase 1.5b: HTML render lens"),
+        )
+        self.assertLess(
+            workflow.index("## Phase 1.5b: HTML render lens"),
             workflow.index("## Phase 2: Render body header sections"),
         )
         self.assertIn(

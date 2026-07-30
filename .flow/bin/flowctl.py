@@ -18273,6 +18273,41 @@ def cmd_pr_cognitive_aid_render(args: argparse.Namespace) -> None:
     print(render_pr_cognitive_aid_markdown(result["artifact"]), end="")
 
 
+def render_pr_cognitive_aid_html_input(artifact: Any) -> str:
+    """Return an HTML-safe, lossless semantic carrier for the validated v1 object."""
+    artifact = validate_pr_cognitive_aid(artifact)
+    encoded = json.dumps(
+        artifact, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
+    encoded = (
+        encoded.replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
+    return (
+        '<script id="flow-next-pr-cognitive-aid" '
+        'type="application/json">'
+        f"{encoded}</script>\n"
+    )
+
+
+def cmd_pr_cognitive_aid_html_input(args: argparse.Namespace) -> None:
+    artifact = _pr_aid_read_input(args.file)
+    try:
+        artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
+        base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
+        head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        artifact = validate_pr_cognitive_aid(
+            artifact,
+            expected_diff_files=_pr_aid_live_diff_files(
+                get_repo_root(), base_sha, head_sha
+            ),
+        )
+        print(render_pr_cognitive_aid_html_input(artifact), end="")
+    except PrCognitiveAidValidationError as exc:
+        error_exit(str(exc), use_json=False, code=2)
+
+
 # Backward-compat alias (T2 layers the deprecation warning).
 
 
@@ -36224,6 +36259,12 @@ def main() -> None:
     p_pr_aid_validate.add_argument("--file", required=True, help="JSON file or -")
     p_pr_aid_validate.add_argument("--json", action="store_true", help="JSON output")
     p_pr_aid_validate.set_defaults(func=cmd_pr_cognitive_aid_validate)
+    p_pr_aid_html_input = pr_aid_sub.add_parser(
+        "html-input",
+        help="Emit a lossless HTML-safe semantic carrier for one validated artifact",
+    )
+    p_pr_aid_html_input.add_argument("--file", required=True, help="JSON file or -")
+    p_pr_aid_html_input.set_defaults(func=cmd_pr_cognitive_aid_html_input)
     for command, handler, help_text in (
         (
             "write",

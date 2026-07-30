@@ -1,26 +1,13 @@
 # PR cognitive-aid artifact
 
-Run this phase after `export-cognitive-aid` and the optional HTML lens succeed,
-and before final PR-body composition. The existing host agent owns every judgment:
+Run this phase after `export-cognitive-aid` and before the optional HTML lens
+and final PR-body composition. The existing host agent owns every judgment:
 thesis, logical groups, summaries, order, and source attribution. This phase
 adds no model call. `flowctl` only validates, persists, selects, and renders.
 
 ## 1. Resolve or compose
 
-The HTML lens may commit its artifact. Refresh the final code-under-review
-identity before selecting or composing:
-
-```bash
-FINAL_HEAD_SHA=$(git rev-parse HEAD)
-if [[ "$FINAL_HEAD_SHA" != "$HEAD_SHA" ]]; then
- HEAD_SHA="$FINAL_HEAD_SHA"
- MERGE_BASE=$(git merge-base "$BASE_REF" "$HEAD_SHA")
- EXPORT_PAYLOAD=$("$FLOWCTL" spec export-cognitive-aid "$SPEC_ID" \
- --base "$BASE_REF" --json)
-fi
-```
-
-Use these refreshed SHAs:
+Use the export-time code-under-review identity:
 
 ```bash
 CURRENT_AID=$("$FLOWCTL" pr-cognitive-aid current "$SPEC_ID" \

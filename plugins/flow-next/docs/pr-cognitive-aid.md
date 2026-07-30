@@ -43,7 +43,11 @@ render lens consumes the same exact validated v1 object when one is available
 and uses it as the authoritative source for the fields above. HTML may enrich
 navigation, collapse state, and bounded inline-diff display; it may not
 reclassify files, reorder groups, invent badges, or blend stale and legacy
-data. Raw diff text is not stored in the object.
+data. The lens embeds the lossless output of
+`flowctl pr-cognitive-aid html-input --file <validated-object>` so consumers can
+recover and compare the exact JSON object. It remains local-only and leaves
+`HEAD` unchanged; committing that HTML to the reviewed branch would immediately
+stale its own head-bound input. Raw diff text is not stored in the object.
 
 Full validation rules, bounds, and fallback behavior are defined by the
 [`pr-cognitive-aid` flowctl commands](flowctl.md#pr-cognitive-aid). The HTML
