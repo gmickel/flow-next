@@ -334,6 +334,42 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             latest["sourceReceiptId"],
         )
 
+    def test_corrupt_history_never_allows_latest_loss(self) -> None:
+        receipt = self.repo / "receipt.json"
+        kwargs = dict(
+            receipt_path=str(receipt),
+            review_type="impl_review",
+            review_id="fn-136.3",
+            backend="codex",
+            verdict="NEEDS_WORK",
+            session_id="session",
+            effective_model="model",
+            effective_effort="high",
+            resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
+            review_text=_fixture("codex"),
+            include_effort=True,
+            base_branch="HEAD",
+        )
+        FLOWCTL._write_backend_review_receipt(**kwargs)
+        before = receipt.read_bytes()
+        findings = json.loads(before)["findings"]
+        history_dir = FLOWCTL._review_receipt_history_dir(receipt)
+        history_dir.mkdir(parents=True)
+        history_path = history_dir / (
+            f"{FLOWCTL.hashlib.sha256(findings['sourceReceiptId'].encode()).hexdigest()}.json"
+        )
+        history_path.write_text("{malformed", encoding="utf-8")
+
+        FLOWCTL._clear_stale_review_receipt(str(receipt))
+        self.assertEqual(receipt.read_bytes(), before)
+        with self.assertRaises(FLOWCTL.ReviewReceiptHistoryError):
+            FLOWCTL._write_backend_review_receipt(**kwargs)
+        self.assertEqual(receipt.read_bytes(), before)
+        history_path.write_text(json.dumps({"conflict": True}), encoding="utf-8")
+        with self.assertRaises(FLOWCTL.ReviewReceiptHistoryError):
+            FLOWCTL._write_backend_review_receipt(**kwargs)
+        self.assertEqual(receipt.read_bytes(), before)
+
     def test_concurrent_writers_materialize_every_generation(self) -> None:
         receipt = self.repo / "receipt.json"
 
@@ -386,6 +422,15 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             self.assertIn(field, completion_host)
         self.assertIn('DIFF_BASE="${BASE_COMMIT:-main}"', completion_host)
         self.assertIn('DIFF_BASE="${BASE_COMMIT:-main}"', impl_host)
+        impl_rp = (
+            skill_root / "flow-next-impl-review" / "workflow-rp.md"
+        ).read_text(encoding="utf-8")
+        self.assertGreaterEqual(
+            impl_rp.count('REVIEW_HEAD_SHA="$(git rev-parse HEAD)"'), 2
+        )
+        self.assertGreaterEqual(
+            completion_rp.count('REVIEW_HEAD_SHA="$(git rev-parse HEAD)"'), 2
+        )
         self.assertIn('QA_FINDINGS="${QA_FINDINGS:-[]}"', qa)
         self.assertIn('RECEIPT_HISTORY_DIR="${RECEIPT_PATH}.history"', qa)
 

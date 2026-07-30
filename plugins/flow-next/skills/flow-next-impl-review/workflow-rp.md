@@ -549,6 +549,18 @@ If verdict is NEEDS_WORK:
    **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
    EOF
 
+   if [[ -z "$BASE_COMMIT" ]]; then
+     DIFF_BASE="main"
+     git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+   else
+     DIFF_BASE="$BASE_COMMIT"
+   fi
+   REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-impl-review-snapshot-<task-id-or-branch-slug>-<suffix>.env"
+   REVIEW_HEAD_SHA="$(git rev-parse HEAD)"
+   REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"
+   printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
+     "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+
    SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
    source "$SETUP_FILE"
    if [[ "$RP_MODE" == "ce" ]]; then

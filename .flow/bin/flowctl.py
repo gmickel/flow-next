@@ -694,7 +694,7 @@ def find_strategy_file(start: Optional[Path] = None) -> tuple[Optional[Path], Pa
     try:
         if candidate.is_file():
             return candidate, repo_root
-    except (CrossProcessLockError, OSError):
+    except OSError:
         pass
     return None, repo_root
 
@@ -2624,7 +2624,7 @@ def _setup_block_write(target: Path, content: str) -> None:
             umask = os.umask(0)
             os.umask(umask)
             os.chmod(target, 0o666 & ~umask)
-    except OSError:
+    except (CrossProcessLockError, OSError, ReviewReceiptHistoryError):
         pass
 
 
@@ -5488,6 +5488,10 @@ _REVIEW_TYPE_TO_FINDINGS_KIND = {
 }
 
 
+class ReviewReceiptHistoryError(RuntimeError):
+    """A valid findings generation could not be preserved immutably."""
+
+
 def _review_receipt_findings_id(
     *,
     review_kind: str,
@@ -5766,9 +5770,15 @@ def _preserve_review_receipt_generation(receipt_path: Path) -> Optional[Path]:
     if history_path.exists():
         try:
             existing = json.loads(history_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError, TypeError, ValueError):
-            return None
-        return history_path if existing == receipt else None
+        except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+            raise ReviewReceiptHistoryError(
+                f"cannot read receipt history generation: {history_path}"
+            ) from exc
+        if existing != receipt:
+            raise ReviewReceiptHistoryError(
+                f"receipt history generation conflicts: {history_path}"
+            )
+        return history_path
     history_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(history_path, receipt)
     return history_path
@@ -26592,7 +26602,7 @@ def _clear_stale_review_receipt(receipt_path: Optional[str]) -> None:
             if path.exists():
                 _preserve_review_receipt_generation(path)
             path.unlink(missing_ok=True)
-    except OSError:
+    except (CrossProcessLockError, OSError, ReviewReceiptHistoryError):
         pass
 
 

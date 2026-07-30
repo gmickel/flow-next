@@ -714,6 +714,14 @@ If verdict is NEEDS_WORK:
  **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
  EOF
 
+ DIFF_BASE="main"
+ git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+ REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-snapshot-<spec-id>-<suffix>.env"
+ REVIEW_HEAD_SHA="$(git rev-parse HEAD)"
+ REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"
+ printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
+ "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+
  SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
  source "$SETUP_FILE"
  if [[ "$RP_MODE" == "ce" ]]; then
