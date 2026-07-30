@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.9.0] - 2026-07-31
 
 ### Added
 
@@ -15,7 +15,7 @@ All notable changes to the flow-next.
   structured JSON, GitHub Markdown, and optional HTML. A maximum-normal
   canonical fixture, SHA-256 metadata, high-resolution information-architecture
   references, and an offline byte-pinned Flow Swarm vendoring contract now
-  define downstream compatibility. No version bump.
+  define downstream compatibility.
 
 - **Structured review benchmarks now use a strict `<100 ms p95` ceiling.**
   Both the maximum-item findings parser and maximum-normal cognitive-aid
