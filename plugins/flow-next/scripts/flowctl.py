@@ -1793,7 +1793,7 @@ def require_rp_cli() -> str:
 
 
 def run_rp_cli(
-    args: list[str], timeout: Optional[int] = None
+    args: list[str], timeout: Optional[int] = None, *, rp_cli: Optional[str] = None
 ) -> subprocess.CompletedProcess:
     """Run the selected RepoPrompt CLI with safe error handling and timeout.
 
@@ -1803,7 +1803,7 @@ def run_rp_cli(
     """
     if timeout is None:
         timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
-    rp = require_rp_cli()
+    rp = rp_cli or require_rp_cli()
     cmd = [rp] + args
     try:
         return subprocess.run(
@@ -1817,7 +1817,7 @@ def run_rp_cli(
 
 
 def run_rp_cli_unchecked(
-    args: list[str], timeout: Optional[int] = None
+    args: list[str], timeout: Optional[int] = None, *, rp_cli: Optional[str] = None
 ) -> subprocess.CompletedProcess:
     """Run the selected RepoPrompt CLI without collapsing command failures.
 
@@ -1826,7 +1826,7 @@ def run_rp_cli_unchecked(
     """
     if timeout is None:
         timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
-    rp = require_rp_cli()
+    rp = rp_cli or require_rp_cli()
     cmd = [rp] + args
     try:
         return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
@@ -1835,7 +1835,7 @@ def run_rp_cli_unchecked(
 
 
 def try_run_rp_cli(
-    args: list[str], timeout: Optional[int] = None
+    args: list[str], timeout: Optional[int] = None, *, rp_cli: Optional[str] = None
 ) -> Optional[subprocess.CompletedProcess]:
     """Run optional Classic capability probes without masking real failures.
 
@@ -1845,7 +1845,7 @@ def try_run_rp_cli(
     """
     if timeout is None:
         timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
-    rp = require_rp_cli()
+    rp = rp_cli or require_rp_cli()
     cmd = [rp] + args
     try:
         return subprocess.run(
@@ -2163,11 +2163,14 @@ def validate_rp_classic_builder_context(data: Any) -> None:
         )
 
 
-def verify_rp_classic_builder_context(window: int, tab: str) -> None:
+def verify_rp_classic_builder_context(
+    window: int, tab: str, *, rp_cli: Optional[str] = None
+) -> None:
     """Read Classic's published builder tab and require usable context."""
     expression = 'workspace_context include=["prompt","selection"]'
     result = run_rp_cli(
-        ["-w", str(window), "-t", tab, "--raw-json", "-e", expression]
+        ["-w", str(window), "-t", tab, "--raw-json", "-e", expression],
+        rp_cli=rp_cli,
     )
     try:
         data = json.loads(result.stdout or "{}")
@@ -2282,14 +2285,18 @@ def validate_rp_ce_builder_review(data: Any) -> dict[str, Any]:
 
 
 def bind_context_window(
-    repo_root: str, *, create_if_missing: bool = False
+    repo_root: str,
+    *,
+    create_if_missing: bool = False,
+    rp_cli: Optional[str] = None,
 ) -> Optional[int]:
     """Prefer RepoPrompt's bind_context repo-path matching when available."""
     payload = {"op": "bind", "working_dirs": normalize_repo_root(repo_root)}
     if create_if_missing:
         payload["create_if_missing"] = True
     result = try_run_rp_cli(
-        ["--raw-json", "-e", f"call bind_context {json.dumps(payload)}"]
+        ["--raw-json", "-e", f"call bind_context {json.dumps(payload)}"],
+        rp_cli=rp_cli,
     )
     if result is None:
         return None
@@ -20721,15 +20728,24 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         )
     rp_cli = require_rp_cli()
     is_ce = Path(rp_cli).name != "rp-cli"
+    if is_ce and response_type == "review" and not args.json and not response_file:
+        error_exit(
+            "CE setup-review with --response-type review requires "
+            "--response-file unless --json is used",
+            use_json=False,
+            code=2,
+        )
 
     # Step 1: pick-window
     roots = normalize_repo_root(repo_root)
     win_id = bind_context_window(
-        repo_root, create_if_missing=bool(getattr(args, "create", False))
+        repo_root,
+        create_if_missing=bool(getattr(args, "create", False)),
+        rp_cli=rp_cli,
     )
     windows: list[dict[str, Any]] = []
     if win_id is None:
-        result = run_rp_cli(["--raw-json", "-e", "windows"])
+        result = run_rp_cli(["--raw-json", "-e", "windows"], rp_cli=rp_cli)
         windows = parse_windows(result.stdout or "")
 
     # Single window with no root paths - use it
@@ -20756,7 +20772,8 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
                 "--raw-json",
                 "-e",
                 f"call manage_workspaces {json.dumps({'action': 'list'})}",
-            ]
+            ],
+            rp_cli=rp_cli,
         )
         workspace = find_workspace_for_repo(
             parse_manage_workspaces(workspaces_res.stdout or ""),
@@ -20780,7 +20797,8 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
                             "--raw-json",
                             "-e",
                             f"call manage_workspaces {json.dumps(switch_cmd)}",
-                        ]
+                        ],
+                        rp_cli=rp_cli,
                     )
                     try:
                         switch_data = json.loads(switch_res.stdout or "{}")
@@ -20798,7 +20816,9 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
             create_cmd = (
                 f"workspace create {shlex.quote(ws_name)} --new-window --folder-path {shlex.quote(repo_root)}"
             )
-            create_res = run_rp_cli(["--raw-json", "-e", create_cmd])
+            create_res = run_rp_cli(
+                ["--raw-json", "-e", create_cmd], rp_cli=rp_cli
+            )
             try:
                 data = json.loads(create_res.stdout or "{}")
                 win_id = extract_response_window_id(data)
@@ -20813,13 +20833,15 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         else:
             error_exit("No RepoPrompt window matches repo root", use_json=False, code=2)
 
-    # Step 2: builder. Use the canonical tool + named instructions field:
-    # CE 1.1.0 can accept the positional shorthand yet create a tab with empty
-    # discover.instructions, prompt, and selection.
-    builder_payload: dict[str, Any] = {"instructions": summary}
-    if is_ce and response_type:
-        builder_payload["response_type"] = response_type
-    builder_expr = f"call context_builder {json.dumps(builder_payload)}"
+    # Step 2: builder. CE requires the named-tool instructions field. Classic
+    # retains its established positional command and published-tab contract.
+    if is_ce:
+        builder_payload: dict[str, Any] = {"instructions": summary}
+        if response_type:
+            builder_payload["response_type"] = response_type
+        builder_expr = f"call context_builder {json.dumps(builder_payload)}"
+    else:
+        builder_expr = f"builder {shlex.quote(summary)}"
 
     builder_cmd = [
         "-w",
@@ -20828,7 +20850,7 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         "-e",
         builder_expr,
     ]
-    builder_res = run_rp_cli(builder_cmd)
+    builder_res = run_rp_cli(builder_cmd, rp_cli=rp_cli)
     output = (builder_res.stdout or "") + (
         "\n" + builder_res.stderr if builder_res.stderr else ""
     )
@@ -20895,7 +20917,7 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         if not tab:
             error_exit("Builder did not return a tab/context id", use_json=False, code=2)
 
-        verify_rp_classic_builder_context(win_id, tab)
+        verify_rp_classic_builder_context(win_id, tab, rp_cli=rp_cli)
 
         if args.json:
             print(

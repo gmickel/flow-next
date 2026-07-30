@@ -165,7 +165,8 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
             "selection": {"files": [{"path": "src/reuse.py"}]},
         }
 
-        def recording_run(args, timeout=None):
+        def recording_run(args, timeout=None, *, rp_cli=None):
+            self.assertEqual(rp_cli, "/bin/rpce-cli")
             calls.append(args)
             if args[-1].startswith("workspace_context "):
                 return _result(json.dumps(usable_context))
@@ -192,7 +193,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp).resolve()
 
-            def try_run(args, timeout=None):
+            def try_run(args, timeout=None, *, rp_cli=None):
                 payload = json.loads(args[-1].removeprefix("call bind_context "))
                 self.assertTrue(payload["create_if_missing"])
                 return _result(json.dumps({"binding": {"window_id": 41}}))
@@ -265,6 +266,61 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
         bind.assert_not_called()
         run.assert_not_called()
 
+    def test_ce_plain_review_requires_a_response_file_before_repo_prompt_call(
+        self,
+    ) -> None:
+        args = argparse.Namespace(
+            repo_root=".",
+            summary="Review this",
+            response_type="review",
+            response_file=None,
+            create=True,
+            json=False,
+        )
+        with mock.patch.object(
+            flowctl, "require_rp_cli", return_value="/bin/rpce-cli"
+        ), mock.patch.object(flowctl, "bind_context_window") as bind, mock.patch.object(
+            flowctl, "run_rp_cli"
+        ) as run, redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            flowctl.cmd_rp_setup_review(args)
+        bind.assert_not_called()
+        run.assert_not_called()
+
+    def test_setup_pins_one_resolved_cli_for_bind_and_builder(self) -> None:
+        direct = {
+            "context_id": "ctx-pinned",
+            "status": "completed",
+            "prompt": "Review this",
+            "file_count": 1,
+            "total_tokens": 10,
+            "selection": "a.py",
+            "response_type": "review",
+            "review": {
+                "chat_id": "chat-pinned",
+                "mode": "review",
+                "response": "<verdict>SHIP</verdict>",
+            },
+        }
+        args = argparse.Namespace(
+            repo_root=".",
+            summary="Review this",
+            response_type="review",
+            response_file=None,
+            create=True,
+            json=True,
+        )
+        with mock.patch.object(
+            flowctl, "require_rp_cli", return_value="/opt/pinned/rpce-cli"
+        ) as resolve, mock.patch.object(
+            flowctl, "bind_context_window", return_value=12
+        ) as bind, mock.patch.object(
+            flowctl, "run_rp_cli", return_value=_result(json.dumps(direct))
+        ) as run, redirect_stdout(io.StringIO()):
+            flowctl.cmd_rp_setup_review(args)
+        resolve.assert_called_once_with()
+        self.assertEqual(bind.call_args.kwargs["rp_cli"], "/opt/pinned/rpce-cli")
+        self.assertEqual(run.call_args.kwargs["rp_cli"], "/opt/pinned/rpce-cli")
+
     def test_summary_file_supplies_complete_builder_instructions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             instructions = Path(tmp) / "review.md"
@@ -314,7 +370,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp).resolve()
 
-            def try_run(_args, timeout=None):
+            def try_run(_args, timeout=None, *, rp_cli=None):
                 return _result(json.dumps({"binding": {"window_id": 41}}))
 
             def run(args):
@@ -362,7 +418,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
         }
         calls: list[list[str]] = []
 
-        def run(args, timeout=None):
+        def run(args, timeout=None, *, rp_cli=None):
             calls.append(args)
             self.assertEqual(args[:2], ["-w", "10"])
             return _result(json.dumps(direct))
@@ -502,7 +558,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
                 stderr="Tool not found: bind_context",
             )
 
-            def legacy_run(args, timeout=None):
+            def legacy_run(args, timeout=None, *, rp_cli=None):
                 if args == ["--raw-json", "-e", "windows"]:
                     return _result(
                         json.dumps(
@@ -519,6 +575,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
                         )
                     )
                 self.assertEqual(args[:2], ["-w", "8"])
+                self.assertEqual(args[-1], "builder 'Classic compatibility'")
                 return _result(json.dumps({"context_id": "classic-tab"}))
 
             args = argparse.Namespace(
