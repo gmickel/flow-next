@@ -226,10 +226,30 @@ file once for findings; do not echo/cat it.
 
 ## Phase 4: Receipt and Status
 
-When `REVIEW_RECEIPT_PATH` is set, write the existing plan-review receipt:
+When `REVIEW_RECEIPT_PATH` is set, write the existing plan-review receipt and
+atomically attach supported structured findings from the response already on
+disk:
 
-```json
-{"type":"plan_review","id":"<spec-id>","mode":"rp","verdict":"<verdict>","timestamp":"<ISO-8601>"}
+```bash
+if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
+  RESPONSE_FILE="${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md"
+  RECEIPT_INPUT="$(mktemp "${TMPDIR:-/tmp}/flow-plan-review-receipt.XXXXXX.json")"
+  jq -n --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{type:"plan_review",id:$id,mode:"rp",verdict:$verdict,timestamp:$timestamp}' \
+    > "$RECEIPT_INPUT"
+  if ! "$FLOWCTL" review-findings attach \
+    --input "$RECEIPT_INPUT" \
+    --receipt "$REVIEW_RECEIPT_PATH" \
+    --review-file "$RESPONSE_FILE" \
+    --head HEAD \
+    --json >/dev/null; then
+    rm -f "$RECEIPT_INPUT"
+    echo "<promise>RETRY</promise>"
+    exit 0
+  fi
+  rm -f "$RECEIPT_INPUT"
+fi
 ```
 
 Write latest status after every verdict:

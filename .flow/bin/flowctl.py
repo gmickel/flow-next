@@ -5227,6 +5227,13 @@ def _review_findings_container_valid(container: dict) -> bool:
         item["id"]
         != _review_finding_lineage_id(item["firstSeenReceiptId"], item["ordinal"])
         or item["lastSeenReceiptId"] != source_id
+        or (
+            "anchor" in item
+            and (
+                item["anchor"]["headSha"] != container["headSha"]
+                or item["anchor"]["baseSha"] != container.get("baseSha")
+            )
+        )
         for item in items
     ):
         return False
@@ -5450,6 +5457,308 @@ def parse_review_findings(
         )
     except (AttributeError, IndexError, KeyError, TypeError, ValueError, UnicodeError):
         return None
+
+
+_REVIEW_TYPE_TO_FINDINGS_KIND = {
+    "plan_review": "plan",
+    "impl_review": "implementation",
+    "completion_review": "completion",
+    "qa_verdict": "qa",
+}
+
+
+def _review_receipt_findings_id(
+    *,
+    review_kind: str,
+    review_id: str,
+    backend: str,
+    round_number: int,
+    head_sha: str,
+    review_text: str,
+) -> str:
+    """Return a deterministic, bounded identity for one receipt generation."""
+    identity = json.dumps(
+        [
+            _FINDINGS_SCHEMA_VERSION,
+            review_kind,
+            review_id,
+            backend,
+            round_number,
+            head_sha,
+            review_text,
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"review-{hashlib.sha256(identity).hexdigest()}"
+
+
+def _load_prior_receipt_findings(path: Optional[Path]) -> Optional[dict]:
+    """Load only a valid prior findings container; legacy/corrupt data is absent."""
+    if path is None:
+        return None
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None
+    if not isinstance(receipt, dict):
+        return None
+    findings = receipt.get("findings")
+    return (
+        findings
+        if isinstance(findings, dict)
+        and _review_findings_container_valid(findings)
+        else None
+    )
+
+
+def build_review_receipt_findings(
+    review_text: str,
+    *,
+    review_type: str,
+    review_id: str,
+    backend: str,
+    head_sha: str,
+    base_sha: Optional[str] = None,
+    prior_receipt_path: Optional[Path] = None,
+    anchor_side: Optional[str] = "head",
+) -> Optional[dict]:
+    """Build the optional findings field while receipt inputs are already held.
+
+    The only read is the receipt path the caller is about to replace. No model,
+    network, or reviewer dispatch occurs. A legacy, malformed, stale-lineage,
+    or unparseable input simply leaves the additive field absent.
+    """
+    review_kind = _REVIEW_TYPE_TO_FINDINGS_KIND.get(review_type)
+    if review_kind is None:
+        return None
+    prior = _load_prior_receipt_findings(prior_receipt_path)
+    if prior is not None and (
+        prior.get("reviewKind") != review_kind
+        or prior.get("backend") != backend
+    ):
+        prior = None
+    round_number = prior["round"] + 1 if prior is not None else 1
+    supersedes = prior["sourceReceiptId"] if prior is not None else None
+    source_receipt_id = _review_receipt_findings_id(
+        review_kind=review_kind,
+        review_id=review_id,
+        backend=backend,
+        round_number=round_number,
+        head_sha=head_sha,
+        review_text=review_text,
+    )
+    return parse_review_findings(
+        review_text,
+        source_receipt_id=source_receipt_id,
+        review_kind=review_kind,
+        backend=backend,
+        round_number=round_number,
+        head_sha=head_sha,
+        base_sha=base_sha,
+        supersedes_receipt_id=supersedes,
+        prior_findings=prior,
+        anchor_side=anchor_side,
+    )
+
+
+def validate_review_receipt_findings(receipt: object) -> bool:
+    """Validate the optional additive field; legacy receipts remain valid."""
+    if not isinstance(receipt, dict):
+        return False
+    findings = receipt.get("findings")
+    return findings is None or (
+        isinstance(findings, dict)
+        and _review_findings_container_valid(findings)
+    )
+
+
+def select_current_review_findings(
+    receipts: list[object],
+    *,
+    current_head_sha: str,
+    review_kind: Optional[str] = None,
+    backend: Optional[str] = None,
+) -> Optional[dict]:
+    """Project one unambiguous current explicit lineage tip.
+
+    Every valid receipt remains caller-owned evidence. This read-only projector
+    returns only a supported chain tip bound to ``current_head_sha``. Duplicate
+    identities, broken/cross-lineage supersedes edges, cycles, duplicate
+    finding lineage within a chain, or multiple current tips fail closed.
+    """
+    if (
+        not isinstance(receipts, list)
+        or not isinstance(current_head_sha, str)
+        or not current_head_sha
+        or (review_kind is not None and review_kind not in _FINDINGS_REVIEW_KINDS)
+        or (backend is not None and (not isinstance(backend, str) or not backend))
+    ):
+        return None
+    containers: list[dict] = []
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            continue
+        findings = receipt.get("findings")
+        if not isinstance(findings, dict):
+            continue
+        if not _review_findings_container_valid(findings):
+            return None
+        if review_kind is not None and findings["reviewKind"] != review_kind:
+            continue
+        if backend is not None and findings["backend"] != backend:
+            continue
+        containers.append(findings)
+    by_id: dict[str, dict] = {}
+    for container in containers:
+        source_id = container["sourceReceiptId"]
+        if source_id in by_id:
+            return None
+        by_id[source_id] = container
+    if not by_id:
+        return None
+
+    superseded: set[str] = set()
+    for container in containers:
+        parent_id = container.get("supersedesReceiptId")
+        if parent_id is None:
+            if container["round"] != 1:
+                return None
+            continue
+        parent = by_id.get(parent_id)
+        if (
+            parent is None
+            or parent["reviewKind"] != container["reviewKind"]
+            or parent["backend"] != container["backend"]
+            or parent["round"] + 1 != container["round"]
+        ):
+            return None
+        superseded.add(parent_id)
+
+    tips = [
+        container
+        for container in containers
+        if container["sourceReceiptId"] not in superseded
+        and container["headSha"] == current_head_sha
+    ]
+    if len(tips) != 1:
+        return None
+    tip = tips[0]
+
+    seen_receipts: set[str] = set()
+    chain: list[dict] = []
+    cursor = tip
+    while True:
+        source_id = cursor["sourceReceiptId"]
+        if source_id in seen_receipts:
+            return None
+        seen_receipts.add(source_id)
+        chain.append(cursor)
+        parent_id = cursor.get("supersedesReceiptId")
+        if parent_id is None:
+            break
+        cursor = by_id[parent_id]
+    known_findings: set[str] = set()
+    claimed_prior_edges: set[str] = set()
+    seen_chain_receipts: set[str] = set()
+    for container in reversed(chain):
+        source_id = container["sourceReceiptId"]
+        seen_chain_receipts.add(source_id)
+        for item in container["items"]:
+            finding_id = item["id"]
+            first_seen = item["firstSeenReceiptId"]
+            prior_id = item.get("priorFindingId")
+            if first_seen not in seen_chain_receipts:
+                return None
+            if finding_id in known_findings and first_seen == source_id:
+                return None
+            if prior_id is not None:
+                if prior_id not in known_findings or prior_id in claimed_prior_edges:
+                    return None
+                claimed_prior_edges.add(prior_id)
+            known_findings.add(finding_id)
+    return tip
+
+
+def cmd_review_findings_attach(args: argparse.Namespace) -> None:
+    """Atomically attach parsed findings to a direct-writer receipt payload."""
+    try:
+        input_path = Path(args.input)
+        receipt_path = Path(args.receipt)
+        review_path = Path(args.review_file)
+        receipt = json.loads(input_path.read_text(encoding="utf-8"))
+        review_text = review_path.read_text(encoding="utf-8")
+    except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+        error_exit(
+            f"review-findings attach input error: {exc}",
+            use_json=args.json,
+            code=2,
+        )
+    if not isinstance(receipt, dict):
+        error_exit(
+            "review-findings attach input must be a JSON object",
+            use_json=args.json,
+            code=2,
+        )
+    review_type = receipt.get("type")
+    review_id = receipt.get("id")
+    backend = receipt.get("mode")
+    if (
+        review_type not in _REVIEW_TYPE_TO_FINDINGS_KIND
+        or not isinstance(review_id, str)
+        or not review_id
+        or not isinstance(backend, str)
+        or not backend
+    ):
+        error_exit(
+            "review-findings attach requires input type/id/mode",
+            use_json=args.json,
+            code=2,
+        )
+    head_sha = _resolve_review_sha(args.head)
+    if head_sha is None:
+        error_exit(
+            f"review-findings attach cannot resolve head: {args.head}",
+            use_json=args.json,
+            code=2,
+        )
+    base_sha = _resolve_review_sha(args.base) if args.base else None
+    if args.base and base_sha is None:
+        error_exit(
+            f"review-findings attach cannot resolve base: {args.base}",
+            use_json=args.json,
+            code=2,
+        )
+    prior_path = Path(args.prior) if args.prior else receipt_path
+    findings = build_review_receipt_findings(
+        review_text,
+        review_type=review_type,
+        review_id=review_id,
+        backend=backend,
+        head_sha=head_sha,
+        base_sha=base_sha,
+        prior_receipt_path=prior_path,
+        anchor_side="head",
+    )
+    if findings is not None:
+        receipt["findings"] = findings
+    else:
+        receipt.pop("findings", None)
+    atomic_write_json(receipt_path, receipt)
+    result = {
+        "success": True,
+        "receipt": str(receipt_path),
+        "findings_attached": findings is not None,
+    }
+    if findings is not None:
+        result["source_receipt_id"] = findings["sourceReceiptId"]
+    if args.json:
+        json_output(result)
+    else:
+        print(
+            f"review findings {'attached' if findings is not None else 'unsupported'}: "
+            f"{receipt_path}"
+        )
 
 
 def _log_review_parse_path(field: str, path: str) -> None:
@@ -26327,6 +26636,23 @@ def _completion_review_receipt_recovery_path(review_id: str) -> Path:
     )
 
 
+def _resolve_review_sha(ref: str) -> Optional[str]:
+    """Resolve a review anchor locally; never dispatch or contact a remote."""
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+            cwd=get_repo_root(),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = proc.stdout.strip()
+    return value if proc.returncode == 0 and value else None
+
+
 def _write_backend_review_receipt(
     receipt_path: str,
     *,
@@ -26397,6 +26723,21 @@ def _write_backend_review_receipt(
         receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
     if unaddressed_rids is not None:
         receipt_data["unaddressed"] = unaddressed_rids
+    head_sha = _resolve_review_sha("HEAD")
+    if head_sha is not None:
+        base_sha = _resolve_review_sha(base_branch) if base_branch else None
+        findings = build_review_receipt_findings(
+            review_text,
+            review_type=review_type,
+            review_id=review_id,
+            backend=backend,
+            head_sha=head_sha,
+            base_sha=base_sha,
+            prior_receipt_path=Path(receipt_path),
+            anchor_side="head",
+        )
+        if findings is not None:
+            receipt_data["findings"] = findings
     content = json.dumps(receipt_data, indent=2) + "\n"
     recovery_path: Optional[Path] = None
     if review_type == "completion_review":
@@ -27181,6 +27522,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             resolved_spec=resolved_spec,
             review_text=review_text,
             include_effort=reg["include_effort"],
+            base_branch=base_branch,
         )
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
@@ -33393,6 +33735,43 @@ def main() -> None:
     )
     p_review_backend.add_argument("--json", action="store_true", help="JSON output")
     p_review_backend.set_defaults(func=cmd_review_backend)
+
+    # review-findings — deterministic receipt-write plumbing. Direct skill
+    # writers use the same parser/currentness contract as subprocess backends.
+    p_review_findings = subparsers.add_parser(
+        "review-findings",
+        help="Attach versioned structured findings to a direct-writer receipt",
+    )
+    review_findings_sub = p_review_findings.add_subparsers(
+        dest="review_findings_cmd", required=True
+    )
+    p_findings_attach = review_findings_sub.add_parser(
+        "attach",
+        help="Parse an existing reviewer response and atomically write the receipt",
+    )
+    p_findings_attach.add_argument(
+        "--receipt", required=True, help="Final receipt path"
+    )
+    p_findings_attach.add_argument(
+        "--input", required=True, help="Base receipt JSON payload"
+    )
+    p_findings_attach.add_argument(
+        "--review-file", required=True, dest="review_file",
+        help="Reviewer output already captured by the caller",
+    )
+    p_findings_attach.add_argument(
+        "--prior",
+        default=None,
+        help="Prior receipt path for lineage (defaults to --receipt)",
+    )
+    p_findings_attach.add_argument(
+        "--head", default="HEAD", help="Reviewed head ref (default: HEAD)"
+    )
+    p_findings_attach.add_argument(
+        "--base", default=None, help="Optional reviewed base ref"
+    )
+    p_findings_attach.add_argument("--json", action="store_true", help="JSON output")
+    p_findings_attach.set_defaults(func=cmd_review_findings_attach)
 
     # models resolve (fn-115.3) — pure map + precedence lookup for skills
     p_models = subparsers.add_parser(

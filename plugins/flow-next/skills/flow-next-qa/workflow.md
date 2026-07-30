@@ -507,6 +507,15 @@ else MODE="interactive"; fi
 
 RECEIPT_PATH="${QA_RECEIPT_OVERRIDE:-${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json}}"
 mkdir -p "$(dirname "$RECEIPT_PATH")"
+RECEIPT_INPUT="$(mktemp "${TMPDIR:-/tmp}/flow-qa-receipt.XXXXXX.json")"
+QA_REVIEW_FILE="$(mktemp "${TMPDIR:-/tmp}/flow-qa-review.XXXXXX.md")"
+PRIOR_RECEIPT="$(mktemp "${TMPDIR:-/tmp}/flow-qa-prior.XXXXXX.json")"
+if [[ -f "$RECEIPT_PATH" ]]; then
+  cp "$RECEIPT_PATH" "$PRIOR_RECEIPT"
+else
+  rm -f "$PRIOR_RECEIPT"
+  PRIOR_RECEIPT=""
+fi
 
 # Freshness key (R1b) + orientation. HEAD is resolved at QA time; a detached/empty
 # HEAD yields "" (the pilot gate treats a missing/empty head_sha as never-fresh).
@@ -533,7 +542,7 @@ for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
 done
 [ -n "$PY" ] || { echo "qa: no working Python 3.11+ interpreter found (see Windows Python troubleshooting)" >&2; exit 1; }
 
-$PY - "$RECEIPT_PATH" <<'PY'
+$PY - "$RECEIPT_INPUT" <<'PY'
 import datetime, json, os, sys
 r = {"type": os.environ["QA_TYPE"], "id": os.environ["QA_ID"],
      "mode": os.environ["QA_MODE"], "verdict": os.environ["QA_VERDICT"],
@@ -550,6 +559,29 @@ r["timestamp"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
     json.dump(r, fh); fh.write("\n")
 PY
+
+# QA's reproduced open findings do not yet carry the confidence/classification
+# pair required by findings v1, so never guess it. Empty SHIP/NA outcomes are
+# still explicit parseable evidence; non-empty QA output safely remains a
+# legacy-shaped receipt until those fields exist.
+if [[ "$VERDICT" == "SHIP" && "${OPEN_P0P1:-[]}" == "[]" ]]; then
+  printf 'No findings.\\n<verdict>SHIP</verdict>\\n' > "$QA_REVIEW_FILE"
+else
+  printf 'QA findings remain in open_p0p1; no lossless v1 conversion.\\n' > "$QA_REVIEW_FILE"
+fi
+PRIOR_ARGS=()
+[[ -n "$PRIOR_RECEIPT" ]] && PRIOR_ARGS=(--prior "$PRIOR_RECEIPT")
+if ! "$FLOWCTL" review-findings attach \
+  --input "$RECEIPT_INPUT" \
+  --receipt "$RECEIPT_PATH" \
+  "${PRIOR_ARGS[@]}" \
+  --review-file "$QA_REVIEW_FILE" \
+  --head HEAD \
+  --json >/dev/null; then
+  rm -f "$RECEIPT_INPUT" "$QA_REVIEW_FILE" ${PRIOR_RECEIPT:+"$PRIOR_RECEIPT"}
+  exit 1
+fi
+rm -f "$RECEIPT_INPUT" "$QA_REVIEW_FILE" ${PRIOR_RECEIPT:+"$PRIOR_RECEIPT"}
 echo "QA_VERDICT_WRITTEN: $RECEIPT_PATH ($QA_OUTCOME → $VERDICT)"
 ```
 

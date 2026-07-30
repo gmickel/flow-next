@@ -427,9 +427,25 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
     EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
   fi
 
-  cat > "$REVIEW_RECEIPT_PATH" <<EOF
+  RECEIPT_INPUT="$(mktemp "${TMPDIR:-/tmp}/flow-impl-review-receipt.XXXXXX.json")"
+  cat > "$RECEIPT_INPUT" <<EOF
 {"type":"impl_review","id":"<TASK_ID>","mode":"rp","verdict":"$VERDICT"$EXTRA_FIELDS,"timestamp":"$ts"}
 EOF
+  # The reviewer response is already local. This deterministic attach reads
+  # the prior receipt before atomically replacing it, preserving explicit
+  # supersedes lineage without another model/network call.
+  if ! "$FLOWCTL" review-findings attach \
+    --input "$RECEIPT_INPUT" \
+    --receipt "$REVIEW_RECEIPT_PATH" \
+    --review-file "$RESPONSE_FILE" \
+    --base "$DIFF_BASE" \
+    --head HEAD \
+    --json >/dev/null; then
+    rm -f "$RECEIPT_INPUT"
+    echo "<promise>RETRY</promise>"
+    exit 0
+  fi
+  rm -f "$RECEIPT_INPUT"
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```

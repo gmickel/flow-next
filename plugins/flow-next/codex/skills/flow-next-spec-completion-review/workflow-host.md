@@ -108,6 +108,24 @@ Build this payload once:
 }
 ```
 
+Write that base payload and the full reviewer output to temporary files. Build
+the recovery receipt through the shared deterministic attachment command,
+using the terminal receipt as the prior lineage source:
+
+```bash
+"$FLOWCTL" review-findings attach \
+ --input "$RECEIPT_INPUT" \
+ --receipt "$RECEIPT_RECOVERY" \
+ --prior "$RECEIPT_PATH" \
+ --review-file "$REVIEW_OUTPUT_FILE" \
+ --base "$DIFF_BASE" \
+ --head HEAD \
+ --json
+```
+
+Unsupported/legacy prose leaves the additive field absent. The command performs
+no reviewer/model/network call.
+
 Persist it in this order:
 
 1. Write the complete JSON payload to

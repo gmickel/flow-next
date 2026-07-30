@@ -1,0 +1,320 @@
+"""Receipt-write integration, currentness, and local-budget tests (fn-136.3)."""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+
+REPO = Path(__file__).resolve().parents[3]
+FLOWCTL_PATH = REPO / "plugins" / "flow-next" / "scripts" / "flowctl.py"
+CORPUS = REPO / "optimization" / "reached-path" / "fixtures" / "review-findings" / "v1"
+SPEC = importlib.util.spec_from_file_location("flowctl_findings_receipts", FLOWCTL_PATH)
+assert SPEC and SPEC.loader
+FLOWCTL = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = FLOWCTL
+SPEC.loader.exec_module(FLOWCTL)
+
+BASE_SHA = "a" * 40
+HEAD_SHA = "b" * 40
+FINDINGS_P95_BUDGET_MS = 50.0
+
+
+def _fixture(backend: str, name: str = "catalog-sample") -> str:
+    return (CORPUS / backend / f"{name}.md").read_text(encoding="utf-8")
+
+
+def _container(
+    *,
+    receipt_id: str,
+    backend: str = "codex",
+    kind: str = "implementation",
+    round_number: int = 1,
+    head_sha: str = HEAD_SHA,
+    prior: dict | None = None,
+) -> dict:
+    return FLOWCTL.parse_review_findings(
+        _fixture(backend, "catalog-sample"),
+        source_receipt_id=receipt_id,
+        review_kind=kind,
+        backend=backend,
+        round_number=round_number,
+        base_sha=BASE_SHA,
+        head_sha=head_sha,
+        supersedes_receipt_id=(
+            prior["sourceReceiptId"] if prior is not None else None
+        ),
+        prior_findings=prior,
+        anchor_side="head",
+    )
+
+
+class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.temp.name)
+        subprocess.run(["git", "init", "-q"], cwd=self.repo, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=self.repo,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=self.repo,
+            check=True,
+        )
+        (self.repo / "tracked.txt").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=self.repo, check=True)
+        subprocess.run(["git", "commit", "-qm", "base"], cwd=self.repo, check=True)
+        self.previous_cwd = Path.cwd()
+        os.chdir(self.repo)
+
+    def tearDown(self) -> None:
+        os.chdir(self.previous_cwd)
+        self.temp.cleanup()
+
+    def test_shared_writer_attaches_every_backend_and_review_kind(self) -> None:
+        type_to_kind = {
+            "impl_review": "implementation",
+            "plan_review": "plan",
+            "completion_review": "completion",
+        }
+        for backend in ("codex", "copilot", "cursor"):
+            for review_type, review_kind in type_to_kind.items():
+                with self.subTest(backend=backend, review_type=review_type):
+                    receipt = self.repo / f"{backend}-{review_type}.json"
+                    FLOWCTL._write_backend_review_receipt(
+                        str(receipt),
+                        review_type=review_type,
+                        review_id="fn-136.3",
+                        backend=backend,
+                        verdict="NEEDS_WORK",
+                        session_id="session",
+                        effective_model="model",
+                        effective_effort="high",
+                        resolved_spec=FLOWCTL.BackendSpec(backend, "model", "high"),
+                        review_text=_fixture(backend),
+                        include_effort=True,
+                        base_branch="HEAD",
+                    )
+                    data = json.loads(receipt.read_text(encoding="utf-8"))
+                    findings = data["findings"]
+                    self.assertEqual(findings["reviewKind"], review_kind)
+                    self.assertEqual(findings["backend"], backend)
+                    self.assertEqual(findings["round"], 1)
+                    self.assertEqual(findings["headSha"], findings["baseSha"])
+                    self.assertTrue(FLOWCTL.validate_review_receipt_findings(data))
+
+    def test_shared_writer_carries_explicit_supersedes_lineage(self) -> None:
+        receipt = self.repo / "receipt.json"
+        kwargs = dict(
+            receipt_path=str(receipt),
+            review_type="impl_review",
+            review_id="fn-136.3",
+            backend="codex",
+            verdict="NEEDS_WORK",
+            session_id="session",
+            effective_model="model",
+            effective_effort="high",
+            resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
+            include_effort=True,
+            base_branch="HEAD",
+        )
+        FLOWCTL._write_backend_review_receipt(
+            review_text=_fixture("codex"), **kwargs
+        )
+        first = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+        FLOWCTL._write_backend_review_receipt(
+            review_text="Prior finding 1 — fixed.\n<verdict>SHIP</verdict>\n",
+            **kwargs,
+        )
+        second = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+        self.assertEqual(second["round"], 2)
+        self.assertEqual(second["supersedesReceiptId"], first["sourceReceiptId"])
+        self.assertEqual(
+            second["items"][0]["firstSeenReceiptId"],
+            first["items"][0]["firstSeenReceiptId"],
+        )
+        self.assertEqual(second["items"][0]["status"], "fixed")
+
+    def test_direct_writer_attach_uses_prior_before_atomic_replace(self) -> None:
+        receipt = self.repo / "host.json"
+        response = self.repo / "review.md"
+        base_input = self.repo / "base.json"
+        response.write_text(_fixture("host"), encoding="utf-8")
+        base_input.write_text(
+            json.dumps(
+                {
+                    "type": "impl_review",
+                    "id": "fn-136.3",
+                    "mode": "host",
+                    "verdict": "NEEDS_WORK",
+                }
+            ),
+            encoding="utf-8",
+        )
+        args = argparse.Namespace(
+            input=str(base_input),
+            receipt=str(receipt),
+            review_file=str(response),
+            prior=None,
+            head="HEAD",
+            base="HEAD",
+            json=True,
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            FLOWCTL.cmd_review_findings_attach(args)
+        first = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+
+        response.write_text(
+            "Prior finding 1 — fixed.\n<verdict>SHIP</verdict>\n",
+            encoding="utf-8",
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            FLOWCTL.cmd_review_findings_attach(args)
+        second = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+        self.assertEqual(second["round"], 2)
+        self.assertEqual(second["supersedesReceiptId"], first["sourceReceiptId"])
+
+    def test_legacy_and_unparseable_receipts_remain_valid(self) -> None:
+        legacy = {
+            "type": "impl_review",
+            "id": "fn-136.3",
+            "verdict": "SHIP",
+        }
+        self.assertTrue(FLOWCTL.validate_review_receipt_findings(legacy))
+        invalid = dict(legacy, findings={"schemaVersion": 99})
+        self.assertFalse(FLOWCTL.validate_review_receipt_findings(invalid))
+
+
+class ReviewFindingsCurrentnessTest(unittest.TestCase):
+    def test_only_unambiguous_current_chain_tip_projects(self) -> None:
+        first = _container(receipt_id="round-1")
+        second = _container(receipt_id="round-2", round_number=2, prior=first)
+        receipts = [{"findings": first}, {"findings": second}]
+        snapshot = json.loads(json.dumps(receipts))
+        current = FLOWCTL.select_current_review_findings(
+            receipts,
+            current_head_sha=HEAD_SHA,
+            review_kind="implementation",
+            backend="codex",
+        )
+        self.assertEqual(current["sourceReceiptId"], "round-2")
+        self.assertEqual(receipts, snapshot, "projection must preserve stale evidence")
+
+    def test_stale_tip_broken_chain_duplicates_and_ambiguity_fail_closed(self) -> None:
+        first = _container(receipt_id="round-1")
+        stale_tip = _container(
+            receipt_id="round-2",
+            round_number=2,
+            head_sha="c" * 40,
+            prior=first,
+        )
+        self.assertIsNone(
+            FLOWCTL.select_current_review_findings(
+                [{"findings": first}, {"findings": stale_tip}],
+                current_head_sha=HEAD_SHA,
+            )
+        )
+
+        broken = json.loads(json.dumps(stale_tip))
+        broken["headSha"] = HEAD_SHA
+        broken["supersedesReceiptId"] = "missing"
+        self.assertIsNone(
+            FLOWCTL.select_current_review_findings(
+                [{"findings": first}, {"findings": broken}],
+                current_head_sha=HEAD_SHA,
+            )
+        )
+        self.assertIsNone(
+            FLOWCTL.select_current_review_findings(
+                [{"findings": first}, {"findings": first}],
+                current_head_sha=HEAD_SHA,
+            )
+        )
+        other_root = _container(receipt_id="other-root")
+        self.assertIsNone(
+            FLOWCTL.select_current_review_findings(
+                [{"findings": first}, {"findings": other_root}],
+                current_head_sha=HEAD_SHA,
+            )
+        )
+
+    def test_anchor_and_cross_receipt_references_fail_closed(self) -> None:
+        first = _container(receipt_id="round-1")
+        bad_anchor = json.loads(json.dumps(first))
+        bad_anchor["items"][0]["anchor"]["headSha"] = "d" * 40
+        self.assertFalse(FLOWCTL._review_findings_container_valid(bad_anchor))
+
+        second = _container(receipt_id="round-2", round_number=2, prior=first)
+        bad_first_seen = json.loads(json.dumps(second))
+        bad_first_seen["items"][0]["firstSeenReceiptId"] = "missing"
+        bad_first_seen["items"][0]["id"] = FLOWCTL._review_finding_lineage_id(
+            "missing", bad_first_seen["items"][0]["ordinal"]
+        )
+        self.assertIsNone(
+            FLOWCTL.select_current_review_findings(
+                [{"findings": first}, {"findings": bad_first_seen}],
+                current_head_sha=HEAD_SHA,
+            )
+        )
+
+        skipped_round = json.loads(json.dumps(second))
+        skipped_round["round"] = 3
+        self.assertIsNone(
+            FLOWCTL.select_current_review_findings(
+                [{"findings": first}, {"findings": skipped_round}],
+                current_head_sha=HEAD_SHA,
+            )
+        )
+
+
+class ReviewFindingsLocalBudgetTest(unittest.TestCase):
+    def test_largest_pinned_fixture_parse_and_validate_p95_under_budget(self) -> None:
+        fixture_paths = list(CORPUS.glob("*/*.md"))
+        largest = max(fixture_paths, key=lambda path: path.stat().st_size)
+        text = largest.read_text(encoding="utf-8")
+        backend = largest.parent.name
+
+        def run_once() -> None:
+            findings = FLOWCTL.parse_review_findings(
+                text,
+                source_receipt_id="benchmark-receipt",
+                review_kind="implementation",
+                backend=backend,
+                round_number=1,
+                base_sha=BASE_SHA,
+                head_sha=HEAD_SHA,
+                anchor_side="head",
+            )
+            self.assertIsNotNone(findings)
+            self.assertTrue(FLOWCTL._review_findings_container_valid(findings))
+
+        for _ in range(5):
+            run_once()
+        timings_ms = []
+        for _ in range(30):
+            started = time.perf_counter()
+            run_once()
+            timings_ms.append((time.perf_counter() - started) * 1000)
+        p95_ms = sorted(timings_ms)[28]
+        self.assertLess(
+            p95_ms,
+            FINDINGS_P95_BUDGET_MS,
+            f"{largest.relative_to(REPO)} p95={p95_ms:.3f}ms",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

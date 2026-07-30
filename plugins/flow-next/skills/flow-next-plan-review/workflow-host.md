@@ -67,6 +67,21 @@ Write:
 }
 ```
 
+Write the base JSON and full reviewer output to temporary files, then make the
+terminal receipt write through the shared deterministic attachment command:
+
+```bash
+"$FLOWCTL" review-findings attach \
+  --input "$RECEIPT_INPUT" \
+  --receipt "$RECEIPT_PATH" \
+  --review-file "$REVIEW_OUTPUT_FILE" \
+  --head HEAD \
+  --json
+```
+
+It reads any prior receipt before atomic replacement, carries only valid
+same-backend plan lineage, and adds no reviewer/model/network call.
+
 After every verdict, including re-review, write latest status:
 
 ```bash

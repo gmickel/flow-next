@@ -555,6 +555,17 @@ EOF
     echo "<promise>RETRY</promise>"
     exit 0
   fi
+  if ! "$FLOWCTL" review-findings attach \
+    --input "$RECEIPT_RECOVERY" \
+    --receipt "$RECEIPT_RECOVERY" \
+    --prior "$REVIEW_RECEIPT_PATH" \
+    --review-file "$RESPONSE_FILE" \
+    --base "$DIFF_BASE" \
+    --head HEAD \
+    --json >/dev/null; then
+    echo "<promise>RETRY</promise>"
+    exit 0
+  fi
   if ! cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"; then
     echo "<promise>RETRY</promise>"
     exit 0
