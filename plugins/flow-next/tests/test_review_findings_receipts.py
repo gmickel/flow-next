@@ -959,6 +959,134 @@ class ReviewFindingsCurrentnessTest(unittest.TestCase):
         self.assertEqual(current["sourceReceiptId"], "round-2")
         self.assertTrue(all(item["status"] == "open" for item in current["items"]))
 
+    def test_repeated_prior_edge_tracks_same_durable_item_across_generations(
+        self,
+    ) -> None:
+        first = _container(receipt_id="round-1")
+        prior_id = first["items"][0]["id"]
+        finding = f"""### Replacement finding
+- **Severity**: Major
+- **Confidence**: 100
+- **Classification**: introduced
+- **Prior finding ID**: {prior_id}
+- **Problem**: The replacement carries explicit lineage.
+<verdict>NEEDS_WORK</verdict>
+"""
+        second = FLOWCTL.parse_review_findings(
+            finding,
+            source_receipt_id="round-2",
+            review_kind="implementation",
+            backend="codex",
+            round_number=2,
+            base_sha=BASE_SHA,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="round-1",
+            prior_findings=first,
+            anchor_side="head",
+        )
+        third = FLOWCTL.parse_review_findings(
+            "Prior finding 1 — not_fixed.\n<verdict>NEEDS_WORK</verdict>\n",
+            source_receipt_id="round-3",
+            review_kind="implementation",
+            backend="codex",
+            round_number=3,
+            base_sha=BASE_SHA,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="round-2",
+            prior_findings=second,
+            anchor_side="head",
+        )
+        replacement_id = next(
+            item["id"] for item in second["items"] if item.get("priorFindingId")
+        )
+        self.assertTrue(
+            any(
+                item["id"] == replacement_id
+                and item["priorFindingId"] == prior_id
+                for item in third["items"]
+            )
+        )
+        current = FLOWCTL.select_current_review_findings(
+            [{"findings": first}, {"findings": second}, {"findings": third}],
+            current_head_sha=HEAD_SHA,
+        )
+        self.assertEqual(current["sourceReceiptId"], "round-3")
+
+    def test_conflicting_prior_edge_ownership_fails_closed(self) -> None:
+        first = _container(receipt_id="round-1")
+        prior_id = first["items"][0]["id"]
+        finding = f"""### Replacement finding
+- **Severity**: Major
+- **Confidence**: 100
+- **Classification**: introduced
+- **Prior finding ID**: {prior_id}
+- **Problem**: The replacement carries explicit lineage.
+<verdict>NEEDS_WORK</verdict>
+"""
+        second = FLOWCTL.parse_review_findings(
+            finding,
+            source_receipt_id="round-2",
+            review_kind="implementation",
+            backend="codex",
+            round_number=2,
+            base_sha=BASE_SHA,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="round-1",
+            prior_findings=first,
+            anchor_side="head",
+        )
+        third = FLOWCTL.parse_review_findings(
+            finding.replace("Replacement finding", "Conflicting replacement"),
+            source_receipt_id="round-3",
+            review_kind="implementation",
+            backend="codex",
+            round_number=3,
+            base_sha=BASE_SHA,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="round-2",
+            prior_findings=second,
+            anchor_side="head",
+        )
+        self.assertIsNone(
+            FLOWCTL.select_current_review_findings(
+                [{"findings": first}, {"findings": second}, {"findings": third}],
+                current_head_sha=HEAD_SHA,
+            )
+        )
+
+    def test_unparseable_rereview_does_not_advance_prior_snapshot(self) -> None:
+        first = _container(receipt_id="round-1")
+        second = FLOWCTL.parse_review_findings(
+            "Looks good after another pass.\n<verdict>SHIP</verdict>\n",
+            source_receipt_id="round-2",
+            review_kind="implementation",
+            backend="codex",
+            round_number=2,
+            base_sha=BASE_SHA,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="round-1",
+            prior_findings=first,
+            anchor_side="head",
+        )
+        self.assertIsNone(second)
+
+    def test_valid_ratchet_still_advances_prior_snapshot(self) -> None:
+        first = _container(receipt_id="round-1")
+        second = FLOWCTL.parse_review_findings(
+            "Prior finding 1 — fixed.\n<verdict>SHIP</verdict>\n",
+            source_receipt_id="round-2",
+            review_kind="implementation",
+            backend="codex",
+            round_number=2,
+            base_sha=BASE_SHA,
+            head_sha=HEAD_SHA,
+            supersedes_receipt_id="round-1",
+            prior_findings=first,
+            anchor_side="head",
+        )
+        self.assertEqual(second["items"][0]["status"], "fixed")
+        self.assertEqual(second["items"][0]["lastSeenReceiptId"], "round-2")
+
     def test_incomplete_snapshot_and_forged_first_seen_fail_closed(self) -> None:
         first = _container(receipt_id="round-1")
         second = _container(receipt_id="round-2", round_number=2, prior=first)

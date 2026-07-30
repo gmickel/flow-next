@@ -5384,8 +5384,10 @@ def _parse_review_findings_v1(
         )
         and re.search(r"<verdict>\s*SHIP\s*</verdict>", output, re.IGNORECASE)
     )
-    if not rows and not prior_items and not explicit_empty:
-        # A malformed/unknown severity label must never become a false empty set.
+    has_prior_records = _FINDINGS_PRIOR_RE.search(output) is not None
+    if not rows and not has_prior_records and not explicit_empty:
+        # Prior state is context, not evidence that this generation parsed.
+        # Arbitrary re-review prose must not advance the structured lineage.
         return None
     if saw_severity_label and not rows:
         return None
@@ -5747,7 +5749,7 @@ def select_current_review_findings(
             break
         cursor = by_id[parent_id]
     known_findings: set[str] = set()
-    claimed_prior_edges: set[str] = set()
+    prior_edge_owners: dict[str, str] = {}
     seen_chain_receipts: set[str] = set()
     for container in reversed(chain):
         source_id = container["sourceReceiptId"]
@@ -5770,9 +5772,12 @@ def select_current_review_findings(
             if finding_id in known_findings and first_seen == source_id:
                 return None
             if prior_id is not None:
-                if prior_id not in known_findings or prior_id in claimed_prior_edges:
+                owner = prior_edge_owners.get(prior_id)
+                if prior_id not in known_findings or (
+                    owner is not None and owner != finding_id
+                ):
                     return None
-                claimed_prior_edges.add(prior_id)
+                prior_edge_owners[prior_id] = finding_id
             known_findings.add(finding_id)
     return tip
 
