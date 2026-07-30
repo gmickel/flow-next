@@ -84,6 +84,10 @@ class RepoPromptSetupWorkflowContractTest(unittest.TestCase):
                 self.assertIn("--mode review", text, path)
                 self.assertIn('RP_MODE" == "ce', text, path)
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "nested bash -c exit propagation is covered by the Unix matrices",
+    )
     def test_plan_setup_fence_stops_at_cap_and_finalizes_setup_failure(self) -> None:
         path = (
             PLUGIN_ROOT
