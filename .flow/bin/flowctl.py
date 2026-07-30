@@ -4528,14 +4528,17 @@ _FINDINGS_INLINE_HOST_RE = re.compile(
     r"\s*(?:\*\*)?\s*$"
 )
 _FINDINGS_PRIOR_RE = re.compile(
-    r"""(?ix)
-    \bprior[\s-]+finding(?:\s*(?:\#)?(?P<ordinal>\d+))?
-    \s*(?:[:—-]\s*)?
+    r"""(?imx)
+    ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?
+    prior[ \t-]+finding(?:[ \t]*(?:\#)?(?P<ordinal>\d+))?
+    [ \t]*(?:[:—-][ \t]*)?
     (?:\*\*)?
     (?P<status>
-      fixed(?:\s+in\s+review)?|resolved|not[\s_]fixed|remains\s+open|
+      fixed(?:[ \t]+in[ \t]+review)?|resolved|not[\s_]fixed|remains[ \t]+open|
       unresolved|withdrawn
     )
+    (?:\*\*)?
+    (?![A-Za-z0-9_-])
     """
 )
 _FINDINGS_FILE_LINE_RE = re.compile(

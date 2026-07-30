@@ -239,6 +239,39 @@ Problem: The replacement finding has materially different scope.
             )
         )
 
+    def test_ratchet_statuses_require_line_records_and_lexical_boundaries(self) -> None:
+        prior = parse(self.fixture("codex", "catalog-sample"), "codex")
+        quoted = """
+Severity: Minor
+Confidence: 75
+Classification: introduced
+Problem: The prompt says "Prior finding 1 — fixed".
+"""
+        current = parse(
+            quoted,
+            "codex",
+            receipt="receipt-round-2",
+            round_number=2,
+            prior=prior,
+            supersedes="receipt-round-1",
+        )
+        self.assertEqual(len(current["items"]), 1)
+        self.assertEqual(current["items"][0]["status"], "open")
+        self.assertNotEqual(current["items"][0]["id"], prior["items"][0]["id"])
+
+        for suffix in ("fixed-ish", "fixedly", "withdrawnish"):
+            with self.subTest(suffix=suffix):
+                self.assertIsNone(
+                    parse(
+                        f"Prior finding 1 — {suffix}.",
+                        "codex",
+                        receipt="receipt-round-2",
+                        round_number=2,
+                        prior=prior,
+                        supersedes="receipt-round-1",
+                    )
+                )
+
     def test_canonical_order_is_severity_confidence_then_ordinal(self) -> None:
         text = """
 Severity: Minor
