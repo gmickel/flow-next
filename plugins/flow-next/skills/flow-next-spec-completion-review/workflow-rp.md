@@ -38,18 +38,31 @@ Compose a 1-2 sentence summary in agent context for the setup-review command bel
 
 ```bash
 # Self-contained: fill this scalar inline; shell variables do not cross tool calls.
-REVIEW_SUMMARY="[1-2 sentence substantive summary composed from Phase 1]"
+REVIEW_SUMMARY="[Verify every current spec requirement against the completed implementation and identify any coverage gaps or unrelated changes. Emit requirements, evidence, gap Confidence and Classification, and finish with exactly one of <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>.]"
+RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
+SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
 
-# Atomic: resolve/reuse window + open Context Builder
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUMMARY" --create)"
+ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
+ROUND_EXIT=$?
+if [[ "$ROUND_EXIT" -ne 0 ]]; then
+  printf '%s\n' "$ROUND_JSON"
+  exit "$ROUND_EXIT"
+fi
+$FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
+  --summary "$REVIEW_SUMMARY" --response-type review \
+  --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
+source "$SETUP_FILE"
 
-# Verify we have W and T
-if [[ -z "${W:-}" || -z "${T:-}" ]]; then
+if [[ -z "${W:-}" || -z "${T:-}" || -z "${RP_MODE:-}" ]]; then
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
+if [[ "$RP_MODE" == "ce" && ( -z "${CHAT_ID:-}" || ! -s "$RESPONSE_FILE" ) ]]; then
   echo "<promise>RETRY</promise>"
   exit 0
 fi
 
-echo "Setup complete: W=$W T=$T"
+echo "Setup complete: mode=$RP_MODE W=$W T=$T"
 ```
 
 If this block fails, output `<promise>RETRY</promise>` and stop. Do not improvise.
@@ -59,24 +72,22 @@ If this block fails, output `<promise>RETRY</promise>` and stop. Do not improvis
 
 ## Phase 2: Augment Selection (RP)
 
-Builder selects context automatically. Review and add must-haves:
+CE already returned the terminal review. Classic alone uses its published-tab
+selection/chat compatibility flow:
 
 ```bash
-# See what builder selected
-$FLOWCTL rp select-get --window "$W" --tab "$T"
-
-# Add spec
-$FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/$SPEC_ID.md"
-
-# Add all task specs
-for task_id in $(echo "$TASKS_JSON" | jq -r '.[].id'); do
-  $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/tasks/$task_id.md"
-done
-
-# Add ALL changed files
-for f in $CHANGED_FILES; do
-  $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
-done
+SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
+source "$SETUP_FILE"
+if [[ "$RP_MODE" == "classic" ]]; then
+  $FLOWCTL rp select-get --window "$W" --tab "$T"
+  $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/$SPEC_ID.md"
+  for task_id in $(echo "$TASKS_JSON" | jq -r '.[].id'); do
+    $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/tasks/$task_id.md"
+  done
+  for f in $CHANGED_FILES; do
+    $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
+  done
+fi
 ```
 
 **Why this matters:** Chat only sees selected files.
@@ -95,7 +106,10 @@ done
 Build the prompt by deterministic composition — redirect command output into the file, never paste it into a heredoc. Only cheap **scalar** slots (`[SPEC_ID]`, `[BRANCH_NAME]`, task-id list) are filled inline while typing the quoted heredocs below; multi-line command output is always appended via redirection.
 
 ```bash
+SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
+source "$SETUP_FILE"
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-completion-review-prompt-<spec-id>-<suffix>.md"   # literal path
+if [[ "$RP_MODE" == "classic" ]]; then
 
 # 1. Builder handoff — captured via redirection, never re-typed
 $FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"
@@ -316,30 +330,17 @@ After the findings list, emit:
 
 Do NOT skip this tag. The automation depends on it.
 EOF
+fi
 ```
 
 **Note:** The scalar bracket slots (`[SPEC_ID]`, `[BRANCH_NAME]`, `[LIST TASK IDs]`) are filled inline while typing the heredoc — they are cheap value substitutions. Multi-line content (handoff, spec body) is NEVER typed by hand; it arrives via the redirections above.
 
 ### Send to RepoPrompt and Parse Verdict (single-entry response)
 
-**fn-90 R5 — deterministic cap gate (run BEFORE every review dispatch, including this first one). Completion reviews reuse the spec-scoped plan counter (`--kind plan`):**
-
-```bash
-ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
-ROUND_EXIT=$?
-if [[ "$ROUND_EXIT" -ne 0 ]]; then
-  printf '%s\n' "$ROUND_JSON"
-  exit "$ROUND_EXIT"
-fi
-REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
-REVIEW_CAP="$(printf '%s' "$ROUND_JSON" | jq -r '.cap')"
-```
-
-Use `REVIEW_ROUND` / `REVIEW_CAP` for this invocation's immediate fix-loop
-branching. After the verdict is recorded, the shared terminal owner re-reads
-the latest completion attempt and live cap counters from
-`review-rounds attempts`; it never relies on these shell variables surviving a
-tool call.
+The spec-scoped plan-counter reservation happens immediately before the single
+CE builder/review call (or before Classic setup). After the verdict is
+recorded, the shared terminal owner re-reads the latest completion attempt and
+live cap counters from `review-rounds attempts`.
 
 At the cap this refuses with an `ESCALATE:` marker + exit 4. That is NOT a
 retryable error: do NOT dispatch the review or invent a completion verdict.
@@ -354,9 +355,15 @@ Redirect the review response to the literal response file — it must enter cont
 # build block, and bash vars do not survive across tool calls (type them verbatim)
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-completion-review-prompt-<spec-id>-<suffix>.md"      # same literal path from the build block
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"  # literal path
+SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
+source "$SETUP_FILE"
 
-$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Spec Completion Review: $SPEC_ID" > "$RESPONSE_FILE"
-RP_EXIT=$?
+if [[ "$RP_MODE" == "classic" ]]; then
+  $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Spec Completion Review: $SPEC_ID" > "$RESPONSE_FILE"
+  RP_EXIT=$?
+else
+  RP_EXIT=0
+fi
 
 # Extract verdict tag from the response file
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \

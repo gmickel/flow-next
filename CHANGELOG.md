@@ -6,14 +6,15 @@ All notable changes to the flow-next.
 
 ### Fixed
 
-- **RepoPrompt setup no longer false-greens on an empty Context Builder tab.**
-  Review setup fences now define their substantive summary in the same shell
-  block that invokes `setup-review`, so fresh-shell hosts cannot lose it.
-  `flowctl rp setup-review` rejects blank summaries and verifies Builder left
-  both a rewritten prompt and selected files before returning `W`/`T`; a
-  context ID alone is no longer success. The wrapper now sends the summary
-  through Context Builder's named `instructions` field, avoiding CE 1.1.0's
-  lossy positional shorthand. Builder still runs exactly once.
+- **RepoPrompt CE reviews now consume Context Builder's direct result.**
+  Review setup fences keep substantive instructions self-contained and reject
+  blank input before RepoPrompt runs. CE invokes the named `context_builder`
+  tool once with `response_type=review`, validates its direct prompt, formatted
+  selection, file/token counts, context/chat identities, and review response,
+  then feeds that response into the normal Flow verdict/receipt path. It no
+  longer queries an unprojected visible tab, augments selection, or sends a
+  second initial chat. Discontinued Classic remains an isolated final fallback
+  using its published-tab selection/chat workflow; CE failures never downgrade.
 
 ## [flow-next 3.8.0] - 2026-07-30
 

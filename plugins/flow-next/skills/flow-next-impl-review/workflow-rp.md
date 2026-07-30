@@ -39,18 +39,33 @@ Compose a 1-2 sentence summary in agent context from these results.
 
 ```bash
 # Self-contained: fill this scalar inline; shell variables do not cross tool calls.
-REVIEW_SUMMARY="[1-2 sentence substantive summary composed from Phase 1]"
+# Include the review contract because CE returns the review from this one call.
+REVIEW_SUMMARY="[Review the current implementation diff against its task/spec. For every finding emit Severity, Confidence, Classification, File:Line, Problem, and Suggestion; finish with exactly one of <verdict>SHIP</verdict>, <verdict>NEEDS_WORK</verdict>, or <verdict>MAJOR_RETHINK</verdict>.]"
+RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
+SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
 
-# Atomic: resolve/reuse window + open Context Builder
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUMMARY" --create)"
+if [[ -n "$TASK_ID" ]]; then
+  $FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
+fi
 
-# Verify we have W and T
-if [[ -z "${W:-}" || -z "${T:-}" ]]; then
+# CE: one context_builder review result, written directly to RESPONSE_FILE.
+# Classic: RP_MODE=classic and the old tab selection/chat flow continues below.
+$FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
+  --summary "$REVIEW_SUMMARY" --response-type review \
+  --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
+source "$SETUP_FILE"
+
+# Both paths retain numeric window/context identity; CE also returns the chat.
+if [[ -z "${W:-}" || -z "${T:-}" || -z "${RP_MODE:-}" ]]; then
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
+if [[ "$RP_MODE" == "ce" && ( -z "${CHAT_ID:-}" || ! -s "$RESPONSE_FILE" ) ]]; then
   echo "<promise>RETRY</promise>"
   exit 0
 fi
 
-echo "Setup complete: W=$W T=$T"
+echo "Setup complete: mode=$RP_MODE W=$W T=$T"
 ```
 
 If this block fails, output `<promise>RETRY</promise>` and stop. Do not improvise.
@@ -60,19 +75,19 @@ If this block fails, output `<promise>RETRY</promise>` and stop. Do not improvis
 
 ## Phase 2: Augment Selection (RP)
 
-Builder selects context automatically. Review and add must-haves:
+CE already returned the terminal review and MUST skip this phase. Classic alone
+uses its published-tab selection:
 
 ```bash
-# See what builder selected
-$FLOWCTL rp select-get --window "$W" --tab "$T"
-
-# Add ALL changed files
-for f in $CHANGED_FILES; do
-  $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
-done
-
-# Add task spec if known
-$FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<task-id>.md
+SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+source "$SETUP_FILE"
+if [[ "$RP_MODE" == "classic" ]]; then
+  $FLOWCTL rp select-get --window "$W" --tab "$T"
+  for f in $CHANGED_FILES; do
+    $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
+  done
+  $FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<task-id>.md
+fi
 ```
 
 **Why this matters:** Chat only sees selected files.
@@ -91,7 +106,10 @@ $FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<task-id>.md
 Build the prompt by deterministic composition — redirect command output into the file, never paste it into a heredoc. Only cheap **scalar** slots (branch, file list, commit summary, focus areas — values you already hold from Phase 1) are filled inline while typing the quoted heredocs below; multi-line command output is always appended via redirection.
 
 ```bash
+SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+source "$SETUP_FILE"
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-impl-review-prompt-<task-id-or-branch-slug>-<suffix>.md"   # literal path
+if [[ "$RP_MODE" == "classic" ]]; then
 
 # 1. Builder handoff — captured via redirection, never re-typed
 $FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"
@@ -199,19 +217,14 @@ After the findings, add (only when applicable): the `## Requirements coverage` t
 
 Do NOT skip this tag. The automation depends on it.
 EOF
+fi
 ```
 
 ### Send to RepoPrompt (single-entry response)
 
-**fn-90 R5 — deterministic cap gate (run BEFORE every review dispatch, including this first one; task-scoped reviews only — standalone/branch reviews have no spec state, so no cap):**
-
-```bash
-if [[ -n "$TASK_ID" ]]; then
-  $FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
-fi
-```
-
-At the cap this refuses with an `ESCALATE:` marker + exit 4. That is NOT a retryable error: do NOT dispatch the review, do NOT retry — surface the ESCALATE message to the caller and stop (Ralph/autonomous: NEEDS_HUMAN). Only proceed to `chat-send` when the increment succeeds.
+The deterministic review-round cap was reserved immediately before the
+single CE builder/review call (or before Classic setup). At the cap, stop
+without invoking RepoPrompt.
 
 Redirect the review response to the literal response file — it must enter context exactly ONCE, via a single Read of that file (command substitution + `echo` would be the second copy; redirection keeps stdout out of context entirely):
 
@@ -220,9 +233,16 @@ Redirect the review response to the literal response file — it must enter cont
 # build block, and bash vars do not survive across tool calls (type them verbatim)
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-impl-review-prompt-<task-id-or-branch-slug>-<suffix>.md"      # same literal path from the build block
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"  # literal path
+SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
+source "$SETUP_FILE"
 
-$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Impl Review: $BRANCH" > "$RESPONSE_FILE"
-RP_EXIT=$?
+if [[ "$RP_MODE" == "classic" ]]; then
+  $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Impl Review: $BRANCH" > "$RESPONSE_FILE"
+  RP_EXIT=$?
+else
+  # CE's one context_builder call already wrote the terminal response.
+  RP_EXIT=0
+fi
 
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
   | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \

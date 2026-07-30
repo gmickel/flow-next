@@ -2126,8 +2126,8 @@ def extract_builder_tab_from_payload(data: Any) -> Optional[str]:
     return None
 
 
-def validate_rp_builder_context(data: Any) -> None:
-    """Reject builder tabs that have no rewritten prompt or selected files."""
+def validate_rp_classic_builder_context(data: Any) -> None:
+    """Reject Classic builder tabs without a published prompt or selection."""
     for _ in range(4):
         if not isinstance(data, dict):
             break
@@ -2163,8 +2163,8 @@ def validate_rp_builder_context(data: Any) -> None:
         )
 
 
-def verify_rp_builder_context(window: int, tab: str) -> None:
-    """Read the builder tab once and require usable semantic context."""
+def verify_rp_classic_builder_context(window: int, tab: str) -> None:
+    """Read Classic's published builder tab and require usable context."""
     expression = 'workspace_context include=["prompt","selection"]'
     result = run_rp_cli(
         ["-w", str(window), "-t", tab, "--raw-json", "-e", expression]
@@ -2175,7 +2175,110 @@ def verify_rp_builder_context(window: int, tab: str) -> None:
         error_exit(
             f"Builder context JSON parse failed: {exc}", use_json=False, code=2
         )
-    validate_rp_builder_context(data)
+    validate_rp_classic_builder_context(data)
+
+
+def validate_rp_ce_builder_review(data: Any) -> dict[str, Any]:
+    """Validate CE's authoritative direct ``context_builder`` review result.
+
+    RepoPrompt CE intentionally need not publish an explicitly targeted
+    Context Builder run into the visible compose tab.  The MCP tool result is
+    therefore the only success oracle on the CE path.
+    """
+    if not isinstance(data, dict):
+        error_exit(
+            "CE context_builder JSON has unexpected shape",
+            use_json=False,
+            code=2,
+        )
+
+    context_id = data.get("context_id")
+    status = data.get("status")
+    prompt = data.get("prompt")
+    selection = data.get("selection")
+    file_count = data.get("file_count")
+    total_tokens = data.get("total_tokens")
+    response_type = data.get("response_type")
+    review = data.get("review")
+
+    if not isinstance(context_id, str) or not context_id.strip():
+        error_exit(
+            "CE context_builder response missing context_id",
+            use_json=False,
+            code=2,
+        )
+    if status != "completed":
+        error_exit(
+            f"CE context_builder did not complete: {status!r}",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(prompt, str) or not prompt.strip():
+        error_exit(
+            "CE context_builder returned an empty prompt",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(selection, str) or not selection.strip():
+        error_exit(
+            "CE context_builder returned an empty formatted selection",
+            use_json=False,
+            code=2,
+        )
+    if (
+        isinstance(file_count, bool)
+        or not isinstance(file_count, int)
+        or file_count <= 0
+    ):
+        error_exit(
+            "CE context_builder returned non-positive file_count",
+            use_json=False,
+            code=2,
+        )
+    if (
+        isinstance(total_tokens, bool)
+        or not isinstance(total_tokens, int)
+        or total_tokens <= 0
+    ):
+        error_exit(
+            "CE context_builder returned non-positive total_tokens",
+            use_json=False,
+            code=2,
+        )
+    if response_type != "review":
+        error_exit(
+            "CE context_builder response_type is not review",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(review, dict):
+        error_exit(
+            "CE context_builder response missing review result",
+            use_json=False,
+            code=2,
+        )
+    chat_id = review.get("chat_id")
+    review_mode = review.get("mode")
+    review_response = review.get("response")
+    if not isinstance(chat_id, str) or not chat_id.strip():
+        error_exit(
+            "CE context_builder review missing chat_id",
+            use_json=False,
+            code=2,
+        )
+    if review_mode != "review":
+        error_exit(
+            "CE context_builder review mode is not review",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(review_response, str) or not review_response.strip():
+        error_exit(
+            "CE context_builder review returned an empty response",
+            use_json=False,
+            code=2,
+        )
+    return data
 
 
 def bind_context_window(
@@ -20577,23 +20680,24 @@ def cmd_rp_prompt_export(args: argparse.Namespace) -> None:
 
 
 def cmd_rp_setup_review(args: argparse.Namespace) -> None:
-    """Atomic RP setup: resolve matching window, then open a builder tab.
+    """Atomic RP setup: resolve a window, then run Context Builder.
 
-    Returns W=<window> T=<tab> on success, exits non-zero on failure.
-    With --response-type review, also returns CHAT_ID and review findings.
-
-    Requires RepoPrompt 1.6.0+ for --response-type review.
+    CE review mode consumes the authoritative direct tool result. Classic is
+    the isolated compatibility fallback and retains its published-tab flow.
     """
 
     repo_root = os.path.realpath(args.repo_root)
     summary = args.summary
     response_type = getattr(args, "response_type", None)
+    response_file = getattr(args, "response_file", None)
     if not isinstance(summary, str) or not summary.strip():
         error_exit(
             "setup-review requires a non-blank --summary",
             use_json=False,
             code=2,
         )
+    rp_cli = require_rp_cli()
+    is_ce = Path(rp_cli).name != "rp-cli"
 
     # Step 1: pick-window
     roots = normalize_repo_root(repo_root)
@@ -20690,7 +20794,7 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
     # CE 1.1.0 can accept the positional shorthand yet create a tab with empty
     # discover.instructions, prompt, and selection.
     builder_payload: dict[str, Any] = {"instructions": summary}
-    if response_type:
+    if is_ce and response_type:
         builder_payload["response_type"] = response_type
     builder_expr = f"call context_builder {json.dumps(builder_payload)}"
 
@@ -20706,41 +20810,57 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         "\n" + builder_res.stderr if builder_res.stderr else ""
     )
 
-    # Parse response based on response-type
-    if response_type == "review":
+    # CE review is a single direct tool result. It may intentionally have no
+    # visible compose-tab projection, so never query workspace_context here.
+    if is_ce and response_type == "review":
         try:
             data = json.loads(builder_res.stdout or "{}")
-            tab = extract_builder_tab_from_payload(data) or ""
-            chat_id = data.get("review", {}).get("chat_id", "")
-            review_response = data.get("review", {}).get("response", "")
+        except json.JSONDecodeError as exc:
+            error_exit(
+                f"CE context_builder review JSON parse failed: {exc}",
+                use_json=False,
+                code=2,
+            )
+        data = validate_rp_ce_builder_review(data)
+        tab = str(data["context_id"])
+        review = data["review"]
+        chat_id = str(review["chat_id"])
+        review_response = str(review["response"])
+        if response_file:
+            atomic_write(Path(response_file), review_response)
 
-            if not tab:
-                error_exit("Builder did not return a tab/context id", use_json=False, code=2)
-
-            verify_rp_builder_context(win_id, tab)
-
-            if args.json:
-                print(
-                    json.dumps(
-                        {
-                            "window": win_id,
-                            "tab": tab,
-                            "chat_id": chat_id,
-                            "review": review_response,
-                            "repo_root": repo_root,
-                            "file_count": data.get("file_count", 0),
-                            "total_tokens": data.get("total_tokens", 0),
-                        }
+        result = {
+            "mode": "ce",
+            "window": win_id,
+            "tab": tab,
+            "context_id": tab,
+            "chat_id": chat_id,
+            "review": review_response,
+            "repo_root": repo_root,
+            "status": data["status"],
+            "prompt": data["prompt"],
+            "selection": data["selection"],
+            "file_count": data["file_count"],
+            "total_tokens": data["total_tokens"],
+            "response_type": data["response_type"],
+            "follow_up_hint": data.get("follow_up_hint"),
+        }
+        if args.json:
+            print(json.dumps(result))
+        else:
+            print(
+                " ".join(
+                    (
+                        "RP_MODE=ce",
+                        f"W={win_id}",
+                        f"T={shlex.quote(tab)}",
+                        f"CHAT_ID={shlex.quote(chat_id)}",
                     )
                 )
-            else:
-                print(f"W={win_id} T={tab} CHAT_ID={chat_id}")
-                if review_response:
-                    print(review_response)
-        except json.JSONDecodeError:
-            error_exit("Failed to parse builder review response", use_json=False, code=2)
+            )
     else:
-        # Try JSON first (RP 2.1.4+), fall back to regex for older versions
+        # Classic compatibility: Context Builder publishes a tab which the
+        # caller augments before a separate chat dispatch.
         tab = ""
         try:
             data = json.loads(builder_res.stdout or "{}")
@@ -20752,12 +20872,22 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         if not tab:
             error_exit("Builder did not return a tab/context id", use_json=False, code=2)
 
-        verify_rp_builder_context(win_id, tab)
+        verify_rp_classic_builder_context(win_id, tab)
 
         if args.json:
-            print(json.dumps({"window": win_id, "tab": tab, "repo_root": repo_root}))
+            print(
+                json.dumps(
+                    {
+                        "mode": "classic" if not is_ce else "context",
+                        "window": win_id,
+                        "tab": tab,
+                        "repo_root": repo_root,
+                    }
+                )
+            )
         else:
-            print(f"W={win_id} T={tab}")
+            mode = "classic" if not is_ce else "context"
+            print(f"RP_MODE={mode} W={win_id} T={shlex.quote(tab)}")
 
 
 # --- Codex Commands ---
@@ -33618,7 +33748,12 @@ def main() -> None:
         "--response-type",
         dest="response_type",
         choices=["review"],
-        help="Use builder review mode (requires RP 1.6.0+)",
+        help="Use CE Context Builder review mode; Classic keeps its compatibility flow",
+    )
+    p_rp_setup.add_argument(
+        "--response-file",
+        dest="response_file",
+        help="Write the CE direct review response to this file",
     )
     p_rp_setup.add_argument(
         "--create",

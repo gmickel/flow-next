@@ -1521,22 +1521,27 @@ RepoPrompt wrappers (preferred for reviews). RepoPrompt CE 1.1.0+ is primary; di
 **Primary entry point** (handles window selection + builder atomically):
 
 ```bash
-# Atomic setup - reuses/resolves the repo window and opens Context Builder
-eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "Review a plan to ...")"
-# Returns: W=<window> T=<tab>
-
-# With --create: reuses a matching CE window or creates one when none matches
-eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "..." --create)"
+# CE review: one direct Context Builder result; review text goes to the file
+flowctl rp setup-review --repo-root "$REPO_ROOT" \
+  --summary "Review the current plan; end with the required verdict tag." \
+  --response-type review --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
+source "$SETUP_FILE"
+# Returns: RP_MODE=ce W=<window> T=<context> CHAT_ID=<chat>
 ```
 
-`setup-review` rejects blank summaries before opening Builder. After Builder
-returns, it verifies the new tab has both a rewritten prompt and a non-empty file
-selection; a context identifier alone is not success. The verification is
-read-only and never retries Builder. The wrapper sends the summary through
-Context Builder's named `instructions` field rather than the lossy positional
-shorthand.
+`setup-review` rejects blank summaries before any RepoPrompt call. On CE it
+invokes the named `context_builder` tool with `response_type=review` and treats
+that direct result as authoritative: `status=completed`, non-empty rewritten
+`prompt`, non-empty formatted `selection`, positive `file_count` and
+`total_tokens`, `context_id`, `review.chat_id`, and a non-empty
+`review.response` are all required. The response is written atomically to
+`--response-file`; no visible compose-tab projection, selection augmentation,
+or second initial chat is required or allowed. Any CE operational/schema
+failure stops—the wrapper never downgrades to Classic.
 
-**Post-setup commands** (use $W and $T from setup-review):
+Discontinued Classic is the isolated final fallback. It receives
+`RP_MODE=classic`, validates the published tab's prompt/selection, then uses the
+legacy post-setup commands below:
 
 ```bash
 flowctl rp prompt-get --window "$W" --tab "$T"

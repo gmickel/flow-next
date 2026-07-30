@@ -172,18 +172,20 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
             return run(args)
 
         output = io.StringIO()
-        with mock.patch.object(flowctl, "run_rp_cli", side_effect=recording_run):
-            with mock.patch.object(flowctl, "try_run_rp_cli", side_effect=try_run):
-                with redirect_stdout(output):
-                    flowctl.cmd_rp_setup_review(
-                        argparse.Namespace(
-                            repo_root=str(repo_root),
-                            summary="Review CE reuse",
-                            response_type=None,
-                            create=True,
-                            json=False,
+        with mock.patch.object(flowctl, "require_rp_cli", return_value="/bin/rpce-cli"):
+            with mock.patch.object(flowctl, "run_rp_cli", side_effect=recording_run):
+                with mock.patch.object(flowctl, "try_run_rp_cli", side_effect=try_run):
+                    with redirect_stdout(output):
+                        flowctl.cmd_rp_setup_review(
+                            argparse.Namespace(
+                                repo_root=str(repo_root),
+                                summary="Review CE reuse",
+                                response_type=None,
+                                response_file=None,
+                                create=True,
+                                json=False,
+                            )
                         )
-                    )
         return output.getvalue().strip(), calls
 
     def test_modern_bind_context_reuses_window_without_discovery_or_create(self) -> None:
@@ -200,7 +202,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
                 return _result(json.dumps({"context_id": "tab-bind"}))
 
             output, calls = self._run_setup(repo, run, try_run)
-        self.assertEqual(output, "W=41 T=tab-bind")
+        self.assertEqual(output, "RP_MODE=context W=41 T=tab-bind")
         flattened = " ".join(" ".join(call) for call in calls)
         self.assertNotIn("manage_workspaces", flattened)
         self.assertNotIn("workspace create", flattened)
@@ -239,7 +241,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
                 return _result(json.dumps({"context_id": "tab-window"}))
 
             output, calls = self._run_setup(repo, run, lambda *_a, **_k: None)
-        self.assertEqual(output, "W=73 T=tab-window")
+        self.assertEqual(output, "RP_MODE=context W=73 T=tab-window")
         flattened = " ".join(" ".join(call) for call in calls)
         self.assertNotIn("manage_workspaces", flattened)
         self.assertNotIn("workspace create", flattened)
@@ -252,6 +254,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
             repo_root=".",
             summary=" \t\n",
             response_type=None,
+            response_file=None,
             create=True,
             json=False,
         )
@@ -281,7 +284,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
                     context={"prompt": "", "selection": {"files": []}},
                 )
 
-    def test_builder_context_requires_prompt_and_selection(self) -> None:
+    def test_classic_builder_context_requires_prompt_and_selection(self) -> None:
         invalid = (
             {"prompt": "", "selection": {"files": [{"path": "src/a.py"}]}},
             {"prompt": "Review this", "selection": {"files": []}},
@@ -289,7 +292,120 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
         for context in invalid:
             with self.subTest(context=context):
                 with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                    flowctl.validate_rp_builder_context(context)
+                    flowctl.validate_rp_classic_builder_context(context)
+
+    def test_ce_review_consumes_exact_direct_result_without_tab_query(self) -> None:
+        # Schema source: RepoPrompt CE d42c2e30
+        # MCPContextBuilderToolProvider.ContextBuilderToolResult + ChatSendReply.
+        direct = {
+            "context_id": "A1B2C3D4",
+            "status": "completed",
+            "prompt": "Review the CE direct-result changes.",
+            "file_count": 7,
+            "total_tokens": 18420,
+            "selection": "### Selected Files\n- src/review.py",
+            "response_type": "review",
+            "review": {
+                "chat_id": "review-42",
+                "mode": "review",
+                "response": "No blocking findings.\n<verdict>SHIP</verdict>",
+            },
+            "follow_up_hint": (
+                'Continue this review conversation with ask_oracle('
+                'chat_id: "review-42", new_chat: false)'
+            ),
+        }
+        calls: list[list[str]] = []
+
+        def run(args, timeout=None):
+            calls.append(args)
+            self.assertEqual(args[:2], ["-w", "10"])
+            return _result(json.dumps(direct))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            response_file = Path(tmp) / "review.md"
+            args = argparse.Namespace(
+                repo_root=tmp,
+                summary="Review CE direct result",
+                response_type="review",
+                response_file=str(response_file),
+                create=True,
+                json=True,
+            )
+            with mock.patch.object(
+                flowctl, "require_rp_cli", return_value="/bin/rpce-cli"
+            ):
+                with mock.patch.object(
+                    flowctl,
+                    "try_run_rp_cli",
+                    return_value=_result('{"binding":{"window_id":10}}'),
+                ):
+                    with mock.patch.object(flowctl, "run_rp_cli", side_effect=run):
+                        output = io.StringIO()
+                        with redirect_stdout(output):
+                            flowctl.cmd_rp_setup_review(args)
+
+            result = json.loads(output.getvalue())
+            self.assertEqual(result["mode"], "ce")
+            self.assertEqual(result["window"], 10)
+            self.assertEqual(result["context_id"], direct["context_id"])
+            self.assertEqual(result["chat_id"], "review-42")
+            self.assertEqual(result["prompt"], direct["prompt"])
+            self.assertEqual(result["selection"], direct["selection"])
+            self.assertEqual(result["file_count"], 7)
+            self.assertEqual(result["total_tokens"], 18420)
+            self.assertEqual(
+                response_file.read_text(encoding="utf-8"),
+                direct["review"]["response"],
+            )
+
+        self.assertEqual(len(calls), 1)
+        expression = calls[0][-1]
+        self.assertTrue(expression.startswith("call context_builder "))
+        payload = json.loads(expression.removeprefix("call context_builder "))
+        self.assertEqual(
+            payload,
+            {
+                "instructions": "Review CE direct result",
+                "response_type": "review",
+            },
+        )
+        self.assertFalse(any("workspace_context" in " ".join(call) for call in calls))
+
+    def test_ce_review_rejects_malformed_direct_results(self) -> None:
+        valid = {
+            "context_id": "A1B2C3D4",
+            "status": "completed",
+            "prompt": "Review the changes.",
+            "file_count": 1,
+            "total_tokens": 100,
+            "selection": "### Selected Files\n- src/review.py",
+            "response_type": "review",
+            "review": {
+                "chat_id": "review-42",
+                "mode": "review",
+                "response": "<verdict>SHIP</verdict>",
+            },
+        }
+        invalid = [
+            {},
+            {**valid, "context_id": ""},
+            {**valid, "status": "failed: unavailable"},
+            {**valid, "prompt": " "},
+            {**valid, "selection": ""},
+            {**valid, "selection": {"files": ["src/review.py"]}},
+            {**valid, "file_count": 0},
+            {**valid, "total_tokens": 0},
+            {**valid, "response_type": "plan"},
+            {**valid, "review": None},
+            {**valid, "review": {**valid["review"], "chat_id": ""}},
+            {**valid, "review": {**valid["review"], "mode": "chat"}},
+            {**valid, "review": {**valid["review"], "response": ""}},
+        ]
+        for payload in invalid:
+            with self.subTest(payload=payload):
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                    flowctl.validate_rp_ce_builder_review(payload)
 
     def test_ce_bind_failures_never_reach_discovery_or_creation(self) -> None:
         failures = (
@@ -307,6 +423,7 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
                 repo_root=str(repo),
                 summary="Must stop",
                 response_type=None,
+                response_file=None,
                 create=True,
                 json=False,
             )
@@ -362,7 +479,8 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
             args = argparse.Namespace(
                 repo_root=str(repo),
                 summary="Classic compatibility",
-                response_type=None,
+                response_type="review",
+                response_file=None,
                 create=True,
                 json=False,
             )
@@ -374,7 +492,10 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
                     with mock.patch.object(flowctl, "run_rp_cli", side_effect=legacy_run):
                         with redirect_stdout(output):
                             flowctl.cmd_rp_setup_review(args)
-            self.assertEqual(output.getvalue().strip(), "W=8 T=classic-tab")
+            self.assertEqual(
+                output.getvalue().strip(),
+                "RP_MODE=classic W=8 T=classic-tab",
+            )
 
 
 class RepoPromptWrapperCommandTest(unittest.TestCase):

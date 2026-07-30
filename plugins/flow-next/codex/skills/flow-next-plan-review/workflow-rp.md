@@ -54,10 +54,20 @@ $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 
 ```bash
 # Self-contained: fill this scalar inline; shell variables do not cross prompt turns.
-REVIEW_SUMMARY="[1-2 sentence substantive summary composed from the current plan]"
+REVIEW_SUMMARY="[Review the current spec and task plans for completeness, feasibility, consistency, architecture, risks, scope, and testability. For each issue emit Severity, Location, Problem, and Suggestion; finish with exactly one of <verdict>SHIP</verdict>, <verdict>NEEDS_WORK</verdict>, or <verdict>MAJOR_RETHINK</verdict>.]"
+RESPONSE_FILE="${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md"
+SETUP_FILE="${TMPDIR:-/tmp}/flow-plan-review-setup-<spec-id>-<suffix>.env"
 
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUMMARY" --create)"
-if [[ -z "${W:-}" || -z "${T:-}" ]]; then
+$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json
+$FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
+ --summary "$REVIEW_SUMMARY" --response-type review \
+ --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
+source "$SETUP_FILE"
+if [[ -z "${W:-}" || -z "${T:-}" || -z "${RP_MODE:-}" ]]; then
+ echo "<promise>RETRY</promise>"
+ exit 0
+fi
+if [[ "$RP_MODE" == "ce" && ( -z "${CHAT_ID:-}" || ! -s "$RESPONSE_FILE" ) ]]; then
  echo "<promise>RETRY</promise>"
  exit 0
 fi
@@ -65,15 +75,20 @@ fi
 
 If setup fails, retry terminal and stop. Never run setup twice.
 
-Inspect Builder selection, then add the current spec and every current task spec:
+CE already returned the terminal review. Classic alone inspects and augments
+its published-tab selection:
 
 ```bash
-$FLOWCTL rp select-get --window "$W" --tab "$T"
-$FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/${SPEC_ID}.md"
-for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
+SETUP_FILE="${TMPDIR:-/tmp}/flow-plan-review-setup-<spec-id>-<suffix>.env"
+source "$SETUP_FILE"
+if [[ "$RP_MODE" == "classic" ]]; then
+ $FLOWCTL rp select-get --window "$W" --tab "$T"
+ $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/${SPEC_ID}.md"
+ for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
  [[ -f "$task_spec" ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" "$task_spec"
-done
-[[ -f docs/prd.md ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" docs/prd.md
+ done
+ [[ -f docs/prd.md ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" docs/prd.md
+fi
 ```
 
 ## Phase 3: Build and Send Review Prompt
@@ -83,7 +98,10 @@ Variables do not survive prompt turns. Compose by redirection; never retype
 multi-line command output.
 
 ```bash
+SETUP_FILE="${TMPDIR:-/tmp}/flow-plan-review-setup-<spec-id>-<suffix>.env"
+source "$SETUP_FILE"
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-plan-review-prompt-<spec-id>-<suffix>.md"
+if [[ "$RP_MODE" == "classic" ]]; then
 $FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"
 cat >> "$PROMPT_FILE" <<'EOF'
 
@@ -153,25 +171,27 @@ After the issues list, emit a `Protected-path filter:` line tallying findings dr
 
 Do NOT skip this tag. The automation depends on it.
 EOF
+fi
 ```
 
 The four-item quality checklist above is byte-equivalent to B1. Do not broaden
 it; the prior broad checklist regressed detection.
 
-Before every dispatch:
-
-```bash
-$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json
-```
-
-Exit 4 / `ESCALATE:` means stop without dispatch. Otherwise run one blocking
-foreground call:
+The first review-round reservation happens immediately before the single CE
+builder/review call (or before Classic setup). Exit 4 / `ESCALATE:` means stop
+without invoking RepoPrompt. Otherwise run one blocking foreground call:
 
 ```bash
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-plan-review-prompt-<spec-id>-<suffix>.md"
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md"
-$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Plan Review: <SPEC_ID>" > "$RESPONSE_FILE"
-RP_EXIT=$?
+SETUP_FILE="${TMPDIR:-/tmp}/flow-plan-review-setup-<spec-id>-<suffix>.env"
+source "$SETUP_FILE"
+if [[ "$RP_MODE" == "classic" ]]; then
+ $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Plan Review: <SPEC_ID>" > "$RESPONSE_FILE"
+ RP_EXIT=$?
+else
+ RP_EXIT=0
+fi
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
  | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
  | tail -n 1 | sed -E 's#</?verdict>##g')"

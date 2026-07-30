@@ -1039,6 +1039,14 @@ class TestRpRecorderFailureFences(unittest.TestCase):
         self.assertIn("RECORD_EXIT=$?", block)
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
+            (temp / "flow-plan-review-setup-fn-1-test.env").write_text(
+                "RP_MODE=classic W=1 T=classic-tab\n",
+                encoding="utf-8",
+            )
+            (temp / "flow-impl-review-setup-fn-1-1-test.env").write_text(
+                "RP_MODE=classic W=1 T=classic-tab\n",
+                encoding="utf-8",
+            )
             env = os.environ.copy()
             env.update(
                 {
