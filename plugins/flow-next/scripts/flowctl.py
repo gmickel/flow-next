@@ -4881,11 +4881,20 @@ def _review_finding_host_table(output: str) -> Optional[list[dict]]:
     """Parse the observed host-review finding table, or return None."""
     lines = output.splitlines()
     candidates: list[tuple[int, list[str]]] = []
+    required_headers = {
+        "sev",
+        "confidence",
+        "classification",
+        "finding",
+        "disposition",
+    }
+    saw_malformed_header = False
     for index, line in enumerate(lines):
         if not line.strip().startswith("|"):
             continue
         candidate = [cell.strip().lower() for cell in line.strip().strip("|").split("|")]
-        if {"sev", "confidence", "classification", "finding", "disposition"} <= set(candidate):
+        present_headers = set(candidate)
+        if required_headers <= present_headers:
             if len(candidate) != len(set(candidate)):
                 # Header names are singleton keys. dict(zip(...)) would
                 # otherwise silently select the last duplicate column.
@@ -4895,6 +4904,13 @@ def _review_finding_host_table(output: str) -> Optional[list[dict]]:
                 # Multiple finding tables make completeness and deduplication
                 # ambiguous. Reject rather than silently selecting the first.
                 return []
+        elif len(required_headers & present_headers) >= 4 or (
+            "finding" in present_headers
+            and len(required_headers & present_headers) >= 3
+        ):
+            saw_malformed_header = True
+    if saw_malformed_header:
+        return []
     if not candidates:
         return None
     header_index, headers = candidates[0]
@@ -4949,15 +4965,17 @@ def _review_finding_prior_items(
     prior_findings: Optional[dict],
     source_receipt_id: str,
 ) -> Optional[list[dict]]:
-    records = list(_FINDINGS_PRIOR_RECORD_RE.finditer(output))
-    if len(records) > _FINDINGS_MAX_ITEMS:
-        return None
+    record_count = 0
+    for _match in _FINDINGS_PRIOR_RECORD_RE.finditer(output):
+        record_count += 1
+        if record_count > _FINDINGS_MAX_ITEMS:
+            return None
     matches = []
     for match in _FINDINGS_PRIOR_RE.finditer(output):
         matches.append(match)
         if len(matches) > _FINDINGS_MAX_ITEMS:
             return None
-    if len(records) != len(matches):
+    if record_count != len(matches):
         # Detect line-level prior-finding records independently of canonical
         # status parsing. Otherwise an unknown status such as "pending" can
         # disappear into an explicit-empty SHIP response.

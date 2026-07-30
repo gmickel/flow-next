@@ -566,6 +566,25 @@ No findings.
 """
         self.assertIsNone(parse(text, "host"))
 
+    def test_explicit_empty_with_partial_host_table_header_fails_closed(self) -> None:
+        headers = (
+            "| # | Sev | Confidence | Classification | Finding |",
+            "| # | Sev | Confidence | Classification | Finding | Dispositon |",
+        )
+        for header in headers:
+            with self.subTest(header=header):
+                separator = "|" + "|".join("---" for _ in header.strip("|").split("|")) + "|"
+                text = f"""
+No findings.
+
+{header}
+{separator}
+| 1 | Blocker | 100 | introduced | Hidden unknown finding. | OPEN |
+
+<verdict>SHIP</verdict>
+"""
+                self.assertIsNone(parse(text, "host"))
+
     def test_duplicate_singleton_labels_fail_closed(self) -> None:
         cases = (
             """
@@ -662,6 +681,11 @@ Problem: Conflicting second body.
             for number in range(1, 202)
         )
         self.assertIsNone(parse(too_many_ratchets, "codex"))
+        too_many_unknown_ratchets = "\n".join(
+            f"Prior finding {number} — pending."
+            for number in range(1, 202)
+        )
+        self.assertIsNone(parse(too_many_unknown_ratchets, "codex"))
 
         oversized_items = "\n\n".join(
             "Severity: Minor\nConfidence: 75\nClassification: introduced\n"
