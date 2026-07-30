@@ -272,6 +272,47 @@ Problem: The prompt says "Prior finding 1 — fixed".
                     )
                 )
 
+    def test_explicit_empty_rejects_unknown_prior_status(self) -> None:
+        prior = parse(self.fixture("codex", "catalog-sample"), "codex")
+        unknown = """
+No findings.
+Prior finding 1 — pending.
+<verdict>SHIP</verdict>
+"""
+        self.assertIsNone(
+            parse(
+                unknown,
+                "codex",
+                receipt="receipt-round-2",
+                round_number=2,
+                prior=prior,
+                supersedes="receipt-round-1",
+            )
+        )
+
+        valid_cases = (
+            ("Prior finding 1 — fixed.", "fixed"),
+            ("- Prior finding #1: not_fixed.", "not_fixed"),
+        )
+        for record, expected_status in valid_cases:
+            with self.subTest(record=record):
+                result = parse(
+                    f"No findings.\n{record}\n<verdict>SHIP</verdict>",
+                    "codex",
+                    receipt="receipt-round-2",
+                    round_number=2,
+                    prior=prior,
+                    supersedes="receipt-round-1",
+                )
+                self.assertEqual(result["items"][0]["status"], expected_status)
+
+        quoted = """
+No findings.
+The prose mentions "Prior finding 1 — pending", but is not a status record.
+<verdict>SHIP</verdict>
+"""
+        self.assertEqual(parse(quoted, "codex")["items"], [])
+
     def test_canonical_order_is_severity_confidence_then_ordinal(self) -> None:
         text = """
 Severity: Minor

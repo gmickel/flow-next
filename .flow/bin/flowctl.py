@@ -4541,6 +4541,16 @@ _FINDINGS_PRIOR_RE = re.compile(
     (?![A-Za-z0-9_-])
     """
 )
+_FINDINGS_PRIOR_RECORD_RE = re.compile(
+    r"""(?imx)
+    ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?
+    prior[ \t-]+finding(?![ \t]+id[ \t]*[:=])(?:[ \t]*(?:\#)?\d+)?
+    [ \t]*(?:[:—-][ \t]*)?
+    (?:\*\*)?
+    [A-Za-z][^\r\n]*
+    $
+    """
+)
 _FINDINGS_FILE_LINE_RE = re.compile(
     r"^(?P<path>.+?):(?P<start>[1-9]\d*)"
     r"(?:\s*[-–]\s*(?P<end>[1-9]\d*))?$"
@@ -4939,11 +4949,19 @@ def _review_finding_prior_items(
     prior_findings: Optional[dict],
     source_receipt_id: str,
 ) -> Optional[list[dict]]:
+    records = list(_FINDINGS_PRIOR_RECORD_RE.finditer(output))
+    if len(records) > _FINDINGS_MAX_ITEMS:
+        return None
     matches = []
     for match in _FINDINGS_PRIOR_RE.finditer(output):
         matches.append(match)
         if len(matches) > _FINDINGS_MAX_ITEMS:
             return None
+    if len(records) != len(matches):
+        # Detect line-level prior-finding records independently of canonical
+        # status parsing. Otherwise an unknown status such as "pending" can
+        # disappear into an explicit-empty SHIP response.
+        return None
     if not matches:
         return []
     if not isinstance(prior_findings, dict):
