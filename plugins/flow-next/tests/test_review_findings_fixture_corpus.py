@@ -88,6 +88,11 @@ class ReviewFindingsFixtureCorpusTest(unittest.TestCase):
             source["id"]: source for source in self.index["provenance"]["sources"]
         }
         self.assertEqual(len(sources), len(self.index["provenance"]["sources"]))
+        for source in sources.values():
+            if source["kind"] == "repository_capture":
+                source_path = REPO / source["path"]
+                self.assertNotIn("*", source["path"], source)
+                self.assertTrue(source_path.is_file(), source)
         for backend, survey in self.index["backends"].items():
             self.assertGreaterEqual(len(survey["variants"]), 3, backend)
             for variant in survey["variants"]:
@@ -102,6 +107,12 @@ class ReviewFindingsFixtureCorpusTest(unittest.TestCase):
                     self.assertIn(source_ref, sources, variant)
                     if variant["status"] == "directly_observed":
                         self.assertIn(backend, sources[source_ref]["backends"], variant)
+                        source = sources[source_ref]
+                        self.assertEqual(source["kind"], "repository_capture")
+                        source_text = (REPO / source["path"]).read_text(
+                            encoding="utf-8"
+                        )
+                        self.assertIn(variant["source_locator"], source_text, variant)
                 for fixture_ref in variant["fixture_refs"]:
                     fixture = CORPUS / fixture_ref
                     self.assertTrue(fixture.is_file(), variant)

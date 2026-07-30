@@ -6,9 +6,15 @@
     "date_utc": "2026-07-30",
     "sources": [
       {
-        "id": "fn90-codex-review-artifacts",
+        "id": "fn90-codex-x1-clean",
         "kind": "repository_capture",
-        "path": ".flow/artifacts/fn-90-baseline/after/*.review.md",
+        "path": ".flow/artifacts/fn-90-baseline/after/x1.clean.md",
+        "backends": ["codex"]
+      },
+      {
+        "id": "fn90-codex-x2-clean",
+        "kind": "repository_capture",
+        "path": ".flow/artifacts/fn-90-baseline/after/x2.clean.md",
         "backends": ["codex"]
       },
       {
@@ -44,19 +50,21 @@
         {
           "label": "**Severity: Major**",
           "status": "directly_observed",
-          "source_refs": ["fn90-codex-review-artifacts"],
+          "source_refs": ["fn90-codex-x1-clean", "fn90-codex-x2-clean"],
+          "source_locator": "- **Severity: Major**",
           "fixture_refs": ["codex/no-anchor.md", "codex/catalog-sample.md"]
         },
         {
           "label": "**Confidence:** 100",
-          "status": "directly_observed",
-          "source_refs": ["fn90-codex-review-artifacts"],
+          "status": "synthetic_boundary",
+          "source_refs": ["fn136-fixture-design-contract"],
           "fixture_refs": ["codex/no-anchor.md", "codex/catalog-sample.md"]
         },
         {
           "label": "**Issues**",
           "status": "directly_observed",
-          "source_refs": ["fn90-codex-review-artifacts"],
+          "source_refs": ["fn90-codex-x1-clean"],
+          "source_locator": "**Issues**",
           "fixture_refs": ["codex/no-anchor.md", "codex/catalog-sample.md"]
         },
         {
@@ -123,12 +131,14 @@
           "label": "Markdown finding table",
           "status": "directly_observed",
           "source_refs": ["fn136-host-plan-receipt"],
+          "source_locator": "| # | Sev | Finding | Disposition |",
           "fixture_refs": ["host/catalog-sample.md"]
         },
         {
           "label": "FIXED in review disposition",
           "status": "directly_observed",
           "source_refs": ["fn136-host-plan-receipt"],
+          "source_locator": "FIXED in review",
           "fixture_refs": ["host/catalog-sample.md"]
         }
       ]
