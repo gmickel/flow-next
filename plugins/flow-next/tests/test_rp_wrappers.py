@@ -151,11 +151,24 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
             ["/legacy", "/shared", "/modern-a", "/modern-b"],
         )
 
-    def _run_setup(self, repo_root: Path, run, try_run) -> tuple[str, list[list[str]]]:
+    def _run_setup(
+        self,
+        repo_root: Path,
+        run,
+        try_run,
+        *,
+        context: dict | None = None,
+    ) -> tuple[str, list[list[str]]]:
         calls: list[list[str]] = []
+        usable_context = context or {
+            "prompt": "Review the CE reuse changes.",
+            "selection": {"files": [{"path": "src/reuse.py"}]},
+        }
 
         def recording_run(args, timeout=None):
             calls.append(args)
+            if args[-1].startswith("workspace_context "):
+                return _result(json.dumps(usable_context))
             return run(args)
 
         output = io.StringIO()
@@ -191,6 +204,18 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
         flattened = " ".join(" ".join(call) for call in calls)
         self.assertNotIn("manage_workspaces", flattened)
         self.assertNotIn("workspace create", flattened)
+        self.assertEqual(
+            sum(call[-1].startswith("workspace_context ") for call in calls), 1
+        )
+        builder_calls = [
+            call for call in calls if call[-1].startswith("call context_builder ")
+        ]
+        self.assertEqual(len(builder_calls), 1)
+        payload = json.loads(
+            builder_calls[0][-1].removeprefix("call context_builder ")
+        )
+        self.assertEqual(payload, {"instructions": "Review CE reuse"})
+        self.assertFalse(builder_calls[0][-1].startswith("builder "))
 
     def test_modern_window_tabs_reuse_root_without_workspace_or_create(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -218,6 +243,53 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
         flattened = " ".join(" ".join(call) for call in calls)
         self.assertNotIn("manage_workspaces", flattened)
         self.assertNotIn("workspace create", flattened)
+        self.assertEqual(
+            sum(call[-1].startswith("workspace_context ") for call in calls), 1
+        )
+
+    def test_blank_summary_fails_before_repo_prompt_is_called(self) -> None:
+        args = argparse.Namespace(
+            repo_root=".",
+            summary=" \t\n",
+            response_type=None,
+            create=True,
+            json=False,
+        )
+        with mock.patch.object(flowctl, "try_run_rp_cli") as bind:
+            with mock.patch.object(flowctl, "run_rp_cli") as run:
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                    flowctl.cmd_rp_setup_review(args)
+        bind.assert_not_called()
+        run.assert_not_called()
+
+    def test_context_id_only_is_not_success_when_builder_state_is_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp).resolve()
+
+            def try_run(_args, timeout=None):
+                return _result(json.dumps({"binding": {"window_id": 41}}))
+
+            def run(args):
+                self.assertEqual(args[:2], ["-w", "41"])
+                return _result(json.dumps({"context_id": "tab-bind"}))
+
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                self._run_setup(
+                    repo,
+                    run,
+                    try_run,
+                    context={"prompt": "", "selection": {"files": []}},
+                )
+
+    def test_builder_context_requires_prompt_and_selection(self) -> None:
+        invalid = (
+            {"prompt": "", "selection": {"files": [{"path": "src/a.py"}]}},
+            {"prompt": "Review this", "selection": {"files": []}},
+        )
+        for context in invalid:
+            with self.subTest(context=context):
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                    flowctl.validate_rp_builder_context(context)
 
     def test_ce_bind_failures_never_reach_discovery_or_creation(self) -> None:
         failures = (
@@ -273,6 +345,15 @@ class RepoPromptSchemaAndReuseTest(unittest.TestCase):
                     return _result(
                         json.dumps(
                             [{"windowID": 8, "rootFolderPaths": [str(repo)]}]
+                        )
+                    )
+                if args[-1].startswith("workspace_context "):
+                    return _result(
+                        json.dumps(
+                            {
+                                "prompt": "Review Classic compatibility.",
+                                "selection": {"files": [{"path": "src/classic.py"}]},
+                            }
                         )
                     )
                 self.assertEqual(args[:2], ["-w", "8"])

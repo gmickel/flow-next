@@ -29,16 +29,19 @@ Save:
 - Commit summary
 - DIFF_BASE (for reference in review prompt)
 
-Compose a 1-2 sentence `REVIEW_SUMMARY` describing the changes for the setup-review command below.
+Compose a 1-2 sentence summary in agent context from these results.
 
 ---
 
 ### Atomic Setup Block
 
-**Only run ONCE. Uses the summary composed in Phase 1.**
+**Only run ONCE. Type the Phase 1 summary into this block.**
 
 ```bash
-# Atomic: resolve/reuse window + open Context Builder (uses REVIEW_SUMMARY from Phase 1)
+# Self-contained: fill this scalar inline; shell variables do not cross tool calls.
+REVIEW_SUMMARY="[1-2 sentence substantive summary composed from Phase 1]"
+
+# Atomic: resolve/reuse window + open Context Builder
 eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUMMARY" --create)"
 
 # Verify we have W and T

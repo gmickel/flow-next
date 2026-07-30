@@ -238,7 +238,7 @@ Some smokes here require manual probing in a real repo (operator-level); deferre
 ## RP gotchas (must follow)
 
 - Use `flowctl rp` wrappers only (no direct RepoPrompt CLI calls).
-- Initialize review state atomically with `eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "$SUMMARY" --create)"`; it resolves or reuses the numeric window and opens Context Builder.
+- Initialize review state atomically with `eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "$SUMMARY" --create)"`; it resolves or reuses the numeric window, opens Context Builder once, and succeeds only when Builder leaves a non-empty prompt and selection.
 - Use the returned `W` and `T` with the prompt, selection, export, and chat wrappers; `setup-review` is the only supported initialization path.
 - Write receipt JSON after chat returns when `REVIEW_RECEIPT_PATH` is set.
 

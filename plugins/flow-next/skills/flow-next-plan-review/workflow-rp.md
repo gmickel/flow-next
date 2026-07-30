@@ -15,7 +15,7 @@ Use only when `BACKEND="rp"` after [workflow.md](workflow.md).
 ## Phase 1: Current Plan and Checkpoint
 
 Read the current persisted spec and task specs before Builder. Compose a short
-`REVIEW_SUMMARY` from the current plan; user edits override generated history.
+summary in agent context from the current plan; user edits override generated history.
 
 ```bash
 $FLOWCTL show "$SPEC_ID" --json
@@ -26,6 +26,9 @@ $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ## Phase 2: Atomic Setup and Selection
 
 ```bash
+# Self-contained: fill this scalar inline; shell variables do not cross tool calls.
+REVIEW_SUMMARY="[1-2 sentence substantive summary composed from the current plan]"
+
 eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUMMARY" --create)"
 if [[ -z "${W:-}" || -z "${T:-}" ]]; then
   echo "<promise>RETRY</promise>"

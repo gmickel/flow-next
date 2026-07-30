@@ -1529,6 +1529,13 @@ eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "Review a pla
 eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "..." --create)"
 ```
 
+`setup-review` rejects blank summaries before opening Builder. After Builder
+returns, it verifies the new tab has both a rewritten prompt and a non-empty file
+selection; a context identifier alone is not success. The verification is
+read-only and never retries Builder. The wrapper sends the summary through
+Context Builder's named `instructions` field rather than the lossy positional
+shorthand.
+
 **Post-setup commands** (use $W and $T from setup-review):
 
 ```bash

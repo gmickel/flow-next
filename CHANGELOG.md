@@ -4,6 +4,17 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Fixed
+
+- **RepoPrompt setup no longer false-greens on an empty Context Builder tab.**
+  Review setup fences now define their substantive summary in the same shell
+  block that invokes `setup-review`, so fresh-shell hosts cannot lose it.
+  `flowctl rp setup-review` rejects blank summaries and verifies Builder left
+  both a rewritten prompt and selected files before returning `W`/`T`; a
+  context ID alone is no longer success. The wrapper now sends the summary
+  through Context Builder's named `instructions` field, avoiding CE 1.1.0's
+  lossy positional shorthand. Builder still runs exactly once.
+
 ## [flow-next 3.8.0] - 2026-07-30
 
 ### Changed

@@ -2126,6 +2126,58 @@ def extract_builder_tab_from_payload(data: Any) -> Optional[str]:
     return None
 
 
+def validate_rp_builder_context(data: Any) -> None:
+    """Reject builder tabs that have no rewritten prompt or selected files."""
+    for _ in range(4):
+        if not isinstance(data, dict):
+            break
+        if "prompt" in data or "selection" in data:
+            break
+        for key in ("result", "data", "context"):
+            nested = data.get(key)
+            if isinstance(nested, dict):
+                data = nested
+                break
+        else:
+            break
+
+    if not isinstance(data, dict):
+        error_exit(
+            "Builder context JSON has unexpected shape", use_json=False, code=2
+        )
+
+    prompt = data.get("prompt")
+    selection = data.get("selection")
+    files = selection.get("files") if isinstance(selection, dict) else None
+    if not isinstance(prompt, str) or not prompt.strip():
+        error_exit(
+            "Builder returned an empty prompt; setup is unusable",
+            use_json=False,
+            code=2,
+        )
+    if not isinstance(files, list) or not files:
+        error_exit(
+            "Builder returned an empty selection; setup is unusable",
+            use_json=False,
+            code=2,
+        )
+
+
+def verify_rp_builder_context(window: int, tab: str) -> None:
+    """Read the builder tab once and require usable semantic context."""
+    expression = 'workspace_context include=["prompt","selection"]'
+    result = run_rp_cli(
+        ["-w", str(window), "-t", tab, "--raw-json", "-e", expression]
+    )
+    try:
+        data = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        error_exit(
+            f"Builder context JSON parse failed: {exc}", use_json=False, code=2
+        )
+    validate_rp_builder_context(data)
+
+
 def bind_context_window(
     repo_root: str, *, create_if_missing: bool = False
 ) -> Optional[int]:
@@ -20536,6 +20588,12 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
     repo_root = os.path.realpath(args.repo_root)
     summary = args.summary
     response_type = getattr(args, "response_type", None)
+    if not isinstance(summary, str) or not summary.strip():
+        error_exit(
+            "setup-review requires a non-blank --summary",
+            use_json=False,
+            code=2,
+        )
 
     # Step 1: pick-window
     roots = normalize_repo_root(repo_root)
@@ -20628,10 +20686,13 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         else:
             error_exit("No RepoPrompt window matches repo root", use_json=False, code=2)
 
-    # Step 2: builder (with optional --type flag for RP 1.6.0+)
-    builder_expr = f"builder {json.dumps(summary)}"
+    # Step 2: builder. Use the canonical tool + named instructions field:
+    # CE 1.1.0 can accept the positional shorthand yet create a tab with empty
+    # discover.instructions, prompt, and selection.
+    builder_payload: dict[str, Any] = {"instructions": summary}
     if response_type:
-        builder_expr += f" --type {response_type}"
+        builder_payload["response_type"] = response_type
+    builder_expr = f"call context_builder {json.dumps(builder_payload)}"
 
     builder_cmd = [
         "-w",
@@ -20655,6 +20716,8 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
 
             if not tab:
                 error_exit("Builder did not return a tab/context id", use_json=False, code=2)
+
+            verify_rp_builder_context(win_id, tab)
 
             if args.json:
                 print(
@@ -20688,6 +20751,8 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
             tab = parse_builder_tab(output)
         if not tab:
             error_exit("Builder did not return a tab/context id", use_json=False, code=2)
+
+        verify_rp_builder_context(win_id, tab)
 
         if args.json:
             print(json.dumps({"window": win_id, "tab": tab, "repo_root": repo_root}))
