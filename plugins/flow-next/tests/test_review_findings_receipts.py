@@ -242,43 +242,125 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
         self.assertEqual(findings["headSha"], HEAD_SHA)
 
     def test_direct_writer_attach_uses_prior_before_atomic_replace(self) -> None:
-        receipt = self.repo / "host.json"
-        response = self.repo / "review.md"
-        base_input = self.repo / "base.json"
-        response.write_text(_fixture("host"), encoding="utf-8")
-        base_input.write_text(
-            json.dumps(
-                {
-                    "type": "impl_review",
-                    "id": "fn-136.3",
-                    "mode": "host",
-                    "verdict": "NEEDS_WORK",
-                }
-            ),
-            encoding="utf-8",
-        )
-        args = argparse.Namespace(
-            input=str(base_input),
-            receipt=str(receipt),
-            review_file=str(response),
-            prior=None,
-            head="HEAD",
-            base="HEAD",
-            json=True,
-        )
-        with contextlib.redirect_stdout(io.StringIO()):
-            FLOWCTL.cmd_review_findings_attach(args)
-        first = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
+        for backend in ("rp", "host"):
+            with self.subTest(backend=backend):
+                receipt = self.repo / f"{backend}.json"
+                recovery = self.repo / f"{backend}-recovery.json"
+                response = self.repo / f"{backend}-review.md"
+                base_input = self.repo / f"{backend}-base.json"
+                response.write_text(_fixture(backend), encoding="utf-8")
+                base_input.write_text(
+                    json.dumps(
+                        {
+                            "type": "impl_review",
+                            "id": "fn-136.3",
+                            "mode": backend,
+                            "verdict": "NEEDS_WORK",
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                args = argparse.Namespace(
+                    input=str(base_input),
+                    receipt=str(receipt),
+                    review_file=str(response),
+                    prior=None,
+                    head="HEAD",
+                    base="HEAD",
+                    recovery=str(recovery),
+                    json=True,
+                )
+                with contextlib.redirect_stdout(io.StringIO()):
+                    FLOWCTL.cmd_review_findings_attach(args)
+                first = json.loads(
+                    receipt.read_text(encoding="utf-8")
+                )["findings"]
 
-        response.write_text(
-            "Prior finding 1 — fixed.\n<verdict>SHIP</verdict>\n",
-            encoding="utf-8",
-        )
-        with contextlib.redirect_stdout(io.StringIO()):
-            FLOWCTL.cmd_review_findings_attach(args)
-        second = json.loads(receipt.read_text(encoding="utf-8"))["findings"]
-        self.assertEqual(second["round"], 2)
-        self.assertEqual(second["supersedesReceiptId"], first["sourceReceiptId"])
+                response.write_text(
+                    "Prior finding 1 — fixed.\n<verdict>SHIP</verdict>\n",
+                    encoding="utf-8",
+                )
+                with contextlib.redirect_stdout(io.StringIO()):
+                    FLOWCTL.cmd_review_findings_attach(args)
+                second = json.loads(
+                    receipt.read_text(encoding="utf-8")
+                )["findings"]
+                self.assertEqual(second["round"], 2)
+                self.assertEqual(
+                    second["supersedesReceiptId"], first["sourceReceiptId"]
+                )
+                self.assertEqual(
+                    json.loads(
+                        recovery.read_text(encoding="utf-8")
+                    )["findings"],
+                    second,
+                )
+                generations = FLOWCTL.load_review_receipt_generations(receipt)
+                self.assertEqual(
+                    [entry["findings"]["round"] for entry in generations],
+                    [1, 2],
+                )
+
+    def test_completion_direct_routes_serialize_concurrent_advancement(self) -> None:
+        for backend in ("rp", "host"):
+            with self.subTest(backend=backend):
+                receipt = self.repo / f"{backend}-completion.json"
+                recovery = self.repo / f"{backend}-completion-recovery.json"
+                response = self.repo / f"{backend}-completion-review.md"
+                response.write_text(
+                    _review_text("completion_review", backend),
+                    encoding="utf-8",
+                )
+
+                def attach(
+                    index: int,
+                    *,
+                    route: str = backend,
+                    terminal: Path = receipt,
+                    recovery_copy: Path = recovery,
+                    review_output: Path = response,
+                ) -> None:
+                    base_input = self.repo / f"{route}-input-{index}.json"
+                    base_input.write_text(
+                        json.dumps(
+                            {
+                                "type": "completion_review",
+                                "id": "fn-136",
+                                "mode": route,
+                                "verdict": "NEEDS_WORK",
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    FLOWCTL.cmd_review_findings_attach(
+                        argparse.Namespace(
+                            input=str(base_input),
+                            receipt=str(terminal),
+                            review_file=str(review_output),
+                            prior=None,
+                            head="HEAD",
+                            base="HEAD",
+                            recovery=str(recovery_copy),
+                            json=True,
+                        )
+                    )
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        list(pool.map(attach, (1, 2)))
+                generations = FLOWCTL.load_review_receipt_generations(receipt)
+                self.assertEqual(
+                    sorted(
+                        entry["findings"]["round"] for entry in generations
+                    ),
+                    [1, 2],
+                )
+                self.assertEqual(
+                    json.loads(
+                        recovery.read_text(encoding="utf-8")
+                    )["findings"]["round"],
+                    2,
+                )
 
     def test_legacy_and_unparseable_receipts_remain_valid(self) -> None:
         legacy = {

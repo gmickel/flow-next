@@ -565,16 +565,12 @@ EOF
   fi
   if ! "$FLOWCTL" review-findings attach \
     --input "$RECEIPT_RECOVERY" \
-    --receipt "$RECEIPT_RECOVERY" \
-    --prior "$REVIEW_RECEIPT_PATH" \
+    --receipt "$REVIEW_RECEIPT_PATH" \
+    --recovery "$RECEIPT_RECOVERY" \
     --review-file "$RESPONSE_FILE" \
     --base "$REVIEW_BASE_SHA" \
     --head "$REVIEW_HEAD_SHA" \
     --json >/dev/null; then
-    echo "<promise>RETRY</promise>"
-    exit 0
-  fi
-  if ! cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"; then
     echo "<promise>RETRY</promise>"
     exit 0
   fi

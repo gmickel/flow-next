@@ -116,14 +116,14 @@ Build this payload once:
 ```
 
 Write that base payload and the full reviewer output to temporary files. Build
-the recovery receipt through the shared deterministic attachment command,
-using the terminal receipt as the prior lineage source:
+the recovery receipt and advance the terminal pointer through one shared
+deterministic attachment transaction:
 
 ```bash
 "$FLOWCTL" review-findings attach \
  --input "$RECEIPT_INPUT" \
- --receipt "$RECEIPT_RECOVERY" \
- --prior "$RECEIPT_PATH" \
+ --receipt "$RECEIPT_PATH" \
+ --recovery "$RECEIPT_RECOVERY" \
  --review-file "$REVIEW_OUTPUT_FILE" \
  --base "$REVIEW_BASE_SHA" \
  --head "$REVIEW_HEAD_SHA" \
@@ -135,14 +135,15 @@ no reviewer/model/network call.
 
 Persist it in this order:
 
-1. Write the complete JSON payload to
+1. Under the terminal receipt's cross-process lock, write the complete JSON
+ payload to
  `$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json`
- first (create the parent directory).
-2. Copy that exact file to `$RECEIPT_PATH`; validate `type`, `id`, and `verdict`
- there with `jq`.
+ first (create the parent directory), preserve the prior terminal generation
+ beside `$RECEIPT_PATH`, then atomically advance `$RECEIPT_PATH`.
+2. Validate `type`, `id`, and `verdict` at `$RECEIPT_PATH` with `jq`.
 3. Leave the recovery file in place after receipt validation. SKILL.md's
  shared checkpoint deletes it only after terminal status persists.
- On any write/copy/validation failure, leave recovery in place, output
+ On any write/validation failure, leave recovery in place, output
  `<promise>RETRY</promise>`, and stop before terminal status.
 
 `session_id` is literal `null` — host re-reviews are always fresh subagents; `null` distinguishes by-design non-resumability from an incomplete receipt. Shape stays compatible with existing consumers.

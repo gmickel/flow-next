@@ -5879,7 +5879,7 @@ def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
 
 
 def cmd_review_findings_attach(args: argparse.Namespace) -> None:
-    """Atomically attach parsed findings to a direct-writer receipt payload."""
+    """Atomically attach parsed findings and advance a direct-writer receipt."""
     try:
         input_path = Path(args.input)
         receipt_path = Path(args.receipt)
@@ -5928,6 +5928,14 @@ def cmd_review_findings_attach(args: argparse.Namespace) -> None:
             code=2,
         )
     prior_path = Path(args.prior) if args.prior else receipt_path
+    recovery_arg = getattr(args, "recovery", None)
+    recovery_path = Path(recovery_arg) if recovery_arg else None
+    if recovery_path is not None and recovery_path.resolve() == receipt_path.resolve():
+        error_exit(
+            "review-findings attach recovery path must differ from receipt path",
+            use_json=args.json,
+            code=2,
+        )
     with cross_process_lock(_review_receipt_lock_path(receipt_path)):
         findings = build_review_receipt_findings(
             review_text,
@@ -5943,6 +5951,8 @@ def cmd_review_findings_attach(args: argparse.Namespace) -> None:
             receipt["findings"] = findings
         else:
             receipt.pop("findings", None)
+        if recovery_path is not None:
+            atomic_write_json(recovery_path, receipt)
         if prior_path != receipt_path and prior_path.exists():
             _preserve_review_receipt_generation(prior_path)
         if receipt_path.exists():
@@ -5953,6 +5963,8 @@ def cmd_review_findings_attach(args: argparse.Namespace) -> None:
         "receipt": str(receipt_path),
         "findings_attached": findings is not None,
     }
+    if recovery_path is not None:
+        result["recovery"] = str(recovery_path)
     if findings is not None:
         result["source_receipt_id"] = findings["sourceReceiptId"]
     if args.json:
@@ -34024,6 +34036,14 @@ def main() -> None:
         "--prior",
         default=None,
         help="Prior receipt path for lineage (defaults to --receipt)",
+    )
+    p_findings_attach.add_argument(
+        "--recovery",
+        default=None,
+        help=(
+            "Optional recovery copy written inside the receipt transaction "
+            "before the terminal pointer advances"
+        ),
     )
     p_findings_attach.add_argument(
         "--head", default="HEAD", help="Reviewed head ref (default: HEAD)"

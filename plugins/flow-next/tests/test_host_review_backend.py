@@ -685,14 +685,17 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         self.assertIn(recovery, host)
         self.assertIn(recovery, rp)
         self.assertLess(rp.index('cat > "$RECOVERY_TMP"'), rp.index(
-            'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"'
+            '--receipt "$REVIEW_RECEIPT_PATH"'
         ))
         self.assertIn('mktemp "${RECEIPT_RECOVERY}.tmp.XXXXXX"', rp)
         self.assertIn('if ! cat > "$RECOVERY_TMP"', rp)
         self.assertIn('mv -f "$RECOVERY_TMP" "$RECEIPT_RECOVERY"', rp)
-        self.assertIn(
-            'if ! cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"', rp
+        self.assertIn('--recovery "$RECEIPT_RECOVERY"', rp)
+        self.assertNotIn(
+            'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"', rp
         )
+        self.assertIn('--receipt "$RECEIPT_PATH"', host)
+        self.assertIn('--recovery "$RECEIPT_RECOVERY"', host)
         self.assertLess(
             completion.index("_write_backend_review_receipt("),
             completion.index("_self_write_review_status("),
