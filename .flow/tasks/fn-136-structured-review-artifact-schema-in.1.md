@@ -16,10 +16,18 @@ Catalog what reviewers ACTUALLY emit per backend and build the parser fixture co
 - Quick commands: cd plugins/flow-next/tests && python3 -m unittest <new fixture test module> -q.
 
 ## Acceptance
-- [ ] Fixture corpus per backend shape committed on the fn-130 harness layout; variant catalog recorded in the done summary (R2).
+- [x] Fixture corpus per backend shape committed on the fn-130 harness layout; variant catalog recorded in the done summary (R2).
 
 ## Done summary
-TBD
+Surveyed codex, copilot, cursor, host, RepoPrompt and export review shapes. The
+v1 corpus under `optimization/reached-path/fixtures/review-findings/v1/`
+records directly observed versus synthetic-boundary variants with per-entry
+source and fixture references. Its per-backend oracle pins canonical severity,
+confidence, classification, current/ratchet status and anchor presence without
+guessing missing anchors. Cases cover SHIP without findings, ratchet-only
+re-review, anchorless findings, unparseable prose and catalog-specific layouts.
+Focused verification:
+`cd plugins/flow-next/tests && python3 -m unittest test_review_findings_fixture_corpus -q`.
 
 ## Evidence
 - Commits:
