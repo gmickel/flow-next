@@ -5292,6 +5292,7 @@ def _parse_review_findings_v1(
         or round_number < 1
         or (supersedes_receipt_id is None and round_number != 1)
         or (supersedes_receipt_id is not None and round_number <= 1)
+        or (supersedes_receipt_id is None and prior_findings is not None)
         or not isinstance(head_sha, str)
         or not head_sha
         or len(head_sha) > _FINDINGS_MAX_ID
@@ -5385,6 +5386,25 @@ def _parse_review_findings_v1(
             if prior_finding_id:
                 row["priorFindingId"] = prior_finding_id
             rows.append(row)
+
+    prior_item_ids = (
+        {
+            item["id"]
+            for item in prior_findings["items"]
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+        if isinstance(prior_findings, dict)
+        and isinstance(prior_findings.get("items"), list)
+        else set()
+    )
+    prior_references = [
+        row["priorFindingId"] for row in rows if "priorFindingId" in row
+    ]
+    if (
+        any(prior_id not in prior_item_ids for prior_id in prior_references)
+        or len(prior_references) != len(set(prior_references))
+    ):
+        return None
 
     explicit_empty = bool(
         re.search(
@@ -17324,7 +17344,12 @@ def validate_pr_cognitive_aid(
             "pr_cognitive_aid",
             f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
         )
-    if artifact.get("schemaVersion") != PR_COGNITIVE_AID_SCHEMA_VERSION:
+    schema_version = artifact.get("schemaVersion")
+    if (
+        not isinstance(schema_version, int)
+        or isinstance(schema_version, bool)
+        or schema_version != PR_COGNITIVE_AID_SCHEMA_VERSION
+    ):
         _pr_aid_fail("schemaVersion", "unsupported schema version")
     artifact_id = _pr_aid_artifact_id(artifact.get("artifactId"), "artifactId")
     spec_id = _pr_aid_string(artifact.get("specId"), "specId", maximum=160)

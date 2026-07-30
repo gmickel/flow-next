@@ -31,6 +31,14 @@ GOLDEN = (
 GOLDEN_META = GOLDEN.with_name("golden.meta.json")
 
 
+def assert_strict_30_sample_p95_under_budget(
+    testcase: unittest.TestCase, durations_ms: list[float], budget_ms: float
+) -> None:
+    testcase.assertEqual(len(durations_ms), 30)
+    p95 = sorted(durations_ms)[28]
+    testcase.assertLess(p95, budget_ms, f"p95={p95:.3f} ms")
+
+
 def artifact(*, canonical_files: int = 2, churn: int = 40) -> dict:
     sources = [
         {"id": "spec", "kind": "spec", "ref": SPEC_ID},
@@ -517,6 +525,16 @@ class PersistenceAndCurrentnessTests(unittest.TestCase):
         unsupported["artifactId"] = "aid-002"
         unsupported["supersedesArtifactId"] = "aid-001"
         cases["unsupported"] = (unsupported, "unsupported")
+        for label, invalid_version in (
+            ("boolean-version", True),
+            ("float-version", 1.0),
+            ("string-version", "1"),
+        ):
+            invalid = artifact()
+            invalid["schemaVersion"] = invalid_version
+            invalid["artifactId"] = "aid-002"
+            invalid["supersedesArtifactId"] = "aid-001"
+            cases[label] = (invalid, "unsupported")
 
         for name, (second, expected_status) in cases.items():
             with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
@@ -535,6 +553,14 @@ class PersistenceAndCurrentnessTests(unittest.TestCase):
                 )
                 self.assertEqual(current["status"], expected_status)
                 self.assertIsNone(current["artifact"])
+
+    def test_schema_version_requires_the_exact_integer_discriminator(self) -> None:
+        for invalid in (True, 1.0, "1", 2):
+            with self.subTest(schema_version=invalid):
+                value = artifact()
+                value["schemaVersion"] = invalid
+                with self.assertRaisesRegex(ValueError, "unsupported schema version"):
+                    flowctl.validate_pr_cognitive_aid(value)
 
     def test_chain_forks_cycles_and_filename_mismatches_are_invalid(self) -> None:
         def write(home: Path, name: str, value: dict) -> None:
@@ -752,17 +778,16 @@ class MarkdownAndBudgetTests(unittest.TestCase):
             started = time.perf_counter()
             flowctl.render_pr_cognitive_aid_markdown(maximum_normal)
             durations_ms.append((time.perf_counter() - started) * 1000)
-        p95 = sorted(durations_ms)[28]
-        self.assertLess(
-            p95,
+        assert_strict_30_sample_p95_under_budget(
+            self,
+            durations_ms,
             metadata["performanceBudget"]["p95MillisecondsExclusive"],
-            f"p95={p95:.3f} ms",
         )
 
     def test_30_sample_p95_uses_strict_nearest_rank(self) -> None:
         durations_ms = [1.0] * 28 + [100.1, 500.0]
-        p95 = sorted(durations_ms)[28]
-        self.assertGreaterEqual(p95, 100.0)
+        with self.assertRaises(AssertionError):
+            assert_strict_30_sample_p95_under_budget(self, durations_ms, 100.0)
 
 
 class MakePrIntegrationTests(unittest.TestCase):

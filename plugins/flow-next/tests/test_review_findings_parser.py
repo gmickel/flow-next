@@ -222,6 +222,7 @@ Suggestion: Add the missing invariant.
         text = self.fixture("codex", "catalog-sample")
         prior = parse(text, "codex")
         self.assertIsNone(parse(text, "codex", round_number=2))
+        self.assertIsNone(parse(text, "codex", prior=prior))
         self.assertIsNone(
             parse(
                 text,
@@ -244,24 +245,74 @@ Suggestion: Add the missing invariant.
         )
 
     def test_explicit_lineage_edge_is_preserved_for_new_identity(self) -> None:
-        prior = parse(self.fixture("codex", "no-findings-ship"), "codex")
-        text = """
+        prior = parse(self.fixture("codex", "catalog-sample"), "codex")
+        prior_id = prior["items"][0]["id"]
+        text = f"""
 Severity: Major
 Confidence: 100
 Classification: introduced
-Prior Finding ID: finding-prior-123
+Prior Finding ID: {prior_id}
 Problem: The replacement finding has materially different scope.
 """
-        item = parse(
+        current = parse(
             text,
             "codex",
             receipt="receipt-round-2",
             round_number=2,
             prior=prior,
             supersedes=prior["sourceReceiptId"],
-        )["items"][0]
-        self.assertEqual(item["priorFindingId"], "finding-prior-123")
+        )
+        item = next(
+            candidate
+            for candidate in current["items"]
+            if candidate.get("priorFindingId") == prior_id
+        )
+        self.assertEqual(item["priorFindingId"], prior_id)
         self.assertNotEqual(item["id"], item["priorFindingId"])
+
+    def test_explicit_lineage_edge_rejects_orphan_and_duplicate_parents(self) -> None:
+        prior = parse(self.fixture("codex", "catalog-sample"), "codex")
+        orphan = """
+Severity: Major
+Confidence: 100
+Classification: introduced
+Prior Finding ID: finding-orphan
+Problem: The replacement references no prior item.
+"""
+        self.assertIsNone(
+            parse(
+                orphan,
+                "codex",
+                receipt="receipt-round-2",
+                round_number=2,
+                prior=prior,
+                supersedes=prior["sourceReceiptId"],
+            )
+        )
+        prior_id = prior["items"][0]["id"]
+        duplicate = f"""
+Severity: Major
+Confidence: 100
+Classification: introduced
+Prior Finding ID: {prior_id}
+Problem: First replacement.
+
+Severity: Major
+Confidence: 100
+Classification: introduced
+Prior Finding ID: {prior_id}
+Problem: Conflicting replacement.
+"""
+        self.assertIsNone(
+            parse(
+                duplicate,
+                "codex",
+                receipt="receipt-round-2",
+                round_number=2,
+                prior=prior,
+                supersedes=prior["sourceReceiptId"],
+            )
+        )
 
     def test_ratchet_requires_matching_explicit_receipt_lineage(self) -> None:
         prior = parse(self.fixture("codex", "catalog-sample"), "codex")
