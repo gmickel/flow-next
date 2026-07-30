@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import shlex
 import subprocess
 import tempfile
 import unittest
@@ -96,34 +95,31 @@ class RepoPromptSetupWorkflowContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             temp = Path(tmp)
             log = temp / "calls.log"
-            stub = temp / "flowctl"
-            stub.write_text(
-                "#!/usr/bin/env bash\n"
+            prefix = (
+                "flowctl() {\n"
                 "printf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n"
                 "if [[ \"$1 $2\" == \"review-rounds increment\" ]]; then\n"
                 "  printf '%s\\n' '{\"round\":1,\"cap\":4}'\n"
-                "  [[ \"${FAIL_CAP:-0}\" == 1 ]] && exit 4\n"
-                "  exit 0\n"
+                "  [[ \"${FAIL_CAP:-0}\" == 1 ]] && return 4\n"
+                "  return 0\n"
                 "elif [[ \"$1 $2\" == \"rp setup-review\" ]]; then\n"
-                "  [[ \"${FAIL_SETUP:-0}\" == 1 ]] && exit 2\n"
+                "  [[ \"${FAIL_SETUP:-0}\" == 1 ]] && return 2\n"
                 "  printf '%s\\n' 'RP_MODE=ce W=2 T=ctx CHAT_ID=chat'\n"
                 "elif [[ \"$1 $2\" == \"review-rounds record\" ]]; then\n"
                 "  printf '%s\\n' '{\"recorded\":true}'\n"
                 "elif [[ \"$1\" == \"cat\" ]]; then\n"
                 "  printf '%s\\n' '# Demo spec'\n"
-                "fi\n",
-                encoding="utf-8",
-            )
-            stub.chmod(0o755)
-            prefix = (
-                f"FLOWCTL={shlex.quote(stub.as_posix())}\n"
-                f"REPO_ROOT={shlex.quote(temp.as_posix())}\n"
+                "fi\n"
+                "}\n"
+                "FLOWCTL=flowctl\n"
+                "REPO_ROOT=.\n"
                 "SPEC_ID=fn-1-demo\n"
-                f"CALL_LOG={shlex.quote(log.as_posix())}\n"
+                "CALL_LOG=calls.log\n"
                 "export CALL_LOG FAIL_CAP FAIL_SETUP\n"
             )
             capped = subprocess.run(
                 ["bash", "-c", prefix + fence],
+                cwd=temp,
                 env={"PATH": "/usr/bin:/bin", "FAIL_CAP": "1"},
                 text=True,
                 capture_output=True,
@@ -135,6 +131,7 @@ class RepoPromptSetupWorkflowContractTest(unittest.TestCase):
             log.write_text("", encoding="utf-8")
             failed = subprocess.run(
                 ["bash", "-c", prefix + fence],
+                cwd=temp,
                 env={"PATH": "/usr/bin:/bin", "FAIL_SETUP": "1"},
                 text=True,
                 capture_output=True,
