@@ -285,6 +285,7 @@ On every prompt, the host agent infers the intended operation and decision type 
 | `flowctl chart release-claim <id>.<D> [--break-stale --reason <r>]` | Owner release or audited stale-claim recovery |
 | `flowctl chart resolve <id>.<D> --answer-file <f> [--assets <json>] [--graduation-file <json>] [--supersedes <D,...>] [--keep-dependents]` | Records the safe answer, closes it, appends the ledger line, and atomically graduates/removes parked questions |
 | `flowctl chart out-of-scope <id>.<D> --reason <r>` | Closes without a decision; writes the `## Boundaries` line |
+| `flowctl chart abandon <id> --reason <r>` | Closes an open chart as `abandoned` with its decisions intact and the reason recorded; terminal except for audited `reopen` |
 | `flowctl chart briefing <id> --proposal-file <f> [--force]` | Validates an agent-confirmed split proposal, then emits an immutable briefing version; forced output is draft-only |
 | `flowctl chart link-spec <id> --briefing <B> --spec <S> --decisions <D,...>` | Idempotently records a successful capture result |
 | `flowctl chart reopen <id> --reason <r>` | Reopens done/abandoned discovery and marks previous briefings/spec links stale |

@@ -32,7 +32,7 @@ Complete the local decision state machine: safe asset attachment, resolve, out-o
 - `resolve fn-N.D9 --supersedes D3` keeps D3 readable, strikes its ledger line, sets bidirectional links, and reports all affected D-IDs.
 - If resolved D7 depended on D3, create a fresh decision such as D10 with D7's question and an explicit “re-evaluate after D9 superseded D3” reason; never reopen D7 in place.
 - `out-of-scope` adds one boundary reason and no decision-ledger answer.
-- `abandon` closes the chart without deleting records.
+- `abandon --reason` closes the chart as `abandoned` with the reason recorded and no record deleted.
 - Resolve can remove a parked question and create/wire the newly visible decisions in the same commit; a crash or validation error leaves all of it untouched.
 - `attach-asset fn-N.D6` records the throwaway artefact and its revision while D6 stays open. Resolving D6 without any asset fails validation; after the attended reaction, resolve records the answer against the already-linked artefact.
 - If the session ends between attachment and reaction, D6 remains open with the same asset. Retry presents it again; it does not create a duplicate asset or infer approval.
