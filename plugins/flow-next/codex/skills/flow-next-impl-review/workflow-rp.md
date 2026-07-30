@@ -556,7 +556,8 @@ If verdict is NEEDS_WORK:
  SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
  source "$SETUP_FILE"
  if [[ "$RP_MODE" == "ce" ]]; then
- $FLOWCTL rp chat-send --window "$W" --chat-id "$CHAT_ID" --mode review \
+ $FLOWCTL rp chat-send --window "$W" --context-id "$T" \
+ --chat-id "$CHAT_ID" --mode review \
  --message-file "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" \
  > "${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
  else

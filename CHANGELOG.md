@@ -17,8 +17,9 @@ All notable changes to the flow-next.
   using its published-tab selection/chat workflow; CE failures never downgrade.
   Complete review contracts now travel through a durable instructions file,
   setup/cap failures finalize their reserved review round, and CE fix-loop or
-  optional-pass continuations use the returned chat identity without treating
-  the direct context identifier as Classic tab state.
+  optional-pass continuations bind the returned canonical context and chat
+  identities without treating the direct context identifier as Classic
+  visible-tab projection.
 
 ## [flow-next 3.8.0] - 2026-07-30
 

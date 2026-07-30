@@ -621,10 +621,11 @@ class RepoPromptWrapperCommandTest(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
         self.assertIn("call oracle_send ", run.call_args.args[0][-1])
 
-    def test_ce_chat_continuation_uses_chat_id_without_tab(self) -> None:
+    def test_ce_chat_continuation_binds_context_and_chat_without_tab(self) -> None:
         args = argparse.Namespace(
             window=2,
             tab=None,
+            context_id="0691CA88-A675-4ACA-8AB3-F92D1CA2BD6C",
             message_file=str(self.message),
             chat_id="review-42",
             mode="review",
@@ -640,7 +641,10 @@ class RepoPromptWrapperCommandTest(unittest.TestCase):
         ) as run, redirect_stdout(io.StringIO()):
             flowctl.cmd_rp_chat_send(args)
         command = run.call_args.args[0]
-        self.assertEqual(command[:2], ["-w", "2"])
+        self.assertEqual(
+            command[:2],
+            ["--context-id", "0691CA88-A675-4ACA-8AB3-F92D1CA2BD6C"],
+        )
         self.assertNotIn("-t", command)
         self.assertIn('"chat_id":"review-42"', command[-1])
         self.assertIn('"mode":"review"', command[-1])

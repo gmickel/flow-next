@@ -20619,9 +20619,16 @@ def cmd_rp_chat_send(args: argparse.Namespace) -> None:
     message = read_text_or_exit(Path(args.message_file), "Message file", use_json=False)
     chat_id_arg = getattr(args, "chat_id", None)
     tab_arg = getattr(args, "tab", None)
-    if not tab_arg and not chat_id_arg:
+    context_id_arg = getattr(args, "context_id", None)
+    if not tab_arg and not context_id_arg:
         error_exit(
-            "chat-send requires --tab or --chat-id",
+            "chat-send requires Classic --tab or CE --context-id",
+            use_json=False,
+            code=2,
+        )
+    if context_id_arg and not chat_id_arg:
+        error_exit(
+            "chat-send --context-id requires --chat-id",
             use_json=False,
             code=2,
         )
@@ -20641,11 +20648,15 @@ def cmd_rp_chat_send(args: argparse.Namespace) -> None:
         chat_id=chat_id_arg,
         selected_paths=args.selected_paths,
     )
-    oracle_cmd = ["-w", str(args.window)]
+    oracle_cmd = (
+        ["--context-id", context_id_arg]
+        if context_id_arg
+        else ["-w", str(args.window)]
+    )
     if tab_arg:
         oracle_cmd.extend(("-t", tab_arg))
     oracle_cmd.extend(("-e", f"call oracle_send {oracle_payload}"))
-    if not tab_arg:
+    if context_id_arg:
         res = run_rp_cli(oracle_cmd)
         print(res.stdout, end="")
         return
@@ -33724,7 +33735,12 @@ def main() -> None:
     p_rp_chat.add_argument("--window", type=int, required=True, help="Window id")
     p_rp_chat.add_argument(
         "--tab",
-        help="Tab id or name (Classic; optional with CE --chat-id)",
+        help="Tab id or name (Classic)",
+    )
+    p_rp_chat.add_argument(
+        "--context-id",
+        dest="context_id",
+        help="Canonical CE context returned by setup-review",
     )
     p_rp_chat.add_argument("--message-file", required=True, help="Message file")
     p_rp_chat.add_argument("--new-chat", action="store_true", help="Start new chat")

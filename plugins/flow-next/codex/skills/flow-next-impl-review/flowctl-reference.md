@@ -29,7 +29,7 @@ flowctl rp prompt-set --window "$W" --tab "$T" --message-file /tmp/prompt.md
 
 # Execute review
 flowctl rp chat-send --window "$W" --tab "$T" --message-file /tmp/review.md --new-chat --chat-name "Review: X" # Classic
-flowctl rp chat-send --window "$W" --chat-id "$CHAT_ID" --mode review --message-file /tmp/review.md # CE continuation
+flowctl rp chat-send --window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review --message-file /tmp/review.md # CE continuation
 
 # Export (non-Ralph)
 flowctl rp prompt-export --window "$W" --tab "$T" --out ~/Desktop/export.md
@@ -39,7 +39,8 @@ flowctl rp prompt-export --window "$W" --tab "$T" --out ~/Desktop/export.md
 
 1. **Always use setup-review first** - handles window selection atomically
 2. **Always pass --window** - Classic state commands also require `--tab`; CE
- continuation uses `--chat-id` and never treats its context ID as a tab
+ continuation uses `--context-id` + `--chat-id` and never treats its context
+ ID as visible-tab projection
 3. **--window must be numeric** - comes from setup-review output
 4. **Use --message-file (not --message)** - write prompt to file first, then pass path
 

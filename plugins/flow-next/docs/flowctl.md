@@ -1545,9 +1545,13 @@ failure stops—the wrapper never downgrades to Classic.
 CE follow-ups use the returned chat identity without tab state:
 
 ```bash
-flowctl rp chat-send --window "$W" --chat-id "$CHAT_ID" --mode review \
+flowctl rp chat-send --window "$W" --context-id "$T" \
+  --chat-id "$CHAT_ID" --mode review \
   --message-file /tmp/re-review.md
 ```
+
+`T` is CE's canonical `context_id`; it binds the CLI call to the conversation's
+headless compose context without requiring visible-tab projection.
 
 Discontinued Classic is the isolated final fallback. It receives
 `RP_MODE=classic`, validates the published tab's prompt/selection, then uses the

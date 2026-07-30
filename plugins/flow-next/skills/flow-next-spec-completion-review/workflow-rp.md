@@ -671,7 +671,8 @@ If verdict is NEEDS_WORK:
    SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
    source "$SETUP_FILE"
    if [[ "$RP_MODE" == "ce" ]]; then
-     $FLOWCTL rp chat-send --window "$W" --chat-id "$CHAT_ID" --mode review \
+     $FLOWCTL rp chat-send --window "$W" --context-id "$T" \
+       --chat-id "$CHAT_ID" --mode review \
        --message-file "${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.md" \
        > "${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
    else

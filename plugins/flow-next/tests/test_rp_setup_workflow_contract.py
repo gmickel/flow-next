@@ -78,6 +78,7 @@ class RepoPromptSetupWorkflowContractTest(unittest.TestCase):
             for relative in WORKFLOWS:
                 path = PLUGIN_ROOT / mirror_prefix / relative
                 text = path.read_text(encoding="utf-8")
+                self.assertIn('--context-id "$T"', text, path)
                 self.assertIn('--chat-id "$CHAT_ID"', text, path)
                 self.assertIn("--mode review", text, path)
                 self.assertIn('RP_MODE" == "ce', text, path)

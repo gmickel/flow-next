@@ -284,7 +284,9 @@ Only after the current spec and affected task specs are updated:
 4. Send `Issues addressed. Please re-review.` in the SAME chat, without
  `--new-chat`; require the same verdict grammar. Classic uses
  `--window "$W" --tab "$T"`. CE uses
- `--window "$W" --chat-id "$CHAT_ID" --mode review` with no `--tab`.
+ `--window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review`
+ with no `--tab`; `T` is CE's canonical context binding, not visible-tab
+ projection.
 5. Overwrite the same response file, parse the verdict, call the same
  `review-rounds record ... --review-type plan` command with the captured
  `rp chat-send` exit code, capture and check `RECORD_EXIT` exactly as in the

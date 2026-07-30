@@ -131,9 +131,9 @@
         "workflow-cursor.md",
         "workflow-host.md"
       ],
-    "candidate_chars": 22366,
-    "reduction_chars": 26120,
-    "reduction_percent": 53.87
+    "candidate_chars": 22457,
+    "reduction_chars": 26029,
+    "reduction_percent": 53.68
     },
     {
       "route": "configured-but-unavailable",
