@@ -17,7 +17,8 @@ Before editing, re-read the landed fn-147 docs commit and fn-148's final report/
 ### Exact files
 
 - New `src/content/docs/skills/chart.mdx`.
-- `astro.config.mjs` and `src/lib/site.ts` — add Chart between Prospect and Capture in both independent navs.
+- New `src/content/docs/skills/guide.mdx` — the router shipped by task 6 gets its own public page; a skill missing from the navs silently vanishes.
+- `astro.config.mjs` and `src/lib/site.ts` — add Chart between Prospect and Capture, and Guide before Prospect, in both independent navs.
 - `src/content/docs/strategy/pipeline.mdx`, `when-to-use.mdx`, `menu-not-a-rail.mdx`, `prototype-driven-specs.mdx`.
 - `src/content/docs/cookbook.mdx`, `first-30-minutes.mdx`, `introduction.mdx`.
 - `src/content/docs/flowctl/commands.mdx`, `cli-reference.mdx`, `configuration.mdx`.
@@ -65,7 +66,7 @@ pnpm build
 - No chart-level verified/inferred fact or decision grammar ahead of a landed human-approved fn-148 result.
 
 ## Acceptance
-- A complete public chart page ships and both independent nav sources place it between Prospect and Capture.
+- Complete public chart and guide pages ship; both independent nav sources place Chart between Prospect and Capture and Guide before Prospect.
 - Pipeline, when-to-use, menu, prototype doctrine, first-run, CLI/config, spec, skill-boundary, team, orchestration/autonomy, glossary, and changelog pages agree on the optional prompt-first contract.
 - Cookbook includes all five materially different original Flow-Next journeys with prompts, evidence/consent boundaries, adaptive re-charting, and no mandatory phase order.
 - Grounding and prototype examples prove approved source references/revisions, no implicit decision resolution, persisted artefact before reaction, human-controlled resolution, interruption-safe resumption, supersession, and adaptive frontier redraw.

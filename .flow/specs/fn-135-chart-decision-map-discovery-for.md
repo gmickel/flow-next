@@ -32,7 +32,7 @@ Grounding is not a research phase and does not search the world before the user 
 
 Chart is intentionally not a complete discovery plan written up front. Its operating loop is:
 
-1. **Re-anchor on the Outcome.** State what the effort is trying to make possible and what is currently known.
+1. **Re-anchor on the Outcome and `## Notes`.** State what the effort is trying to make possible and what is currently known, honoring the standing preferences and named skills the chart's `## Notes` carries.
 2. **Choose the next uncertainty.** Select one frontier decision whose answer most reduces uncertainty or unlocks other decisions.
 3. **Take the smallest evidence route.** Research, probe, evaluate, prototype, interview, or perform the enabling task -- whichever can settle that decision with the least ceremony.
 4. **Record what changed.** Resolve, supersede, park, or rule out the decision with its evidence and assets.
