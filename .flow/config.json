@@ -112,12 +112,21 @@
           "flow:fn-99-setup-block-diet-evidence-schema-inline": "34f4f10c-8be5-4ac4-bf7d-1da8d1612f8f",
           "improvement": "ac8434d9-e47f-44cf-b43e-04743afba6b1"
         },
+        "stateIds": {
+          "backlog": "f6b12cac-bc21-4fd8-9e20-101dae3b381d",
+          "cancelled": "2a421c59-4e8d-46b2-8c45-f4664cac1163",
+          "done": "cfedfe99-1159-41fd-a29e-d840ec53254c",
+          "in_progress": "9cb829c5-9bd6-4d34-b286-16d50effe74d",
+          "in_review": "e22ff50c-0576-4daa-8a25-59725eb60f49",
+          "todo": "62f4d670-9c89-481c-a0fe-6fe97f3fbf34"
+        },
         "teamId": "7c086b79-e7fc-4eee-8d2d-b2dd60eee166",
         "teamKey": "FLOW"
       },
       "resolvedAt": null,
       "scopeResolvedAt": {
-        "destination": "2026-07-30T07:15:20.340956Z"
+        "destination": "2026-07-30T07:15:20.340956Z",
+        "destination.stateIds": "2026-07-30T16:44:33.165495Z"
       }
     },
     "staleAfterHours": 24,
