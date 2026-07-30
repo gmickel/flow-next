@@ -24,10 +24,12 @@ class ReviewFindingsDocsTest(unittest.TestCase):
             '"lastSeenReceiptId"',
             "`P0`, `P1`, `P2`, `P3`",
             "`introduced`, `pre_existing`",
+            "`pre-existing` / `pre existing` → `pre_existing`",
             "`open`, `fixed`, `not_fixed`, `withdrawn`",
             "`base`, `head`",
             "Canonical item order",
             "Exactly one must remain",
+            "A stale sibling tip does not invalidate",
             "stale evidence",
             "Explicit empty `items`",
             "receipt contract, not an internal API",
@@ -43,6 +45,7 @@ class ReviewFindingsDocsTest(unittest.TestCase):
             "256 KiB UTF-8",
             "| Items per container | 200 |",
             "| `rIds` per item | 32, unique |",
+            "| `baseSha` and `headSha` | 160 characters |",
             "| Anchor paths | 1,024 characters |",
             "| Item title | 240 characters |",
             "| Item body | 4,000 characters |",
@@ -53,6 +56,21 @@ class ReviewFindingsDocsTest(unittest.TestCase):
         self.assertIn("rejection boundaries, not truncation targets", text)
         self.assertIn("Unsupported version, invalid field, or ambiguous lineage", text)
         self.assertIn("Ignore unsupported structured data without turning it into a pass", text)
+        self.assertIn("positive JSON integers—booleans do not qualify", text)
+        self.assertIn("must use round 1", text)
+        self.assertIn("7–64 lowercase hexadecimal characters", text)
+
+    def test_identity_is_explicit_not_semantically_inferred(self) -> None:
+        text = CONTRACT.read_text(encoding="utf-8")
+        self.assertIn(
+            "Fully restated finding prose is not semantic identity",
+            " ".join(text.split()),
+        )
+        self.assertIn(
+            "Only parser-emitted `id` and `priorFindingId` edges establish identity",
+            " ".join(text.split()),
+        )
+        self.assertIn("consumers never match findings by title", " ".join(text.split()))
 
     def test_receipt_memory_and_discovery_surfaces_cross_link_contract(self) -> None:
         for relative in (

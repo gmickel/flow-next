@@ -67,7 +67,7 @@ consumers must not reinterpret them as a compatible extension.
 | `reviewKind` | `plan`, `implementation`, `completion`, `qa` | none |
 | `severity` | `P0`, `P1`, `P2`, `P3` | `Critical` → `P0`; `Major` → `P1`; `Minor` → `P2`; `Nitpick` → `P3` |
 | `confidence` | `0`, `25`, `50`, `75`, `100` | none |
-| `classification` | `introduced`, `pre_existing` | none |
+| `classification` | `introduced`, `pre_existing` | `pre-existing` / `pre existing` → `pre_existing` |
 | `status` | `open`, `fixed`, `not_fixed`, `withdrawn` | `fixed in review` / `resolved` → `fixed`; `not fixed` / `remains open` / `unresolved` → `not_fixed` |
 | `anchor.side` | `base`, `head` | none |
 
@@ -82,14 +82,19 @@ ordinal ascending. Consumers preserve that order.
 
 `sourceReceiptId` identifies one findings generation. Round 1 derives each
 finding `id` deterministically from that receipt identity and the local
-`ordinal`. A later round carries the same `id` for the same finding and keeps
-`firstSeenReceiptId`; `lastSeenReceiptId` advances to the current generation.
-A genuinely new later-round finding receives a new ID even if its ordinal
-resembles an older item.
+`ordinal`. A later round preserves an ID only when the prior complete snapshot
+and a `Prior finding N` ratchet record carry it forward;
+`firstSeenReceiptId` stays fixed and `lastSeenReceiptId` advances. Fully
+restated finding prose is not semantic identity: without an explicit lineage
+edge, it creates a new finding and ID even when its content or ordinal resembles
+an older item.
 
 `priorFindingId` is an explicit edge used only when a parser cannot preserve an
-older ID byte-for-byte. It does not authorize replacing or deleting the prior
-generation. Every non-root generation is a complete snapshot of the lineage:
+older ID byte-for-byte. The new item keeps its new ID and names the older item;
+the edge does not authorize replacing or deleting the prior generation. Only
+parser-emitted `id` and `priorFindingId` edges establish identity—consumers
+never match findings by title, body, anchor, ordinal, or other semantic
+similarity. Every non-root generation is a complete snapshot of the lineage:
 omitting a previously known finding makes the chain invalid rather than
 silently resolving it.
 
@@ -132,15 +137,16 @@ Currentness is a read-only projection, not a mutable flag:
 2. Index unique `sourceReceiptId` values. Reject duplicate identities.
 3. Validate every `supersedesReceiptId`: its parent must exist in the same
    review-kind/backend lineage and its `round` must be exactly one lower.
-4. Reject cycles, broken edges, ambiguous replacement edges, incomplete
-   snapshots, or finding identities whose first-seen record is absent.
+4. Reject cycles, broken edges, incomplete snapshots, duplicate replacement
+   ownership, or finding identities whose first-seen record is absent.
 5. Find unsuperseded tips whose `headSha` equals the current review head.
    Exactly one must remain.
 
 That tip's item status is current. A supported receipt bound to another
 `headSha` is stale evidence: retain and label it, but do not use it as current
-resolution, approval, or ship state. Zero or multiple matching tips means
-“no unambiguous current structured findings,” never “no findings.”
+resolution, approval, or ship state. A stale sibling tip does not invalidate
+the one head-matching tip. Zero or multiple head-matching tips means “no
+unambiguous current structured findings,” never “no findings.”
 
 Receipt verdict remains the workflow gate. The `findings` projection explains
 the finding stream; it does not independently grant `SHIP`.
@@ -154,14 +160,18 @@ the finding stream; it does not independently grant `SHIP`.
 | Items per container | 200 |
 | `rIds` per item | 32, unique |
 | IDs, backend, and review-kind strings | 160 characters |
+| `baseSha` and `headSha` | 160 characters |
 | Anchor paths | 1,024 characters |
 | Item title | 240 characters |
 | Item body | 4,000 characters |
 | Item suggestion | 4,000 characters |
 
-R-IDs must use `R<digits>`. IDs and ordinals must be unique. Anchor paths must
-be normalized repository-relative paths without `..` traversal. Ranges use
-positive lines and `endLine >= startLine`.
+R-IDs must use `R<digits>`. IDs and ordinals must be unique. `round` and
+`ordinal` are positive JSON integers—booleans do not qualify—and a root
+generation without `supersedesReceiptId` must use round 1. Anchor paths must be
+normalized repository-relative paths without `..` traversal. Ranges use
+positive integer lines and `endLine >= startLine`. `blobOid`, when present, is
+7–64 lowercase hexadecimal characters.
 
 Limits are rejection boundaries, not truncation targets. Oversize input,
 overflowing output, duplicates, unsafe paths, invalid lineage, unknown enums,
