@@ -924,6 +924,28 @@ class ReviewFindingsCurrentnessTest(unittest.TestCase):
             )
         )
 
+    def test_semantically_incomplete_stale_sibling_does_not_invalidate_current(
+        self,
+    ) -> None:
+        first = _container(receipt_id="round-1")
+        current = _container(receipt_id="current-tip", round_number=2, prior=first)
+        stale = _container(
+            receipt_id="stale-tip",
+            round_number=2,
+            head_sha="c" * 40,
+            prior=first,
+        )
+        stale["items"] = stale["items"][1:]
+        selected = FLOWCTL.select_current_review_findings(
+            [
+                {"findings": first},
+                {"findings": stale},
+                {"findings": current},
+            ],
+            current_head_sha=HEAD_SHA,
+        )
+        self.assertEqual(selected["sourceReceiptId"], "current-tip")
+
     def test_anchor_and_cross_receipt_references_fail_closed(self) -> None:
         first = _container(receipt_id="round-1")
         bad_anchor = json.loads(json.dumps(first))

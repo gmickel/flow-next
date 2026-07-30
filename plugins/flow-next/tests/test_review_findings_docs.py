@@ -67,7 +67,7 @@ class ReviewFindingsDocsTest(unittest.TestCase):
             " ".join(text.split()),
         )
         self.assertIn(
-            "Only parser-emitted `id` and `priorFindingId` edges establish identity",
+            "stored `id` and `priorFindingId` fields establish identity",
             " ".join(text.split()),
         )
         self.assertIn("consumers never match findings by title", " ".join(text.split()))
@@ -85,14 +85,22 @@ class ReviewFindingsDocsTest(unittest.TestCase):
         text = CONTRACT.read_text(encoding="utf-8")
         normalized = " ".join(text.split())
         self.assertIn(
-            "valid location evidence without enough snapshot binding, produces no anchor",
+            "valid primary location without enough snapshot binding omits the entire anchor candidate",
             normalized,
         )
         self.assertIn(
-            "Malformed or conflicting supplied locations, unsafe paths, invalid ranges or sides, and invalid blob OIDs reject the entire structured generation",
+            "Once the primary location is snapshot-bound, invalid supplemental paths or blob OIDs also reject the generation",
             normalized,
         )
         self.assertIn("must not repair or truncate invalid anchor evidence", normalized)
+        self.assertIn(
+            "Only the selected chain receives the step 5 finding-lineage checks",
+            normalized,
+        )
+        self.assertIn(
+            "a semantically incomplete stale sibling does not invalidate it",
+            normalized,
+        )
 
     def test_receipt_memory_and_discovery_surfaces_cross_link_contract(self) -> None:
         for relative in (

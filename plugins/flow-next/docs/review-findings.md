@@ -93,9 +93,9 @@ an older item.
 `priorFindingId` is an explicit edge used only when a parser cannot preserve an
 older ID byte-for-byte. The new item keeps its new ID and names the older item;
 the edge does not authorize replacing or deleting the prior generation. Only
-parser-emitted `id` and `priorFindingId` edges establish identity—consumers
-never match findings by title, body, anchor, ordinal, or other semantic
-similarity. Every non-root generation is a complete snapshot of the lineage:
+stored `id` and `priorFindingId` fields establish identity—consumers never
+match findings by title, body, anchor, ordinal, or other semantic similarity.
+Every non-root generation is a complete snapshot of the lineage:
 omitting a previously known finding makes the chain invalid rather than
 silently resolving it.
 
@@ -116,12 +116,15 @@ Flow-Next implementation files or assume that every receipt is committed.
 ## Anchors
 
 An anchor is present only when the reviewer supplied a safe repository-relative
-path and a positive line or line range. Absent location evidence, or valid
-location evidence without enough snapshot binding, produces no anchor;
-Flow-Next never guesses one. Malformed or conflicting supplied locations,
-unsafe paths, invalid ranges or sides, and invalid blob OIDs reject the entire
-structured generation. Consumers then fall back to the receipt and prose; they
-must not repair or truncate invalid anchor evidence.
+path and a positive line or line range. Absent location evidence produces no
+anchor. A valid primary location without enough snapshot binding omits the
+entire anchor candidate before supplemental `originalPath` or `blobOid`
+metadata is interpreted. Flow-Next never guesses the missing binding.
+Malformed or conflicting primary locations, unsafe primary paths, and invalid
+ranges or sides reject the entire structured generation. Once the primary
+location is snapshot-bound, invalid supplemental paths or blob OIDs also reject
+the generation. Consumers then fall back to the receipt and prose; they must
+not repair or truncate invalid anchor evidence.
 
 `side` says which reviewed snapshot owns the line range. `baseSha` and
 `headSha` bind it to the compared snapshots. `originalPath` records the
@@ -142,12 +145,15 @@ Currentness is a read-only projection, not a mutable flag:
 2. Index unique `sourceReceiptId` values. Reject duplicate identities.
 3. Validate every `supersedesReceiptId`: its parent must exist in the same
    review-kind/backend lineage and its `round` must be exactly one lower.
-4. Reject cycles, broken edges, incomplete snapshots, duplicate replacement
-   ownership, or finding identities whose first-seen record is absent.
-5. Find unsuperseded tips whose `headSha` equals the current review head.
+4. Find unsuperseded tips whose `headSha` equals the current review head.
    Exactly one must remain.
+5. Walk that tip's ancestor chain and reject cycles, incomplete snapshots,
+   duplicate replacement ownership, or finding identities whose first-seen
+   record is absent.
 
-That tip's item status is current. A supported receipt bound to another
+Only the selected chain receives the step 5 finding-lineage checks; a
+semantically incomplete stale sibling does not invalidate it. That tip's item
+status is current. A supported receipt bound to another
 `headSha` is stale evidence: retain and label it, but do not use it as current
 resolution, approval, or ship state. A stale sibling tip does not invalidate
 the one head-matching tip. Zero or multiple head-matching tips means “no

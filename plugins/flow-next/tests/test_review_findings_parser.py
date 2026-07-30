@@ -383,6 +383,16 @@ Problem: second severity but higher confidence
         anchored = parse(text, "rp", anchor_side="base")["items"][0]["anchor"]
         self.assertEqual(anchored["side"], "base")
 
+    def test_unbound_anchor_omits_supplemental_metadata_before_validation(self) -> None:
+        text = self.fixture("rp", "catalog-sample").replace(
+            "Problem:",
+            "Original Path: ../unsafe.py\nBlob OID: not-a-git-object\nProblem:",
+            1,
+        )
+        result = parse(text, "rp", anchor_side=None)
+        self.assertIsNotNone(result)
+        self.assertNotIn("anchor", result["items"][0])
+
     def test_explicit_anchor_side_is_honored_and_conflicts_reject(self) -> None:
         text = """
 Severity: Major
