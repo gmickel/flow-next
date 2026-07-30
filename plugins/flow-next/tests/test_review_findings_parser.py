@@ -357,6 +357,58 @@ Problem: A second representation must not be silently dropped.
         self.assertIsNone(parse(f"{table}\n{valid_block}", "host"))
         self.assertIsNone(parse(f"{table}\n{unknown_block}", "host"))
 
+    def test_duplicate_singleton_labels_fail_closed(self) -> None:
+        cases = (
+            """
+Severity: Blocker
+Severity: Major
+Confidence: 100
+Classification: introduced
+Problem: An earlier unknown severity must not be overwritten.
+""",
+            """
+Severity: Major
+Confidence: 100
+Classification: pre_existing
+Classification: introduced
+Problem: Conflicting canonical classifications must not be order-dependent.
+""",
+            """
+Severity: Major
+Confidence: 100
+Classification: inherited
+Classification: introduced
+Problem: An earlier unknown classification must not be overwritten.
+""",
+            """
+Severity: Major
+Confidence: 100
+Classification: introduced
+Problem: First body.
+Problem: Conflicting second body.
+""",
+        )
+        for text in cases:
+            with self.subTest(text=text):
+                self.assertIsNone(parse(text, "codex"))
+
+    def test_duplicate_host_table_headers_fail_closed(self) -> None:
+        cases = (
+            """
+| # | Sev | Confidence | Classification | Classification | Finding | Disposition |
+|---|-----|------------|----------------|----------------|---------|-------------|
+| 1 | P1 | 100 | inherited | introduced | Hidden unknown classification. | OPEN |
+""",
+            """
+| # | Sev | Confidence | Classification | Classification | Finding | Disposition |
+|---|-----|------------|----------------|----------------|---------|-------------|
+| 1 | P1 | 100 | pre_existing | introduced | Conflicting classifications. | OPEN |
+""",
+        )
+        for table in cases:
+            with self.subTest(table=table):
+                self.assertIsNone(parse(table, "host"))
+
     def test_all_bounds_reject_without_truncation(self) -> None:
         base = self.fixture("codex", "catalog-sample")
         self.assertIsNone(parse("x" * (1024 * 1024 + 1), "codex"))

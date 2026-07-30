@@ -4562,7 +4562,7 @@ def _review_finding_clean_markdown(value: str) -> str:
     return value.rstrip()
 
 
-def _review_finding_fields(block: str) -> dict[str, str]:
+def _review_finding_fields(block: str) -> Optional[dict[str, str]]:
     fields: dict[str, str] = {}
     for line in block.splitlines():
         normalized_line = re.sub(
@@ -4572,6 +4572,11 @@ def _review_finding_fields(block: str) -> dict[str, str]:
         if not match:
             continue
         label = re.sub(r"[\s_-]+", " ", match.group("label").lower()).strip()
+        if label in fields:
+            # Finding fields are singletons. Accepting a duplicate would make
+            # line order choose which value survives, potentially hiding an
+            # unsupported enum or conflicting anchor.
+            return None
         fields[label] = _review_finding_clean_markdown(match.group("value"))
     return fields
 
@@ -4744,7 +4749,8 @@ def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
     saw_severity_label = False
     for index, line in enumerate(lines):
         fields = _review_finding_fields(line)
-        if "severity" in fields or _FINDINGS_INLINE_HOST_RE.search(line):
+        has_severity_field = fields is not None and "severity" in fields
+        if has_severity_field or _FINDINGS_INLINE_HOST_RE.search(line):
             starts.append(index)
             saw_severity_label = True
             if len(starts) > _FINDINGS_MAX_ITEMS:
@@ -4779,6 +4785,10 @@ def _review_finding_host_table(output: str) -> Optional[list[dict]]:
             continue
         candidate = [cell.strip().lower() for cell in line.strip().strip("|").split("|")]
         if {"sev", "confidence", "classification", "finding", "disposition"} <= set(candidate):
+            if len(candidate) != len(set(candidate)):
+                # Header names are singleton keys. dict(zip(...)) would
+                # otherwise silently select the last duplicate column.
+                return []
             header_index = index
             headers = candidate
             break
@@ -5159,6 +5169,8 @@ def _parse_review_findings_v1(
     if parsed_rows is None:
         for block in blocks:
             fields = _review_finding_fields(block)
+            if fields is None:
+                return None
             enums = _review_finding_enum(fields, block)
             if enums is None:
                 return None
