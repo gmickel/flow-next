@@ -550,6 +550,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                 ],
                 input=renderer,
                 text=True,
+                encoding="utf-8",
                 env=env,
                 check=True,
             )

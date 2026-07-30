@@ -1,10 +1,10 @@
 usage: flowctl.py [-h]
-                  {init,setup-block,detect,status,config,tracker,sync,pilot-log,review-backend,models,review-rounds,memory,prospect,anchor,repo-map,prime,glossary,strategy,spec,scope,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
+                  {init,setup-block,detect,status,config,tracker,sync,pilot-log,review-backend,review-findings,models,review-rounds,memory,prospect,anchor,repo-map,prime,glossary,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
 
 flowctl - CLI for .flow/ task tracking
 
 positional arguments:
-  {init,setup-block,detect,status,config,tracker,sync,pilot-log,review-backend,models,review-rounds,memory,prospect,anchor,repo-map,prime,glossary,strategy,spec,scope,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
+  {init,setup-block,detect,status,config,tracker,sync,pilot-log,review-backend,review-findings,models,review-rounds,memory,prospect,anchor,repo-map,prime,glossary,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
     init                Initialize .flow/ directory
     setup-block         Apply or resolve the tracked Flow-Next docs block
     detect              Check if .flow/ exists
@@ -15,6 +15,8 @@ positional arguments:
                         receipt)
     pilot-log           Pilot backlog-mode decision log (append / summary)
     review-backend      Get review backend (ASK if not configured)
+    review-findings     Attach versioned structured findings to a direct-
+                        writer receipt
     models              Model role-map helpers (read-only resolve; no
                         judgment)
     review-rounds       Deterministic review-round cap counter (rp workflows:
@@ -41,6 +43,8 @@ positional arguments:
     spec                Spec commands (canonical)
     scope               Scope helpers for --scope=business|technical|both
                         (parser + write policy)
+    pr-cognitive-aid    Validate, persist, select, and render a v1 PR
+                        cognitive-aid artifact
     task                Task commands
     dep                 Dependency commands
     show                Show spec or task

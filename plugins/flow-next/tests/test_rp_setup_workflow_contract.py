@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -115,10 +116,10 @@ class RepoPromptSetupWorkflowContractTest(unittest.TestCase):
             )
             stub.chmod(0o755)
             prefix = (
-                f"FLOWCTL={stub!s}\n"
-                f"REPO_ROOT={temp!s}\n"
+                f"FLOWCTL={shlex.quote(stub.as_posix())}\n"
+                f"REPO_ROOT={shlex.quote(temp.as_posix())}\n"
                 "SPEC_ID=fn-1-demo\n"
-                f"CALL_LOG={log!s}\n"
+                f"CALL_LOG={shlex.quote(log.as_posix())}\n"
                 "export CALL_LOG FAIL_CAP FAIL_SETUP\n"
             )
             capped = subprocess.run(
