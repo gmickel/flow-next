@@ -454,6 +454,52 @@ class PersistenceAndCurrentnessTests(unittest.TestCase):
             self.assertIsNone(current["artifact"])
             self.assertEqual(current["latestArtifactId"], "aid-002")
 
+    def test_current_tip_diff_validation_does_not_revalidate_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            first = artifact(canonical_files=2, churn=40)
+            flowctl.write_pr_cognitive_aid(
+                flow_dir,
+                first,
+                spec_id=SPEC_ID,
+                base_sha=BASE_SHA,
+                head_sha=HEAD_SHA,
+                expected_diff_files=artifact_diff_files(first),
+            )
+
+            next_head_sha = "c" * 40
+            second = artifact(canonical_files=1, churn=17)
+            second.update(
+                {
+                    "artifactId": "aid-002",
+                    "generatedAt": "2026-07-30T12:01:00Z",
+                    "supersedesArtifactId": "aid-001",
+                    "headSha": next_head_sha,
+                }
+            )
+            second["sources"][3]["ref"] = f"{BASE_SHA}..{next_head_sha}"
+            second["sources"][4]["ref"] = next_head_sha
+            second["changeWalkthrough"]["proof"][0]["value"] = next_head_sha[:7]
+            second_diff = artifact_diff_files(second)
+            flowctl.write_pr_cognitive_aid(
+                flow_dir,
+                second,
+                spec_id=SPEC_ID,
+                base_sha=BASE_SHA,
+                head_sha=next_head_sha,
+                expected_diff_files=second_diff,
+            )
+
+            current = flowctl.select_current_pr_cognitive_aid(
+                flow_dir,
+                SPEC_ID,
+                base_sha=BASE_SHA,
+                head_sha=next_head_sha,
+                expected_diff_files=second_diff,
+            )
+            self.assertEqual(current["status"], "current")
+            self.assertEqual(current["artifact"]["artifactId"], "aid-002")
+
     def test_invalid_or_unsupported_home_never_projects_current_data(self) -> None:
         cases = {}
         malformed = artifact()

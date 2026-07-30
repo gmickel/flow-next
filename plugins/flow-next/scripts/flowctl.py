@@ -17668,9 +17668,8 @@ def _pr_cognitive_aid_home(flow_dir: Path, spec_id: str) -> Path:
 def _load_pr_cognitive_aid_records(
     flow_dir: Path,
     spec_id: str,
-    *,
-    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
+    """Load and structurally validate every immutable generation."""
     records: list[dict[str, Any]] = []
     rejected: list[str] = []
     home = _pr_cognitive_aid_home(flow_dir, spec_id)
@@ -17689,7 +17688,6 @@ def _load_pr_cognitive_aid_records(
             record = validate_pr_cognitive_aid(
                 raw,
                 expected_spec_id=spec_id,
-                expected_diff_files=expected_diff_files,
             )
             if path.name != f"{record['artifactId']}.json":
                 _pr_aid_fail(
@@ -17773,10 +17771,13 @@ def select_current_pr_cognitive_aid(
             records, rejected = _load_pr_cognitive_aid_records(
                 flow_dir,
                 spec_id,
-                expected_diff_files=expected_diff_files,
             )
             return _select_current_pr_cognitive_aid_records(
-                records, rejected, base_sha=base_sha, head_sha=head_sha
+                records,
+                rejected,
+                base_sha=base_sha,
+                head_sha=head_sha,
+                expected_diff_files=expected_diff_files,
             )
     except CrossProcessLockError as exc:
         return {
@@ -17793,6 +17794,7 @@ def _select_current_pr_cognitive_aid_records(
     *,
     base_sha: str,
     head_sha: str,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
 ) -> dict[str, Any]:
     """Select from one writer-locked home snapshot."""
     if rejected:
@@ -17823,6 +17825,21 @@ def _select_current_pr_cognitive_aid_records(
             "artifact": None,
             "latestArtifactId": latest_artifact_id,
             "rejected": rejected,
+        }
+    try:
+        latest = validate_pr_cognitive_aid(
+            latest,
+            expected_spec_id=latest["specId"],
+            expected_base_sha=base_sha,
+            expected_head_sha=head_sha,
+            expected_diff_files=expected_diff_files,
+        )
+    except PrCognitiveAidValidationError as exc:
+        return {
+            "status": "invalid",
+            "artifact": None,
+            "latestArtifactId": latest_artifact_id,
+            "rejected": [str(exc)],
         }
     return {
         "status": "current",
