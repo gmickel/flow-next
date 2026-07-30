@@ -11,7 +11,7 @@ Complete the local decision state machine: safe asset attachment, resolve, out-o
 ### Exact files
 
 - `plugins/flow-next/scripts/flowctl.py` — add idempotent `attach-asset`, resolve, out-of-scope, abandon, dependent-closure, replacement-D-ID, ledger update, asset validation, and transition-note operations on the task-1 transaction layer.
-- `plugins/flow-next/tests/test_chart_resolution.py` — new state-transition, open-decision asset attachment, prototype proof, resolve-with-graduation, ledger, cascade, safe-evidence, rollback, and idempotency suite.
+- `plugins/flow-next/tests/test_chart_resolution.py` — new state-transition, open-decision asset attachment, prototype proof, resolve-with-sharpening, ledger, cascade, safe-evidence, rollback, and idempotency suite.
 - `plugins/flow-next/tests/test_chart_store.py` and `test_chart_graph_claims.py` — extend only shared transaction/error fixtures if needed.
 
 ### Investigation targets
@@ -20,7 +20,7 @@ Complete the local decision state machine: safe asset attachment, resolve, out-o
 - Reuse the append-only identity discipline from R-IDs/spec history. Do not mutate an old resolved answer or reuse a D-ID.
 - Treat `depends_on` as a premise graph. On supersession, walk its direct and transitive closure. An open dependent stays open, loses its claim, and gets a transition note. A resolved dependent stays immutable and gets a new replacement D-ID that supersedes it.
 - `--keep-dependents` is an explicit judgment override and must be recorded on both the new decision and every affected dependent.
-- `--graduation-file` describes new titled/typed decisions, their wiring, and parked-question keys to remove. Allocate/validate the entire post-resolution graph and commit answer, ledger, new records, wiring, and removals as one journalled transaction.
+- `--sharpen-file` describes new titled/typed decisions, their wiring, and parked-question keys to remove. Allocate/validate the entire post-resolution graph and commit answer, ledger, new records, wiring, and removals as one journalled transaction.
 - Asset inputs are structured safe references with kind/reference/display summary and revision or fingerprint where the source provides one. Accept repository-relative paths, branch/commit refs, and approved HTTPS tracker/evidence URLs; reject ignored or missing paths, symlink escapes, paths outside the repo, redirects used as identity, and credential-bearing URLs.
 - `attach-asset` persists an artefact before resolution while leaving the D-ID open. Identical retries are no-ops; a conflicting reuse is explicit. For `prototype`, `resolve` requires at least one attached safe asset. Human reaction remains a skill-owned attended judgment in task 4, but deterministic plumbing must make artefact-free prototype resolution impossible.
 - An interruption after attachment leaves the asset and open decision resumable. A later session presents the same reference/revision without rebuilding it; attach alone never writes an answer, closes the D-ID, or promotes prototype code into implementation.
@@ -45,14 +45,14 @@ cd plugins/flow-next/tests && python3 -m unittest test_chart_store test_chart_re
 
 ### Non-goals
 
-- No agent decision selection or newly-visible decision inference; the skill owns those judgments and supplies the graduation file.
+- No agent decision selection or newly-visible decision inference; the skill owns those judgments and supplies the sharpen file.
 - No briefing/capture or tracker transport.
 ## Acceptance
 - Legal transitions are enforced exactly; resolved answers and D-IDs are immutable and retries are idempotent only when inputs match.
 - Resolve updates decision record and compact ledger in one recoverable transaction; the map never duplicates the full answer.
 - Supersession preserves the old record, strikes/links its ledger line, walks direct and transitive `depends_on`, clears open claims, and creates replacement D-IDs for resolved dependents.
 - `--keep-dependents` records the override and reports the complete affected set without cascading.
-- Resolve-with-graduation atomically publishes newly visible titled decisions/wiring and removes parked questions; invalid graph or killed process recovers without partial graduation.
+- Resolve-with-sharpening atomically publishes newly visible titled decisions/wiring and removes parked questions; invalid graph or killed process recovers without partial sharpening.
 - Out-of-scope and abandon preserve history and write only their documented projections.
 - Unsafe/secret-bearing answer content is refused for embedding and remains available only through an approved source reference plus safe summary; answer, asset, and ledger tests cover it.
 - Asset attachment is transactional and idempotent; safe references/revisions survive interruption while the decision remains open.

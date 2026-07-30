@@ -30,7 +30,7 @@ Layer decision metadata, parked questions, graph wiring, frontier, compact loadi
 - `add-decision --title "Choose tenant key" --type research ...` returns `fn-N.D1`, title, attendance, and record link.
 - `add-decision --type task` without attendance fails validation; a human approval task is attended while a scripted export task may be unattended.
 - A blocked-only or claimed-only chart is stuck, not complete.
-- Open Questions can be persisted without editing Markdown, then removed by stable key during a later atomic graduation.
+- Open Questions can be persisted without editing Markdown, then removed by stable key during a later atomic sharpening.
 - Over-ceiling initial create fails without any chart/id reservation; an explicitly forced create returns the audit object in its v1 result and persists the same object in the sidecar.
 - Claim conflicts and stale claims have distinguishable v1 error classes/codes.
 

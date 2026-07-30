@@ -5,10 +5,10 @@
 
 Everything from `capture` onwards is heavily exercised and deliberately opinionated. The stage *before* capture is not. Field coaching keeps surfacing the same two-sided gap:
 
-- `/flow-next:prospect` gives you a **ranked idea**. `/flow-next:capture` wants **intent it can write down**. Between them, for an effort that is genuinely large and genuinely foggy, there is nothing. Teams either capture too early (a spec full of `[inferred]` criteria that the interview then has to demolish) or hold a series of unstructured meetings whose output evaporates.
+- `/flow-next:prospect` gives you a **ranked idea**. `/flow-next:capture` wants **intent it can write down**. Between them, for an effort that is genuinely large and genuinely unclear, there is nothing. Teams either capture too early (a spec full of `[inferred]` criteria that the interview then has to demolish) or hold a series of unstructured meetings whose output evaporates.
 - The ideation edge is the most company-specific part of any delivery process, so the answer is not to bolt a fixed discovery ceremony onto the front. It is to ship a **composable** discovery primitive that produces a briefing package, which is exactly what the shipped [prototype-driven-specs](https://flow-next.dev/strategy/prototype-driven-specs/) doctrine tells people to bring their own front door for.
 
-`/flow-next:chart` fills that gap. It takes **one loose idea that is too big for a single capture session and wrapped in unknowns**, and finds the route to it by resolving one decision at a time until the effort can be captured as one or more specs.
+`/flow-next:chart` fills that gap. It takes **one unshaped idea that is too big for a single capture session and wrapped in unknowns**, and finds the route to it by resolving one decision at a time until the effort can be captured as one or more specs.
 
 The unit of a chart is a **decision** -- a question whose resolution settles something, not a slice of a build. This is what separates chart from `plan`: plan decomposes work that is already understood; chart makes an effort understandable enough to be worth planning.
 
@@ -23,10 +23,10 @@ Chart kickoff begins with a bounded **Grounding Snapshot**, following the ordere
 - a candidate Outcome;
 - known facts with safe evidence references and capture revision where available;
 - conflicts, staleness, or assumptions that still require judgment;
-- the smallest visible frontier and parked fog;
+- the smallest visible frontier and parked unknowns;
 - attended/unattended cost.
 
-Grounding is not a research phase and does not search the world before the user can begin. It is a bounded pass over immediately relevant evidence so the agent does not ask questions the repository already answers. Missing, inaccessible, conflicting, or stale evidence remains uncertainty and is read back or parked; it never becomes a fact by inference. Imported background stays under `## Notes` and does not fabricate a resolved D-ID. The agent presents the snapshot and proposed frontier before persistence, and an idea with no consequential fog routes directly to capture or the smaller path.
+Grounding is not a research phase and does not search the world before the user can begin. It is a bounded pass over immediately relevant evidence so the agent does not ask questions the repository already answers. Missing, inaccessible, conflicting, or stale evidence remains uncertainty and is read back or parked; it never becomes a fact by inference. Imported background stays under `## Notes` and does not fabricate a resolved D-ID. The agent presents the snapshot and proposed frontier before persistence, and an idea with no consequential unknowns routes directly to capture or the smaller path.
 
 ### The adaptive discovery loop
 
@@ -45,7 +45,7 @@ The route therefore adapts after every answer rather than pretending the initial
 
 | | `chart` | `plan` |
 |---|---|---|
-| Input | A loose idea; the route is not visible | A spec that is ready |
+| Input | An unshaped idea; the route is not visible | A spec that is ready |
 | Unit | A decision (D-ID) | A task resolving to a diff |
 | Done when | Nothing is left to decide before someone builds | Every task is executed and evidenced |
 | Output | A briefing package, handed to `capture` | Tasks with dependencies and waves |
@@ -57,11 +57,11 @@ The route therefore adapts after every answer rather than pretending the initial
 
 ### Where chart sits -- and when to skip it
 
-The public pipeline must present chart as an **optional discovery on-ramp**, not a newly mandatory stage:
+The public pipeline must present chart as an **optional discovery route**, not a newly mandatory stage:
 
 | Starting state | Smallest sufficient route |
 |---|---|
-| Looking for candidate investments across a domain | `prospect`, then choose `chart` only if the selected candidate remains too foggy to capture |
+| Looking for candidate investments across a domain | `prospect`, then choose `chart` only if the selected candidate remains too unclear to capture |
 | One large idea, unclear boundaries, several consequential unknowns | `chart` -> briefing -> `capture` |
 | One meaningful idea whose intent and boundaries can already be stated | Skip chart; go directly to `capture` or author the spec directly |
 | Existing structured brief with resolved business and technical choices | Skip chart; `capture` the brief, then skip or narrow `interview` when the read-back exposes no material gaps |
@@ -84,7 +84,7 @@ A chart is git-native like a spec, and lives beside them:
 
 Chart ids share the repo prefix and allocator with specs (`<prefix>-<n>`) but carry a distinct kind so `flowctl list` can render them separately. This is one cross-kind allocation domain, not two counters: allocation scans specs and charts across the working tree, linked worktrees, and visible refs under one lock, then reserves the next id with no-clobber creation. `flowctl spec create` and `flowctl chart create` therefore cannot race into the same id.
 
-The map body reuses spec section names wherever the meaning matches, so a reader who knows a spec can read a chart cold. It is an **index, not a store** -- a decision's detail lives in exactly one place, its own record, so the map gists and links but never restates:
+The map body reuses spec section names wherever the meaning matches, so a reader who knows a spec can read a chart cold. The map stays at gist level -- each decision's detail lives only in its own record; the map links to it and never restates it:
 
 ```markdown
 # <chart-id> <Title>
@@ -95,7 +95,7 @@ change this effort is finding its way to. One or two lines. Every session re-anc
 on it before choosing a decision.>
 
 ## Notes
-<Domain. Skills every session should consult. Standing preferences for this effort.>
+<Domain context, working agreements, and pointers this effort's sessions should keep in view.>
 <Known facts carry citations or approved evidence references here. Acceptance-
 criterion source tags do not apply to chart facts. A fact becomes a resolved D-ID
 only when the chart actually asked and settled that question; importing background
@@ -110,7 +110,7 @@ does not fabricate decision history.>
 <!-- in-scope unknowns not yet sharp enough to be a decision record -->
 
 ## Boundaries
-<!-- ruled beyond the Outcome; closed, never graduates -->
+<!-- ruled beyond the Outcome; closed for good, never returns to the frontier -->
 ```
 
 `## Open Questions` and `## Boundaries` carry the same meaning here as in a spec: parked unknowns, and what is deliberately not being done. `## Outcome` is the chart's `Goal & Context`.
@@ -163,7 +163,7 @@ Attended types never resolve without the human's side of the exchange. An agent 
 
 - **Blocking** uses `blocked_by[]`: the named decision must close before this decision is actionable. **Premise dependence** uses `depends_on[]`: this decision's conclusion relies on the named answer and must be re-evaluated if that premise is superseded. The arrays are not aliases, though the same D-ID may appear in both. Missing targets, self-edges, duplicates, and cycles are rejected atomically before either file changes. When a chart is projected to a tracker, only `blocked_by[]` becomes the native blocking relation; `depends_on[]` remains local provenance unless an adapter has a lossless distinct relation.
 - **Frontier** = open, unblocked, unclaimed decisions -- the same word and the same shape `/flow-next:work` already uses for the ready task frontier. `flowctl chart frontier <chart-id>` returns it.
-- **`## Open Questions`** holds deliberate incompleteness: in-scope unknowns you can tell are coming but cannot yet phrase sharply. The test for parked-vs-decision is whether the question can be **stated** precisely now, not whether it can be **answered** now. A sharp but blocked question is a decision record. A vague one parks. Resolving a decision graduates whatever it made specifiable into fresh decision records, and clears that entry from `## Open Questions` so it lives in exactly one place.
+- **`## Open Questions`** holds deliberate incompleteness: in-scope unknowns you can tell are coming but cannot yet phrase sharply. The test for parked-vs-decision is whether the question can be **stated** precisely now, not whether it can be **answered** now. A sharp but blocked question is a decision record. A vague one parks. Resolving a decision sharpens whatever it made specifiable into fresh decision records, and clears that entry from `## Open Questions` so it lives in exactly one place.
 - **`## Boundaries`** is a scoping act, not a route step. A decision exposed as sitting past the Outcome is closed with a one-line reason under `## Boundaries`, and stays out of `## Decisions`, which records the route actually walked.
 
 An empty frontier is not completion by itself. A chart is briefable only when it has no `open` decisions (blocked, unblocked, or claimed) and no parked Open Questions. All-blocked and all-claimed charts report why they are stuck rather than pretending they are done.
@@ -190,11 +190,11 @@ Multi-file chart mutation is crash-recoverable, not merely exception-safe. A wri
 The skill never edits chart Markdown or sidecars directly. Open Questions and post-create graph wiring have deterministic operations:
 
 - `park-question` adds one normalized question with a stable question key; identical retries are no-ops.
-- `remove-question` removes by key and fails if absent unless the identical enclosing graduation transaction already committed.
+- `remove-question` removes by key and fails if absent unless the identical enclosing sharpening transaction already committed.
 - `wire-decision` validates and atomically replaces the target decision's `blocked_by[]` and `depends_on[]`.
-- `resolve --graduation-file <json>` performs one transaction containing the answer, newly visible decision creates/wiring, and parked-question removals. It allocates all new D-IDs, validates the resulting graph, and commits all-or-nothing.
+- `resolve --sharpen-file <json>` performs one transaction containing the answer, newly visible decision creates/wiring, and parked-question removals. It allocates all new D-IDs, validates the resulting graph, and commits all-or-nothing.
 
-This is how chart mode persists initial fog and how work mode enforces “record once, then graduate” without bypassing the store.
+This is how chart mode persists initial unknowns and how work mode enforces “record once, then sharpen” without bypassing the store.
 
 ### Supersession: when a later decision invalidates an earlier one
 
@@ -248,7 +248,7 @@ Estimated 4-5 working sessions with you.
 `/flow-next:chart` in two modes, disambiguated by argument.
 
 ```
-/flow-next:chart "<loose idea>"              # chart mode: name the Outcome, sketch the map
+/flow-next:chart "<unshaped idea>"              # chart mode: name the Outcome, sketch the map
 /flow-next:chart <chart-id>                  # work mode: resolve the next frontier decision
 /flow-next:chart <chart-id> --decision <n>   # work mode, human picks the decision
 /flow-next:chart <stored tracker URL>         # re-enter the projected chart or exact decision
@@ -279,11 +279,11 @@ On every prompt, the host agent infers the intended operation and decision type 
 | `flowctl chart add-decision <id> --title <t> --type <t> [--attendance <a>] --body-file <f> [--blocked-by <D,...>] [--depends-on <D,...>]` | Allocates the next D-ID; attendance is required only for `task` |
 | `flowctl chart attach-asset <id>.<D> --asset-file <f>` | Idempotently records a safe evidence/prototype asset while the decision remains open, allowing a later attended session to resume from the same artefact |
 | `flowctl chart park-question <id> --body-file <f>` | Adds a normalized parked question and returns its stable key |
-| `flowctl chart remove-question <id> --question <Q>` | Removes a parked question idempotently within a committed graduation |
+| `flowctl chart remove-question <id> --question <Q>` | Removes a parked question idempotently within a committed sharpening |
 | `flowctl chart wire-decision <id>.<D> [--blocked-by <D,...>] [--depends-on <D,...>]` | Atomically replaces validated graph edges after two-pass creation |
 | `flowctl chart claim <id>.<D>` | Atomic claim; refuses an already-claimed decision |
 | `flowctl chart release-claim <id>.<D> [--break-stale --reason <r>]` | Owner release or audited stale-claim recovery |
-| `flowctl chart resolve <id>.<D> --answer-file <f> [--assets <json>] [--graduation-file <json>] [--supersedes <D,...>] [--keep-dependents]` | Records the safe answer, closes it, appends the ledger line, and atomically graduates/removes parked questions |
+| `flowctl chart resolve <id>.<D> --answer-file <f> [--assets <json>] [--sharpen-file <json>] [--supersedes <D,...>] [--keep-dependents]` | Records the safe answer, closes it, appends the ledger line, and atomically sharpens/removes parked questions |
 | `flowctl chart out-of-scope <id>.<D> --reason <r>` | Closes without a decision; writes the `## Boundaries` line |
 | `flowctl chart abandon <id> --reason <r>` | Closes an open chart as `abandoned` with its decisions intact and the reason recorded; terminal except for audited `reopen` |
 | `flowctl chart briefing <id> --proposal-file <f> [--force]` | Validates an agent-confirmed split proposal, then emits an immutable briefing version; forced output is draft-only |
@@ -327,12 +327,12 @@ Pasting a projected chart or decision URL is a re-entry convenience. `chart loca
 - **Chart never writes a spec.** It hands a briefing to `capture`. Letting chart author specs directly would let discovery content bypass capture's acceptance-criterion source-tagging and read-back, which is exactly the guarantee the ratchet depends on.
 - **Chart never sets `ready`.** Promotion stays a human act, unchanged.
 - **Charts are not required.** A small, well-understood effort goes straight to `capture`. Reaching for a chart on a two-day feature is the same error as running a full interview on a one-line fix. `/flow-next:chart` on an idea with nothing parked must say so and stop rather than manufacture decisions.
-- **Charts have a size ceiling.** Past `chart.maxDecisions` (default 12) at charting time, chart refuses to persist and proposes either narrowing the Outcome or splitting into two charts, because a 20-decision chart is a quarter of discovery masquerading as one effort. `--force-size --reason` overrides only after prompt-layer warning/read-back and records actor, configured ceiling, proposed count, timestamp, and reason. The ceiling is a charting-time guard only; decisions graduated later from `## Open Questions` may legitimately carry a chart past it.
+- **Charts have a size ceiling.** Past `chart.maxDecisions` (default 12) at charting time, chart refuses to persist and proposes either narrowing the Outcome or splitting into two charts, because a 20-decision chart is a quarter of discovery masquerading as one effort. `--force-size --reason` overrides only after prompt-layer warning/read-back and records actor, configured ceiling, proposed count, timestamp, and reason. The ceiling is a charting-time guard only; decisions sharpened later from `## Open Questions` may legitimately carry a chart past it.
 - **A superseded decision is never deleted.** Its ledger line is struck through, its record stays readable, and it appears in the briefing under its own heading. Reversals are the most valuable thing a chart learns.
 - **Supersession cascades are reported, never silent.** Re-opening dependents clears their claims, so a session holding one must re-claim; the re-open reason names the superseding D-ID.
 - **Abandoned charts.** An effort killed mid-discovery closes `abandoned` with its decisions intact. The decisions were paid for and stay searchable; a future chart may cite them.
 - **Concurrency.** Multiple sessions may work one chart. Claims are atomic and checked before any work; a stale claim (configurable age) can be broken with a recorded note.
-- **`## Open Questions` is not a backlog.** It must not be pre-sliced into decision-shaped entries. One parked entry may graduate into several decisions, or none.
+- **`## Open Questions` is not a backlog.** It must not be pre-sliced into decision-shaped entries. One parked entry may sharpen into several decisions, or none.
 - **No new tracker adapters.** Chart projection rides the existing four (Linear, GitHub, GitLab, Jira) or degrades to local-only.
 - **Tracker URLs never become identity.** URL selection succeeds only through the local projection ledger and reads back the canonical chart/D-ID. Unsupported or stale URLs produce a local recovery path; they never create, relink, or guess a chart.
 - **Unsafe evidence stays referenced, not copied.** If an answer contains an obvious secret or a literal guard-triggering destructive command, chart refuses to embed it. The source remains at a repository-relative evidence path or approved HTTPS reference; the decision stores a safe redacted/escaped summary and link. This applies to answer bodies, assets, normal briefings, and forced drafts. Never silently strip bytes from the cited source.
@@ -350,7 +350,7 @@ Pasting a projected chart or decision URL is a re-entry convenience. `chart loca
 - **R4:** `flowctl chart frontier <id>` returns only open, unblocked, unclaimed decisions, dependency-ordered, and is the sole selection input for work mode.
 - **R5:** Work mode claims a decision atomically before any work; a second session claiming the same decision fails with a non-zero exit and a distinguishable error.
 - **R6:** Resolving a decision writes the answer to its record, closes it, and appends exactly one gist line with a link to `## Decisions`. The map body never restates the answer.
-- **R7:** Resolving a decision graduates any newly-specifiable entry into decision records and removes that entry from `## Open Questions`, so no content exists in both places.
+- **R7:** Resolving a decision sharpens any newly-specifiable entry into decision records and removes that entry from `## Open Questions`, so no content exists in both places.
 - **R8:** An attended decision (`prototype`, `interview`) reached in an unattended run terminates `CHART_VERDICT=NEEDS_HUMAN` without writing an answer.
 - **R9:** Independent unattended decisions may be dispatched as separate parallel work invocations, each claiming exactly one D-ID and emitting its own verdict; no batch invocation aggregates mixed outcomes. Attended decisions remain one per session.
 - **R10:** `flowctl chart out-of-scope` closes a decision, writes a one-line reason under `## Boundaries`, and produces no entry under `## Decisions`.
@@ -374,12 +374,12 @@ Pasting a projected chart or decision URL is a re-entry convenience. `chart loca
 - **R28:** After every resolved, superseded, or out-of-scope decision, work mode recomputes the frontier and proposes the next smallest uncertainty from the new state; it does not execute a frozen up-front sequence. Newly visible decisions are added only after the answer that exposed them.
 - **R29:** Every selected decision fits one agent session. Oversized decisions are split before claim/dispatch, while unattended decisions that are genuinely independent may still fan out in parallel.
 - **R30:** The shipped guide and public when-to-use material contain one consistent smallest-sufficient-workflow matrix covering direct change, prospect, chart, capture/direct spec authoring, interview, plan, work, and the review/ship path, including explicit conditions for skipping or narrowing each pre-build stage.
-- **R31:** Adjacent skill surfaces (`prospect`, `guide`, `capture`, `interview`, `plan`, `pilot`) recognize chart at their handover boundaries: they recommend it only for a single oversized/foggy idea, accept its outputs where appropriate, and do not manufacture a chart for clear or already-ready work.
+- **R31:** Adjacent skill surfaces (`prospect`, `guide`, `capture`, `interview`, `plan`, `pilot`) recognize chart at their handover boundaries: they recommend it only for a single oversized/unclear idea, accept its outputs where appropriate, and do not manufacture a chart for clear or already-ready work.
 - **R32:** Documentation examples demonstrate at least four materially different adaptive journeys -- including a route that skips chart, a research-led chart, a prototype-led reversal with supersession, and a chart that splits into multiple specs -- without presenting any one journey as the mandatory phase order.
 - **R33:** Exact flags remain fully documented for scripting and automation, but onboarding, the chart skill page, and `guide` lead with natural-language prompting. Every flag example has a semantically equivalent conversational example, and the examples are authored in flow-next's own chart vocabulary.
 - **R34:** A docs inventory test or maintained assertion covers every canonical pipeline/when-to-use surface named by R19 and fails when chart is absent from a route where it belongs or presented as mandatory. Generated Codex copies are updated through `sync-codex.sh` twice and remain byte-idempotent.
 - **R35:** Chart creation builds only the first visible frontier, breadth-first from the Outcome; it does not precompute a complete route. Independent unattended evidence routes may be offered for parallel dispatch, while the charting session resolves none of them.
-- **R36:** Map, list, frontier, verdict, and guide output always pair a human-readable decision title with its D-ID and record link; no normal human-facing surface presents an unexplained wall of bare identifiers.
+- **R36:** Map, list, frontier, verdict, and guide output always pair a human-readable decision title with its D-ID and record link; no normal human-facing surface presents an unexplained dump of bare identifiers.
 - **R37:** `flowctl` loads the chart map and compact decision metadata for navigation, then loads full decision answers/assets only for the selected operation or briefing. Status and frontier commands do not flood the host context with every record body.
 - **R38:** Graph mutation rejects missing D-IDs, self-edges, duplicates, and cycles before writing; `blocked_by[]` alone controls readiness while `depends_on[]` alone controls premise-invalidating supersession cascades.
 - **R39:** Stale claims are never silently expired. Owner release and age-gated break-claim operations are audited, distinguish conflict from stale-claim errors, and leave no partial chart/decision mutation after failure.
@@ -387,7 +387,7 @@ Pasting a projected chart or decision URL is a re-entry convenience. `chart loca
 - **R41:** Briefings are immutable/versioned. Capture decline and partial multi-spec capture leave the chart resumable; successful D-ID-to-spec links are idempotent; later supersession marks affected links stale without rewriting history.
 - **R42:** Tracker projection uses the post-fn-141 lifecycle facade and a local provenance ledger. Remote partial success is reconcile-safe and idempotent; unsupported hierarchy/relation capabilities degrade explicitly without making remote state canonical or blocking local chart work.
 - **R43:** Every decision has a title and mechanically validated attendance. Five decision types derive attendance; `task` requires it explicitly. Cost estimates and unattended gates use the stored field.
-- **R44:** Park, remove, wire, and resolve-with-graduation operations are deterministic, idempotent, graph-validating transactions; the skill never edits Open Questions, edges, or graduated decisions directly.
+- **R44:** Park, remove, wire, and resolve-with-sharpening operations are deterministic, idempotent, graph-validating transactions; the skill never edits Open Questions, edges, or sharpened decisions directly.
 - **R45:** The first non-draft briefing sets the chart to done. Later discovery requires an audited reopen that stales prior briefing/spec links. Identical briefing fingerprints reuse a B-ID; changed proposal or chart revision allocates the next B-ID.
 - **R46:** Parallel unattended work is one invocation per D-ID with one claim and one verdict. Scenario tests cover crash/stale-claim recovery and demonstrate that no batch/mixed-result grammar exists.
 - **R47:** Prompt-first behavior is exercised by a structured scenario/eval harness, not static prose checks alone: known facts, ambiguous steering/read-back, reversal, attended gating, adaptive frontier growth, guide routing, skip-chart, and exact terminal verdicts.
@@ -395,7 +395,7 @@ Pasting a projected chart or decision URL is a re-entry convenience. `chart loca
 - **R49:** Chart decision provenance and acceptance-criterion author provenance remain distinct: briefings preserve D-ID/evidence links, capture and interview use the settled four-tag grammar only on criteria each pass newly writes, existing criteria are never retagged, and untagged remains unknown rather than user-grounded.
 - **R50:** Capture handoff is retry-safe and admission-aware: draft/stale briefings fail closed absent explicit risk read-back, shared-context D-IDs do not become duplicated requirements by default, and interruption between spec creation and `chart link-spec` resumes against the existing B-ID/cluster/spec identity without creating a duplicate.
 - **R51:** fn-135 does not define verified/inferred marking for chart facts or decisions. Each overlapping implementation/docs task re-anchors on fn-148's final recorded outcome and consumes only human-approved guidance that has actually landed; NOT CONFIRMED or INCONCLUSIVE produces no chart contract or documentation claim.
-- **R52:** Chart kickoff produces and reads back a bounded Grounding Snapshot from approved in-scope evidence before persistence. Known facts retain safe references/revisions under Notes, conflicting or unavailable evidence remains uncertainty, no imported fact fabricates a D-ID, and no-fog work exits to the smaller route.
+- **R52:** Chart kickoff produces and reads back a bounded Grounding Snapshot from approved in-scope evidence before persistence. Known facts retain safe references/revisions under Notes, conflicting or unavailable evidence remains uncertainty, no imported fact fabricates a D-ID, and work with no consequential unknowns exits to the smaller route.
 - **R53:** A prototype D-ID cannot resolve without a persisted safe artefact reference and the human's recorded reaction. Artefacts attach idempotently while the decision remains open, survive interruption for resumption, and remain evidence rather than silently becoming implementation.
 - **R54:** Optional tracker projection covers the complete chart lifecycle: decision type/attendance/status/blocking/safe evidence on children plus compact counts, latest resolution, frontier, and chart status on the parent. Every transition is local-first, revisioned, idempotent, receipt-backed, reconcile-safe, and explicitly degraded per provider capability.
 - **R55:** A stored supported tracker identifier or chart/decision URL resolves locally to exactly one canonical chart/D-ID before work. Lookup performs no network/title inference, rejects unsafe/unknown/ambiguous/stale/conflicting locators without mutation, and treats resolved/superseded decision URLs as history rather than silently selecting replacement work.
@@ -440,13 +440,13 @@ The timing argument: the ideation edge was left deliberately open, and that was 
 
 **One attended decision per session.** Rejected batching. The context-collapse failure mode is well-evidenced across the orchestration work, and a decision made at the tail of a long session is measurably worse than one made fresh. Unattended types are exempted because they return facts rather than consume judgment.
 
-**Parked unknowns as a first-class section rather than pre-created stub decisions.** Rejected auto-slicing `## Open Questions` into stub records: one parked entry may graduate into several decisions or none, and stubs pollute the frontier with items nobody can act on. The state-it-vs-answer-it test is the cheapest reliable discriminator.
+**Parked unknowns as a first-class section rather than pre-created stub decisions.** Rejected auto-slicing `## Open Questions` into stub records: one parked entry may sharpen into several decisions or none, and stubs pollute the frontier with items nobody can act on. The state-it-vs-answer-it test is the cheapest reliable discriminator.
 
 **Supersession over mutation.** Rejected editing a resolved decision in place, which is the obvious cheap fix and the wrong one: it destroys the record of what was tried, and silently invalidates anything that depended on the old answer. Immutable-plus-supersede matches the completed-spec-is-change-history rule already in the glossary, keeps reversals as evidence for the eventual `## Decision Context`, and makes the dependent cascade explicit rather than a thing a human has to remember. The cost is a heavier resolve path and a struck-through ledger; both are worth it, and a chart with visible reversals is more trustworthy than one that reads as if discovery went in a straight line.
 
 **The spec split is decided at briefing time, not charting time.** Rejected declaring the split up front, because the boundaries worth splitting on are usually discovered *during* discovery, and a split guessed at charting time hardens exactly the guess the chart exists to avoid. Rejected also letting capture infer it silently, since a wrong split is expensive and invisible. Proposing with rationale and requiring confirmation reuses capture's read-back consent pattern, and the shared-context flag keeps one decision from becoming two divergent requirements.
 
-**Cost reported before spent, with a ceiling.** Rejected leaving discovery cost implicit. The dominant cost is attended sessions, and a 20-decision chart is a quarter of discovery wearing one effort's clothes -- the failure mode is discovering that in week three. A charting-time refusal past `chart.maxDecisions` with a proposal to narrow the Outcome or split makes the size decision at the only point where it is cheap. The ceiling deliberately does not apply to later graduations, because a chart legitimately growing from what it learned is the system working.
+**Cost reported before spent, with a ceiling.** Rejected leaving discovery cost implicit. The dominant cost is attended sessions, and a 20-decision chart is a quarter of discovery wearing one effort's clothes -- the failure mode is discovering that in week three. A charting-time refusal past `chart.maxDecisions` with a proposal to narrow the Outcome or split makes the size decision at the only point where it is cheap. The ceiling deliberately does not apply to later sharpening, because a chart legitimately growing from what it learned is the system working.
 
 **Named `chart`, not `map`.** `/flow-next:map` is already the clawpatch feature-map wrapper. `chart` reads as both noun and verb and does not collide.
 
@@ -469,7 +469,7 @@ The timing argument: the ideation edge was left deliberately open, and that was 
 - **Ralph autonomous mode:** unattended evidence routes can advance under a loop, but `NEEDS_HUMAN` makes the product-judgment boundary machine-checkable and terminal.
 - **Cross-platform parity:** the canonical Claude-native skill, generated Codex mirror, and portable-host fallbacks follow the existing roster and sync discipline; no host gets a separate chart implementation.
 - **Self-improving through normal work:** immutable reversals, linked evidence, and briefing-to-Decision-Context provenance preserve what discovery learned instead of discarding the false starts that prevent repetition.
-- **Menu, not rail:** chart strengthens the pipeline only if it remains an optional high-fog route. Guide/docs tests must prevent it from becoming a universal new phase or inflating the quick-start path.
+- **Menu, not rail:** chart strengthens the pipeline only if it remains an optional high-uncertainty route. Guide/docs tests must prevent it from becoming a universal new phase or inflating the quick-start path.
 
 ## Early Proof Point
 <!-- scope: technical -->

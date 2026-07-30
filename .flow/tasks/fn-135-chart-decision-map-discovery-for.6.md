@@ -12,10 +12,10 @@ Ship the missing `/flow-next:guide` router and wire chart into every adjacent sk
 
 - `plugins/flow-next/skills/flow-next-guide/SKILL.md` — new stateless routing skill implementing the approved fn-67 scope plus the chart-aware matrix.
 - `plugins/flow-next/commands/guide.md` — thin command shim.
-- `plugins/flow-next/skills/flow-next-prospect/SKILL.md` and `workflow.md` — selected candidate routes to chart only when still singular, oversized, and foggy.
+- `plugins/flow-next/skills/flow-next-prospect/SKILL.md` and `workflow.md` — selected candidate routes to chart only when still singular, oversized, and unclear.
 - `plugins/flow-next/skills/flow-next-capture/SKILL.md` — clear ideas/briefings route to capture; do not manufacture chart.
 - `plugins/flow-next/skills/flow-next-interview/SKILL.md` — existing-spec clarification stays primary; route backward only when the effort itself is not specifiable.
-- `plugins/flow-next/skills/flow-next-plan/SKILL.md` and `steps.md` — ready spec stays in plan; loose oversized idea routes to chart.
+- `plugins/flow-next/skills/flow-next-plan/SKILL.md` and `steps.md` — ready spec stays in plan; unshaped oversized idea routes to chart.
 - `plugins/flow-next/skills/flow-next-pilot/SKILL.md` and/or `workflow.md` — chart stays outside the build loop; optional unattended driving stops terminally at attended decisions.
 - Existing plugin registries that enumerate public skills/commands.
 - `plugins/flow-next/tests/test_guide_routing.py` — new exact matrix, skip/narrow, prompt-first, and boundary contract suite.
@@ -24,7 +24,7 @@ Ship the missing `/flow-next:guide` router and wire chart into every adjacent sk
 
 ### Routing matrix to encode
 
-- Domain search -> prospect; selected candidate -> chart only if still foggy/oversized.
+- Domain search -> prospect; selected candidate -> chart only if still unclear/oversized.
 - Clear meaningful idea -> capture or direct spec authoring; skip chart.
 - Existing structured brief -> capture; narrow/skip interview only after read-back proves no material gaps.
 - Valid but ambiguous spec -> interview; do not reopen chart unless the effort itself is not specifiable.
@@ -46,7 +46,7 @@ cd plugins/flow-next/tests && python3 -m unittest test_guide_routing test_chart_
 - No fixed prospect -> chart -> capture conveyor.
 ## Acceptance
 - `/flow-next:guide` ships as a stateless prompt-first router and covers direct change, prospect, chart, capture/direct spec, interview, plan, work, review/QA/ship.
-- Each route names its positive signal and explicit safe skip/narrow condition; chart is recommended only for one oversized/foggy idea.
+- Each route names its positive signal and explicit safe skip/narrow condition; chart is recommended only for one oversized/unclear idea.
 - Prospect, capture, interview, plan, and pilot handovers agree with the same matrix and preserve their existing ownership boundaries.
 - Guide output leads with a natural-language next prompt, not flags; one blocking question is used only for materially different routes.
 - Behavioral scenario fixtures prove ambiguous read-back and unambiguous routing into skip-chart, chart, capture, interview, and plan; registries/shims and focused tests pass.

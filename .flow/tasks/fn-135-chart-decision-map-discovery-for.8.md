@@ -44,7 +44,7 @@ Use flow-next chart vocabulary and original approximated examples. State explici
 
 ### Public narrative requirements
 
-- Chart is an optional high-fog on-ramp before capture; preserve the lightweight first-run happy path.
+- Chart is an optional high-uncertainty route before capture; preserve the lightweight first-run happy path.
 - One smallest-sufficient matrix covers direct change, prospect, chart, capture/direct spec, interview, plan, work, review/QA/ship.
 - Prompt-first language leads; exact CLI/flags/config/error/result contracts remain complete in reference pages.
 - Explain attended/unattended automation boundaries and `.flow/` canonical/tracker projection. D-ID/evidence provenance remains separate from acceptance-criterion source tags; chart hands off through capture without implying capture is the only criterion-tag writer.
