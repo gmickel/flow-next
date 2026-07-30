@@ -94,12 +94,29 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                     "Suggestion",
                 ):
                     self.assertIn(marker, output)
-                self.assertRegex(output, r"File:Line[^\n]*path:line[^\n]*`-`")
+                self.assertRegex(output, r"File:Line[^\n]*path:line[^\n]*(?:`-`|\|-)")
                 self.assertRegex(output, r"R-IDs[^\n]*\[R1, R2\][^\n]*\[\]")
                 self.assertRegex(
                     output,
                     r"Classification[^\n]*introduced[^\n]*pre_existing",
                 )
+
+    def test_plan_and_completion_require_parser_compatible_lines(self) -> None:
+        required = (
+            "Severity: P0|P1|P2|P3",
+            "Confidence: 0|25|50|75|100",
+            "Classification: introduced|pre_existing",
+            "File:Line: path:line|-",
+            "R-IDs: [R1, R2]|[]",
+            "Problem:",
+            "Suggestion:",
+        )
+        prompts = self.rendered_prompts()
+        for name in ("plan", "plan_no_tasks", "completion", "completion_no_tasks"):
+            output = _output_format(prompts[name])
+            with self.subTest(prompt=name):
+                for line in required:
+                    self.assertIn(line, output)
 
     def test_flowctl_process_and_llm_invocation_inventory_is_frozen(self) -> None:
         tree = ast.parse(FLOWCTL_PATH.read_text(encoding="utf-8"))
@@ -197,6 +214,30 @@ class ReviewPromptConstraintTest(unittest.TestCase):
             elif isinstance(node, ast.ImportFrom) and node.module:
                 imported.add(node.module)
         self.assertTrue(forbidden.isdisjoint(imported), imported & forbidden)
+
+    def test_constraint_guards_do_not_spawn_processes(self) -> None:
+        paths = (
+            REPO / "optimization/reached-path/plan_review_candidate.py",
+            Path(__file__).resolve(),
+            Path(__file__).with_name("test_review_prompt_template_parity.py"),
+        )
+        for path in paths:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            calls = []
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if (
+                    isinstance(func, ast.Attribute)
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id in {"os", "subprocess"}
+                    and func.attr
+                    in {"run", "Popen", "call", "check_call", "check_output", "system"}
+                ):
+                    calls.append(f"{func.value.id}.{func.attr}")
+            with self.subTest(path=path.relative_to(REPO)):
+                self.assertEqual(calls, [])
 
     def test_prompt_templates_match_generated_codex_mirrors(self) -> None:
         pairs = (

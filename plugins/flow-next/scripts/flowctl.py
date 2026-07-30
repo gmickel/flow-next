@@ -8509,8 +8509,17 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 {plan_quality_block}{protected_artifacts_block}
 ## Output Format
 
-Each issue uses labeled lines: Severity (P0/P1/P2/P3); Confidence (0/25/50/75/100); Classification (introduced/pre_existing); File:Line (`path:line` or `-`); R-IDs (`[R1, R2]` or `[]`); Location; Problem; Suggestion.
-When applicable, add `Protected-path filter: N`.
+Each issue uses these colon-delimited lines:
+```
+Severity: P0|P1|P2|P3
+Confidence: 0|25|50|75|100
+Classification: introduced|pre_existing
+File:Line: path:line|-
+R-IDs: [R1, R2]|[]
+Location: task or section
+Problem: what is wrong
+Suggestion: how to fix
+```
 
 {review_json_tally_block}
 **REQUIRED**: End your response with exactly one verdict tag:
@@ -8620,16 +8629,21 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 
 ## Gaps Found
 
-[Each GAP uses labeled lines: Severity (P0/P1/P2/P3); Confidence (0/25/50/75/100); Classification (introduced/pre_existing); File:Line (`path:line` or `-`); R-IDs (`[R1, R2]` or `[]`); Problem; Suggestion.]
+[Each GAP uses these colon-delimited lines:
+Severity: P0|P1|P2|P3
+Confidence: 0|25|50|75|100
+Classification: introduced|pre_existing
+File:Line: path:line|-
+R-IDs: [R1, R2]|[]
+Problem: what is wrong
+Suggestion: how to fix]
 ```
 
-Put pre_existing gaps under `## Pre-existing issues (not blocking this verdict)`; they do not gate the verdict.
+Put pre_existing gaps under `## Pre-existing issues`; they do not gate the verdict.
 
-After the findings list, emit:
-- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
-- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
-- A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
-- A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
+When applicable, add the Requirements coverage / Unaddressed R-IDs,
+Suppressed findings, Classification counts, and Protected-path filter outputs
+defined above.
 
 ## Verdict
 

@@ -17,8 +17,6 @@ from __future__ import annotations
 import importlib.util
 import hashlib
 import json
-import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -111,40 +109,6 @@ def _without_output_format(text: str) -> str:
     if end == -1:
         raise AssertionError("Output Format has no following section boundary")
     return text[:start] + "## Output Format\n<FORMAT>\n" + text[end:]
-
-
-def _load_pre_change_flowctl() -> Any:
-    """Load the immutable task pre-change source without mutable fixtures."""
-    source = subprocess.run(
-        [
-            "git",
-            "show",
-            f"{PRE_CHANGE_COMMIT}:plugins/flow-next/scripts/flowctl.py",
-        ],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    ).stdout
-    module_name = "flowctl_review_prompt_pre_change"
-    with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / "flowctl.py"
-        path.write_text(source, encoding="utf-8")
-        spec = importlib.util.spec_from_file_location(module_name, path)
-        assert spec and spec.loader
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
-    module.load_impl_review_template = lambda: module.IMPL_REVIEW_PROMPT_FALLBACK
-    module.load_plan_review_template = lambda: module.PLAN_REVIEW_PROMPT_FALLBACK
-    module.load_standalone_review_template = (
-        lambda: module.STANDALONE_REVIEW_PROMPT_FALLBACK
-    )
-    module.load_completion_review_template = (
-        lambda: module.COMPLETION_REVIEW_PROMPT_FALLBACK
-    )
-    return module
 
 
 class TestReviewPromptTemplateParity(unittest.TestCase):
@@ -251,32 +215,28 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
 class TestReviewPromptPreChangeBinding(unittest.TestCase):
     """Every assembled route variant differs only inside Output Format."""
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.pre_change = _load_pre_change_flowctl()
-
-    def rendered_prompts(self, module: Any) -> dict[str, str]:
+    def rendered_prompts(self) -> dict[str, str]:
         prompts = {
-            "impl": module.build_review_prompt(
+            "impl": flowctl.build_review_prompt(
                 "impl", _SPEC, _HINTS, diff_summary=_DSUM, diff_content=_DDIFF
             ),
-            "impl_empty_optional": module.build_review_prompt(
+            "impl_empty_optional": flowctl.build_review_prompt(
                 "impl", _SPEC, "", diff_summary="", diff_content=""
             ),
-            "plan": module.build_review_prompt(
+            "plan": flowctl.build_review_prompt(
                 "plan", _SPEC, _HINTS, task_specs=_TASKS
             ),
-            "plan_no_tasks": module.build_review_prompt("plan", _SPEC, _HINTS),
-            "standalone": module.build_standalone_review_prompt(
+            "plan_no_tasks": flowctl.build_review_prompt("plan", _SPEC, _HINTS),
+            "standalone": flowctl.build_standalone_review_prompt(
                 _BASE, _FOCUS, _DSUM
             ),
-            "standalone_no_focus": module.build_standalone_review_prompt(
+            "standalone_no_focus": flowctl.build_standalone_review_prompt(
                 _BASE, None, _DSUM
             ),
-            "completion": module.build_completion_review_prompt(
+            "completion": flowctl.build_completion_review_prompt(
                 _SPEC, _TASKS, _DSUM, _DDIFF
             ),
-            "completion_no_tasks": module.build_completion_review_prompt(
+            "completion_no_tasks": flowctl.build_completion_review_prompt(
                 _SPEC, "", _DSUM, _DDIFF
             ),
         }
@@ -297,7 +257,7 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
             ),
         }
         for name, spec in corpus.items():
-            prompts[name] = module.build_review_prompt(
+            prompts[name] = flowctl.build_review_prompt(
                 "plan",
                 spec,
                 "Production Plan Review context hints.",
@@ -308,14 +268,16 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
         return prompts
 
     def test_all_route_variants_are_format_only_against_pre_change_commit(self) -> None:
-        current = self.rendered_prompts(flowctl)
-        baseline = self.rendered_prompts(self.pre_change)
-        self.assertEqual(current.keys(), baseline.keys())
-        for name in current:
+        evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
+        current = self.rendered_prompts()
+        self.assertEqual(current.keys(), evidence["prompts"].keys())
+        for name, prompt in current.items():
             with self.subTest(prompt=name):
                 self.assertEqual(
-                    _without_output_format(current[name]),
-                    _without_output_format(baseline[name]),
+                    hashlib.sha256(
+                        _without_output_format(prompt).encode("utf-8")
+                    ).hexdigest(),
+                    evidence["prompts"][name]["baseline_masked_sha256"],
                     f"{name} changed outside ## Output Format relative to {PRE_CHANGE_COMMIT}",
                 )
 
@@ -323,15 +285,10 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
         evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
         self.assertEqual(evidence["baseline"]["commit"], PRE_CHANGE_COMMIT)
         self.assertEqual(evidence["measurement"]["tool"], "tiktoken")
-        current = self.rendered_prompts(flowctl)
-        baseline = self.rendered_prompts(self.pre_change)
+        current = self.rendered_prompts()
         self.assertEqual(evidence["prompts"].keys(), current.keys())
         for name, row in evidence["prompts"].items():
             with self.subTest(prompt=name):
-                self.assertEqual(
-                    row["baseline_sha256"],
-                    hashlib.sha256(baseline[name].encode("utf-8")).hexdigest(),
-                )
                 self.assertEqual(
                     row["candidate_sha256"],
                     hashlib.sha256(current[name].encode("utf-8")).hexdigest(),
