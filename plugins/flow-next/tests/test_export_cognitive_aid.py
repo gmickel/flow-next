@@ -10,7 +10,10 @@ batched base-object process for any number of changed glossary candidates.
 """
 
 import json
+import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -78,6 +81,10 @@ class TestSharedUnifiedDiff(unittest.TestCase):
         unified_calls = [c for c in calls if "--unified=0" in c]
         self.assertEqual(len(calls), 4)
         self.assertEqual(len(unified_calls), 1)
+        for call in calls[1:]:
+            self.assertIn("-C", call)
+            self.assertIn("--find-copies-harder", call)
+        self.assertIn("--diff-filter=AMRDC", calls[1])
         self.assertEqual(parse_mock.call_count, 1)
         self.assertEqual(summary["files_changed"], 2)
         self.assertEqual(
@@ -85,6 +92,54 @@ class TestSharedUnifiedDiff(unittest.TestCase):
             [{"file": "pkg/index.ts", "added": ["ready"], "removed": []}],
         )
         self.assertEqual(refs, [])  # same-path signature re-add is not removal
+
+    def test_unchanged_source_copy_materializes_as_copy(self) -> None:
+        env = dict(os.environ)
+        env.update(
+            {
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@t.co",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@t.co",
+            }
+        )
+
+        def git(repo: Path, *args: str) -> str:
+            return subprocess.run(
+                ["git", *args],
+                cwd=repo,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            git(repo, "init", "-q")
+            source = repo / "src" / "original.txt"
+            source.parent.mkdir()
+            source.write_text("alpha\nbeta\n", encoding="utf-8")
+            git(repo, "add", "src/original.txt")
+            git(repo, "commit", "-qm", "base")
+            base_sha = git(repo, "rev-parse", "HEAD")
+
+            (repo / "src" / "copied.txt").write_bytes(source.read_bytes())
+            git(repo, "add", "src/copied.txt")
+            git(repo, "commit", "-qm", "copy")
+
+            materialized = flowctl._export_materialize_diff(base_sha, repo)
+            summary = flowctl._export_diff_summary(
+                "HEAD^",
+                base_sha,
+                repo,
+                materialized=materialized,
+            )
+
+        copied = summary["files"][0]
+        self.assertEqual(copied["path"], "src/copied.txt")
+        self.assertEqual(copied["status"], "C")
+        self.assertEqual((copied["additions"], copied["deletions"]), (0, 0))
 
     def test_add_delete_rename_and_readd_blocks_are_byte_stable(self) -> None:
         diff = (

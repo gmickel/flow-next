@@ -1325,7 +1325,7 @@ The skill itself is markdown — no unit-test surface. Phase 0 validation is exe
 - Branch with a CLOSED or MERGED PR (no OPEN) → continues cleanly. **This is the load-bearing check** — fn-42 spike validated empirically that bare `gh pr view --json url` rc=0 for closed/merged PRs would false-positive without the `select(.state == "OPEN")` filter.
 - Branch with no PR history at all (`gh pr view` exits 1) → continues cleanly.
 - Ralph mode (`FLOW_RALPH=1`) → no `AskUserQuestion` calls in Phase 0; deterministic exit codes on missing context.
-- `artifacts.html.enabled` unset/false → Phase 1.5 is a single config read; no reference load, no `.flow/artifacts/` write, no commit, no render-lens body line, byte-identical body vs pre-feature.
+- `artifacts.html.enabled` unset/false → Phase 1.5b performs one config read; no HTML-reference load, no `pr.html` write or commit, and no render-lens body line. Phase 1.5 still persists the structured PR cognitive-aid and renders its supported current walkthrough into the body.
 - `artifacts.html.enabled` true + supported current v1 input → `.flow/artifacts/<spec-id>/pr.html` written with the exact semantic carrier, self-check grep prints `OK: self-contained`, no artifact commit advances `HEAD`, and the body carries local-open guidance.
 - `artifacts.html.enabled` true + labeled legacy fallback + tracked artifact → exactly one `chore(flow): pr artifact <spec-id>` commit (artifact file only — `git show --stat` lists one path) before `gh pr create`, and the blob link resolves on the remote branch.
 - `artifacts.html.enabled` true + `--dry-run` → no artifact written, no commit, no render-lens line in the stdout body.

@@ -20147,18 +20147,31 @@ def _export_materialize_diff(
         [
             "diff",
             "--numstat",
-            "-M",
-            "--diff-filter=AMRD",
+            "-C",
+            "--find-copies-harder",
+            "--diff-filter=AMRDC",
             f"{merge_base_sha}..HEAD",
         ],
         cwd=repo_root,
     )
     name_status_rc, name_status, _ = _export_run_git(
-        ["diff", "--name-status", "-M", f"{merge_base_sha}..HEAD"],
+        [
+            "diff",
+            "--name-status",
+            "-C",
+            "--find-copies-harder",
+            f"{merge_base_sha}..HEAD",
+        ],
         cwd=repo_root,
     )
     unified_rc, unified, _ = _export_run_git(
-        ["diff", "-M", "--unified=0", f"{merge_base_sha}..HEAD"],
+        [
+            "diff",
+            "-C",
+            "--find-copies-harder",
+            "--unified=0",
+            f"{merge_base_sha}..HEAD",
+        ],
         cwd=repo_root,
     )
     return _ExportDiffMaterialization(
@@ -20363,9 +20376,8 @@ def _export_diff_summary(
 ) -> dict[str, Any]:
     """Build the diff_summary block from git diff output.
 
-    Uses `git diff --numstat -M --diff-filter=AMRD <merge_base>..HEAD` for
-    per-file additions/deletions, `--name-status -M` for status (A/M/R/D),
-    and a unified-diff scan for added export lines.
+    Uses copy-aware Git diff materialization for per-file additions/deletions,
+    status (A/M/R/C/D), and a unified-diff scan for added export lines.
     """
     diff = materialized or _export_materialize_diff(merge_base_sha, repo_root)
     head_sha = diff.head_sha
@@ -20409,7 +20421,8 @@ def _export_diff_summary(
                 "deletions": dels,
             }
 
-    # name-status: A/M/D/R. Renames appear as `R<score>\told\tnew`.
+    # name-status: A/M/D/R/C. Renames and copies appear as
+    # `<status><score>\told\tnew`.
     file_status: dict[str, str] = {}
     if diff.name_status_rc == 0:
         for line in diff.name_status.splitlines():

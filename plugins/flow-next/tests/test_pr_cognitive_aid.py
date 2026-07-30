@@ -822,6 +822,25 @@ class MakePrIntegrationTests(unittest.TestCase):
         self.assertIn("sync check", finalize)
         self.assertIn("Retro-fire", finalize)
 
+    def test_html_off_only_disables_the_optional_html_lens(self) -> None:
+        workflow = (
+            REPO_ROOT
+            / "plugins/flow-next/skills/flow-next-make-pr/workflow.md"
+        ).read_text(encoding="utf-8")
+        html_off = next(
+            line
+            for line in workflow.splitlines()
+            if "`artifacts.html.enabled` unset/false" in line
+        )
+        self.assertIn("Phase 1.5b performs one config read", html_off)
+        self.assertIn("no `pr.html` write or commit", html_off)
+        self.assertIn(
+            "Phase 1.5 still persists the structured PR cognitive-aid",
+            html_off,
+        )
+        self.assertNotIn("no `.flow/artifacts/` write", html_off)
+        self.assertNotIn("byte-identical body vs pre-feature", html_off)
+
 
 if __name__ == "__main__":
     unittest.main()
