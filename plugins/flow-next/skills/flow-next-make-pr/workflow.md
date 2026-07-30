@@ -344,12 +344,13 @@ persists, selects by merge-base/head, and renders. It adds no model/network
 call.
 
 When a supported current artifact renders, insert its contiguous
-`## The change, top to bottom` section after Verification and before Critical
-changes. Its thesis, proof, R-ID/task links, verification claims, order, and
-file membership are authoritative; the legacy fields are fallback-only for
-those claims. Keep Critical changes, How to review, and the risk-ranked Review
-plan separate. Artifact rejection prints one note and preserves the existing
-compact body without mixing stale or rejected fields.
+`## The change, top to bottom` section before Critical changes. Its thesis,
+proof, R-ID/task links, verification claims, order, and file membership are
+authoritative: suppress the legacy R-ID coverage and Verification sections and
+derive the summary coverage ratio from the artifact. The legacy fields are
+fallback-only for those claims. Keep Critical changes, How to review, and the
+risk-ranked Review plan separate. Artifact rejection prints one note and
+preserves the existing compact body without mixing stale or rejected fields.
 
 Done when:
 
@@ -372,9 +373,9 @@ The body sections appear in this exact order. Skip any section whose source cont
 1. **Title** + summary block (spec id link, branch / base, task counts, R-ID coverage ratio).
 2. **TL;DR** — 3-5 plain-language bullets covering the headline change.
 3. **Not in this PR (by design)** — the spec's scope boundaries (§2.2b), so scope objections don't become review threads. Only when `spec.spec_sections.boundaries[]` is non-empty.
-4. **R-ID coverage** — table mapping every spec R-ID to satisfying task(s) + evidence commit(s).
-5. **Verification** — per-task test evidence + the honest "no test changed alongside X" gap fact (§2.3b), so the reviewer sees what was actually checked. Only when any `tasks[].evidence.tests[]` is non-empty.
-6. **The change, top to bottom** — the contiguous deterministic v1 artifact rendering from Phase 1.4 when supported/current; omitted on labeled legacy fallback.
+4. **R-ID coverage** — table mapping every spec R-ID to satisfying task(s) + evidence commit(s). On supported/current cognitive-aid output, omit this legacy section; the artifact renders its grounded R-ID/task links.
+5. **Verification** — per-task test evidence + the honest "no test changed alongside X" gap fact (§2.3b), so the reviewer sees what was actually checked. Only when any `tasks[].evidence.tests[]` is non-empty. On supported/current cognitive-aid output, omit this legacy section; the artifact renders its proof and provenance.
+6. **The change, top to bottom** — the contiguous deterministic v1 artifact rendering from Phase 1.5b when supported/current; omitted on labeled legacy fallback.
 7. **Critical changes** — ≤7 bullets, prioritized by churn / cross-module / public-interface / security-sensitive / behavior-visible.
 8. **How to review this PR** — the trust-calibration coaching block (§2.4c): what the pipeline verified mechanically (tests / gates / R-ID coverage / cross-model review) vs what the human must judge, so the reviewer trusts the buckets below. Always rendered (like Critical changes).
 9. **Review plan** — the risk-ranked, budgeted read-order (§2.4d): Must review (~X%) / Spot-check / Safe to skim, so the reviewer spends the next 30 minutes on the ~20-30% that carries real judgment risk and skips the rest with confidence. Only when `diff_summary.files[]` has ≥2 files.

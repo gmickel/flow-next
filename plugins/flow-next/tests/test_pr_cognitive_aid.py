@@ -5,6 +5,8 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 
@@ -177,6 +179,42 @@ class ValidationTests(unittest.TestCase):
                 ):
                     flowctl.validate_pr_cognitive_aid(value)
 
+    def test_source_kinds_are_bound_to_artifact_identity(self) -> None:
+        mutations = []
+        wrong_spec = artifact()
+        wrong_spec["sources"][0]["ref"] = "fn-999-other"
+        mutations.append((wrong_spec, "artifact.specId"))
+        wrong_task = artifact()
+        wrong_task["sources"][1]["ref"] = "fn-999-other.1"
+        mutations.append((wrong_task, "task of artifact.specId"))
+        wrong_rid = artifact()
+        wrong_rid["sources"][2]["ref"] = "requirement-six"
+        mutations.append((wrong_rid, "canonical R-ID"))
+        wrong_diff = artifact()
+        wrong_diff["sources"][3]["ref"] = f"{BASE_SHA}..{'c' * 40}"
+        mutations.append((wrong_diff, "baseSha..headSha"))
+        wrong_commit = artifact()
+        wrong_commit["sources"][4]["ref"] = "not-a-sha"
+        mutations.append((wrong_commit, "Git SHA"))
+        missing_diff = artifact()
+        missing_diff["changeWalkthrough"]["groups"][2]["files"][0][
+            "sourceRefs"
+        ] = ["task", "rid"]
+        mutations.append((missing_diff, "diff_metadata"))
+        for value, message in mutations:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(
+                    flowctl.PrCognitiveAidValidationError, message
+                ):
+                    flowctl.validate_pr_cognitive_aid(value)
+
+    def test_raw_input_is_bounded_before_json_decode(self) -> None:
+        with tempfile.NamedTemporaryFile() as handle:
+            handle.write(b" " * (flowctl.PR_COGNITIVE_AID_MAX_BYTES + 1))
+            handle.flush()
+            with redirect_stdout(StringIO()), self.assertRaises(SystemExit):
+                flowctl._pr_aid_read_input(handle.name)
+
     def test_rejects_bounds_order_cardinality_and_oversize_without_truncation(self) -> None:
         no_step = artifact()
         no_step["changeWalkthrough"]["groups"] = [
@@ -341,6 +379,7 @@ class PersistenceAndCurrentnessTests(unittest.TestCase):
                     "headSha": "c" * 40,
                 }
             )
+            second["sources"][3]["ref"] = f"{BASE_SHA}..{'c' * 40}"
             flowctl.write_pr_cognitive_aid(
                 flow_dir,
                 second,
@@ -354,6 +393,71 @@ class PersistenceAndCurrentnessTests(unittest.TestCase):
             self.assertEqual(current["status"], "stale")
             self.assertIsNone(current["artifact"])
             self.assertEqual(current["latestArtifactId"], "aid-002")
+
+    def test_invalid_or_unsupported_home_never_projects_current_data(self) -> None:
+        cases = {}
+        malformed = artifact()
+        malformed["artifactId"] = "aid-002"
+        malformed["supersedesArtifactId"] = "missing"
+        cases["dangling"] = (malformed, "invalid")
+
+        unsupported = artifact()
+        unsupported["schemaVersion"] = 2
+        unsupported["artifactId"] = "aid-002"
+        unsupported["supersedesArtifactId"] = "aid-001"
+        cases["unsupported"] = (unsupported, "unsupported")
+
+        for name, (second, expected_status) in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                flow_dir = Path(tmp) / ".flow"
+                home = flowctl._pr_cognitive_aid_home(flow_dir, SPEC_ID)
+                home.mkdir(parents=True)
+                first = artifact()
+                (home / "aid-001.json").write_text(
+                    flowctl._pr_aid_serialized_text(first), encoding="utf-8"
+                )
+                (home / "aid-002.json").write_text(
+                    flowctl._pr_aid_serialized_text(second), encoding="utf-8"
+                )
+                current = flowctl.select_current_pr_cognitive_aid(
+                    flow_dir, SPEC_ID, base_sha=BASE_SHA, head_sha=HEAD_SHA
+                )
+                self.assertEqual(current["status"], expected_status)
+                self.assertIsNone(current["artifact"])
+
+    def test_chain_forks_cycles_and_filename_mismatches_are_invalid(self) -> None:
+        def write(home: Path, name: str, value: dict) -> None:
+            (home / name).write_text(
+                flowctl._pr_aid_serialized_text(value), encoding="utf-8"
+            )
+
+        for case in ("fork", "cycle", "filename"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                flow_dir = Path(tmp) / ".flow"
+                home = flowctl._pr_cognitive_aid_home(flow_dir, SPEC_ID)
+                home.mkdir(parents=True)
+                first = artifact()
+                if case == "filename":
+                    write(home, "wrong-name.json", first)
+                elif case == "fork":
+                    write(home, "aid-001.json", first)
+                    for suffix in ("002", "003"):
+                        child = artifact()
+                        child["artifactId"] = f"aid-{suffix}"
+                        child["supersedesArtifactId"] = "aid-001"
+                        write(home, f"aid-{suffix}.json", child)
+                else:
+                    first["supersedesArtifactId"] = "aid-002"
+                    second = artifact()
+                    second["artifactId"] = "aid-002"
+                    second["supersedesArtifactId"] = "aid-001"
+                    write(home, "aid-001.json", first)
+                    write(home, "aid-002.json", second)
+                result = flowctl.select_current_pr_cognitive_aid(
+                    flow_dir, SPEC_ID, base_sha=BASE_SHA, head_sha=HEAD_SHA
+                )
+                self.assertEqual(result["status"], "invalid")
+                self.assertIsNone(result["artifact"])
 
 
 class MarkdownAndBudgetTests(unittest.TestCase):
@@ -391,6 +495,24 @@ class MarkdownAndBudgetTests(unittest.TestCase):
         self.assertIn("Tracker facade", rendered)
         self.assertIn("Verification and ship", rendered)
         self.assertNotIn("@@", rendered)
+
+    def test_badges_order_provenance_metrics_and_plain_text_are_deterministic(self) -> None:
+        value = artifact(canonical_files=6, churn=1)
+        files = value["changeWalkthrough"]["groups"][2]["files"]
+        files[0]["changeType"] = "added"
+        files[0]["summary"] = "</summary>`[misleading](https://bad.test)"
+        files.insert(0, files.pop(-2))
+        rendered = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertIn("| `NEW` |", rendered)
+        self.assertIn("Human-review lines", rendered)
+        self.assertIn("Canonical files", rendered)
+        self.assertIn("Total files", rendered)
+        self.assertIn("source:diff", rendered)
+        self.assertIn("R-ID:R6", rendered)
+        self.assertIn("task:fn-136-cognitive-aid.1", rendered)
+        self.assertIn("&lt;/summary&gt;", rendered)
+        self.assertIn("&#96;", rendered)
+        self.assertLess(rendered.index("generated.md"), rendered.index("change_0.py"))
 
     def test_validation_plus_render_p95_under_50_ms_for_30_warm_runs(self) -> None:
         maximum_normal = artifact(canonical_files=120, churn=3)

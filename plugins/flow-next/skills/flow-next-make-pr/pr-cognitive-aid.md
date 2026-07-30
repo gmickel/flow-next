@@ -1,13 +1,26 @@
 # PR cognitive-aid artifact
 
-Run this phase after `export-cognitive-aid` succeeds and before HTML generation or
-final PR-body composition. The existing host agent owns every judgment:
+Run this phase after `export-cognitive-aid` and the optional HTML lens succeed,
+and before final PR-body composition. The existing host agent owns every judgment:
 thesis, logical groups, summaries, order, and source attribution. This phase
 adds no model call. `flowctl` only validates, persists, selects, and renders.
 
 ## 1. Resolve or compose
 
-Use the code-under-review SHAs captured in pre-flight:
+The HTML lens may commit its artifact. Refresh the final code-under-review
+identity before selecting or composing:
+
+```bash
+FINAL_HEAD_SHA=$(git rev-parse HEAD)
+if [[ "$FINAL_HEAD_SHA" != "$HEAD_SHA" ]]; then
+  HEAD_SHA="$FINAL_HEAD_SHA"
+  MERGE_BASE=$(git merge-base "$BASE_REF" "$HEAD_SHA")
+  EXPORT_PAYLOAD=$("$FLOWCTL" spec export-cognitive-aid "$SPEC_ID" \
+    --base "$BASE_REF" --json)
+fi
+```
+
+Use these refreshed SHAs:
 
 ```bash
 CURRENT_AID=$("$FLOWCTL" pr-cognitive-aid current "$SPEC_ID" \
@@ -32,10 +45,14 @@ repository. The object follows `pr_cognitive_aid` schema version 1:
 - `changeWalkthrough.thesis`, grounded `proof[]`, and ordered `groups[]`.
   Logical order: optional `problem`, optional `principle`, 1-7 `step`, optional
   `kept`, optional `verify`. Never invent an optional group.
+- Source refs are bound, not labels: `spec` equals `specId`; `task` belongs to
+  that spec; `rid` uses canonical R-ID syntax; `commit` is a SHA; and
+  `diff_metadata` equals `$MERGE_BASE..$HEAD_SHA`.
 - Each proof/group/file semantic claim carries non-empty `sourceRefs`.
   Group/file `rIds` and `taskIds` also carry a same-record source reference to
   the matching `rid` or `task` source. File claims do not inherit group claims.
-- Each file comes only from `diff_summary.files[]`; keep its upstream group.
+- Each file comes only from `diff_summary.files[]`, cites the bound
+  `diff_metadata` source, and keeps its upstream group and array order.
   `changeType` is Git state (`added|modified|deleted|renamed|copied`);
   `attentionClass` is review attention
   (`canonical|generated|mechanical`). Never collapse these dimensions.
@@ -95,12 +112,17 @@ The rendered section never replaces or absorbs the separate risk-ranked
 
 ## 4. One truth, tracker boundary unchanged
 
+Immediately before `gh pr create`, assert `git rev-parse HEAD` still equals the
+artifact `headSha`; on mismatch, treat it as stale and use the labeled fallback.
+
 When `PR_AID_MARKDOWN` is non-empty, the current v1 object is authoritative for
 the thesis, proof metrics, R-ID/task links, verification claims, walkthrough
-order, and file membership. Existing fields are fallback-only; never merge
-stale/legacy values into those claims. Other established sections remain:
-boundaries, Critical changes, How to review, Review plan, decisions, memory,
-glossary/strategy, open items, QA, and the footer.
+order, and file membership. Suppress the legacy R-ID coverage and Verification
+sections; their content is rendered from the artifact inside the walkthrough.
+Derive the summary block's coverage ratio from the artifact links. Existing
+fields are fallback-only; never merge stale/legacy values into those claims.
+Other established sections remain: boundaries, Critical changes, How to review,
+Review plan, decisions, memory, glossary/strategy, open items, QA, and footer.
 
 This phase ends before PR creation. Do not move or alter the post-creation
 `makePr` tracker facade in `create-and-finalize.md`: `$PR_URL` must exist first;

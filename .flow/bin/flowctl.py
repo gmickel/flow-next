@@ -9,6 +9,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 import argparse
 import errno
 import hashlib
+import html
 import io
 import json
 import math
@@ -17148,6 +17149,7 @@ PR_COGNITIVE_AID_ATTENTION_CLASSES = frozenset(
 )
 _PR_COGNITIVE_AID_SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
 _PR_COGNITIVE_AID_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")
+_PR_COGNITIVE_AID_RID_RE = re.compile(r"^R[1-9][0-9]*$")
 
 
 class PrCognitiveAidValidationError(ValueError):
@@ -17260,6 +17262,11 @@ def _pr_aid_nonnegative_int(value: Any, path: str) -> int:
     return value
 
 
+def _pr_aid_serialized_text(artifact: Any) -> str:
+    """Return the one canonical representation used for limits and persistence."""
+    return json.dumps(artifact, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
 def validate_pr_cognitive_aid(
     artifact: Any,
     *,
@@ -17284,9 +17291,7 @@ def validate_pr_cognitive_aid(
         },
         optional={"supersedesArtifactId"},
     )
-    encoded = json.dumps(
-        artifact, ensure_ascii=False, separators=(",", ":"), sort_keys=True
-    ).encode("utf-8")
+    encoded = _pr_aid_serialized_text(artifact).encode("utf-8")
     if len(encoded) > PR_COGNITIVE_AID_MAX_BYTES:
         _pr_aid_fail(
             "pr_cognitive_aid",
@@ -17340,7 +17345,24 @@ def validate_pr_cognitive_aid(
         kind = _pr_aid_string(source.get("kind"), f"{source_path}.kind", maximum=160)
         if kind not in PR_COGNITIVE_AID_SOURCE_KINDS:
             _pr_aid_fail(f"{source_path}.kind", "unsupported source kind")
-        _pr_aid_string(source.get("ref"), f"{source_path}.ref", maximum=1024)
+        source_ref = _pr_aid_string(
+            source.get("ref"), f"{source_path}.ref", maximum=1024
+        )
+        if kind == "spec" and source_ref != spec_id:
+            _pr_aid_fail(f"{source_path}.ref", "must identify artifact.specId")
+        if kind == "task":
+            if not is_task_id(source_ref) or spec_id_from_task(source_ref) != spec_id:
+                _pr_aid_fail(
+                    f"{source_path}.ref", "must identify a task of artifact.specId"
+                )
+        if kind == "rid" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(source_ref):
+            _pr_aid_fail(f"{source_path}.ref", "must be a canonical R-ID")
+        if kind == "diff_metadata" and source_ref != f"{base_sha}..{head_sha}":
+            _pr_aid_fail(
+                f"{source_path}.ref", "must identify artifact baseSha..headSha"
+            )
+        if kind == "commit":
+            _pr_aid_sha(source_ref, f"{source_path}.ref")
         digest = source.get("digest")
         if digest is not None:
             digest = _pr_aid_string(digest, f"{source_path}.digest", maximum=160)
@@ -17382,6 +17404,17 @@ def validate_pr_cognitive_aid(
         task_ids = _pr_aid_string_array(
             record.get("taskIds", []), f"{record_path}.taskIds"
         )
+        for r_index, r_id in enumerate(r_ids):
+            if not _PR_COGNITIVE_AID_RID_RE.fullmatch(r_id):
+                _pr_aid_fail(
+                    f"{record_path}.rIds[{r_index}]", "must be a canonical R-ID"
+                )
+        for task_index, task_id in enumerate(task_ids):
+            if not is_task_id(task_id) or spec_id_from_task(task_id) != spec_id:
+                _pr_aid_fail(
+                    f"{record_path}.taskIds[{task_index}]",
+                    "must identify a task of artifact.specId",
+                )
         referenced_sources = [source_by_id[source_id] for source_id in refs]
         for r_id in r_ids:
             if not any(
@@ -17512,7 +17545,17 @@ def validate_pr_cognitive_aid(
             file_summary = _pr_aid_string(
                 file_record.get("summary"), f"{file_path}.summary", maximum=500
             )
-            validate_refs(file_record, file_path, require_grounding=bool(file_summary))
+            file_refs, _, _ = validate_refs(
+                file_record, file_path, require_grounding=bool(file_summary)
+            )
+            if not any(
+                source_by_id[source_id]["kind"] == "diff_metadata"
+                for source_id in file_refs
+            ):
+                _pr_aid_fail(
+                    f"{file_path}.sourceRefs",
+                    "must cite the artifact diff_metadata source",
+                )
             additions = file_record.get("additions")
             deletions = file_record.get("deletions")
             if additions is not None:
@@ -17569,10 +17612,60 @@ def _load_pr_cognitive_aid_records(
     for path in sorted(home.glob("*.json")):
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
-            records.append(validate_pr_cognitive_aid(raw, expected_spec_id=spec_id))
+            record = validate_pr_cognitive_aid(raw, expected_spec_id=spec_id)
+            if path.name != f"{record['artifactId']}.json":
+                _pr_aid_fail(
+                    path.name, "filename must equal <artifactId>.json"
+                )
+            records.append(record)
         except (OSError, json.JSONDecodeError, PrCognitiveAidValidationError) as exc:
             rejected.append(f"{path.name}: {exc}")
     return records, rejected
+
+
+def _pr_aid_chain_tip(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Validate one linear, connected generation chain and return its sole tip."""
+    if not records:
+        return None
+    by_id: dict[str, dict[str, Any]] = {}
+    for record in records:
+        artifact_id = record["artifactId"]
+        if artifact_id in by_id:
+            _pr_aid_fail("artifact home", f"duplicate artifactId {artifact_id}")
+        by_id[artifact_id] = record
+    genesis = [
+        record for record in records if not record.get("supersedesArtifactId")
+    ]
+    if len(genesis) != 1:
+        _pr_aid_fail("artifact home", "must contain exactly one genesis")
+    children: dict[str, list[str]] = {artifact_id: [] for artifact_id in by_id}
+    for record in records:
+        parent = record.get("supersedesArtifactId")
+        if not parent:
+            continue
+        if parent not in by_id:
+            _pr_aid_fail(
+                "artifact home", f"dangling supersedesArtifactId {parent}"
+            )
+        children[parent].append(record["artifactId"])
+        if len(children[parent]) > 1:
+            _pr_aid_fail("artifact home", f"fork at artifactId {parent}")
+    visited: set[str] = set()
+    cursor = genesis[0]["artifactId"]
+    while True:
+        if cursor in visited:
+            _pr_aid_fail("artifact home", "supersedes cycle")
+        visited.add(cursor)
+        next_ids = children[cursor]
+        if not next_ids:
+            break
+        cursor = next_ids[0]
+    if len(visited) != len(records):
+        _pr_aid_fail("artifact home", "contains a cycle or disconnected generation")
+    tips = [artifact_id for artifact_id, next_ids in children.items() if not next_ids]
+    if len(tips) != 1 or tips[0] != cursor:
+        _pr_aid_fail("artifact home", "must contain exactly one chain tip")
+    return by_id[cursor]
 
 
 def select_current_pr_cognitive_aid(
@@ -17580,17 +17673,24 @@ def select_current_pr_cognitive_aid(
 ) -> dict[str, Any]:
     """Project the matching chain tip; never merge stale or legacy fields."""
     records, rejected = _load_pr_cognitive_aid_records(flow_dir, spec_id)
-    all_superseded_ids = {
-        record.get("supersedesArtifactId")
-        for record in records
-        if record.get("supersedesArtifactId")
-    }
-    all_tips = [
-        record for record in records if record["artifactId"] not in all_superseded_ids
-    ]
-    all_tips.sort(key=lambda item: (item["generatedAt"], item["artifactId"]))
-    latest_artifact_id = all_tips[-1]["artifactId"] if all_tips else None
-    latest = all_tips[-1] if all_tips else None
+    if rejected:
+        unsupported = all("unsupported schema version" in item for item in rejected)
+        return {
+            "status": "unsupported" if unsupported else "invalid",
+            "artifact": None,
+            "latestArtifactId": None,
+            "rejected": rejected,
+        }
+    try:
+        latest = _pr_aid_chain_tip(records)
+    except PrCognitiveAidValidationError as exc:
+        return {
+            "status": "invalid",
+            "artifact": None,
+            "latestArtifactId": None,
+            "rejected": [str(exc)],
+        }
+    latest_artifact_id = latest["artifactId"] if latest else None
     if (
         latest is None
         or latest["baseSha"] != base_sha
@@ -17634,6 +17734,7 @@ def write_pr_cognitive_aid(
                 _pr_aid_fail(
                     "artifact home", "contains invalid or unsupported generations"
                 )
+            existing_tip = _pr_aid_chain_tip(existing)
             by_id = {record["artifactId"]: record for record in existing}
             if artifact["artifactId"] in by_id or target.exists():
                 _pr_aid_fail("artifactId", f"generation already exists at {target}")
@@ -17653,24 +17754,18 @@ def write_pr_cognitive_aid(
                     "does not identify an existing generation",
                 )
             if supersedes:
-                referenced = {
-                    record.get("supersedesArtifactId")
-                    for record in existing
-                    if record.get("supersedesArtifactId")
-                }
-                existing_tips = sorted(set(by_id) - referenced)
-                if supersedes not in existing_tips:
+                if existing_tip is None or supersedes != existing_tip["artifactId"]:
                     _pr_aid_fail(
                         "supersedesArtifactId",
                         "must extend an existing chain tip",
                     )
-            atomic_create(
-                target,
-                json.dumps(
-                    artifact, indent=2, sort_keys=True, ensure_ascii=False
+            serialized = _pr_aid_serialized_text(artifact)
+            if len(serialized.encode("utf-8")) > PR_COGNITIVE_AID_MAX_BYTES:
+                _pr_aid_fail(
+                    "pr_cognitive_aid",
+                    f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
                 )
-                + "\n",
-            )
+            atomic_create(target, serialized)
     except FileExistsError as exc:
         raise PrCognitiveAidValidationError(
             f"artifactId: generation already exists at {target}"
@@ -17682,8 +17777,24 @@ def write_pr_cognitive_aid(
     return target
 
 
+def _pr_aid_plain_text(value: Any) -> str:
+    escaped = html.escape(str(value), quote=True).replace("`", "&#96;")
+    for character in ("\\", "*", "[", "]", ">"):
+        escaped = escaped.replace(character, f"\\{character}")
+    return escaped.replace("\n", " ")
+
+
 def _pr_aid_markdown_cell(value: Any) -> str:
-    return str(value).replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
+    return _pr_aid_plain_text(value).replace("|", "\\|")
+
+
+def _pr_aid_links(record: dict[str, Any]) -> str:
+    parts = [
+        *(f"source:{item}" for item in record.get("sourceRefs", [])),
+        *(f"R-ID:{item}" for item in record.get("rIds", [])),
+        *(f"task:{item}" for item in record.get("taskIds", [])),
+    ]
+    return _pr_aid_markdown_cell(", ".join(parts) or "—")
 
 
 def _pr_aid_file_row(file_record: dict[str, Any]) -> str:
@@ -17695,12 +17806,22 @@ def _pr_aid_file_row(file_record: dict[str, Any]) -> str:
         else f"+{additions or 0}/-{deletions or 0}"
     )
     diff_url = file_record.get("diffUrl")
-    diff = f"[diff]({diff_url})" if diff_url else "—"
+    diff = (
+        f"[diff]({html.escape(diff_url, quote=True)})" if diff_url else "—"
+    )
+    change_badges = {
+        "added": "NEW",
+        "modified": "MODIFIED",
+        "deleted": "DELETED",
+        "renamed": "RENAMED",
+        "copied": "COPIED",
+    }
     return (
-        f"| `{file_record['changeType'].upper()}` | "
+        f"| `{change_badges[file_record['changeType']]}` | "
         f"`{file_record['attentionClass'].upper()}` | "
         f"`{_pr_aid_markdown_cell(file_record['path'])}` | "
-        f"{_pr_aid_markdown_cell(file_record['summary'])} | {stats} | {diff} |"
+        f"{_pr_aid_markdown_cell(file_record['summary'])} | {stats} | {diff} | "
+        f"{_pr_aid_links(file_record)} |"
     )
 
 
@@ -17720,20 +17841,31 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         for file_record in canonical_files
     )
     full = human_review_lines >= 200 or len(canonical_files) >= 6
-    lines = ["## The change, top to bottom", "", walkthrough["thesis"], ""]
+    lines = [
+        "## The change, top to bottom",
+        "",
+        _pr_aid_plain_text(walkthrough["thesis"]),
+        "",
+        "| Proof | Value | Sources |",
+        "|---|---|---|",
+        f"| Head commit | `{artifact['headSha']}` | artifact identity |",
+        f"| Human-review lines | {human_review_lines} | deterministic file stats |",
+        f"| Canonical files | {len(canonical_files)} | deterministic membership |",
+        f"| Total files | {len(files)} | deterministic membership |",
+    ]
     if walkthrough["proof"]:
-        lines.extend(["| Proof | Value |", "|---|---|"])
         for cell in walkthrough["proof"]:
             lines.append(
                 f"| {_pr_aid_markdown_cell(cell['label'])} | "
-                f"{_pr_aid_markdown_cell(cell['value'])} |"
+                f"{_pr_aid_markdown_cell(cell['value'])} | "
+                f"{_pr_aid_links(cell)} |"
             )
-        lines.append("")
+    lines.append("")
     if not full:
         lines.extend(
             [
-                "| Change | Attention | File | Purpose | +/- | Diff |",
-                "|---|---|---|---|---:|---|",
+                "| Change | Attention | File | Purpose | +/- | Diff | Evidence |",
+                "|---|---|---|---|---:|---|---|",
                 *(_pr_aid_file_row(file_record) for file_record in canonical_files),
                 "",
             ]
@@ -17773,59 +17905,72 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
             [
                 f"<details{open_attr}>",
                 f"<summary><code>{kind_badges[group['kind']]}</code> "
-                f"{group['ordinal']}. {_pr_aid_markdown_cell(group['title'])} — "
-                f"{_pr_aid_markdown_cell(group['summary'])}</summary>",
+                f"{group['ordinal']}. {_pr_aid_plain_text(group['title'])} — "
+                f"{_pr_aid_plain_text(group['summary'])}</summary>",
+                "",
+                f"Evidence: {_pr_aid_links(group)}",
                 "",
             ]
         )
-        canonical = [
-            file_record
-            for file_record in group.get("files", [])
-            if file_record["attentionClass"] == "canonical"
-        ]
-        secondary = [
-            file_record
-            for file_record in group.get("files", [])
-            if file_record["attentionClass"] != "canonical"
-        ]
-        if canonical:
+        group_files = group.get("files", [])
+        run_start = 0
+        while run_start < len(group_files):
+            secondary = (
+                group_files[run_start]["attentionClass"] != "canonical"
+            )
+            run_end = run_start + 1
+            while (
+                run_end < len(group_files)
+                and (
+                    group_files[run_end]["attentionClass"] != "canonical"
+                )
+                == secondary
+            ):
+                run_end += 1
+            run = group_files[run_start:run_end]
+            if secondary:
+                lines.extend(
+                    [
+                        "<details>",
+                        f"<summary>Generated/mechanical files ({len(run)})</summary>",
+                        "",
+                    ]
+                )
             lines.extend(
                 [
-                    "| Change | Attention | File | Purpose | +/- | Diff |",
-                    "|---|---|---|---|---:|---|",
-                    *(_pr_aid_file_row(file_record) for file_record in canonical),
+                    "| Change | Attention | File | Purpose | +/- | Diff | Evidence |",
+                    "|---|---|---|---|---:|---|---|",
+                    *(_pr_aid_file_row(file_record) for file_record in run),
                     "",
                 ]
             )
-        if secondary:
-            lines.extend(
-                [
-                    "<details>",
-                    f"<summary>Generated/mechanical files ({len(secondary)})</summary>",
-                    "",
-                    "| Change | Attention | File | Purpose | +/- | Diff |",
-                    "|---|---|---|---|---:|---|",
-                    *(_pr_aid_file_row(file_record) for file_record in secondary),
-                    "",
-                    "</details>",
-                    "",
-                ]
-            )
+            if secondary:
+                lines.extend(["</details>", ""])
+            run_start = run_end
         lines.extend(["</details>", ""])
     return "\n".join(lines).rstrip() + "\n"
 
 
 def _pr_aid_read_input(path_arg: str) -> Any:
-    raw = (
-        sys.stdin.read()
-        if path_arg == "-"
-        else read_text_or_exit(
-            Path(path_arg), "PR cognitive-aid artifact", use_json=True
-        )
-    )
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError as exc:
+        if path_arg == "-":
+            raw_bytes = sys.stdin.buffer.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
+        else:
+            with Path(path_arg).open("rb") as handle:
+                raw_bytes = handle.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
+    except OSError as exc:
+        error_exit(
+            f"Cannot read PR cognitive-aid artifact: {exc}", use_json=True, code=2
+        )
+    if len(raw_bytes) > PR_COGNITIVE_AID_MAX_BYTES:
+        error_exit(
+            f"PR cognitive-aid artifact exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
+            use_json=True,
+            code=2,
+        )
+    try:
+        return json.loads(raw_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         error_exit(
             f"PR cognitive-aid artifact invalid JSON: {exc}", use_json=True, code=2
         )

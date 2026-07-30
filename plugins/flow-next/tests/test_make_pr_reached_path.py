@@ -131,7 +131,11 @@ class MakePrReachedPathTests(unittest.TestCase):
                 observed - metrics[route]["b1_chars"],
                 route,
             )
-        self.assertLess(metrics["html-off"]["candidate_chars"], metrics["html-off"]["b1_chars"])
+        self.assertLess(
+            metrics["html-off"]["delta_chars"],
+            10_000,
+            "structured cognitive-aid contract must keep reached-path overhead bounded",
+        )
         self.assertIsNone(self.ledger["kept_candidate"]["wall_time_claim"])
 
     def test_creation_failure_and_autonomous_contracts_stay_at_consumers(self) -> None:

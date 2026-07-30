@@ -14,12 +14,12 @@
     "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md": "05e7f9e3994f897c8aede9c1e2e0a00774ce238fd363d4fd607e79864dbcb77e",
     "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "804ebc2d31cc89f09b51333a0b5ed84987994c3b616d120116db2a2e32b625f1",
     "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md": "bf7c72d18be2764733a1d211145ff996a711b3c72994e9cd18897dbfa8acb2f0",
-    "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md": "d4b2aff71fbd05887f71ee7de38067642d7904d1a8b44991e97ebc69adc6a833",
-    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "80bfd66a1ef73422f92fdab1832c1b7a3f58bbf330726e07af8ed1e0fb03d794"
+    "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md": "6f50fd89b5f3692d4b974ba00a26a56a1fd65954e113629f16e7f04b8ed62fda",
+    "plugins/flow-next/skills/flow-next-make-pr/workflow.md": "55aed458464fe6f13039e5b282b69f553472e066afce7c8cf64a5a063052d619"
   },
   "b1_unchanged_workflow_slices": {
     "before_phase_1_5_sha256": "01e2f2cc79062068ccc23d4dc44ffeef31dd1ea72a441ca860d0ef38e51d67c9",
-    "after_phase_1_5_sha256": "146cfb6e5803804439dc476a3785789704a9a08b37e1142c7228c388eca2d970",
+    "after_phase_1_5_sha256": "05459d81ce91d7ddcd149a8fd9a3e687f84518f79e1eddba73e1e1834853ced1",
     "meaning": "Phase 0/1 remains byte-identical to B1; Phase 1.5 now loads the structured cognitive aid and Phase 2 places its deterministic Markdown."
   },
   "kept_candidate": {
@@ -43,39 +43,39 @@
       "algorithm": "lf-full-file-on-activation-once-per-path-hash",
       "dry-run": {
         "b1_chars": 145723,
-        "candidate_chars": 145584,
-        "delta_chars": -139
+        "candidate_chars": 146912,
+        "delta_chars": 1189
       },
       "html-off": {
         "b1_chars": 191058,
-        "candidate_chars": 190845,
-        "delta_chars": -213
+        "candidate_chars": 192173,
+        "delta_chars": 1115
       },
       "html-on": {
         "b1_chars": 210653,
-        "candidate_chars": 218152,
-        "delta_chars": 7499,
+        "candidate_chars": 219480,
+        "delta_chars": 8827,
         "note": "Selected HTML path pays the direct-reference router plus the shared structured cognitive-aid contract; no wall-time claim."
       },
       "create": {
         "b1_chars": 191058,
-        "candidate_chars": 190845,
-        "delta_chars": -213
+        "candidate_chars": 192173,
+        "delta_chars": 1115
       },
       "finalize": {
         "b1_chars": 179412,
-        "candidate_chars": 179199,
-        "delta_chars": -213
+        "candidate_chars": 180527,
+        "delta_chars": 1115
       },
       "existing-pr": {
         "b1_chars": 179412,
-        "candidate_chars": 179199,
-        "delta_chars": -213
+        "candidate_chars": 180527,
+        "delta_chars": 1115
       },
       "push-retry": {
         "b1_chars": 179412,
-        "candidate_chars": 179199,
-        "delta_chars": -213
+        "candidate_chars": 180527,
+        "delta_chars": 1115
       }
     },
     "required_reads": {
