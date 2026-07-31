@@ -16520,6 +16520,111 @@ def cmd_glossary_remove(args: argparse.Namespace) -> None:
     error_exit(f"term '{term}' not found", use_json=use_json, code=1)
 
 
+# --- Global acceptance criteria (fn-137.1) ---
+#
+# `.flow/criteria.md` is a plain markdown file of standing, project-wide
+# acceptance criteria, one per bullet, mirroring the R-ID grammar with a
+# G- prefix:
+#
+#     - **G1:** Every route change regenerates the contract.
+#     - **G2:** No new dependency without a health check (scope: package.json).
+#
+# Non-bullet lines (headings, prose) are ignored. Absence of the file is a
+# silent no-op everywhere. flowctl only parses + validates; judgment about
+# compliance is the completion-review skill's job.
+
+CRITERIA_FILE = "criteria.md"
+
+# Canonical marker heading for the criteria block in assembled review prompts.
+# fn-137.2's completion-review injection MUST use this constant (tests grep the
+# constant, not a re-typed literal) so absent-file zero-cost is provable.
+GLOBAL_CRITERIA_HEADING = "## Global acceptance criteria"
+
+_CRITERIA_LINE_RE = re.compile(r"^-\s+\*\*G(\d+):\*\*\s*(.*)$")
+
+
+def get_criteria_path() -> Path:
+    """Path to the project's global criteria file (.flow/criteria.md)."""
+    return get_flow_dir() / CRITERIA_FILE
+
+
+def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
+    """Parse criteria markdown into ([{id, text}], [error strings]).
+
+    Grammar: `- **G<N>:** <criterion prose>`. Non-matching lines are
+    ignored (headings, prose, blank lines). Validation: unique ids,
+    non-empty prose. Sequential numbering NOT required.
+    """
+    entries: list[dict] = []
+    errors: list[str] = []
+    seen: set[str] = set()
+    dup_reported: set[str] = set()
+
+    for line in text.splitlines():
+        m = _CRITERIA_LINE_RE.match(line)
+        if not m:
+            continue
+        cid = f"G{m.group(1)}"
+        prose = m.group(2).strip()
+
+        if cid in seen:
+            if cid not in dup_reported:
+                errors.append(f"duplicate id {cid}")
+                dup_reported.add(cid)
+            continue
+
+        if not prose:
+            errors.append(f"empty criterion text for {cid}")
+            continue
+
+        seen.add(cid)
+        entries.append({"id": cid, "text": prose})
+
+    return entries, errors
+
+
+def cmd_criteria_list(args: argparse.Namespace) -> None:
+    """List global acceptance criteria from .flow/criteria.md.
+
+    Absent file -> empty list, ok exit (absence is a silent no-op
+    everywhere). Validation failure -> error exit listing every problem.
+    """
+    use_json = bool(getattr(args, "json", False))
+    path = get_criteria_path()
+
+    if not path.exists():
+        if use_json:
+            json_output({"criteria": [], "count": 0, "path": None})
+        else:
+            print("no global criteria (.flow/criteria.md absent or empty)")
+        return
+
+    text = path.read_text(encoding="utf-8")
+    entries, errors = _criteria_parse(text)
+    if errors:
+        error_exit(
+            "invalid .flow/criteria.md: " + "; ".join(errors),
+            use_json=use_json,
+        )
+
+    if use_json:
+        json_output(
+            {
+                "criteria": entries,
+                "count": len(entries),
+                "path": str(path),
+            }
+        )
+        return
+
+    if not entries:
+        print("no global criteria (.flow/criteria.md absent or empty)")
+        return
+
+    for entry in entries:
+        print(f"{entry['id']}: {entry['text']}")
+
+
 # --- Strategy subcommands (fn-39.1) ---
 
 
@@ -36040,6 +36145,18 @@ def main() -> None:
     p_glossary_remove.add_argument("term", help="Term name (case-insensitive match)")
     p_glossary_remove.add_argument("--json", action="store_true", help="JSON output")
     p_glossary_remove.set_defaults(func=cmd_glossary_remove)
+
+    p_criteria = subparsers.add_parser(
+        "criteria",
+        help="Global acceptance criteria (.flow/criteria.md)",
+    )
+    criteria_sub = p_criteria.add_subparsers(dest="criteria_cmd", required=True)
+    p_criteria_list = criteria_sub.add_parser(
+        "list",
+        help="List global criteria (absent file -> empty list, ok exit)",
+    )
+    p_criteria_list.add_argument("--json", action="store_true", help="JSON output")
+    p_criteria_list.set_defaults(func=cmd_criteria_list)
 
     # strategy status / read / list (fn-39.1)
     # Read-only plumbing. The skill (`/flow-next:strategy`) writes the file

@@ -78,6 +78,7 @@ copilot deep-pass
 copilot impl-review
 copilot plan-review
 copilot validate
+criteria list
 cursor completion-review
 cursor deep-pass
 cursor impl-review
