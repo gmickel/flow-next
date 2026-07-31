@@ -16826,30 +16826,50 @@ G<N>: met|violated|n/a - <one-line note>
 def build_global_criteria_block() -> str:
     """Render the completion-review global-criteria injection block.
 
-    Returns "" when `.flow/criteria.md` is absent, unreadable, invalid, or
-    empty - criteria-less repos pay zero criteria content in assembled
-    prompts (fn-137 R1). Never raises.
+    Returns "" when `.flow/criteria.md` is absent or valid-but-empty -
+    criteria-less repos pay zero criteria content in assembled prompts
+    (fn-137 R1). An EXISTING file that is unreadable or fails validation
+    raises ValueError (fail closed: configured standing criteria must never
+    be silently dropped from a review).
     """
-    try:
-        path = get_criteria_path()
-        if not path.exists():
-            return ""
-        entries, errors = _criteria_parse(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError):
+    path = get_criteria_path()
+    if not path.exists():
         return ""
-    if errors or not entries:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(
+            f"unreadable .flow/criteria.md: {exc} "
+            "(run `flowctl criteria list` to diagnose)"
+        ) from exc
+    entries, errors = _criteria_parse(text)
+    if errors:
+        raise ValueError(
+            "invalid .flow/criteria.md: " + "; ".join(errors)
+            + " (run `flowctl criteria list` to diagnose)"
+        )
+    if not entries:
         return ""
     bullets = "\n".join(f"- **{e['id']}:** {e['text']}" for e in entries)
     return _GLOBAL_CRITERIA_BLOCK_TEMPLATE.format(criteria_bullets=bullets)
 
 
 def cmd_criteria_prompt_block(args: argparse.Namespace) -> None:
-    """Print the criteria injection block (empty output when absent/invalid).
+    """Print the criteria injection block (empty output when absent/empty).
 
     Used by the rp/host completion-review workflows to compose the same
     block the subprocess backends get from build_completion_review_prompt.
+    An existing-but-invalid `.flow/criteria.md` exits nonzero with the
+    validation errors on stderr (stdout stays empty so a careless append
+    cannot inject the error text into a prompt file).
     """
-    block = build_global_criteria_block()
+    try:
+        block = build_global_criteria_block()
+    except ValueError as exc:
+        error_exit(str(exc), use_json=False)
+        return
     if block:
         sys.stdout.write(block)
 
@@ -29515,6 +29535,14 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     reg = BACKEND_REGISTRY[backend]
     if not ensure_flow_exists():
         error_exit(".flow/ does not exist", use_json=args.json)
+
+    # Fail closed pre-dispatch (fn-137): an existing-but-invalid
+    # .flow/criteria.md must abort the review instead of silently running
+    # every backend without the configured standing criteria.
+    try:
+        build_global_criteria_block()
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
 
     epic_id = resolve_spec_id_arg(get_flow_dir(), args.epic, use_json=args.json)
     epic_spec_path, tasks_dir, epic_spec, task_specs, task_ids = (

@@ -62,7 +62,8 @@ Give the subagent:
 - The exact output of `$FLOWCTL criteria prompt-block`, appended verbatim when
  non-empty (global acceptance criteria + the `## Global criteria` output
  grammar; the command prints nothing when `.flow/criteria.md` is absent -
- include nothing in that case)
+ include nothing in that case. A nonzero exit is a validation error - fix
+ `.flow/criteria.md` before re-running the review)
 - Task list + evidence that work claims done
 - Diff / implementation surfaces to check compliance (not code-quality taste — that is impl-review)
 - Prior findings for convergence (on re-review)

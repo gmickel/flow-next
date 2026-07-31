@@ -230,12 +230,40 @@ class TestGlobalCriteriaBlock(unittest.TestCase):
     def test_absent_path_returns_empty(self) -> None:
         self.assertEqual(flowctl.build_global_criteria_block(), "")
 
-    def test_invalid_file_returns_empty(self) -> None:
+    def test_invalid_file_raises_fail_closed(self) -> None:
+        """Existing-but-invalid criteria.md must raise, not silently
+        disable the configured standing criteria (fail closed)."""
         self.path.write_text(
             "- **G1:** first.\n- **G1:** second.\n",
             encoding="utf-8",
         )
+        with self.assertRaises(ValueError) as ctx:
+            flowctl.build_global_criteria_block()
+        self.assertIn("invalid .flow/criteria.md", str(ctx.exception))
+        self.assertIn("duplicate", str(ctx.exception))
+
+    def test_valid_empty_template_returns_empty(self) -> None:
+        """Present file that parses to zero active criteria is a no-op."""
+        self.path.write_text(
+            "# Global acceptance criteria\n\n<!-- comment only -->\n",
+            encoding="utf-8",
+        )
         self.assertEqual(flowctl.build_global_criteria_block(), "")
+
+    def test_invalid_file_fails_prompt_build(self) -> None:
+        """Backend completion-review prompt build must error on an invalid
+        criteria file, never assemble a prompt without the standing rules."""
+        self.path.write_text(
+            "- **G1:** first.\n- **G1:** second.\n",
+            encoding="utf-8",
+        )
+        with self.assertRaises(ValueError):
+            flowctl.build_completion_review_prompt(
+                epic_spec="# Spec\n\n- **R1:** something\n",
+                task_specs="task body",
+                diff_summary="1 file changed",
+                diff_content="diff --git a/x b/x\n",
+            )
 
     def test_valid_file_renders_block(self) -> None:
         self.path.write_text(
@@ -559,6 +587,18 @@ class TestCriteriaReceiptCli(unittest.TestCase):
             proc.stdout.startswith("## Global acceptance criteria"),
             proc.stdout[:80],
         )
+
+    def test_prompt_block_invalid_file_fails_closed(self) -> None:
+        """Existing-but-invalid criteria.md: nonzero exit, errors on stderr,
+        stdout empty (so a careless append injects nothing)."""
+        (self.root / ".flow" / "criteria.md").write_text(
+            "- **G1:** first.\n- **G1:** second.\n",
+            encoding="utf-8",
+        )
+        proc = self._run("criteria", "prompt-block")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("invalid .flow/criteria.md", proc.stderr)
 
     def _write_criteria(self, *ids: str) -> None:
         lines = "".join(f"- **{cid}:** Criterion {cid} prose.\n" for cid in ids)
