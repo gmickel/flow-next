@@ -29426,6 +29426,7 @@ def _finish_backend_exec(
             output=output,
             failure_class=failure_class,
             task_id=task_id,
+            reviewed_head_sha=reviewed_head_sha,
             review_type=review_type,
             use_json=args.json,
         )
