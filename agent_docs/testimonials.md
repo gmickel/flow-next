@@ -17,7 +17,36 @@ grep -ri "PSVI\|Velocity Index" ~/work/flow-next.dev/src ~/work/mickel.tech/app/
 
 # 2. Client names (pattern list is PRIVATE, kept out of this public repo at ~/.claude/flow-next-client-names.txt):
 grep -riwf ~/.claude/flow-next-client-names.txt ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/
+
+# 3. Encoding-fragile punctuation in ADDED lines (em dash, en dash, middle dot).
+#    Diff-scoped on purpose - see the note below. Run inside each repo you touched:
+git diff origin/main...HEAD -U0 -- . | grep '^+' | grep -v '^+++' | grep -n '[—–·]'
 ```
+
+**Why gate 3 is diff-scoped and the other two are not.** A whole-tree scan for em dashes
+would start red: `flow-next.dev/src/content/docs/` alone still carries ~975 of them from
+before the house style was set, and a gate that is red on arrival gets ignored, which is
+worse than no gate. What matters is that *new* copy does not carry them, so gate 3 checks
+added lines only and starts green.
+
+The front doors ARE clean today and can be checked absolutely, which is worth doing when
+you have just rewritten one:
+
+```bash
+grep -c '—' README.md                                    # expect 0
+cd ~/work/flow-next.dev && grep -c '—' src/pages/index.astro \
+  src/content/docs/{introduction,install}.mdx \
+  src/content/docs/strategy/why-flow-next.mdx \
+  src/content/docs/proof/evidence.mdx                    # expect 0 each
+cd ~/work/mickel.tech && grep -c '—' app/apps/flow-next/page.tsx   # expect 0
+```
+
+One known quirk: run against a change to *this file*, gate 3 flags its own example commands, because they contain the character they search for. That is the only expected false positive; anywhere else a hit is real.
+
+Replacement is chosen per sentence: a comma, colon, period, parentheses, or a spaced plain
+hyphen, whichever that sentence wants. A global substitution reads worse than the original
+and will need redoing. Third-party quotations are exempt and ship verbatim, including the
+author's own punctuation.
 
 Gate log:
 
