@@ -27,10 +27,6 @@
 - **R4:** Fixture validation tests (valid + invalid configs incl. the backend spec grammar pattern) pass stdlib-only; no new dependencies.
 - **R5:** Docs + Unreleased CHANGELOG updated; the downstream-walk note lists the docs-site publication step.
 
-## Cross-spec dependency (added 2026-07-26)
+## Cross-spec dependency (added 2026-07-26; SATISFIED 2026-07-31)
 
-**Depends on [[fn-139-tracker-sync-determinism-flowctl-owns]].**
-
-fn-139 adds a new top-level config block `tracker.resolved` (a discovery-written destination + capability cache: per-tracker resolved ids, plus `attachments` / `blockedBy` / `subIssues` / `deleteIssue` capability flags). Its shape is settled by fn-139's R2/R19-R23, including that it is atomic, lock-protected, and may be partially absent by design during migration.
-
-Publishing the schema before that block exists would ship a schema that immediately drifts, and fn-138's own honesty test would fail the moment fn-139 lands. Sequence fn-138 after fn-139, or land both in one window with the schema table updated in the same change.
+**Depended on [[fn-139-tracker-sync-determinism-flowctl-owns]] - landed** (3.5.2, republished 3.6.0), with fn-140/fn-141 completing the tracker facade batch and fn-146 (3.6.1) wiring `tracker.conflictTiebreak` into status policy. The `tracker.resolved` block (discovery-written destination + capability cache; atomic, lock-protected, partially-absent-by-design during migration) is settled and documented in flowctl.md § config alongside `tracker.conflictTiebreak`. The schema table must cover both from day one; the documented surface is now ~44 dotted keys (was ~39 at speccing), also including `models.roles.*` / `models.verifiedAt` / `models.verifiedWith` (fn-115), `land.cleanReviewCommentPattern` (fn-65.1), and `pilot.gateClasses` (fn-68). flowctl.md § config is the authoritative inventory at implementation time; the .2 reader-walk guard is what keeps the count honest, not this paragraph.
