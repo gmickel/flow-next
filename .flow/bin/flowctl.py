@@ -29065,6 +29065,7 @@ def _dispatch_backend_review(
     review_kind: Optional[str],
     review_type: str,
     task_id: Optional[str] = None,
+    reviewed_head_sha: Optional[str] = None,
 ) -> tuple[str, Optional[str], int, str]:
     """Run a backend and refund if dispatch itself terminates before a result."""
     try:
@@ -29086,6 +29087,7 @@ def _dispatch_backend_review(
                 output="backend dispatch terminated before returning output",
                 failure_class="dispatch_error",
                 task_id=task_id,
+                reviewed_head_sha=reviewed_head_sha,
                 review_type=review_type,
                 use_json=args.json,
             )
@@ -29112,6 +29114,7 @@ def _dispatch_backend_review(
                 output=detail,
                 failure_class="dispatch_exception",
                 task_id=task_id,
+                reviewed_head_sha=reviewed_head_sha,
                 review_type=review_type,
                 use_json=args.json,
             )
@@ -29259,6 +29262,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         review_kind=None if standalone else "impl",
         review_type="impl",
         task_id=None if standalone else task_id,
+        reviewed_head_sha=reviewed_head_sha,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -29583,6 +29587,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         spec_id=epic_id,
         review_kind="plan",
         review_type="plan",
+        reviewed_head_sha=reviewed_head_sha,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -29767,6 +29772,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         spec_id=epic_id,
         review_kind="plan",
         review_type="completion",
+        reviewed_head_sha=reviewed_head_sha,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
