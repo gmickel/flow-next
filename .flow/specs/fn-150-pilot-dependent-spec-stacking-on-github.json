@@ -1,14 +1,25 @@
 {
   "branch_name": "fn-150-pilot-dependent-spec-stacking-on-github",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-07-31T04:08:57.324920Z",
-  "depends_on_epics": [],
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [
+    "fn-149-land-hardening-survive-stacked-pr-auto",
+    "fn-152-make-pr-opt-in-stack-linking-via-github"
+  ],
   "id": "fn-150-pilot-dependent-spec-stacking-on-github",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-150-pilot-dependent-spec-stacking-on-github.md",
   "status": "open",
-  "title": "pilot dependent-spec stacking on GitHub stacked PRs (preview-gated)",
+  "title": "pilot dependent-spec stacking on GitHub stacked PRs",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -21,5 +32,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-84"
   },
-  "updated_at": "2026-07-31T04:10:33.020473Z"
+  "updated_at": "2026-07-31T04:28:21.432896Z"
 }

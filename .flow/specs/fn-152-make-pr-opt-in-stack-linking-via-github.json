@@ -1,0 +1,33 @@
+{
+  "branch_name": "fn-152-make-pr-opt-in-stack-linking-via-github",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-07-31T04:27:08.970594Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-152-make-pr-opt-in-stack-linking-via-github",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "ready": true,
+  "spec_path": ".flow/specs/fn-152-make-pr-opt-in-stack-linking-via-github.md",
+  "status": "open",
+  "title": "make-pr opt-in stack linking via GitHub Stacks REST API",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": "d5595ec6-84c3-474b-8660-ed7758efc349",
+    "identifier": "FLOW-85",
+    "lastSyncedAt": "2026-07-31T04:28:22.293337Z",
+    "linkState": "linked",
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": "https://linear.app/gmickel/issue/FLOW-85"
+  },
+  "updated_at": "2026-07-31T04:28:22.318856Z"
+}

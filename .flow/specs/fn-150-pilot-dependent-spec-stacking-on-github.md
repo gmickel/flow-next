@@ -1,38 +1,39 @@
 ## Conversation Evidence
 
 > user (turn 1): "https://github.blog/changelog/2026-07-30-stacked-pull-requests-are-now-in-public-preview/ [...] research task. how does this help flow-next, and does it conflict with our new make-pr or does it improve it"
-> user (turn 2): "capture it, probable 2 specs, then commit and push so we have the specs stored. other agents working here too, don't interfere with each other"
+> user (turn 4): "yes, capture the v0 slice and rewrite fn-150 so that we could feasibly land all 3 tomorrow so that all flow-next stuff including automonmy (pilot) etc could work as this is the biggest gain imo, also do your research properly and smoketest the api in a new test repo so we are not guessing at all."
 
-Research findings this capture rests on (agent research, 2026-07-31): GitHub stacked PRs (public preview 2026-07-30) let an ordered series of PRs each target the branch below; each layer's PR shows only that layer's diff and carries a stack map; stacks are created via the web UI or the gh-stack CLI extension (init/add/push/submit/view); branch protections and required checks apply per layer; merge-queue integration is still rolling out. make-pr's existing base-ref override plus the export-cognitive-aid base-scoped diff already produce correct layer-scoped PR bodies when the base points at a lower branch - the architecture anticipated this; stacking improves make-pr rather than conflicting with it.
+Smoke-tested live 2026-07-31 (gmickel/stacks-api-smoke): merging a stack's bottom layer causes GitHub to auto-rebase upper layers (head SHAs move) and retarget their bases - server-initiated, with the force-push attributed to the merging account. Merging an upper layer via the stack merge endpoint merges ALL unmerged layers below it sequentially, each as its own squash commit. Stack membership is readable per-PR from the REST payload's `stack` object. Ordinary `gh pr merge` is hard-blocked on stacked PRs.
 
 ## Goal & Context
 
-<!-- Source-tag breakdown: 15% [user], 45% [paraphrase], 40% [inferred] -->
+<!-- Source-tag breakdown: 25% [user], 55% [paraphrase], 20% [inferred] -->
 
-Today a spec that depends on an unmerged spec stalls the build loop: pilot cannot drain it until the parent PR merges. GitHub's native stacked PRs remove that stall - pilot can branch a dependent spec off the parent spec's branch and open its PR as the next stack layer, so the build loop keeps producing while the ship loop babysits the whole stack. Reviewers get per-layer diffs (which compose with the cognitive-aid body: the stack map answers "where am I in the change", the body answers "where do I focus in this layer"), and different layers can receive different cross-model reviews in parallel.
+The merge-wait stall is the main serialization point in multi-spec autonomous runs: pilot parks a ready spec whose dependency PR has not merged. With the make-pr stack-linking slice (companion v0 spec) and land's stacked-merge hardening (fn-149) in place, pilot can drain dependent specs onto their parent's branch as stack layers - the build loop keeps producing while the ship loop babysits the whole stack bottom-up. This spec is the autonomy integration: pilot's selection, branch matrix, and verdicts understand stacking, end to end, so the full pipeline (including backlog mode) works over stacks. This is the biggest gain of the stacked-PRs feature for flow-next. [user]
 
-This is deliberately deferred: the feature is a public preview explicitly subject to change, requires the gh-stack CLI extension for stack-linked creation, and its merge-queue interplay is unfinished. This spec parks the design so it is ready to activate when the preview stabilizes - merge-queue general availability is the suggested revisit trigger.
+All three specs (fn-149, the v0 make-pr slice, this one) are scoped to be landable together immediately - no deferral. The earlier preview-stability deferral is dropped: the API surface was verified live, the opt-in gate contains the blast radius, and worst-case API regressions degrade to today's serial behavior. [user]
 
 ## Acceptance Criteria
 
-- **R1:** Pilot can drain a ready spec whose dependency spec has an open unmerged PR by branching off the dependency's branch and opening the new PR as a stack layer on top of it - instead of skipping the spec until the parent merges. [paraphrase]
-- **R2:** make-pr gains a stack-aware create path: when the resolved base is another spec's branch and the stack tooling is available, the PR is created as a linked stack layer; otherwise it degrades to the existing plain dependent-PR create with the explicit base. [paraphrase]
-- **R3:** make-pr's base-detection cascade gains a parent-spec rung: a spec with a flow dependency on an unmerged spec resolves its default base to that spec's branch (explicit base override still wins). [inferred]
-- **R4:** The cognitive-aid body of a layer PR is scoped to that layer's diff only (base = parent branch) and states its stack position in one line. [paraphrase]
-- **R5:** Land merges stacks bottom-up, one layer per tick, re-gating upper layers after each GitHub auto-retarget; the stack collapse merge stays forbidden. Depends on the companion land-hardening spec landing first. [paraphrase]
-- **R6:** The whole capability is opt-in and preview-gated: with the gate off (default), pilot, make-pr, and land behave exactly as today; no hard dependency on the gh-stack extension is introduced for non-stacked flows. [user]
-- **R7:** Cross-platform: hosts without the stack tooling degrade gracefully to today's serial dependent-spec behavior with a stated reason, never a hard failure. [inferred]
+- **R1:** With `stacks.enabled` on and the repo GitHub-hosted, pilot (interactive-select and backlog mode) can select a ready spec whose flow dependency has an open unmerged PR, instead of parking it - provided the dependency spec's tasks are all done. The work stage branches from the dependency's branch; make-pr then links the layer (companion v0 spec). In-flight dependencies (tasks not all done) still park exactly as today. [paraphrase]
+- **R2:** Pilot's branch matrix and all-done PR probe operate correctly when a spec branch's parent is another spec branch rather than the default branch. [paraphrase]
+- **R3:** Dependency chains only: stacking applies to linear parent chains. A diamond (two ready specs depending on the same unmerged parent) stacks the first and parks the second with a stated reason, since GitHub stacks are linear. [inferred]
+- **R4:** Pilot verdict lines and the pilot log carry stack context (parent spec and layer position) so the driver transcript shows what was stacked on what. [inferred]
+- **R5:** With the gate off, on a non-GitHub host, or when stack linking degraded (v0 spec R5), pilot behaves exactly as today: dependent specs park until the parent merges. No behavior drift for non-adopters. [user]
+- **R6:** Land ticks over a stacked chain converge without human input in the happy path: bottom layer merges, upper layers re-gate after the server retarget (fn-149), and the chain drains over successive ticks. Covered by an end-to-end smoke scenario in the local-dev harness docs. [paraphrase]
+- **R7:** Documentation: orchestration and teams docs describe the stacked flow (opt-in, GitHub-only, linear chains); the docs-site gets the story entry. Dependency-planning guidance notes that plan-created dep chains become stack chains when the gate is on. [inferred]
 
 ## Boundaries
 
-- Deferred: do not implement while the GitHub feature is in public preview; revisit when stack semantics stabilize (suggested trigger: merge-queue support for stacks reaches general availability). [user]
-- No merge-queue enrollment by land, stacked or not. [paraphrase]
-- No stack authoring under Ralph or any autonomous driver until the opt-in gate is explicitly enabled by the user. [inferred]
-- Not a replacement for spec dependencies or the tracker relations projection - stacking is a delivery mechanism, not a planning model. [inferred]
+- Requires fn-149 (land stacked-merge + retarget hardening) and the v0 make-pr stack-linking spec; this spec adds no merge or linking mechanics of its own. [paraphrase]
+- Opt-in stays opt-in: never the default; enabling is an explicit user config action. [user]
+- GitHub only; GitLab MR trains and other hosts are out of scope (fn-73 unaffected). [user]
+- No merge-queue integration; no gh-stack extension dependency; no stack restructuring. [paraphrase]
+- No flowctl Python changes expected - dep info (`flowctl dep`), branch names, and spec state already exist; pilot logic is skill prose. [paraphrase]
 
 ## Decision Context
 
-Motivation: this directly serves the one-dial-to-autonomous claim - the merge-wait stall is currently the main serialization point in multi-spec autonomous runs, and native stacking removes it without weakening any gate (branch protections and per-layer checks still apply). The research verdict was that stacking improves make-pr (the base-scoped export already produces layer-correct bodies) and only land needs hardening, which is split into the companion spec so the insurance lands independently of this deferred feature. [paraphrase]
+Motivation: this directly serves the one-dial-to-autonomous claim - removing the merge-wait stall multiplies pilot backlog throughput on dependency-heavy backlogs without weakening any gate (per-layer checks, reviews, and land's gate tree still apply to every layer). Deferral dropped deliberately: the risky unknowns (API shapes, collapse semantics, retarget attribution) were eliminated by live smoke testing rather than waiting for the preview label to drop; the opt-in gate plus graceful degrade bound the residual preview risk to zero-behavior-change for non-adopters. [paraphrase]
 
 ## Requirement coverage
 
