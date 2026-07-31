@@ -64,9 +64,12 @@ Copy rules apply to every word: no em dashes, straight quotes only (verbatim thi
 
 
 ## Done summary
-TBD
+Reordered `strategy/why-flow-next.mdx` to the spine and gave it the long-form SlopCodeBench treatment, added `proof/evidence.mdx` carrying the measured-problem argument in full plus a 122-word capsule recording the plan-sync skip gate our own eval removed, moved the outcome summary above the harness install blocks in `introduction.mdx`, opened `install.mdx` with what setup does, how long it takes, and how to undo it, corrected the subagent count to 21, and registered the new page in both navigation sources.
 
+The three anchor-bearing `install.mdx` headings are byte-unchanged, verified against the built HTML, so the eight inbound links including the two from the flow-next repo still resolve.
+
+Note for the conductor: the nav slug-set diff prints three astro-only slugs, not the two the acceptance criterion names. `first-30-minutes` is a pre-existing third hardcoded DocsRail top-link (`src/components/DocsRail.astro:30`) that the check description in `CLAUDE.md:61-67` predates. It was present in the pre-edit baseline and this change did not alter the diff by a single line. Fixing it is a one-line edit to the `CLAUDE.md` check description, which is outside this task's file scope and belongs with the global verification pass.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: flow-next.dev:9fe165ec60fd7fe78c130126ea48459b1ffdddda, flow-next.dev integration merge: 4ebd9d6
+- Tests: baseline (pre-edit, a09f91a4): pnpm install --frozen-lockfile && pnpm check && pnpm build -> green, 76 pages built, pnpm check -> green, Result (14 files): 0 errors, 0 warnings, 0 hints, pnpm build -> green, 77 page(s) built (new proof/evidence page), nav slug-set diff (CLAUDE.md check) -> byte-identical to pre-edit baseline (first-30-minutes, install, introduction); proof/evidence absent from the diff, proof/evidence registered in both sources -> grep hit in astro.config.mjs and src/lib/site.ts; rendered rail link and Starlight prev/next both present in dist, anchor integrity -> dist/install/index.html carries id="xai-grok-build", id="cursor", id="team--org-wide-deployment-claude-code-managed-settings"; git diff shows no heading line changed, internal link resolution -> dist/proof/evidence/, dist/strategy/verification-spine/, dist/strategy/pipeline/, dist/proof/field-notes/ all built, em dash + curly quote census on why-flow-next.mdx, introduction.mdx, install.mdx, proof/evidence.mdx -> 0 and 0 (22 em dashes cleared from install.mdx, 6 from introduction.mdx, replaced per sentence), banned-phrase grep over the four owned pages -> no output, lineage citation grep (Wei|Karpathy|Vogels|Sonar|Willison) outside strategy/verification-spine -> no output, PSVI / Velocity Index grep over src/ -> no output, client-name grep (6 patterns, ~/.claude/flow-next-client-names.txt) over src/ -> no output, plan-sync capsule word count -> 122 words, canonical harness-tiering sentence -> byte-identical to the spec R26 string, integrated flow-next.dev target (band + docs merged): pnpm check -> 0 errors/warnings/hints; pnpm build -> 77 pages, exit 0
 - PRs:

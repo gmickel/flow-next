@@ -60,9 +60,10 @@ Copy rules apply: no em dashes (this file currently has zero, keep it that way),
 
 
 ## Done summary
-TBD
+Aligned the mickel.tech flow-next page and its `/apps` registry entry with the recomposed front doors: version corrected to 3.9.0, problem titles restated as pain the reader recognises having with the mechanism demoted to the description line, platform statuses converged on the canonical harness-tiering sentence (first-class on Claude Code, OpenAI Codex, Factory Droid, Cursor and xAI Grok Build; community port for OpenCode) with Cursor's team-marketplace import as the recommended route, every inventory count removed from selling prose, and the breadth paragraph aligned to the landing's wording with the honest-asymmetry paragraph added in this page's client-and-employer register.
 
+Committed separately in the mickel.tech worktree at `/Users/gordon/work/fn151-mickel` (branch `fn-151-alignment`) as `c4192b2afdce447893d482af5f7779c9f00524fb`. No layout restructure: the sixteen numbered sections and every Atelier component are unchanged.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: mickel.tech:c4192b2afdce447893d482af5f7779c9f00524fb
+- Tests: cd /Users/gordon/work/fn151-mickel && bun run build -> PASS (exit 0; /apps/flow-next prerendered static; requires RESEND_API_KEY + RESEND_FROM to be set, placeholder values used), cd /Users/gordon/work/fn151-mickel && bun x biome check . -> PASS (exit 0; 205 files, no fixes applied), lefthook pre-commit `bun x ultracite fix` -> PASS (205 files, no fixes applied), baseline before edits: bun x biome check . -> PASS; bun run build -> PASS with RESEND_API_KEY/RESEND_FROM placeholders (RED without them, pre-existing env requirement unrelated to this task), grep -ri 'PSVI|Velocity Index' app/apps/flow-next lib/apps.ts -> no output (clean), grep -riwf ~/.claude/flow-next-client-names.txt app/apps/flow-next lib/apps.ts -> no output (clean), grep -c '—' app/apps/flow-next/page.tsx lib/apps.ts -> 0, 0 (no em dashes), rendered-page check on the production build: breadth + honest-asymmetry paragraphs, four restated problem cards, and the canonical tiering lede all present; document horizontal overflow = 0px
 - PRs:

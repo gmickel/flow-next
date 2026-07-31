@@ -74,9 +74,8 @@ Copy rules apply to every word written in this task: no em dashes, straight quot
 
 
 ## Done summary
-TBD
-
+Built the evidence band as a self-contained Astro component plus its stylesheet: the SlopCodeBench argument in four paragraphs, a hand-authored inline SVG decay plot (amber agent curve climbing against a flat teal human baseline, two mono annotations, no legend and no charting dependency), the paper link and source label beneath it, and the verify tape relocated verbatim from index.astro as the answer to the argument. The plot's resting markup is fully drawn; the draw-on animation arms only when an IntersectionObserver exists and the visitor has not asked for reduced motion, verified against no-JS, observer-blocked, reduced-motion, and below-the-fold cases. Nothing mounts the component yet and index.astro is untouched.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: flow-next.dev: c794944cc66016ec879caa9f8e437af3e6ad6767, flow-next.dev integration merge: 4ebd9d6
+- Tests: pnpm check (flow-next.dev worktree /Users/gordon/work/fn151-band) -> 0 errors, 0 warnings, 0 hints across 15 astro files, pnpm build (flow-next.dev worktree) -> 76 pages built, exit 0, baseline before edits: pnpm check green, pnpm build green (76 pages), browser verification at 1280px and 390px: no horizontal overflow (documentElement.scrollWidth 375 <= innerWidth 390), no console errors, resting-state proof: served SVG markup carries zero stroke-dash state and home-evidence.css declares zero stroke-dasharray, so the chart is complete without JavaScript, prefers-reduced-motion emulated -> plot never armed, dash styles absent, annotations at opacity 1, transitions none, IntersectionObserver deleted before the component script -> plot never armed, chart complete, band placed below the fold -> armed (offsets 544.022 / 554.542, annotations opacity 0) at load, then is-drawn with offsets 0 after scrolling into view, integrated flow-next.dev target (band + docs merged): pnpm check -> 0 errors/warnings/hints; pnpm build -> 77 pages, exit 0
 - PRs:
