@@ -917,3 +917,20 @@ class TestCriteriaAltBulletMarkers(unittest.TestCase):
         entries, errors = flowctl._criteria_parse("* just a note\n- **G1:** valid\n")
         self.assertEqual(errors, [])
         self.assertEqual(len(entries), 1)
+
+
+class TestReceiptPlusBullet(unittest.TestCase):
+    """Plus-bulleted records in the reviewer section are seen by the parser."""
+
+    def test_plus_bulleted_contradictory_record_degrades(self):
+        text = (
+            "## Global criteria\n"
+            "G1: met - fine\n"
+            "+ G1: violated - actually failed\n"
+        )
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_plus_bulleted_valid_record_parses(self):
+        text = "## Global criteria\n+ G1: met - fine\n"
+        out = flowctl.parse_review_criteria(text)
+        self.assertEqual([c["id"] for c in out], ["G1"])

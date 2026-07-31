@@ -5848,7 +5848,7 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
             stripped = line.strip()
             if re.match(r"^#{1,6}\s", stripped):
                 break
-            if stripped.startswith(("- ", "* ")):
+            if stripped.startswith(("- ", "* ", "+ ")):
                 stripped = stripped[2:].strip()
             m = _REVIEW_CRITERIA_LINE_RE.match(stripped)
             if not m:
