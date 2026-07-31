@@ -16706,7 +16706,11 @@ def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
 
     Grammar: `- **G<N>:** <criterion prose>`. Non-matching lines are
     ignored (headings, prose, blank lines). Validation: unique ids,
-    non-empty prose. Sequential numbering NOT required.
+    non-empty prose, at most _REVIEW_CRITERIA_MAX_ENTRIES active criteria
+    (the receipt-side cap in parse_review_criteria - an oversized source
+    file could never produce the authoritative receipt compliance array,
+    so it is rejected here where the author can see it). Sequential
+    numbering NOT required.
     """
     entries: list[dict] = []
     errors: list[str] = []
@@ -16732,6 +16736,12 @@ def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
 
         seen.add(cid)
         entries.append({"id": cid, "text": prose})
+
+    if len(entries) > _REVIEW_CRITERIA_MAX_ENTRIES:
+        errors.append(
+            f"too many criteria: {len(entries)} active criteria exceed the "
+            f"limit of {_REVIEW_CRITERIA_MAX_ENTRIES}"
+        )
 
     return entries, errors
 

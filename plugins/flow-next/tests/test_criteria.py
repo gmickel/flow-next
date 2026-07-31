@@ -76,6 +76,25 @@ class TestCriteriaParse(unittest.TestCase):
         self.assertTrue(any("empty" in e and "G2" in e for e in errors))
         self.assertEqual(entries, [])
 
+    def test_at_limit_parses_ok(self) -> None:
+        text = "".join(
+            f"- **G{i}:** criterion {i}.\n"
+            for i in range(1, flowctl._REVIEW_CRITERIA_MAX_ENTRIES + 1)
+        )
+        entries, errors = flowctl._criteria_parse(text)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(entries), flowctl._REVIEW_CRITERIA_MAX_ENTRIES)
+
+    def test_over_limit_rejected(self) -> None:
+        text = "".join(
+            f"- **G{i}:** criterion {i}.\n"
+            for i in range(1, flowctl._REVIEW_CRITERIA_MAX_ENTRIES + 2)
+        )
+        entries, errors = flowctl._criteria_parse(text)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("too many criteria", errors[0])
+        self.assertIn(str(flowctl._REVIEW_CRITERIA_MAX_ENTRIES), errors[0])
+
     def test_non_matching_bullets_ignored(self) -> None:
         text = (
             "- plain bullet\n"
@@ -148,6 +167,33 @@ class TestCriteriaCli(unittest.TestCase):
         combined = proc.stdout + proc.stderr
         self.assertIn("duplicate", combined)
         self.assertIn("G1", combined)
+
+    def test_over_limit_file_nonzero_exit(self) -> None:
+        limit = flowctl._REVIEW_CRITERIA_MAX_ENTRIES
+        (self.root / ".flow" / "criteria.md").write_text(
+            "".join(
+                f"- **G{i}:** criterion {i}.\n" for i in range(1, limit + 2)
+            ),
+            encoding="utf-8",
+        )
+        proc = self._run("criteria", "list", "--json")
+        self.assertNotEqual(proc.returncode, 0)
+        combined = proc.stdout + proc.stderr
+        self.assertIn("too many criteria", combined)
+        self.assertIn(str(limit), combined)
+
+    def test_at_limit_file_ok(self) -> None:
+        limit = flowctl._REVIEW_CRITERIA_MAX_ENTRIES
+        (self.root / ".flow" / "criteria.md").write_text(
+            "".join(
+                f"- **G{i}:** criterion {i}.\n" for i in range(1, limit + 1)
+            ),
+            encoding="utf-8",
+        )
+        proc = self._run("criteria", "list", "--json")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["count"], limit)
 
 
 class TestCriteriaHeadingConstant(unittest.TestCase):
