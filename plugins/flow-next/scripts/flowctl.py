@@ -16744,8 +16744,9 @@ def cmd_criteria_list(args: argparse.Namespace) -> None:
 
 # Static instruction wrapper for the completion-review criteria injection.
 # Rendered ONLY when .flow/criteria.md exists and parses (zero-cost-absent).
-# Prompt text: pinned in test_prompt_text_pinned.py.
-_GLOBAL_CRITERIA_BLOCK_TEMPLATE = """## Global acceptance criteria
+# Prompt text: pinned in test_prompt_text_pinned.py. Composed from the shared
+# heading constants so injection, parser, and .1's zero-cost test cannot drift.
+_GLOBAL_CRITERIA_BLOCK_TEMPLATE = GLOBAL_CRITERIA_HEADING + """
 
 This project defines standing, project-wide acceptance criteria in
 `.flow/criteria.md`. Judge each one against this spec's implementation, in
@@ -16760,7 +16761,7 @@ Assign each criterion exactly one status:
   stays the single findings surface
 - `n/a` - the criterion does not apply to this change
 
-Then add a `## Global criteria` section to your review output, one line per
+Then add a `""" + GLOBAL_CRITERIA_OUTPUT_HEADING + """` section to your review output, one line per
 criterion, exactly this grammar (ids from the list above):
 
 G<N>: met|violated|n/a - <one-line note>
