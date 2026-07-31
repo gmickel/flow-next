@@ -900,3 +900,20 @@ class TestCriteriaLooksLikeRound9(unittest.TestCase):
             self.assertNotEqual(r.returncode, 0)
             self.assertNotIn("Traceback", r.stderr)
             self.assertIn("unreadable", r.stdout + r.stderr)
+
+
+class TestCriteriaAltBulletMarkers(unittest.TestCase):
+    """Alternate Markdown bullet markers with G-IDs fail closed as malformed."""
+
+    def test_star_bullet_errors(self):
+        _, errors = flowctl._criteria_parse("* **G1:** must lint\n")
+        self.assertTrue(any("malformed criterion bullet" in e for e in errors))
+
+    def test_plus_bullet_errors(self):
+        _, errors = flowctl._criteria_parse("+ **G2** no new deps\n")
+        self.assertTrue(any("malformed criterion bullet" in e for e in errors))
+
+    def test_star_prose_without_gid_ignored(self):
+        entries, errors = flowctl._criteria_parse("* just a note\n- **G1:** valid\n")
+        self.assertEqual(errors, [])
+        self.assertEqual(len(entries), 1)

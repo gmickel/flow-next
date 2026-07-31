@@ -16711,7 +16711,9 @@ _CRITERIA_LINE_RE = re.compile(r"^-\s+\*\*G(\d+):\*\*\s*(.*)$")
 # Two intent shapes: any G-number bullet WITH a colon (`- G1: x`, `- **G1**: x`),
 # or a BOLD G-number bullet even without one (`- **G2** must lint`) - an
 # unbolded colon-less bullet (`- G20 railway station`) stays ordinary prose.
-_CRITERIA_LOOKSLIKE_RE = re.compile(r"^-\s+(\*\*G\d+\*\*|\**G\d+\**\s*:)")
+# All three Markdown bullet markers (`-`, `*`, `+`) are probed; the strict
+# grammar itself stays `-`-only, so `* **G1:** x` fails closed as malformed.
+_CRITERIA_LOOKSLIKE_RE = re.compile(r"^[-*+]\s+(\*\*G\d+\*\*|\**G\d+\**\s*:)")
 
 
 def get_criteria_path() -> Path:
