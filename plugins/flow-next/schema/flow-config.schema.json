@@ -62,7 +62,11 @@
             },
             {
               "type": "string",
-              "pattern": "^(codex|copilot):[^:\\s]+(:(high|low|medium|minimal|none|xhigh))?$"
+              "pattern": "^codex:[^:\\s]+(:(high|low|medium|minimal|none|xhigh))?$"
+            },
+            {
+              "type": "string",
+              "pattern": "^copilot:[^:\\s]+(:(high|low|medium|xhigh))?$"
             },
             {
               "type": "string",
@@ -549,7 +553,10 @@
         },
         "cleanReviewCommentPattern": {
           "description": "ERE for the silence-signal clean-review COMMENT path: a bot's no-findings issue comment naming the current head SHA also satisfies the gate. Requires BOTH the clean phrase AND the Reviewed commit marker. null/missing falls back to the built-in default; set to an empty string to disable the comment scan (the only real off-switch).",
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "default": "(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit"
         }
       }

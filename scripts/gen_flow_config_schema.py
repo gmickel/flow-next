@@ -12,6 +12,7 @@ Usage: python3 scripts/gen_flow_config_schema.py [--check]
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -388,28 +389,26 @@ def _review_backend_fragment() -> dict:
         if r.get("models") and r.get("efforts")
     )
     model_only = sorted(set(model_backends) - set(effort_backends))
-    efforts = sorted(
-        set().union(
-            *(
-                r["efforts"]
-                for r in flowctl.BACKEND_REGISTRY.values()
-                if r.get("efforts")
-            )
-        )
-    )
-    effort_alt = "|".join(effort_backends)
-    effort_vals = "|".join(efforts)
-    only_alt = "|".join(model_only)
+    # One pattern branch PER effort backend, each with that backend's own
+    # effort set - a union alternation would accept e.g. copilot:<m>:none,
+    # which flowctl rejects at parse time. Backend names are re.escape()d so
+    # a future name carrying a regex metachar cannot corrupt the pattern.
+    effort_branches = [
+        {
+            "type": "string",
+            "pattern": (
+                f"^{re.escape(b)}:[^:\\s]+"
+                f"(:({'|'.join(sorted(flowctl.BACKEND_REGISTRY[b]['efforts']))}))?$"
+            ),
+        }
+        for b in effort_backends
+    ]
+    only_alt = "|".join(re.escape(b) for b in model_only)
     return {
         "anyOf": [
             {"type": "null"},
             {"enum": list(flowctl.VALID_BACKENDS)},
-            {
-                "type": "string",
-                "pattern": (
-                    f"^({effort_alt}):[^:\\s]+(:({effort_vals}))?$"
-                ),
-            },
+            *effort_branches,
             {"type": "string", "pattern": f"^({only_alt}):[^:\\s]+$"},
         ],
     }
@@ -571,7 +570,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("land.automatedReviewers", {"type": "string"}),
         ("land.reviewTrigger", {"type": "string"}),
         ("land.ciFixBudget", {"type": "integer"}),
-        ("land.cleanReviewCommentPattern", {"type": "string"}),
+        ("land.cleanReviewCommentPattern", {"type": ["string", "null"]}),
         ("artifacts", {"kind": "object", "open": False}),
         ("artifacts.html", {"kind": "object", "open": False}),
         ("artifacts.html.enabled", {"type": "boolean"}),
