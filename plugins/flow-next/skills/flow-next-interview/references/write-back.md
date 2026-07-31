@@ -51,6 +51,7 @@ Hard rules:
 - **Never ask about tagging.** The tag records how a criterion got written down; it is not an extra interview question.
 - **Uniform tagging is a failure, not a safe default.** A criterion the interviewee answered is `[user]` or `[paraphrase]`; only genuine gap-fill is `[inferred]`. If everything you wrote came out `[inferred]`, the tally carries no signal - re-check which criteria came from actual answers.
 - **No self-blessing on unasked guesses** (capture's rule, narrowed for interview): if any criterion you wrote is `[inferred]` AND no interview question covered it, do NOT recommend `approve` in the ask above - state the count and let the user check those lines. Criteria settled by an answered question are verified by construction and do not trigger this.
+- **Standing criteria stay out of the R list.** When `.flow/criteria.md` exists, do not restate its standing criteria (G-IDs) as R-IDs - completion review already judges every G-ID against the spec. Reference a relevant G-ID in prose when useful; append an R only for what this spec adds beyond the standing rule.
 
 ### For NEW IDEA (text input, no Flow ID)
 

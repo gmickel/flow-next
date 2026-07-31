@@ -430,6 +430,7 @@ Default to standard unless complexity demands more or less.
  - New criteria take the next unused number. Gaps are fine — do not compact.
  - R-IDs in `## Acceptance Criteria` and `## Requirement coverage` must match (same IDs, same meanings).
  - R-IDs are plain markdown prose, not YAML — the reviewer matches them via LLM reasoning, not strict parsing.
+ - When `.flow/criteria.md` exists, do not restate its standing criteria (G-IDs) as R-IDs - completion review already judges every G-ID against the spec. Reference a relevant G-ID in prose when useful; write an R only for what this spec adds beyond the standing rule.
 
  **Source-tag consumption (Route A refine of a capture-authored spec):** `/flow-next:capture` tags each acceptance criterion with its provenance — `[user]` (verbatim), `[paraphrase]` (user-grounded), `[inferred]` (the agent filled a gap), `[strategy:<track>]`. capture invests real machinery in these *so plan can scrutinize them* — do not plan an `[inferred]` criterion as established fact. When the spec carries source tags:
  - `[user]` / `[paraphrase]` / `[strategy:*]` → user- or strategy-grounded; plan normally.
