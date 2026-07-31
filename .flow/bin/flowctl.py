@@ -5812,7 +5812,7 @@ _REVIEW_CRITERIA_HEADING_RE = re.compile(
     r"^#{2,3}\s+Global criteria\s*:?\s*$", re.IGNORECASE
 )
 _REVIEW_CRITERIA_LINE_RE = re.compile(
-    r"^G([1-9]\d*):\s*(met|violated|n/a)\s*(?:-\s*(.*))?$"
+    r"^G([1-9][0-9]*):\s*(met|violated|n/a)\s*(?:-\s*(.*))?$"
 )
 _REVIEW_CRITERIA_MAX_ENTRIES = 100
 _REVIEW_CRITERIA_MAX_NOTE = 400
@@ -5900,7 +5900,7 @@ def validate_review_receipt_criteria(receipt: object) -> bool:
         cid = item.get("id")
         if (
             not isinstance(cid, str)
-            or not re.fullmatch(r"G[1-9]\d*", cid)
+            or not re.fullmatch(r"G[1-9][0-9]*", cid)
             or cid in seen
         ):
             return False
@@ -16704,7 +16704,7 @@ CRITERIA_FILE = "criteria.md"
 # constant, not a re-typed literal) so absent-file zero-cost is provable.
 GLOBAL_CRITERIA_HEADING = "## Global acceptance criteria"
 
-_CRITERIA_LINE_RE = re.compile(r"^-\s+\*\*G([1-9]\d*):\*\*\s*(.*)$")
+_CRITERIA_LINE_RE = re.compile(r"^-\s+\*\*G([1-9][0-9]*):\*\*\s*(.*)$")
 # Looks-like probe for malformed criterion bullets: a top-level bullet that
 # clearly intends a G-ID (e.g. `- **G1**: prose`, `- G1: prose`) but fails the
 # strict grammar above. Such lines are validation ERRORS, not ignorable prose -
@@ -16716,7 +16716,7 @@ _CRITERIA_LINE_RE = re.compile(r"^-\s+\*\*G([1-9]\d*):\*\*\s*(.*)$")
 # unbolded colon-less bullet (`- G20 railway station`) stays ordinary prose.
 # All three Markdown bullet markers (`-`, `*`, `+`) are probed; the strict
 # grammar itself stays `-`-only, so `* **G1:** x` fails closed as malformed.
-_CRITERIA_LOOKSLIKE_RE = re.compile(r"^[-*+]\s+(\*\*G\d+\*\*|\**G\d+\**\s*:)")
+_CRITERIA_LOOKSLIKE_RE = re.compile(r"^[-*+]\s+(\*\*G[0-9]\S*|\**G[0-9]+\**\s*:)")
 
 
 def get_criteria_path() -> Path:

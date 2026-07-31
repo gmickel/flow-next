@@ -1013,3 +1013,18 @@ class TestGidNumberGrammar(unittest.TestCase):
         self.assertEqual(entries[0]["id"], "G10")
         out = flowctl.parse_review_criteria("## Global criteria\nG10: met - ok\n")
         self.assertEqual(out[0]["id"], "G10")
+
+
+class TestAsciiDigitGids(unittest.TestCase):
+    """Round 16: G-ID digits are ASCII-only on all surfaces."""
+
+    def test_unicode_digit_source_fails_closed(self):
+        _, errors = flowctl._criteria_parse("- **G1١:** arabic-one suffix\n")
+        self.assertTrue(errors)
+
+    def test_unicode_digit_receipt_degrades(self):
+        self.assertIsNone(flowctl.parse_review_criteria("## Global criteria\nG1١: met - x\n"))
+
+    def test_unicode_digit_validator_rejects(self):
+        r = {"type": "completion_review", "criteria": [{"id": "G1０", "status": "met"}]}
+        self.assertFalse(flowctl.validate_review_receipt_criteria(r))

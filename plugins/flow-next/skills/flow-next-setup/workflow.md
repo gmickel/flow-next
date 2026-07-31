@@ -348,7 +348,7 @@ CURRENT_SPEC_IDS=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.specIds -
 # Global criteria scaffold gate (fn-137): the question is offered only while
 # .flow/criteria.md is absent. An existing file - scaffolded, hand-written, or
 # customized - is user content and is never re-asked about, never touched.
-CRITERIA_EXISTS=$(test -f .flow/criteria.md && echo 1 || echo 0)
+CRITERIA_EXISTS=$( { test -e .flow/criteria.md || test -L .flow/criteria.md; } && echo 1 || echo 0)   # -e||-L: a dangling symlink or non-regular path COUNTS as existing (never re-ask/overwrite; a broken path is a validation error to surface, not a scaffold target)
 
 # Call the canonical predicate; never re-derive it. A bare `-n "$TYPE"` counted
 # an inactive value ("null", a typo) as configured, so setup persisted
