@@ -2,6 +2,30 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+An interrupted review can no longer leave your spec telling two different
+stories. Previously, if a plan review died between its internal writes (a
+crash, a Ctrl-C, an OOM), the attempt ledger could carry the new verdict
+while `plan_review_status` still showed the old one - and the next pipeline
+stage would trust the stale status. Now the in-process plan-review path
+commits the attempt row, the status field, and the SHIP round-counter reset
+as one atomic write, so the sidecar is always internally consistent.
+
+### Fixed
+
+- **Review sidecar write transaction (#279).** `record_review_attempt` can
+  now fold the denormalized `<kind>_review_status` write and the SHIP
+  round-counter reset into its single atomic sidecar write. The in-process
+  plan-review path uses both; impl and completion reviews fold the SHIP cap
+  reset (completion keeps its separate status write - receipt persistence
+  before terminal status is a recovery contract). Transport failures never
+  touch status. Each attempt row also gains a best-effort `head_sha` so the
+  ledger records which commit a verdict reviewed. Authority rule documented
+  in `docs/architecture.md`: `review_attempts[]` is the ledger,
+  `*_review_status` is a read model, ledger wins on divergence. Reported by
+  @sn-furali (#279) with a precise read of the write paths - thank you.
+
 ## [flow-next 3.12.0] - 2026-07-31
 
 Your editor can now validate and autocomplete `.flow/config.json`. Flow-next

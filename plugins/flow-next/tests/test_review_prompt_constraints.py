@@ -180,6 +180,9 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.run", "get_copilot_version"): 1,
                 ("subprocess.run", "get_cursor_version"): 1,
                 ("subprocess.run", "get_actor"): 2,
+                # issue #279: best-effort HEAD-sha provenance on review-attempt
+                # rows - a deterministic git read, not an execution bridge.
+                ("subprocess.run", "_review_head_sha"): 1,
                 ("subprocess.run", "_spec_alloc_git"): 1,
                 ("subprocess.run", "_export_run_git"): 1,
                 ("subprocess.run", "_export_read_base_blobs"): 1,
