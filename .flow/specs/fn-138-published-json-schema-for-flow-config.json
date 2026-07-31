@@ -10,13 +10,16 @@
     "fn-139-tracker-determinism-a-transport"
   ],
   "id": "fn-138-published-json-schema-for-flow-config",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-138-published-json-schema-for-flow-config.1": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-07-31T15:08:33.873678Z",
   "ready": true,
   "review_pending_rounds": {
+    "impl:fn-138-published-json-schema-for-flow-config.1": 2,
     "plan": 2
   },
   "spec_path": ".flow/specs/fn-138-published-json-schema-for-flow-config.md",
@@ -33,5 +36,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-31T15:08:34.202348Z"
+  "updated_at": "2026-07-31T15:34:14.597650Z"
 }
