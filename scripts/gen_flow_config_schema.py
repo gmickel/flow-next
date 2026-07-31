@@ -308,6 +308,14 @@ DESCRIPTIONS: dict[str, str] = {
         "CI-fix attempts per PR before land durably labels it "
         "flow-next:needs-human and skips it on later ticks."
     ),
+    "makePr": "/flow-next:make-pr export settings.",
+    "makePr.derivedPaths": (
+        "Optional derived-file classification rules for the make-pr export: "
+        "bucket names (dualCopy, mirror, state) mapped to arrays of rules "
+        "({path|prefix, source}). A configured value fully replaces "
+        "flow-next's built-in default shapes; never required and not part "
+        "of the seeded defaults."
+    ),
     "artifacts": "HTML artifact mode settings (fn-62).",
     "artifacts.html": "HTML render-lens settings.",
     "artifacts.html.enabled": (
@@ -571,6 +579,20 @@ def _build_table() -> list[tuple[str, dict]]:
         ("land.reviewTrigger", {"type": "string"}),
         ("land.ciFixBudget", {"type": "integer"}),
         ("land.cleanReviewCommentPattern", {"type": ["string", "null"]}),
+        ("makePr", {"kind": "object", "open": False}),
+        (
+            "makePr.derivedPaths",
+            {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": {"type": "string"},
+                    },
+                },
+            },
+        ),
         ("artifacts", {"kind": "object", "open": False}),
         ("artifacts.html", {"kind": "object", "open": False}),
         ("artifacts.html.enabled", {"type": "boolean"}),

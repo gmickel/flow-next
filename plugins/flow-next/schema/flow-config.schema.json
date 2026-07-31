@@ -561,6 +561,26 @@
         }
       }
     },
+    "makePr": {
+      "description": "/flow-next:make-pr export settings.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "derivedPaths": {
+          "description": "Optional derived-file classification rules for the make-pr export: bucket names (dualCopy, mirror, state) mapped to arrays of rules ({path|prefix, source}). A configured value fully replaces flow-next's built-in default shapes; never required and not part of the seeded defaults.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
     "artifacts": {
       "description": "HTML artifact mode settings (fn-62).",
       "type": "object",
