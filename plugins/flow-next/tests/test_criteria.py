@@ -865,3 +865,38 @@ class TestCriteriaLooksLikeSource(unittest.TestCase):
     def test_template_grammar_fence_line_not_flagged(self):
         _, errors = flowctl._criteria_parse("- **G<N>:** <criterion prose>\n")
         self.assertEqual(errors, [])
+
+
+class TestCriteriaLooksLikeRound9(unittest.TestCase):
+    """Colon-less bold G-bullets are malformed; unreadable file errors cleanly."""
+
+    def test_bold_no_colon_errors(self):
+        _, errors = flowctl._criteria_parse("- **G2** must lint\n")
+        self.assertTrue(any("malformed criterion bullet" in e for e in errors))
+
+    def test_unbolded_no_colon_stays_prose(self):
+        entries, errors = flowctl._criteria_parse("- G20 railway station\n- **G1:** valid\n")
+        self.assertEqual(errors, [])
+        self.assertEqual([e["id"] for e in entries], ["G1"])
+
+    def test_valid_lines_never_probed(self):
+        entries, errors = flowctl._criteria_parse("- **G1:** a\n- **G2:** b\n")
+        self.assertEqual(errors, [])
+        self.assertEqual(len(entries), 2)
+
+    def test_unreadable_file_clean_error(self):
+        import subprocess, tempfile, os
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run(["git", "init", "-q", td], check=True)
+            flow = os.path.join(td, ".flow")
+            os.makedirs(flow)
+            p = os.path.join(flow, "criteria.md")
+            with open(p, "wb") as fh:
+                fh.write(b"- **G1:** \xff\xfe invalid utf8\n")
+            r = subprocess.run(
+                [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), "criteria", "list", "--json"],
+                capture_output=True, text=True, cwd=td,
+            )
+            self.assertNotEqual(r.returncode, 0)
+            self.assertNotIn("Traceback", r.stderr)
+            self.assertIn("unreadable", r.stdout + r.stderr)

@@ -16708,7 +16708,10 @@ _CRITERIA_LINE_RE = re.compile(r"^-\s+\*\*G(\d+):\*\*\s*(.*)$")
 # an all-typo file must fail closed, never silently disable standing policy.
 # Digit required, so the template's fenced `- **G<N>:**` grammar line never
 # matches; commented examples start with `<!--` and are never probed.
-_CRITERIA_LOOKSLIKE_RE = re.compile(r"^-\s+\**G\d+\**\s*:")
+# Two intent shapes: any G-number bullet WITH a colon (`- G1: x`, `- **G1**: x`),
+# or a BOLD G-number bullet even without one (`- **G2** must lint`) - an
+# unbolded colon-less bullet (`- G20 railway station`) stays ordinary prose.
+_CRITERIA_LOOKSLIKE_RE = re.compile(r"^-\s+(\*\*G\d+\*\*|\**G\d+\**\s*:)")
 
 
 def get_criteria_path() -> Path:
@@ -16783,7 +16786,13 @@ def cmd_criteria_list(args: argparse.Namespace) -> None:
             print("no global criteria (.flow/criteria.md absent or empty)")
         return
 
-    text = path.read_text(encoding="utf-8")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        error_exit(
+            f"invalid .flow/criteria.md: unreadable ({exc})",
+            use_json=use_json,
+        )
     entries, errors = _criteria_parse(text)
     if errors:
         error_exit(
