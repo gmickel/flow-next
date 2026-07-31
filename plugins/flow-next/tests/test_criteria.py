@@ -947,3 +947,21 @@ class TestReceiptStrictSection(unittest.TestCase):
         text = "## Global criteria\n\nG1: met - ok\n\nG2: n/a - x\n"
         out = flowctl.parse_review_criteria(text)
         self.assertEqual([c["id"] for c in out], ["G1", "G2"])
+
+
+class TestReceiptVerdictTerminator(unittest.TestCase):
+    """Round 13: the required verdict tag ends the section instead of poisoning it."""
+
+    def test_section_final_with_verdict_tag_parses(self):
+        text = "## Global criteria\nG1: met - ok\nG2: n/a - x\n<verdict>SHIP</verdict>\n"
+        out = flowctl.parse_review_criteria(text)
+        self.assertEqual([c["id"] for c in out], ["G1", "G2"])
+
+    def test_needs_work_tag_also_terminates(self):
+        text = "## Global criteria\nG1: violated - bad\n<verdict>NEEDS_WORK</verdict>\n"
+        out = flowctl.parse_review_criteria(text)
+        self.assertEqual(out[0]["status"], "violated")
+
+    def test_prose_before_verdict_still_degrades(self):
+        text = "## Global criteria\nG1: met - ok\nsome prose\n<verdict>SHIP</verdict>\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))

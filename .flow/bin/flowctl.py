@@ -5849,6 +5849,8 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
                 break
             if not stripped:
                 continue
+            if re.match(r"^<verdict>(SHIP|NEEDS_WORK)</verdict>$", stripped):
+                break  # the required terminal verdict tag ends the section
             if stripped.startswith(("- ", "* ", "+ ")):
                 stripped = stripped[2:].strip()
             m = _REVIEW_CRITERIA_LINE_RE.match(stripped)
