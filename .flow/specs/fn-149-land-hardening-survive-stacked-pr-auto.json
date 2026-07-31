@@ -1,0 +1,25 @@
+{
+  "branch_name": "fn-149-land-hardening-survive-stacked-pr-auto",
+  "created_at": "2026-07-31T04:08:56.482369Z",
+  "depends_on_epics": [],
+  "id": "fn-149-land-hardening-survive-stacked-pr-auto",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-149-land-hardening-survive-stacked-pr-auto.md",
+  "status": "open",
+  "title": "land hardening: survive stacked-PR auto-retarget and rebase",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": "e8b91403-53e3-4195-8564-1e0c60882e68",
+    "identifier": "FLOW-83",
+    "lastSyncedAt": "2026-07-31T04:10:32.523445Z",
+    "linkState": "linked",
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": "https://linear.app/gmickel/issue/FLOW-83"
+  },
+  "updated_at": "2026-07-31T04:10:32.548546Z"
+}
