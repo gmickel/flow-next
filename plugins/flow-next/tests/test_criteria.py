@@ -558,5 +558,69 @@ class TestCriteriaReceiptCli(unittest.TestCase):
         self.assertNotIn("criteria", receipt)
 
 
+class TestCriteriaTemplate(unittest.TestCase):
+    """Bundled setup scaffold template parses clean (fn-137.3)."""
+
+    _TEMPLATE = (
+        REPO_ROOT / "plugins" / "flow-next" / "templates" / "criteria.md"
+    )
+
+    def test_template_parses_clean_with_zero_active_criteria(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        try:
+            root = Path(tmp.name)
+            _git(root, "init", "-q")
+            flow_dir = root / ".flow"
+            flow_dir.mkdir()
+            (flow_dir / "criteria.md").write_text(
+                self._TEMPLATE.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS_DIR / "flowctl.py"),
+                    "criteria",
+                    "list",
+                    "--json",
+                ],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            payload = json.loads(proc.stdout)
+            self.assertTrue(payload.get("success"))
+            self.assertEqual(payload["count"], 0)
+            self.assertEqual(payload["criteria"], [])
+        finally:
+            tmp.cleanup()
+
+    def test_commented_examples_match_grammar_when_uncommented(self) -> None:
+        text = self._TEMPLATE.read_text(encoding="utf-8")
+        commented = [
+            line
+            for line in text.splitlines()
+            if line.startswith("<!-- - **G")
+        ]
+        self.assertEqual(len(commented), 3)
+        stripped_lines = []
+        for line in commented:
+            self.assertTrue(line.endswith(" -->"))
+            stripped_lines.append(line[len("<!-- ") : -len(" -->")])
+        entries, errors = flowctl._criteria_parse("\n".join(stripped_lines))
+        self.assertEqual(errors, [])
+        self.assertEqual(len(entries), 3)
+        self.assertEqual([e["id"] for e in entries], ["G1", "G2", "G3"])
+
+    def test_no_active_criterion_lines_in_template(self) -> None:
+        text = self._TEMPLATE.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            self.assertIsNone(
+                flowctl._CRITERIA_LINE_RE.match(line),
+                f"active criterion line in template: {line!r}",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

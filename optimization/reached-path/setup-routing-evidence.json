@@ -18,8 +18,8 @@
     },
     {
       "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
-      "chars_lf": 72057,
-      "content_hash": "80c28010b2d97f6050b5712c9a80db88c331476f2cbbbbfa7e41453208a559c7"
+      "chars_lf": 74091,
+      "content_hash": "8c0e45ba79b3389fd66b563733a3f77d848448369afa12bc6811f767aef1083f"
     },
     {
       "path": "plugins/flow-next/skills/flow-next-setup/references/model-pins.md",
@@ -76,40 +76,40 @@
     {
       "fixture_id": "setup.autonomous",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
+      "candidate_chars": 75373,
+      "reduction_chars": 28315,
       "reduction_percent": 29.27,
       "candidate_reached_path_chars": 73339
     },
     {
       "fixture_id": "setup.copy-first-install",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
+      "candidate_chars": 75373,
+      "reduction_chars": 28315,
       "reduction_percent": 29.27,
       "candidate_reached_path_chars": 73339
     },
     {
       "fixture_id": "setup.copy-refresh",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
+      "candidate_chars": 75373,
+      "reduction_chars": 28315,
       "reduction_percent": 29.27,
       "candidate_reached_path_chars": 73339
     },
     {
       "fixture_id": "setup.customized-snippet-keep",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
+      "candidate_chars": 75373,
+      "reduction_chars": 28315,
       "reduction_percent": 29.27,
       "candidate_reached_path_chars": 73339
     },
     {
       "fixture_id": "setup.customized-snippet-overwrite",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
+      "candidate_chars": 75373,
+      "reduction_chars": 28315,
       "reduction_percent": 29.27,
       "candidate_reached_path_chars": 73339
     },
@@ -119,8 +119,8 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78602,
-      "reduction_chars": 25086,
+      "candidate_chars": 80636,
+      "reduction_chars": 23052,
       "reduction_percent": 24.19,
       "candidate_reached_path_chars": 78602
     },
@@ -130,8 +130,8 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78602,
-      "reduction_chars": 25086,
+      "candidate_chars": 80636,
+      "reduction_chars": 23052,
       "reduction_percent": 24.19,
       "candidate_reached_path_chars": 78602
     },
@@ -141,8 +141,8 @@
         "model-routing-question-cursor.md",
         "model-routing-cursor.md"
       ],
-      "candidate_chars": 77972,
-      "reduction_chars": 25716,
+      "candidate_chars": 80006,
+      "reduction_chars": 23682,
       "reduction_percent": 24.8,
       "candidate_reached_path_chars": 77972
     },
@@ -152,8 +152,8 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78602,
-      "reduction_chars": 25086,
+      "candidate_chars": 80636,
+      "reduction_chars": 23052,
       "reduction_percent": 24.19,
       "candidate_reached_path_chars": 78602
     },
@@ -163,16 +163,16 @@
         "model-routing-question-grok.md",
         "model-routing-grok.md"
       ],
-      "candidate_chars": 78322,
-      "reduction_chars": 25366,
+      "candidate_chars": 80356,
+      "reduction_chars": 23332,
       "reduction_percent": 24.46,
       "candidate_reached_path_chars": 78322
     },
     {
       "fixture_id": "setup.malformed-metadata",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
+      "candidate_chars": 75373,
+      "reduction_chars": 28315,
       "reduction_percent": 29.27,
       "candidate_reached_path_chars": 73339
     },
@@ -182,8 +182,8 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78602,
-      "reduction_chars": 25086,
+      "candidate_chars": 80636,
+      "reduction_chars": 23052,
       "reduction_percent": 24.19,
       "candidate_reached_path_chars": 78602
     },
@@ -192,16 +192,16 @@
       "reads": [
         "model-routing-question-bridge.md"
       ],
-      "candidate_chars": 74628,
-      "reduction_chars": 29060,
+      "candidate_chars": 76662,
+      "reduction_chars": 27026,
       "reduction_percent": 28.03,
       "candidate_reached_path_chars": 74628
     },
     {
       "fixture_id": "setup.plugin-mode",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
+      "candidate_chars": 75373,
+      "reduction_chars": 28315,
       "reduction_percent": 29.27,
       "candidate_reached_path_chars": 73339
     },
@@ -211,16 +211,16 @@
         "ralph-question.md",
         "ralph-enable.md"
       ],
-      "candidate_chars": 75388,
-      "reduction_chars": 28300,
+      "candidate_chars": 77422,
+      "reduction_chars": 26266,
       "reduction_percent": 27.29,
       "candidate_reached_path_chars": 75388
     },
     {
       "fixture_id": "setup.ralph-unsupported",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
+      "candidate_chars": 75373,
+      "reduction_chars": 28315,
       "reduction_percent": 29.27,
       "candidate_reached_path_chars": 73339
     }
@@ -231,16 +231,16 @@
       "reads": [
         "model-pins.md"
       ],
-      "candidate_chars": 78568,
-      "reduction_chars": 25120,
+      "candidate_chars": 80602,
+      "reduction_chars": 23086,
       "reduction_percent": 24.23,
       "candidate_reached_path_chars": 78568
     },
     {
       "branch": "model-pin-autonomous-skip",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
+      "candidate_chars": 75373,
+      "reduction_chars": 28315,
       "reduction_percent": 29.27,
       "candidate_reached_path_chars": 73339
     },
@@ -250,8 +250,8 @@
         "ralph-question.md",
         "ralph-disable.md"
       ],
-      "candidate_chars": 75641,
-      "reduction_chars": 28047,
+      "candidate_chars": 77675,
+      "reduction_chars": 26013,
       "reduction_percent": 27.05,
       "candidate_reached_path_chars": 75641
     }

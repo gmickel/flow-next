@@ -345,6 +345,11 @@ CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.h
 # tracker configured AND this key unset so existing repos get asked on their next
 # setup run without re-prompting once either value is written.
 CURRENT_SPEC_IDS=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.specIds --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+# Global criteria scaffold gate (fn-137): the question is offered only while
+# .flow/criteria.md is absent. An existing file - scaffolded, hand-written, or
+# customized - is user content and is never re-asked about, never touched.
+CRITERIA_EXISTS=$(test -f .flow/criteria.md && echo 1 || echo 0)
+
 # Call the canonical predicate; never re-derive it. A bare `-n "$TYPE"` counted
 # an inactive value ("null", a typo) as configured, so setup persisted
 # specIds=tracker while every mint gate saw the bridge as inactive.
@@ -406,7 +411,7 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 Build the questions array dynamically. **Only include questions for config values that are NOT already set** — existing config is preserved, never overwritten. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
 
-Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `AskUserQuestion` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only Docs + Star, plus Ralph when `RALPH_ASK=1` and Model Routing when its interactive platform/bridge gate passes.
+Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `AskUserQuestion` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only Docs + Star, plus Ralph when `RALPH_ASK=1`, Model Routing when its interactive platform/bridge gate passes, and Global criteria while `.flow/criteria.md` is still absent.
 
 Available questions (include only if corresponding config is unset):
 
@@ -485,6 +490,19 @@ Available questions (include only if corresponding config is unset):
   "options": [
     {"label": "Yes (Recommended)", "description": "Also emit shareable HTML review pages alongside the markdown"},
     {"label": "No", "description": "Markdown-only. Zero extra steps, zero token overhead. Enable later: flowctl config set artifacts.html.enabled true"}
+  ],
+  "multiSelect": false
+}
+```
+
+**Global criteria question** (include if `CRITERIA_EXISTS=0` — an existing `.flow/criteria.md` is user content: never re-ask, never touch. Runs in BOTH setup modes — like the Step 4a SPEC.md offer, it seeds a user-owned file, not a setup-managed copy):
+```json
+{
+  "header": "Global criteria",
+  "question": "Scaffold .flow/criteria.md? A plain markdown file of standing, project-wide acceptance criteria (- **G1:** every route change regenerates the contract...). When present, spec completion review judges every criterion against each spec's implementation and records met/violated/n-a in the review receipt. Absent = zero effect anywhere.",
+  "options": [
+    {"label": "Scaffold", "description": "Write .flow/criteria.md from the bundled template - documents the G-ID grammar with commented examples to replace with your own criteria"},
+    {"label": "Skip", "description": "No file written, nothing changes. Opt in any time by creating .flow/criteria.md yourself (grammar: - **G<N>:** <criterion>) or re-running /flow-next:setup"}
   ],
   "multiSelect": false
 }
@@ -765,6 +783,15 @@ Only process answers for questions that were asked (config values that were unse
      flow-next never auto-installs lavish-axi.
      ```
 
+**Global criteria** (if question was asked):
+- If "Scaffold": copy the bundled template (both modes resolve it from the plugin - the file is user content from this moment on, so no re-run ever refreshes or compares it):
+
+  ```bash
+  cp "${PLUGIN_ROOT}/templates/criteria.md" .flow/criteria.md
+  ```
+
+- If "Skip": do nothing - no file, no config key, no meta stamp. Declining leaves no trace.
+
 **Review** (if question was asked):
 Map user's answer to config value and persist:
 
@@ -879,6 +906,7 @@ Installed:
 - .flow/templates/spec.md
 - .flow/usage.md
 - <repo-root>/SPEC.md (only if Step 4a "Copy template" was chosen — otherwise omit this line)
+- .flow/criteria.md (only if the Global criteria "Scaffold" option was chosen — otherwise omit this line)
 ```
 
 **If PLATFORM=cursor, also show:**
@@ -959,6 +987,7 @@ Setup mode: plugin (Claude Code)
 Written:
 - CLAUDE.md flow-next snippet (marker-fenced, sentinel v<N>)
 - <repo-root>/SPEC.md (only if Step 4a "Copy template" was chosen — otherwise omit this line)
+- .flow/criteria.md (only if the Global criteria "Scaffold" option was chosen — otherwise omit this line)
 
 Nothing was copied into .flow/ — flowctl rides the plugin's PATH:
   flowctl --help        # any agent shell, no export needed
