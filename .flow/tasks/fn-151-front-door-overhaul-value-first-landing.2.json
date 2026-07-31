@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-31T04:47:40.690135Z",
+  "depends_on": [],
+  "id": "fn-151-front-door-overhaul-value-first-landing.2",
+  "priority": null,
+  "spec": "fn-151-front-door-overhaul-value-first-landing",
+  "spec_path": ".flow/tasks/fn-151-front-door-overhaul-value-first-landing.2.md",
+  "status": "todo",
+  "title": "flow-next.dev supporting pages, proof page, and nav",
+  "updated_at": "2026-07-31T04:47:40.690135Z"
+}

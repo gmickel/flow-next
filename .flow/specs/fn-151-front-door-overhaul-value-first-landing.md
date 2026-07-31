@@ -61,7 +61,7 @@ Register per property, unchanged from the vault tone map: README is a skeptical 
 | 9 | Notable updates | Shrunk to lead plus two |
 | 10 | Quickstart band | Unchanged |
 
-### Chart-proofing (fn-135 is ready, plan-reviewed, nine tasks, blocked only on fn-141)
+### Chart-proofing (fn-135 is ready, plan-reviewed, nine tasks, and unblocked: fn-141 has landed)
 
 fn-135 ships `/flow-next:chart` (pre-capture discovery) and `/flow-next:guide` (the router), and its R19 demands a pipeline-level docs change touching nearly every surface this spec edits. Six rules keep this overhaul from needing a second pass:
 
@@ -88,11 +88,25 @@ Hand-authored SVG on the ink field. Amber curve climbing for agent code-quality 
 
 | Repository | Surfaces |
 |---|---|
-| `flow-next` | `README.md` |
-| `flow-next.dev` | `src/pages/index.astro`, styles, a new evidence-band component, `strategy/why-flow-next.mdx`, `introduction.mdx`, new `proof/evidence.mdx`, `install.mdx`, `src/lib/site.ts`, `astro.config.mjs` |
+| `flow-next` | `README.md`, `CHANGELOG.md`, `plugins/flow-next/docs/platforms.md` |
+| `flow-next.dev` | `src/pages/index.astro`, `src/styles/home*.css`, a new evidence-band component, `strategy/why-flow-next.mdx`, `introduction.mdx`, new `proof/evidence.mdx`, `install.mdx`, `subagents/overview.mdx`, `releases/changelog.mdx`, `src/lib/site.ts`, `astro.config.mjs`, `DESIGN.md` |
 | `mickel.tech` | `app/apps/flow-next/page.tsx`, `lib/apps.ts` |
 
 Each repository commits separately. The flow-next.dev and mickel.tech work happens in their own clean worktrees, and their commit SHAs are reported as evidence against this spec.
+
+### Canonical harness tiering (single formulation, R26)
+
+`plugins/flow-next/docs/platforms.md` is the canonical statement. Every other surface restates it verbatim or links to it:
+
+> First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Community port for OpenCode.
+
+Grok Build qualifies on the same standard Cursor already meets: its own setup detection signal (`GROK_AGENT=1`, fn-126), canonical plugin files consumed as-is, slash commands, and verified multi-agent flows. Ralph is intentionally not built for either. Because every surface restates one sentence from one canonical home, demoting Grok later is a one-place edit.
+
+### Contradiction resolutions (from the fn-151 gap pass)
+
+- **R13 versus R25.** R13 governs front-door prose: the landing, the README narrative, and the mickel.tech page carry no counts. R25 governs reference documents, where an accurate count earns its place: `platforms.md`, `subagents/overview.mdx`, `docs/skills.md`, and the README's demoted reference tail keep counts and are corrected to 21 agents. A count is banned where it sells and kept where it informs.
+- **Canonical wording versus per-property register.** The six outcome *headings* ship word-for-word identically on the landing and in the README. The supporting body copy adapts to each property's register. Consistency where the claim lives, register where the voice lives.
+- **Front-door scope.** Three surfaces: the landing, the README, the mickel.tech page. R13, R14, and R15 bind all three. mickel.tech's own count claims are inside R25's ledger.
 
 ## Edge Cases & Constraints
 <!-- scope: technical -->
@@ -103,6 +117,11 @@ Each repository commits separately. The flow-next.dev and mickel.tech work happe
 - **No client names.** Sector descriptors only. No PSVI or Velocity Index vocabulary anywhere public.
 - **No process or speed self-praise.** Release cadence and issue-closure rate are true and banned.
 - **The video goes stale on chart.** `pipeline-hero.mp4` animates a route that fn-135 invalidates. Its re-cut is already scoped into fn-135 task 8 and is explicitly out of scope here.
+- **fn-135 is unblocked and workable today** (fn-141 landed). No dependency edge is recorded in either direction, because a real edge would block fn-135 needlessly. Instead: **fn-151 should land first.** fn-135 task 7 owns `README.md` and task 8 owns `index.astro`, `site.ts`, `astro.config.mjs`, and `introduction.mdx`; if fn-135 lands first, fn-151's from-scratch recomposition of those files would steamroll it and force exactly the second overhaul this spec exists to avoid. Landing fn-151 first leaves fn-135 four small additions: two nav entries, one routing paragraph, one figcaption string, one README mention.
+- **fn-142** (maintainability axis) also inserts a sentence into `README.md`. Whichever lands second preserves the other's claim. R21's "retains every existing section" does not protect a single inserted sentence.
+- **Cross-repo anchor fragility.** Three `install.mdx` headings back at least eight inbound links, two of them from the other repository (`README.md` and `platforms.md`). Starlight does not validate cross-file anchors and no build in any repo catches the cross-repo case. Heading text is preserved rather than trusted to a link checker.
+- **No precedent for the decay plot.** The flow-next.dev codebase contains no hand-authored chart SVG and no `IntersectionObserver`. Both existing animations are load-triggered with a `prefers-reduced-motion` opt-out; that gating pattern is reusable, the scroll trigger is new.
+- **The banned-phrase lists are vault-resident** and unavailable to any delegated implementer. The rules that matter are therefore inlined into task acceptance rather than referenced.
 - **Docs-only.** No plugin version bump. Changelog entries land under `## Unreleased`.
 - **Em-dash replacement is per sentence.** A global substitution reads worse than the original and will need redoing.
 
@@ -144,7 +163,15 @@ Each repository commits separately. The flow-next.dev and mickel.tech work happe
 - **R33:** The landing renders without a dead viewport between the harness strip and the following section, and the pipeline video band either plays or is replaced by its poster.
 - **R34:** The landing and README are verified at desktop and mobile widths, with no horizontal overflow and visible keyboard focus retained.
 - **R35:** No plugin version bump occurs. Changelog additions land under `## Unreleased` in both the repository and the docs site.
-- **R36:** Each repository is committed separately, and the flow-next.dev and mickel.tech commit SHAs are recorded as evidence against this spec.
+- **R36:** Each repository is committed separately. The flow-next.dev and mickel.tech commit SHAs are recorded in the task done-summary and in the evidence JSON `commits` array, each prefixed with its repository name so a single-repo schema still carries all three.
+- **R37:** `flow-next.dev/DESIGN.md` is updated so its Homepage structure list, Homepage Product Mockup section, and Feature Cards section describe the shipped page rather than the retired one, and its Visual QA Checklist gains the mobile-width, keyboard-focus, and video-poster steps that R32 relies on to verify R33 and R34.
+- **R38:** The landing's `siteTitle`, `siteDescription`, and Open Graph and Twitter metadata, and the mickel.tech `lib/apps.ts` tagline and description, are restated in the outcome-first register rather than the mechanism list they currently repeat. If `public/og-image.png` is left showing the retired hero, that is stated as a deliberate deferral rather than left unnoticed.
+- **R39:** The three `install.mdx` headings that back inbound anchors keep their exact text, or every inbound link is updated in the same change set, including the two cross-repo links from `README.md` and `plugins/flow-next/docs/platforms.md`.
+- **R40:** A `## Unreleased` heading is created in the repository `CHANGELOG.md` above the 3.9.0 entry, matching that file's existing keep-a-changelog subsection style, and the docs-site changelog placeholder is replaced with an entry in the customer-facing problem-first register.
+- **R41:** The other two repositories are gated too: `bun run build` and `bun x biome check .` pass for mickel.tech, and the README renders with no broken relative link. Results are recorded as evidence.
+- **R42:** The six outcome headings appear word-for-word identically on the landing and in the README; supporting body copy adapts per property register.
+- **R43:** The decay plot's resting state is fully drawn. The draw-on animation is an enhancement applied only when the element can be observed entering the viewport, so a deep-link, a restored scroll position, or a missing observer yields a complete chart rather than an empty one.
+- **R44:** Front doors describe the pipeline as an arc rather than a stage list, and no front door presents a stage enumeration that fn-135 would invalidate.
 
 ## Boundaries
 <!-- scope: business -->
@@ -176,3 +203,57 @@ Not in this spec:
 **Counts leave the front doors permanently.** They have drifted twice, they move again when fn-135 lands, and a marketing surface quoting an inventory number is a maintenance liability with no reader benefit. Generated catalogs keep exact numbers.
 
 **The overhaul is chart-proofed rather than deferred until after fn-135.** fn-135 is blocked on fn-141 and carries nine tasks; the front doors are damaging credibility now. Building against the arc rather than the stage list means fn-135's docs task inherits slots instead of a rewrite.
+
+## Quick commands
+
+```bash
+# flow-next.dev (per-task, in its own worktree)
+cd ~/work/flow-next.dev && pnpm check && pnpm build
+
+# mickel.tech
+cd ~/work/mickel.tech && bun run build && bun x biome check .
+
+# nav parity (flow-next.dev) - only install + introduction may differ
+diff <(grep -oE 'slug: "[^"]+"' astro.config.mjs | sed -E 's/slug: "([^"]+)"/\1/' | sort -u) \
+     <(grep -oE '"[a-z][a-zA-Z0-9/_-]*"' src/lib/site.ts | tr -d '"' | sort -u)
+
+# boundary gates - both MUST produce no output
+grep -ri "PSVI\|Velocity Index" ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/
+grep -riwf ~/.claude/flow-next-client-names.txt ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/
+
+# em-dash census on the five front-door surfaces
+grep -c '—' README.md ~/work/flow-next.dev/src/pages/index.astro
+```
+
+## Strategy Alignment
+
+Active tracks served by this plan:
+
+- **Spec-driven team patterns** - the front doors are where the methodology identity is either legible or invisible. Promoting the breadth evidence, the honest asymmetry, and the outcome framing is what makes the methodology claim land on a cold visitor instead of reading as an elaborate tool.
+- **Cross-platform parity** - R26 resolves a three-way contradiction about which harnesses are first-class, and establishes one canonical sentence with a single home, so the claim stops drifting per surface.
+
+## Early proof point
+
+Task 1 validates the core approach: the evidence band with its decay plot is the one genuinely new thing here, it has no precedent in the codebase (no hand-authored chart SVG, no IntersectionObserver), and it carries the beat the whole recomposition is built around. If the plot cannot be made to read in three seconds inside the existing palette, or the drawn-by-default requirement makes the animation pointless, reconsider the compact-stat-band variant before task 5 recomposes the page around it.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1-R3 | Hero problem line, reduced visual, refresh boundary | .5 | - |
+| R4-R6 | Evidence band, decay plot, motion gating | .1 | - |
+| R7-R12 | Verify-tape relocation, six outcomes, numbering, breadth band, adoption strip, path router | .5 | - |
+| R13-R15 | Counts off front doors, noun-swap scope claims, prompt-first | .3, .4 | .3 owns README and canonical prose; .4 owns mickel.tech |
+| R16-R20 | Supporting pages, proof page, install opener, nav both sources | .2 | - |
+| R21-R23 | README recomposition, evidence position, scannable SlopCodeBench | .3 | - |
+| R24-R26 | mickel.tech alignment, ledger, canonical tiering | .3, .4 | .4 writes the canonical sentence; .3 restates it |
+| R27-R31 | Em dashes, curly quotes, confidence register, banned phrases, boundary greps | .6 | Applied inline by every task, verified globally in .6 |
+| R32-R36 | Build gates, live-render checks, responsive and a11y, no bump, per-repo evidence | .6 | - |
+| R37 | DESIGN.md sync and QA-checklist extension | .5 | Written by the task that ships the page it describes |
+| R38 | Metadata and registry copy in outcome register | .5, .4 | .5 owns site metadata; .4 owns lib/apps.ts |
+| R39 | install.mdx anchor integrity incl. cross-repo links | .2 | - |
+| R40 | Repo CHANGELOG Unreleased + docs-site entry | .3, .6 | .3 opens the repo section; .6 writes the docs-site entry |
+| R41 | mickel.tech and README gates | .4, .6 | - |
+| R42 | Outcome headings byte-identical across front doors | .3, .6 | .3 authors; .6 diffs |
+| R43 | Decay plot drawn by default | .1 | - |
+| R44 | Arc not stage list | .5 | - |
