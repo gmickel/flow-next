@@ -2,6 +2,8 @@
 
 > user (turn 3): "could be a selling point to have early optional support for this. analyse if this would be possible without blowing up flowctl, our skills etc. we obviously wouldn't want to make it the default and we support more than just github anyhow, so optional. consider the lowest friction way, including users have to install the gh stacked commit skill that was mentioned or us taking some of that to enable this early"
 > user (turn 4): "yes, capture the v0 slice and rewrite fn-150 so that we could feasibly land all 3 tomorrow so that all flow-next stuff including automonmy (pilot) etc could work as this is the biggest gain imo, also do your research properly and smoketest the api in a new test repo so we are not guessing at all."
+> user (turn 5): "maybe land doesn't make sense as a flow here anyhow, would us say the point of stacked PRs is to improve being able to land lots of stuff and then review them manually? how would that change the picture"
+> user (turn 6): "yes, should be --ready probably, update our specs with these new insights"
 
 Smoke-tested live 2026-07-31 in a throwaway repo (gmickel/stacks-api-smoke), not guessed:
 - `POST /repos/{o}/{r}/stacks` with `{"pull_requests": [bottom..top]}` links EXISTING plain PRs (created via `gh pr create --base <parent-branch>`) into a server-side stack. No gh-stack extension involved. 201 + stack object.
@@ -14,7 +16,7 @@ Smoke-tested live 2026-07-31 in a throwaway repo (gmickel/stacks-api-smoke), not
 
 <!-- Source-tag breakdown: 30% [user], 50% [paraphrase], 20% [inferred] -->
 
-Early, optional stacked-PR support is a differentiator (GitHub shipped the public preview 2026-07-30; agent products are announcing day-one support) and the groundwork for removing the build loop's merge-wait stall. The lowest-friction v0 lives entirely in make-pr: flow-next already creates correctly-shaped dependent PRs via the base-ref override, and the verified Stacks REST API turns such a PR into a real stack layer with one `gh api` call after create. Zero flowctl changes, zero new dependencies (the gh-stack CLI extension is NOT required - stack linkage is plain REST via the `gh` CLI every install already has), zero behavior change while the gate is off.
+Early, optional stacked-PR support is a differentiator (GitHub shipped the public preview 2026-07-30; agent products are announcing day-one support) and the groundwork for removing the build loop's merge-wait stall. The primary consumption model is human review: the point of stacks is that the pipeline can produce lots of small, individually proven layers and a human reviews each layer's clean diff (stack map + per-layer cognitive-aid body) and merges from GitHub's stack UI, which owns sequential merging and retargeting. Autonomous merging (land) is a separate, opt-in tail. The lowest-friction v0 lives entirely in make-pr: flow-next already creates correctly-shaped dependent PRs via the base-ref override, and the verified Stacks REST API turns such a PR into a real stack layer with one `gh api` call after create. Zero flowctl changes, zero new dependencies (the gh-stack CLI extension is NOT required - stack linkage is plain REST via the `gh` CLI every install already has), zero behavior change while the gate is off.
 
 ## Acceptance Criteria
 
@@ -24,7 +26,8 @@ Early, optional stacked-PR support is a differentiator (GitHub shipped the publi
 - **R4:** With the gate on and the resolved base being another open flow-authored PR's branch, make-pr links the new PR into a stack after create: extend the parent's existing stack via the add endpoint when one exists, else create a stack from parent + new PR. Implemented with plain `gh api` REST calls - the gh-stack extension is never required. [paraphrase]
 - **R5:** Stack-link failure is non-fatal: on 404/409/422 (preview not enabled on the repo, concurrent modification, validation refusal) make-pr emits one stderr note and the PR stands as a plain dependent PR. Linking never blocks or fails PR creation. [paraphrase]
 - **R6:** A linked PR's body records its stack membership in one line (stack number and position) sourced from the API response, consistent with the no-fabrication guardrails. [inferred]
-- **R7:** The draft-first flow is preserved: draft PRs join stacks (verified live), and draft/ready semantics are untouched. [inferred]
+- **R7:** Draft PRs join stacks correctly (verified live); draft/ready semantics for non-stacked PRs are untouched. [inferred]
+- **R8:** Stacked layers default to READY, not draft: with the gate on, a stack-linked PR whose open-items count is zero is created ready - a human merging from the stack UI cannot merge drafts, and readiness is not merge consent (the human, or land when chosen, still gates the merge). Open items still force draft; an explicit draft flag always wins. This ready-default applies under Ralph/autonomous drivers too, as a documented gate-scoped exception to forced-draft (the human-review gate moves from "flip draft to ready" to "merge the layer"). [user]
 
 ## Boundaries
 
@@ -49,3 +52,4 @@ Why REST over the gh-stack extension: `gh api` is already authenticated and requ
 | R5 | TBD - populate via /flow-next:plan |
 | R6 | TBD - populate via /flow-next:plan |
 | R7 | TBD - populate via /flow-next:plan |
+| R8 | TBD - populate via /flow-next:plan |

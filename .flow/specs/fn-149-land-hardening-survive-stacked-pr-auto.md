@@ -3,6 +3,8 @@
 > user (turn 1): "https://github.blog/changelog/2026-07-30-stacked-pull-requests-are-now-in-public-preview/ [...] research task. how does this help flow-next, and does it conflict with our new make-pr or does it improve it"
 > user (turn 2): "capture it, probable 2 specs, then commit and push so we have the specs stored. [...]"
 > user (turn 4): "yes, capture the v0 slice and rewrite fn-150 so that we could feasibly land all 3 tomorrow so that all flow-next stuff including automonmy (pilot) etc could work as this is the biggest gain imo, also do your research properly and smoketest the api in a new test repo so we are not guessing at all."
+> user (turn 5): "maybe land doesn't make sense as a flow here anyhow, would us say the point of stacked PRs is to improve being able to land lots of stuff and then review them manually? how would that change the picture"
+> user (turn 6): "yes, should be --ready probably, update our specs with these new insights"
 
 Smoke-tested live 2026-07-31 in a throwaway repo (gmickel/stacks-api-smoke) - findings that harden this spec from analysis into verified fact:
 - `gh pr merge` (REST/GraphQL mergePullRequest) is HARD-BLOCKED on any stacked PR: "This pull request is part of a stack and must be merged sequentially using the stack merge API." Land's current merge call cannot merge a stacked PR at all.
@@ -41,6 +43,8 @@ This spec makes land correct on stacked PRs: recognize retargets and re-gate, me
 ## Decision Context
 
 Why now: verified live that land's current merge call cannot merge a stacked PR and that targeting an upper layer collapses the stack - so without this spec, land is broken or dangerous the moment any babysat PR joins a stack, regardless of who stacked it. Hardening the reader and fixing the merge path are independent of, and prerequisite to, authoring stacks. The no-client-head-pin gap in merge-async is mitigated by minimizing the read-to-submit window and verifying the server-echoed expected head SHA, with mismatch escalating to NEEDS_HUMAN rather than proceeding. [paraphrase]
+
+Driver scoping: in the default human-merge flow (merging layers from GitHub's stack UI) land never merges, so R5 is exercised only when the user chooses land as the driver - running land IS choosing autonomous merging, no extra gate needed. R1-R4 protect every land tick regardless: human merges cause the retargets that land then observes while babysitting CI and review threads on the remaining layers. [paraphrase]
 
 ## Requirement coverage
 
