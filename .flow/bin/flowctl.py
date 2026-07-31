@@ -16785,6 +16785,11 @@ def cmd_criteria_list(args: argparse.Namespace) -> None:
     path = get_criteria_path()
 
     if not path.exists():
+        if os.path.lexists(path):
+            error_exit(
+                "invalid .flow/criteria.md: broken symlink",
+                use_json=use_json,
+            )
         if use_json:
             json_output({"criteria": [], "count": 0, "path": None})
         else:
@@ -16861,6 +16866,13 @@ def build_global_criteria_block() -> str:
     """
     path = get_criteria_path()
     if not path.exists():
+        # A dangling/self-referential symlink fails exists() but lexists() -
+        # that is an EXISTING broken config entry, not absence: fail closed.
+        if os.path.lexists(path):
+            raise ValueError(
+                "invalid .flow/criteria.md: broken symlink "
+                "(run `flowctl criteria list` to diagnose)"
+            )
         return ""
     try:
         text = path.read_text(encoding="utf-8")

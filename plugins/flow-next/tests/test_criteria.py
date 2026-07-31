@@ -965,3 +965,22 @@ class TestReceiptVerdictTerminator(unittest.TestCase):
     def test_prose_before_verdict_still_degrades(self):
         text = "## Global criteria\nG1: met - ok\nsome prose\n<verdict>SHIP</verdict>\n"
         self.assertIsNone(flowctl.parse_review_criteria(text))
+
+
+class TestCriteriaBrokenSymlink(unittest.TestCase):
+    """Round 14: a dangling criteria.md symlink fails closed, not silently absent."""
+
+    def test_dangling_symlink_raises_in_block_builder(self):
+        import tempfile, os as _os
+        with tempfile.TemporaryDirectory() as td:
+            import subprocess
+            subprocess.run(["git", "init", "-q", td], check=True)
+            flow = _os.path.join(td, ".flow")
+            _os.makedirs(flow)
+            _os.symlink(_os.path.join(td, "nonexistent-target.md"), _os.path.join(flow, "criteria.md"))
+            r = subprocess.run(
+                [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), "criteria", "list", "--json"],
+                capture_output=True, text=True, cwd=td,
+            )
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("broken symlink", r.stdout + r.stderr)
