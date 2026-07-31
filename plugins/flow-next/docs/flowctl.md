@@ -1526,9 +1526,12 @@ Thin plumbing for the project's standing global acceptance criteria in the user-
 flowctl criteria list [--json]
 
 # Print the completion-review injection block (the same block the subprocess
-# backends get via build_completion_review_prompt); empty output when the file
-# is absent, unreadable, invalid, or has no active criteria. Used by the
-# rp/host completion-review workflows to append criteria to their prompts.
+# backends get via build_completion_review_prompt); empty output + ok exit when
+# the file is absent or has no active criteria. An EXISTING file that is
+# unreadable or invalid fails closed: nonzero exit with the validation errors
+# on stderr and empty stdout (fix .flow/criteria.md, diagnose via
+# `flowctl criteria list`). Used by the rp/host completion-review workflows,
+# which validate this before reserving a review round.
 flowctl criteria prompt-block
 ```
 
