@@ -1,4 +1,4 @@
-<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, global_criteria_block, review_json_tally_block -->
 
 **You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
 `flowctl <backend>` review command, or a nested agent/backend to perform this
@@ -76,7 +76,7 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 {confidence_rubric_block}
 {classification_rubric_block}
 {protected_artifacts_block}
-## Output Format
+{global_criteria_block}## Output Format
 
 ```
 ## Requirements Extracted

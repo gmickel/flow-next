@@ -75,7 +75,7 @@ PROMPT_HASHES = {
     "CLASSIFICATION_RUBRIC_BLOCK":
         "fbde8f499ba3d82b50901b12a984912490b66c6e69f1b74c38edf80c28567a06",
     "COMPLETION_REVIEW_PROMPT_FALLBACK":
-        "f3ccfc5be5294e99b53ab945e70bb707be43d3024b71b7ef03811cfa6348a4a0",
+        "f774114be32160a0e19fb4e428e1ce9ffff3de697db5cdcba68fcbadc3687585",
     "CONFIDENCE_RUBRIC_BLOCK":
         "b8cc9e9594a3fed35498040e222bc9000333f4407f48374464115a69c231ae15",
     "IMPL_REVIEW_PROMPT_FALLBACK":
@@ -107,6 +107,10 @@ PROMPT_HASHES = {
         "eaca7619b45629e1db6dac60bb1042718baff9c7ea85f317116848e62def44e7",
     "_CURSOR_PROMPT_TRUNC_MARKER":
         "623c116989917678074c110eb51c5e37bfe966bdcf09ad222b7801202ca5f740",
+    # Completion-review criteria injection wrapper (fn-137.2). Rendered only
+    # when .flow/criteria.md exists; empty otherwise.
+    "_GLOBAL_CRITERIA_BLOCK_TEMPLATE":
+        "58eece8cecd3cfb56f6a3a2105bf1c9287258a25950d37a3e541f1cf8cdaabdd",
     # Lands in the receipt `note` field and on stdout; agents read receipts.
     "HOST_JUDGES_NOTE":
         "47b75b60635754b4267077dc782a7b026af6dce3669619c4ffca6ec920c5d878",
@@ -149,7 +153,7 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":
         "af90b7ffa7e44944fa473af3cbb0023e31ad4d6e07e8ff05073e039fb4b2d9f9",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
-        "f3ccfc5be5294e99b53ab945e70bb707be43d3024b71b7ef03811cfa6348a4a0",
+        "f774114be32160a0e19fb4e428e1ce9ffff3de697db5cdcba68fcbadc3687585",
     # Rendered by ralph.sh each autonomous loop - production prompts, and the
     # ones an unattended run depends on most.
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_plan.md":

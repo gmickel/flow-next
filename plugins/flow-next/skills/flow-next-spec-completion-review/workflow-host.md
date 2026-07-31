@@ -59,6 +59,10 @@ Retain those literal anchors through receipt writing.
 
 Give the subagent:
 - Spec requirements / R-IDs / acceptance criteria
+- The exact output of `$FLOWCTL criteria prompt-block`, appended verbatim when
+  non-empty (global acceptance criteria + the `## Global criteria` output
+  grammar; the command prints nothing when `.flow/criteria.md` is absent -
+  include nothing in that case)
 - Task list + evidence that work claims done
 - Diff / implementation surfaces to check compliance (not code-quality taste — that is impl-review)
 - Prior findings for convergence (on re-review)
@@ -130,8 +134,10 @@ deterministic attachment transaction:
   --json
 ```
 
-Unsupported/legacy prose leaves the additive field absent. The command performs
-no reviewer/model/network call.
+Unsupported/legacy prose leaves the additive field absent. The same transaction
+also attaches the additive `criteria: [{id, status, note?}]` field when the
+reviewer output has a parseable `## Global criteria` section (absent otherwise).
+The command performs no reviewer/model/network call.
 
 Persist it in this order:
 

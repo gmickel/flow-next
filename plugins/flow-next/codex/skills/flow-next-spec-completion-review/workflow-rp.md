@@ -92,6 +92,9 @@ for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
  [[ -f "$task_spec" ]] && printf '\n\n' >> "$REVIEW_INSTRUCTIONS_FILE" \
  && sed -n 'p' "$task_spec" >> "$REVIEW_INSTRUCTIONS_FILE"
 done
+# Global acceptance criteria (fn-137): emits nothing when .flow/criteria.md absent
+printf '\n\n' >> "$REVIEW_INSTRUCTIONS_FILE"
+$FLOWCTL criteria prompt-block >> "$REVIEW_INSTRUCTIONS_FILE"
 
 ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
 ROUND_EXIT=$?
@@ -203,7 +206,11 @@ EOF
 # 3. Spec body — appended via redirection, never re-typed
 $FLOWCTL cat "$SPEC_ID" >> "$PROMPT_FILE"
 
-# 4. Review criteria (static, quoted heredoc)
+# 4. Global acceptance criteria (fn-137) — emits nothing when .flow/criteria.md absent
+printf '\n\n' >> "$PROMPT_FILE"
+$FLOWCTL criteria prompt-block >> "$PROMPT_FILE"
+
+# 5. Review criteria (static, quoted heredoc)
 cat >> "$PROMPT_FILE" << 'EOF'
 
 ## Review Focus: Spec Compliance

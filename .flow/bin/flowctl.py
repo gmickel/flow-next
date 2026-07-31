@@ -5792,6 +5792,114 @@ def validate_review_receipt_findings(receipt: object) -> bool:
     )
 
 
+# --- Global-criteria compliance in completion-review receipts (fn-137.2) ---
+#
+# The completion-review prompt (when .flow/criteria.md exists) mandates a
+# `## Global criteria` output section, one `G<N>: met|violated|n/a - <note>`
+# line per criterion. parse_review_criteria() projects that section into the
+# additive receipt field `criteria: [{id, status, note?}]`. Same public
+# boundary as parse_review_findings: unparseable degrades to None (field
+# absent), never an error. The criteria array is authoritative for compliance
+# status; findings carry the detail; no cross-validation links the two.
+
+GLOBAL_CRITERIA_OUTPUT_HEADING = "## Global criteria"
+
+_REVIEW_CRITERIA_HEADING_RE = re.compile(
+    r"^#{2,3}\s+Global criteria\s*:?\s*$", re.IGNORECASE
+)
+_REVIEW_CRITERIA_LINE_RE = re.compile(
+    r"^G(\d+):\s*(met|violated|n/a)\s*(?:-\s*(.*))?$"
+)
+_REVIEW_CRITERIA_MAX_ENTRIES = 100
+_REVIEW_CRITERIA_MAX_NOTE = 400
+
+
+def parse_review_criteria(output: str) -> Optional[list[dict]]:
+    """Parse the reviewer's `## Global criteria` section into [{id, status, note?}].
+
+    Deterministic projection of completion-review output (fn-137.2). Uses the
+    LAST matching heading (mirrors the tally-block precedent: the real section
+    follows any quoted prompt text). Unparseable, duplicate-id, or oversized
+    content returns None - degrade-to-absent, never an error.
+    """
+    try:
+        if not isinstance(output, str) or not output:
+            return None
+        lines = output.replace("\r\n", "\n").split("\n")
+        idx = None
+        for i, line in enumerate(lines):
+            if _REVIEW_CRITERIA_HEADING_RE.match(line.strip()):
+                idx = i
+        if idx is None:
+            return None
+        entries: list[dict] = []
+        seen: set[str] = set()
+        for line in lines[idx + 1:]:
+            stripped = line.strip()
+            if re.match(r"^#{1,6}\s", stripped):
+                break
+            if stripped.startswith(("- ", "* ")):
+                stripped = stripped[2:].strip()
+            m = _REVIEW_CRITERIA_LINE_RE.match(stripped)
+            if not m:
+                continue
+            cid = f"G{m.group(1)}"
+            if cid in seen:
+                return None
+            seen.add(cid)
+            entry: dict[str, Any] = {"id": cid, "status": m.group(2)}
+            note = (m.group(3) or "").strip()
+            if note:
+                entry["note"] = note[:_REVIEW_CRITERIA_MAX_NOTE]
+            entries.append(entry)
+            if len(entries) > _REVIEW_CRITERIA_MAX_ENTRIES:
+                return None
+        return entries or None
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError, UnicodeError):
+        return None
+
+
+def validate_review_receipt_criteria(receipt: object) -> bool:
+    """Validate the optional additive `criteria` field; legacy receipts stay valid."""
+    if not isinstance(receipt, dict):
+        return False
+    criteria = receipt.get("criteria")
+    if criteria is None:
+        return True
+    if receipt.get("type") != "completion_review":
+        return False
+    if (
+        not isinstance(criteria, list)
+        or not criteria
+        or len(criteria) > _REVIEW_CRITERIA_MAX_ENTRIES
+    ):
+        return False
+    seen: set[str] = set()
+    for item in criteria:
+        if not isinstance(item, dict):
+            return False
+        if not set(item) <= {"id", "status", "note"}:
+            return False
+        cid = item.get("id")
+        if (
+            not isinstance(cid, str)
+            or not re.fullmatch(r"G\d+", cid)
+            or cid in seen
+        ):
+            return False
+        seen.add(cid)
+        if item.get("status") not in ("met", "violated", "n/a"):
+            return False
+        note = item.get("note")
+        if note is not None and (
+            not isinstance(note, str)
+            or not note
+            or len(note) > _REVIEW_CRITERIA_MAX_NOTE
+        ):
+            return False
+    return True
+
+
 def select_current_review_findings(
     receipts: list[object],
     *,
@@ -6101,6 +6209,13 @@ def cmd_review_findings_attach(args: argparse.Namespace) -> None:
             receipt["findings"] = findings
         else:
             receipt.pop("findings", None)
+        criteria = None
+        if review_type == "completion_review":
+            criteria = parse_review_criteria(review_text)
+            if criteria is not None:
+                receipt["criteria"] = criteria
+            else:
+                receipt.pop("criteria", None)
         if recovery_path is not None:
             atomic_write_json(recovery_path, receipt)
         if prior_path != receipt_path and prior_path.exists():
@@ -6117,6 +6232,8 @@ def cmd_review_findings_attach(args: argparse.Namespace) -> None:
         result["recovery"] = str(recovery_path)
     if findings is not None:
         result["source_receipt_id"] = findings["sourceReceiptId"]
+    if review_type == "completion_review":
+        result["criteria_attached"] = criteria is not None
     if args.json:
         json_output(result)
     else:
@@ -8655,7 +8772,7 @@ Be critical. Find real issues.
 Do NOT skip this tag. The automation depends on it.
 """
 
-COMPLETION_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+COMPLETION_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, global_criteria_block, review_json_tally_block -->
 
 **You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
 `flowctl <backend>` review command, or a nested agent/backend to perform this
@@ -8733,7 +8850,7 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 {confidence_rubric_block}
 {classification_rubric_block}
 {protected_artifacts_block}
-## Output Format
+{global_criteria_block}## Output Format
 
 ```
 ## Requirements Extracted
@@ -16623,6 +16740,63 @@ def cmd_criteria_list(args: argparse.Namespace) -> None:
 
     for entry in entries:
         print(f"{entry['id']}: {entry['text']}")
+
+
+# Static instruction wrapper for the completion-review criteria injection.
+# Rendered ONLY when .flow/criteria.md exists and parses (zero-cost-absent).
+# Prompt text: pinned in test_prompt_text_pinned.py.
+_GLOBAL_CRITERIA_BLOCK_TEMPLATE = """## Global acceptance criteria
+
+This project defines standing, project-wide acceptance criteria in
+`.flow/criteria.md`. Judge each one against this spec's implementation, in
+addition to the spec's own requirements:
+
+{criteria_bullets}
+
+Assign each criterion exactly one status:
+- `met` - the implementation complies with the criterion
+- `violated` - the implementation breaks the criterion. Report every violation
+  ALSO as a normal gap/finding (severity per your judgment); the findings list
+  stays the single findings surface
+- `n/a` - the criterion does not apply to this change
+
+Then add a `## Global criteria` section to your review output, one line per
+criterion, exactly this grammar (ids from the list above):
+
+G<N>: met|violated|n/a - <one-line note>
+
+"""
+
+
+def build_global_criteria_block() -> str:
+    """Render the completion-review global-criteria injection block.
+
+    Returns "" when `.flow/criteria.md` is absent, unreadable, invalid, or
+    empty - criteria-less repos pay zero criteria content in assembled
+    prompts (fn-137 R1). Never raises.
+    """
+    try:
+        path = get_criteria_path()
+        if not path.exists():
+            return ""
+        entries, errors = _criteria_parse(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return ""
+    if errors or not entries:
+        return ""
+    bullets = "\n".join(f"- **{e['id']}:** {e['text']}" for e in entries)
+    return _GLOBAL_CRITERIA_BLOCK_TEMPLATE.format(criteria_bullets=bullets)
+
+
+def cmd_criteria_prompt_block(args: argparse.Namespace) -> None:
+    """Print the criteria injection block (empty output when absent/invalid).
+
+    Used by the rp/host completion-review workflows to compose the same
+    block the subprocess backends get from build_completion_review_prompt.
+    """
+    block = build_global_criteria_block()
+    if block:
+        sys.stdout.write(block)
 
 
 # --- Strategy subcommands (fn-39.1) ---
@@ -28455,6 +28629,10 @@ def _write_backend_review_receipt(
             )
             if findings is not None:
                 receipt_data["findings"] = findings
+        if review_type == "completion_review":
+            criteria = parse_review_criteria(review_text)
+            if criteria is not None:
+                receipt_data["criteria"] = criteria
         content = json.dumps(receipt_data, indent=2) + "\n"
         if review_type == "completion_review":
             # Preserve the payload before the terminal pointer. The skill can
@@ -29544,6 +29722,7 @@ def build_completion_review_prompt(
         confidence_rubric_block=CONFIDENCE_RUBRIC_BLOCK,
         classification_rubric_block=CLASSIFICATION_RUBRIC_BLOCK,
         protected_artifacts_block=PROTECTED_ARTIFACTS_BLOCK,
+        global_criteria_block=build_global_criteria_block(),
         review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
     )
 
@@ -36157,6 +36336,11 @@ def main() -> None:
     )
     p_criteria_list.add_argument("--json", action="store_true", help="JSON output")
     p_criteria_list.set_defaults(func=cmd_criteria_list)
+    p_criteria_pb = criteria_sub.add_parser(
+        "prompt-block",
+        help="Print the completion-review criteria injection block (empty when absent)",
+    )
+    p_criteria_pb.set_defaults(func=cmd_criteria_prompt_block)
 
     # strategy status / read / list (fn-39.1)
     # Read-only plumbing. The skill (`/flow-next:strategy`) writes the file

@@ -170,5 +170,393 @@ class TestCriteriaHeadingConstant(unittest.TestCase):
         self.assertNotIn(flowctl.GLOBAL_CRITERIA_HEADING, prompt)
 
 
+class TestGlobalCriteriaBlock(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self._tmp.name) / "criteria.md"
+        self._orig = flowctl.get_criteria_path
+        flowctl.get_criteria_path = lambda: self.path  # type: ignore[assignment]
+
+    def tearDown(self) -> None:
+        flowctl.get_criteria_path = self._orig  # type: ignore[assignment]
+        self._tmp.cleanup()
+
+    def test_absent_path_returns_empty(self) -> None:
+        self.assertEqual(flowctl.build_global_criteria_block(), "")
+
+    def test_invalid_file_returns_empty(self) -> None:
+        self.path.write_text(
+            "- **G1:** first.\n- **G1:** second.\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(flowctl.build_global_criteria_block(), "")
+
+    def test_valid_file_renders_block(self) -> None:
+        self.path.write_text(
+            "- **G1:** Every route change regenerates the contract.\n"
+            "- **G2:** No new dependency without a health check.\n",
+            encoding="utf-8",
+        )
+        block = flowctl.build_global_criteria_block()
+        self.assertTrue(block.startswith(flowctl.GLOBAL_CRITERIA_HEADING))
+        self.assertIn(
+            "- **G1:** Every route change regenerates the contract.",
+            block,
+        )
+        self.assertIn(
+            "- **G2:** No new dependency without a health check.",
+            block,
+        )
+        self.assertIn("## Global criteria", block)
+        self.assertIn(
+            "G<N>: met|violated|n/a - <one-line note>",
+            block,
+        )
+        self.assertTrue(block.endswith("\n\n"))
+
+
+class TestGlobalCriteriaPromptInjection(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self._tmp.name) / "criteria.md"
+        self._orig = flowctl.get_criteria_path
+        flowctl.get_criteria_path = lambda: self.path  # type: ignore[assignment]
+
+    def tearDown(self) -> None:
+        flowctl.get_criteria_path = self._orig  # type: ignore[assignment]
+        self._tmp.cleanup()
+
+    def test_valid_criteria_injected_before_output_format(self) -> None:
+        self.path.write_text(
+            "- **G1:** Every route change regenerates the contract.\n"
+            "- **G2:** No new dependency without a health check.\n",
+            encoding="utf-8",
+        )
+        prompt = flowctl.build_completion_review_prompt(
+            epic_spec="# Spec\n\n- **R1:** something\n",
+            task_specs="task body",
+            diff_summary="1 file changed",
+            diff_content="diff --git a/x b/x\n",
+        )
+        self.assertIn(flowctl.GLOBAL_CRITERIA_HEADING, prompt)
+        self.assertIn(
+            "- **G1:** Every route change regenerates the contract.",
+            prompt,
+        )
+        self.assertIn(
+            "- **G2:** No new dependency without a health check.",
+            prompt,
+        )
+        self.assertIn("<one-line note>\n\n## Output Format", prompt)
+        self.assertIn("<verdict>SHIP</verdict>", prompt)
+        self.assertIn("<verdict>NEEDS_WORK</verdict>", prompt)
+
+
+_SAMPLE_COMPLETION_REVIEW = """## Requirements Extracted
+
+1. Route changes regenerate the contract
+2. Health checks for new deps
+
+## Coverage Verification
+
+1. Route changes - COVERED - evidence: contract.py:10
+2. Health checks - GAP - not found
+
+## Global criteria
+
+G1: met - contract regenerated
+G2: violated - dep added without health check
+G3: n/a - no UI in this change
+
+## Gaps Found
+
+Severity: P1
+Confidence: 75
+Classification: introduced
+File:Line: deps.py:1
+R-IDs: [R2]
+Problem: missing health check
+Suggestion: add one
+
+<verdict>NEEDS_WORK</verdict>
+"""
+
+
+class TestParseReviewCriteria(unittest.TestCase):
+    def test_happy_path(self) -> None:
+        entries = flowctl.parse_review_criteria(_SAMPLE_COMPLETION_REVIEW)
+        self.assertEqual(
+            entries,
+            [
+                {"id": "G1", "status": "met", "note": "contract regenerated"},
+                {
+                    "id": "G2",
+                    "status": "violated",
+                    "note": "dep added without health check",
+                },
+                {"id": "G3", "status": "n/a", "note": "no UI in this change"},
+            ],
+        )
+
+    def test_line_without_note(self) -> None:
+        text = "## Global criteria\n\nG1: met\n"
+        entries = flowctl.parse_review_criteria(text)
+        self.assertEqual(entries, [{"id": "G1", "status": "met"}])
+        self.assertNotIn("note", entries[0])
+
+    def test_bulleted_lines(self) -> None:
+        text = "## Global criteria\n\n- G1: met - ok\n"
+        self.assertEqual(
+            flowctl.parse_review_criteria(text),
+            [{"id": "G1", "status": "met", "note": "ok"}],
+        )
+
+    def test_no_section_returns_none(self) -> None:
+        text = "## Requirements Extracted\n\n1. something\n\n<verdict>SHIP</verdict>\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_duplicate_id_returns_none(self) -> None:
+        text = "## Global criteria\n\nG1: met - a\nG1: violated - b\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_prose_only_section_returns_none(self) -> None:
+        text = "## Global criteria\n\nNo criteria applicable.\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_heading_then_immediate_next_heading(self) -> None:
+        text = "## Global criteria\n## Gaps Found\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_section_ends_at_next_heading(self) -> None:
+        text = (
+            "## Global criteria\n"
+            "\n"
+            "G1: met - ok\n"
+            "\n"
+            "## Gaps Found\n"
+            "\n"
+            "G2: violated - should not parse\n"
+        )
+        self.assertEqual(
+            flowctl.parse_review_criteria(text),
+            [{"id": "G1", "status": "met", "note": "ok"}],
+        )
+
+    def test_last_heading_wins(self) -> None:
+        text = (
+            "## Global criteria\n"
+            "\n"
+            "G1: met - first\n"
+            "\n"
+            "## Other\n"
+            "\n"
+            "## Global criteria\n"
+            "\n"
+            "G1: violated - last\n"
+            "G2: n/a - ignored elsewhere\n"
+        )
+        self.assertEqual(
+            flowctl.parse_review_criteria(text),
+            [
+                {"id": "G1", "status": "violated", "note": "last"},
+                {"id": "G2", "status": "n/a", "note": "ignored elsewhere"},
+            ],
+        )
+
+    def test_non_str_and_empty(self) -> None:
+        self.assertIsNone(flowctl.parse_review_criteria(None))  # type: ignore[arg-type]
+        self.assertIsNone(flowctl.parse_review_criteria(""))
+        self.assertIsNone(flowctl.parse_review_criteria(123))  # type: ignore[arg-type]
+
+
+class TestValidateReviewReceiptCriteria(unittest.TestCase):
+    def test_absent_criteria_ok(self) -> None:
+        self.assertTrue(
+            flowctl.validate_review_receipt_criteria(
+                {"type": "completion_review", "id": "fn-1"}
+            )
+        )
+
+    def test_valid_completion_list(self) -> None:
+        receipt = {
+            "type": "completion_review",
+            "criteria": [
+                {"id": "G1", "status": "met", "note": "ok"},
+                {"id": "G2", "status": "n/a"},
+            ],
+        }
+        self.assertTrue(flowctl.validate_review_receipt_criteria(receipt))
+
+    def test_wrong_type_rejected(self) -> None:
+        receipt = {
+            "type": "impl_review",
+            "criteria": [{"id": "G1", "status": "met"}],
+        }
+        self.assertFalse(flowctl.validate_review_receipt_criteria(receipt))
+
+    def test_bad_status_id_duplicate_extra_empty(self) -> None:
+        base = {"type": "completion_review"}
+        self.assertFalse(
+            flowctl.validate_review_receipt_criteria(
+                {**base, "criteria": [{"id": "G1", "status": "pass"}]}
+            )
+        )
+        self.assertFalse(
+            flowctl.validate_review_receipt_criteria(
+                {**base, "criteria": [{"id": "X1", "status": "met"}]}
+            )
+        )
+        self.assertFalse(
+            flowctl.validate_review_receipt_criteria(
+                {
+                    **base,
+                    "criteria": [
+                        {"id": "G1", "status": "met"},
+                        {"id": "G1", "status": "violated"},
+                    ],
+                }
+            )
+        )
+        self.assertFalse(
+            flowctl.validate_review_receipt_criteria(
+                {
+                    **base,
+                    "criteria": [
+                        {"id": "G1", "status": "met", "extra": True},
+                    ],
+                }
+            )
+        )
+        self.assertFalse(
+            flowctl.validate_review_receipt_criteria({**base, "criteria": []})
+        )
+
+
+class TestCriteriaReceiptCli(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _git(self.root, "init", "-q")
+        (self.root / ".flow").mkdir()
+        (self.root / "tracked.txt").write_text("x\n", encoding="utf-8")
+        _git(self.root, "add", "tracked.txt")
+        _git(self.root, "commit", "-qm", "init")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _run(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), *args],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_prompt_block_absent_empty(self) -> None:
+        proc = self._run("criteria", "prompt-block")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout, "")
+
+    def test_prompt_block_valid_file(self) -> None:
+        (self.root / ".flow" / "criteria.md").write_text(
+            "- **G1:** Every route change regenerates the contract.\n",
+            encoding="utf-8",
+        )
+        proc = self._run("criteria", "prompt-block")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertTrue(
+            proc.stdout.startswith("## Global acceptance criteria"),
+            proc.stdout[:80],
+        )
+
+    def test_review_findings_attach_with_criteria(self) -> None:
+        review = self.root / "review.md"
+        review.write_text(_SAMPLE_COMPLETION_REVIEW, encoding="utf-8")
+        in_path = self.root / "in.json"
+        out_path = self.root / "out.json"
+        in_path.write_text(
+            json.dumps(
+                {
+                    "type": "completion_review",
+                    "id": "fn-9",
+                    "mode": "host",
+                    "verdict": "SHIP",
+                }
+            ),
+            encoding="utf-8",
+        )
+        proc = self._run(
+            "review-findings",
+            "attach",
+            "--input",
+            str(in_path),
+            "--receipt",
+            str(out_path),
+            "--review-file",
+            str(review),
+            "--head",
+            "HEAD",
+            "--json",
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr + proc.stdout)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload.get("success"))
+        self.assertTrue(payload.get("criteria_attached"))
+        receipt = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            receipt["criteria"],
+            [
+                {"id": "G1", "status": "met", "note": "contract regenerated"},
+                {
+                    "id": "G2",
+                    "status": "violated",
+                    "note": "dep added without health check",
+                },
+                {"id": "G3", "status": "n/a", "note": "no UI in this change"},
+            ],
+        )
+
+    def test_review_findings_attach_without_criteria_section(self) -> None:
+        review = self.root / "review.md"
+        review.write_text(
+            "## Requirements Extracted\n\n1. something\n\n"
+            "<verdict>SHIP</verdict>\n",
+            encoding="utf-8",
+        )
+        in_path = self.root / "in.json"
+        out_path = self.root / "out.json"
+        in_path.write_text(
+            json.dumps(
+                {
+                    "type": "completion_review",
+                    "id": "fn-9",
+                    "mode": "host",
+                    "verdict": "SHIP",
+                }
+            ),
+            encoding="utf-8",
+        )
+        proc = self._run(
+            "review-findings",
+            "attach",
+            "--input",
+            str(in_path),
+            "--receipt",
+            str(out_path),
+            "--review-file",
+            str(review),
+            "--head",
+            "HEAD",
+            "--json",
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr + proc.stdout)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload.get("success"))
+        self.assertFalse(payload.get("criteria_attached"))
+        receipt = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertNotIn("criteria", receipt)
+
+
 if __name__ == "__main__":
     unittest.main()
