@@ -11,7 +11,8 @@
   "impl_review_rounds": {
     "fn-137-global-acceptance-criteria-object.1": 0,
     "fn-137-global-acceptance-criteria-object.2": 0,
-    "fn-137-global-acceptance-criteria-object.3": 0
+    "fn-137-global-acceptance-criteria-object.3": 0,
+    "fn-137-global-acceptance-criteria-object.4": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -20,6 +21,7 @@
   "ready": true,
   "review_pending_rounds": {
     "impl:fn-137-global-acceptance-criteria-object.3": 1,
+    "impl:fn-137-global-acceptance-criteria-object.4": 1,
     "plan": 2
   },
   "spec_path": ".flow/specs/fn-137-global-acceptance-criteria-object.md",
@@ -36,5 +38,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-31T05:25:35.212159Z"
+  "updated_at": "2026-07-31T05:44:38.875885Z"
 }
