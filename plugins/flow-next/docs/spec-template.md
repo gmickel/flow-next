@@ -137,6 +137,24 @@ Rules:
 - Impl-review and spec-completion review emit a per-R-ID coverage table (met / partial / not-addressed / deferred).
 - Any unaddressed R-ID flips verdict to `NEEDS_WORK`; receipt carries an `unaddressed: ["R2", "R5"]` array so the fix loop has targeted work.
 
+### Global criteria (G-IDs) - the same grammar at project scope
+
+Some acceptance criteria are not about one spec - "every route change regenerates the API contract", "no new dependency without a health check". Those live in an optional, user-owned `.flow/criteria.md` as **G-IDs**: the R-ID grammar with a `G` prefix, one line-anchored bullet per criterion:
+
+```markdown
+- **G1:** Every route change regenerates the API contract.
+- **G2:** No new dependency without a health check (scope: package.json).
+```
+
+The rules mirror R-IDs where they apply:
+
+- Plain markdown prose; optional scope hints (paths/globs) live in the prose itself.
+- Ids must be unique; gaps are allowed (deleting G2 leaves G1, G3). **Never renumber** - G-IDs are stable identity across specs and receipts, exactly like R-ID numbers within a spec.
+- `flowctl criteria list --json` parses and validates the file; invalid content is a loud error, an absent file is a silent no-op everywhere.
+- The **spec is the unit of compliance**: spec completion review (not per-task impl review) judges each G-ID against the whole implementation and records `met` / `violated` / `n/a` per criterion in the review receipt's additive `criteria` array. Violations also surface as normal findings.
+
+`/flow-next:setup` offers to scaffold the file (opt-in; declining leaves no trace). See [`review-findings.md`](review-findings.md) § Global-criteria compliance for the receipt field, and [`flowctl.md`](flowctl.md) § criteria for the CLI.
+
 ### Source tags - what you said vs what the agent inferred
 
 `/flow-next:capture` **and** `/flow-next:interview` tag every acceptance criterion they write at source: `[user]` (the human's words - the PO under a business pass, the tech lead under a technical one), `[paraphrase]` (that meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:

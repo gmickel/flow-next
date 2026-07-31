@@ -8,7 +8,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 
 ```
 init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, review-findings, models, review-rounds,
-memory, prospect, anchor, repo-map, prime, glossary, strategy, spec, scope, task, dep,
+memory, prospect, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
 checkpoint, rp, codex, copilot, cursor,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
@@ -41,6 +41,7 @@ Works out of the box for parallel branches. No setup required.
 │   ├── flowctl-help.txt       # tracked root-help fast-path output
 │   └── flowctl.py             # source of truth (all CLI logic)
 ├── templates/spec.md          # Setup-managed copy of the canonical scaffold
+├── criteria.md                # Optional user-owned global acceptance criteria (G-IDs)
 ├── specs/fn-N-slug.json       # Spec state - colocated with .md
 ├── specs/fn-N-slug.md         # Spec markdown
 ├── tasks/fn-N-slug.M.json     # Task state
@@ -1514,6 +1515,30 @@ flowctl strategy read [--section <name>] [--json]
 - **`status`** - presence + husk + populated section count (used by doc-aware autodetect).
 - **`read`** - print the parsed file; `--section` filters to one body (case-insensitive match against the locked section list: target problem, our approach, who it's for, key metrics, tracks, milestones, not working on).
 
+### criteria
+
+Thin plumbing for the project's standing global acceptance criteria in the user-owned `.flow/criteria.md` (G-ID grammar: one line-anchored `- **G<N>:** <criterion prose>` bullet per criterion - see [`spec-template.md`](spec-template.md) § Global criteria). Parse + validate only; judging compliance is the spec-completion-review skill's job.
+
+```bash
+# List parsed criteria; absent/empty file -> empty list, ok exit (absence is a
+# silent no-op everywhere). Invalid file (duplicate ids, empty prose) -> error
+# exit listing every problem.
+flowctl criteria list [--json]
+
+# Print the completion-review injection block (the same block the subprocess
+# backends get via build_completion_review_prompt); empty output when the file
+# is absent, unreadable, invalid, or has no active criteria. Used by the
+# rp/host completion-review workflows to append criteria to their prompts.
+flowctl criteria prompt-block
+```
+
+`criteria list --json`:
+```json
+{"success": true, "criteria": [{"id": "G1", "text": "Every route change regenerates the API contract."}], "count": 1, "path": ".flow/criteria.md"}
+```
+
+Ids must be unique; gaps are allowed; sequential numbering is not required. Indented/nested bullets and commented-out lines are ignored (the bundled scaffold ships its examples commented out, so a freshly scaffolded file parses to 0 active criteria). Compliance lands in the completion-review receipt's additive `criteria: [{id, status, note?}]` array - see [`review-findings.md`](review-findings.md) § Global-criteria compliance. Constants shared between injection and parser: `GLOBAL_CRITERIA_HEADING` (`"## Global acceptance criteria"`, the prompt block's marker) and `GLOBAL_CRITERIA_OUTPUT_HEADING` (`"## Global criteria"`, the reviewer-output section `parse_review_criteria()` projects into the receipt).
+
 ### triage-skip
 
 Trivial-diff fast path that bypasses the configured review backend on whitelisted diffs (lockfile-only, docs-only, release-chore, generated-file-only). Returns `VERDICT=SHIP` deterministically.
@@ -1715,6 +1740,8 @@ Completion review receipt:
   "timestamp": "2026-01-11T10:30:00Z"
 }
 ```
+
+When the project defines global criteria in `.flow/criteria.md`, completion-review receipts additionally carry the additive per-criterion compliance array `criteria: [{id, status, note?}]` (`status` in `met` / `violated` / `n/a`), projected deterministically from the reviewer's `## Global criteria` output section; unparseable compliance degrades to absent, never an error. See [`review-findings.md`](review-findings.md) § Global-criteria compliance.
 
 **Session continuity:** Receipt includes `session_id` (thread_id from codex). Subsequent reviews read the existing receipt and resume the conversation, maintaining full context across fix → re-review cycles.
 
