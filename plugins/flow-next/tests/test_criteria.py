@@ -841,3 +841,27 @@ class TestCriteriaTemplate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCriteriaLooksLikeSource(unittest.TestCase):
+    """Malformed G-ID-looking bullets are validation errors (fail closed)."""
+
+    def test_bold_colon_outside_typo_errors(self):
+        entries, errors = flowctl._criteria_parse("- **G1**: must run tests\n")
+        self.assertEqual(entries, [])
+        self.assertTrue(any("malformed criterion bullet" in e for e in errors))
+
+    def test_unbolded_gid_bullet_errors(self):
+        _, errors = flowctl._criteria_parse("- G2: no new deps\n")
+        self.assertTrue(any("malformed criterion bullet" in e for e in errors))
+
+    def test_prose_and_headings_still_ignored(self):
+        entries, errors = flowctl._criteria_parse(
+            "# Criteria\n\nSome prose about G1 and rules.\n- **G1:** valid one\n"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual([e["id"] for e in entries], ["G1"])
+
+    def test_template_grammar_fence_line_not_flagged(self):
+        _, errors = flowctl._criteria_parse("- **G<N>:** <criterion prose>\n")
+        self.assertEqual(errors, [])

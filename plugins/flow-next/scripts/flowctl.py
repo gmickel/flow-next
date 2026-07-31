@@ -16702,6 +16702,13 @@ CRITERIA_FILE = "criteria.md"
 GLOBAL_CRITERIA_HEADING = "## Global acceptance criteria"
 
 _CRITERIA_LINE_RE = re.compile(r"^-\s+\*\*G(\d+):\*\*\s*(.*)$")
+# Looks-like probe for malformed criterion bullets: a top-level bullet that
+# clearly intends a G-ID (e.g. `- **G1**: prose`, `- G1: prose`) but fails the
+# strict grammar above. Such lines are validation ERRORS, not ignorable prose -
+# an all-typo file must fail closed, never silently disable standing policy.
+# Digit required, so the template's fenced `- **G<N>:**` grammar line never
+# matches; commented examples start with `<!--` and are never probed.
+_CRITERIA_LOOKSLIKE_RE = re.compile(r"^-\s+\**G\d+\**\s*:")
 
 
 def get_criteria_path() -> Path:
@@ -16713,7 +16720,9 @@ def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
     """Parse criteria markdown into ([{id, text}], [error strings]).
 
     Grammar: `- **G<N>:** <criterion prose>`. Non-matching lines are
-    ignored (headings, prose, blank lines). Validation: unique ids,
+    ignored (headings, prose, blank lines) - EXCEPT bullets that look like a
+    G-ID criterion but fail the grammar (e.g. `- **G1**: x`), which are
+    validation errors so an all-typo file fails closed. Validation: unique ids,
     non-empty prose, at most _REVIEW_CRITERIA_MAX_ENTRIES active criteria
     (the receipt-side cap in parse_review_criteria - an oversized source
     file could never produce the authoritative receipt compliance array,
@@ -16728,6 +16737,10 @@ def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
     for line in text.splitlines():
         m = _CRITERIA_LINE_RE.match(line)
         if not m:
+            if _CRITERIA_LOOKSLIKE_RE.match(line):
+                errors.append(
+                    f"malformed criterion bullet (expected `- **G<N>:** <prose>`): {line.strip()[:80]}"
+                )
             continue
         cid = f"G{m.group(1)}"
         prose = m.group(2).strip()
