@@ -8,61 +8,94 @@
 [![Mentioned in Awesome](https://awesome.re/mentioned-badge.svg)](https://github.com/ithiria894/awesome-claude-code-workflows)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/docs/README.md)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
-[![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/gmickel)
-
 ### Agents generate. flow-next proves.
 
-**AI coding agents that ship like engineers - not slot machines.**
-The workflow layer for AI coding agents: durable specs, re-anchored workers, adversarial reviews, receipts.
-Everything lives in your repo. Zero external dependencies. Uninstall: `rm -rf .flow/`.
+**Implementation got cheap. Reviewing it, verifying it, and keeping a codebase coherent did not.**
+
+Flow-Next is the workflow layer that carries the weight: durable specs, re-anchored workers, adversarial cross-model review, and a receipt behind every claim of done. Everything lives in your repo, and uninstall is `rm -rf .flow/`.
 
 <img src="assets/flow-next-pipeline.gif" alt="A real pipeline run: pilot plans the spec, cross-model plan review catches a gap and ships, the worker implements with tests, impl review ships, ending on the task receipt" width="860">
 
-*Proof, not adjectives: a real recorded run - plan → cross-model plan review (catches a missing guard, fix, SHIP) → implement + tests → impl review SHIP → the receipt. Nothing staged; every frame is live output.*
+*A real recorded run: plan, then cross-model plan review (catches a missing guard, fix, SHIP), then implement plus tests, then impl review SHIP, ending on the receipt. Nothing staged; every frame is live output.*
 
-<sub>ℹ️ The recording drives each tick with `claude -p "…"` (Claude Code's non-interactive / headless mode) so the whole run captures unattended. In normal use you just type the prompt or `/flow-next:…` command in your interactive session — same pipeline, same gates.</sub>
-
-<img src="assets/flow-next-plan.png" alt="/flow-next:plan output — dependency-ordered tasks, cross-model review passed, key decisions documented" width="720">
-
-*A real `/flow-next:plan` result - dependency-ordered tasks, cross-model review iterated to SHIP, key decisions documented.*
+<sub>The recording drives each tick with `claude -p "..."` (Claude Code's non-interactive / headless mode) so the whole run captures unattended. In normal use you type the prompt or the `/flow-next:...` command in your interactive session: same pipeline, same gates.</sub>
 
 </div>
 
-### 🌐 [Full Documentation Site → flow-next.dev](https://flow-next.dev)
-
-> 📖 **[Doc index](plugins/flow-next/docs/README.md)** · 👥 **[Teams guide](plugins/flow-next/docs/teams.md)** · 💬 **[Discord](https://discord.gg/f3DYq8AAm5)**
+> 📖 **[Doc index](plugins/flow-next/docs/README.md)** · 👥 **[Teams guide](plugins/flow-next/docs/teams.md)** · 💬 **[Discord](https://discord.gg/f3DYq8AAm5)** · **[Full documentation site: flow-next.dev](https://flow-next.dev)**
 
 ---
 
 ## Why this exists
 
-Agentic engineering compresses implementation from weeks to hours — and quietly removes every safety valve pre-agentic Agile relied on. The standups, the hallway clarification, the mid-flight course correction that used to *finish* a vague ticket over a two-week cycle: gone. When an agent can ship the task in one sitting, a rough ticket plus a chat scrollback is the whole work surface.
+Agentic engineering compresses implementation from weeks to hours, and it quietly removes every safety valve pre-agentic Agile relied on. The standups, the hallway clarification, the mid-flight course correction that used to *finish* a vague ticket over a two-week cycle: gone. When an agent can ship the task in one sitting, a rough ticket plus a chat scrollback is the whole work surface.
 
-That work surface fails predictably. Agents drift mid-task, forget requirements, overfit to recent context, and hand reviewers 10K-line diffs with no focus signal. The bottleneck didn't disappear — it moved upstream, to requirements, review, and verification. **The spec has to carry the weight.**
+That work surface fails predictably. Agents drift mid-task, forget requirements, overfit to recent context, and hand reviewers 10K-line diffs with no focus signal. The bottleneck did not disappear; it moved upstream, to requirements, review, and verification. **The spec has to carry the weight.**
 
-That failure surface is now measured, not asserted. [SlopCodeBench](https://arxiv.org/html/2603.24755v1) (Orlanski et al., Mar 2026) chains an agent across 93 checkpoints of extending *its own* prior code under specs that fix only external behavior. Across 11 models, **no agent solved a single problem end-to-end**; the best strict pass rate was 17.2% and it collapsed to 0.5% by the final checkpoint, while code quality degraded in 80-90% of trajectories and diverged further from maintained human repositories with every iteration. The study also tested the cheapest available fix and ruled it out: quality-aware prompts lowered *initial* verbosity by about a third, changed the rate of decay not at all, left every pass-rate subtype statistically unchanged, and cost up to 48% more. Better instructions do not survive iteration. What the paper's authors name as untested is enforcing structural discipline *across* checkpoints through tooling, which is the bet this repo makes.
+That failure surface is measured rather than asserted. [SlopCodeBench](https://arxiv.org/html/2603.24755v1) (Orlanski et al., Mar 2026) chains an agent across 93 checkpoints of extending *its own* prior code, under specs that fix only external behavior:
 
-Flow-Next fixes the operating model, not just the prompt. It turns rough intent into durable specs, specs into context-sized task graphs, task graphs into re-anchored worker runs, and implementation into reviewed PRs with receipts. Between idea and merge it defines **six named handover objects** — each reviewable on its own, verified by a *different* model, and frozen at handover.
+- **No model finished a problem.** Across 11 models, not one solved a single problem end to end.
+- **The pass rate collapses as the work goes on.** The best strict pass rate was 17.2%, down to 0.5% by the final checkpoint.
+- **Quality erodes with every iteration.** Code quality degraded in 80-90% of trajectories, diverging further from maintained human repositories at each step.
+- **The cheapest fix was tested and ruled out.** Quality-aware prompts lowered *initial* verbosity by about a third, changed the rate of decay not at all, left every pass-rate subtype statistically unchanged, and cost up to 48% more.
 
-The artifact chain is not bureaucracy. **It is the conversation that would otherwise be missing.**
+Better instructions do not survive iteration. What the paper's authors name as untested is enforcing structural discipline *across* checkpoints through tooling, and that is the bet this repo makes.
+
+Flow-Next puts the discipline in the operating model. It turns rough intent into durable specs, specs into context-sized task graphs, task graphs into re-anchored worker runs, and implementation into reviewed PRs with receipts. From the conversation you already had to a merged pull request, it defines **six named handover objects**, each reviewable on its own, verified by a *different* model, and frozen at handover. **The artifact chain is the conversation that would otherwise be missing.**
 
 ## What you get
 
-Flow-Next is an AI agent orchestration plugin: **28 agent-native skills** covering the full lifecycle — idea → spec → tasks → review → ship → maintain — layered on a bundled pure-stdlib Python CLI (`flowctl`). The host agent is the intelligence; flowctl is the deterministic plumbing. No external services, no SaaS, no global config.
+Flow-Next is an AI agent orchestration plugin: agent-native skills layered on a bundled pure-stdlib Python CLI (`flowctl`). The host agent is the intelligence; flowctl is the deterministic plumbing. One arc, from the conversation you already had to a merged pull request: decide what to build, build it, prove it. Every skill runs from plain language, and the slash commands are the precise form of the same thing. No external services, no SaaS, no global config.
+
+**Ship more without lowering the bar.**
+A different model reviews every plan and every implementation, the loop iterates until SHIP, and a task cannot be marked done without evidence JSON.
+
+**Reviews stop being where work waits.**
+The pull request arrives explaining itself: which acceptance criterion each change satisfies, which decisions still need a human, what deliberately did not change.
+
+**Your team's context stops living in three people's heads.**
+Specs, decisions, glossary, and memory are files in your repository that the next run reads. A teammate joining on Monday reads the same thing the agent does.
+
+**Climb to autonomy without a leap of faith.**
+One dial from a supervised pair to a loop draining the backlog overnight. The gates do not change as you climb.
+
+**Spend the expensive model where it earns its keep.**
+Route any model to any role, by parameter or by sentence. Cost and quality become steering decisions you make per task.
+
+**Your process outlives your agent.**
+The same specs, gates, receipts, and task state across harnesses. Everything sits in your repository under `.flow/`, in git and code-reviewable, and uninstall is `rm -rf .flow/`.
+
+<details>
+<summary><strong>The vocabulary underneath: seven tenets</strong></summary>
 
 | Tenet | What it means |
 |---|---|
-| **Spec-driven** | Intent survives the chat. The unit of work is the spec — not the ticket, not the transcript, not the PR title. One durable document at `.flow/specs/<id>.md`, evolving through layers. |
+| **Spec-driven** | Intent survives the chat. The unit of work is the spec, never the ticket, the transcript, or the PR title. One durable document at `.flow/specs/<id>.md`, evolving through layers. |
 | **Context-fit planning** | Right-sized task slices. Specs decompose into dependency-ordered tasks, each sized to one fresh ~100k-token context window. |
-| **Re-anchored work** | Fresh context per task. Every worker subagent re-reads the spec, the task, and git state before touching code — no token bleed, no stale assumptions. |
-| **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot / Cursor) reviews every plan and every implementation. Different models make different mistakes — the disagreement surface is where the gaps live. |
-| **Receipts** | "Done" means there is proof. Commits, tests, review verdicts, and evidence recorded per task — never narration. |
-| **Multi-harness** | One workflow everywhere. First-class on Claude Code, OpenAI Codex, and Factory Droid; runs on Grok Build and Cursor; community OpenCode port. |
-| **Self-improving** | Compounds as you work. Memory, glossary, decision records, and strategy grow as side-effects of the workflow you already run — no manual "refresh" ceremony, ever. |
+| **Re-anchored work** | Fresh context per task. Every worker subagent re-reads the spec, the task, and git state before touching code: no token bleed, no stale assumptions. |
+| **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot / Cursor) reviews every plan and every implementation. Different models make different mistakes, and the disagreement surface is where the gaps live. |
+| **Receipts** | "Done" means there is proof. Commits, tests, review verdicts, and evidence recorded per task, never narration. |
+| **Multi-harness** | One workflow everywhere. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Community port for OpenCode. |
+| **Self-improving** | Compounds as you work. Memory, glossary, decision records, and strategy grow as side-effects of the workflow you already run, with no manual "refresh" ceremony, ever. |
 
-And one tenet about *trust*: everything lives in your repo under `.flow/`. Specs, tasks, memory, receipts — all of it is yours, in git, code-reviewable. Uninstall is `rm -rf .flow/`.
+</details>
+
+## Where it already runs
+
+Flow-Next's ways of working are coached and run in enterprise engineering organisations worldwide, from CAD and construction software to proptech and education, across modern monorepos, hundred-repo microservice estates, and 30-year-old legacy stacks, on GitHub Enterprise, GitLab, and Jira. A 2-3 hour structured discovery interview reliably produces 8-11 implementation-ready specs with numbered acceptance criteria, boundaries, and task breakdowns; the edge cases surface in the interview instead of the sprint. Receipts, evidence JSON, and review gates are the audit trail enterprise adoption asks for: approval checkpoints and traceability are built in.
+
+Adoption is not uniformly euphoric, and pretending otherwise would cost this page its credibility. The consistent pattern: **product and delivery roles feel relief early**, with specs they can read, evidence they can audit, and progress they can see. **Senior developers feel friction early**, because the pipeline formalizes judgment they already exercise implicitly, and the ceremony reads as overhead until the first review gate catches something they would have missed. The friction fades with the first caught regression; the relief does not.
+
+The open-source record is linkable, so it speaks in its own words: an outside contributor shipping a correct `flowctl` patch in [PR #95](https://github.com/gmickel/flow-next/pull/95), a feature in [awesome-claude-code-workflows](https://github.com/ithiria894/awesome-claude-code-workflows) for plan-first workflows, Ralph autonomous mode, and receipt-based gating ([#96](https://github.com/gmickel/flow-next/issues/96)), and a [3-OS test matrix](https://github.com/gmickel/flow-next/actions) on every push, because the field runs all three.
+
+> *"I am enjoying your version of all these cool new plugins. So far yours has worked the best."*
+> [@patrickmichalina](https://github.com/gmickel/flow-next/issues/5#issuecomment-3734228766)
+
+> *"really enjoying this project, thanks for making it and making it public"*
+> [@possibilities](https://github.com/gmickel/flow-next/pull/95), external contributor
+
+> *"it’s been really useful in my workflow."*
+> [@raydocs](https://github.com/gmickel/flow-next/issues/4)
 
 ---
 
@@ -110,7 +143,7 @@ droid plugin marketplace add \
 </tr>
 </table>
 
-**Why a script for Codex?** Codex's plugin protocol only registers `skills` from `plugin.json` — not custom `.toml` agents or hooks. `install-codex.sh` merges all 22 agents + hooks into `~/.codex/config.toml`. Idempotent — safe to re-run. Full platform matrix + community ports in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md).
+**Why a script for Codex?** Codex's plugin protocol only registers `skills` from `plugin.json`, not custom `.toml` agents or hooks. `install-codex.sh` merges the bundled agents and hooks into `~/.codex/config.toml`. It is idempotent, so re-running it is safe. Full platform matrix + community ports in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md).
 
 **Grok Build (xAI)?** It picks up the Claude Code install automatically - skills, commands, and multi-agent flows verified. Details + caveats in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md#grok-build-claude-code-compatibility).
 
@@ -128,9 +161,9 @@ That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `
 
 ### After every update
 
-**Plugin mode (Claude Code, the setup default for Claude-Code-only repos): nothing to do.** Nothing is copied into your repo — `flowctl` rides the plugin's `bin/` PATH injection, the agent guide is pulled live via `flowctl usage`, and the spec template resolves from the bundled copy. Plugin updates land silently; you never re-run setup for an update.
+**Plugin mode (Claude Code, the setup default for Claude-Code-only repos): nothing to do.** Nothing is copied into your repo: `flowctl` rides the plugin's `bin/` PATH injection, the agent guide is pulled live via `flowctl usage`, and the spec template resolves from the bundled copy. Plugin updates land silently; you never re-run setup for an update.
 
-**Copy mode (mixed-host repos — Codex/Cursor/Droid teammates, CI, plain terminals): update the plugin, then re-run `/flow-next:setup` in each project.** In copy mode two things live as **snapshot copies inside your repo's `.flow/`**, not live links to the plugin: the bundled **`flowctl` CLI** (`.flow/bin/`) and **`.flow/usage.md`** (the in-repo agent guide). A plugin update does **not** touch them - re-running setup refreshes the CLI, `usage.md`, the model-routing scaffold, and the spec template. It is idempotent; nothing is lost. Plan detects a known copy/plugin version mismatch before planning; direct invocation of other skills does not run a version preflight. See [Troubleshooting](plugins/flow-next/docs/troubleshooting.md).
+**Copy mode (mixed-host repos with Codex/Cursor/Droid teammates, CI, or plain terminals): update the plugin, then re-run `/flow-next:setup` in each project.** In copy mode two things live as **snapshot copies inside your repo's `.flow/`**, not live links to the plugin: the bundled **`flowctl` CLI** (`.flow/bin/`) and **`.flow/usage.md`** (the in-repo agent guide). A plugin update does **not** touch them - re-running setup refreshes the CLI, `usage.md`, the model-routing scaffold, and the spec template. It is idempotent; nothing is lost. Plan detects a known copy/plugin version mismatch before planning; direct invocation of other skills does not run a version preflight. See [Troubleshooting](plugins/flow-next/docs/troubleshooting.md).
 
 Setup asks the mode question once per repo (Claude Code only; other hosts are always copy mode) and stamps the choice; switching later is a consented setup re-run. Details: [platforms.md](plugins/flow-next/docs/platforms.md).
 
@@ -138,13 +171,11 @@ Setup asks the mode question once per repo (Claude Code only; other hosts are al
 
 ## The pipeline is a menu, not a rail
 
-The 5-command path is the opinionated default - rails for your first week, not a prohibition on anything else. Every stage is a composable primitive: skip stages, reorder them, chain them in one sentence, prompt *into* any of them - and whichever subset you run, the same execution, evidence, and review contracts hold. (Directly answers [#28](https://github.com/gmickel/flow-next/issues/28) and [#91](https://github.com/gmickel/flow-next/issues/91).)
+The 5-command path is the opinionated default: rails for your first week, with everything else still available. Every stage is a composable primitive. Skip stages, reorder them, chain them in one sentence, prompt *into* any of them, and whichever subset you run, the same execution, evidence, and review contracts hold. (Directly answers [#28](https://github.com/gmickel/flow-next/issues/28) and [#91](https://github.com/gmickel/flow-next/issues/91).)
 
-**You never have to type a slash command or a `--flag`.** Every skill runs from plain language and every argument has a plain-language equivalent - "implement fn-12 on a new branch and review it with codex" *is* `/flow-next:work fn-12 --branch=new --review=codex`. The explicit forms below are the precise, copy-pasteable version. And the skills compose beyond the pipeline: research a competitor's pricing, then "capture a spec for it"; run a load test, then "spec the fixes the numbers point to" - the exploration is the input, the spec is the durable output.
+**You never have to type a slash command or a `--flag`.** Plain language is a first-class entry point: every skill runs from it, and every argument has a plain-language equivalent, so "implement fn-12 on a new branch and review it with codex" *is* `/flow-next:work fn-12 --branch=new --review=codex`. The explicit forms below are the precise, copy-pasteable version. The skills also compose past the pipeline: research a competitor's pricing, then "capture a spec for it"; run a load test, then "spec the fixes the numbers point to". The exploration is the input, the spec is the durable output.
 
-**Prototype first when the question needs it.** Capture's input was never meant to be a requirements document - it can be a conversation, a half-formed briefing package, a business-language BRD, an eval result, or a working prototype. Some questions ("how should this look?", "how should this behave?", "does this state model survive the awkward cases?") cannot be settled in prose, so build the thing badly on purpose and then *"capture a spec from this prototype - ignore the code quality, I want the intent and the requirements it demonstrates."* What happens to the prototype code is a separate call made at **plan** time against your architecture and standards: throwaway evidence, keep-the-presentation-layer, or implementation seed.
-
-Prototyping is the sharpest instance of a general move - **let something real answer the question, then capture the answer** - and the route should match the question: probe or load-test a performance complaint, reproduce a bug report as a failing test that becomes R1, run an eval for a model or prompt choice, bake off candidate approaches as one task each, research the outside world. Most of those run unattended, so the finding-out happens before anyone commits to a shape. See [Prototype-Driven Specs](https://flow-next.dev/strategy/prototype-driven-specs/) and the [cookbook](https://flow-next.dev/cookbook/#compose-beyond-the-pipeline).
+**Prototype first when the question needs it.** Capture's input can be a conversation, a half-formed briefing package, a business-language BRD, an eval result, or a working prototype. Some questions ("how should this look?", "does this state model survive the awkward cases?") cannot be settled in prose, so build the thing badly on purpose and then *"capture a spec from this prototype, ignore the code quality, I want the intent and the requirements it demonstrates."* What happens to that code is a separate call made at **plan** time against your architecture and standards. The general move is to let something real answer the question and then capture the answer: probe a performance complaint, reproduce a bug report as the failing test that becomes R1, run an eval for a model choice, bake off candidate approaches as one task each. See [Prototype-Driven Specs](https://flow-next.dev/strategy/prototype-driven-specs/) and the [cookbook](https://flow-next.dev/cookbook/#compose-beyond-the-pipeline).
 
 ```text
 Skip stages       Tiny fix? plan + work, nothing else: /flow-next:plan "rename the config key" → /flow-next:work fn-N
@@ -156,7 +187,7 @@ Parallelize       /flow-next:plan reports execution waves. /flow-next:work inspe
 Route models      flowctl config set review.backend codex · per-task review: pins · delegate:codex for implementation.
 ```
 
-Skills are prompts executed by the host agent, not compiled code - if the variation you want isn't a parameter, describe it and the host builds the arrangement on the spot ([orchestration guide](plugins/flow-next/docs/orchestration.md)). Use the smallest sufficient workflow. Full recipe catalog: [flow-next.dev/cookbook](https://flow-next.dev/cookbook).
+Skills are prompts executed by the host agent. If the variation you want is not already a parameter, describe it and the host builds the arrangement on the spot ([orchestration guide](plugins/flow-next/docs/orchestration.md)). Use the smallest sufficient workflow. Full recipe catalog: [flow-next.dev/cookbook](https://flow-next.dev/cookbook).
 
 ---
 
@@ -164,7 +195,7 @@ Skills are prompts executed by the host agent, not compiled code - if the variat
 
 ```mermaid
 flowchart LR
-    Idea([💡 Idea]) --> P[/flow-next:prospect/]
+    Idea([Idea]) --> P[/flow-next:prospect/]
     Idea --> C[/flow-next:capture/]
     P --> C
     P -.->|direct via promote| L[/flow-next:plan/]
@@ -175,21 +206,21 @@ flowchart LR
     W --> R[/flow-next:impl-review/]
     R -->|SHIP| Q[/flow-next:qa/]
     R -->|NEEDS_WORK| W
-    Q -->|YES| Done([🚀 Ship])
+    Q -->|YES| Done([Ship])
     Q -->|NO| W
 
     Done -.maintenance.-> A[/flow-next:audit/]
     A -.-> M[(.flow/memory/)]
 ```
 
-> `/flow-next:qa` is an **opt-in** live-app QA stage (after work, before make-pr) — it drives the deployed app like a real user and only runs when there's a live deploy + a driver; with neither it surfaces the limitation rather than blocking. It **augments, never replaces** CI/staging/manual QA: the cheap first live pass that catches obvious runtime breakage before a human opens the PR. Run it by hand, or wire it into the autonomous loop as the optional `pipeline.qa` pilot stage (`flowctl config set pipeline.qa on`, default off) — `plan → plan-review → work → qa → make-pr`.
+> `/flow-next:qa` is an **opt-in** live-app QA stage (after work, before make-pr): it drives the deployed app like a real user and only runs when there's a live deploy + a driver; with neither it surfaces the limitation rather than blocking. It **augments, never replaces** CI/staging/manual QA: the cheap first live pass that catches obvious runtime breakage before a human opens the PR. Run it by hand, or wire it into the autonomous loop as the optional `pipeline.qa` pilot stage (`flowctl config set pipeline.qa on`, default off): `plan → plan-review → work → qa → make-pr`.
 
 The loop is spec-driven. Each step below maps to one skill; click through to flow-next.dev for the full page.
 
 <details>
 <summary><strong>1. Capture or prospect a spec</strong></summary>
 
-Either synthesize an existing conversation into a structured spec, or — when starting from scratch — generate ranked candidate ideas grounded in the repo. Both land in `.flow/specs/<id>.md`. Capture **source-tags every acceptance criterion** as `[user]` / `[paraphrase]` / `[inferred]` and runs a mandatory read-back — you see exactly how much of the spec the agent invented before anything is written.
+Either synthesize an existing conversation into a structured spec, or, when starting from scratch, generate ranked candidate ideas grounded in the repo. Both land in `.flow/specs/<id>.md`. Capture **source-tags every acceptance criterion** as `[user]` / `[paraphrase]` / `[inferred]` and runs a mandatory read-back, so you see exactly how much of the spec the agent invented before anything is written.
 
 ```bash
 /flow-next:capture                    # from a conversation
@@ -203,7 +234,7 @@ Either synthesize an existing conversation into a structured spec, or — when s
 <details>
 <summary><strong>2. Interview to refine</strong></summary>
 
-Deep Q&A pass over a spec or task: lead-with-recommendation, confidence tiers, codebase-first investigation. Use it to flesh out an ambiguous spec before breaking it down. `--scope=business|technical|both` symmetrically narrows the pass — the same skill serves the PO filling the business layer and the tech lead filling the technical layer, on the same spec file.
+Deep Q&A pass over a spec or task: lead-with-recommendation, confidence tiers, codebase-first investigation. Use it to flesh out an ambiguous spec before breaking it down. `--scope=business|technical|both` symmetrically narrows the pass, so the same skill serves the PO filling the business layer and the tech lead filling the technical layer, on the same spec file.
 
 ```bash
 /flow-next:interview <spec-id>
@@ -216,7 +247,13 @@ Deep Q&A pass over a spec or task: lead-with-recommendation, confidence tiers, c
 <details>
 <summary><strong>3. Plan into dependency-ordered tasks</strong></summary>
 
-Research the codebase via parallel scouts, then write the spec + tasks together. Tasks `fn-N.M` declare blockers, inherit context from the parent spec, and declare which acceptance criteria they satisfy (`satisfies: [R1, R3]`). This skill does not write code — only the plan.
+Research the codebase via parallel scouts, then write the spec + tasks together. Tasks `fn-N.M` declare blockers, inherit context from the parent spec, and declare which acceptance criteria they satisfy (`satisfies: [R1, R3]`). This skill does not write code, only the plan.
+
+<div align="center">
+<img src="assets/flow-next-plan.png" alt="/flow-next:plan output - dependency-ordered tasks, cross-model review passed, key decisions documented" width="720">
+</div>
+
+*A real `/flow-next:plan` result: dependency-ordered tasks, cross-model review iterated to SHIP, key decisions documented.*
 
 ```bash
 /flow-next:plan <spec-id>             # or <free-form text>
@@ -242,7 +279,7 @@ Execute tasks systematically: each runs in a fresh-context worker subagent, re-a
 <details>
 <summary><strong>5. Open the PR with a cognitive-aid body</strong></summary>
 
-Don't ask a human to skim a 10K-line diff. `/flow-next:make-pr` renders a PR body from nine flow-next input streams (spec R-IDs, per-task evidence, memory hits, glossary changes, strategy alignment, deferred review findings, the diff itself) — with an R-ID coverage table mapping every acceptance criterion to its satisfying task and evidence commit, and a "where to look" list that tells the reviewer which lines matter. A real one, from [PR #215](https://github.com/gmickel/flow-next/pull/215):
+Don't ask a human to skim a 10K-line diff. `/flow-next:make-pr` renders a PR body from nine flow-next input streams (spec R-IDs, per-task evidence, memory hits, glossary changes, strategy alignment, deferred review findings, the diff itself), with an R-ID coverage table mapping every acceptance criterion to its satisfying task and evidence commit, and a "where to look" list that tells the reviewer which lines matter. A real one, from [PR #215](https://github.com/gmickel/flow-next/pull/215):
 
 <div align="center">
 <img src="assets/flow-next-pr-body.png" alt="Cognitive-aid PR body from a real merged PR: R-ID coverage table mapping acceptance criteria to tasks and evidence commits, plus the per-task verification record" width="720">
@@ -282,9 +319,9 @@ Fetch unresolved threads + top-level comments + review-submission bodies, cluste
 
 ## Going autonomous
 
-Three loops, one quality bar. Multi-model review at every handover, don't-thrash reflexes (two-strike unready, auto-block, bounded CI fix budgets), evidence over narration — invariant across all three. That's the differentiator from "ralph-wiggum"-style loops that run open-loop without gates.
+Three loops, one quality bar. Multi-model review at every handover, don't-thrash reflexes (two-strike unready, auto-block, bounded CI fix budgets), and evidence over narration hold across all three. That's the differentiator from "ralph-wiggum"-style loops that run open-loop without gates.
 
-The default path is the **pilot + land pipeline** — in-session, host-driven, zero scaffold:
+The default path is the **pilot + land pipeline**, in-session, host-driven, zero scaffold:
 
 ```bash
 flowctl spec ready fn-12          # bless work (or move its issue on the tracker board)
@@ -292,9 +329,9 @@ flowctl spec ready fn-12          # bless work (or move its issue on the tracker
 /loop 30m /flow-next:land         # ship loop: draft PR → CI green → reviews converged → merged → released
 ```
 
-Run both concurrently — two instances, **separate clones** — and you have the full assembly line: board → pilot → draft PR → land → released. The `ready` flag (or your tracker's board state) is the consent boundary: humans bless specs, loops drain them. 📖 **[Going autonomous](https://flow-next.dev/autonomous/overview)**
+Run both concurrently (two instances, **separate clones**) and you have the full assembly line: board → pilot → draft PR → land → released. The `ready` flag (or your tracker's board state) is the consent boundary: humans bless specs, loops drain them. 📖 **[Going autonomous](https://flow-next.dev/autonomous/overview)**
 
-**Ralph** is the hardened harness for **fully planned** specs (it never plans): an external shell loop drives a *fresh* session per iteration — failed attempts die with the session instead of polluting the next one — with hook-enforced guardrails and receipts on disk. Reach for it when a run outlasts a session or prose guardrails aren't enough.
+**Ralph** is the hardened harness for **fully planned** specs (it never plans): an external shell loop drives a *fresh* session per iteration, so failed attempts die with the session instead of polluting the next one, under hook-enforced guardrails with receipts on disk. Reach for it when a run outlasts a session or prose guardrails aren't enough.
 
 ```bash
 /flow-next:ralph-init           # One-time setup
@@ -309,7 +346,7 @@ scripts/ralph/ralph.sh          # Run from terminal
 
 </div>
 
-📖 **[Ralph deep dive](plugins/flow-next/docs/ralph.md)** · **[Ralph TUI](flow-next-tui/)** (`bun add -g @gmickel/flow-next-tui`)
+**[Ralph deep dive](plugins/flow-next/docs/ralph.md)** · **[Ralph TUI](flow-next-tui/)** (`bun add -g @gmickel/flow-next-tui`)
 
 ---
 
@@ -317,47 +354,26 @@ scripts/ralph/ralph.sh          # Run from terminal
 
 | Problem | Solution |
 |---------|----------|
-| Context drift | **Re-anchoring** before every task — re-reads specs + git state |
-| Context window limits | **Fresh context per task** — worker subagent starts clean |
-| Single-model blind spots | **Cross-model reviews** — RepoPrompt, Codex, Copilot, or Cursor as second opinion |
-| Forgotten requirements | **R-IDs frozen at handover** — numbered once, never renumbered; traced spec → task → commit → PR coverage table |
-| "It worked on my machine" | **Evidence recording** — commits, tests, PRs tracked per task |
-| Infinite retry loops | **Auto-block stuck tasks** — fails after N attempts, moves on |
-| Duplicate implementations | **Pre-implementation search** — worker checks for similar code before writing new |
-| Hallucinated specs from "I think we discussed…" | **Source-tagged capture** — every acceptance criterion marked `[user]` / `[paraphrase]` / `[inferred]`, mandatory read-back loop |
-| Stale project memory polluting future work | **`/flow-next:audit` + categorized memory schema** — agent reviews each entry, flags stale (never deletes) |
-| 10K-line diffs with no focus signal | **PR-as-cognitive-aid** — R-ID coverage, critical changes, decisions, where-to-look |
-| GitHub PR review threads piling up | **`/flow-next:resolve-pr`** — fetch → triage → dispatch resolver agents → reply → resolve via GraphQL |
-| One model doing everything | **Orchestration & model routing** — tiered subagents, per-task reviewer routing, opt-in `codex exec` implementation offload, promptable overrides ([docs](plugins/flow-next/docs/orchestration.md)) |
-
-## What adopters say
-
-> *"I am enjoying your version of all these cool new plugins. So far yours has worked the best."*
-> — [@patrickmichalina](https://github.com/gmickel/flow-next/issues/5#issuecomment-3734228766)
-
-> *"really enjoying this project, thanks for making it and making it public"*
-> — [@possibilities](https://github.com/gmickel/flow-next/pull/95), external contributor, said while shipping a correct kernel patch
-
-> *"it’s been really useful in my workflow."*
-> — [@raydocs](https://github.com/gmickel/flow-next/issues/4)
-
-Featured in [awesome-claude-code-workflows](https://github.com/ithiria894/awesome-claude-code-workflows) for plan-first workflows, Ralph autonomous mode, and receipt-based gating ([#96](https://github.com/gmickel/flow-next/issues/96)).
-
-## Field-hardened in enterprise environments
-
-flow-next's ways of working are coached and run in enterprise environments worldwide - from CAD and construction software to proptech and education, from modern monorepos and hundred-repo microservice estates to 30-year-old legacy stacks, on GitHub Enterprise, GitLab, and Jira. Discovery interviews of 2-3 hours produce 8-11 structured, buildable specs; the edge cases surface in the interview, not the sprint.
-
-Receipts, evidence JSON, and review gates are the audit trail enterprise adoption asks for - approval checkpoints and traceability are built in, not bolted on.
-
-**For teams:** six named handover objects, **Spec-as-PR** (review the 50-line spec before the 500-line diff exists), and tracker projection to Linear / GitHub / GitLab / Jira. → [`docs/teams.md`](plugins/flow-next/docs/teams.md) · [flow-next.dev](https://flow-next.dev)
+| Context drift | **Re-anchoring** before every task: re-reads specs + git state |
+| Context window limits | **Fresh context per task**: worker subagent starts clean |
+| Single-model blind spots | **Cross-model reviews**: RepoPrompt, Codex, Copilot, or Cursor as second opinion |
+| Forgotten requirements | **R-IDs frozen at handover**: numbered once, never renumbered; traced spec → task → commit → PR coverage table |
+| "It worked on my machine" | **Evidence recording**: commits, tests, PRs tracked per task |
+| Infinite retry loops | **Auto-block stuck tasks**: fails after N attempts, moves on |
+| Duplicate implementations | **Pre-implementation search**: worker checks for similar code before writing new |
+| Hallucinated specs from "I think we discussed…" | **Source-tagged capture**: every acceptance criterion marked `[user]` / `[paraphrase]` / `[inferred]`, mandatory read-back loop |
+| Stale project memory polluting future work | **`/flow-next:audit` + categorized memory schema**: agent reviews each entry, flags stale (never deletes) |
+| 10K-line diffs with no focus signal | **PR-as-cognitive-aid**: R-ID coverage, critical changes, decisions, where-to-look |
+| GitHub PR review threads piling up | **`/flow-next:resolve-pr`**: fetch → triage → dispatch resolver agents → reply → resolve via GraphQL |
+| One model doing everything | **Orchestration & model routing**: tiered subagents, per-task reviewer routing, opt-in `codex exec` implementation offload, promptable overrides ([docs](plugins/flow-next/docs/orchestration.md)) |
 
 ## What Flow-Next is *not*
 
 Scope honesty, because the architecture depends on it:
 
 - **Not a hosted dashboard or SaaS tier.** Everything is in the repo; a hosted layer would break the uninstall promise.
-- **Not a Jira/Linear replacement for human-only teams.** Flow-Next is for agentic-engineering teams. If your team lives in a tracker, `/flow-next:tracker-sync` *projects* specs to it — **projection, not coordination**: the spec stays the source of truth; the tracker never drives flow state or spawns agents. (Contrast OpenAI Symphony, where the tracker is the control plane — Flow-Next is "Symphony, but with real specs, re-anchoring, and receipts.")
-- **Not split-file specs.** One durable spec document evolving through layers — vs. Kiro-style `requirements.md` / `design.md` / `tasks.md` fragmentation.
+- **Not a Jira/Linear replacement for human-only teams.** Flow-Next is for agentic-engineering teams. If your team lives in a tracker, `/flow-next:tracker-sync` *projects* specs to it: **projection, not coordination**. The spec stays the source of truth; the tracker never drives flow state or spawns agents. (Contrast OpenAI Symphony, where the tracker is the control plane. Flow-Next is "Symphony, but with real specs, re-anchoring, and receipts.")
+- **Not split-file specs.** One durable spec document evolving through layers, versus Kiro-style `requirements.md` / `design.md` / `tasks.md` fragmentation.
 - **Not a replacement for human judgment.** Humans own product decisions, risk tolerance, merge decisions, and production responsibility. Flow-Next makes those decisions easier to verify because the evidence is structured.
 - **Not waterfall.** Waterfall means irreversible phases, a plan frozen at minimum knowledge, and handovers that discard what the next phase learns. Flow-Next has none of them: stages are re-enterable (re-interview after planning exposes a hole, re-plan after a task proves the approach wrong), the spec is captured at the moment of *most* knowledge because exploration comes first, and evidence is written *back* into the spec as work proceeds. It does ask for more **thought** earlier than a loose ticket does; it does not ask for more **commitment** earlier. The spec is a ratchet, not a gate. Full argument: [Prototype-Driven Specs](https://flow-next.dev/strategy/prototype-driven-specs/).
 
@@ -365,44 +381,21 @@ Scope honesty, because the architecture depends on it:
 
 ## Commands
 
-| Command | What it does |
-|---------|--------------|
-| `/flow-next:strategy` | Write `STRATEGY.md` — target problem, approach, users, metrics, active tracks |
-| `/flow-next:prospect` | Generate ranked candidate ideas grounded in the repo, upstream of `capture`/`interview`/`plan` |
-| `/flow-next:capture` | Synthesize conversation context into a spec (source-tagged, mandatory read-back) |
-| `/flow-next:interview` | Deep spec refinement with lead-with-recommendation + confidence tiers + codebase-first investigation; `--scope=business\|technical\|both` |
-| `/flow-next:plan` | Research codebase, create spec + dependency-ordered tasks |
-| `/flow-next:work` | Execute tasks with re-anchoring + worker subagents + review gates. Opt-in: offload implementation to a local `codex exec` with `delegate:codex` (or `work.delegate=codex` config) — OFF by default, consent-gated, host keeps all judgment ([config keys](plugins/flow-next/docs/flowctl.md#config)) |
-| `/flow-next:impl-review` | Cross-model implementation review (RepoPrompt, Codex, Copilot, or Cursor) |
-| `/flow-next:plan-review` | Cross-model plan review |
-| `/flow-next:spec-completion-review` | Spec-completion review gate — verify combined implementation matches the spec (renamed from `/flow-next:epic-review` in 1.0.0) |
-| `/flow-next:qa` | **Live-app real-user QA** — derives scenarios from the spec (AC / R-IDs / boundaries), drives the running app via `flow-next-drive`, files P0/P1/P2 findings with evidence, ends with a YES/NO ship verdict receipt. Forbidden from marking PASS by reading source. Opt-in — needs a live deploy + a driver |
-| `/flow-next:make-pr` | Render a cognitive-aid PR body (9 input streams) and open via `gh`; with HTML artifact mode on, also commits a `pr.html` review instrument |
-| `/flow-next:resolve-pr` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve via GraphQL) |
-| `/flow-next:audit` | Agent-native review of `.flow/memory/` entries against current code (Keep / Update / Consolidate / Replace / Delete / Harden — Harden graduates a recurring, mechanizable lesson into a lint rule, CI step, or instruction-file rule, verified live before the entry is demoted to a pointer) |
-| `/flow-next:memory-migrate` | Lift legacy flat memory files into the categorized schema |
-| `/flow-next:prime` | **Opinionated agent-readiness assessment** - classifies the project (lifecycle / topology / size / stack / delivery shape), judges substance over existence, verifies commands actually run, leads with an operability verdict + ranked next-actions; fixes agent readiness with consent. `--classify-only` gives a cheap portfolio-triage sweep across many repos |
-| `/flow-next:pilot` | **Single-tick build-loop conductor** — advances one ready spec by one pipeline stage (plan → plan-review → work → make-pr, plus an optional `qa` stage when `pipeline.qa==on`) per tick, ends with a `PILOT_VERDICT` line; drive it with `/loop` or `/goal` |
-| `/flow-next:land` | **Cadence-tick ship loop** — babysits the build loop's draft PRs: CI tri-state fix loop, reviewer patience window, resolve-pr convergence, gated explicit merge, spec close, release-follow; ends with a `LAND_VERDICT` line; drive it with `/loop 30m /flow-next:land` |
-| `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) + register project hooks (consent-gated; nothing installed by default) |
-| `/flow-next:setup` | Per-project setup — `.flow/` init, mode question (plugin mode: zero copies, run-once on Claude Code; copy mode: local flowctl install for mixed-host repos), CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony, optional model-routing scaffold |
-| `/flow-next:sync` | **Plan-sync** — update downstream *task* specs after implementation drift inside flow-next |
-| `/flow-next:tracker-sync` | **Tracker bridge** (distinct from `/flow-next:sync`) — project a spec to a Linear/GitHub/GitLab/Jira issue and reconcile body/status/comments two-way; projection, not coordination ([docs](plugins/flow-next/docs/tracker-sync.md)) |
-| `/flow-next:map` | Optional — wrap [openclaw/clawpatch](https://github.com/openclaw/clawpatch)'s `clawpatch map` for a semantic feature index (`.clawpatch/features/*.json`); scouts read it when present, fall back to grep/glob when absent. Requires Node 22+ + `pnpm add -g clawpatch` |
+Every skill is invocable as `/flow-next:<name>` or in plain language. The inner loop is `capture` → `plan` → `work` → `make-pr` → `resolve-pr`. Upstream of it sit `strategy`, `prospect`, and `interview`; around it, the review gates (`plan-review`, `impl-review`, `spec-completion-review`, `qa`); after it, the loops (`pilot`, `land`, `ralph-init`) and the maintenance skills (`audit`, `sync`, `memory-migrate`). `setup`, `prime`, `tracker-sync`, and `map` handle the project itself.
 
-**Phrase-triggered skills** (no slash command — just ask): `flow-next-deps` ("what's blocking what?" — dependency graph + execution order), `flow-next-drive` (drive a running app like a real user; powers `/flow-next:qa`), `flow-next-export-context` (export RepoPrompt context for external-LLM review), `flow-next-rp-explorer` (token-efficient codebase exploration via RepoPrompt), `flow-next-worktree-kit` (worktree create/list/switch/cleanup + `.env` copying), and base `flow-next` ("show me my tasks", "what's ready?").
+**Phrase-triggered skills** (no slash command, just ask): `flow-next-deps` ("what's blocking what?", dependency graph + execution order), `flow-next-drive` (drive a running app like a real user; powers `/flow-next:qa`), `flow-next-export-context` (export RepoPrompt context for external-LLM review), `flow-next-rp-explorer` (token-efficient codebase exploration via RepoPrompt), `flow-next-worktree-kit` (worktree create/list/switch/cleanup + `.env` copying), and base `flow-next` ("show me my tasks", "what's ready?").
 
-Full catalog of all 28 skills with triggers: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every flag, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md). Steering all of it — model routing, review backends, delegation, loop chaining: [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md).
+Full catalog of all 28 skills, with triggers, one-liners, and every flag: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every command, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md). Steering all of it, from model routing to review backends, delegation, and loop chaining: [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md).
 
 ---
 
 ## Adopting in a team
 
-Flow-Next is a methodology, not just a tool. The [teams guide](plugins/flow-next/docs/teams.md) maps the AI-native SDLC onto concrete commands: the six handover objects, **Spec-as-PR** (review the 50-line spec before the 500-line implementation exists), parallel work from one spec, the symmetric interview (PO and tech lead run the *same* skill on the *same* file), and a week-1 → month-1 → quarter-1 adoption ladder.
+Flow-Next is a methodology with a tool attached. The [teams guide](plugins/flow-next/docs/teams.md) maps the AI-native SDLC onto concrete commands: the six handover objects, **Spec-as-PR** (review the 50-line spec before the 500-line implementation exists), parallel work from one spec, the symmetric interview (PO and tech lead run the *same* skill on the *same* file), and a week-1 → month-1 → quarter-1 adoption ladder.
 
-Teams that live in Linear, GitHub Issues, GitLab, or Jira keep their board: the tracker bridge projects every spec to an issue, two-way. On Linear, `make-pr` output is additionally [Linear Diffs](https://linear.app/docs/diffs)-ready — review the PR inside the issue. → [`docs/teams.md`](plugins/flow-next/docs/teams.md) · [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md)
+Teams that live in Linear, GitHub Issues, GitLab, or Jira keep their board: the tracker bridge projects every spec to an issue, two-way. On Linear, `make-pr` output is also [Linear Diffs](https://linear.app/docs/diffs)-ready, so you review the PR inside the issue. → [`docs/teams.md`](plugins/flow-next/docs/teams.md) · [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md)
 
-**Rolling it out to everyone?** On Claude Code you can skip the per-developer install: deploy the marketplace + plugin org-wide via a `managed-settings.json` (MDM/GPO — `extraKnownMarketplaces` + `enabledPlugins`), or commit a `.claude/settings.json` to a repo for prompt-on-trust install. Each repo still needs `/flow-next:setup`. → [Install: team / org-wide deployment](https://flow-next.dev/install/#team--org-wide-deployment-claude-code-managed-settings)
+**Rolling it out to everyone?** On Claude Code you can skip the per-developer install: deploy the marketplace + plugin org-wide via a `managed-settings.json` (MDM/GPO, using `extraKnownMarketplaces` + `enabledPlugins`), or commit a `.claude/settings.json` to a repo for prompt-on-trust install. Each repo still needs `/flow-next:setup`. → [Install: team / org-wide deployment](https://flow-next.dev/install/#team--org-wide-deployment-claude-code-managed-settings)
 
 ---
 
@@ -413,27 +406,27 @@ The repo holds the offline-resilient reference. [flow-next.dev](https://flow-nex
 | Looking for… | Repo file | Website |
 |---|---|---|
 | 5-minute pitch + install | `README.md` (this page) | [flow-next.dev](https://flow-next.dev) |
-| Skills catalog — all 28 skills, triggers, one-liners | [`docs/skills.md`](plugins/flow-next/docs/skills.md) | — |
+| Skills catalog: all 28 skills, triggers, one-liners | [`docs/skills.md`](plugins/flow-next/docs/skills.md) | n/a |
 | Adopting in a team, handover objects, Spec-as-PR, adoption ladder | [`docs/teams.md`](plugins/flow-next/docs/teams.md) | [Teams guide](https://flow-next.dev) |
-| Full `flowctl` CLI reference — every command, every flag | [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) | — |
-| Ralph autonomous mode internals — hooks, receipts, DCG | [`docs/ralph.md`](plugins/flow-next/docs/ralph.md) | — |
-| Optional HTML render lenses — spec visualizer + PR review instrument | [`docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md) | — |
-| Live-app QA — `/flow-next:qa`, spec-derived scenarios, P0/P1/P2 findings, `qa_verdict` receipt | [`skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md) | — |
-| `.flow/` directory layout, spec-first task model, ID format | [`docs/architecture.md`](plugins/flow-next/docs/architecture.md) | — |
-| Spec template — R-ID rules, confidence anchors, receipt schema | [`docs/spec-template.md`](plugins/flow-next/docs/spec-template.md) · canonical scaffold at [`templates/spec.md`](plugins/flow-next/templates/spec.md) | — |
-| Structured review findings — versioned receipt schema, lineage/currentness, anchors, bounds, consumer fallback | [`docs/review-findings.md`](plugins/flow-next/docs/review-findings.md) | [Receipts](https://flow-next.dev/review/receipts/) |
-| Memory schema — bug / knowledge tracks, frontmatter, audit lifecycle | [`docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) | — |
-| Self-improving loops — memory, glossary, decisions, strategy | [`docs/self-improving.md`](plugins/flow-next/docs/self-improving.md) | — |
+| Full `flowctl` CLI reference: every command, every flag | [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) | n/a |
+| Ralph autonomous mode internals: hooks, receipts, DCG | [`docs/ralph.md`](plugins/flow-next/docs/ralph.md) | n/a |
+| Optional HTML render lenses: spec visualizer + PR review instrument | [`docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md) | n/a |
+| Live-app QA: `/flow-next:qa`, spec-derived scenarios, P0/P1/P2 findings, `qa_verdict` receipt | [`skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md) | n/a |
+| `.flow/` directory layout, spec-first task model, ID format | [`docs/architecture.md`](plugins/flow-next/docs/architecture.md) | n/a |
+| Spec template: R-ID rules, confidence anchors, receipt schema | [`docs/spec-template.md`](plugins/flow-next/docs/spec-template.md) · canonical scaffold at [`templates/spec.md`](plugins/flow-next/templates/spec.md) | n/a |
+| Structured review findings: versioned receipt schema, lineage/currentness, anchors, bounds, consumer fallback | [`docs/review-findings.md`](plugins/flow-next/docs/review-findings.md) | [Receipts](https://flow-next.dev/review/receipts/) |
+| Memory schema: bug / knowledge tracks, frontmatter, audit lifecycle | [`docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) | n/a |
+| Self-improving loops: memory, glossary, decisions, strategy | [`docs/self-improving.md`](plugins/flow-next/docs/self-improving.md) | n/a |
 | Tracker-sync bridge: projection model, hybrid ids, deterministic `flowctl tracker` transport, `/flow-next:tracker-sync` vs `/flow-next:sync` | [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md) | n/a |
-| Project glossary — `GLOSSARY.md` shape, R17 forbidden-vocabulary guard | [`docs/glossary.md`](plugins/flow-next/docs/glossary.md) · [`GLOSSARY.md`](GLOSSARY.md) | — |
-| Project strategy — `STRATEGY.md` shape, downstream skill grounding | [`docs/strategy.md`](plugins/flow-next/docs/strategy.md) · [`STRATEGY.md`](STRATEGY.md) | — |
-| Cross-platform install matrix + Codex / Droid / OpenCode notes | [`docs/platforms.md`](plugins/flow-next/docs/platforms.md) | — |
-| `scripts/sync-codex.sh` pipeline, plain-text transform, validation guards | [`docs/sync-codex.md`](plugins/flow-next/docs/sync-codex.md) | — |
-| Troubleshooting — stuck tasks, Ralph debug, receipt validation, uninstall | [`docs/troubleshooting.md`](plugins/flow-next/docs/troubleshooting.md) | — |
-| Contributing — local dev, adding skills, releasing | [`CONTRIBUTING.md`](CONTRIBUTING.md) | — |
-| Repo strategic intent + active tracks | [`STRATEGY.md`](STRATEGY.md) | — |
-| Canonical vocabulary | [`GLOSSARY.md`](GLOSSARY.md) | — |
-| Visual overview, diagrams, methodology | — | [`flow-next.dev`](https://flow-next.dev) |
+| Project glossary: `GLOSSARY.md` shape, R17 forbidden-vocabulary guard | [`docs/glossary.md`](plugins/flow-next/docs/glossary.md) · [`GLOSSARY.md`](GLOSSARY.md) | n/a |
+| Project strategy: `STRATEGY.md` shape, downstream skill grounding | [`docs/strategy.md`](plugins/flow-next/docs/strategy.md) · [`STRATEGY.md`](STRATEGY.md) | n/a |
+| Cross-platform install matrix + Codex / Droid / OpenCode notes | [`docs/platforms.md`](plugins/flow-next/docs/platforms.md) | n/a |
+| `scripts/sync-codex.sh` pipeline, plain-text transform, validation guards | [`docs/sync-codex.md`](plugins/flow-next/docs/sync-codex.md) | n/a |
+| Troubleshooting: stuck tasks, Ralph debug, receipt validation, uninstall | [`docs/troubleshooting.md`](plugins/flow-next/docs/troubleshooting.md) | n/a |
+| Contributing: local dev, adding skills, releasing | [`CONTRIBUTING.md`](CONTRIBUTING.md) | n/a |
+| Repo strategic intent + active tracks | [`STRATEGY.md`](STRATEGY.md) | n/a |
+| Canonical vocabulary | [`GLOSSARY.md`](GLOSSARY.md) | n/a |
+| Visual overview, diagrams, methodology | n/a | [`flow-next.dev`](https://flow-next.dev) |
 
 Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugins/flow-next/docs/README.md).
 
@@ -441,22 +434,24 @@ Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugi
 
 ## Requirements
 
-- **Python 3.11+** (or the `py` launcher on Windows) — bundled `flowctl` CLI is pure-stdlib. Launchers skip broken aliases and working interpreters below the supported floor before loading flowctl.
-- **`jq`** and **`gh`** — required for the review subsystem and PR plumbing.
-- **`bun`** *(optional)* — only needed for the [Ralph TUI](flow-next-tui/).
+- **Python 3.11+** (or the `py` launcher on Windows): the bundled `flowctl` CLI is pure-stdlib. Launchers skip broken aliases and working interpreters below the supported floor before loading flowctl.
+- **`jq`** and **`gh`**: required for the review subsystem and PR plumbing.
+- **`bun`** *(optional)*: only needed for the [Ralph TUI](flow-next-tui/).
 
 ## Platforms
+
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Community port for OpenCode.
 
 | Platform | Status |
 |---|---|
 | Claude Code | First-class (canonical surface) |
 | OpenAI Codex (CLI + Desktop) | First-class (mirror at `plugins/flow-next/codex/`, regenerated by `scripts/sync-codex.sh`) |
 | Factory Droid | First-class (regex-OR matchers handle `Execute` ↔ `Bash`) |
-| Grok Build (xAI) | Works via Claude Code compatibility — skills, `/flow-next:*` commands, hooks, and **multi-agent flows** (verified). Type **`/flow-next:`** to open the command autocomplete; `/flow-next-` filters the separate hyphen-named skill surface. Ralph intentionally not built — [details](plugins/flow-next/docs/platforms.md#grok-build-claude-code-compatibility) |
-| Cursor | First-class. **Recommended:** team-marketplace repo import (admin imports this GitHub repo via the Cursor GitHub App; Default Off/On/Required; auto-refresh on push). **Fallback:** local plugin (`./scripts/install-cursor.sh` / `install-cursor.ps1`). Skills, commands, multi-agent, native asks, slash autocomplete verified; Ralph intentionally not built for Cursor — [details](plugins/flow-next/docs/platforms.md#cursor) |
+| Cursor | First-class. **Recommended:** team-marketplace repo import (admin imports this GitHub repo via the Cursor GitHub App; Default Off/On/Required; auto-refresh on push). **Fallback:** local plugin (`./scripts/install-cursor.sh` / `install-cursor.ps1`). Skills, commands, multi-agent, native asks, slash autocomplete verified; Ralph intentionally not built for Cursor ([details](plugins/flow-next/docs/platforms.md#cursor)) |
+| Grok Build (xAI) | First-class via Claude Code compatibility: skills, `/flow-next:*` commands, hooks, and **multi-agent flows** (verified). Type **`/flow-next:`** to open the command autocomplete; `/flow-next-` filters the separate hyphen-named skill surface. Ralph intentionally not built ([details](plugins/flow-next/docs/platforms.md#grok-build-claude-code-compatibility)) |
 | OpenCode | Community port: [`flow-next-opencode`](https://github.com/gmickel/flow-next-opencode) |
 
-Detailed install + cross-platform patterns in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md).
+Detailed install + cross-platform patterns in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md), the canonical home for the tiering sentence above.
 
 > **Upgrading from 0.x?** The 1.0 release renamed the `epic` surface to `spec`; the legacy aliases and automated migration commands were removed in 3.0. Re-run `/flow-next:setup` for current scaffolding, then follow the manual three-step pre-1.0 layout port in [troubleshooting](plugins/flow-next/docs/troubleshooting.md#pre-10-layout-porting).
 
@@ -470,13 +465,13 @@ Detailed install + cross-platform patterns in [`docs/platforms.md`](plugins/flow
 
 ## Contributing
 
-Bug reports and PRs welcome — start at [`CONTRIBUTING.md`](CONTRIBUTING.md) (local dev, adding skills, the docs-only rule) and [`SECURITY.md`](SECURITY.md) for private disclosure. Questions and show-and-tell: [GitHub Discussions](https://github.com/gmickel/flow-next/discussions). Or come say hi on [Discord](https://discord.gg/f3DYq8AAm5).
+Bug reports and PRs welcome: start at [`CONTRIBUTING.md`](CONTRIBUTING.md) (local dev, adding skills, the docs-only rule) and [`SECURITY.md`](SECURITY.md) for private disclosure. Questions and show-and-tell: [GitHub Discussions](https://github.com/gmickel/flow-next/discussions). Or come say hi on [Discord](https://discord.gg/f3DYq8AAm5).
 
 Every PR runs the same gate: the full test suite on a 3-OS matrix (Ubuntu / macOS / Windows) plus an offline docs-linkcheck - green CI is the merge floor.
 
 ## Also check out
 
-> **[GNO](https://gno.sh)** — local hybrid search for your notes, docs, and code. Long-term memory over your files via MCP.
+> **[GNO](https://gno.sh)**: local hybrid search for your notes, docs, and code. Long-term memory over your files via MCP.
 >
 > ```bash
 > bun install -g @gmickel/gno && gno mcp install --target claude-code
@@ -486,7 +481,7 @@ Every PR runs the same gate: the full test suite on a 3-OS matrix (Ubuntu / macO
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).
 
 <div align="center">
 

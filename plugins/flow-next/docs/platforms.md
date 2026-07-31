@@ -1,6 +1,10 @@
 # Other Platforms
 
-Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre-built mirror), and Factory Droid (native cross-platform patterns). A community port exists for OpenCode. xAI **Grok Build** reads the canonical Claude plugin format AS-IS (skills, agents, commands, MCP, instruction files). Skills load, `/flow-next:*` slash commands run when typed, and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Setup detects Grok via **`GROK_AGENT=1`** (not Codex fallback / `$flow-next-` syntax). Copy mode + `.flow/bin/flowctl`; Ralph intentionally not built for Grok. See [Grok Build](#grok-build-claude-code-compatibility) below. **Cursor** is first-class too: **recommended install is team-marketplace repo import** (admin imports the GitHub repo via the Cursor GitHub App; Default Off / On / Required modes; auto-refresh on push); local `install-cursor.sh` / `.ps1` remain the individual/fallback path. Skills, commands, multi-agent flows, native asks, and slash autocomplete verified; Ralph intentionally not built for Cursor. See [Cursor](#cursor) below.
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Community port for OpenCode.
+
+**That sentence is canonical, and this file is its only home.** Every other surface (the README prose, the README platforms table, and flow-next.dev) restates it verbatim or links here, so promoting or demoting a harness stays a one-place edit. First-class means the canonical plugin files are consumed (as-is or through the generated mirror), skills and slash commands run, multi-agent flows are verified, and setup detects the host. Ralph is intentionally not built for Cursor or Grok Build; that is a deliberate posture, not a tiering gap.
+
+Claude Code is the canonical surface, OpenAI Codex consumes the pre-built mirror, and Factory Droid runs on the native cross-platform patterns. xAI **Grok Build** reads the canonical Claude plugin format AS-IS (skills, agents, commands, MCP, instruction files). Skills load, `/flow-next:*` slash commands run when typed, and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Setup detects Grok via **`GROK_AGENT=1`** (not Codex fallback / `$flow-next-` syntax). Copy mode + `.flow/bin/flowctl`; Ralph intentionally not built for Grok. See [Grok Build](#grok-build-claude-code-compatibility) below. **Cursor** is first-class too: **recommended install is team-marketplace repo import** (admin imports the GitHub repo via the Cursor GitHub App; Default Off / On / Required modes; auto-refresh on push); local `install-cursor.sh` / `.ps1` remain the individual/fallback path. Skills, commands, multi-agent flows, native asks, and slash autocomplete verified; Ralph intentionally not built for Cursor. See [Cursor](#cursor) below.
 
 ### Ralph hooks: per-host registration (no plugin-default)
 
@@ -101,7 +105,7 @@ cd flow-next
 ./scripts/install-codex.sh flow-next
 ```
 
-The script copies pre-built files from `codex/` to `~/.codex/` (skills, 22 `.toml` agents, hooks, flowctl, prompts, ralph templates) and merges agent + feature entries into `config.toml`. Idempotent — re-run after `git pull` to update. The native `/plugins` install path isn't used because Codex's plugin manifest only declares `skills`, not custom agents or hooks; until that changes, the script is the only way to get the full multi-agent experience.
+The script copies pre-built files from `codex/` to `~/.codex/` (skills, 21 `.toml` agents, hooks, flowctl, prompts, ralph templates) and merges agent + feature entries into `config.toml`. Idempotent — re-run after `git pull` to update. The native `/plugins` install path isn't used because Codex's plugin manifest only declares `skills`, not custom agents or hooks; until that changes, the script is the only way to get the full multi-agent experience.
 
 ### Skill invocation
 
@@ -130,7 +134,7 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 ### What works
 
 - Planning, work execution, interviews, reviews — full workflow.
-- Multi-agent roles: 22 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`).
+- Multi-agent roles: 21 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`).
 - Cross-model reviews (Codex as review backend).
 - flowctl CLI (`~/.codex/scripts/flowctl`).
 - Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/flowctl to project; Ralph hooks only if the Ralph ceremony answers yes.
@@ -177,7 +181,7 @@ Codex supports hooks, but flow-next installs **none** by default: the Codex mirr
 Run `$flow-next-setup` (or select **Flow Setup** from the `$` dropdown) in your project. It detects the Codex platform and:
 - Initializes `.flow/` directory
 - Copies flowctl to `.flow/bin/`
-- Copies 22 agent `.toml` configs to `.codex/agents/` (project-scoped)
+- Copies 21 agent `.toml` configs to `.codex/agents/` (project-scoped)
 - Asks whether to enable Ralph (default **No**). Yes → ralph-init (scaffold + `.codex/hooks.json`). No → strips any fingerprinted Ralph guard entries if present
 - Adds Flow-Next instructions to AGENTS.md
 - Configures review backend and recommended defaults

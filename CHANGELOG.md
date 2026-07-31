@@ -2,6 +2,53 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Someone landing on the README now learns what Flow-Next does for them before
+they meet a single mechanism, and they see that it runs in real engineering
+organisations inside the first screenful instead of two thirds of the way down.
+
+### Changed
+
+- **The README leads with the problem, the measured evidence, and the outcomes
+  you get.** The page opens on the reader's situation (implementation got cheap;
+  reviewing and verifying it did not), then the SlopCodeBench findings as four
+  scannable bullets instead of a dense statistics paragraph, then six outcome
+  headings that state what you get rather than which mechanism produces it.
+  Adoption and breadth evidence, including the honest asymmetry about who feels
+  the change first, moved from two thirds down the page into the first quarter.
+  Every section is retained; the seven-tenet vocabulary table and the command
+  inventory are demoted behind a disclosure and a link to the generated
+  catalog, so the narrative reads as an argument rather than a manual.
+- **Natural-language invocation is stated as a first-class entry point.** Every
+  skill runs from plain language and every argument has a plain-language
+  equivalent, so a reader learns that before they learn the slash commands.
+
+### Fixed
+
+- **Which harnesses are first-class no longer depends on which page you read.**
+  The README prose called Cursor and Grok Build "runs on" while the platforms
+  table two hundred lines later called Cursor first-class and the docs site
+  called all five first-class. `plugins/flow-next/docs/platforms.md` is now the
+  single canonical home for one sentence ("First-class on Claude Code, OpenAI
+  Codex, Factory Droid, Cursor, and xAI Grok Build. Community port for
+  OpenCode."), and every other surface restates it verbatim or links there, so
+  promoting or demoting a harness is a one-place edit.
+- **Agent counts in the reference docs match what ships.** `platforms.md`
+  claimed 22 agents in three places; the plugin ships 21. Inventory counts are
+  gone from README front-door prose entirely, where they drift silently and
+  earn the reader nothing, and the generated catalogs keep the exact numbers.
+
+### Documentation
+
+- README punctuation and ornament pass: em dashes and stray curly quotes
+  replaced sentence by sentence, decorative emoji dropped from prose and from
+  the mermaid diagram while the handful marking navigation links stay, and
+  every relative link re-verified. Third-party quotations keep their authors'
+  own punctuation.
+
+No plugin version bump: documentation only.
+
 ## [flow-next 3.9.0] - 2026-07-31
 
 Human reviewers can now follow a pull request as a deliberate journey through
