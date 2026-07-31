@@ -636,25 +636,41 @@
         },
         "gateClasses": {
           "description": "Backlog-mode force-gate: class names (e.g. risky, prod-config) that force surfacing before action - a matching item is parked with a question instead of advanced full-auto. Empty = full-auto for every workable item.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
           "default": []
         }
       }
     },
     "models": {
       "description": "Model-pin role map (fn-115). flowctl stores + validates + does staleness math only; /flow-next:setup probes and refreshes pins.",
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "additionalProperties": false,
       "properties": {
         "roles": {
           "description": "Role-map pins: models.roles.<role>.<backend> = model or model:effort. Roles name semantic jobs (fastJudge, review, delegate, scoutFast, scoutIntelligent), not call sites; backends are codex, copilot, cursor. Schema-validated on config set. Empty = registry baselines.",
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "patternProperties": {
             "^(fastJudge|review|delegate|scoutFast|scoutIntelligent)$": {
-              "type": "object",
+              "type": [
+                "object",
+                "null"
+              ],
               "description": "Per-backend pins for one semantic role.",
               "patternProperties": {
                 "^(codex|copilot|cursor)$": {

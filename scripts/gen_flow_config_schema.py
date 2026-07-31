@@ -426,10 +426,14 @@ def _models_roles_fragment() -> dict:
     role_pat = "^(" + "|".join(flowctl.MODEL_ROLES) + ")$"
     backend_pat = "^(" + "|".join(flowctl.MODEL_ROLE_BACKENDS) + ")$"
     return {
-        "type": "object",
+        # roles-level null is also a validator-accepted clear path.
+        "type": ["object", "null"],
         "patternProperties": {
             role_pat: {
-                "type": "object",
+                # `config set models.roles.<role> null` is a supported clear
+                # path (_validate_models_config_key accepts + persists null;
+                # nested reads treat it as absent) - null must stay valid.
+                "type": ["object", "null"],
                 "description": DESCRIPTIONS["models.roles.<role>"],
                 "patternProperties": {
                     backend_pat: {
@@ -625,9 +629,21 @@ def _build_table() -> list[tuple[str, dict]]:
         ("pilot.autonomy", {"enum": ["ready", "backlog"]}),
         (
             "pilot.gateClasses",
-            {"type": "array", "items": {"type": "string"}},
+            # The documented CLI form `flowctl config set pilot.gateClasses
+            # risky` persists a BARE STRING which the pilot workflow
+            # normalizes to one class - scalar and array are both supported.
+            {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}},
+                ]
+            },
         ),
-        ("models", {"kind": "object", "open": False}),
+        # Whole-block and roles-level nulls are validator-accepted clear
+        # paths (_validate_models_config_key / _validate_models_roles_tree
+        # both accept None and set_config persists it) - preempted here so a
+        # cleared block never fails editors.
+        ("models", {"kind": "object", "open": False, "nullable": True}),
         ("models.roles", _models_roles_fragment()),
         ("models.verifiedAt", {"type": ["string", "null"]}),
         ("models.verifiedWith", {}),
@@ -666,7 +682,9 @@ def compute() -> dict:
         if spec.get("kind") == "object":
             node: dict[str, Any] = {
                 "description": DESCRIPTIONS[path],
-                "type": "object",
+                # nullable: validator-accepted whole-block clear paths persist
+                # null (e.g. `config set models null`) and must stay valid.
+                "type": ["object", "null"] if spec.get("nullable") else "object",
                 "additionalProperties": bool(spec["open"]),
                 "properties": {},
             }
