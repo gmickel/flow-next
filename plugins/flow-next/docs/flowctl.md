@@ -1534,10 +1534,12 @@ flowctl criteria prompt-block
 
 `criteria list --json`:
 ```json
-{"success": true, "criteria": [{"id": "G1", "text": "Every route change regenerates the API contract."}], "count": 1, "path": ".flow/criteria.md"}
+{"success": true, "criteria": [{"id": "G1", "text": "Every route change regenerates the API contract."}], "count": 1, "path": "/abs/path/to/repo/.flow/criteria.md"}
 ```
 
-Ids must be unique; gaps are allowed; sequential numbering is not required. Indented/nested bullets and commented-out lines are ignored (the bundled scaffold ships its examples commented out, so a freshly scaffolded file parses to 0 active criteria). Compliance lands in the completion-review receipt's additive `criteria: [{id, status, note?}]` array - see [`review-findings.md`](review-findings.md) § Global-criteria compliance. Constants shared between injection and parser: `GLOBAL_CRITERIA_HEADING` (`"## Global acceptance criteria"`, the prompt block's marker) and `GLOBAL_CRITERIA_OUTPUT_HEADING` (`"## Global criteria"`, the reviewer-output section `parse_review_criteria()` projects into the receipt).
+`path` is absolute; it is `null` when the file is absent.
+
+Ids must be unique; gaps are allowed; sequential numbering is not required. Indented/nested bullets are ignored, as are lines commented out inline (`<!-- - **G1:** ... -->`, the bundled scaffold's style, so a freshly scaffolded file parses to 0 active criteria); the parser does not track multi-line comment blocks, so a criterion bullet at column 0 inside a block comment still counts as active. Compliance lands in the completion-review receipt's additive `criteria: [{id, status, note?}]` array - see [`review-findings.md`](review-findings.md) § Global-criteria compliance. Constants shared between injection and parser: `GLOBAL_CRITERIA_HEADING` (`"## Global acceptance criteria"`, the prompt block's marker) and `GLOBAL_CRITERIA_OUTPUT_HEADING` (`"## Global criteria"`, the reviewer-output section `parse_review_criteria()` projects into the receipt).
 
 ### triage-skip
 
