@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -629,6 +630,233 @@ class TestDeterministicCap(unittest.TestCase):
         self.assertFalse(row["round_consumed"])
 
 
+# ------------- issue #279: combined finalize write transaction -------------
+
+
+class TestCombinedFinalizeWrite(unittest.TestCase):
+    """issue #279: attempt ledger, denormalized status, and the SHIP cap
+    reset must land in ONE atomic sidecar write on the in-process paths."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _init_flow_repo(self.root)
+        self.spec_id = "fn-1-demo"
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        self._old_env = os.environ.pop("MAX_REVIEW_ITERATIONS", None)
+
+    def tearDown(self):
+        os.chdir(self._cwd)
+        if self._old_env is not None:
+            os.environ["MAX_REVIEW_ITERATIONS"] = self._old_env
+        self._tmp.cleanup()
+
+    def _spec_data(self) -> dict:
+        return json.loads(
+            (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
+        )
+
+    def _reserve(self, kind: str = "plan") -> None:
+        flowctl.enforce_and_increment_review_cap(self.spec_id, kind)
+
+    def test_ship_finalize_is_one_atomic_write(self):
+        """SHIP with finalize + reset: attempt row appended, plan status set,
+        rounds zeroed - all via exactly one atomic_write_json call."""
+        self._reserve()
+        real = flowctl.atomic_write_json
+        with mock.patch.object(
+            flowctl, "atomic_write_json", side_effect=real
+        ) as aw:
+            result = flowctl.record_review_attempt(
+                self.spec_id,
+                "plan",
+                backend="codex",
+                output="<verdict>SHIP</verdict>",
+                verdict="SHIP",
+                review_type="plan",
+                finalize_status_kind="plan",
+                reset_rounds_on_ship=True,
+            )
+        self.assertEqual(aw.call_count, 1)
+        self.assertEqual(result["status_written"], "ship")
+        data = self._spec_data()
+        self.assertEqual(data["plan_review_status"], "ship")
+        self.assertIn("plan_reviewed_at", data)
+        self.assertEqual(int(data.get("plan_review_rounds", 0) or 0), 0)
+        self.assertEqual(len(data["review_attempts"]), 1)
+        self.assertTrue(data["review_attempts"][0]["round_consumed"])
+
+    def test_major_rethink_maps_needs_work_and_keeps_round(self):
+        """MAJOR_RETHINK maps to needs_work exactly like
+        _self_write_review_status, and the consumed round is NOT reset."""
+        self._reserve()
+        result = flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="codex",
+            output="<verdict>MAJOR_RETHINK</verdict>",
+            verdict="MAJOR_RETHINK",
+            review_type="plan",
+            finalize_status_kind="plan",
+            reset_rounds_on_ship=True,
+        )
+        self.assertEqual(result["status_written"], "needs_work")
+        data = self._spec_data()
+        self.assertEqual(data["plan_review_status"], "needs_work")
+        self.assertEqual(int(data.get("plan_review_rounds", 0) or 0), 1)
+
+    def test_transport_failure_with_finalize_does_not_touch_status(self):
+        """verdict=None (transport) + finalize_status_kind set: no status
+        write, no reviewed_at, no SHIP reset - only the refund + ledger row."""
+        self._reserve()
+        result = flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="codex",
+            output="",
+            failure_class="empty_output",
+            review_type="plan",
+            finalize_status_kind="plan",
+            reset_rounds_on_ship=True,
+        )
+        self.assertEqual(result["outcome"], "transport_failure")
+        self.assertIsNone(result["status_written"])
+        data = self._spec_data()
+        # normalize_epic defaults survive untouched - no terminal status.
+        self.assertEqual(data["plan_review_status"], "unknown")
+        self.assertIsNone(data["plan_reviewed_at"])
+        self.assertFalse(data["review_attempts"][-1]["round_consumed"])
+
+    def test_summary_shape_unchanged_without_finalize(self):
+        """Callers that never opt in (rp review-rounds record) keep the old
+        summary shape - no status_written key, no status side effects."""
+        self._reserve()
+        result = flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="rp",
+            output="<verdict>SHIP</verdict>",
+            verdict="SHIP",
+            review_type="plan",
+        )
+        self.assertNotIn("status_written", result)
+        self.assertEqual(self._spec_data()["plan_review_status"], "unknown")
+
+    def test_finish_backend_exec_combined_plan_path(self):
+        """_finish_backend_exec threads finalize + reset through and surfaces
+        the record summary via attempt_out."""
+        self._reserve()
+        attempt_out: dict = {}
+        real = flowctl.atomic_write_json
+        with mock.patch.object(
+            flowctl, "atomic_write_json", side_effect=real
+        ) as aw:
+            verdict = flowctl._finish_backend_exec(
+                backend="codex",
+                reg={
+                    "has_sandbox": False,
+                    "cli_label": "codex exec",
+                    "no_verdict_label": "Codex",
+                },
+                args=mock.Mock(json=False),
+                receipt_path=None,
+                output="<verdict>SHIP</verdict>",
+                stderr="",
+                exit_code=0,
+                spec_id=self.spec_id,
+                review_kind="plan",
+                review_type="plan",
+                finalize_status_kind="plan",
+                reset_rounds_on_ship=True,
+                attempt_out=attempt_out,
+            )
+        self.assertEqual(verdict, "SHIP")
+        self.assertEqual(aw.call_count, 1)
+        self.assertEqual(attempt_out["status_written"], "ship")
+        data = self._spec_data()
+        self.assertEqual(data["plan_review_status"], "ship")
+        self.assertEqual(int(data.get("plan_review_rounds", 0) or 0), 0)
+
+    def test_head_sha_recorded_in_git_repo(self):
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        subprocess.run(
+            [
+                "git", "-c", "user.email=t@t", "-c", "user.name=t",
+                "commit", "--allow-empty", "-q", "-m", "x",
+            ],
+            cwd=self.root,
+            check=True,
+        )
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="codex",
+            output="<verdict>NEEDS_WORK</verdict>",
+            verdict="NEEDS_WORK",
+            review_type="plan",
+        )
+        row = self._spec_data()["review_attempts"][-1]
+        self.assertEqual(row["head_sha"], head)
+
+    def test_head_sha_none_outside_git(self):
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="codex",
+            output="<verdict>NEEDS_WORK</verdict>",
+            verdict="NEEDS_WORK",
+            review_type="plan",
+        )
+        row = self._spec_data()["review_attempts"][-1]
+        self.assertIn("head_sha", row)
+        self.assertIsNone(row["head_sha"])
+
+    def test_head_sha_helper_never_raises(self):
+        with mock.patch.object(
+            flowctl.subprocess, "run", side_effect=OSError("no git")
+        ):
+            self.assertIsNone(flowctl._review_head_sha())
+
+    def test_completion_path_keeps_separate_status_write(self):
+        """Completion deliberately stays two writes: receipt persistence
+        BEFORE terminal status (recovery invariant). The standalone status
+        writer must survive and keep MAJOR_RETHINK -> needs_work."""
+        written = flowctl._self_write_review_status(
+            self.spec_id, "completion", "MAJOR_RETHINK"
+        )
+        self.assertEqual(written, "needs_work")
+        self.assertEqual(
+            self._spec_data()["completion_review_status"], "needs_work"
+        )
+        src = inspect.getsource(flowctl._backend_completion_review)
+        self.assertIn("_self_write_review_status", src)
+        self.assertNotIn("finalize_status_kind", src)
+        self.assertIn("reset_rounds_on_ship=True", src)
+        self.assertNotIn("reset_review_cap", src)
+
+    def test_plan_and_impl_paths_fold_writes(self):
+        """The in-process plan path folds status + cap reset; the impl path
+        folds the cap reset; neither makes a second sidecar write."""
+        plan_src = inspect.getsource(flowctl._backend_plan_review)
+        self.assertIn('finalize_status_kind="plan"', plan_src)
+        self.assertIn("reset_rounds_on_ship=True", plan_src)
+        self.assertNotIn("reset_review_cap", plan_src)
+        self.assertNotIn("_self_write_review_status", plan_src)
+        impl_src = inspect.getsource(flowctl._backend_impl_review)
+        self.assertIn("reset_rounds_on_ship=not standalone", impl_src)
+        self.assertNotIn("reset_review_cap", impl_src)
+
+
 class TestReviewRoundsCLI(unittest.TestCase):
     """fn-90 R5, rp surface: `flowctl review-rounds increment|reset`.
 
@@ -1096,6 +1324,25 @@ class TestRpRecorderFailureFences(unittest.TestCase):
             result.returncode, 0, result.stdout + result.stderr
         )
         self.assertIn("VERDICT=SHIP", result.stdout)
+
+
+class TestReviewedHeadShaBinding(TestCombinedFinalizeWrite):
+    """The attempt row records the sha the review OBSERVED when supplied
+    (pre-dispatch snapshot beats finalize-time HEAD)."""
+
+    def test_reviewed_head_sha_wins_over_finalize_time_head(self) -> None:
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="codex",
+            output="<verdict>SHIP</verdict>",
+            verdict="SHIP",
+            reviewed_head_sha="a" * 40,
+        )
+        self.assertEqual(
+            self._spec_data()["review_attempts"][-1]["head_sha"], "a" * 40
+        )
 
 
 if __name__ == "__main__":

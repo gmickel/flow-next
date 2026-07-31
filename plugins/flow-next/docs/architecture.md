@@ -94,6 +94,36 @@ New fields:
 - Spec JSON `tracker` block (tracker-sync, defaulted/optional): `tracker.id` (tracker UUID - durable dedupe key), `identifier` (display key `WOR-17`), `url`, `lastSyncedAt` (advances only on a real reconcile), `baseHashFlow` / `baseHashTracker` (echo-fence content hashes), `mergeBaseFlow` / `mergeBaseTracker` (paired body snapshots - the 3-way merge base, written atomically as a unit). Full schema: [`tracker-sync.md`](tracker-sync.md).
 - Task JSON: `priority`. The parent reference field is `spec`.
 
+### Review bookkeeping: authority and write-ordering
+
+The spec sidecar carries two views of review state. `review_attempts[]` is the
+authoritative ledger - one row per finalized reservation, with backend,
+outcome, verdict, output hash, and (best-effort) the `head_sha` the review
+observed (the pre-dispatch snapshot on the in-process backend paths;
+finalize-time HEAD is the fallback where no snapshot exists, e.g. rp). `plan_review_status` / `completion_review_status` (plus their
+`*_reviewed_at` stamps) are a denormalized read model derived from that
+ledger; when the two ever diverge, the ledger wins.
+
+Write-ordering differs by path, on purpose:
+
+- **In-process plan review** (`flowctl codex|copilot|cursor plan-review`)
+  finalizes the attempt row, writes `plan_review_status`, and performs the
+  SHIP round-counter reset as ONE atomic sidecar write inside
+  `record_review_attempt` - there is no interrupt window where the ledger
+  carries a verdict the status field has not seen.
+- **In-process completion review** deliberately stays two writes: the receipt
+  (and its recovery payload) must persist BEFORE the terminal
+  `completion_review_status` lands. That ordering is a recovery contract - if
+  the process dies between the writes, status stays non-terminal and the
+  skill restores from the recovery payload instead of dispatching another
+  round. The SHIP cap reset is folded into the attempt write; the status
+  write stays separate, with the ledger authoritative on divergence.
+- **Host/rp paths** (`flowctl review-rounds record`,
+  `set-plan-review-status`, `set-completion-review-status`) are separate CLI
+  invocations by design - the host agent sequences them - and the same
+  authority rule applies: the ledger row is the record of what happened; the
+  status field is the projection.
+
 ## ID format
 
 - **Spec**: `fn-N-slug` where `slug` is derived from the spec title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)

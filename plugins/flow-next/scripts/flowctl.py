@@ -9193,6 +9193,28 @@ def _review_attempt_summary(
     }
 
 
+def _review_head_sha() -> Optional[str]:
+    """Best-effort HEAD sha for review-attempt provenance (issue #279).
+
+    Never raises: detached HEAD still resolves; a broken/absent git, an
+    unborn branch, or a timeout returns None.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True, encoding="utf-8",
+            cwd=str(get_repo_root()),
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+        sha = (result.stdout or "").strip()
+        return sha or None
+    except Exception:
+        return None
+
+
 def record_review_attempt(
     spec_id: str,
     review_kind: str,
@@ -9204,6 +9226,9 @@ def record_review_attempt(
     task_id: Optional[str] = None,
     review_type: Optional[str] = None,
     use_json: bool = False,
+    finalize_status_kind: Optional[str] = None,
+    reset_rounds_on_ship: bool = False,
+    reviewed_head_sha: Optional[str] = None,
 ) -> dict:
     """Finalize one pre-dispatch reservation and persist its outcome.
 
@@ -9211,14 +9236,21 @@ def record_review_attempt(
     transport-failure count. A no-verdict attempt refunds exactly one reserved
     round, increments the separate transport-failure count, and remains
     auditable in ``review_attempts`` on the spec sidecar.
+    When ``finalize_status_kind`` is set, the denormalized
+    ``<kind>_review_status`` / ``<kind>_reviewed_at`` fields (and, with
+    ``reset_rounds_on_ship``, the SHIP round-counter reset) are folded into
+    the same single atomic sidecar write (issue #279).
     """
     flow_dir = get_flow_dir()
     spec_json_path = find_spec_json_path(flow_dir, spec_id)
     if not spec_json_path.exists():
-        return {
+        result = {
             "recorded": False,
             "outcome": "verdict" if verdict else "transport_failure",
         }
+        if finalize_status_kind is not None:
+            result["status_written"] = None
+        return result
 
     spec_data = normalize_epic(
         load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
@@ -9274,12 +9306,34 @@ def record_review_attempt(
             (output or "").encode("utf-8", errors="replace")
         ).hexdigest(),
         "round_consumed": not refunded,
+        # The sha the review OBSERVED (pre-dispatch snapshot) when the caller
+        # has it; finalize-time HEAD is only the fallback (rp/refund paths).
+        "head_sha": reviewed_head_sha or _review_head_sha(),
     }
     attempts = spec_data.get("review_attempts")
     if not isinstance(attempts, list):
         attempts = []
         spec_data["review_attempts"] = attempts
     attempts.append(row)
+    # issue #279: fold the denormalized status write and the SHIP cap reset
+    # into THIS sidecar mutation so the attempt ledger, <kind>_review_status,
+    # and the round counter land in ONE atomic_write_json - no interrupt
+    # window where the ledger and the read model diverge.
+    status_written: Optional[str] = None
+    if finalize_status_kind in ("plan", "completion"):
+        status = {
+            "SHIP": "ship",
+            "NEEDS_WORK": "needs_work",
+            "MAJOR_RETHINK": "needs_work",
+        }.get(verdict or "")
+        if status:
+            spec_data[f"{finalize_status_kind}_review_status"] = status
+            spec_data[f"{finalize_status_kind}_reviewed_at"] = now_iso()
+            status_written = status
+    if reset_rounds_on_ship and verdict == "SHIP":
+        # Same counter mutation reset_review_cap performs; pending is
+        # deliberately left alone (fn-134.7 / R22).
+        _write_review_rounds(spec_data, review_kind, task_id, 0)
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
 
@@ -9303,6 +9357,8 @@ def record_review_attempt(
             ),
         }
     )
+    if finalize_status_kind is not None:
+        summary["status_written"] = status_written
     return summary
 
 
@@ -29009,6 +29065,7 @@ def _dispatch_backend_review(
     review_kind: Optional[str],
     review_type: str,
     task_id: Optional[str] = None,
+    reviewed_head_sha: Optional[str] = None,
 ) -> tuple[str, Optional[str], int, str]:
     """Run a backend and refund if dispatch itself terminates before a result."""
     try:
@@ -29030,6 +29087,7 @@ def _dispatch_backend_review(
                 output="backend dispatch terminated before returning output",
                 failure_class="dispatch_error",
                 task_id=task_id,
+                reviewed_head_sha=reviewed_head_sha,
                 review_type=review_type,
                 use_json=args.json,
             )
@@ -29056,6 +29114,7 @@ def _dispatch_backend_review(
                 output=detail,
                 failure_class="dispatch_exception",
                 task_id=task_id,
+                reviewed_head_sha=reviewed_head_sha,
                 review_type=review_type,
                 use_json=args.json,
             )
@@ -29203,6 +29262,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         review_kind=None if standalone else "impl",
         review_type="impl",
         task_id=None if standalone else task_id,
+        reviewed_head_sha=reviewed_head_sha,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -29217,10 +29277,9 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         review_kind=None if standalone else "impl",
         review_type="impl",
         task_id=None if standalone else task_id,
+        reset_rounds_on_ship=not standalone,
+        reviewed_head_sha=reviewed_head_sha,
     )
-
-    if verdict == "SHIP" and not standalone:
-        reset_review_cap(spec_id_from_task(task_id), "impl", task_id=task_id)
 
     review_id = task_id if task_id else "branch"
     review_text = reg["extract_review"](output)
@@ -29316,6 +29375,10 @@ def _finish_backend_exec(
     review_kind: Optional[str] = None,
     review_type: Optional[str] = None,
     task_id: Optional[str] = None,
+    finalize_status_kind: Optional[str] = None,
+    reset_rounds_on_ship: bool = False,
+    attempt_out: Optional[dict] = None,
+    reviewed_head_sha: Optional[str] = None,
 ) -> str:
     """Shared post-exec gates and verdict-aware round finalization.
 
@@ -29326,7 +29389,7 @@ def _finish_backend_exec(
     verdict = parse_codex_verdict(output)
     if verdict:
         if spec_id and review_kind:
-            record_review_attempt(
+            summary = record_review_attempt(
                 spec_id,
                 review_kind,
                 backend=backend,
@@ -29335,7 +29398,12 @@ def _finish_backend_exec(
                 task_id=task_id,
                 review_type=review_type,
                 use_json=args.json,
+                finalize_status_kind=finalize_status_kind,
+                reset_rounds_on_ship=reset_rounds_on_ship,
+                reviewed_head_sha=reviewed_head_sha,
             )
+            if attempt_out is not None:
+                attempt_out.update(summary)
         return verdict
 
     sandbox_failure = (
@@ -29362,6 +29430,7 @@ def _finish_backend_exec(
             output=output,
             failure_class=failure_class,
             task_id=task_id,
+            reviewed_head_sha=reviewed_head_sha,
             review_type=review_type,
             use_json=args.json,
         )
@@ -29518,6 +29587,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         spec_id=epic_id,
         review_kind="plan",
         review_type="plan",
+        reviewed_head_sha=reviewed_head_sha,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -29525,20 +29595,22 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         prior_receipt_model=prior_receipt_model,
         prior_receipt_effort=prior_receipt_effort,
     )
+    attempt_summary: dict = {}
     verdict = _finish_backend_exec(
         backend=backend, reg=reg, args=args, receipt_path=receipt_path,
         output=output, stderr=stderr, exit_code=exit_code,
         spec_id=epic_id,
         review_kind="plan",
         review_type="plan",
+        finalize_status_kind="plan",
+        reset_rounds_on_ship=True,
+        attempt_out=attempt_summary,
+        reviewed_head_sha=reviewed_head_sha,
     )
 
-    if verdict == "SHIP":
-        reset_review_cap(epic_id, "plan")
-
-    written_status = _self_write_review_status(
-        epic_id, "plan", verdict, use_json=args.json
-    )
+    # issue #279: attempt row, plan_review_status, and the SHIP cap reset all
+    # landed in ONE atomic sidecar write inside record_review_attempt.
+    written_status = attempt_summary.get("status_written")
 
     review_text = reg["extract_review"](output)
 
@@ -29700,6 +29772,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         spec_id=epic_id,
         review_kind="plan",
         review_type="completion",
+        reviewed_head_sha=reviewed_head_sha,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -29713,10 +29786,9 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         spec_id=epic_id,
         review_kind="plan",
         review_type="completion",
+        reset_rounds_on_ship=True,
+        reviewed_head_sha=reviewed_head_sha,
     )
-
-    if verdict == "SHIP":
-        reset_review_cap(epic_id, "plan")
 
     # Preserve session_id for continuity (avoid clobbering on resumed sessions).
     session_id_to_write = returned_session_id or session_id
