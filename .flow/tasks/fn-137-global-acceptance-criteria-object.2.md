@@ -26,9 +26,8 @@ Completion review applies existing criteria; receipts carry per-criterion compli
 - [ ] Zero-cost-absent proven; template deltas measured; sync-codex idempotent if prose touched (R4).
 
 ## Done summary
-TBD
-
+Completion review now applies `.flow/criteria.md` global acceptance criteria across all six backend surfaces (codex/copilot/cursor via the shared build_completion_review_prompt `{global_criteria_block}` placeholder; rp CE+classic and host via the new `flowctl criteria prompt-block` composition), mandating a `## Global criteria` output section whose `G<N>: met|violated|n/a - note` lines are deterministically projected into the additive completion-review receipt field `criteria: [{id, status, note?}]` (parse_review_criteria, fn-136-style degrade-to-None; attached by both `_write_backend_review_receipt` and `review-findings attach`). Absent-file stays byte-identical zero-cost (fn-137.1's test now load-bearing); template + byte-identical fallback + pinned hashes refreshed in the same commit; dual copies, tracker MANIFEST, and codex mirror (sync-codex x2, idempotent) propagated. Implementation delegated to grok-4.5 via the cursor-agent bridge; prompt wording, skill prose, and review by the orchestrator.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c4988fa7, aab272f3
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_criteria test_prompt_text_pinned test_review_prompt_template_parity test_review_findings_parser test_review_findings_receipts test_review_prompt_constraints test_startup_bootstrap test_tracker_distribution -q (164 tests OK), python3 scripts/run_tests_parallel.py (files=165 ran=3474 failures=0 errors=0; GREEN_RECEIPT 9947d982-unittest), uvx ruff@0.16.0 check . (All checks passed), baseline: green (focused suites, 100 tests OK pre-edit), post-review: python3 -m unittest test_criteria test_prompt_text_pinned test_review_prompt_template_parity test_startup_bootstrap test_bin_launcher_parity test_tracker_distribution -q (OK); uvx ruff@0.16.0 check flowctl.py clean
 - PRs:
