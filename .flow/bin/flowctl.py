@@ -5814,6 +5814,11 @@ _REVIEW_CRITERIA_HEADING_RE = re.compile(
 _REVIEW_CRITERIA_LINE_RE = re.compile(
     r"^G(\d+):\s*(met|violated|n/a)\s*(?:-\s*(.*))?$"
 )
+# Looks like a criterion record (a G-ID prefix, optionally bolded) without
+# satisfying the full record grammar above. Such lines are ambiguous reviewer
+# output (e.g. `G1: pass - ...`), not ignorable prose - the whole projection
+# degrades to absent rather than silently dropping them.
+_REVIEW_CRITERIA_LOOKSLIKE_RE = re.compile(r"^\**G\d+\**\s*:")
 _REVIEW_CRITERIA_MAX_ENTRIES = 100
 _REVIEW_CRITERIA_MAX_NOTE = 400
 
@@ -5823,8 +5828,9 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
 
     Deterministic projection of completion-review output (fn-137.2). Uses the
     LAST matching heading (mirrors the tally-block precedent: the real section
-    follows any quoted prompt text). Unparseable, duplicate-id, or oversized
-    content returns None - degrade-to-absent, never an error.
+    follows any quoted prompt text). Unparseable, duplicate-id, oversized, or
+    G-ID-looking-but-malformed content returns None - degrade-to-absent,
+    never an error.
     """
     try:
         if not isinstance(output, str) or not output:
@@ -5846,6 +5852,8 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
                 stripped = stripped[2:].strip()
             m = _REVIEW_CRITERIA_LINE_RE.match(stripped)
             if not m:
+                if _REVIEW_CRITERIA_LOOKSLIKE_RE.match(stripped):
+                    return None
                 continue
             cid = f"G{m.group(1)}"
             if cid in seen:

@@ -381,6 +381,38 @@ class TestParseReviewCriteria(unittest.TestCase):
         text = "## Global criteria\n\nNo criteria applicable.\n"
         self.assertIsNone(flowctl.parse_review_criteria(text))
 
+    def test_malformed_gid_record_returns_none(self) -> None:
+        # A G-ID-looking line that fails the record grammar poisons the whole
+        # projection - even when every other configured id parsed validly.
+        text = (
+            "## Global criteria\n"
+            "\n"
+            "G1: met - ok\n"
+            "G2: violated - dep added\n"
+            "G1: pass - contradictory rating\n"
+        )
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_bolded_malformed_gid_record_returns_none(self) -> None:
+        text = "## Global criteria\n\n**G1**: met - ok\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_plain_prose_line_amid_valid_records_still_parses(self) -> None:
+        text = (
+            "## Global criteria\n"
+            "\n"
+            "G1: met - ok\n"
+            "All criteria were checked against the diff.\n"
+            "G2: n/a - no UI\n"
+        )
+        self.assertEqual(
+            flowctl.parse_review_criteria(text),
+            [
+                {"id": "G1", "status": "met", "note": "ok"},
+                {"id": "G2", "status": "n/a", "note": "no UI"},
+            ],
+        )
+
     def test_heading_then_immediate_next_heading(self) -> None:
         text = "## Global criteria\n## Gaps Found\n"
         self.assertIsNone(flowctl.parse_review_criteria(text))
