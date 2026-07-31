@@ -167,6 +167,10 @@ DESCRIPTIONS: dict[str, str] = {
         "(Cloud HTTP-basic email:API_TOKEN) or bearer-pat (DC/Server bearer "
         "PAT). Credentials still read from env each run, never stored here."
     ),
+    "tracker.perTracker.owner": (
+        "GitHub repository owner (discovery-fingerprint input; dynamic "
+        "per.get read via _FINGERPRINT_KEYS)."
+    ),
     "tracker.perTracker.issueType": (
         "Jira issue type (name or id) for created issues; a configured value "
         "that does not resolve against the live project is an error."
@@ -591,6 +595,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("tracker.perTracker.apiVersion", {"type": ["integer", "null"]}),
         # set_config coerces digit-only args to int and the resolver compares
         # str(configured) - numeric ids are a supported CLI shape.
+        ("tracker.perTracker.owner", {"type": ["string", "null"]}),
         ("tracker.perTracker.issueType", {"type": ["string", "integer", "null"]}),
         ("tracker.perTracker.blocksLinkType", {"type": ["string", "null"]}),
         ("tracker.perTracker.preferredTransport", {"type": ["string", "null"]}),

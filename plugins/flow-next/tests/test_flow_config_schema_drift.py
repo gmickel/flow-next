@@ -51,6 +51,7 @@ ALLOWLIST: dict[str, str] = {
     # Dict-read keys: consumed by flowctl_tracker through parsed config dicts
     # (per.get/transport.get), invisible to the four-helper call-site guard -
     # inventoried here manually; the guard cannot see dict navigation.
+    "tracker.perTracker.owner": "dynamic per.get via _FINGERPRINT_KEYS (resolved_cache.py)",
     "tracker.perTracker.authScheme": "dict-read (resolve_verb.py)",
     "tracker.perTracker.issueType": "dict-read (providers/jira.py)",
     "tracker.perTracker.blocksLinkType": "dict-read (relate/providers.py)",
@@ -536,6 +537,17 @@ class TestDictReadGuard(unittest.TestCase):
             for key in self._TRANSPORT_RE.findall(text):
                 if key not in transport_props:
                     missing.append(f"tracker.transport.{key} ({path.name})")
+        # Dynamic reads through the fingerprint registry (per.get(k) with k
+        # from _FINGERPRINT_KEYS) are invisible to the literal grep - import
+        # the registry itself so a new fingerprint key without a schema entry
+        # fails here (PR #280 round 7). "type" lives on tracker, not perTracker.
+        from flowctl_tracker import resolved_cache as _rc
+
+        for key in _rc._FINGERPRINT_KEYS:
+            if key == "type":
+                continue
+            if key not in per_props:
+                missing.append(f"tracker.perTracker.{key} (_FINGERPRINT_KEYS)")
         self.assertFalse(
             missing,
             "dict-read config keys without schema entries: " + ", ".join(missing),

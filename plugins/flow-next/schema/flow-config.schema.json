@@ -344,6 +344,13 @@
               ],
               "default": null
             },
+            "owner": {
+              "description": "GitHub repository owner (discovery-fingerprint input; dynamic per.get read via _FINGERPRINT_KEYS).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "issueType": {
               "description": "Jira issue type (name or id) for created issues; a configured value that does not resolve against the live project is an error.",
               "type": [
