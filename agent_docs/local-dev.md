@@ -40,6 +40,14 @@ plugins/flow-next/scripts/smoke_test.sh
 plugins/flow-next/scripts/ralph_smoke_test.sh
 ```
 
+The full CI-run smoke fleet is larger - per-skill suites live beside these in
+`plugins/flow-next/scripts/`: `ci_test.sh`, `audit_smoke_test.sh`,
+`glossary_smoke_test.sh`, `impl-review_smoke_test.sh`, `make-pr_smoke_test.sh`,
+`map_smoke_test.sh`, `prospect_smoke_test.sh`, `resolve-pr_smoke_test.sh`,
+`strategy_smoke_test.sh`, `plan_review_prompt_smoke.sh`, `pick_python_test.sh`.
+`ls plugins/flow-next/scripts/*_test.sh *_smoke*.sh` is the authoritative list;
+this paragraph names the fleet so nobody assumes two suites is the whole gate.
+
 Non-RP Ralph e2e (real `claude`, no RepoPrompt): `plugins/flow-next/scripts/ralph_e2e_test.sh` (run from a non-plugin repo dir; sets its own `TEST_DIR`).
 
 **RP smoke** (RP 1.5.68+ auto-opens window with `--create`):
@@ -265,9 +273,9 @@ When planning an epic or opening a PR, include doc updates as acceptance criteri
 
 - **In scope for any contributor (always):**
   - `CHANGELOG.md` — new entry under the relevant version block
-  - `plugins/<plugin>/README.md` — relevant sections + commands/skills tables
+  - root `README.md` § Commands table + `plugins/flow-next/docs/skills.md` — the command/skill surfaces (`plugins/flow-next/README.md` is a thin pointer stub, no tables)
   - `CLAUDE.md` — feature description in the relevant subsection
-  - `.flow/usage.md` — when listed commands change
+  - `plugins/flow-next/templates/usage.md` — when listed commands change (canonical since fn-121; `.flow/usage.md` is a copy-mode snapshot of it)
 
 - **Maintainer-only (Gordon handles post-merge):**
   - `~/work/mickel.tech/app/apps/flow-next/page.tsx` — feature card on the public marketing site. External contributors **do not** need to update this; lives in a separate private repo. PRs from non-maintainers should skip the website task entirely; Gordon adds the corresponding feature card during release.

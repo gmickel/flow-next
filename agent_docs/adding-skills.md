@@ -47,7 +47,7 @@ SKILL.md routing block (canonical pattern in `flow-next-impl-review/SKILL.md`): 
 - `flow-next-impl-review` (commit `06f6e6f`) — workflow.md 1126 → 4 files; `workflow-common.md` 565 LOC (over the ≤500 target, accepted vs duplicating gated phases). Auxiliary `deep-passes.md` / `walkthrough.md` untouched (already cross-backend).
 - `flow-next-resolve-pr` — **inline-kept**: divergence is one ~22-line Phase 5 (parallel-vs-serial dispatch); below threshold.
 
-**sync-codex.sh impact:** the RP-warning injector (line 365-378) auto-prefers `workflow-rp.md` when present, falling back to monolithic `workflow.md`. No sync edits needed unless new tool-name references are introduced (see memory entry `bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18`).
+**sync-codex.sh impact:** the RP-warning injector (grep `rp_warning` / the workflow-rp preference block in sync-codex.sh - line numbers rot, names don't) auto-prefers `workflow-rp.md` when present, falling back to monolithic `workflow.md`. No sync edits needed unless new tool-name references are introduced (see memory entry `bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18`).
 
 ## Gated references/*.md — progressive disclosure (heuristic)
 
@@ -101,7 +101,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 **Why the env-var fallback stays.** `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` is **not** dead code. Per `.flow/memory/knowledge/decisions/factory-droid-platform-status-2026-05-2026-05-25.md` (fn-48.2 web-verified against Factory docs on 2026-05-25), Droid still uses `DROID_PLUGIN_ROOT` as its canonical plugin-root env var; `CLAUDE_PLUGIN_ROOT` is documented as the Claude Code compat alias. Both resolve on Droid via the interop layer.
 
 **What's NOT in the prelude.**
-- `.factory-plugin/plugin.json` fallback — dropped per fn-48.2; Droid auto-translates Claude Code plugin format via its interop layer for Claude-first plugins like flow-next. The `sync-codex.sh:206` rewrite `'s|\.factory-plugin/plugin\.json|.claude-plugin/plugin.json|g'` remains as defense-in-depth but is now effectively a no-op.
+- `.factory-plugin/plugin.json` fallback — dropped per fn-48.2; Droid auto-translates Claude Code plugin format via its interop layer for Claude-first plugins like flow-next. The sync-codex.sh rewrite (grep `factory-plugin` in the script) `'s|\.factory-plugin/plugin\.json|.claude-plugin/plugin.json|g'` remains as defense-in-depth but is now effectively a no-op.
 - Platform detection (`if [ -n "${DROID_PLUGIN_ROOT:-}" ]`) — that's a distinct concern from the FLOWCTL prelude; lives in `flow-next-setup/workflow.md` as-is.
 
 **Landed examples** (fn-48):
@@ -109,7 +109,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 - `flow-next-deps` (fn-48.6) — collapsed 5 inline `FLOWCTL=...` blocks to one preamble.
 - `flow-next-ralph-init` (fn-48.6) — uses `PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"` to collapse 10+ inline expansions in the cp commands.
 
-**sync-codex.sh impact:** the existing FLOWCTL rewrite rule at line 183 (`$HOME/.codex/scripts/flowctl` for the Codex mirror) and the local-fallback awk at lines 188-195 (`[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"`) continue to work with the once-per-file pattern. No sync edits needed for consolidation — the rewrite acts on the single FLOWCTL definition wherever it appears.
+**sync-codex.sh impact:** the existing FLOWCTL rewrite rule (grep `\.codex/scripts/flowctl` in sync-codex.sh) and the local-fallback awk (grep the fallback string `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"`) continue to work with the once-per-file pattern. No sync edits needed for consolidation — the rewrite acts on the single FLOWCTL definition wherever it appears.
 
 ## Reference
 

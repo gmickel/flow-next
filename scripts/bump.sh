@@ -74,9 +74,9 @@ if [[ "$TARGET" == "flow-next" || "$TARGET" == "all" ]]; then
     echo "flow-next (codex marketplace): $OLD -> $NEW"
   fi
 
-  # Update version badges in READMEs
-  sed -i '' "s/Flow--next-v[0-9]*\.[0-9]*\.[0-9]*/Flow--next-v$NEW/" README.md
-  sed -i '' "s/Version-[0-9]*\.[0-9]*\.[0-9]*/Version-$NEW/" plugins/flow-next/README.md
+  # (Version badges were removed from both READMEs in the fn-151 front-door
+  # rework - no badge rewrite needed. If a version badge ever returns, add
+  # its sed here AND a note in agent_docs/releasing.md.)
 
   echo "flow-next: $OLD -> $NEW"
   echo "marketplace: -> $NEW (synced)"
