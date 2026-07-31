@@ -1,0 +1,32 @@
+{
+  "branch_name": "fn-front-door-overhaul",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-07-31T04:16:24.145273Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-151-front-door-overhaul-value-first-landing",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "ready": true,
+  "spec_path": ".flow/specs/fn-151-front-door-overhaul-value-first-landing.md",
+  "status": "open",
+  "title": "Front-door overhaul: value-first landing, README, and property alignment",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-31T04:49:49.745791Z"
+}
