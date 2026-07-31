@@ -48,6 +48,18 @@ ALLOWLIST: dict[str, str] = {
         "(contain dots - terminal container)"
     ),
     "tracker.resolved.resolvedAt": "machine-written resolve completion stamp",
+    # Dict-read keys: consumed by flowctl_tracker through parsed config dicts
+    # (per.get/transport.get), invisible to the four-helper call-site guard -
+    # inventoried here manually; the guard cannot see dict navigation.
+    "tracker.perTracker.authScheme": "dict-read (resolve_verb.py)",
+    "tracker.perTracker.issueType": "dict-read (providers/jira.py)",
+    "tracker.perTracker.blocksLinkType": "dict-read (relate/providers.py)",
+    "tracker.perTracker.preferredTransport": "dict-read (facade/helpers.py)",
+    "tracker.perTracker.transport": "dict-read legacy alias (facade/helpers.py)",
+    "tracker.transport.timeoutS": "dict-read (resolve_verb.py)",
+    "tracker.transport.maxRetries": "dict-read (resolve_verb.py)",
+    "tracker.transport.backoffCapS": "dict-read (resolve_verb.py)",
+    "tracker.transport.concurrency": "dict-read (resolve_verb.py)",
     "makePr.derivedPaths": (
         "validated-only reader key (make-pr export rules); never seeded"
     ),

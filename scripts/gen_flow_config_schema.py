@@ -167,6 +167,29 @@ DESCRIPTIONS: dict[str, str] = {
         "(Cloud HTTP-basic email:API_TOKEN) or bearer-pat (DC/Server bearer "
         "PAT). Credentials still read from env each run, never stored here."
     ),
+    "tracker.perTracker.issueType": (
+        "Jira issue type (name or id) for created issues; a configured value "
+        "that does not resolve against the live project is an error."
+    ),
+    "tracker.perTracker.blocksLinkType": (
+        "GitLab link type used for blocks relations (e.g. blocks); probe and "
+        "mutation use the same resolved name."
+    ),
+    "tracker.perTracker.preferredTransport": (
+        "Linear transport preference (mcp routes through the MCP "
+        "continuation; anything else uses HTTP)."
+    ),
+    "tracker.perTracker.transport": (
+        "Legacy alias for preferredTransport (read second)."
+    ),
+    "tracker.transport": (
+        "HTTP transport tuning for tracker calls (dict-read in "
+        "flowctl_tracker)."
+    ),
+    "tracker.transport.timeoutS": "Per-request timeout in seconds (0-600).",
+    "tracker.transport.maxRetries": "Retry attempts per call.",
+    "tracker.transport.backoffCapS": "Backoff cap in seconds.",
+    "tracker.transport.concurrency": "Max concurrent tracker calls.",
     "tracker.perTracker.apiVersion": (
         "Jira REST API version. null until the resolver pins 2; migration "
         "converges a legacy 3 to 2."
@@ -556,6 +579,11 @@ def _build_table() -> list[tuple[str, dict]]:
             {"enum": ["cloud-basic", "bearer-pat", None]},
         ),
         ("tracker.perTracker.apiVersion", {"type": ["integer", "null"]}),
+        ("tracker.perTracker.authScheme", {"type": ["string", "null"]}),
+        ("tracker.perTracker.issueType", {"type": ["string", "null"]}),
+        ("tracker.perTracker.blocksLinkType", {"type": ["string", "null"]}),
+        ("tracker.perTracker.preferredTransport", {"type": ["string", "null"]}),
+        ("tracker.perTracker.transport", {"type": ["string", "null"]}),
         ("tracker.perTracker.sslVerify", {"type": "boolean"}),
         ("tracker.perTracker.statusMap", _status_map_fragment()),
         ("tracker.staleAfterHours", {"type": "integer"}),
@@ -568,6 +596,16 @@ def _build_table() -> list[tuple[str, dict]]:
             "tracker.specIds",
             {"enum": sorted(flowctl.TRACKER_SPEC_IDS_VALUES)},
         ),
+        (
+            "tracker.transport",
+            # Dict-read tuning block (resolve_verb reads it whole) - open so
+            # future knobs never invalidate configs; known keys typed.
+            {"kind": "object", "open": True, "nullable": True},
+        ),
+        ("tracker.transport.timeoutS", {"type": ["number", "null"]}),
+        ("tracker.transport.maxRetries", {"type": ["integer", "null"]}),
+        ("tracker.transport.backoffCapS", {"type": ["number", "null"]}),
+        ("tracker.transport.concurrency", {"type": ["integer", "null"]}),
         ("tracker.resolved", {"kind": "object", "open": True}),
         ("tracker.resolved.destination", {"kind": "object", "open": True}),
         (

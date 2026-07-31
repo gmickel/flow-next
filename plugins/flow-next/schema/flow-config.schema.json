@@ -329,10 +329,9 @@
             },
             "authScheme": {
               "description": "Jira auth shape decided once at the discovery ceremony: cloud-basic (Cloud HTTP-basic email:API_TOKEN) or bearer-pat (DC/Server bearer PAT). Credentials still read from env each run, never stored here.",
-              "enum": [
-                "cloud-basic",
-                "bearer-pat",
-                null
+              "type": [
+                "string",
+                "null"
               ],
               "default": null
             },
@@ -343,6 +342,34 @@
                 "null"
               ],
               "default": null
+            },
+            "issueType": {
+              "description": "Jira issue type (name or id) for created issues; a configured value that does not resolve against the live project is an error.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "blocksLinkType": {
+              "description": "GitLab link type used for blocks relations (e.g. blocks); probe and mutation use the same resolved name.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "preferredTransport": {
+              "description": "Linear transport preference (mcp routes through the MCP continuation; anything else uses HTTP).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "transport": {
+              "description": "Legacy alias for preferredTransport (read second).",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "sslVerify": {
               "description": "Verify TLS certificates against Jira. false is an explicit opt-out for a self-hosted internal-CA / self-signed cert (JIRA_SSL_VERIFY env overrides).",
@@ -400,6 +427,44 @@
             "tracker"
           ],
           "default": "flow"
+        },
+        "transport": {
+          "description": "HTTP transport tuning for tracker calls (dict-read in flowctl_tracker).",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "timeoutS": {
+              "description": "Per-request timeout in seconds (0-600).",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "maxRetries": {
+              "description": "Retry attempts per call.",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "backoffCapS": {
+              "description": "Backoff cap in seconds.",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "concurrency": {
+              "description": "Max concurrent tracker calls.",
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
         },
         "resolved": {
           "description": "Persisted runtime facts written by flowctl tracker resolve (destination + capability cache). Machine-written, atomic, partially-absent-by-design during migration - never hand-edit; refresh with flowctl tracker resolve.",
