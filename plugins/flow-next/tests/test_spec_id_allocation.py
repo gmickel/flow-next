@@ -43,6 +43,15 @@ def _write_spec(flow_dir: Path, stem: str, *, sub: str = "specs") -> Path:
     return path
 
 
+def _write_chart(flow_dir: Path, chart_id: str) -> Path:
+    """fn-135: charts share the native fn-N domain under .flow/charts/."""
+    d = flow_dir / "charts"
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"{chart_id}.json"
+    path.write_text("{}", encoding="utf-8")
+    return path
+
+
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -69,6 +78,14 @@ class TestSpecIdAllocation(unittest.TestCase):
             _write_spec(flow_dir, "fn-7-beta")
             _write_spec(flow_dir, "wor-9999-tracker")  # must not count
             self.assertEqual(flowctl.scan_max_native_fn_spec_id(flow_dir), 7)
+
+    def test_working_tree_includes_charts(self) -> None:
+        """fn-135: charts in .flow/charts/ raise the shared native max."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            _write_spec(flow_dir, "fn-3-alpha")
+            _write_chart(flow_dir, "fn-14")
+            self.assertEqual(flowctl.scan_max_native_fn_spec_id(flow_dir), 14)
 
     def test_aliases_still_bound(self) -> None:
         self.assertIs(flowctl.scan_max_spec_id, flowctl.scan_max_native_fn_spec_id)
@@ -425,9 +442,14 @@ class TestSpecIdAllocation(unittest.TestCase):
                 f"{name} must not list worktrees",
             )
 
-        # Only cmd_spec_create should invoke the allocator by name.
+        # cmd_spec_create and cmd_chart_create share the allocator by name.
         create_src = inspect.getsource(flowctl.cmd_spec_create)
         self.assertIn("scan_max_native_fn_spec_id", create_src)
+        chart_src = inspect.getsource(flowctl.cmd_chart_create)
+        self.assertIn("scan_max_native_fn_spec_id", chart_src)
+        # Both kinds serialize on the same lock leaf.
+        self.assertIn("native_fn_alloc_lock_path", create_src)
+        self.assertIn("native_fn_alloc_lock_path", chart_src)
 
     def test_git_invocations_pass_no_color_and_timeout(self) -> None:
         """Both allocation git calls neutralize color and use an explicit timeout."""
@@ -530,6 +552,82 @@ class TestSpecIdAllocation(unittest.TestCase):
             f"(samples_ms={[s*1000 for s in samples]}); over 250ms budget — investigate before shipping; fallback is drop ref source",
         )
 
+    def test_refs_source_sees_historical_charts(self) -> None:
+        """Source 3 pathspec includes .flow/charts so retired chart ids bound max."""
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            flow_dir = base / ".flow"
+            _write_spec(flow_dir, "fn-2-local")
+
+            def fake_git(root, args, timeout=10):
+                cmd = list(args)
+                if cmd[:2] == ["worktree", "list"]:
+                    return (0, f"worktree {base}\n", "")
+                if cmd and cmd[0] == "log":
+                    # Assert charts pathspec is requested (fn-135 cross-kind).
+                    self.assertIn(".flow/charts", cmd)
+                    return (
+                        0,
+                        ".flow/charts/fn-40.json\n"
+                        ".flow/specs/fn-2-local.json\n",
+                        "",
+                    )
+                return (1, "", "unexpected")
+
+            with mock.patch.object(flowctl, "_spec_alloc_git", side_effect=fake_git):
+                self.assertEqual(flowctl.scan_max_native_fn_spec_id(flow_dir), 40)
+
+    def test_concurrent_spec_and_chart_create_no_collision(self) -> None:
+        """Shared lock: concurrent spec create + chart create never share fn-N."""
+        with tempfile.TemporaryDirectory() as tmp:
+            main = Path(tmp) / "repo"
+            _init_repo(main)
+            subprocess.run(
+                [sys.executable, str(FLOWCTL_PY), "init"],
+                cwd=str(main), capture_output=True, text=True, check=False,
+            )
+
+            import threading
+
+            results: list[tuple[str, str]] = []
+            errors: list[str] = []
+
+            def make_spec() -> None:
+                r = subprocess.run(
+                    [sys.executable, str(FLOWCTL_PY), "spec", "create",
+                     "--title", "Concurrent Spec", "--json"],
+                    cwd=str(main), capture_output=True, text=True, check=False,
+                )
+                if r.returncode != 0:
+                    errors.append(f"spec fail: {r.stderr} {r.stdout}")
+                    return
+                results.append(("spec", json.loads(r.stdout)["id"]))
+
+            def make_chart() -> None:
+                r = subprocess.run(
+                    [sys.executable, str(FLOWCTL_PY), "chart", "create",
+                     "--title", "Concurrent Chart",
+                     "--outcome", "Outcome", "--json"],
+                    cwd=str(main), capture_output=True, text=True, check=False,
+                )
+                if r.returncode != 0:
+                    errors.append(f"chart fail: {r.stderr} {r.stdout}")
+                    return
+                results.append(("chart", json.loads(r.stdout)["result"]["id"]))
+
+            threads = [threading.Thread(target=make_spec),
+                       threading.Thread(target=make_chart)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=60)
+
+            self.assertEqual(errors, [], errors)
+            self.assertEqual(len(results), 2, results)
+            nums = {int(cid.split("-")[1]) for _kind, cid in results}
+            self.assertEqual(nums, {1, 2}, results)
+
 
 if __name__ == "__main__":
     unittest.main()
+

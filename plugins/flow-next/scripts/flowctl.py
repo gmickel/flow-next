@@ -188,6 +188,24 @@ TASKS_DIR = "tasks"
 MEMORY_DIR = "memory"
 PROSPECTS_DIR = "prospects"
 PROSPECTS_ARCHIVE_DIR = "_archive"
+# fn-135: charts share the native fn-N allocation domain with specs.
+CHARTS_DIR = "charts"
+CHART_TRANSACTIONS_DIR = ".transactions"
+CHART_JSON_SCHEMA_VERSION = 1
+CHART_ERROR_CLASSES = frozenset(
+    {
+        "not_found",
+        "conflict",
+        "invalid_state",
+        "invalid_graph",
+        "stale_claim",
+        "validation",
+        "io",
+    }
+)
+# Single cross-kind lock leaf under .flow/locks/ for specs + charts.
+NATIVE_FN_ALLOC_LOCK_NAME = "native-fn-id-alloc.lock"
+CHARTS_RESOURCE_LOCK_NAME = "charts-resource.lock"
 CONFIG_FILE = "config.json"
 # Post-1.0 layout sentinel. Presence of `.flow/.flow_version` means the repo
 # uses the canonical specs/ write path (see get_specs_json_write_dir). Payload
@@ -9792,9 +9810,14 @@ def _scan_max_fn_names_in_dir(directory: Path) -> int:
 
 
 def _scan_max_fn_in_flow_dir(flow_dir: Path) -> int:
-    """In-process max native fn-N across epics/ + specs/ of one .flow/ tree."""
+    """In-process max native fn-N across epics/ + specs/ + charts/ of one .flow/.
+
+    One cross-kind allocation domain (fn-135): charts and specs share the
+    monotonic native counter. Decision records under charts/<id>/<n>.* are
+    not scanned (names do not match the native fn-N filename pattern).
+    """
     max_n = 0
-    for sub in (EPICS_DIR, SPECS_DIR):
+    for sub in (EPICS_DIR, SPECS_DIR, CHARTS_DIR):
         n = _scan_max_fn_names_in_dir(flow_dir / sub)
         if n > max_n:
             max_n = n
@@ -9890,7 +9913,11 @@ def _scan_max_fn_from_refs(repo_root: Path) -> int:
     exists to provide. It costs nothing measurable (both forms run well inside
     the R3 budget).
     """
-    pathspecs = [f"{FLOW_DIR}/{SPECS_DIR}", f"{FLOW_DIR}/{EPICS_DIR}"]
+    pathspecs = [
+        f"{FLOW_DIR}/{SPECS_DIR}",
+        f"{FLOW_DIR}/{EPICS_DIR}",
+        f"{FLOW_DIR}/{CHARTS_DIR}",
+    ]
     rc, out, _err = _spec_alloc_git(
         repo_root,
         [
@@ -9924,23 +9951,30 @@ def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
     """Union max of native `fn-N` across working tree, worktrees, and refs.
 
     NATIVE-`fn`-ONLY (fn-52.10): this feeds `fn-N` allocation in
-    `cmd_spec_create`, so tracker-key specs (`wor-9999-foo`) must NOT count —
-    else a high tracker number would push the next flow-first spec to a far
-    higher `fn-N`. Tracker-key specs are still visible to enumeration
-    (`iter_spec_json_files`); they just don't drive the native allocator.
+    `cmd_spec_create` and `cmd_chart_create`, so tracker-key specs
+    (`wor-9999-foo`) must NOT count - else a high tracker number would push
+    the next flow-first id to a far higher `fn-N`. Tracker-key specs are
+    still visible to enumeration (`iter_spec_json_files`); they just don't
+    drive the native allocator.
 
-    Three sources, take the maximum (fn-134):
-      1. Current working tree `.flow/epics/` + `.flow/specs/` (always).
+    Cross-kind domain (fn-135): specs and charts share one counter. A chart
+    at `.flow/charts/fn-N` and a spec at `.flow/specs/fn-N-slug` both reserve
+    number N under the same allocation lock.
+
+    Three sources, take the maximum (fn-134 + fn-135):
+      1. Current working tree `.flow/epics/` + `.flow/specs/` + `.flow/charts/`
+         (always).
       2. Every registered git worktree's `.flow/` (in-process scandir).
       3. Every ref via one `git log --all --full-history --diff-filter=A` over
-         the specs dirs (`--full-history` keeps pruned side branches visible).
+         the specs/epics/charts dirs (`--full-history` keeps pruned side
+         branches visible).
 
     Handles legacy (fn-N.json), short suffix (fn-N-xxx.json), and slug
     (fn-N-slug.json) formats. Returns 0 if none exist.
 
     Fail-open on every git problem (absent git, not a repo, stale worktree
     path, missing/unreadable `.flow/`, non-zero git exit): degrade to whatever
-    sources worked, worst case source 1 alone. Never blocks spec creation.
+    sources worked, worst case source 1 alone. Never blocks allocation.
     Monotonic: a number that was allocated and later deleted is never reused
     because source 3 still sees the historical add.
     """
@@ -9977,6 +10011,855 @@ def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
 # prefer the explicit name). Backward-compat `scan_max_epic_id` preserved too.
 scan_max_spec_id = scan_max_native_fn_spec_id
 scan_max_epic_id = scan_max_native_fn_spec_id
+
+
+def native_fn_alloc_lock_path(flow_dir: Path) -> Path:
+    """Shared lock path for the cross-kind native fn-N allocator (specs+charts)."""
+    return flow_dir / "locks" / NATIVE_FN_ALLOC_LOCK_NAME
+
+
+def charts_resource_lock_path(flow_dir: Path) -> Path:
+    """Lock path coordinating chart recovery and multi-file mutations."""
+    return flow_dir / "locks" / CHARTS_RESOURCE_LOCK_NAME
+
+
+def charts_dir(flow_dir: Path) -> Path:
+    return flow_dir / CHARTS_DIR
+
+
+def chart_transactions_dir(flow_dir: Path) -> Path:
+    return charts_dir(flow_dir) / CHART_TRANSACTIONS_DIR
+
+
+# Chart id is plain native `fn-N` (no slug). Specs keep `fn-N-slug`; the shared
+# allocator only cares about the numeric component.
+_CHART_ID_RE = re.compile(r"^fn-([1-9][0-9]*)$")
+# Full external D-ID: <chart-id>.D<n>
+_CHART_DID_FULL_RE = re.compile(r"^(fn-[1-9][0-9]*)\.D([1-9][0-9]*)$", re.IGNORECASE)
+# Bare decision forms accepted only when a chart context is supplied.
+_CHART_DID_BARE_RE = re.compile(r"^(?:D)?([1-9][0-9]*)$", re.IGNORECASE)
+# Ambiguous bare-or-local forms that look like another chart: fn-X.DY or fn-X.Y
+_CHART_DID_CROSS_RE = re.compile(
+    r"^(fn-[1-9][0-9]*)\.(?:D)?([1-9][0-9]*)$", re.IGNORECASE
+)
+
+
+class ChartError(Exception):
+    """Structured chart command failure (maps to v1 error envelope)."""
+
+    def __init__(
+        self,
+        error_class: str,
+        code: str,
+        message: str,
+        details: Optional[dict] = None,
+        exit_code: int = 1,
+    ) -> None:
+        if error_class not in CHART_ERROR_CLASSES:
+            raise ValueError(f"unknown chart error class: {error_class}")
+        super().__init__(message)
+        self.error_class = error_class
+        self.code = code
+        self.message = message
+        self.details = details if details is not None else {}
+        self.exit_code = exit_code
+
+
+def chart_json_success(command: str, result: dict) -> None:
+    """Emit exact v1 success envelope for chart commands."""
+    print(
+        json.dumps(
+            {
+                "success": True,
+                "schema_version": CHART_JSON_SCHEMA_VERSION,
+                "command": command,
+                "result": result,
+            },
+            indent=2,
+            default=str,
+        )
+    )
+
+
+def chart_json_error(
+    command: str,
+    error_class: str,
+    code: str,
+    message: str,
+    details: Optional[dict] = None,
+    exit_code: int = 1,
+) -> None:
+    """Emit exact v1 failure envelope and exit."""
+    if error_class not in CHART_ERROR_CLASSES:
+        error_class = "io"
+        code = "internal_error_class"
+    print(
+        json.dumps(
+            {
+                "success": False,
+                "schema_version": CHART_JSON_SCHEMA_VERSION,
+                "command": command,
+                "error": {
+                    "class": error_class,
+                    "code": code,
+                    "message": message,
+                    "details": details if details is not None else {},
+                },
+            },
+            indent=2,
+            default=str,
+        )
+    )
+    sys.exit(exit_code)
+
+
+def chart_fail(
+    command: str,
+    use_json: bool,
+    error_class: str,
+    code: str,
+    message: str,
+    details: Optional[dict] = None,
+    exit_code: int = 1,
+) -> None:
+    """Surface a chart failure (JSON envelope or stderr). Never returns."""
+    if use_json:
+        chart_json_error(
+            command, error_class, code, message, details=details, exit_code=exit_code
+        )
+    print(f"Error: {message}", file=sys.stderr)
+    sys.exit(exit_code)
+
+
+def canonicalize_chart_id(raw: str) -> str:
+    """Return canonical chart id `fn-N` or raise ChartError(validation).
+
+    Rejects empty, slug-bearing, tracker-key, and ambiguous forms before I/O.
+    """
+    if raw is None or not isinstance(raw, str):
+        raise ChartError(
+            "validation",
+            "invalid_chart_id",
+            "Chart id is required (expected fn-N)",
+            details={"raw": raw},
+        )
+    text = raw.strip().lower()
+    if not text:
+        raise ChartError(
+            "validation",
+            "invalid_chart_id",
+            "Chart id is required (expected fn-N)",
+            details={"raw": raw},
+        )
+    match = _CHART_ID_RE.fullmatch(text)
+    if not match:
+        raise ChartError(
+            "validation",
+            "invalid_chart_id",
+            f"Invalid chart id '{raw.strip()}' (expected fn-N with no slug)",
+            details={"raw": raw.strip()},
+        )
+    return f"fn-{int(match.group(1))}"
+
+
+def canonicalize_decision_id(
+    raw: str, chart_id: Optional[str] = None
+) -> str:
+    """Return canonical external D-ID `<chart-id>.D<n>` or raise ChartError.
+
+    Accepts `fn-N.DM`, `fn-N.M`, `DM`, or `M` when chart_id is provided.
+    Rejects cross-chart identifiers and ambiguous forms before I/O.
+    """
+    if raw is None or not isinstance(raw, str) or not raw.strip():
+        raise ChartError(
+            "validation",
+            "invalid_decision_id",
+            "Decision id is required (expected <chart-id>.D<n> or D<n>)",
+            details={"raw": raw},
+        )
+    text = raw.strip()
+    # Normalize only the chart/D markers for matching; preserve digits.
+    text_norm = text.lower()
+    full = _CHART_DID_FULL_RE.fullmatch(text_norm)
+    if full:
+        chart_part = canonicalize_chart_id(full.group(1))
+        d_num = int(full.group(2))
+        if chart_id is not None:
+            expected = canonicalize_chart_id(chart_id)
+            if chart_part != expected:
+                raise ChartError(
+                    "validation",
+                    "cross_chart_decision_id",
+                    f"Decision id '{text}' belongs to {chart_part}, not {expected}",
+                    details={"raw": text, "chart_id": expected, "other_chart": chart_part},
+                )
+        return f"{chart_part}.D{d_num}"
+
+    cross = _CHART_DID_CROSS_RE.fullmatch(text_norm)
+    if cross:
+        # Form fn-N.M without the D prefix - still chart-qualified.
+        chart_part = canonicalize_chart_id(cross.group(1))
+        d_num = int(cross.group(2))
+        if chart_id is not None:
+            expected = canonicalize_chart_id(chart_id)
+            if chart_part != expected:
+                raise ChartError(
+                    "validation",
+                    "cross_chart_decision_id",
+                    f"Decision id '{text}' belongs to {chart_part}, not {expected}",
+                    details={"raw": text, "chart_id": expected, "other_chart": chart_part},
+                )
+        return f"{chart_part}.D{d_num}"
+
+    bare = _CHART_DID_BARE_RE.fullmatch(text_norm)
+    if bare:
+        if chart_id is None:
+            raise ChartError(
+                "validation",
+                "ambiguous_decision_id",
+                f"Bare decision id '{text}' requires a chart context",
+                details={"raw": text},
+            )
+        chart_part = canonicalize_chart_id(chart_id)
+        return f"{chart_part}.D{int(bare.group(1))}"
+
+    raise ChartError(
+        "validation",
+        "invalid_decision_id",
+        f"Invalid decision id '{text}' (expected <chart-id>.D<n> or D<n>)",
+        details={"raw": text},
+    )
+
+
+def decision_local_number(canonical_did: str) -> int:
+    """Extract the chart-local decision number from a canonical `<chart>.D<n>`."""
+    full = _CHART_DID_FULL_RE.fullmatch(canonical_did)
+    if not full:
+        raise ChartError(
+            "validation",
+            "invalid_decision_id",
+            f"Not a canonical decision id: {canonical_did}",
+            details={"raw": canonical_did},
+        )
+    return int(full.group(2))
+
+
+def decision_record_paths(flow_dir: Path, chart_id: str, d_num: int) -> tuple[Path, Path]:
+    """Return (md_path, json_path) for decision local number under the chart."""
+    chart_id = canonicalize_chart_id(chart_id)
+    base = charts_dir(flow_dir) / chart_id / str(d_num)
+    return (base.with_suffix(".md"), base.with_suffix(".json"))
+
+
+def chart_pair_paths(flow_dir: Path, chart_id: str) -> tuple[Path, Path]:
+    """Return (md_path, json_path) for a chart root pair."""
+    chart_id = canonicalize_chart_id(chart_id)
+    base = charts_dir(flow_dir) / chart_id
+    return (base.with_suffix(".md"), base.with_suffix(".json"))
+
+
+def _file_sha256(path: Path) -> Optional[str]:
+    """Content fingerprint for journal pre-state; None if missing."""
+    try:
+        if not path.is_file():
+            return None
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def _fsync_path(path: Path) -> None:
+    """Best-effort fsync of a file."""
+    try:
+        fd = os.open(str(path), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def _fsync_dir(path: Path) -> None:
+    """Best-effort directory fsync (metadata flush before rename)."""
+    try:
+        fd = os.open(str(path), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def _chart_failpoint(name: str) -> None:
+    """Test injection: FLOWCTL_CHART_FAILPOINT=exit:NAME or raise:NAME."""
+    raw = os.environ.get("FLOWCTL_CHART_FAILPOINT") or ""
+    if not raw:
+        return
+    if raw == f"exit:{name}":
+        # Hard process death without cleanup (simulates kill -9 at a failpoint).
+        os._exit(99)
+    if raw == f"raise:{name}":
+        raise RuntimeError(f"injected chart failpoint: {name}")
+
+
+def _write_bytes_fsync(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+        _fsync_path(path)
+        _fsync_dir(path.parent)
+    except Exception:
+        try:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _write_text_fsync(path: Path, content: str) -> None:
+    _write_bytes_fsync(path, content.encode("utf-8"))
+
+
+def _write_json_fsync(path: Path, data: dict) -> None:
+    content = json.dumps(data, indent=2, sort_keys=True) + "\n"
+    _write_text_fsync(path, content)
+
+
+def _chart_relpath(flow_dir: Path, path: Path) -> str:
+    """Path relative to charts/ for journal entries."""
+    charts = charts_dir(flow_dir)
+    try:
+        return path.resolve().relative_to(charts.resolve()).as_posix()
+    except ValueError:
+        return path.name
+
+
+def chart_body_text(chart_id: str, title: str, outcome: str) -> str:
+    """Canonical empty-ledger chart map body."""
+    return (
+        f"# {chart_id} {title}\n"
+        f"\n"
+        f"## Outcome\n"
+        f"{outcome}\n"
+        f"\n"
+        f"## Notes\n"
+        f"\n"
+        f"## Decisions\n"
+        f"<!-- the ledger: one line per resolved decision, append-only, "
+        f"D-IDs never reused -->\n"
+        f"\n"
+        f"## Open Questions\n"
+        f"\n"
+        f"## Boundaries\n"
+        f"\n"
+    )
+
+
+def chart_sidecar_data(
+    chart_id: str,
+    title: str,
+    outcome: str,
+    *,
+    created: Optional[str] = None,
+) -> dict:
+    """v1 chart JSON sidecar with empty ledger."""
+    ts = created or now_iso()
+    return {
+        "id": chart_id,
+        "title": title,
+        "outcome": outcome,
+        "status": "open",
+        "created": ts,
+        "decisions": [],
+        "briefings": [],
+        "tracker": {
+            "id": None,
+            "identifier": None,
+            "url": None,
+        },
+        "produced_specs": [],
+    }
+
+
+def compact_chart_metadata(data: dict) -> dict:
+    """Compact show/list metadata (no graph/frontier/claims in task 1)."""
+    decisions = data.get("decisions") or []
+    if not isinstance(decisions, list):
+        decisions = []
+    return {
+        "id": data.get("id"),
+        "title": data.get("title"),
+        "outcome": data.get("outcome"),
+        "status": data.get("status"),
+        "created": data.get("created"),
+        "decision_count": len(decisions),
+        "briefing_count": len(data.get("briefings") or [])
+        if isinstance(data.get("briefings"), list)
+        else 0,
+        "produced_spec_count": len(data.get("produced_specs") or [])
+        if isinstance(data.get("produced_specs"), list)
+        else 0,
+    }
+
+
+def _journal_path(txn_dir: Path) -> Path:
+    return txn_dir / "journal.json"
+
+
+def _list_incomplete_chart_txns(flow_dir: Path) -> list[Path]:
+    tx_root = chart_transactions_dir(flow_dir)
+    if not tx_root.is_dir():
+        return []
+    found: list[Path] = []
+    try:
+        with os.scandir(tx_root) as it:
+            for entry in it:
+                if not entry.is_dir(follow_symlinks=False):
+                    continue
+                if entry.name.startswith("."):
+                    continue
+                jpath = Path(entry.path) / "journal.json"
+                if jpath.is_file():
+                    found.append(Path(entry.path))
+    except OSError:
+        return found
+    return sorted(found, key=lambda p: p.name)
+
+
+def _load_journal(txn_dir: Path) -> Optional[dict]:
+    jpath = _journal_path(txn_dir)
+    try:
+        with open(jpath, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+    return None
+
+
+def _rm_tree(path: Path) -> None:
+    if not path.exists():
+        return
+    try:
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    except OSError:
+        pass
+
+
+def _restore_pre_state(flow_dir: Path, journal: dict, txn_dir: Path) -> None:
+    """Restore recorded pre-state for every mutation target."""
+    charts = charts_dir(flow_dir)
+    pre_state = journal.get("pre_state") or {}
+    mutations = journal.get("mutations") or []
+    for mut in mutations:
+        if not isinstance(mut, dict):
+            continue
+        rel = mut.get("relpath")
+        if not isinstance(rel, str) or not rel or ".." in rel.split("/"):
+            continue
+        target = charts / rel
+        info = pre_state.get(rel) if isinstance(pre_state, dict) else None
+        if not info or not info.get("exists"):
+            # Pre-state absent: remove any partial publication.
+            try:
+                if target.is_file() or target.is_symlink():
+                    target.unlink()
+            except OSError:
+                pass
+            continue
+        backup_rel = info.get("backup")
+        if isinstance(backup_rel, str) and backup_rel:
+            backup = txn_dir / backup_rel
+            if backup.is_file():
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(backup, target)
+                    _fsync_path(target)
+                except OSError:
+                    pass
+                continue
+        # Exists-in-pre but no backup: leave target alone if fingerprint matches;
+        # otherwise delete (safer than inventing content).
+        expected = info.get("sha256")
+        current = _file_sha256(target)
+        if expected and current and expected == current:
+            continue
+        try:
+            if target.is_file() or target.is_symlink():
+                target.unlink()
+        except OSError:
+            pass
+
+
+def _publish_staged_mutation(
+    flow_dir: Path, txn_dir: Path, mut: dict
+) -> None:
+    """Publish one staged mutation (create = no-clobber link, update = replace)."""
+    charts = charts_dir(flow_dir)
+    rel = mut["relpath"]
+    op = mut.get("op") or "create"
+    staged = txn_dir / "staged" / rel
+    target = charts / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not staged.is_file():
+        raise ChartError(
+            "io",
+            "missing_staged_file",
+            f"Staged file missing for {rel}",
+            details={"relpath": rel},
+        )
+    content = staged.read_text(encoding="utf-8")
+    if op == "create":
+        if target.exists():
+            # Idempotent roll-forward: already published with matching content.
+            try:
+                if target.read_text(encoding="utf-8") == content:
+                    return
+            except OSError:
+                pass
+            raise ChartError(
+                "conflict",
+                "chart_path_exists",
+                f"Refusing to overwrite existing chart path {rel}",
+                details={"relpath": rel},
+            )
+        atomic_create(target, content)
+    else:
+        atomic_write(target, content)
+    _fsync_path(target)
+    _fsync_dir(target.parent)
+
+
+def _roll_forward_journal(flow_dir: Path, txn_dir: Path, journal: dict) -> None:
+    """Publish all staged mutations then drop the transaction."""
+    mutations = journal.get("mutations") or []
+    for mut in mutations:
+        if isinstance(mut, dict) and mut.get("relpath"):
+            _publish_staged_mutation(flow_dir, txn_dir, mut)
+    _chart_failpoint("after_publish_before_commit")
+    # Mark committed then remove txn dir.
+    journal = dict(journal)
+    journal["phase"] = "committed"
+    try:
+        _write_json_fsync(_journal_path(txn_dir), journal)
+    except OSError:
+        pass
+    _rm_tree(txn_dir)
+
+
+def recover_chart_transactions(flow_dir: Path) -> list[str]:
+    """Recover incomplete chart journals under the charts resource lock.
+
+    Deterministic policy:
+      - phase staging / unknown / corrupt: restore pre-state, drop txn
+      - phase ready or publishing with complete staged set: roll forward
+      - phase committed: drop txn
+    Returns list of recovered txn ids (for diagnostics/tests).
+    """
+    recovered: list[str] = []
+    for txn_dir in _list_incomplete_chart_txns(flow_dir):
+        journal = _load_journal(txn_dir)
+        txn_id = txn_dir.name
+        if journal is None:
+            # Corrupt journal: best-effort cleanup of any staged-only debris
+            # without touching live chart files (pre-state unknown).
+            _rm_tree(txn_dir)
+            recovered.append(txn_id)
+            continue
+        phase = journal.get("phase")
+        mutations = journal.get("mutations") or []
+        staged_complete = True
+        for mut in mutations:
+            if not isinstance(mut, dict):
+                staged_complete = False
+                break
+            rel = mut.get("relpath")
+            if not isinstance(rel, str):
+                staged_complete = False
+                break
+            if not (txn_dir / "staged" / rel).is_file():
+                staged_complete = False
+                break
+
+        if phase == "committed":
+            _rm_tree(txn_dir)
+            recovered.append(txn_id)
+            continue
+
+        if phase in ("ready", "publishing") and staged_complete:
+            try:
+                _roll_forward_journal(flow_dir, txn_dir, journal)
+            except ChartError:
+                # Roll-forward conflict: fall back to pre-state restore.
+                _restore_pre_state(flow_dir, journal, txn_dir)
+                _rm_tree(txn_dir)
+            recovered.append(txn_id)
+            continue
+
+        # Incomplete staging or unknown phase: restore pre-state.
+        _restore_pre_state(flow_dir, journal, txn_dir)
+        _rm_tree(txn_dir)
+        recovered.append(txn_id)
+    return recovered
+
+
+def _begin_chart_transaction(
+    flow_dir: Path,
+    command: str,
+    mutations: list[tuple[str, str, str]],
+) -> Path:
+    """Create a write-ahead journal with pre-state fingerprints.
+
+    mutations: list of (relpath, op, content) where op is create|update.
+    Returns the txn directory path. Caller stages contents then publishes.
+    """
+    charts = charts_dir(flow_dir)
+    charts.mkdir(parents=True, exist_ok=True)
+    tx_root = chart_transactions_dir(flow_dir)
+    tx_root.mkdir(parents=True, exist_ok=True)
+    txn_id = f"{int(datetime.now(timezone.utc).timestamp() * 1000):x}-{uuid.uuid4().hex[:12]}"
+    txn_dir = tx_root / txn_id
+    txn_dir.mkdir(parents=True, exist_ok=False)
+    (txn_dir / "staged").mkdir()
+    (txn_dir / "pre").mkdir()
+
+    pre_state: dict[str, dict] = {}
+    mut_records: list[dict] = []
+    for relpath, op, _content in mutations:
+        if ".." in relpath.split("/"):
+            raise ChartError(
+                "validation",
+                "invalid_mutation_path",
+                f"Invalid mutation path: {relpath}",
+                details={"relpath": relpath},
+            )
+        target = charts / relpath
+        exists = target.is_file()
+        entry: dict[str, Any] = {"exists": exists}
+        if exists:
+            sha = _file_sha256(target)
+            entry["sha256"] = sha
+            backup_rel = f"pre/{relpath.replace('/', '__')}"
+            backup_path = txn_dir / backup_rel
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(target, backup_path)
+            _fsync_path(backup_path)
+            entry["backup"] = backup_rel
+        pre_state[relpath] = entry
+        mut_records.append({"relpath": relpath, "op": op})
+
+    journal = {
+        "schema_version": 1,
+        "txn_id": txn_id,
+        "command": command,
+        "phase": "staging",
+        "created_at": now_iso(),
+        "pre_state": pre_state,
+        "mutations": mut_records,
+    }
+    _write_json_fsync(_journal_path(txn_dir), journal)
+    _fsync_dir(txn_dir)
+    _fsync_dir(tx_root)
+    _chart_failpoint("after_journal")
+    return txn_dir
+
+
+def _stage_chart_mutation(txn_dir: Path, relpath: str, content: str) -> None:
+    staged = txn_dir / "staged" / relpath
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    _write_text_fsync(staged, content)
+
+
+def _finalize_chart_transaction(flow_dir: Path, txn_dir: Path) -> None:
+    """Mark staged set ready, then roll forward to publication."""
+    journal = _load_journal(txn_dir)
+    if journal is None:
+        raise ChartError(
+            "io",
+            "journal_missing",
+            "Chart transaction journal missing after staging",
+            details={"txn": txn_dir.name},
+        )
+    # Verify every mutation is staged before leaving staging phase.
+    for mut in journal.get("mutations") or []:
+        rel = mut.get("relpath") if isinstance(mut, dict) else None
+        if not isinstance(rel, str) or not (txn_dir / "staged" / rel).is_file():
+            raise ChartError(
+                "io",
+                "incomplete_staging",
+                f"Staged content missing for {rel}",
+                details={"txn": txn_dir.name, "relpath": rel},
+            )
+    _chart_failpoint("after_stage")
+    journal["phase"] = "ready"
+    _write_json_fsync(_journal_path(txn_dir), journal)
+    _fsync_dir(txn_dir)
+    _chart_failpoint("before_publish")
+    journal["phase"] = "publishing"
+    _write_json_fsync(_journal_path(txn_dir), journal)
+    # Publish first mutation with a mid-publish failpoint for kill tests.
+    mutations = [m for m in (journal.get("mutations") or []) if isinstance(m, dict)]
+    if mutations:
+        _publish_staged_mutation(flow_dir, txn_dir, mutations[0])
+        _chart_failpoint("after_first_publish")
+        for mut in mutations[1:]:
+            _publish_staged_mutation(flow_dir, txn_dir, mut)
+    _chart_failpoint("after_publish_before_commit")
+    journal["phase"] = "committed"
+    _write_json_fsync(_journal_path(txn_dir), journal)
+    _rm_tree(txn_dir)
+
+
+def run_chart_transaction(
+    flow_dir: Path,
+    command: str,
+    mutations: list[tuple[str, str, str]],
+) -> None:
+    """Journal + stage + publish a multi-file chart mutation set.
+
+    On handled failure, restore pre-state and remove the txn. Crash recovery
+    is performed by recover_chart_transactions on the next chart command.
+    """
+    txn_dir: Optional[Path] = None
+    try:
+        txn_dir = _begin_chart_transaction(flow_dir, command, mutations)
+        for relpath, _op, content in mutations:
+            _stage_chart_mutation(txn_dir, relpath, content)
+        _finalize_chart_transaction(flow_dir, txn_dir)
+    except ChartError:
+        if txn_dir is not None and txn_dir.exists():
+            journal = _load_journal(txn_dir) or {
+                "pre_state": {},
+                "mutations": [{"relpath": r} for r, _o, _c in mutations],
+            }
+            _restore_pre_state(flow_dir, journal, txn_dir)
+            _rm_tree(txn_dir)
+        raise
+    except Exception as e:
+        if txn_dir is not None and txn_dir.exists():
+            journal = _load_journal(txn_dir) or {
+                "pre_state": {},
+                "mutations": [{"relpath": r} for r, _o, _c in mutations],
+            }
+            _restore_pre_state(flow_dir, journal, txn_dir)
+            _rm_tree(txn_dir)
+        raise ChartError(
+            "io",
+            "chart_transaction_failed",
+            f"Chart transaction failed: {e}",
+            details={"command": command},
+        ) from e
+
+
+def create_chart_pair(
+    flow_dir: Path,
+    chart_id: str,
+    title: str,
+    outcome: str,
+) -> dict:
+    """Allocate-time publication of a new chart md/json pair (empty ledger).
+
+    Caller must hold the shared native-fn allocation lock and the charts
+    resource lock, and must have already run recovery.
+    """
+    chart_id = canonicalize_chart_id(chart_id)
+    md_path, json_path = chart_pair_paths(flow_dir, chart_id)
+    if md_path.exists() or json_path.exists():
+        raise ChartError(
+            "conflict",
+            "chart_exists",
+            f"Refusing to overwrite existing chart {chart_id}",
+            details={"id": chart_id},
+        )
+    data = chart_sidecar_data(chart_id, title, outcome)
+    md_content = chart_body_text(chart_id, title, outcome)
+    json_content = json.dumps(data, indent=2, sort_keys=True) + "\n"
+    mutations = [
+        (f"{chart_id}.json", "create", json_content),
+        (f"{chart_id}.md", "create", md_content),
+    ]
+    run_chart_transaction(flow_dir, "chart.create", mutations)
+    return data
+
+
+def load_chart_sidecar(flow_dir: Path, chart_id: str) -> dict:
+    """Load chart JSON sidecar or raise ChartError not_found/io."""
+    chart_id = canonicalize_chart_id(chart_id)
+    _md_path, json_path = chart_pair_paths(flow_dir, chart_id)
+    if not json_path.is_file():
+        raise ChartError(
+            "not_found",
+            "chart_not_found",
+            f"Chart not found: {chart_id}",
+            details={"id": chart_id},
+        )
+    try:
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "io",
+            "chart_invalid_json",
+            f"Chart sidecar invalid JSON: {chart_id} ({e})",
+            details={"id": chart_id, "path": str(json_path)},
+        ) from e
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "chart_unreadable",
+            f"Chart sidecar unreadable: {chart_id} ({e})",
+            details={"id": chart_id, "path": str(json_path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "io",
+            "chart_invalid_json",
+            f"Chart sidecar must be a JSON object: {chart_id}",
+            details={"id": chart_id},
+        )
+    return data
+
+
+def list_chart_ids(flow_dir: Path) -> list[str]:
+    """Sorted chart ids present as .json sidecars under charts/."""
+    cdir = charts_dir(flow_dir)
+    if not cdir.is_dir():
+        return []
+    ids: list[str] = []
+    try:
+        with os.scandir(cdir) as it:
+            for entry in it:
+                name = entry.name
+                if not name.endswith(".json"):
+                    continue
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                stem = name[: -len(".json")]
+                if _CHART_ID_RE.fullmatch(stem):
+                    ids.append(stem)
+    except OSError:
+        return []
+    return sorted(ids, key=lambda s: int(s.split("-", 1)[1]))
 
 
 def get_specs_json_write_dir(flow_dir: Path) -> Path:
@@ -17608,7 +18491,8 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
 
     # fn-52.10 (R16): origin-branched id generator.
     #   - flow-first (default): native sequential `fn-NN-slug`, allocated from
-    #     `fn-*` specs ONLY (tracker-key specs never bump the native counter).
+    #     the shared native fn-N domain (specs + charts; tracker-key specs
+    #     never bump the counter).
     #   - tracker-first (`--tracker-first` + `--tracker-identifier WOR-17`):
     #     canonical id derived from the LOWERCASE tracker key + number +
     #     slug → `wor-17-slug`; tasks become `wor-17-slug.M` via the unchanged
@@ -17619,6 +18503,94 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     # Use slugified title as suffix, fallback to random if empty/invalid.
     slug = slugify(args.title)
     suffix = slug if slug else generate_epic_suffix()
+
+    # fn-43.1: Resolve write target. Fresh / migrated repos -> .flow/specs/;
+    # alias-mode 0.x repos (no sentinel + epics/ exists) -> .flow/epics/.
+    spec_json_dir = get_specs_json_write_dir(flow_dir)
+    spec_json_dir.mkdir(parents=True, exist_ok=True)
+    spec_md_dir = flow_dir / SPECS_DIR
+    spec_md_dir.mkdir(parents=True, exist_ok=True)
+
+    def _publish_spec(spec_id: str, tracker_first_flag: bool, tracker_id_val) -> dict:
+        # Double-check no collision across BOTH dirs (shouldn't happen with
+        # scan-based allocation + no-clobber create).
+        canonical_json_path = flow_dir / SPECS_JSON_DIR / f"{spec_id}.json"
+        legacy_json_path = flow_dir / EPICS_DIR / f"{spec_id}.json"
+        spec_md_path = spec_md_dir / f"{spec_id}.md"
+        if (
+            canonical_json_path.exists()
+            or legacy_json_path.exists()
+            or spec_md_path.exists()
+        ):
+            error_exit(
+                f"Refusing to overwrite existing spec {spec_id}. "
+                f"This shouldn't happen - check for orphaned files.",
+                use_json=args.json,
+            )
+
+        spec_json_path = spec_json_dir / f"{spec_id}.json"
+
+        # Create spec JSON. depends_on_epics field name kept (reads accept both
+        # names through 1.x; T2 layers the read-compat). Field rename is internal
+        # only and deferred so external tooling reading the file keeps working.
+        spec_data = {
+            "id": spec_id,
+            "title": args.title,
+            "status": "open",
+            "plan_review_status": "unknown",
+            "plan_reviewed_at": None,
+            "branch_name": args.branch if args.branch else spec_id,
+            "depends_on_epics": [],
+            "spec_path": f"{FLOW_DIR}/{SPECS_DIR}/{spec_id}.md",
+            "next_task": 1,
+            # fn-52.1 (R4): per-item tracker sync state. `id` is the durable UUID
+            # dedupe key; `identifier` the display key (WOR-17); merge-base stored
+            # in BOTH flow-form and tracker-form so the agentic 3-way merge (.4)
+            # has a base comparable to each side, plus content hashes for the
+            # echo-fence (a post-push hash match on the next pull = flow's own
+            # echo, not a real conflict).
+            "tracker": default_spec_tracker_state(),
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+        # fn-52.10: tracker-first specs store the DISPLAY identifier (WOR-17) so the
+        # alias index resolves the bare handle. The canonical id already carries the
+        # lowercase key; the full UUID / url land later on link (fn-52.2).
+        if tracker_first_flag and tracker_id_val:
+            spec_data["tracker"]["identifier"] = tracker_id_val
+        json_content = json.dumps(spec_data, indent=2, sort_keys=True) + "\n"
+        spec_content = create_epic_spec(spec_id, args.title)
+
+        # No-clobber publication under the allocation lock (fn-135): concurrent
+        # chart/spec creates cannot reserve the same number then overwrite.
+        published: list[Path] = []
+        try:
+            atomic_create(spec_json_path, json_content)
+            published.append(spec_json_path)
+            atomic_create(spec_md_path, spec_content)
+            published.append(spec_md_path)
+        except FileExistsError:
+            for published_path in reversed(published):
+                try:
+                    published_path.unlink()
+                except OSError:
+                    pass
+            error_exit(
+                f"Refusing to overwrite existing spec {spec_id}. "
+                f"This shouldn't happen - check for orphaned files.",
+                use_json=args.json,
+            )
+        except (OSError, ValueError) as e:
+            for published_path in reversed(published):
+                try:
+                    published_path.unlink()
+                except OSError:
+                    pass
+            error_exit(
+                f"Failed to create spec {spec_id}: {e}",
+                use_json=args.json,
+            )
+        return spec_data
 
     if tracker_first:
         # fn-134.2: KEY-N (Linear/Jira) OR synthetic gh/gl from #N / project#N
@@ -17634,74 +18606,35 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
             display=tracker_identifier, use_json=args.json,
         )
         spec_id = f"{key}-{number}-{suffix}"
+        # Tracker-first ids are not from the native counter; still serialize
+        # publication against the shared lock so a concurrent native allocate
+        # cannot race a colliding path write (defensive; schemes differ).
+        try:
+            with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
+                spec_data = _publish_spec(spec_id, True, tracker_identifier)
+        except CrossProcessLockError as e:
+            error_exit(
+                f"Native id allocation lock unavailable: {e}",
+                use_json=args.json,
+            )
     else:
         # Flow-first specs may still carry a tracker identifier later, but at
         # create time only the reserved-key guard applies (no identifier set).
         reject_reserved_tracker_key(tracker_identifier, use_json=args.json)
-        # MU-1: Scan-based allocation for merge safety. NATIVE-`fn`-ONLY so a
-        # tracker-key spec never pushes the next flow-first spec's number.
-        max_spec = scan_max_native_fn_spec_id(flow_dir)
-        spec_num = max_spec + 1
-        spec_id = f"fn-{spec_num}-{suffix}"
-
-    # fn-43.1: Resolve write target. Fresh / migrated repos -> .flow/specs/;
-    # alias-mode 0.x repos (no sentinel + epics/ exists) -> .flow/epics/.
-    spec_json_dir = get_specs_json_write_dir(flow_dir)
-    spec_json_dir.mkdir(parents=True, exist_ok=True)
-    spec_md_dir = flow_dir / SPECS_DIR
-    spec_md_dir.mkdir(parents=True, exist_ok=True)
-
-    # Double-check no collision across BOTH dirs (shouldn't happen with
-    # scan-based allocation).
-    canonical_json_path = flow_dir / SPECS_JSON_DIR / f"{spec_id}.json"
-    legacy_json_path = flow_dir / EPICS_DIR / f"{spec_id}.json"
-    spec_md_path = spec_md_dir / f"{spec_id}.md"
-    if (
-        canonical_json_path.exists()
-        or legacy_json_path.exists()
-        or spec_md_path.exists()
-    ):
-        error_exit(
-            f"Refusing to overwrite existing spec {spec_id}. "
-            f"This shouldn't happen - check for orphaned files.",
-            use_json=args.json,
-        )
-
-    spec_json_path = spec_json_dir / f"{spec_id}.json"
-
-    # Create spec JSON. depends_on_epics field name kept (reads accept both
-    # names through 1.x; T2 layers the read-compat). Field rename is internal
-    # only and deferred so external tooling reading the file keeps working.
-    spec_data = {
-        "id": spec_id,
-        "title": args.title,
-        "status": "open",
-        "plan_review_status": "unknown",
-        "plan_reviewed_at": None,
-        "branch_name": args.branch if args.branch else spec_id,
-        "depends_on_epics": [],
-        "spec_path": f"{FLOW_DIR}/{SPECS_DIR}/{spec_id}.md",
-        "next_task": 1,
-        # fn-52.1 (R4): per-item tracker sync state. `id` is the durable UUID
-        # dedupe key; `identifier` the display key (WOR-17); merge-base stored
-        # in BOTH flow-form and tracker-form so the agentic 3-way merge (.4)
-        # has a base comparable to each side, plus content hashes for the
-        # echo-fence (a post-push hash match on the next pull = flow's own
-        # echo, not a real conflict).
-        "tracker": default_spec_tracker_state(),
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-    }
-    # fn-52.10: tracker-first specs store the DISPLAY identifier (WOR-17) so the
-    # alias index resolves the bare handle. The canonical id already carries the
-    # lowercase key; the full UUID / url land later on link (fn-52.2).
-    if tracker_first and tracker_identifier:
-        spec_data["tracker"]["identifier"] = tracker_identifier
-    atomic_write_json(spec_json_path, spec_data)
-
-    # Create spec markdown.
-    spec_content = create_epic_spec(spec_id, args.title)
-    atomic_write(spec_md_path, spec_content)
+        # fn-135: shared cross-kind allocation lock with chart create. Scan +
+        # no-clobber reserve under one lock so concurrent kinds never select
+        # the same fn-N.
+        try:
+            with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
+                max_spec = scan_max_native_fn_spec_id(flow_dir)
+                spec_num = max_spec + 1
+                spec_id = f"fn-{spec_num}-{suffix}"
+                spec_data = _publish_spec(spec_id, False, tracker_identifier)
+        except CrossProcessLockError as e:
+            error_exit(
+                f"Native id allocation lock unavailable: {e}",
+                use_json=args.json,
+            )
 
     # NOTE: We no longer update meta["next_spec"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
@@ -17719,6 +18652,191 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         json_output(out)
     else:
         print(f"Spec {spec_id} created: {args.title}")
+
+
+def _chart_ensure_flow(use_json: bool, command: str) -> Path:
+    if not ensure_flow_exists():
+        chart_fail(
+            command,
+            use_json,
+            "invalid_state",
+            "flow_missing",
+            ".flow/ does not exist. Run 'flowctl init' first.",
+        )
+    return get_flow_dir()
+
+
+def cmd_chart_create(args: argparse.Namespace) -> None:
+    """Create a chart with empty ledger (allocator/store foundation only)."""
+    command = "chart.create"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+
+    title = (getattr(args, "title", None) or "").strip()
+    outcome = (getattr(args, "outcome", None) or "").strip()
+    if not title:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "title_required",
+            "Chart create requires --title",
+        )
+    if not outcome:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "outcome_required",
+            "Chart create requires --outcome",
+        )
+
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
+                next_n = scan_max_native_fn_spec_id(flow_dir) + 1
+                chart_id = f"fn-{next_n}"
+                data = create_chart_pair(flow_dir, chart_id, title, outcome)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart allocation lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+
+    result = {
+        "id": data["id"],
+        "title": data["title"],
+        "outcome": data["outcome"],
+        "status": data["status"],
+        "created": data["created"],
+        "chart_path": f"{FLOW_DIR}/{CHARTS_DIR}/{data['id']}.md",
+        "decision_count": 0,
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(f"Chart {data['id']} created: {data['title']}")
+
+
+def cmd_chart_show(args: argparse.Namespace) -> None:
+    """Show compact chart metadata (no graph/frontier/claims in task 1)."""
+    command = "chart.show"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            data = load_chart_sidecar(flow_dir, chart_id)
+            meta = compact_chart_metadata(data)
+            md_path, _json_path = chart_pair_paths(flow_dir, chart_id)
+            body = ""
+            if md_path.is_file():
+                try:
+                    body = md_path.read_text(encoding="utf-8")
+                except OSError as e:
+                    raise ChartError(
+                        "io",
+                        "chart_body_unreadable",
+                        f"Chart body unreadable: {chart_id} ({e})",
+                        details={"id": chart_id},
+                    ) from e
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+
+    result = {
+        **meta,
+        "chart_path": f"{FLOW_DIR}/{CHARTS_DIR}/{meta['id']}.md",
+        "body": body,
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(f"{meta['id']}  {meta['title']}  [{meta['status']}]")
+        print(f"Outcome: {meta['outcome']}")
+        print(f"Decisions: {meta['decision_count']}")
+        if body:
+            print()
+            sys.stdout.write(body if body.endswith("\n") else body + "\n")
+
+
+def cmd_chart_list(args: argparse.Namespace) -> None:
+    """List charts with compact metadata."""
+    command = "chart.list"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            charts_out: list[dict] = []
+            for chart_id in list_chart_ids(flow_dir):
+                try:
+                    data = load_chart_sidecar(flow_dir, chart_id)
+                    charts_out.append(compact_chart_metadata(data))
+                except ChartError:
+                    # Skip unreadable entries rather than failing the whole list.
+                    continue
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+
+    if use_json:
+        chart_json_success(command, {"charts": charts_out, "count": len(charts_out)})
+    else:
+        if not charts_out:
+            print("No charts.")
+            return
+        for c in charts_out:
+            print(
+                f"{c['id']}  {c['title']}  [{c['status']}]  "
+                f"decisions={c['decision_count']}"
+            )
 
 
 # ---------- PR cognitive-aid artifact (fn-136.6) ------------------------
@@ -36377,6 +37495,42 @@ def main() -> None:
         "--json", action="store_true", help="JSON output"
     )
     p_prospect_promote.set_defaults(func=cmd_prospect_promote)
+
+    # chart (fn-135) — decision-map discovery store foundation.
+    # Task 1 owns create/show/list + shared allocator + journal recovery only.
+    p_chart = subparsers.add_parser(
+        "chart",
+        help="Chart commands (decision-map discovery; fn-135)",
+    )
+    chart_sub = p_chart.add_subparsers(dest="chart_cmd", required=True)
+
+    p_chart_create = chart_sub.add_parser(
+        "create",
+        help="Allocate a chart id and write body + sidecar with empty ledger",
+    )
+    p_chart_create.add_argument("--title", required=True, help="Chart title")
+    p_chart_create.add_argument(
+        "--outcome",
+        required=True,
+        help="What reaching the end of this chart looks like",
+    )
+    p_chart_create.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_create.set_defaults(func=cmd_chart_create)
+
+    p_chart_show = chart_sub.add_parser(
+        "show",
+        help="Show compact chart metadata and map body",
+    )
+    p_chart_show.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_show.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_show.set_defaults(func=cmd_chart_show)
+
+    p_chart_list = chart_sub.add_parser(
+        "list",
+        help="List charts with compact progress metadata",
+    )
+    p_chart_list.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_list.set_defaults(func=cmd_chart_list)
 
     # anchor (fn-83.3) — single-call worker anchor bundle: the verbatim
     # outputs of every worker Phase-1 re-anchor read in one deterministic
