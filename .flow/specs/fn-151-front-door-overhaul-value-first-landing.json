@@ -15,7 +15,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-151-front-door-overhaul-value-first-landing.md",
-  "status": "open",
+  "status": "done",
   "title": "Front-door overhaul: value-first landing, README, and property alignment",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-31T04:49:49.745791Z"
+  "updated_at": "2026-07-31T07:35:19.340765Z"
 }
