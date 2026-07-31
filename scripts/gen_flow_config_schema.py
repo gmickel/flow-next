@@ -405,8 +405,11 @@ def _review_backend_fragment() -> dict:
         {
             "type": "string",
             "pattern": (
-                f"^{re.escape(b)}:[^:\\s]+"
-                f"(:({'|'.join(sorted(flowctl.BACKEND_REGISTRY[b]['efforts']))}))?$"
+                # Model component OPTIONAL: BackendSpec.parse accepts
+                # effort-only (`codex::high`) and bare-colon (`codex:`)
+                # shapes - runtime-valid configs must not fail editors.
+                f"^{re.escape(b)}:[^:\\s]*"
+                f"(:({'|'.join(sorted(flowctl.BACKEND_REGISTRY[b]['efforts']))})?)?$"
             ),
         }
         for b in effort_backends
@@ -416,8 +419,14 @@ def _review_backend_fragment() -> dict:
         "anyOf": [
             {"type": "null"},
             {"enum": list(flowctl.VALID_BACKENDS)},
+            # Degenerate-but-runtime-valid: a bare backend with ONE trailing
+            # colon (`rp:`) parses to the bare backend.
+            {
+                "type": "string",
+                "pattern": "^(" + "|".join(re.escape(b) for b in sorted(flowctl.VALID_BACKENDS)) + "):{1,2}$",
+            },
             *effort_branches,
-            {"type": "string", "pattern": f"^({only_alt}):[^:\\s]+$"},
+            {"type": "string", "pattern": f"^({only_alt}):[^:\\s]*:?$"},  # model-only: optional trailing empty effort colon
         ],
     }
 

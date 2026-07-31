@@ -499,3 +499,42 @@ class TestArtifactKeywordsSupported(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBackendGrammarMatchesParser(unittest.TestCase):
+    """Exhaustive equivalence: the schema's review.backend grammar accepts a
+    string iff BackendSpec.parse does, over every shape up to the parser's
+    two-colon cap for every backend (77 cases). Ends the per-shape whack-a-mole
+    permanently (PR #280 rounds 1-3)."""
+
+    def test_schema_equals_parser_over_all_shapes(self) -> None:
+        import contextlib
+        import io
+
+        schema = json.loads(ARTIFACT.read_text(encoding="utf-8"))
+        frag = schema["properties"]["review"]["properties"]["backend"]
+
+        def schema_ok(v: str) -> bool:
+            for alt in frag["anyOf"]:
+                if "enum" in alt and v in alt["enum"]:
+                    return True
+                if alt.get("type") == "string" and "pattern" in alt and re.search(alt["pattern"], v):
+                    return True
+            return False
+
+        cases = set()
+        for b in sorted(flowctl.VALID_BACKENDS):
+            cases.update({b, b + ":", b + "::"})
+            for mdl in ("", "m1"):
+                for eff in ("", "high", "none", "bogus"):
+                    cases.add(f"{b}:{mdl}:{eff}")
+                    if eff == "":
+                        cases.add(f"{b}:{mdl}")
+        for v in sorted(cases):
+            try:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    flowctl.BackendSpec.parse(v)
+                runtime = True
+            except Exception:
+                runtime = False
+            self.assertEqual(schema_ok(v), runtime, f"schema/parser disagree on {v!r}")

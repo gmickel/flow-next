@@ -62,15 +62,19 @@
             },
             {
               "type": "string",
-              "pattern": "^codex:[^:\\s]+(:(high|low|medium|minimal|none|xhigh))?$"
+              "pattern": "^(codex|copilot|cursor|host|none|rp):{1,2}$"
             },
             {
               "type": "string",
-              "pattern": "^copilot:[^:\\s]+(:(high|low|medium|xhigh))?$"
+              "pattern": "^codex:[^:\\s]*(:(high|low|medium|minimal|none|xhigh)?)?$"
             },
             {
               "type": "string",
-              "pattern": "^(cursor):[^:\\s]+$"
+              "pattern": "^copilot:[^:\\s]*(:(high|low|medium|xhigh)?)?$"
+            },
+            {
+              "type": "string",
+              "pattern": "^(cursor):[^:\\s]*:?$"
             }
           ],
           "default": null
