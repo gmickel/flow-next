@@ -9,8 +9,9 @@ Both-directions honesty between the config reader and the schema; fixture valida
 **Size:** M
 
 ### Approach
-- Drift test: enumerate reader-accepted keys (walk flowctl.py config access sites - build the inventory mechanically where feasible, else a maintained list WITH a guard that greps config.get sites and fails on uncounted additions); assert reader-keys == schema-keys both directions.
-- Fixture configs valid + invalid (bad enum, bad spec-grammar, unknown key behavior documented) validated with a small stdlib structural checker (no new deps).
+- Drift test - the canonical key-set is defined as THREE parts (call-site grep is NOT the primary mechanism; `config get` accepts any dotted key so call sites are both noisy and incomplete): (a) dotted leaves of `get_default_config()` (mechanical backbone - covers land/work/pipeline/pilot/artifacts/tracker settings), (b) an explicit ANNOTATED allowlist for keys with no default leaf: machine-written blocks (`tracker.resolved.*` via the resolve transaction, `tracker.provenance`, `tracker.perTracker.*`), write-validated-only keys (`review.backend`, `tracker.specIds`, `tracker.conflictTiebreak`, `models.*`), pattern families, and `$schema` itself, (c) a guard that greps flowctl-side `get_config`/tree-probe string literals and FAILS on any literal not accounted for by (a)+(b). Assert schema-keys == (a)+(b) both directions. Inventory boundary is flowctl-side ONLY - skills read arbitrary subtrees via jq (e.g. land's lcfg()); they are consumers of the same key-set, never a second inventory.
+- Fixture configs valid + invalid (bad enum, bad spec-grammar, unknown-key behavior documented per the additionalProperties policy in the spec) validated with a small stdlib structural checker (no new deps).
+- The single best anti-regression fixture: a freshly-scaffolded config (setup's _init_persisted_defaults shape + stamped $schema) MUST validate against the committed schema.
 
 ## Acceptance
 - [ ] Drift test fails on either-direction divergence (R2).

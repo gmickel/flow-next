@@ -1,13 +1,24 @@
 {
   "branch_name": "fn-138-published-json-schema-for-flow-config",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-07-25T11:56:55.671060Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-139-tracker-determinism-a-transport"
   ],
   "id": "fn-138-published-json-schema-for-flow-config",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
+  "review_pending_rounds": {
+    "plan": 1
+  },
   "spec_path": ".flow/specs/fn-138-published-json-schema-for-flow-config.md",
   "status": "open",
   "title": "Published JSON Schema for flow config",
@@ -22,5 +33,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-31T15:00:16.478955Z"
+  "updated_at": "2026-07-31T15:05:47.412615Z"
 }
