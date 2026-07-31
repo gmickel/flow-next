@@ -2,6 +2,40 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+
+- **`/flow-next:make-pr` — the PR-create call is now interposable via
+  `FLOW_PR_CREATE_CMD` (#277).** Repos that require App/bot-authored PRs — the
+  canonical case: `required_approving_review_count: 1` with a single
+  maintainer, where GitHub forbids self-approval and a human-authored PR is
+  structurally unmergeable — can point the env var at a wrapper that supplies
+  its own identity (e.g. mints a GitHub App installation token) instead of
+  shimming `gh` on `PATH`. Default is `gh pr create`; unset means byte-for-byte
+  the old behavior. The contract is documented inline at the seam
+  (create-and-finalize.md §4.6) and is deliberately narrow: the command is
+  invoked as `$FLOW_PR_CREATE_CMD --title <t> --body-file <f> [--draft] --base
+  <branch> --head <branch>` (whitespace-split, never eval'd), must exit 0 and
+  print the PR URL on success, and gets its combined output surfaced verbatim
+  on failure. Scope is CREATE only — authorship is fixed at creation; `gh pr
+  view`/`gh pr edit`, the `--update` path, and the §4.6b repair still use `gh`,
+  which remains a preflight requirement. Identity work stays the integrator's:
+  flow-next does not mint tokens or know about GitHub Apps.
+  Reported with an unusually precise diagnosis by @sn-furali.
+
+### Fixed
+
+- **`/flow-next:make-pr` — `PR_URL` is now extracted from the create output,
+  not raw-assigned (#277).** §4.6 captured `CREATE_OUT=$(gh pr create … 2>&1)`
+  and assigned the whole capture to `PR_URL`, so ANY stderr chatter — gh's own
+  "a new release is available" upgrade notice was enough — corrupted the URL
+  and the `${PR_URL##*/}` PR-number derivation the receipts and resolve-pr
+  hints build on. The URL is now grep-extracted (`…/pull/<n>`, last match wins)
+  from the combined output, which also frees `FLOW_PR_CREATE_CMD` wrappers from
+  any stay-silent-on-success obligation; success with no URL anywhere in the
+  output is a hard, labeled error instead of a silently poisoned variable.
+
 ## [flow-next 3.10.0] - 2026-07-31
 
 Teams can now write their standing, project-wide acceptance criteria down once

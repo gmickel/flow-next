@@ -175,7 +175,7 @@ The escape hatches are the **flags**, not a prompt:
 
 ### 4.6 — Push branch + `gh pr create` retry loop (R20 refinement)
 
-Reached directly after §4.4 (body persisted) — no confirm gate. `git push -u origin HEAD` first; **then** wait one second (cli/cli #2691 — GitHub's API trails the git protocol push by tens to hundreds of milliseconds, with the worst observed lag in single-digit seconds). After the sleep, run `gh pr create` inside a 3-attempt retry loop that catches **only** the eventual-consistency error class. Other errors (auth, body too long, PR already exists) fail fast.
+Reached directly after §4.4 (body persisted) — no confirm gate. `git push -u origin HEAD` first; **then** wait one second (cli/cli #2691 — GitHub's API trails the git protocol push by tens to hundreds of milliseconds, with the worst observed lag in single-digit seconds). After the sleep, run the PR-create command inside a 3-attempt retry loop that catches **only** the eventual-consistency error class. Other errors (auth, body too long, PR already exists) fail fast. The create invocation is **interposable** via `FLOW_PR_CREATE_CMD` (#277 — App/bot-authored PRs); default is `gh pr create`, and the argument + output contract is documented inline at the seam below.
 
 ```bash
 # Resolve current branch BEFORE push. `gh pr create --head` needs an explicit
@@ -269,17 +269,53 @@ if [ "$TRK_ACTIVE" = "true" ]; then
  fi
 fi
 
+# PR-create seam (#277). FLOW_PR_CREATE_CMD names the command that OPENS the
+# PR; default `gh pr create`. Repos that require App/bot-authored PRs (e.g.
+# `required_approving_review_count: 1` with a single maintainer — GitHub
+# forbids approving your own PR, so a human-authored PR can never collect the
+# required approval) point it at a wrapper that supplies its own identity.
+# Contract (STABLE — integrators depend on it):
+# - invoked exactly as:
+# $FLOW_PR_CREATE_CMD --title <t> --body-file <f> [--draft] --base <branch> --head <branch>
+# - the expansion is whitespace-split, never eval'd — the command path must
+# not contain spaces; everything after it arrives as pre-quoted arguments
+# - success: exit 0 and print the PR URL (…/pull/<n>) somewhere in output.
+# Extra logging is TOLERATED — the URL is EXTRACTED from combined
+# stdout+stderr below, never raw-assigned
+# - failure: nonzero exit; combined output is surfaced verbatim. The retry
+# loop matches gh's two eventual-consistency substrings in that output, so
+# wrappers that proxy `gh` inherit the retry for free; direct-API wrappers
+# just fail fast, which is correct
+# Scope: CREATE only — authorship is fixed at creation. `gh pr view` /
+# `gh pr edit` (update mode, §4.6b repair) and all other calls still use `gh`,
+# which stays a preflight requirement. Identity work (App tokens, bots) belongs
+# to the integrator's wrapper; flow-next only guarantees this seam.
+PR_CREATE_CMD="${FLOW_PR_CREATE_CMD:-gh pr create}"
+
 # Retry loop. Only retry on the eventual-consistency error class. Other errors
-# fail fast — re-running gh pr create after a 422 (body too long) or 401 (auth)
+# fail fast — re-running the create after a 422 (body too long) or 401 (auth)
 # just produces the same error.
 PR_URL=""
 for attempt in 1 2 3; do
- CREATE_OUT=$(gh pr create \
+ if CREATE_OUT=$($PR_CREATE_CMD \
  --title "$PR_TITLE" \
  --body-file "$BODY_FILE" \
  $DRAFT_FLAG \
  --base "$BASE_BRANCH" \
- --head "$HEAD_BRANCH" 2>&1) && { PR_URL="$CREATE_OUT"; break; }
+ --head "$HEAD_BRANCH" 2>&1); then
+ # EXTRACT the URL rather than assigning the raw capture: `2>&1` folds any
+ # stderr chatter (gh's own upgrade notice, a wrapper's logging) into
+ # CREATE_OUT, which would corrupt PR_URL and the `${PR_URL##*/}` number
+ # derivation downstream (§5). Last match wins — a wrapper may log URLs
+ # before printing the real one.
+ PR_URL=$(printf '%s\n' "$CREATE_OUT" | grep -Eo 'https://[^[:space:]]+/pull/[0-9]+' | tail -n1 || true)
+ if [[ -z "$PR_URL" ]]; then
+ echo "Error: PR create reported success but printed no PR URL (FLOW_PR_CREATE_CMD contract: print the .../pull/<n> URL)." >&2
+ echo "$CREATE_OUT" >&2
+ exit 1
+ fi
+ break
+ fi
 
  # Eventual-consistency error class — retry. Empirically validated during fn-42 spike:
  # even after `git push` returns 0 and `sleep 1` elapses, gh pr create can fail with
@@ -293,13 +329,13 @@ for attempt in 1 2 3; do
  esac
 
  # Any other error: fail fast.
- echo "Error: gh pr create failed:" >&2
+ echo "Error: PR create failed ($PR_CREATE_CMD):" >&2
  echo "$CREATE_OUT" >&2
  exit 1
 done
 
 if [[ -z "$PR_URL" ]]; then
- echo "Error: gh pr create failed after 3 retries on eventual-consistency error." >&2
+ echo "Error: PR create failed after 3 retries on eventual-consistency error." >&2
  echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
  exit 1
 fi

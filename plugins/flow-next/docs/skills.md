@@ -20,7 +20,7 @@ The spec-to-merge pipeline, in order.
 | [`flow-next-impl-review`](../skills/flow-next-impl-review/SKILL.md) | `/flow-next:impl-review` | Carmack-level cross-model implementation review — confidence anchors, introduced-vs-pre-existing classification, SHIP / NEEDS_WORK receipt. |
 | [`flow-next-spec-completion-review`](../skills/flow-next-spec-completion-review/SKILL.md) | `/flow-next:spec-completion-review` | End-of-spec gate — verifies the *combined* implementation across all tasks satisfies the spec. |
 | [`flow-next-qa`](../skills/flow-next-qa/SKILL.md) | `/flow-next:qa` | Live-app real-user QA derived from the spec — drives the running app via `flow-next-drive`, files P0/P1/P2 findings with evidence, YES/NO ship verdict receipt. Forbidden from marking PASS by reading source. Opt-in. |
-| [`flow-next-make-pr`](../skills/flow-next-make-pr/SKILL.md) | `/flow-next:make-pr` | Render a cognitive-aid PR body from nine input streams and open via `gh`; with HTML artifact mode on, also commits a `pr.html` review instrument. |
+| [`flow-next-make-pr`](../skills/flow-next-make-pr/SKILL.md) | `/flow-next:make-pr` | Render a cognitive-aid PR body from nine input streams and open via `gh` (create call interposable via `FLOW_PR_CREATE_CMD` for App/bot-authored PRs); with HTML artifact mode on, also commits a `pr.html` review instrument. |
 | [`flow-next-resolve-pr`](../skills/flow-next-resolve-pr/SKILL.md) | `/flow-next:resolve-pr` | Resolve PR review feedback — fetch unresolved threads, triage, dispatch per-thread resolver agents, validate, commit, reply + resolve via GraphQL. |
 
 ## Autonomous loops
