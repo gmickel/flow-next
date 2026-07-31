@@ -27,8 +27,25 @@ Before editing, re-read the landed fn-147 docs commit and fn-148's final report/
 - `src/content/docs/teams/collaboration.mdx`, `orchestration/index.mdx`, `autonomous/overview.mdx`.
 - `src/content/docs/teams/tracker-sync.mdx`.
 - `src/content/docs/reference/glossary.mdx`, `releases/changelog.mdx`.
+- `motion/pipeline/index.html` and the rendered `public/videos/pipeline-hero.mp4` + `public/videos/pipeline-hero-poster.jpg` (see "Homepage pipeline assets" below).
+- `src/pages/index.astro` — the motion-band `figcaption` only.
 
 Do not alter the homepage build-loop mock; it depicts post-spec execution. Change homepage marketing copy only if it makes an externally false pipeline claim after the docs update.
+
+### Homepage pipeline assets
+
+The homepage motion band and its caption both present the idea-to-PR route, so R19 covers them. Both state a route that begins at rough intent and goes straight to spec, which is externally false once chart ships as the pre-capture route.
+
+Two surfaces, in this order:
+
+1. **The caption** (`src/pages/index.astro`, the `figcaption` under `.motion-frame`) currently reads `intent → spec → plan → work → review → ship`. Update it to place chart as the optional pre-capture route, matching the smallest-sufficient matrix. This is a string change and it is not optional.
+2. **The video** (`public/videos/pipeline-hero.mp4`, authored at `motion/pipeline/index.html` as a HyperFrames composition) animates the same false route in five beats plus a chip rail with absolute-positioned stage chips. Re-cut it to include chart as an optional pre-capture beat, visually distinguished as optional in the same way the existing QA branch is (dashed, off the main spine), so the paved path still reads as the short one. Re-render and replace both the mp4 and the poster.
+
+Follow `motion/design.md` exactly: warm black, amber as the single accent, JetBrains Mono, square corners, edges draw rather than fade, no bounce. The new beat must not lengthen the video enough to change its role as an atmospheric hero; if the beat cannot be added inside the existing runtime budget, shorten an existing beat rather than extending the whole.
+
+While in that file, replace the `&mdash;` entities in the caption strings with the house-style equivalent; the composition currently carries em dashes that the rest of the property is removing.
+
+**If the re-render cannot be completed** (toolchain unavailable, render fails, or the result is visibly below the standard in `motion/design.md`): ship the caption fix, leave the existing video in place, and report it as an explicit blocker naming what failed. Do not ship a degraded render, and do not silently leave the caption stating a route the product no longer has. A correct caption over a stale video is an acceptable interim state; an incorrect caption is not.
 
 ### Cookbook requirements
 
@@ -60,6 +77,12 @@ pnpm check
 pnpm build
 ```
 
+Motion re-cut only (from `motion/pipeline/`):
+
+```bash
+npx hyperframes lint && npx hyperframes render
+```
+
 ### Non-goals
 
 - No product code or plugin generated files in the docs repo.
@@ -74,6 +97,8 @@ pnpm build
 - Supported chart/decision tracker URLs re-enter via the local locator ledger; unsupported, unlinked, stale, conflicting, or historical selectors fail/show history visibly and offer the local ID/frontier path without mutation or guessing.
 - Cookbook/interview docs preserve fn-147's source-tag recipes and `untagged = unknown`, while chart examples retain D-ID/evidence references without relabelling facts or claiming an unlanded fn-148 outcome.
 - Public `## Unreleased` entry exists, with no version bump.
+- The homepage motion-band caption states a route that includes chart as the optional pre-capture step and agrees with the smallest-sufficient matrix. No surface left claiming intent goes straight to spec.
+- The pipeline video is re-cut with an optional chart beat rendered in the same optional treatment as the existing QA branch, obeys `motion/design.md`, does not materially extend runtime, and ships as replaced mp4 plus poster. If the re-render is blocked, the caption fix ships alone and the blocker is reported explicitly with the failure named.
 - Work occurs in a separate clean flow-next.dev worktree and yields a separate commit for fn-135 evidence.
 - `pnpm check` and `pnpm build` pass in that worktree.
 
