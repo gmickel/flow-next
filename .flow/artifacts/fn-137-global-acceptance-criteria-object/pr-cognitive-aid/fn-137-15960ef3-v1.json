@@ -1,0 +1,922 @@
+{
+  "artifactId": "fn-137-15960ef3-v1",
+  "baseSha": "7a5f08f1142f6f2c4f6125459e012a690d3f32de",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "Standing project-wide acceptance criteria lived in CLAUDE.md prose and reviewer memory - nothing applied them per spec, and compliance never landed anywhere machine-readable.",
+        "taskIds": [],
+        "title": "Criteria lived in prose and reviewer memory"
+      },
+      {
+        "files": [
+          {
+            "additions": 626,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_criteria.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "grammar, CLI, injection, receipt, and template tests.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r1",
+          "task1",
+          "c1"
+        ],
+        "summary": "Criteria object + deterministic plumbing: .flow/criteria.md with the G-ID grammar (- **G<N>:** prose), parsed and validated by the new `flowctl criteria list --json`; canonical marker heading exposed as the shared GLOBAL_CRITERIA_HEADING constant; zero-cost-absent test greps that constant against real prompt assembly.",
+        "taskIds": [
+          "fn-137-global-acceptance-criteria-object.1"
+        ],
+        "title": "The criteria object and its plumbing"
+      },
+      {
+        "files": [
+          {
+            "additions": 3,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/bin/flowctl-help.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 304,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "dual copy of flowctl.py (byte-identical).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_bootstrap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "codex mirror regen (sync-codex).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "codex mirror regen (sync-codex).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "codex mirror regen (sync-codex).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "codex mirror regen (sync-codex).",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "codex mirror regen (sync-codex).",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "codex mirror regen (sync-codex).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/scripts/flowctl-help.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "supporting change for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 304,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "criteria parser/CLI, prompt-block, injection placeholder, receipt criteria parsing (tasks .1+.2).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_bootstrap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "supporting change for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "supporting change for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "gains the {global_criteria_block} placeholder.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "backend prose: criteria block application.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "backend prose: criteria block application.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "backend prose: criteria block application.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "backend prose: criteria block application.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "backend prose: criteria block application.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "supporting change for the criteria object.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R2",
+          "R4"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r2",
+          "r4",
+          "task2",
+          "c6",
+          "c5"
+        ],
+        "summary": "Completion-review integration: build_completion_review_prompt gains a {global_criteria_block} placeholder (codex/copilot/cursor ride it; rp CE+classic and host append the identical block via the new `flowctl criteria prompt-block`); reviewer output section `## Global criteria` is parsed by parse_review_criteria into the receipt's additive criteria: [{id, status, note?}] array with fn-136-style degrade-to-absent; post-review refactor composes the template from the shared heading constants so injection, parser, and test cannot drift.",
+        "taskIds": [
+          "fn-137-global-acceptance-criteria-object.2"
+        ],
+        "title": "Completion review applies the criteria"
+      },
+      {
+        "files": [
+          {
+            "additions": 29,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "codex mirror regen (sync-codex).",
+            "taskIds": []
+          },
+          {
+            "additions": 30,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/templates/criteria.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "codex mirror regen (sync-codex).",
+            "taskIds": []
+          },
+          {
+            "additions": 30,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "opt-in criteria scaffold question + processing.",
+            "taskIds": []
+          },
+          {
+            "additions": 30,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/templates/criteria.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "bundled scaffold template (parses to 0 active criteria).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r3",
+          "task3",
+          "c0",
+          "c2"
+        ],
+        "summary": "Setup scaffold opt-in: the setup skill offers .flow/criteria.md only while absent, copies the bundled parser-verified template on accept, and leaves zero trace on decline; template documents the grammar with commented examples that parse to 0 active criteria.",
+        "taskIds": [
+          "fn-137-global-acceptance-criteria-object.3"
+        ],
+        "title": "Setup scaffolds it opt-in"
+      },
+      {
+        "files": [
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-136-structured-review-artifact-schema-in/pr-cognitive-aid/.write.lock",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-136 harness artifact exhaust (unrelated; swept with flow state).",
+            "taskIds": []
+          },
+          {
+            "additions": 2135,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-136-structured-review-artifact-schema-in/pr-cognitive-aid/fn-136-4a60819e-v4.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-136 harness artifact exhaust (unrelated; swept with flow state).",
+            "taskIds": []
+          },
+          {
+            "additions": 2196,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-136-structured-review-artifact-schema-in/pr-cognitive-aid/fn-136-5ec99c59-v7.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-136 harness artifact exhaust (unrelated; swept with flow state).",
+            "taskIds": []
+          },
+          {
+            "additions": 2135,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-136-structured-review-artifact-schema-in/pr-cognitive-aid/fn-136-63b8d041-v5.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-136 harness artifact exhaust (unrelated; swept with flow state).",
+            "taskIds": []
+          },
+          {
+            "additions": 2106,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-136-structured-review-artifact-schema-in/pr-cognitive-aid/fn-136-8546442e-v1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-136 harness artifact exhaust (unrelated; swept with flow state).",
+            "taskIds": []
+          },
+          {
+            "additions": 2135,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-136-structured-review-artifact-schema-in/pr-cognitive-aid/fn-136-d558cd0f-v6.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-136 harness artifact exhaust (unrelated; swept with flow state).",
+            "taskIds": []
+          },
+          {
+            "additions": 2121,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-136-structured-review-artifact-schema-in/pr-cognitive-aid/fn-136-f5e09a26-v3.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-136 harness artifact exhaust (unrelated; swept with flow state).",
+            "taskIds": []
+          },
+          {
+            "additions": 2107,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-136-structured-review-artifact-schema-in/pr-cognitive-aid/fn-136-fe3d96b4-v2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-136 harness artifact exhaust (unrelated; swept with flow state).",
+            "taskIds": []
+          },
+          {
+            "additions": 48,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 11,
+            "path": ".flow/specs/fn-137-global-acceptance-criteria-object.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/specs/fn-137-global-acceptance-criteria-object.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/tasks/fn-137-global-acceptance-criteria-object.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": ".flow/tasks/fn-137-global-acceptance-criteria-object.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-137-global-acceptance-criteria-object.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-137-global-acceptance-criteria-object.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 39,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Unreleased entry (user-outcome-first).",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "GLOSSARY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Global criterion (G-ID) entry beside R-ID.",
+            "taskIds": []
+          },
+          {
+            "additions": 98,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 79,
+            "path": "optimization/reached-path/setup-routing-evidence.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "supporting change for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "docs update for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 30,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "docs update for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/docs/memory-schema.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "docs update for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 31,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/review-findings.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "docs update for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/skills.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "docs update for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 18,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/spec-template.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "docs update for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/teams.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "docs update for the criteria object.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_prompt_text_pinned.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "supporting change for the criteria object.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R5",
+          "R4"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r5",
+          "r4",
+          "task4",
+          "c3",
+          "c4"
+        ],
+        "summary": "Docs + convergence: G-ID grammar documented beside the R-ID grammar (GLOSSARY, spec-template), receipts compliance field (review-findings, memory-schema, flowctl CLI reference), teams.md standing-criteria note, Unreleased CHANGELOG, full parallel suite + ruff gate green.",
+        "taskIds": [
+          "fn-137-global-acceptance-criteria-object.4"
+        ],
+        "title": "Docs and convergence"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 6,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "Boundaries held: no auditor fleet, no rule engine or scoring, no per-task application (the spec is the unit of compliance), no plan/work skill changes; criteria-less repos pay zero criteria content in assembled prompts.",
+        "taskIds": [],
+        "title": "Boundaries held"
+      },
+      {
+        "files": [],
+        "kind": "verify",
+        "ordinal": 7,
+        "rIds": [],
+        "sourceRefs": [
+          "spec",
+          "c3"
+        ],
+        "summary": "Per-task focused suites plus the full parallel suite (165 files, 3477 tests, 0 failures) and uvx ruff 0.16.0 clean; four per-task host reviews and the spec completion review all returned SHIP.",
+        "taskIds": [],
+        "title": "Full gate + reviews all SHIP"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Coverage",
+        "sourceRefs": [
+          "spec",
+          "task1",
+          "task2",
+          "task3",
+          "task4"
+        ],
+        "value": "All 4 tasks done with per-task host reviews SHIP; spec completion review SHIP across R1-R5."
+      },
+      {
+        "label": "Gate",
+        "sourceRefs": [
+          "task4",
+          "c3"
+        ],
+        "value": "Full parallel suite green (165 files, 3477 tests, 0 failures) and ruff 0.16.0 clean at the branch head."
+      },
+      {
+        "label": "Zero-cost-absent",
+        "sourceRefs": [
+          "r1",
+          "task1",
+          "c1"
+        ],
+        "value": "Zero-cost-absent proven by prompt-assembly inspection: without .flow/criteria.md the assembled completion-review prompt contains no criteria content."
+      }
+    ],
+    "thesis": "Standing, project-wide acceptance criteria become a first-class flow-next object: a user-owned .flow/criteria.md judged agentically by the existing completion review on every spec, with per-criterion compliance landing in ordinary review receipts - no auditor fleet, no rule engine."
+  },
+  "generatedAt": "2026-07-31T06:19:06Z",
+  "headSha": "5e7e39ef38ca55e44579be862eb1448e7c110dc2",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-137-global-acceptance-criteria-object"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "7a5f08f1142f6f2c4f6125459e012a690d3f32de..5e7e39ef38ca55e44579be862eb1448e7c110dc2"
+    },
+    {
+      "id": "task1",
+      "kind": "task",
+      "ref": "fn-137-global-acceptance-criteria-object.1"
+    },
+    {
+      "id": "task2",
+      "kind": "task",
+      "ref": "fn-137-global-acceptance-criteria-object.2"
+    },
+    {
+      "id": "task3",
+      "kind": "task",
+      "ref": "fn-137-global-acceptance-criteria-object.3"
+    },
+    {
+      "id": "task4",
+      "kind": "task",
+      "ref": "fn-137-global-acceptance-criteria-object.4"
+    },
+    {
+      "id": "r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "c0",
+      "kind": "commit",
+      "ref": "2319b7b8de5b480c84775062be3e7eeb8db544b5"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "273ab221ac3a65aec5f53f90c699c460fc382dab"
+    },
+    {
+      "id": "c2",
+      "kind": "commit",
+      "ref": "364fe43a98153f632979a4175f81152fdf299e92"
+    },
+    {
+      "id": "c3",
+      "kind": "commit",
+      "ref": "81fc86e9bcf4be8a64ebd870ae76d4c3db695423"
+    },
+    {
+      "id": "c4",
+      "kind": "commit",
+      "ref": "99b48fa865721ec5d397a147162c01d610b92469"
+    },
+    {
+      "id": "c5",
+      "kind": "commit",
+      "ref": "aab272f35905ad78a8ad075051191c6f8ad8ee44"
+    },
+    {
+      "id": "c6",
+      "kind": "commit",
+      "ref": "c4988fa7c0184dcbc70c4660a9362b1048189aa0"
+    }
+  ],
+  "specId": "fn-137-global-acceptance-criteria-object"
+}
