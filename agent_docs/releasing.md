@@ -111,7 +111,13 @@ understands the value.
 
 ### Notable updates (docs home)
 
-`plugins/flow-next/docs/README.md` § **Notable updates** is the GitHub docs entry point for behavior-affecting changes and new opt-in defaults — one line each plus how to enable, newest first. Append when a release introduces something a user (or agent reading the docs home) would otherwise miss. Do not dump the full CHANGELOG there; the section documents its own format inline.
+`plugins/flow-next/docs/README.md` § **Notable updates** is the GitHub docs entry point for behavior-affecting changes and new opt-in defaults - one line each plus how to enable, newest first. Append when a release introduces something a user (or agent reading the docs home) would otherwise miss. Do not dump the full CHANGELOG there; the section documents its own format inline.
+
+The flow-next.dev homepage carries a shorter rotating desk: one prominent latest
+update plus the three preceding notable releases, all visible at once. Do not
+turn it into a carousel or hide entries behind controls. On each behavior
+release, add the new outcome-first item at the front, remove the oldest homepage
+item, and keep the full history in the changelog.
 
 ## Re-sync local installs (dogfood)
 
