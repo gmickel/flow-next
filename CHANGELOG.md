@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.10.0] - 2026-07-31
 
 Teams can now write their standing, project-wide acceptance criteria down once
 and have every spec judged against them - no more relying on CLAUDE.md prose
@@ -40,6 +40,17 @@ or "no new dependency without a health check".
   criteria (G-ID grammar beside the R-ID rules), `review-findings.md` §
   Global-criteria compliance, `teams.md` § Standing criteria, `flowctl.md` §
   criteria.
+- **A misconfigured criteria file can never silently disable your standing
+  rules.** Sixteen cross-model review rounds hardened the input boundary: an
+  existing-but-invalid `.flow/criteria.md` (typo'd bullets in any Markdown
+  marker, zero/zero-padded or unicode-digit ids, duplicate ids, over-limit
+  files, broken symlinks, unreadable content) fails closed with a diagnostic
+  pointing at `flowctl criteria list` - before a review round is reserved -
+  while an absent or valid-but-empty file stays a silent, zero-token no-op.
+  Receipt-side, the reviewer's compliance section is strict: ambiguous or
+  contradictory output degrades the array to absent rather than ever
+  recording wrong compliance, and the criteria ids must exactly match the
+  configured set before anything attaches.
 
 Someone landing on the README now learns what Flow-Next does for them before
 they meet a single mechanism, and they see that it runs in real engineering
@@ -83,8 +94,6 @@ organisations inside the first screenful instead of two thirds of the way down.
   the mermaid diagram while the handful marking navigation links stay, and
   every relative link re-verified. Third-party quotations keep their authors'
   own punctuation.
-
-No plugin version bump: documentation only.
 
 ## [flow-next 3.9.0] - 2026-07-31
 
