@@ -4,66 +4,74 @@ All notable changes to the flow-next.
 
 ## [flow-next 3.9.0] - 2026-07-31
 
+Human reviewers can now follow a pull request as a deliberate journey through
+the change instead of rebuilding the story from file order. Logical steps
+explain their purpose, group the files that belong together, name deliberate
+non-changes, and attach evidence, while the independent review plan keeps human
+attention on the risky decisions.
+
 ### Added
 
-- **Make PR now persists a portable v1 change walkthrough.** The existing host
-  composes one bounded, grounded explanation; flowctl validates, stores,
-  selects, and renders it without another model or network call. Supported
-  current artifacts keep identity/currentness, provenance, ordered groups,
-  exact file membership, separate change/attention dimensions, file-level
-  R-ID/task links, deliberate non-changes, and verification aligned across
-  structured JSON, GitHub Markdown, and optional HTML. A maximum-normal
-  canonical fixture, SHA-256 metadata, high-resolution information-architecture
-  references, and an offline byte-pinned Flow Swarm vendoring contract now
-  define downstream compatibility.
+- **Pull requests now explain the change in the order a reviewer needs to
+  understand it.** Each source-grounded step carries its purpose, exact file
+  membership, R-ID/task links, deliberate non-changes, and aligned
+  verification. The risk-ranked review plan remains separate, so the journey
+  explains how the work fits together while the plan tells the human where
+  judgment matters. Under the hood, Make PR persists the walkthrough as a
+  head-bound portable v1 object and renders the same meaning through structured
+  JSON, GitHub Markdown, and optional HTML. A maximum-normal canonical fixture,
+  SHA-256 metadata, information-architecture references, and an offline
+  byte-pinned Flow Swarm contract define downstream compatibility.
 
-- **Structured review benchmarks now use a strict `<100 ms p95` ceiling.**
+- **The richer handover stays negligible beside the review itself.**
   Both the maximum-item findings parser and maximum-normal cognitive-aid
-  validation/render path run 30 warm measurements. This supersedes the original
-  50 ms target after a representative parallel-suite observation of 90.57 ms;
-  the cost is operationally negligible within the end-to-end workflow. The
-  fixture metadata and consumer contracts pin the exclusive bound.
+  validation/render path enforce a strict `<100 ms p95` ceiling over 30 warm
+  measurements. This supersedes the original 50 ms target after a representative
+  parallel-suite observation of 90.57 ms. Fixture metadata and consumer
+  contracts pin the exclusive bound.
 
-- **Current v1 HTML lenses no longer stale their own cognitive-aid input.**
-  Make PR now persists the head-bound structured object before optional HTML,
-  embeds a lossless script-safe semantic carrier for executable parity, and
-  keeps that current lens local-only so `HEAD` remains unchanged. Only a
-  visibly labeled legacy fallback may use the narrow artifact commit.
+- **Opening the optional HTML view no longer makes its review evidence stale.**
+  Make PR persists the head-bound structured object before optional HTML,
+  embeds a lossless script-safe semantic carrier, and keeps the current lens
+  local-only so `HEAD` remains unchanged. Only a visibly labeled legacy
+  fallback may use the narrow artifact commit.
 
-- **Review receipts now expose optional versioned structured findings.**
-  Plan, implementation, completion, and QA receipt writers preserve canonical
-  severity/confidence/classification/status values, durable finding and receipt
-  lineage, snapshot-bound optional anchors, deterministic ordering, and
-  immutable prior generations. Head-current selection rejects broken or
-  ambiguous chains; unsupported versions, unknown enums, unsafe/oversize data,
-  and unparseable reviewer prose fall back to the original receipt and prose
-  without raising or truncating. The portable consumer contract and its
-  separation from bug memory are documented; no extra model or network call is
-  introduced.
+- **Review findings keep their identity across fix rounds.** A reviewer or
+  downstream tool can distinguish current, resolved, and superseded findings
+  and trace each one back to the review that raised it. Plan, implementation,
+  completion, and QA receipts may carry optional versioned structured findings
+  with canonical severity, confidence, classification, status, lineage, and
+  optional snapshot-bound anchors.
+  Head-current selection rejects broken or ambiguous chains; unsupported
+  versions, unknown enums, unsafe or oversized data, and unparseable reviewer
+  prose fall back to the original receipt and prose without raising or
+  truncating. No extra model or network call is introduced.
 
 ### Fixed
 
-- **RepoPrompt CE reviews now consume Context Builder's direct result.**
-  Review setup fences keep substantive instructions self-contained and reject
-  blank input before RepoPrompt runs. CE invokes the named `context_builder`
-  tool once with `response_type=review`, validates its direct prompt, formatted
-  selection, file/token counts, context/chat identities, and review response,
-  then feeds that response into the normal Flow verdict/receipt path. It no
-  longer queries an unprojected visible tab, augments selection, or sends a
-  second initial chat. Discontinued Classic remains an isolated final fallback
-  using its published-tab selection/chat workflow; CE failures never downgrade.
-  Complete review contracts now travel through a durable instructions file,
-  setup/cap failures finalize their reserved review round, and CE fix-loop or
-  optional-pass continuations bind the returned canonical context and chat
-  identities without treating the direct context identifier as Classic
-  visible-tab projection.
+- **RepoPrompt CE reviews now start and continue in the context CE actually
+  returns.** Reviewers get the normal Flow verdict, receipt, and same-context
+  fix loop without a hidden second setup conversation or dependency on a
+  Classic-style visible tab. Under the hood, one `context_builder` call with
+  `response_type=review` supplies the prompt, formatted selection, file/token
+  counts, context/chat identities, and response. Setup validates that direct
+  result, rejects blank input, and feeds the response into the normal review
+  path. Discontinued Classic remains an isolated final fallback; CE failures
+  never downgrade. Setup/cap failures finalize their reserved round, and later
+  passes bind the returned canonical context and chat identities.
 
 ## [flow-next 3.8.0] - 2026-07-30
 
+People reviewing interview-authored specs can now tell which acceptance
+criteria came from a human and which ones the agent inferred. The same
+provenance signal already available after Capture now survives the PO and
+technical interview journey, making grounded claims easy to separate from
+guesses before implementation starts.
+
 ### Changed
 
-- **`/flow-next:interview` now tags the acceptance criteria it writes.** Capture
-  has always stamped provenance on every criterion (`[user]` / `[paraphrase]` /
+- **Interview-authored criteria now say where they came from.** Capture has
+  always stamped provenance on every criterion (`[user]` / `[paraphrase]` /
   `[inferred]` / `[strategy:<track>]`), but interview emitted nothing - so the
   grounded-vs-guessed tally and the targeted "re-interview only the `[inferred]`
   items" pattern silently returned empty on any interview-authored spec, which is
@@ -94,9 +102,13 @@ All notable changes to the flow-next.
 
 ## [flow-next 3.7.0] - 2026-07-29
 
+Teams can now shape the spec around their own domain and have Interview fill
+those project-specific sections without losing or silently ignoring them. A
+scope marker makes ownership explicit, while unmarked sections stay frozen.
+
 ### Changed
 
-- **Project-added spec sections are now first-class to the interview passes.**
+- **Interview now fills the spec sections your project adds.**
   `flowctl scope write-policy` enumerates the seven canonical sections only, so
   a section a project added via its own repo-root `SPEC.md` scaffold appeared in
   neither its `writable` nor its `preserved` list. The interview prose asked the
@@ -133,10 +145,15 @@ All notable changes to the flow-next.
 
 ## [flow-next 3.6.1] - 2026-07-29
 
+When Flow and an external tracker disagree about status, the conflict policy
+the team chose now decides the outcome. Sync no longer stalls because the
+setting was documented but ignored, and impossible state transitions remain
+visible for human resolution.
+
 ### Fixed
 
-- **Tracker status deadlocks now honor `tracker.conflictTiebreak`.** The shared
-  deterministic policy consumes `always-ask`, `flow-wins`, and `tracker-wins`
+- **Tracker status conflicts now follow the team's chosen policy.** The shared
+  deterministic path consumes `always-ask`, `flow-wins`, and `tracker-wins`
   across direct status and lifecycle-facade calls. Flow wins through the
   existing provider-neutral write path; a terminal tracker wins through the
   existing local fold and `pulled` receipt. The unrepresentable mirror — a
@@ -147,9 +164,15 @@ All notable changes to the flow-next.
 
 ## [flow-next 3.6.0] - 2026-07-29
 
+Tracker updates now behave consistently across GitHub, GitLab, Linear, and Jira,
+including retries, dependency links, status transitions, and partial failures.
+This release publishes that already-shipped behavior under the correct minor
+version; there is no additional runtime change from 3.5.2.
+
 ### Changed
 
-- **Tracker determinism is now published under the correct minor version.**
+- **The reliable cross-provider tracker path now has the correct release
+  signal.**
   The fn-139/fn-140/fn-141 batch replaces tracker-sync's provider mutation
   prose with the deterministic `flowctl tracker` wire, lifecycle, status,
   relation, body-sync, and facade layers across GitHub, GitLab, Linear, and

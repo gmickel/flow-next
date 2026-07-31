@@ -110,6 +110,15 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 ## Docs site
 
 - A public docs site exists at **`https://flow-next.dev`** (source repo `~/work/flow-next.dev`). User-facing changes — behavior, commands, setup, public vocabulary, README, release notes — should be reflected there in the same workstream. **The detailed update/release workflow for the docs site, and the maintainer's other downstream/narrative properties, live in the maintainer's *private* config — not this committed file** (they reference maintainer-local repos/paths that other contributors don't have).
+- **Both changelogs are user-facing release surfaces.** `CHANGELOG.md` becomes the
+  GitHub release body; flow-next.dev is the shorter public story. For any feature
+  release, write in this order: **user outcome -> changed workflow or review
+  journey -> control/evidence -> implementation details**. Lead with why the
+  change matters to the person using or reviewing Flow-Next. Commands, internal
+  type names, schema fields, fixtures, hashes, and benchmarks belong after that
+  story. Hard rejection test: if a reader sees machinery before they can explain
+  what became easier, safer, faster, or newly possible, rewrite the entry. Full
+  rules and examples: [`agent_docs/releasing.md`](agent_docs/releasing.md).
 
 ## Where to look
 
