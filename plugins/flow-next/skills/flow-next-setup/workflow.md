@@ -70,7 +70,7 @@ Use flowctl init (idempotent - safe to re-run, handles upgrades):
 This creates/upgrades:
 - `.flow/` directory structure (specs/, tasks/, memory/)
 - `meta.json` with schema version
-- `config.json` with defaults (merges new keys on upgrade)
+- `config.json` with defaults (merges new keys on upgrade; stamps a `$schema` key pointing at the published flow-config JSON Schema so editors validate/autocomplete - inert string, never fetched)
 
 If the repo still has a pre-1.0 `.flow/epics/` layout, port it by hand before continuing (see `.flow/usage.md` "Pre-1.0 layout porting").
 

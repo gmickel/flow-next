@@ -22,7 +22,9 @@ import flowctl  # noqa: E402
 from flowctl_tracker.resolved_cache import SCOPES  # noqa: E402
 from gen_flow_config_schema import _default_leaves  # noqa: E402
 
-SCHEMA_URL = "https://flow-next.dev/schema/flow-config.schema.json"
+# fn-138.3: the ONE flowctl constant carries the published URL; tests
+# reference it rather than re-embedding the string.
+SCHEMA_URL = flowctl.FLOW_CONFIG_SCHEMA_URL
 
 # (b) Annotated allowlist: dotted keys the schema declares that have NO
 # get_default_config() leaf. Union semantics with (a) - a key may move
