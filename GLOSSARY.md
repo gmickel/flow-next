@@ -48,7 +48,7 @@ Re-reading the spec, the task, and `git log` since branch base before each task 
 
 ## Cross-model review
 
-A different model reviews the artefact produced by the first model. Applied at every handover. Backends: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor `cursor-agent` CLI (cursor). The disagreement surface between writing model and reviewing model is where the gaps live.
+A different model reviews the artefact produced by the first model. Applied at every handover. Backends: RepoPrompt (rp - eligibility-probed, macOS/CLI-gated), Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor `cursor-agent` CLI (cursor), and host-native (host - a fresh read-only subagent pinned to a different model family, no external CLI; fn-123). The disagreement surface between writing model and reviewing model is where the gaps live.
 
 ## Feature map
 
@@ -60,9 +60,15 @@ Optional scout output field listing feature slices from the feature map that ove
 
 ## Receipt
 
-A review-layer JSON artefact that gates workflow state transitions. It carries a verdict (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`), confidence and classification evidence, and may carry the optional versioned [`findings`](plugins/flow-next/docs/review-findings.md) projection. The receipt and original reviewer prose remain authoritative handover evidence when that additive projection is absent, stale, invalid, or unsupported. A Green receipt is the gate-layer counterpart, not a review-layer receipt.
+A review-layer JSON artefact that gates workflow state transitions. It carries a verdict (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`), confidence and classification evidence, and may carry the optional versioned [`findings`](plugins/flow-next/docs/review-findings.md) projection. The receipt and original reviewer prose remain authoritative handover evidence when that additive projection is absent, stale, invalid, or unsupported. A Green receipt is the gate-layer counterpart, not a review-layer receipt; the sidecar bookkeeping that gates transitions is the Attempts ledger.
 
-_Relates to_: Green receipt
+_Relates to_: Green receipt, Attempts ledger
+
+## Attempts ledger
+
+The `review_attempts[]` array on the spec sidecar - one row per finalized review reservation (backend, outcome, verdict, output hash, and best-effort the `head_sha` the review observed). The authoritative record of review state: `plan_review_status` / `completion_review_status` are a denormalized read model derived from it, and when the two diverge the ledger wins (issue #279). In-process plan/impl finalize writes attempt + status + SHIP cap reset as one atomic sidecar write; completion review deliberately orders receipt persistence before terminal status (recovery contract), so there the pair is two writes with the ledger authoritative. Full contract: `docs/architecture.md` § Review bookkeeping.
+
+_Relates to_: Receipt, Verdict
 
 ## Structured finding
 
@@ -92,7 +98,7 @@ The strict cross-model review tier flow-next runs by default. References John Ca
 
 ## Triage skip
 
-A deterministic whitelist pre-check that returns `SHIP` without invoking a review backend, for trivial diffs: lockfile-only / docs-only / release-chore / generated-file-only. `flowctl triage-skip` is the helper. On by default in Ralph mode; opt-out via `--no-triage` or `FLOW_RALPH_NO_TRIAGE=1`.
+A deterministic whitelist pre-check that returns `SHIP` without invoking a review backend, for trivial diffs: lockfile-only / docs-only / release-chore / generated-file-only. `flowctl triage-skip` is the helper. Runs by default on every impl-review invocation (any mode); opt-out via `--no-triage` or `FLOW_RALPH_NO_TRIAGE=1`.
 
 ## PR-as-cognitive-aid
 
@@ -124,7 +130,13 @@ The per-tick **factory-metrics substrate** backlog mode writes (fn-68) via `flow
 
 ## Land
 
-The cadence-tick ship loop (`/flow-next:land`): one tick discovers the open PRs the build loop authored (spec `branch_name` match AND the make-pr breadcrumb — both signals required), walks each through the gate tree (CI tri-state over ALL checks, patience window anchored to the last push, resolve-pr convergence, `land.reviewSignal`), and takes at most one action class per PR — CI fix, resolve dispatch, mechanical rebase, or the gated explicit merge (`gh pr merge --squash --match-head-commit`, never `--auto`) plus the post-merge tail (spec close → tracker touchpoint → release-follow). The one confined exception to the no-auto-merge rule; `/loop`-shaped where pilot is `/goal`-shaped. Ends with a terminal `LAND_VERDICT` line.
+The cadence-tick ship loop (`/flow-next:land`): one tick discovers the open PRs the build loop authored (spec `branch_name` match AND the structural authorship probe — see Machine marker; both signals required), walks each through the gate tree (CI tri-state over ALL checks, patience window anchored to the last push, resolve-pr convergence, `land.reviewSignal`), and takes at most one action class per PR — CI fix, resolve dispatch, mechanical rebase, or the gated explicit merge (`gh pr merge --squash --match-head-commit`, never `--auto`) plus the post-merge tail (spec close → tracker touchpoint → release-follow). The one confined exception to the no-auto-merge rule; `/loop`-shaped where pilot is `/goal`-shaped. Ends with a terminal `LAND_VERDICT` line.
+
+## Machine marker
+
+The invisible HTML comment `<!-- flow-next:make-pr spec=<spec-id> base=<base-ref> -->` that `/flow-next:make-pr` emits directly under the visible footer breadcrumb (workflow §2.13b), and that land's authorship probe keys on: the marker must be the final structural line of the PR body with a spec-bound `Generated by ...` breadcrumb directly above it. Prose that merely mentions the token can never form the comment node, so a hand-written PR discussing flow-next never classifies as build-loop-authored (issue #274, 3.11.0). Pre-marker PRs fall back to an anchored single-line match of the complete dated footer. Verbatim forgery of the canonical footer is the documented boundary; the escalation path is attested provenance (classifying on the identity that opened the PR).
+
+_Relates to_: Land, PR-as-cognitive-aid
 
 ## QA stage (`pipeline.qa`)
 
@@ -144,7 +156,7 @@ The R-ID invariant. Once a spec has been reviewed once, R5 means the same thing 
 
 ## flow-swarm
 
-An in-progress companion product to flow-next that reads `.flow/specs/` directly to coordinate parallel agents across worktrees and consume `/flow-next:make-pr` output. The on-disk layout flow-swarm expects is what fn-43 (epic->spec rename) produces. Reference target for the v1.0 migration carrot.
+An in-progress companion product to flow-next that reads `.flow/specs/` directly to coordinate parallel agents across worktrees and consume `/flow-next:make-pr` output. The stable on-disk layout it builds against shipped with 1.0 (fn-43), and the portable contracts it renders from - structured findings (fn-136), criteria compliance (fn-137), the published config schema (fn-138) - are receipts, never Flow-Next internals. Still to migrate on the flow-swarm side: the pre-1.0 `epics` JSON key.
 
 ## Tracker
 

@@ -91,7 +91,7 @@ Driver condition examples:
 
 - Asking the user anything in the tick path. Land is autonomous; ambiguity maps to `NEEDS_HUMAN`.
 - Authoring PRs, choosing/planning/implementing specs — that is the build loop (pilot). Land only babysits existing PRs.
-- Acting on a PR without BOTH authorship signals (branch matches a spec's `branch_name` AND the make-pr breadcrumb in the PR body). Branch-only matches are reported `NEEDS_HUMAN`, never mutated.
+- Acting on a PR without BOTH authorship signals (branch matches a spec's `branch_name` AND the structural authorship probe - the make-pr machine marker in footer position, with the anchored dated-footer fallback for pre-marker PRs; workflow.md Phase 1). Branch-only matches are reported `NEEDS_HUMAN`, never mutated.
 - `gh pr merge --auto`, merge-queue enrollment, or any merge without `--match-head-commit`.
 - Hand-resolving merge-conflict hunks. The conflict path is mechanical rebase only; any conflict hunk aborts → `BLOCKED`.
 - Inventing release steps. Release-follow runs deterministic, non-interactive commands from the project's discovered release docs ONLY, or stops at merge.

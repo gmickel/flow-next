@@ -1,6 +1,6 @@
 ---
 name: flow-next
-last_updated: 2026-06-09
+last_updated: 2026-08-01
 generator: flow-next-strategy
 ---
 
@@ -12,7 +12,7 @@ AI agent workflows drift, lose context, and produce uneven quality at scale. Exi
 
 ## Our approach
 
-Spec-driven development with re-anchoring, cross-model review, and zero external dependencies. Six named handover objects between idea and merge — each reviewable on its own, cross-model-verified, and frozen at handover. **Specs are single durable documents that evolve through layers** — `.flow/specs/<id>.md` is the source of truth for goal, architecture, R-IDs, and acceptance, vs alternative split-file approaches (e.g., Kiro's `requirements.md` / `design.md` / `tasks.md`). Skill-driven plugin layered on `flowctl` Python plumbing; the host agent (Claude Code / Codex / Droid / OpenCode) IS the intelligence, and flowctl provides only thin atomic helpers. Everything lives in the repo under `.flow/` — no external services, no global config, no SaaS. Uninstall: delete the directory.
+Spec-driven development with re-anchoring, cross-model review, and zero external dependencies. Six named handover objects between idea and merge — each reviewable on its own, cross-model-verified, and frozen at handover. **Specs are single durable documents that evolve through layers** — `.flow/specs/<id>.md` is the source of truth for goal, architecture, R-IDs, and acceptance, vs alternative split-file approaches (e.g., Kiro's `requirements.md` / `design.md` / `tasks.md`). Skill-driven plugin layered on `flowctl` Python plumbing; the host agent IS the intelligence (first-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build; community port for OpenCode - canonical sentence in `plugins/flow-next/docs/platforms.md`), and flowctl provides only thin atomic helpers. Everything lives in the repo under `.flow/` — no external services, no global config, no SaaS. Uninstall: delete the directory.
 
 Opt-in convenience skills (e.g. `/flow-next:map` wrapping `clawpatch`) may carry their own runtime prerequisites, but `flowctl` core never imports or requires them — the zero-dep contract holds for the base install; opt-in skills add nothing to the uninstall path beyond a single self-contained directory.
 
@@ -23,7 +23,7 @@ Standing rules that decide day-to-day build questions. Each earned its place thr
 - **The artifact is the contract.** Nothing between the plan and an executor restates content that lives in a file - prompts carry pointers and rails; every executor (native worker, `delegate:codex`, raw bridge, scout, runner) reads the spec/task files as its brief. Quality budget therefore concentrates at plan time, where the session model writes the spec; a thin artifact is refused downstream (the worker's thin-task valve), never compensated for. *(Anchor: fn-103 / decision record `composed-brief-deleted-path-handoff-2026-07-19` - an 8-run eval deleted the composed delegation brief.)*
 - **flowctl grows only under burden of proof.** flowctl is thin atomic plumbing - hashes, path membership, schema validation, receipts, git mechanics. A subcommand is added only when the operation involves zero judgment and must work with no agent in the loop; anything that reads, weighs, or decides belongs to the host agent. Deterministic proxies for judgment questions are banned outright *(anchor: `plan-sync-skip-gate-not-viable-2026-07-03`)*; the periodic audit that keeps this honest is the fn-101 pattern - classify every subcommand keep / leakage / vestigial, burden of proof on keeping, and on adding.
 - **Remember the bitter lesson.** Do not build scaffolding around a model's current weaknesses - capability grows and the scaffolding rots into cost (the composed brief was exactly this). Before adding a compensating mechanism, try stating the bar in one general sentence; before keeping one, eval it against its absence with pre-registered bars and delete on evidence. Deterministic machinery is reserved for what models should never own regardless of capability: unattended-trust rails (receipts, rollback, guard shapes, schemas), not quality compensation.
-- **Receipts are the portable product boundary.** Downstream tools consume versioned, additive receipt fields with explicit identity, snapshot binding, lineage, bounds, and labeled fallback. They never depend on Flow-Next's parser or skill internals, and they never turn stale or ambiguous evidence into current state.
+- **Receipts are the portable product boundary.** Downstream tools consume versioned, additive receipt fields with explicit identity, snapshot binding, lineage, bounds, and labeled fallback. They never depend on Flow-Next's parser or skill internals, and they never turn stale or ambiguous evidence into current state. *(Anchors: fn-136 structured findings 3.9.0; fn-137 criteria compliance receipts 3.10.0; fn-138 published config schema 3.12.0 - the principle graduated from aspiration to receipted rule.)*
 
 ## Who it's for
 
@@ -31,29 +31,33 @@ Solo developers running multi-agent loops who need re-anchoring + receipts to ke
 
 ## Key metrics
 
-- **Smoke-test surface and parity.** Number of smoke suites × OS matrix (currently 7 × Linux/macOS/Windows). Cross-platform parity with Codex / Droid / OpenCode is non-negotiable.
-- **Slash-command count and density.** Each command is a discrete handover. v0.42.0 ships 18; v1.0 holds the line on count while renaming `epic-review` → `spec-completion-review`.
-- **Community-port adoption.** FlowFactory (Droid), flow-next-opencode (OpenCode) — independent ports validate the architecture without the maintainer.
+- **Smoke-test surface and parity.** Number of smoke suites × OS matrix (currently 10 × Linux/macOS/Windows, plus Cursor-install, python-probe, and Windows-launcher jobs). Cross-platform parity across Codex / Droid / Cursor / Grok Build (and the OpenCode port) is non-negotiable.
+- **Slash-command count and density.** Each command is a discrete handover. 23 commands / 28 skills / 21 subagents at 3.12.0; additions must justify a new handover, not a convenience alias (the retired `epic-review` alias was removed entirely in 3.3.1).
+- **Community-port adoption.** flow-next-opencode (OpenCode) remains the independent-port validation signal; FlowFactory predates native first-class Droid support and is historical evidence, not the current Droid story.
 - **Spec-driven adoption signal.** Inbound traffic to `docs/teams.md` and the AI-x-SDLC-Starter-Kit cross-link as proxy for team adoption.
 - **Idea-to-merge wall-clock.** Time from `/flow-next:capture` to `/flow-next:make-pr` body landing on a draft PR. Worth measuring as the system matures.
 
 ## Tracks
 
-### v1.0 vocabulary stability
+### v1.0 vocabulary stability (SHIPPED)
 
-The fn-43 epic→spec rename + alias deprecation timeline. The single highest-leverage cleanup before flow-next commits to a 1.0 contract. Backward compat for 0.x users is non-negotiable: aliases live until 2.0; opt-in migration with a flow-swarm carrot; never silent.
+Complete. fn-43 (epic→spec rename) shipped in 1.0.0 (2026-05-09) with the full alias layer; the aliases outlived the original "until 2.0" plan and were removed telemetry-driven in 3.0.0 (fn-111) along with the pre-1.0 migration machinery. Kept as history because the contract it established - canonical vocabulary, never-silent migration - still governs renames.
 
 ### Spec-driven team patterns
 
-`docs/teams.md` (handover objects, Spec-as-PR, parallel work from one spec, R-ID frozen-at-handover, symmetric interview, adoption ladder). Cross-linked from the AI-x-SDLC-Starter-Kit methodology guide. Establishes flow-next's identity as a methodology, not just a tool.
+`docs/teams.md` (handover objects, Spec-as-PR, parallel work from one spec, R-ID frozen-at-handover, symmetric interview, adoption ladder, and since 3.10.0 standing project-wide criteria: a user-owned `.flow/criteria.md` of G-IDs judged by the completion review on every spec). Cross-linked from the AI-x-SDLC-Starter-Kit methodology guide. Establishes flow-next's identity as a methodology, not just a tool.
 
 ### Ralph autonomous mode
 
-The autonomy track — now a three-loop suite (1.13.0/1.14.0). **Pilot + land are the default path**: pilot builds (ready spec → plan → reviews → work → `[opt-in qa]` → draft PR, host `/loop`/`/goal` drives the ticks), land ships (draft PR → CI-fixed → review-converged → gated merge → spec close → release-follow); run concurrently in separate clones they form the full assembly line, with the readiness gate / tracker board as the consent boundary. An **optional live-app QA stage** (`pipeline.qa`, default off, fn-72) sits between work and make-pr: with it on, pilot drives the running build like a real user at all-tasks-done and surfaces runtime/UI breakage into the draft PR — autonomy-safe (never prompts, never hard-blocks; `NEEDS_WORK` still advances), and it **augments, never replaces** CI/staging/manual QA. An **opt-in backlog mode** (`pilot.autonomy=backlog`, default off, fn-68) widens pilot from "one already-ready spec" to **standing management of the whole open backlog** — per tick it enumerates flow specs + tracker issues, triages the top dep-ordered item, and either advances it or surfaces a precise async question; this pushes the consent boundary from *before* the loop to *inside the loop, on block*, while holding the line that backlog mode **never authors a spec** (a thin/missing spec is a surfaced "needs capture/interview" gap), **never promotes** (the human's board act), and **never merges** (land stays human-gated). Readiness stays the human's explicit signal (ready gate / board state), never an agent-inferred score. The per-tick **decision log** (`flowctl pilot-log`) is the factory-efficiency readout and the self-improvement substrate. Ralph remains the hardened harness for fully planned specs: fresh session per iteration, hook-enforced guardrails, receipts on disk — for runs that outlast a session. Quality discipline is invariant across all: multi-model review at every handover, don't-thrash reflexes (two-strike unready / auto-block / bounded CI fixes), evidence over narration, surface-don't-force. Differentiator from "ralph-wiggum"-style autonomous loops that run open-loop without quality gates. The cloud-orchestration role (scheduler, hosted environments, multi-agent-at-scale, the production monitor→triage loop) is **mergefoundry's**, not flow-next's — fn-68 is the governed, in-repo per-tick conductor such a control plane invokes. (Track name kept for spec-tag stability; it covers the whole loop suite.)
+The autonomy track — a three-loop suite (pilot 1.13.0, land 1.14.0, Ralph fully opt-in with zero default hooks since 3.0.0/fn-114; land gained the structural authorship marker and the FLOW_PR_CREATE_CMD identity seam in 3.11.0). **Pilot + land are the default path**: pilot builds (ready spec → plan → reviews → work → `[opt-in qa]` → draft PR, host `/loop`/`/goal` drives the ticks), land ships (draft PR → CI-fixed → review-converged → gated merge → spec close → release-follow); run concurrently in separate clones they form the full assembly line, with the readiness gate / tracker board as the consent boundary. An **optional live-app QA stage** (`pipeline.qa`, default off, fn-72) sits between work and make-pr: with it on, pilot drives the running build like a real user at all-tasks-done and surfaces runtime/UI breakage into the draft PR — autonomy-safe (never prompts, never hard-blocks; `NEEDS_WORK` still advances), and it **augments, never replaces** CI/staging/manual QA. An **opt-in backlog mode** (`pilot.autonomy=backlog`, default off, fn-68) widens pilot from "one already-ready spec" to **standing management of the whole open backlog** — per tick it enumerates flow specs + tracker issues, triages the top dep-ordered item, and either advances it or surfaces a precise async question; this pushes the consent boundary from *before* the loop to *inside the loop, on block*, while holding the line that backlog mode **never authors a spec** (a thin/missing spec is a surfaced "needs capture/interview" gap), **never promotes** (the human's board act), and **never merges** (land stays human-gated). Readiness stays the human's explicit signal (ready gate / board state), never an agent-inferred score. The per-tick **decision log** (`flowctl pilot-log`) is the factory-efficiency readout and the self-improvement substrate. Ralph remains the hardened harness for fully planned specs: fresh session per iteration, hook-enforced guardrails, receipts on disk — for runs that outlast a session. Quality discipline is invariant across all: multi-model review at every handover, don't-thrash reflexes (two-strike unready / auto-block / bounded CI fixes), evidence over narration, surface-don't-force. Differentiator from "ralph-wiggum"-style autonomous loops that run open-loop without quality gates. The cloud-orchestration role (scheduler, hosted environments, multi-agent-at-scale, the production monitor→triage loop) is **mergefoundry's**, not flow-next's — fn-68 is the governed, in-repo per-tick conductor such a control plane invokes. (Track name kept for spec-tag stability; it covers the whole loop suite.)
 
-### flow-swarm preparation
+### flow-swarm preparation (contract pillars SHIPPED)
 
-The on-disk `.flow/specs/` layout that flow-swarm reads natively, plus portable receipt/artifact contracts that let it render review state without importing Flow-Next internals. Structured review findings preserve durable IDs, snapshot-bound anchors, and explicit currentness while legacy prose remains a safe fallback. Coordination with flow-swarm timing remains downstream product work; Flow-Next owns the stable handover objects.
+The portable-contract surface flow-swarm consumes without importing Flow-Next internals is now shipped: structured review findings with durable IDs, snapshot-bound anchors, and explicit currentness (fn-136, 3.9.0); per-criterion compliance in ordinary receipts (fn-137, 3.10.0); and a published JSON Schema for the full config surface at flow-next.dev/schema/ (fn-138, 3.12.0). Legacy prose remains a safe labeled fallback throughout. Open coordination fact: flow-swarm still reads the pre-1.0 `epics` JSON key and forwards `--epic` flags (flagged at 3.0.0) and must migrate to the canonical spec surface. Coordination timing remains downstream product work; Flow-Next owns the stable handover objects.
+
+### Tracker determinism
+
+The fn-139-141 batch (3.5.2-3.6.1): the four-provider tracker bridge's repeatable machinery - auth boundaries, provider selection, pagination, create-if-unlinked, status transitions, relations, PR links, comment-marker dedup, locks, one aggregate receipt - moved from skill prose into the deterministic `flowctl_tracker/` package, deleting four growing per-provider API recipes and cutting reached-path prose ~70%. Every semantic judgment (discovery, three-way body conflicts, lifecycle-comment content, structured recovery) stays in the host; the facade supersedes fn-57 R3's prohibition on tracker mutations in flowctl because the mutations carry zero judgment. The template for future "prose that grew into plumbing" extractions.
 
 ### TUI
 
@@ -61,7 +65,7 @@ The on-disk `.flow/specs/` layout that flow-swarm reads natively, plus portable 
 
 ### Cross-platform parity
 
-First-class on Claude Code + OpenAI Codex + Factory Droid. Community port for OpenCode. Canonical skill files use Claude-native tool names; `sync-codex.sh` rewrites for the Codex mirror. Single source of truth.
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor (3.3.0), and xAI Grok Build (3.4.0); community port for OpenCode (canonical roster sentence: `plugins/flow-next/docs/platforms.md`). Canonical skill files use Claude-native tool names; `sync-codex.sh` rewrites for the Codex mirror; Cursor/Droid/Grok consume canonical files as-is, so Claude-only references need portable fallbacks. What parity means mechanically: the fn-121 plugin-vs-copy setup modes and the fn-139 tracker-manifest install-integrity contract. Single source of truth.
 
 ### Self-improving through normal work
 
@@ -69,8 +73,9 @@ The system compounds as a side-effect of normal use — memory accretes from rev
 
 ## Milestones
 
-- **2026-Q3 — flow-next 1.0.0.** fn-43 ships; alias layer covers all 0.x callers; flow-swarm gains a stable `.flow/` contract to build against.
-- **TBD — flow-swarm v1.** Reads `.flow/specs/` directly; coordinates parallel agents across worktrees; consumes flow-next's PR-as-cognitive-aid output.
+- **DONE 2026-05-09 — flow-next 1.0.0** (shipped early, Q2). fn-43 + alias layer; the stable `.flow/` contract flow-swarm needed. Since then: 2.0.0 (2026-06-12, render lenses), 3.0.0 (2026-07-21, alias removal + Ralph opt-in + dead-surface sweep), 3.12.0 (2026-07-31, the fn-136/137/138 portable-contract series complete).
+- **Next — flow-swarm contract consumption.** flow-swarm migrates off the `epics` key and renders structured findings + criteria compliance from receipts; first end-to-end swarm-driven pipeline run against a published-schema config.
+- **TBD — flow-swarm v1.** Reads `.flow/specs/` directly; coordinates parallel agents across worktrees; consumes the PR-as-cognitive-aid walkthrough (the portable contract for it shipped in fn-136).
 - **TBD — Spec-driven team adoption case study.** First public team writeup using the methodology guide. Validates the framing externally.
 
 ## Not working on
