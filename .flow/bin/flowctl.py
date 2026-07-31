@@ -5814,11 +5814,6 @@ _REVIEW_CRITERIA_HEADING_RE = re.compile(
 _REVIEW_CRITERIA_LINE_RE = re.compile(
     r"^G(\d+):\s*(met|violated|n/a)\s*(?:-\s*(.*))?$"
 )
-# Looks like a criterion record (a G-ID prefix, optionally bolded) without
-# satisfying the full record grammar above. Such lines are ambiguous reviewer
-# output (e.g. `G1: pass - ...`), not ignorable prose - the whole projection
-# degrades to absent rather than silently dropping them.
-_REVIEW_CRITERIA_LOOKSLIKE_RE = re.compile(r"^\**G\d+\**\s*:")
 _REVIEW_CRITERIA_MAX_ENTRIES = 100
 _REVIEW_CRITERIA_MAX_NOTE = 400
 
@@ -5828,9 +5823,13 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
 
     Deterministic projection of completion-review output (fn-137.2). Uses the
     LAST matching heading (mirrors the tally-block precedent: the real section
-    follows any quoted prompt text). Unparseable, duplicate-id, oversized, or
-    G-ID-looking-but-malformed content returns None - degrade-to-absent,
-    never an error.
+    follows any quoted prompt text). The section is machine-mandated output
+    with an exact grammar, so ANY non-blank line inside it that is not a valid
+    record (after stripping a plain bullet marker) is ambiguity and returns
+    None - as do duplicate ids and oversized content. Degrade-to-absent,
+    never an error; this subsumes every Markdown-prefix variant (ordered
+    lists, blockquotes, exotic bullets) generically instead of enumerating
+    them.
     """
     try:
         if not isinstance(output, str) or not output:
@@ -5848,13 +5847,15 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
             stripped = line.strip()
             if re.match(r"^#{1,6}\s", stripped):
                 break
+            if not stripped:
+                continue
             if stripped.startswith(("- ", "* ", "+ ")):
                 stripped = stripped[2:].strip()
             m = _REVIEW_CRITERIA_LINE_RE.match(stripped)
             if not m:
-                if _REVIEW_CRITERIA_LOOKSLIKE_RE.match(stripped):
-                    return None
-                continue
+                # Strict section: any non-blank, non-record line is ambiguous
+                # reviewer output -> whole projection degrades to absent.
+                return None
             cid = f"G{m.group(1)}"
             if cid in seen:
                 return None

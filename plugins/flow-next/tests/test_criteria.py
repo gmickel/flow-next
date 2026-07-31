@@ -425,7 +425,9 @@ class TestParseReviewCriteria(unittest.TestCase):
         text = "## Global criteria\n\n**G1**: met - ok\n"
         self.assertIsNone(flowctl.parse_review_criteria(text))
 
-    def test_plain_prose_line_amid_valid_records_still_parses(self) -> None:
+    def test_plain_prose_line_amid_valid_records_degrades(self) -> None:
+        # Strict-section contract (PR #275 round 12): ANY non-blank non-record
+        # line inside the section is ambiguity -> whole projection absent.
         text = (
             "## Global criteria\n"
             "\n"
@@ -433,13 +435,7 @@ class TestParseReviewCriteria(unittest.TestCase):
             "All criteria were checked against the diff.\n"
             "G2: n/a - no UI\n"
         )
-        self.assertEqual(
-            flowctl.parse_review_criteria(text),
-            [
-                {"id": "G1", "status": "met", "note": "ok"},
-                {"id": "G2", "status": "n/a", "note": "no UI"},
-            ],
-        )
+        self.assertIsNone(flowctl.parse_review_criteria(text))
 
     def test_heading_then_immediate_next_heading(self) -> None:
         text = "## Global criteria\n## Gaps Found\n"
@@ -934,3 +930,20 @@ class TestReceiptPlusBullet(unittest.TestCase):
         text = "## Global criteria\n+ G1: met - fine\n"
         out = flowctl.parse_review_criteria(text)
         self.assertEqual([c["id"] for c in out], ["G1"])
+
+
+class TestReceiptStrictSection(unittest.TestCase):
+    """Round 12: any non-record line in the section degrades - generic, no prefix enumeration."""
+
+    def test_ordered_list_contradiction_degrades(self):
+        text = "## Global criteria\nG1: met - ok\n1. G1: violated - actually failed\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_blockquote_contradiction_degrades(self):
+        text = "## Global criteria\nG1: met - ok\n> G1: violated - actually failed\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_blank_lines_still_fine(self):
+        text = "## Global criteria\n\nG1: met - ok\n\nG2: n/a - x\n"
+        out = flowctl.parse_review_criteria(text)
+        self.assertEqual([c["id"] for c in out], ["G1", "G2"])
