@@ -48,10 +48,6 @@ ALLOWLIST: dict[str, str] = {
         "(contain dots - terminal container)"
     ),
     "tracker.resolved.resolvedAt": "machine-written resolve completion stamp",
-    "tracker.resolved.capabilities._source": (
-        "machine-written capability provenance (GitLab resolver persists it "
-        "alongside the boolean capability flags)"
-    ),
     "makePr.derivedPaths": (
         "validated-only reader key (make-pr export rules); never seeded"
     ),
@@ -59,7 +55,12 @@ ALLOWLIST: dict[str, str] = {
 
 # Containers the schema-key walk must NOT descend into: their property
 # names are not dotted-path segments (scope keys contain literal dots).
-TERMINAL_CONTAINERS = frozenset({"tracker.resolved.scopeResolvedAt"})
+TERMINAL_CONTAINERS = frozenset({
+    "tracker.resolved.scopeResolvedAt",
+    # capabilities carries boolean flags PLUS the machine-written _source
+    # provenance object (GitLab resolver) - one canonical leaf, not per-key.
+    "tracker.resolved.capabilities",
+})
 
 # Both quote styles: flowctl.py carries at least one single-quoted read
 # (get_config('tracker.type') inside an f-string) - a double-quote-only
