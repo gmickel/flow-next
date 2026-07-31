@@ -426,6 +426,12 @@
             "capabilities": {
               "description": "Provider capability booleans (e.g. attachments, blockedBy, subIssues, deleteIssue) from the provider's static table.",
               "type": "object",
+              "properties": {
+                "_source": {
+                  "type": "object",
+                  "description": "Machine-written capability provenance (which probe/endpoint established each flag); GitLab's resolver persists it alongside the boolean capability keys."
+                }
+              },
               "additionalProperties": {
                 "type": "boolean"
               }
@@ -652,8 +658,20 @@
               "description": "Per-backend pins for one semantic role.",
               "patternProperties": {
                 "^(codex|copilot|cursor)$": {
-                  "type": "string",
-                  "pattern": "^[^:\\s]+(:[^:\\s]+)?$",
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "enum": [
+                        ""
+                      ]
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^[^:\\s]+(:[^:\\s]+)?$"
+                    }
+                  ],
                   "description": "Pin value: model or model:effort."
                 }
               },

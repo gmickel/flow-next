@@ -48,6 +48,10 @@ ALLOWLIST: dict[str, str] = {
         "(contain dots - terminal container)"
     ),
     "tracker.resolved.resolvedAt": "machine-written resolve completion stamp",
+    "tracker.resolved.capabilities._source": (
+        "machine-written capability provenance (GitLab resolver persists it "
+        "alongside the boolean capability flags)"
+    ),
     "makePr.derivedPaths": (
         "validated-only reader key (make-pr export rules); never seeded"
     ),

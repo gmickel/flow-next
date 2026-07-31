@@ -433,8 +433,18 @@ def _models_roles_fragment() -> dict:
                 "description": DESCRIPTIONS["models.roles.<role>"],
                 "patternProperties": {
                     backend_pat: {
-                        "type": "string",
-                        "pattern": "^[^:\\s]+(:[^:\\s]+)?$",
+                        # A pin is `model[:effort]`; the supported clear path
+                        # (`config set ... null` / empty value) PERSISTS null
+                        # or "" and get_role_map_pin treats both as no-pin -
+                        # cleared configs must stay editor-valid.
+                        "anyOf": [
+                            {"type": "null"},
+                            {"enum": [""]},
+                            {
+                                "type": "string",
+                                "pattern": "^[^:\\s]+(:[^:\\s]+)?$",
+                            },
+                        ],
                         "description": DESCRIPTIONS[
                             "models.roles.<role>.<backend>"
                         ],
@@ -557,7 +567,20 @@ def _build_table() -> list[tuple[str, dict]]:
         ),
         (
             "tracker.resolved.capabilities",
-            {"type": "object", "additionalProperties": {"type": "boolean"}},
+            {
+                "type": "object",
+                # Capability flags are booleans, but GitLab's resolver also
+                # persists a machine-written `_source` provenance object
+                # alongside them (resolved_cache.apply_scope_result) - model
+                # it explicitly so a valid GitLab config never fails editors.
+                "properties": {
+                    "_source": {
+                        "type": "object",
+                        "description": "Machine-written capability provenance (which probe/endpoint established each flag); GitLab's resolver persists it alongside the boolean capability keys.",
+                    },
+                },
+                "additionalProperties": {"type": "boolean"},
+            },
         ),
         ("tracker.resolved.scopeResolvedAt", _scope_resolved_at_fragment()),
         ("tracker.resolved.resolvedAt", {"type": ["string", "null"]}),
