@@ -10,10 +10,12 @@ receipt. Absence of criteria, or of this file, changes nothing.
 Each active criterion is a single markdown bullet:
 
 ```
-    - **G<N>:** <criterion prose>
+- **G<N>:** <criterion prose>
 ```
 
-Ids must be unique; gaps are allowed (deleting G2 leaves G1, G3). Optional
+Each bullet starts at the beginning of a line - indented or nested bullets are
+ignored by the parser. Ids must be unique; gaps are allowed (deleting G2 leaves
+G1, G3). Optional
 scope hints live in the prose itself (e.g. `(scope: src/api/**)`). G-ids are
 stable identity - do not renumber (same rule as spec R-IDs).
 
