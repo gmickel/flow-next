@@ -11,7 +11,8 @@
   ],
   "id": "fn-138-published-json-schema-for-flow-config",
   "impl_review_rounds": {
-    "fn-138-published-json-schema-for-flow-config.1": 0
+    "fn-138-published-json-schema-for-flow-config.1": 0,
+    "fn-138-published-json-schema-for-flow-config.2": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -20,6 +21,7 @@
   "ready": true,
   "review_pending_rounds": {
     "impl:fn-138-published-json-schema-for-flow-config.1": 2,
+    "impl:fn-138-published-json-schema-for-flow-config.2": 1,
     "plan": 2
   },
   "spec_path": ".flow/specs/fn-138-published-json-schema-for-flow-config.md",
@@ -36,5 +38,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-31T15:34:14.597650Z"
+  "updated_at": "2026-07-31T15:51:41.082470Z"
 }
