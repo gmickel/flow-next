@@ -984,3 +984,32 @@ class TestCriteriaBrokenSymlink(unittest.TestCase):
             )
             self.assertNotEqual(r.returncode, 0)
             self.assertIn("broken symlink", r.stdout + r.stderr)
+
+
+class TestGidNumberGrammar(unittest.TestCase):
+    """Round 15: G-IDs start at 1, no leading zeros - consistently on all three surfaces."""
+
+    def test_source_g0_and_zero_padded_fail_closed(self):
+        _, errors = flowctl._criteria_parse("- **G0:** zero\n")
+        self.assertTrue(any("malformed criterion bullet" in e for e in errors))
+        _, errors = flowctl._criteria_parse("- **G01:** padded\n")
+        self.assertTrue(any("malformed criterion bullet" in e for e in errors))
+
+    def test_receipt_g0_line_degrades(self):
+        text = "## Global criteria\nG0: met - zero\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_receipt_zero_padded_degrades(self):
+        text = "## Global criteria\nG01: met - padded\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_validator_rejects_zero_padded_id(self):
+        receipt = {"type": "completion_review", "criteria": [{"id": "G01", "status": "met"}]}
+        self.assertFalse(flowctl.validate_review_receipt_criteria(receipt))
+
+    def test_g10_still_valid_everywhere(self):
+        entries, errors = flowctl._criteria_parse("- **G10:** tenth\n")
+        self.assertEqual(errors, [])
+        self.assertEqual(entries[0]["id"], "G10")
+        out = flowctl.parse_review_criteria("## Global criteria\nG10: met - ok\n")
+        self.assertEqual(out[0]["id"], "G10")
