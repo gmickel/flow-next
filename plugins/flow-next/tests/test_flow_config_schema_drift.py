@@ -554,8 +554,7 @@ class TestDictReadGuard(unittest.TestCase):
         )
 
 
-if __name__ == "__main__":
-    unittest.main()
+
 
 
 class TestBackendGrammarMatchesParser(unittest.TestCase):
@@ -601,3 +600,7 @@ class TestBackendGrammarMatchesParser(unittest.TestCase):
             except Exception:
                 runtime = False
             self.assertEqual(schema_ok(v), runtime, f"schema/parser disagree on {v!r}")
+
+
+if __name__ == "__main__":
+    unittest.main()
