@@ -49,6 +49,8 @@ Format: `{"type":"completion_review","id":"<spec-id>","mode":"cursor","verdict":
 
 There is **no `effort` key** — effort is not a Cursor field. The `spec` field is the canonical round-trippable form; `model` is the resolved Cursor model string.
 
+When `.flow/criteria.md` exists, the prompt includes the project's global acceptance criteria and the receipt may carry the additive `criteria: [{id, status, note?}]` field (absent when the reviewer output has no parseable `## Global criteria` section).
+
 Session resume guard: re-review only resumes the cursor session when the existing receipt at `$RECEIPT_PATH` has `mode == "cursor"`. The first call omits `--resume` and captures Cursor's generated `session_id`; continuations pass `--resume <session_id>`. Cross-backend switches start a fresh session.
 
 ---

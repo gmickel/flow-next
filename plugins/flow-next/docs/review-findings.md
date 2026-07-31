@@ -231,6 +231,37 @@ Fallback must be labeled when a consumer presents a structured view. Never
 merge fields from a stale/invalid container with prose or another generation
 to manufacture one apparently current record.
 
+## Global-criteria compliance (`criteria`)
+
+Completion-review receipts (`type: completion_review` only) may carry a second
+additive field beside `findings`: per-criterion compliance with the project's
+standing global criteria in `.flow/criteria.md` (see
+[`spec-template.md`](spec-template.md) § Global criteria):
+
+```json
+"criteria": [
+  {"id": "G1", "status": "met"},
+  {"id": "G3", "status": "violated", "note": "route added without contract regen"},
+  {"id": "G4", "status": "n/a"}
+]
+```
+
+- `id` is a G-ID (`G<digits>`, unique within the array); `status` is exactly
+  one of `met` / `violated` / `n/a`; `note` is an optional one-liner (<=400
+  chars).
+- The field is projected deterministically from the reviewer's
+  `## Global criteria` output section by `parse_review_criteria()` - same
+  public boundary as the findings parser: unparseable, duplicate-id, or
+  oversized content **degrades to absent, never an error**. Legacy receipts
+  without the field stay valid.
+- The `criteria` array is **authoritative for compliance status**; findings
+  carry the detail (every `violated` criterion is also reported as a normal
+  finding at reviewer-judged severity). No cross-validation links the two -
+  a consumer renders compliance from `criteria` and detail from `findings`
+  independently.
+- When `.flow/criteria.md` is absent, the review prompt contains no criteria
+  content and receipts carry no `criteria` field - absence is a silent no-op.
+
 ## Memory relationship
 
 Receipts and memory serve different lifetimes. A receipt records what one

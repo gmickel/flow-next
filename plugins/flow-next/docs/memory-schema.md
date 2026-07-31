@@ -234,9 +234,11 @@ Config lives in `.flow/config.json`, separate from Ralph's `scripts/ralph/config
 ## Review findings are evidence, memory is learning
 
 Review receipts may carry the versioned structured `findings` container
-documented in [`review-findings.md`](review-findings.md). That receipt stream is
-the authority for finding identity, round lineage, snapshot binding, and current
-status. Memory has a different job: preserving a reusable explanation after a
+documented in [`review-findings.md`](review-findings.md), and completion-review
+receipts may additionally carry the per-criterion global-criteria compliance
+array (`criteria: [{id, status, note?}]`, same doc § Global-criteria
+compliance). That receipt stream is the authority for finding identity, round
+lineage, snapshot binding, current status, and standing-criteria compliance. Memory has a different job: preserving a reusable explanation after a
 non-trivial review fix.
 
 After a `NEEDS_WORK` → `SHIP` transition, Work may synthesize a bug-track entry

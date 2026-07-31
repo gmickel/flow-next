@@ -18,8 +18,9 @@
     },
     {
       "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
-      "chars_lf": 72057,
-      "content_hash": "80c28010b2d97f6050b5712c9a80db88c331476f2cbbbbfa7e41453208a559c7"
+      "chars_lf": 74292,
+      "content_hash": "64c95306a2d9b8f553a452420bbe7ddeb573e4f0589255771edfbab0a427bc61",
+      "sha256": "64c95306a2d9b8f553a452420bbe7ddeb573e4f0589255771edfbab0a427bc61"
     },
     {
       "path": "plugins/flow-next/skills/flow-next-setup/references/model-pins.md",
@@ -76,42 +77,47 @@
     {
       "fixture_id": "setup.autonomous",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
-      "reduction_percent": 29.27,
-      "candidate_reached_path_chars": 73339
+      "candidate_chars": 75574,
+      "reduction_chars": 28114,
+      "reduction_percent": 27.11,
+      "candidate_reached_path_chars": 73339,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.copy-first-install",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
-      "reduction_percent": 29.27,
-      "candidate_reached_path_chars": 73339
+      "candidate_chars": 75574,
+      "reduction_chars": 28114,
+      "reduction_percent": 27.11,
+      "candidate_reached_path_chars": 73339,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.copy-refresh",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
-      "reduction_percent": 29.27,
-      "candidate_reached_path_chars": 73339
+      "candidate_chars": 75574,
+      "reduction_chars": 28114,
+      "reduction_percent": 27.11,
+      "candidate_reached_path_chars": 73339,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.customized-snippet-keep",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
-      "reduction_percent": 29.27,
-      "candidate_reached_path_chars": 73339
+      "candidate_chars": 75574,
+      "reduction_chars": 28114,
+      "reduction_percent": 27.11,
+      "candidate_reached_path_chars": 73339,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.customized-snippet-overwrite",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
-      "reduction_percent": 29.27,
-      "candidate_reached_path_chars": 73339
+      "candidate_chars": 75574,
+      "reduction_chars": 28114,
+      "reduction_percent": 27.11,
+      "candidate_reached_path_chars": 73339,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.host-claude",
@@ -119,10 +125,11 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78602,
-      "reduction_chars": 25086,
-      "reduction_percent": 24.19,
-      "candidate_reached_path_chars": 78602
+      "candidate_chars": 80837,
+      "reduction_chars": 22851,
+      "reduction_percent": 22.04,
+      "candidate_reached_path_chars": 78602,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.host-codex",
@@ -130,10 +137,11 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78602,
-      "reduction_chars": 25086,
-      "reduction_percent": 24.19,
-      "candidate_reached_path_chars": 78602
+      "candidate_chars": 80837,
+      "reduction_chars": 22851,
+      "reduction_percent": 22.04,
+      "candidate_reached_path_chars": 78602,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.host-cursor",
@@ -141,10 +149,11 @@
         "model-routing-question-cursor.md",
         "model-routing-cursor.md"
       ],
-      "candidate_chars": 77972,
-      "reduction_chars": 25716,
-      "reduction_percent": 24.8,
-      "candidate_reached_path_chars": 77972
+      "candidate_chars": 80207,
+      "reduction_chars": 23481,
+      "reduction_percent": 22.65,
+      "candidate_reached_path_chars": 77972,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.host-droid",
@@ -152,10 +161,11 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78602,
-      "reduction_chars": 25086,
-      "reduction_percent": 24.19,
-      "candidate_reached_path_chars": 78602
+      "candidate_chars": 80837,
+      "reduction_chars": 22851,
+      "reduction_percent": 22.04,
+      "candidate_reached_path_chars": 78602,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.host-grok",
@@ -163,18 +173,20 @@
         "model-routing-question-grok.md",
         "model-routing-grok.md"
       ],
-      "candidate_chars": 78322,
-      "reduction_chars": 25366,
-      "reduction_percent": 24.46,
-      "candidate_reached_path_chars": 78322
+      "candidate_chars": 80557,
+      "reduction_chars": 23131,
+      "reduction_percent": 22.31,
+      "candidate_reached_path_chars": 78322,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.malformed-metadata",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
-      "reduction_percent": 29.27,
-      "candidate_reached_path_chars": 73339
+      "candidate_chars": 75574,
+      "reduction_chars": 28114,
+      "reduction_percent": 27.11,
+      "candidate_reached_path_chars": 73339,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.model-routing-accepted",
@@ -182,28 +194,31 @@
         "model-routing-question-bridge.md",
         "model-routing-bridge.md"
       ],
-      "candidate_chars": 78602,
-      "reduction_chars": 25086,
-      "reduction_percent": 24.19,
-      "candidate_reached_path_chars": 78602
+      "candidate_chars": 80837,
+      "reduction_chars": 22851,
+      "reduction_percent": 22.04,
+      "candidate_reached_path_chars": 78602,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.model-routing-skipped",
       "reads": [
         "model-routing-question-bridge.md"
       ],
-      "candidate_chars": 74628,
-      "reduction_chars": 29060,
-      "reduction_percent": 28.03,
-      "candidate_reached_path_chars": 74628
+      "candidate_chars": 76863,
+      "reduction_chars": 26825,
+      "reduction_percent": 25.87,
+      "candidate_reached_path_chars": 74628,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.plugin-mode",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
-      "reduction_percent": 29.27,
-      "candidate_reached_path_chars": 73339
+      "candidate_chars": 75574,
+      "reduction_chars": 28114,
+      "reduction_percent": 27.11,
+      "candidate_reached_path_chars": 73339,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.ralph-available",
@@ -211,18 +226,20 @@
         "ralph-question.md",
         "ralph-enable.md"
       ],
-      "candidate_chars": 75388,
-      "reduction_chars": 28300,
-      "reduction_percent": 27.29,
-      "candidate_reached_path_chars": 75388
+      "candidate_chars": 77623,
+      "reduction_chars": 26065,
+      "reduction_percent": 25.14,
+      "candidate_reached_path_chars": 75388,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "fixture_id": "setup.ralph-unsupported",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
-      "reduction_percent": 29.27,
-      "candidate_reached_path_chars": 73339
+      "candidate_chars": 75574,
+      "reduction_chars": 28114,
+      "reduction_percent": 27.11,
+      "candidate_reached_path_chars": 73339,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     }
   ],
   "supplementary_branch_results": [
@@ -231,18 +248,20 @@
       "reads": [
         "model-pins.md"
       ],
-      "candidate_chars": 78568,
-      "reduction_chars": 25120,
-      "reduction_percent": 24.23,
-      "candidate_reached_path_chars": 78568
+      "candidate_chars": 80803,
+      "reduction_chars": 22885,
+      "reduction_percent": 22.07,
+      "candidate_reached_path_chars": 78568,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "branch": "model-pin-autonomous-skip",
       "reads": [],
-      "candidate_chars": 73339,
-      "reduction_chars": 30349,
-      "reduction_percent": 29.27,
-      "candidate_reached_path_chars": 73339
+      "candidate_chars": 75574,
+      "reduction_chars": 28114,
+      "reduction_percent": 27.11,
+      "candidate_reached_path_chars": 73339,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     },
     {
       "branch": "ralph-disable",
@@ -250,10 +269,11 @@
         "ralph-question.md",
         "ralph-disable.md"
       ],
-      "candidate_chars": 75641,
-      "reduction_chars": 28047,
-      "reduction_percent": 27.05,
-      "candidate_reached_path_chars": 75641
+      "candidate_chars": 77876,
+      "reduction_chars": 25812,
+      "reduction_percent": 24.89,
+      "candidate_reached_path_chars": 75641,
+      "candidate_reached_path_chars_note": "frozen eval-run measurement (pre fn-137.3 workflow delta); candidate_chars is the current pinned value"
     }
   ],
   "trace_boundary": "Deterministic candidate read sets derived from the explicit router gates; B1 manifests are the pre-mutation trace baseline. No backend telemetry is claimed.",

@@ -32,6 +32,12 @@ An execution unit under a spec, sized to fit one `/flow-next:work` iteration (~1
 
 A numbered acceptance criterion in a spec, format `**R1:** ...`, `**R2:** ...`. Renumber-forbidden after the first review cycle: deletions leave gaps, new criteria take the next unused number. R-IDs are the load-bearing identity of a requirement across the spec, the tasks that satisfy it, the commits that reference it, and the PR body coverage table.
 
+## Global criterion (G-ID)
+
+A numbered standing, project-wide acceptance criterion in the user-owned `.flow/criteria.md`, format `- **G1:** ...` - the R-ID grammar with a `G` prefix, lifted from one spec to the whole project. Parsed and validated by `flowctl criteria list` (unique ids, non-empty prose, gaps allowed); judged agentically by the existing spec completion review, which records per-criterion compliance (`met` / `violated` / `n/a`) in the ordinary review receipt's additive `criteria: [{id, status, note?}]` array - no separate auditor, no rule engine. The spec is the unit of compliance; G-IDs are stable identity like R-IDs (never renumber). Absence of the file is a silent no-op everywhere: criteria-less repos pay zero prompt content. Like structured findings (fn-136, see the flow-swarm preparation track in STRATEGY.md), the compliance record is a portable receipt contract that downstream consumers such as flow-swarm can render without importing Flow-Next internals.
+
+_Relates to_: R-ID, Receipt
+
 ## Handover object
 
 A named, reviewable artefact that carries context across a step in the agentic SDLC. flow-next defines six handover states: the spec at business-layer completion (#1) and at full completion (#2) — both the **same** `.flow/specs/<spec-id>.md` file at successive layers, NOT two separate specs — then the implementation plan (#3), the working implementation (#4), the cross-model code review (#5), and the PR-as-cognitive-aid (#6). Each is reviewable on its own, cross-model-verified, and frozen at handover. The chain of handovers replaces the standups / refinement / design-review touchpoints that pre-agentic Agile relied on.

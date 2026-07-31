@@ -1,0 +1,2135 @@
+{
+  "artifactId": "fn-136-4a60819e-v4",
+  "baseSha": "753df471c30e321a5ac96924441b037b2a1f692e",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R6"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid1",
+          "rid6"
+        ],
+        "summary": "Downstream consumers should not need to regex free-form review prose or reconstruct a PR's intent from raw diffs.",
+        "taskIds": [],
+        "title": "Replace prose-only review state"
+      },
+      {
+        "files": [
+          {
+            "additions": 3339,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 122,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/scripts/flowctl.py",
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R1",
+              "R2",
+              "R4"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task2",
+              "rid1",
+              "rid2",
+              "rid4"
+            ],
+            "summary": "Adds the structured-finding parser, receipt currentness, and PR cognitive-aid validation/render plumbing.",
+            "taskIds": [
+              "fn-136-structured-review-artifact-schema-in.2"
+            ]
+          },
+          {
+            "additions": 1004,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_review_findings_parser.py",
+            "path": "plugins/flow-next/tests/test_review_findings_parser.py",
+            "rIds": [
+              "R1",
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task2",
+              "rid1",
+              "rid2"
+            ],
+            "summary": "Pins canonical enums, bounds, lineage, anchors, ordering, and graceful degradation.",
+            "taskIds": [
+              "fn-136-structured-review-artifact-schema-in.2"
+            ]
+          },
+          {
+            "additions": 267,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/docs/review-findings.md",
+            "path": "plugins/flow-next/docs/review-findings.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task2",
+              "rid5"
+            ],
+            "summary": "Defines the product-neutral structured-findings consumer contract.",
+            "taskIds": [
+              "fn-136-structured-review-artifact-schema-in.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1",
+          "R2",
+          "R4"
+        ],
+        "sourceRefs": [
+          "task2",
+          "rid1",
+          "rid2",
+          "rid4",
+          "diff"
+        ],
+        "summary": "Pure-stdlib plumbing normalizes bounded findings, portable anchors, durable lineage, and invalid-versus-absent behavior without new model or network calls.",
+        "taskIds": [
+          "fn-136-structured-review-artifact-schema-in.2"
+        ],
+        "title": "Parse findings deterministically"
+      },
+      {
+        "files": [
+          {
+            "additions": 1239,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_review_findings_receipts.py",
+            "path": "plugins/flow-next/tests/test_review_findings_receipts.py",
+            "rIds": [
+              "R1",
+              "R4"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task3",
+              "rid1",
+              "rid4"
+            ],
+            "summary": "Exercises backend writers, recovery, concurrency, import safety, currentness, and performance.",
+            "taskIds": [
+              "fn-136-structured-review-artifact-schema-in.3"
+            ]
+          },
+          {
+            "additions": 150,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 33,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-impl-review/workflow-rp.md",
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-rp.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task4",
+              "rid3"
+            ],
+            "summary": "Makes RepoPrompt review setup durable, context-bound, and directly consumable.",
+            "taskIds": [
+              "fn-136-structured-review-artifact-schema-in.4"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R1",
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "task3",
+          "task4",
+          "rid1",
+          "rid3",
+          "rid4",
+          "diff"
+        ],
+        "summary": "Receipt writers retain immutable generations and project only the valid current tip; prompt formats remain parser-compatible and token-neutral.",
+        "taskIds": [
+          "fn-136-structured-review-artifact-schema-in.3",
+          "fn-136-structured-review-artifact-schema-in.4"
+        ],
+        "title": "Persist current findings across every review path"
+      },
+      {
+        "files": [
+          {
+            "additions": 130,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md",
+            "path": "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md",
+            "rIds": [
+              "R6",
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task6",
+              "rid6",
+              "rid7"
+            ],
+            "summary": "Defines host composition, deterministic validation/currentness, and Markdown insertion rules.",
+            "taskIds": [
+              "fn-136-structured-review-artifact-schema-in.6"
+            ]
+          },
+          {
+            "additions": 827,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_pr_cognitive_aid.py",
+            "path": "plugins/flow-next/tests/test_pr_cognitive_aid.py",
+            "rIds": [
+              "R6",
+              "R7",
+              "R8"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task6",
+              "rid6",
+              "rid7",
+              "rid8"
+            ],
+            "summary": "Pins identity, provenance, history selection, validation rejection, rendering, and latency.",
+            "taskIds": [
+              "fn-136-structured-review-artifact-schema-in.6"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R6",
+          "R7",
+          "R8"
+        ],
+        "sourceRefs": [
+          "task6",
+          "rid6",
+          "rid7",
+          "rid8",
+          "diff"
+        ],
+        "summary": "Make-pr now validates and persists an intent-ordered artifact, selects one current generation, and renders deterministic Markdown without replacing the independent risk-ranked review plan.",
+        "taskIds": [
+          "fn-136-structured-review-artifact-schema-in.6"
+        ],
+        "title": "Publish one head-bound PR walkthrough"
+      },
+      {
+        "files": [
+          {
+            "additions": 10948,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.json",
+            "path": "plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.json",
+            "rIds": [
+              "R9"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task7",
+              "rid9"
+            ],
+            "summary": "Canonical maximum-normal v1 fixture shared with downstream consumers.",
+            "taskIds": [
+              "fn-136-structured-review-artifact-schema-in.7"
+            ]
+          },
+          {
+            "additions": 3339,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 122,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/bin/flowctl.py",
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/bin/flowctl.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/bin/flowctl_tracker/MANIFEST.json",
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/bin/flowctl_tracker/MANIFEST.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 36,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/config.json",
+            "path": ".flow/config.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/config.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 29,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/memory/bug/integration/head-bound-html-artifacts-must-not-2026-07-30.md",
+            "path": ".flow/memory/bug/integration/head-bound-html-artifacts-must-not-2026-07-30.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/memory/bug/integration/head-bound-html-artifacts-must-not-2026-07-30.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/memory/bug/runtime-errors/structured-review-parsers-must-2026-07-30.md",
+            "path": ".flow/memory/bug/runtime-errors/structured-review-parsers-must-2026-07-30.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/memory/bug/runtime-errors/structured-review-parsers-must-2026-07-30.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.1.json",
+            "path": ".flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.1.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.4.json",
+            "path": ".flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.4.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.4.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.8.json",
+            "path": ".flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.8.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/review-receipts/impl-fn-136-structured-review-artifact-schema-in.8.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 745,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 12,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/specs/fn-136-structured-review-artifact-schema-in.json",
+            "path": ".flow/specs/fn-136-structured-review-artifact-schema-in.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/specs/fn-136-structured-review-artifact-schema-in.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/specs/fn-136-structured-review-artifact-schema-in.md",
+            "path": ".flow/specs/fn-136-structured-review-artifact-schema-in.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/specs/fn-136-structured-review-artifact-schema-in.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/tasks/fn-136-structured-review-artifact-schema-in.1.md",
+            "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/tasks/fn-136-structured-review-artifact-schema-in.1.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/tasks/fn-136-structured-review-artifact-schema-in.2.md",
+            "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/tasks/fn-136-structured-review-artifact-schema-in.2.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/tasks/fn-136-structured-review-artifact-schema-in.3.md",
+            "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/tasks/fn-136-structured-review-artifact-schema-in.3.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/tasks/fn-136-structured-review-artifact-schema-in.4.md",
+            "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/tasks/fn-136-structured-review-artifact-schema-in.4.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/tasks/fn-136-structured-review-artifact-schema-in.5.md",
+            "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/tasks/fn-136-structured-review-artifact-schema-in.5.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/tasks/fn-136-structured-review-artifact-schema-in.6.md",
+            "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.6.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/tasks/fn-136-structured-review-artifact-schema-in.6.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 9,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/tasks/fn-136-structured-review-artifact-schema-in.7.md",
+            "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.7.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/tasks/fn-136-structured-review-artifact-schema-in.7.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/tasks/fn-136-structured-review-artifact-schema-in.8.json",
+            "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.8.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/tasks/fn-136-structured-review-artifact-schema-in.8.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 38,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/.flow/tasks/fn-136-structured-review-artifact-schema-in.8.md",
+            "path": ".flow/tasks/fn-136-structured-review-artifact-schema-in.8.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: .flow/tasks/fn-136-structured-review-artifact-schema-in.8.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 54,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/CHANGELOG.md",
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: CHANGELOG.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/GLOSSARY.md",
+            "path": "GLOSSARY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: GLOSSARY.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 9,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/README.md",
+            "path": "README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: README.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/STRATEGY.md",
+            "path": "STRATEGY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: STRATEGY.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/agent_docs/local-dev.md",
+            "path": "agent_docs/local-dev.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: agent_docs/local-dev.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 119,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/evidence/fn136/review-output-format-token-delta.json",
+            "path": "optimization/reached-path/evidence/fn136/review-output-format-token-delta.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/evidence/fn136/review-output-format-token-delta.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 242,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/INDEX.json",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/INDEX.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/INDEX.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/codex/catalog-sample.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/codex/catalog-sample.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/codex/catalog-sample.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/codex/no-anchor.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/codex/no-anchor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/codex/no-anchor.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/codex/no-findings-ship.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/codex/no-findings-ship.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/codex/no-findings-ship.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/codex/ratchet-only.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/codex/ratchet-only.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/codex/ratchet-only.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/codex/unparseable.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/codex/unparseable.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/codex/unparseable.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/copilot/catalog-sample.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/copilot/catalog-sample.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/copilot/catalog-sample.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/copilot/no-anchor.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/copilot/no-anchor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/copilot/no-anchor.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/copilot/no-findings-ship.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/copilot/no-findings-ship.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/copilot/no-findings-ship.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/copilot/ratchet-only.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/copilot/ratchet-only.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/copilot/ratchet-only.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/copilot/unparseable.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/copilot/unparseable.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/copilot/unparseable.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/cursor/catalog-sample.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/cursor/catalog-sample.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/cursor/catalog-sample.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/cursor/no-anchor.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/cursor/no-anchor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/cursor/no-anchor.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/cursor/no-findings-ship.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/cursor/no-findings-ship.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/cursor/no-findings-ship.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/cursor/ratchet-only.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/cursor/ratchet-only.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/cursor/ratchet-only.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/cursor/unparseable.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/cursor/unparseable.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/cursor/unparseable.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/export/catalog-sample.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/export/catalog-sample.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/export/catalog-sample.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/export/no-anchor.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/export/no-anchor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/export/no-anchor.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/export/no-findings-ship.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/export/no-findings-ship.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/export/no-findings-ship.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/export/ratchet-only.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/export/ratchet-only.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/export/ratchet-only.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/export/unparseable.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/export/unparseable.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/export/unparseable.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/host/catalog-sample.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/host/catalog-sample.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/host/catalog-sample.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/host/no-anchor.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/host/no-anchor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/host/no-anchor.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/host/no-findings-ship.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/host/no-findings-ship.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/host/no-findings-ship.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/host/ratchet-only.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/host/ratchet-only.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/host/ratchet-only.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/host/unparseable.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/host/unparseable.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/host/unparseable.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/rp/catalog-sample.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/rp/catalog-sample.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/rp/catalog-sample.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/rp/no-anchor.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/rp/no-anchor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/rp/no-anchor.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/rp/no-findings-ship.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/rp/no-findings-ship.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/rp/no-findings-ship.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/rp/ratchet-only.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/rp/ratchet-only.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/rp/ratchet-only.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/fixtures/review-findings/v1/rp/unparseable.md",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/rp/unparseable.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/fixtures/review-findings/v1/rp/unparseable.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 27,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 24,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/make-pr-candidates.json",
+            "path": "optimization/reached-path/make-pr-candidates.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/make-pr-candidates.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 41,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/plan_review_candidate.py",
+            "path": "optimization/reached-path/plan_review_candidate.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/plan_review_candidate.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/optimization/reached-path/runs/plan-review-candidate.json",
+            "path": "optimization/reached-path/runs/plan-review-candidate.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: optimization/reached-path/runs/plan-review-candidate.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/references/html-artifacts.md",
+            "path": "plugins/flow-next/codex/references/html-artifacts.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/references/html-artifacts.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-impl-review/SKILL.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-impl-review/SKILL.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-impl-review/flowctl-reference.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/flowctl-reference.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-impl-review/flowctl-reference.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-impl-review/optional-phases.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/optional-phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-impl-review/optional-phases.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-impl-review/references/impl-review-prompt.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/references/impl-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-impl-review/references/impl-review-prompt.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-impl-review/references/standalone-review-prompt.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/references/standalone-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-impl-review/references/standalone-review-prompt.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-impl-review/workflow-host.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-impl-review/workflow-host.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 149,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 32,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-impl-review/workflow-rp.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-impl-review/workflow-rp.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-make-pr/SKILL.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-make-pr/SKILL.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 49,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 10,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-make-pr/html-lens.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/html-lens.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-make-pr/html-lens.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-make-pr/phases.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-make-pr/phases.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 130,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-make-pr/pr-cognitive-aid.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/pr-cognitive-aid.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-make-pr/pr-cognitive-aid.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 58,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 16,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-make-pr/workflow.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-make-pr/workflow.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-plan-review/references/plan-review-prompt.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-plan-review/workflow-host.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-plan-review/workflow-host.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 130,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 33,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-plan-review/workflow-rp.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-plan-review/workflow-rp.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 117,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 9,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-qa/workflow.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-qa/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-qa/workflow.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 7,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-spec-completion-review/references/completion-review-prompt.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 31,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-host.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-host.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 123,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 50,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-rp.md",
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-rp.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/docs/README.md",
+            "path": "plugins/flow-next/docs/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/docs/README.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 20,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/docs/architecture.md",
+            "path": "plugins/flow-next/docs/architecture.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/docs/architecture.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 100,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 7,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/docs/flowctl.md",
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/docs/flowctl.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/docs/html-artifacts.md",
+            "path": "plugins/flow-next/docs/html-artifacts.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/docs/html-artifacts.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/docs/memory-schema.md",
+            "path": "plugins/flow-next/docs/memory-schema.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/docs/memory-schema.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 111,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/docs/pr-cognitive-aid.md",
+            "path": "plugins/flow-next/docs/pr-cognitive-aid.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/docs/pr-cognitive-aid.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/docs/teams.md",
+            "path": "plugins/flow-next/docs/teams.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/docs/teams.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/references/html-artifacts.md",
+            "path": "plugins/flow-next/references/html-artifacts.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/references/html-artifacts.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-impl-review/SKILL.md",
+            "path": "plugins/flow-next/skills/flow-next-impl-review/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-impl-review/SKILL.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-impl-review/flowctl-reference.md",
+            "path": "plugins/flow-next/skills/flow-next-impl-review/flowctl-reference.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-impl-review/flowctl-reference.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-impl-review/optional-phases.md",
+            "path": "plugins/flow-next/skills/flow-next-impl-review/optional-phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-impl-review/optional-phases.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md",
+            "path": "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md",
+            "path": "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-impl-review/workflow-host.md",
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-impl-review/workflow-host.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
+            "path": "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-make-pr/SKILL.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 49,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 10,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-make-pr/html-lens.md",
+            "path": "plugins/flow-next/skills/flow-next-make-pr/html-lens.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-make-pr/html-lens.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-make-pr/phases.md",
+            "path": "plugins/flow-next/skills/flow-next-make-pr/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-make-pr/phases.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 58,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 16,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-make-pr/workflow.md",
+            "path": "plugins/flow-next/skills/flow-next-make-pr/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-make-pr/workflow.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "path": "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-plan-review/workflow-host.md",
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-plan-review/workflow-host.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 130,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 33,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-plan-review/workflow-rp.md",
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-plan-review/workflow-rp.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 117,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-qa/workflow.md",
+            "path": "plugins/flow-next/skills/flow-next-qa/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-qa/workflow.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 7,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 31,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-spec-completion-review/workflow-host.md",
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-spec-completion-review/workflow-host.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 125,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 52,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/skills/flow-next-spec-completion-review/workflow-rp.md",
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/skills/flow-next-spec-completion-review/workflow-rp.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.meta.json",
+            "path": "plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.meta.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.meta.json.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_backend_spec.py",
+            "path": "plugins/flow-next/tests/test_backend_spec.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_backend_spec.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_flowctl_surface.py",
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_flowctl_surface.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_host_review_backend.py",
+            "path": "plugins/flow-next/tests/test_host_review_backend.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_host_review_backend.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_make_pr_reached_path.py",
+            "path": "plugins/flow-next/tests/test_make_pr_reached_path.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_make_pr_reached_path.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 371,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_pr_cognitive_aid_fixture_contract.py",
+            "path": "plugins/flow-next/tests/test_pr_cognitive_aid_fixture_contract.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_pr_cognitive_aid_fixture_contract.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_prompt_text_pinned.py",
+            "path": "plugins/flow-next/tests/test_prompt_text_pinned.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_prompt_text_pinned.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_qa_receipt.py",
+            "path": "plugins/flow-next/tests/test_qa_receipt.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_qa_receipt.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_review_convergence_cap.py",
+            "path": "plugins/flow-next/tests/test_review_convergence_cap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_review_convergence_cap.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 160,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_review_findings_docs.py",
+            "path": "plugins/flow-next/tests/test_review_findings_docs.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_review_findings_docs.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 174,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_review_findings_fixture_corpus.py",
+            "path": "plugins/flow-next/tests/test_review_findings_fixture_corpus.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_review_findings_fixture_corpus.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 262,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_review_prompt_constraints.py",
+            "path": "plugins/flow-next/tests/test_review_prompt_constraints.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_review_prompt_constraints.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 172,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_review_prompt_template_parity.py",
+            "path": "plugins/flow-next/tests/test_review_prompt_template_parity.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_review_prompt_template_parity.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 153,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_rp_setup_workflow_contract.py",
+            "path": "plugins/flow-next/tests/test_rp_setup_workflow_contract.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_rp_setup_workflow_contract.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 351,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 19,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_rp_wrappers.py",
+            "path": "plugins/flow-next/tests/test_rp_wrappers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Changed for the fn-136 structured review-artifact contract: plugins/flow-next/tests/test_rp_wrappers.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 46,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/scripts/ci_test.sh",
+            "path": "plugins/flow-next/scripts/ci_test.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Updates the integration smoke harness for RepoPrompt CLI selection, Classic verification, and the current setup-review output contract.",
+            "taskIds": []
+          },
+          {
+            "additions": 35,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "/gmickel/flow-next/blob/fn-136-structured-review-artifact-schema-in/plugins/flow-next/tests/test_export_cognitive_aid.py",
+            "path": "plugins/flow-next/tests/test_export_cognitive_aid.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pins root-level rename normalization so cognitive-aid validation uses the destination path and renamed status.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 5,
+        "rIds": [
+          "R9",
+          "R10"
+        ],
+        "sourceRefs": [
+          "task7",
+          "rid9",
+          "rid10",
+          "diff"
+        ],
+        "summary": "A byte-pinned canonical fixture drives structured, Markdown, HTML, and Flow Swarm consumer checks; repository-local images remain information-architecture references.",
+        "taskIds": [
+          "fn-136-structured-review-artifact-schema-in.7"
+        ],
+        "title": "Prove portable cross-render parity"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Coverage",
+        "sourceRefs": [
+          "spec",
+          "completion"
+        ],
+        "value": "All 10 acceptance criteria are covered by 8 completed tasks."
+      },
+      {
+        "label": "Verification",
+        "sourceRefs": [
+          "head",
+          "completion"
+        ],
+        "value": "Rebased full gate: 3,437 tests with zero failures or errors; pinned Ruff clean."
+      },
+      {
+        "label": "Review",
+        "sourceRefs": [
+          "completion"
+        ],
+        "value": "RepoPrompt CE same-chat reviews converged to SHIP across parser, receipt, prompt, cognitive-aid, fixture, and setup slices."
+      },
+      {
+        "label": "Performance",
+        "sourceRefs": [
+          "rid8",
+          "task7"
+        ],
+        "value": "Validation and render satisfy the strict sub-100 ms p95 warm-run contract."
+      }
+    ],
+    "thesis": "Preserve review findings and PR intent as versioned, portable, head-bound data while retaining legacy prose, GitHub Markdown, and existing review workflows."
+  },
+  "generatedAt": "2026-07-30T21:45:09Z",
+  "headSha": "4a60819e790ac72ad6bbc446b6901598817c9501",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-136-structured-review-artifact-schema-in"
+    },
+    {
+      "id": "task2",
+      "kind": "task",
+      "ref": "fn-136-structured-review-artifact-schema-in.2"
+    },
+    {
+      "id": "task3",
+      "kind": "task",
+      "ref": "fn-136-structured-review-artifact-schema-in.3"
+    },
+    {
+      "id": "task4",
+      "kind": "task",
+      "ref": "fn-136-structured-review-artifact-schema-in.4"
+    },
+    {
+      "id": "task6",
+      "kind": "task",
+      "ref": "fn-136-structured-review-artifact-schema-in.6"
+    },
+    {
+      "id": "task7",
+      "kind": "task",
+      "ref": "fn-136-structured-review-artifact-schema-in.7"
+    },
+    {
+      "id": "rid1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "rid2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "rid3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "rid4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "rid5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "rid6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "rid7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "rid8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "rid9",
+      "kind": "rid",
+      "ref": "R9"
+    },
+    {
+      "id": "rid10",
+      "kind": "rid",
+      "ref": "R10"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "753df471c30e321a5ac96924441b037b2a1f692e..4a60819e790ac72ad6bbc446b6901598817c9501"
+    },
+    {
+      "id": "head",
+      "kind": "commit",
+      "ref": "4a60819e790ac72ad6bbc446b6901598817c9501"
+    },
+    {
+      "id": "completion",
+      "kind": "review_receipt",
+      "ref": "fn-136-structured-review-artifact-schema-in"
+    }
+  ],
+  "specId": "fn-136-structured-review-artifact-schema-in",
+  "supersedesArtifactId": "fn-136-f5e09a26-v3"
+}

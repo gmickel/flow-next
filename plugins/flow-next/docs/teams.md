@@ -25,6 +25,7 @@ The vocabulary on this page — *handover objects*, *Delegate / Review / Own*, *
 - [Multi-developer coordination](#multi-developer-coordination)
 - [Autonomous mode (Ralph) in a team](#autonomous-mode-ralph-in-a-team)
 - [Tracker sync & Linear Diffs](#tracker-sync--linear-diffs)
+- [Standing criteria (`.flow/criteria.md`)](#standing-criteria-flowcriteriamd)
 - [What flow-next does *not* replace](#what-flow-next-does-not-replace)
 - [Adoption ladder](#adoption-ladder)
 - [Where to go next](#where-to-go-next)
@@ -434,6 +435,18 @@ Teams that live in Linear, GitHub Issues, GitLab, or Jira don't have to leave th
 **Linear Diffs — review the PR inside the issue.** When `tracker.type == linear`, Flow-Next makes your PRs [Linear Diffs](https://linear.app/docs/diffs)-ready automatically: `/flow-next:make-pr` writes a **non-closing** `Ref WOR-N` line into the PR body (plus a rich PR attachment on the GraphQL transport), so Linear's GitHub integration auto-links the PR and renders its full diff, file changes, checks, and inline review threads **directly on the issue** — you approve / request changes / merge without leaving Linear. *Non-closing* (`Ref`, not `Fixes`) is deliberate: the PR renders as a diff but does **not** auto-complete the issue on merge — `/flow-next:land`'s `land.merged` touchpoint owns the `Done` transition (fn-66), gated on a GitHub-confirmed `MERGED` probe (completion review only posts a verdict comment + at most `In Review`). The PR↔issue link **and the move to `In Review`** are unconditional once the bridge is active (no `makePr` opt-in needed); `land.merged`'s move to `Done` is likewise active-by-default. One-time Linear-side setup is required (the GitHub integration with code access, your personal GitHub connection, and "Enable code reviews"). **GitHub-, GitLab-, and Jira-tracker** users get no Linear Diffs — the PR is cross-linked natively (`Refs #N` on GitHub; `Ref <project>#<iid>` on GitLab; a **remote link / PR-URL comment** on the Jira issue — Jira has neither PR auto-linkify nor `gh`, so the adapter writes the link in-adapter) and review happens on the host.
 
 Full reference: setup ceremony, hybrid ids, flowctl-owned transport and capabilities, who-wins reconciliation: [`tracker-sync.md`](tracker-sync.md). A screenshot of a Flow-Next PR rendered as a Linear Diff is on [flow-next.dev](https://flow-next.dev/teams/tracker-sync/#linear-diffs--review-the-pr-inside-the-issue).
+
+---
+
+## Standing criteria (`.flow/criteria.md`)
+
+Teams accumulate project-wide acceptance criteria that no single spec owns - "every route change regenerates the API contract", "user-facing strings live in the i18n catalog". Instead of leaving them in CLAUDE.md prose and reviewer memory, put them in `.flow/criteria.md`: one line-anchored bullet per criterion, `- **G1:** <criterion prose>` (the R-ID grammar with a `G` prefix; grammar details in [`spec-template.md`](spec-template.md) § Global criteria).
+
+How it works in the team lifecycle:
+
+- **The spec is the unit of compliance.** The existing **spec completion review is the sole compliance surface**: when the file exists, the reviewer judges every G-ID against the whole spec's implementation and records `met` / `violated` / `n/a` per criterion in the ordinary review receipt (`criteria: [{id, status, note?}]` - [`review-findings.md`](review-findings.md) § Global-criteria compliance). No separate auditor pass, no rule engine, no per-task application.
+- **The file is user content.** `/flow-next:setup` offers to scaffold it from a bundled template (opt-in; declining leaves no trace, and an existing file is never touched or re-asked about). Edit it like any reviewed team artifact - it lives in the repo, so criteria changes go through the same PR review as code.
+- **Absence costs nothing.** No file means no criteria content in any assembled review prompt and no `criteria` field in receipts - adopt it when the team has standing rules worth enforcing, ignore it until then.
 
 ---
 

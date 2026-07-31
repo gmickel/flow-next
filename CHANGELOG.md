@@ -4,6 +4,43 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+Teams can now write their standing, project-wide acceptance criteria down once
+and have every spec judged against them - no more relying on CLAUDE.md prose
+and reviewer memory to enforce "every route change regenerates the contract"
+or "no new dependency without a health check".
+
+### Added
+
+- **Standing project-wide acceptance criteria, applied by the review you
+  already run.** Put team-wide rules in a plain markdown file,
+  `.flow/criteria.md`, one bullet per criterion (`- **G1:** ...` - the
+  familiar R-ID grammar with a `G` prefix, lifted to project scope; ids are
+  stable, gaps allowed, scope hints live in the prose). The existing spec
+  completion review - every backend: codex, copilot, cursor, rp, host - then
+  judges each criterion against the whole spec's implementation, and
+  compliance lands in the ordinary review receipt as an additive
+  `criteria: [{id, status, note?}]` array (`met` / `violated` / `n/a`), with
+  every violation also reported as a normal finding. No separate auditor
+  fleet, no rule engine, no scoring math - the criteria are prose judged by
+  the reviewer that already runs.
+- **Opt-in from setup, invisible until adopted.** `/flow-next:setup` offers a
+  one-question scaffold of `.flow/criteria.md` from a bundled template that
+  documents the grammar with commented examples; declining leaves no trace,
+  and an existing file is user content - never re-asked about, never touched.
+  An absent file is a silent no-op everywhere: assembled review prompts carry
+  zero criteria content and receipts carry no `criteria` field.
+- **Deterministic plumbing, degrade-to-absent evidence.** `flowctl criteria
+  list --json` parses and validates the file (unique ids, non-empty prose);
+  `flowctl criteria prompt-block` prints the same injection block the
+  subprocess backends get from the shared prompt builder, for the rp/host
+  workflows. The receipt's compliance array is projected from the reviewer's
+  `## Global criteria` output section by the same public boundary as the
+  fn-136 findings parser: unparseable compliance degrades to absent, never an
+  error, and legacy receipts stay valid. Docs: `spec-template.md` § Global
+  criteria (G-ID grammar beside the R-ID rules), `review-findings.md` §
+  Global-criteria compliance, `teams.md` § Standing criteria, `flowctl.md` §
+  criteria.
+
 Someone landing on the README now learns what Flow-Next does for them before
 they meet a single mechanism, and they see that it runs in real engineering
 organisations inside the first screenful instead of two thirds of the way down.

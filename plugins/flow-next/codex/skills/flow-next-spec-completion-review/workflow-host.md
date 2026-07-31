@@ -24,7 +24,16 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 
 ## Step 2: Dispatch read-only reviewer subagent
 
-Before **every** host dispatch, including the first, reserve the shared
+Validate the criteria object BEFORE reserving a round - an invalid
+`.flow/criteria.md` must not consume review budget (`$FLOWCTL criteria
+prompt-block >/dev/null` exiting nonzero is a validation error: surface it,
+fix the file, re-run; absent file exits 0 and costs nothing):
+
+```bash
+"$FLOWCTL" criteria prompt-block > /dev/null || { echo "invalid .flow/criteria.md - fix before re-running (see: flowctl criteria list)" >&2; exit 1; }
+```
+
+Then, before **every** host dispatch, including the first, reserve the shared
 spec-scoped completion-review round:
 
 ```bash
@@ -59,6 +68,11 @@ Retain those literal anchors through receipt writing.
 
 Give the subagent:
 - Spec requirements / R-IDs / acceptance criteria
+- The exact output of `$FLOWCTL criteria prompt-block`, appended verbatim when
+ non-empty (global acceptance criteria + the `## Global criteria` output
+ grammar; the command prints nothing when `.flow/criteria.md` is absent -
+ include nothing in that case. A nonzero exit is a validation error - fix
+ `.flow/criteria.md` before re-running the review)
 - Task list + evidence that work claims done
 - Diff / implementation surfaces to check compliance (not code-quality taste — that is impl-review)
 - Prior findings for convergence (on re-review)
@@ -130,8 +144,10 @@ deterministic attachment transaction:
  --json
 ```
 
-Unsupported/legacy prose leaves the additive field absent. The command performs
-no reviewer/model/network call.
+Unsupported/legacy prose leaves the additive field absent. The same transaction
+also attaches the additive `criteria: [{id, status, note?}]` field when the
+reviewer output has a parseable `## Global criteria` section (absent otherwise).
+The command performs no reviewer/model/network call.
 
 Persist it in this order:
 
