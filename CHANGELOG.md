@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.12.0] - 2026-07-31
 
 Your editor can now validate and autocomplete `.flow/config.json`. Flow-next
 ships a published JSON Schema for the whole documented config surface, and
