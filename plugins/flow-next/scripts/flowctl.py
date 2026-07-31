@@ -11145,8 +11145,10 @@ def cmd_init(args: argparse.Namespace) -> None:
     # shared config-writer lock (fn-139.3, R8b): init on an existing repo is a
     # read-modify-write like any other and can race a resolve transaction.
     config_path = flow_dir / CONFIG_FILE
-    # fn-138.3 (R3): both init write paths stamp "$schema" (first key, stable
-    # ordering) pointing at the published schema URL. Seeding it into the
+    # fn-138.3 (R3): both init write paths stamp "$schema" pointing at the
+    # published schema URL. First-key placement is enforced by
+    # atomic_write_json's sort_keys=True ("$" sorts before every letter); the
+    # construction order below is readability, not the mechanism. Seeding it into the
     # deep_merge BASE means an existing "$schema" in the file always wins
     # (override side), so a user-pinned URL survives re-init; a missing one is
     # added on the refresh rewrite. No other write path touches it: set_config
