@@ -8,6 +8,10 @@ satisfies: [R11, R12, R13, R24, R25, R41, R45, R49, R50, R51]
 
 Implement the immutable briefing package and attributable capture handoff. Separate deterministic emission from agent judgment: chart proposes/clusters and obtains confirmation; flowctl validates and publishes the confirmed proposal. Keep chart/B-ID/cluster/D-ID evidence provenance distinct from acceptance-criterion author tags.
 
+### Parallelization
+
+Runs in parallel with task 4 (no shared files: this task owns `flowctl.py` and the capture skill; task 4 owns the chart skill, shim, registries, and its own fixtures). A briefing-contract contradiction discovered here updates the spec before task 4 writes its briefing-handoff section.
+
 ### Exact files
 
 - `plugins/flow-next/scripts/flowctl.py` — add briefing validation/emission/versioning and idempotent `chart link-spec`.

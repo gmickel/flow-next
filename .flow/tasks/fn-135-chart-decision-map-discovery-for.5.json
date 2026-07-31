@@ -5,6 +5,7 @@
   "created_at": "2026-07-28T15:38:20.496222Z",
   "depends_on": [
     "fn-135-chart-decision-map-discovery-for.2",
+    "fn-135-chart-decision-map-discovery-for.3",
     "fn-135-chart-decision-map-discovery-for.4"
   ],
   "id": "fn-135-chart-decision-map-discovery-for.5",
@@ -13,5 +14,5 @@
   "spec_path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.5.md",
   "status": "todo",
   "title": "Project charts through the deterministic tracker facade",
-  "updated_at": "2026-07-30T13:11:45.664348Z"
+  "updated_at": "2026-07-31T04:10:38.552Z"
 }

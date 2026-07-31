@@ -12,6 +12,8 @@ Add optional full-lifecycle chart projection and safe tracker-locator re-entry t
 
 Re-anchor on fn-141 before starting. Its lifecycle facade, authoritative caller matrix, and tracker-runner teardown must be present. Do not implement against the deleted/legacy runner or copy adapter command prose into chart.
 
+Task 3 is a direct dependency: the projected transition matrix includes briefing/done, reopen, and stale-link events that task 3 implements. This task may run in parallel with task 6 (disjoint files).
+
 ### Exact files
 
 - `plugins/flow-next/scripts/flowctl.py` and the post-fn-141 `plugins/flow-next/scripts/flowctl_tracker/` modules that own locator, hierarchy, relation, capability, ledger, and lifecycle sync — extend the facade, not a chart-only transport stack.

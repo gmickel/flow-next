@@ -4,8 +4,7 @@
   "claimed_at": null,
   "created_at": "2026-07-28T15:38:20.302573Z",
   "depends_on": [
-    "fn-135-chart-decision-map-discovery-for.2",
-    "fn-135-chart-decision-map-discovery-for.3"
+    "fn-135-chart-decision-map-discovery-for.2"
   ],
   "id": "fn-135-chart-decision-map-discovery-for.4",
   "priority": 4,
@@ -13,5 +12,5 @@
   "spec_path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.4.md",
   "status": "todo",
   "title": "Ship prompt-first chart skill and adaptive loop",
-  "updated_at": "2026-07-30T13:11:44.774973Z"
+  "updated_at": "2026-07-31T04:10:38.552Z"
 }

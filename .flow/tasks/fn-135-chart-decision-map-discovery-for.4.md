@@ -8,6 +8,10 @@ satisfies: [R1, R2, R3, R4, R5, R7, R8, R9, R15, R17, R20, R26, R27, R28, R29, R
 
 Ship the canonical prompt-first `/flow-next:chart` skill and command shim. The host agent owns bounded grounding, interpretation, chart shaping, frontier judgment, evidence-route dispatch, prototype presentation and attended consent, tracker-locator re-entry, re-charting, briefing proposal, and one terminal verdict.
 
+### Parallelization
+
+Runs in parallel with task 3 by design: task 3 owns `flowctl.py` and the capture skill; this task owns the chart skill, shim, registries, and its own tests/fixtures - no shared files. The briefing-handoff prose is written against the spec's pinned proposal-file/briefing contract; if task 3 exposes a contract contradiction, the spec is updated first and this task re-anchors before writing that section.
+
 ### Exact files
 
 - `plugins/flow-next/skills/flow-next-chart/SKILL.md` — new canonical entrypoint and routing contract.
