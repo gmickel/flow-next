@@ -5799,8 +5799,12 @@ def validate_review_receipt_findings(receipt: object) -> bool:
 # line per criterion. parse_review_criteria() projects that section into the
 # additive receipt field `criteria: [{id, status, note?}]`. Same public
 # boundary as parse_review_findings: unparseable degrades to None (field
-# absent), never an error. The criteria array is authoritative for compliance
-# status; findings carry the detail; no cross-validation links the two.
+# absent), never an error. Because the array is authoritative for compliance
+# status, bind_review_criteria() additionally requires the parsed ids to
+# exactly match the currently configured `.flow/criteria.md` id set before
+# either attach site writes the field - omitted, extra, or invented ids (or a
+# missing/invalid criteria file) degrade to absent, never an error. Findings
+# carry the detail; no cross-validation links the two.
 
 GLOBAL_CRITERIA_OUTPUT_HEADING = "## Global criteria"
 
@@ -5849,8 +5853,10 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
             seen.add(cid)
             entry: dict[str, Any] = {"id": cid, "status": m.group(2)}
             note = (m.group(3) or "").strip()
+            if len(note) > _REVIEW_CRITERIA_MAX_NOTE:
+                return None
             if note:
-                entry["note"] = note[:_REVIEW_CRITERIA_MAX_NOTE]
+                entry["note"] = note
             entries.append(entry)
             if len(entries) > _REVIEW_CRITERIA_MAX_ENTRIES:
                 return None
@@ -5898,6 +5904,36 @@ def validate_review_receipt_criteria(receipt: object) -> bool:
         ):
             return False
     return True
+
+
+def bind_review_criteria(
+    criteria: Optional[list[dict]],
+) -> Optional[list[dict]]:
+    """Bind parsed reviewer criteria to the configured `.flow/criteria.md` ids.
+
+    The receipt criteria array is documented as authoritative for compliance,
+    so it must never silently drop a standing criterion or assert compliance
+    with an id that is not configured. Returns ``criteria`` only when the
+    parsed id set exactly equals the configured id set; any mismatch, or an
+    absent/unreadable/invalid/empty criteria file, degrades to None (field
+    absent) - never an error.
+    """
+    if criteria is None:
+        return None
+    try:
+        path = get_criteria_path()
+        if not path.exists():
+            return None
+        entries, errors = _criteria_parse(path.read_text(encoding="utf-8"))
+        if errors or not entries:
+            return None
+        configured_ids = {entry["id"] for entry in entries}
+        parsed_ids = {item["id"] for item in criteria}
+    except (AttributeError, KeyError, OSError, TypeError, UnicodeError, ValueError):
+        return None
+    if parsed_ids != configured_ids:
+        return None
+    return criteria
 
 
 def select_current_review_findings(
@@ -6211,7 +6247,7 @@ def cmd_review_findings_attach(args: argparse.Namespace) -> None:
             receipt.pop("findings", None)
         criteria = None
         if review_type == "completion_review":
-            criteria = parse_review_criteria(review_text)
+            criteria = bind_review_criteria(parse_review_criteria(review_text))
             if criteria is not None:
                 receipt["criteria"] = criteria
             else:
@@ -28631,7 +28667,7 @@ def _write_backend_review_receipt(
             if findings is not None:
                 receipt_data["findings"] = findings
         if review_type == "completion_review":
-            criteria = parse_review_criteria(review_text)
+            criteria = bind_review_criteria(parse_review_criteria(review_text))
             if criteria is not None:
                 receipt_data["criteria"] = criteria
         content = json.dumps(receipt_data, indent=2) + "\n"

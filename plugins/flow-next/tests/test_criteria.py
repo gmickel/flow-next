@@ -311,6 +311,18 @@ class TestParseReviewCriteria(unittest.TestCase):
             [{"id": "G1", "status": "met", "note": "ok"}],
         )
 
+    def test_oversized_note_returns_none(self) -> None:
+        text = "## Global criteria\n\nG1: met - " + ("x" * 401) + "\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+    def test_max_length_note_kept_verbatim(self) -> None:
+        note = "x" * 400
+        text = f"## Global criteria\n\nG1: met - {note}\n"
+        self.assertEqual(
+            flowctl.parse_review_criteria(text),
+            [{"id": "G1", "status": "met", "note": note}],
+        )
+
     def test_no_section_returns_none(self) -> None:
         text = "## Requirements Extracted\n\n1. something\n\n<verdict>SHIP</verdict>\n"
         self.assertIsNone(flowctl.parse_review_criteria(text))
@@ -470,7 +482,46 @@ class TestCriteriaReceiptCli(unittest.TestCase):
             proc.stdout[:80],
         )
 
+    def _write_criteria(self, *ids: str) -> None:
+        lines = "".join(f"- **{cid}:** Criterion {cid} prose.\n" for cid in ids)
+        (self.root / ".flow" / "criteria.md").write_text(lines, encoding="utf-8")
+
+    def _attach(self, review_text: str) -> tuple[dict, Path]:
+        review = self.root / "review.md"
+        review.write_text(review_text, encoding="utf-8")
+        in_path = self.root / "in.json"
+        out_path = self.root / "out.json"
+        in_path.write_text(
+            json.dumps(
+                {
+                    "type": "completion_review",
+                    "id": "fn-9",
+                    "mode": "host",
+                    "verdict": "SHIP",
+                }
+            ),
+            encoding="utf-8",
+        )
+        proc = self._run(
+            "review-findings",
+            "attach",
+            "--input",
+            str(in_path),
+            "--receipt",
+            str(out_path),
+            "--review-file",
+            str(review),
+            "--head",
+            "HEAD",
+            "--json",
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr + proc.stdout)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload.get("success"))
+        return payload, out_path
+
     def test_review_findings_attach_with_criteria(self) -> None:
+        self._write_criteria("G1", "G2", "G3")
         review = self.root / "review.md"
         review.write_text(_SAMPLE_COMPLETION_REVIEW, encoding="utf-8")
         in_path = self.root / "in.json"
@@ -556,6 +607,54 @@ class TestCriteriaReceiptCli(unittest.TestCase):
         self.assertFalse(payload.get("criteria_attached"))
         receipt = json.loads(out_path.read_text(encoding="utf-8"))
         self.assertNotIn("criteria", receipt)
+
+    def test_attach_no_criteria_file_suppresses_criteria(self) -> None:
+        # Reviewer emits a Global criteria section but the repo has no
+        # .flow/criteria.md - fabricated compliance must not attach.
+        payload, out_path = self._attach(_SAMPLE_COMPLETION_REVIEW)
+        self.assertFalse(payload.get("criteria_attached"))
+        receipt = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertNotIn("criteria", receipt)
+
+    def test_attach_omitted_criterion_suppresses_criteria(self) -> None:
+        # Configured G1-G4 but the reviewer only reported G1-G3 - a dropped
+        # standing criterion degrades to absent.
+        self._write_criteria("G1", "G2", "G3", "G4")
+        payload, out_path = self._attach(_SAMPLE_COMPLETION_REVIEW)
+        self.assertFalse(payload.get("criteria_attached"))
+        receipt = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertNotIn("criteria", receipt)
+
+    def test_attach_invented_id_suppresses_criteria(self) -> None:
+        # Reviewer reports G1-G3 but only G1-G2 are configured - invented ids
+        # degrade to absent.
+        self._write_criteria("G1", "G2")
+        payload, out_path = self._attach(_SAMPLE_COMPLETION_REVIEW)
+        self.assertFalse(payload.get("criteria_attached"))
+        receipt = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertNotIn("criteria", receipt)
+
+    def test_attach_oversized_note_suppresses_criteria(self) -> None:
+        # A >400-char note is invalid reviewer output - the projection
+        # degrades to absent rather than truncating the evidence.
+        self._write_criteria("G1", "G2", "G3")
+        review_text = _SAMPLE_COMPLETION_REVIEW.replace(
+            "G2: violated - dep added without health check",
+            "G2: violated - " + ("x" * 401),
+        )
+        payload, out_path = self._attach(review_text)
+        self.assertFalse(payload.get("criteria_attached"))
+        receipt = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertNotIn("criteria", receipt)
+
+    def test_attach_exact_match_attaches(self) -> None:
+        self._write_criteria("G1", "G2", "G3")
+        payload, out_path = self._attach(_SAMPLE_COMPLETION_REVIEW)
+        self.assertTrue(payload.get("criteria_attached"))
+        receipt = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [item["id"] for item in receipt["criteria"]], ["G1", "G2", "G3"]
+        )
 
 
 class TestCriteriaTemplate(unittest.TestCase):
