@@ -2,6 +2,19 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Spec-authoring skills no longer duplicate standing criteria.** When
+  `.flow/criteria.md` exists, `/flow-next:plan`, `/flow-next:capture`, and
+  `/flow-next:interview` reference a relevant G-ID in prose instead of
+  restating it as an R-ID - a copy would freeze while `criteria.md` evolves
+  and get judged twice (once as the spec's R, once as the standing G at
+  completion review). A spec writes an R-ID only for what it requires beyond
+  the standing rule. Docs: `teams.md` § Standing criteria and
+  `spec-template.md` § Global criteria.
+
 ## [flow-next 3.11.0] - 2026-07-31
 
 A pull request can no longer earn land's trust just by *talking about* flow-next.

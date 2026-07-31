@@ -326,6 +326,7 @@ Auxiliary section rules layered on the template:
 - Allocate sequentially from R1 in creation order. Capture-created specs have never been reviewed → no renumber concern (the renumber-forbidden rule from `flow-next-plan/steps.md:227-262` only applies after a review cycle).
 - R-IDs in `## Acceptance Criteria` and `## Requirement coverage` must match.
 - Plain markdown prose, not YAML.
+- When `.flow/criteria.md` exists, do not restate its standing criteria (G-IDs) as R-IDs - completion review already judges every G-ID against the spec. Reference a relevant G-ID in prose when useful; write an R only for what this spec adds beyond the standing rule.
 
 ### 2.4 — Acceptance-criterion testability check
 

@@ -152,6 +152,7 @@ The rules mirror R-IDs where they apply:
 - Ids must be unique; gaps are allowed (deleting G2 leaves G1, G3). **Never renumber** - G-IDs are stable identity across specs and receipts, exactly like R-ID numbers within a spec.
 - `flowctl criteria list --json` parses and validates the file; invalid content is a loud error, an absent file is a silent no-op everywhere.
 - The **spec is the unit of compliance**: spec completion review (not per-task impl review) judges each G-ID against the whole implementation and records `met` / `violated` / `n/a` per criterion in the review receipt's additive `criteria` array. Violations also surface as normal findings.
+- **G-IDs are never restated as R-IDs.** The spec-authoring skills (`plan`, `capture`, `interview`) do not copy standing criteria into a spec's `## Acceptance Criteria` - a copy drifts as `criteria.md` evolves and gets judged twice. A spec references a relevant G-ID in prose; an R-ID covers only what the spec adds beyond the standing rule.
 
 `/flow-next:setup` offers to scaffold the file (opt-in; declining leaves no trace). See [`review-findings.md`](review-findings.md) § Global-criteria compliance for the receipt field, and [`flowctl.md`](flowctl.md) § criteria for the CLI.
 
