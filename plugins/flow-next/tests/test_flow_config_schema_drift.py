@@ -462,5 +462,33 @@ class FixtureValidation(unittest.TestCase):
         self._invalid({"$schema": 42})
 
 
+class TestArtifactKeywordsSupported(unittest.TestCase):
+    """Every node of the committed artifact uses only checker-supported keywords.
+
+    The checker's fail-closed guarantee is per-visited-node; this walk is
+    instance-independent, so an unsupported keyword in a branch no fixture
+    exercises still fails the suite (host review P3, fn-138.2)."""
+
+    def test_every_schema_node_uses_supported_keys(self) -> None:
+        def walk(node, path="$"):
+            if isinstance(node, dict):
+                unknown = set(node) - _SUPPORTED_KEYS - {"$id", "title"}
+                # Property NAMES are not keywords - only walk keyword positions.
+                for key, value in node.items():
+                    if key in ("properties", "patternProperties"):
+                        for name, sub in value.items():
+                            walk(sub, f"{path}.{key}[{name}]")
+                    elif key in ("items", "additionalProperties") and isinstance(value, dict):
+                        walk(value, f"{path}.{key}")
+                    elif key == "anyOf":
+                        for i, sub in enumerate(value):
+                            walk(sub, f"{path}.anyOf[{i}]")
+                self.assertFalse(
+                    unknown, f"unsupported schema keywords at {path}: {sorted(unknown)}"
+                )
+
+        walk(json.loads(ARTIFACT.read_text(encoding="utf-8")))
+
+
 if __name__ == "__main__":
     unittest.main()
