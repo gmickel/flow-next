@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.11.0] - 2026-07-31
 
 A pull request can no longer earn land's trust just by *talking about* flow-next.
 Land's autonomous babysitter now recognizes its own PRs by an invisible
