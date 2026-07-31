@@ -4,6 +4,48 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+Your editor can now validate and autocomplete `.flow/config.json`. Flow-next
+ships a published JSON Schema for the whole documented config surface, and
+`flowctl init` wires it up for you - open the file in VS Code (or any
+JSON-Schema-aware editor) and you get completion for every key, enum values
+for knobs like `review.backend` and `pipeline.qa`, hover docs, and squiggles
+on typos, instead of cross-checking the settings table by hand.
+
+### Added
+
+- **Published JSON Schema for `.flow/config.json` (fn-138).** A deterministic,
+  pure-stdlib generator emits a draft 2020-12 schema covering all documented
+  keys with descriptions, defaults, enums, and the `backend[:model[:effort]]`
+  spec-grammar pattern. The committed artifact lives at
+  `plugins/flow-next/schema/flow-config.schema.json` and is published at the
+  stable URL `https://flow-next.dev/schema/flow-config.schema.json`
+  (latest-mutable). Kept honest by tests, not by discipline: a drift test
+  walks the config reader's accepted keys against the schema in both
+  directions (a new config key without a schema entry fails the suite),
+  schema `default` annotations are asserted equal to the code defaults, and
+  valid/invalid fixture configs validate with a stdlib-only structural
+  validator - no new dependency, no runtime validation in flowctl.
+- **`flowctl init` stamps `$schema` into configs it writes.** Fresh scaffolds
+  and re-init refreshes carry `"$schema": "https://flow-next.dev/schema/flow-config.schema.json"`
+  as the first key; existing configs are untouched on every other path
+  (`config set` round-trips the stamp, and an already-present `$schema`
+  value always survives re-init). The URL is an inert string - flowctl never
+  fetches it. Until the docs site publishes the URL, editors may show a
+  transient "could not load reference" warning on the `$schema` line;
+  validation picks up automatically once the schema is live.
+
+### Fixed
+
+- **flowctl.md settings table: corrected `memory.enabled` and
+  `planSync.enabled` defaults.** Both were documented as `false`; the code
+  default for each is `true`.
+
+> Downstream walk (before the release announcement): publish
+> `plugins/flow-next/schema/flow-config.schema.json` at
+> `https://flow-next.dev/schema/flow-config.schema.json` on the docs site
+> FIRST, so freshly stamped configs resolve their `$schema` reference on day
+> one; then the docs-site changelog entry.
+
 ### Changed
 
 - **Spec-authoring skills no longer duplicate standing criteria.** When

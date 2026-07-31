@@ -1394,6 +1394,12 @@ _INIT_UNMATERIALIZED_BLOCKS = ("artifacts",)
 # fn-134.2: tracker.specIds — see get_default_tracker_config comment for the
 # materialization decision (DO NOT materialize; unset must be detectable).
 _INIT_UNMATERIALIZED_LEAVES = ("tracker.specIds",)
+# fn-138.3 (R3): stable published URL of the flow-config JSON Schema, stamped
+# as "$schema" into configs cmd_init scaffolds/refreshes so editors validate
+# and autocomplete .flow/config.json. Latest-mutable (not versioned). Inert to
+# flowctl: never fetched, never read back. This is the ONE flowctl constant
+# carrying the URL (the committed artifact's $id and tests reference it).
+FLOW_CONFIG_SCHEMA_URL = "https://flow-next.dev/schema/flow-config.schema.json"
 
 # Strict enum for tracker.specIds (fn-134.2). Write-side rejects anything else;
 # read-side fail-closes anything else to "flow".
@@ -11139,9 +11145,19 @@ def cmd_init(args: argparse.Namespace) -> None:
     # shared config-writer lock (fn-139.3, R8b): init on an existing repo is a
     # read-modify-write like any other and can race a resolve transaction.
     config_path = flow_dir / CONFIG_FILE
+    # fn-138.3 (R3): both init write paths stamp "$schema" pointing at the
+    # published schema URL. First-key placement is enforced by
+    # atomic_write_json's sort_keys=True ("$" sorts before every letter); the
+    # construction order below is readability, not the mechanism. Seeding it into the
+    # deep_merge BASE means an existing "$schema" in the file always wins
+    # (override side), so a user-pinned URL survives re-init; a missing one is
+    # added on the refresh rewrite. No other write path touches it: set_config
+    # is a raw read-modify-write, so `config set` round-trips it untouched.
+    stamped_defaults = {"$schema": FLOW_CONFIG_SCHEMA_URL}
+    stamped_defaults.update(_init_persisted_defaults())
     with _shared_config_lock(flow_dir):
         if not config_path.exists():
-            atomic_write_json(config_path, _init_persisted_defaults())
+            atomic_write_json(config_path, stamped_defaults)
             actions.append("created config.json")
         else:
             # Load raw config, compare with merged (which includes new defaults)
@@ -11154,7 +11170,7 @@ def cmd_init(args: argparse.Namespace) -> None:
             # The 1.1.11 pre-merge crossEpic→crossSpec mirror was removed in
             # 2.0.0 along with the `planSync.crossEpic` alias: a leftover legacy
             # key in the file is now inert (preserved by the merge, never read).
-            merged = deep_merge(_init_persisted_defaults(), raw)
+            merged = deep_merge(stamped_defaults, raw)
             if merged != raw:
                 atomic_write_json(config_path, merged)
                 actions.append("upgraded config.json (added missing keys)")

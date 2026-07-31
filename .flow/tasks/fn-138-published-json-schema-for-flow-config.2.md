@@ -18,9 +18,8 @@ Both-directions honesty between the config reader and the schema; fixture valida
 - [ ] Fixture validation stdlib-only (R4).
 
 ## Done summary
-TBD
-
+Added the fn-138.2 reader-schema honesty layer: a drift test asserting schema leaf paths == get_default_config() leaves UNION an annotated machine-written allowlist (both directions), a source-grep guard over flowctl-side config-read literals (both quote styles, f-string family prefixes, exact-boundary matching), and a minimal fail-closed stdlib draft-2020-12 structural checker with valid/invalid fixtures (init-persisted defaults + stamped $schema anti-regression, per-backend effort grammar, null cleanReviewCommentPattern). The inventory caught a real drift: makePr.derivedPaths was a live get_config read missing from the schema - the generator learned it and the artifact was regenerated.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d4f7c6d7c22f54f36553c31acebf3d05d09d247d, 938b7473
+- Tests: python3 scripts/gen_flow_config_schema.py --check, cd plugins/flow-next/tests && python3 -m unittest test_flow_config_schema test_flow_config_schema_drift -q (38 tests OK; baseline: green), uvx ruff@0.16.0 check . (repo root, all passed), post-review: 29+10 schema tests OK incl. instance-independent keyword sweep
 - PRs:

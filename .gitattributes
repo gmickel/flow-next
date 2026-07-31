@@ -7,3 +7,5 @@
 # (plugins/flow-next/scripts/flowctl, .flow/bin/flowctl, installed scripts/ralph/flowctl).
 *.cmd text eol=crlf
 flowctl text eol=lf
+# Schema regen byte-identity tests need LF on windows-latest (no CRLF checkout).
+*.schema.json text eol=lf

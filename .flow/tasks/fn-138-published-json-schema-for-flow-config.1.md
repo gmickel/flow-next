@@ -20,9 +20,8 @@ Deterministic generator + byte-stable committed schema.
 - [ ] Generator + committed artifact byte-stable w/ regen test; full documented surface covered (R1).
 
 ## Done summary
-TBD
-
+Added the deterministic flow-config JSON Schema generator (scripts/gen_flow_config_schema.py, pure stdlib, standalone-script convention mirroring gen_tracker_manifest.py with --check mode) and the committed draft 2020-12 artifact at plugins/flow-next/schema/flow-config.schema.json, covering the full ~44-key documented surface with code-authoritative keys/types/defaults (get_default_config leaves, TRACKER_* enums, MODEL_ROLES/MODEL_ROLE_BACKENDS, BACKEND_REGISTRY-derived backend[:model[:effort]] patterns, resolved_cache SCOPES) and docs-authored descriptions. Determinism fully pinned (insertion order, ensure_ascii, explicit separators, one trailing newline, binary write, *.schema.json eol=lf in .gitattributes); the new test module asserts byte-identity regen, defaults honesty both directions, the tracker.resolved/scopeResolvedAt open-map contract, and description coverage. Implementation code was delegated to grok-4.5 via the cursor-agent bridge per run direction (one polish pass applied in-session); flowctl.py untouched, so no dual-copy/manifest/sync-codex propagation was needed.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8e22df13171cdc1cccc3203ec07d49599dd58550, f0d2571f
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p "test_flow_config_schema.py" -v (10 tests OK), python3 -m unittest discover -s plugins/flow-next/tests -p "test_config_snapshot.py" -q (OK), python3 scripts/run_tests_parallel.py (files=166 ran=3532 failures=0 errors=0; green receipt 8e22df13-unittest), python3 scripts/gen_flow_config_schema.py --check (current), uvx ruff@0.16.0 check . (All checks passed), post-review: test_flow_config_schema 10/10 OK; reviewer fuzz 63 specs schema==BackendSpec.parse; repo config validates 0 errors
 - PRs:

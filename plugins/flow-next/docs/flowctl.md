@@ -757,12 +757,14 @@ flowctl config set memory.enabled false [--json]
 
 `--raw` applies to all three forms and bypasses merged defaults: scalar reads return `null` for keys absent from the on-disk `.flow/config.json` (distinguishing unset from explicitly-false), and subtree/root reads return only set values with absent leaves omitted (not defaulted). Raw output carries `"raw": true`. Subtree and root output always emit canonical key names; a persisted legacy leaf surfaces silently under its canonical name, and the deprecation warning fires only when the legacy key itself is read as a scalar.
 
+**JSON Schema:** `.flow/config.json` has a published JSON Schema (draft 2020-12) covering the full documented surface below - keys, types, enums, the `review.backend` spec grammar, and per-key descriptions. The committed artifact lives at [`plugins/flow-next/schema/flow-config.schema.json`](../schema/flow-config.schema.json) and is published at the stable URL `https://flow-next.dev/schema/flow-config.schema.json` (latest-mutable, not versioned). `flowctl init` stamps a `$schema` key pointing at that URL into configs it scaffolds or refreshes, so editors validate and autocomplete the file; the value is an inert string - flowctl never fetches it, and `config set` round-trips it untouched. Existing configs are only stamped on a re-init refresh; an already-present `$schema` value (for example a pinned URL) always survives.
+
 **Available settings:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `memory.enabled` | bool | `false` | Enable memory system |
-| `planSync.enabled` | bool | `false` | Enable plan-sync after task completion |
+| `memory.enabled` | bool | `true` | Enable memory system |
+| `planSync.enabled` | bool | `true` | Enable plan-sync after task completion |
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync — scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
 | `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` — cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
