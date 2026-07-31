@@ -550,7 +550,13 @@ class TestBackendGrammarMatchesParser(unittest.TestCase):
     """Exhaustive equivalence: the schema's review.backend grammar accepts a
     string iff BackendSpec.parse does, over every shape up to the parser's
     two-colon cap for every backend (77 cases). Ends the per-shape whack-a-mole
-    permanently (PR #280 rounds 1-3)."""
+    permanently (PR #280 rounds 1-3).
+
+    Deliberate boundary: whitespace-PADDED components (parse strips them, e.g.
+    `codex: model : high `) are excluded from the equivalence contract - the
+    schema lints toward the canonical unpadded form, and stricter-in-editor is
+    the safe direction (accepted in the fn-138.1 host review and PR #280 r6;
+    flowctl never rejects such configs at runtime)."""
 
     def test_schema_equals_parser_over_all_shapes(self) -> None:
         import contextlib
