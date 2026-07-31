@@ -509,6 +509,39 @@ class TestArtifactKeywordsSupported(unittest.TestCase):
         walk(json.loads(ARTIFACT.read_text(encoding="utf-8")))
 
 
+class TestDictReadGuard(unittest.TestCase):
+    """Mechanical guard for dict-navigation config reads in flowctl_tracker.
+
+    The four-helper call-site guard cannot see `per.get("key")` /
+    `transport.get("key")` navigation - this test greps those literal forms
+    across flowctl_tracker and asserts every read key has a schema entry, so
+    a future `per.get("newSetting")` fails the suite instead of silently
+    missing from the schema (PR #280 round 5)."""
+
+    _PER_RE = re.compile(r"""\bper\.get\(\s*["']([A-Za-z]+)["']\s*\)""")
+    _TRANSPORT_RE = re.compile(r"""\btransport\.get\(\s*["']([A-Za-z]+)["']\s*\)""")
+
+    def test_dict_read_keys_have_schema_entries(self) -> None:
+        schema = json.loads(ARTIFACT.read_text(encoding="utf-8"))
+        tracker_props = schema["properties"]["tracker"]["properties"]
+        per_props = set(tracker_props["perTracker"]["properties"])
+        transport_props = set(tracker_props["transport"]["properties"])
+        tracker_dir = REPO / "plugins" / "flow-next" / "scripts" / "flowctl_tracker"
+        missing = []
+        for path in sorted(tracker_dir.rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            for key in self._PER_RE.findall(text):
+                if key not in per_props:
+                    missing.append(f"tracker.perTracker.{key} ({path.name})")
+            for key in self._TRANSPORT_RE.findall(text):
+                if key not in transport_props:
+                    missing.append(f"tracker.transport.{key} ({path.name})")
+        self.assertFalse(
+            missing,
+            "dict-read config keys without schema entries: " + ", ".join(missing),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
 

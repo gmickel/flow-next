@@ -524,6 +524,16 @@ def _status_map_fragment() -> dict:
     }
 
 
+def _assert_unique_paths(table: list[tuple[str, dict]]) -> None:
+    """A duplicate TABLE path silently clobbers the earlier node in the
+    assembler (parent_props[key] = node) - fail loudly instead (PR #280 r5)."""
+    seen: set[str] = set()
+    for path, _ in table:
+        if path in seen:
+            raise AssertionError(f"duplicate TABLE path: {path}")
+        seen.add(path)
+
+
 def _build_table() -> list[tuple[str, dict]]:
     """Ordered TABLE: dotted path -> container or leaf fragment."""
     return [
@@ -579,8 +589,9 @@ def _build_table() -> list[tuple[str, dict]]:
             {"enum": ["cloud-basic", "bearer-pat", None]},
         ),
         ("tracker.perTracker.apiVersion", {"type": ["integer", "null"]}),
-        ("tracker.perTracker.authScheme", {"type": ["string", "null"]}),
-        ("tracker.perTracker.issueType", {"type": ["string", "null"]}),
+        # set_config coerces digit-only args to int and the resolver compares
+        # str(configured) - numeric ids are a supported CLI shape.
+        ("tracker.perTracker.issueType", {"type": ["string", "integer", "null"]}),
         ("tracker.perTracker.blocksLinkType", {"type": ["string", "null"]}),
         ("tracker.perTracker.preferredTransport", {"type": ["string", "null"]}),
         ("tracker.perTracker.transport", {"type": ["string", "null"]}),
@@ -701,6 +712,7 @@ def compute() -> dict:
     """Build the schema object (insertion order is property order)."""
     defaults = _default_leaves(flowctl.get_default_config())
     table = _build_table()
+    _assert_unique_paths(table)
 
     schema: dict[str, Any] = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

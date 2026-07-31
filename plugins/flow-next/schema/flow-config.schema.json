@@ -329,9 +329,10 @@
             },
             "authScheme": {
               "description": "Jira auth shape decided once at the discovery ceremony: cloud-basic (Cloud HTTP-basic email:API_TOKEN) or bearer-pat (DC/Server bearer PAT). Credentials still read from env each run, never stored here.",
-              "type": [
-                "string",
-                "null"
+              "enum": [
+                "cloud-basic",
+                "bearer-pat",
+                null
               ],
               "default": null
             },
@@ -347,6 +348,7 @@
               "description": "Jira issue type (name or id) for created issues; a configured value that does not resolve against the live project is an error.",
               "type": [
                 "string",
+                "integer",
                 "null"
               ]
             },
