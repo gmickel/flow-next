@@ -24,7 +24,16 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 
 ## Step 2: Dispatch read-only reviewer subagent
 
-Before **every** host dispatch, including the first, reserve the shared
+Validate the criteria object BEFORE reserving a round - an invalid
+`.flow/criteria.md` must not consume review budget (`$FLOWCTL criteria
+prompt-block >/dev/null` exiting nonzero is a validation error: surface it,
+fix the file, re-run; absent file exits 0 and costs nothing):
+
+```bash
+"$FLOWCTL" criteria prompt-block > /dev/null || { echo "invalid .flow/criteria.md - fix before re-running (see: flowctl criteria list)" >&2; exit 1; }
+```
+
+Then, before **every** host dispatch, including the first, reserve the shared
 spec-scoped completion-review round:
 
 ```bash
