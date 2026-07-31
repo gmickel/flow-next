@@ -24,6 +24,9 @@ Treating the mirror regen as a mechanical step ("validators green = done"). The 
 - Lifecycle dispatches use the fn-57 grammar verbatim: `skill: flow-next-tracker-sync (operation: push <spec-id>, event: land.merged)`.
 - Centralize ledger post-push writes in ONE canonical snippet (sha + decision) that all push paths reference.
 
+## Update 2026-08-01
+The `skill: flow-next-tracker-sync (operation: ...)` free-prose dispatch grammar above is now the FORBIDDEN legacy shape. Post fn-140/141, tracker-sync dispatch is the deterministic CLI facade: `"$FLOWCTL" tracker sync <id> --op <push|pull|reconcile|comment> --event <key>`. Any lifecycle touchpoint still emitting the old `skill: ... (operation: ...)` form needs updating to the facade call.
+
 ## Prevention
 - When a release regenerates the Codex mirror with a NEW skill, expect the reviewer to treat the whole mirror as introduced — pre-audit the mirrored skill's path vars (`grep -rE '(PLUGIN_ROOT)[^ ]*/skills/' codex/skills/`) and any state-mutating steps for a persistence/commit story before sending to review.
 - Any skill step that mutates `.flow` outside the worker-commit flow needs an explicit commit+push+rollback story — the `.flow/`-excluding dirty-tree guards make silent stranding the default failure mode.

@@ -40,3 +40,14 @@ For tracker documentation changes, search the whole skill and docs tree for old
 route vocabulary, then inspect each provider-fidelity bullet independently.
 Run mirror parity, prompt pins, and the relevant provider contract tests before
 review. Recompute always-loaded prompt weight whenever an always-read file changes.
+
+## Consolidated 2026-08-01
+Folded in `bug/integration/adding-a-tracker-to-tracker-sync-sweep-2026-06-28.md`
+(deleted; superseded by the fn-141 facade teardown, which removed the
+per-adapter-prose shape that entry described). One surviving technique worth
+keeping: when sweeping tracker docs for a per-provider claim, a broad slash-list
+grep (`Linear/GitHub/GitLab`-style enumerations) is necessary but not sufficient —
+also grep the per-adapter fidelity bullets that name each tracker in its own
+clause (`on GitHub`, `on GitLab`, `flat tracker`, `threaded`), since those don't
+match the slash-list pattern. Budget for multiple review rounds on a tracker-doc
+sweep; a dispatched reviewer is the reliable backstop for this miss class.

@@ -13,12 +13,12 @@ When planning a flow-next epic that touches skills, agents, slash commands, tool
 ## What to verify during planning
 
 **New user-facing skill** (any new `/flow-next:<name>` slash command):
-- Add the skill name to the `REQUIRED_OPENAI_YAML_SKILLS` array in `scripts/sync-codex.sh` (~line 537). Validation hard-fails if missing.
-- Add a `generate_openai_yaml` call (~lines 514-531). Pick the right brand color section: workflow blue `#3B82F6`, review red `#EF4444`, utility amber `#F59E0B`.
+- Add the skill name to the `REQUIRED_OPENAI_YAML_SKILLS` array in `scripts/sync-codex.sh` (grep for the array name — the file grows, so line numbers rot; anchor on the name, not a line offset). Validation hard-fails if missing.
+- Add a `generate_openai_yaml` call (grep for `generate_openai_yaml`, near the `REQUIRED_OPENAI_YAML_SKILLS` array). Pick the right brand color section: workflow blue `#3B82F6`, review red `#EF4444`, utility amber `#F59E0B`.
 - Provide a default prompt only when it materially helps the user (capture/work/plan/prospect have one; interview/audit/setup don't).
 
 **New tool reference** (a Claude-native tool we haven't used canonically before):
-- Add a rewrite rule in the tool-name transformation block at lines 360-491 (currently handles `AskUserQuestion → request_user_input`). New tools need new sed transforms.
+- Add a rewrite rule in the tool-name transformation block (grep for `is_negative_context` and the `spawn_agent` transform — the block currently handles `AskUserQuestion → request_user_input`, `Task`/`Explore` → `spawn_agent`, etc.). New tools need new sed transforms.
 - Document the canonical → mirror mapping in CLAUDE.md "Cross-platform patterns" so future skill authors don't reinvent.
 
 **New `.md` agent in `plugins/flow-next/agents/`**:
@@ -28,7 +28,7 @@ When planning a flow-next epic that touches skills, agents, slash commands, tool
 **New prose rule** (e.g. "no jargon X must appear in user-facing files"):
 - Validation lives in **two places**, not one — mirror the existing `AskUserQuestion` / `ToolSearch` split:
   - **Canonical scan**: `ci_test.sh` greps `plugins/flow-next/skills + agents + commands + scripts/flowctl.py`
-  - **Mirror scan**: `scripts/sync-codex.sh` validation block at lines 760-770 greps `plugins/flow-next/codex/skills/` and `codex/agents/`
+  - **Mirror scan**: `scripts/sync-codex.sh` validation block (grep the block near the mirror's skill/agent walk) greps `plugins/flow-next/codex/skills/` and `codex/agents/`
 - Mirror scan stays with the sync script because the mirror is its responsibility.
 
 **After any prose change in skills/agents**:
@@ -51,3 +51,6 @@ Any flow-next planning step that produces tasks touching:
 - `scripts/sync-codex.sh` itself (extending validation, rewrites, generation)
 
 If the planned change touches any of these, the planning step MUST include a sync-codex.sh audit task or fold the audit into an existing task's acceptance.
+
+## Update 2026-08-01
+Line-number anchors in this entry (formerly ~537, ~360-491, ~760-770) rot as the script grows — replaced above with grep-by-name anchors on the actual function/marker names (`REQUIRED_OPENAI_YAML_SKILLS`, `is_negative_context`, the `spawn_agent` transform). Also note: the validation-guard family this entry describes has grown since 2026-04-30 - fn-100 added the Explore-dispatch and scout-tier rules as their own guarded transforms/validators. When auditing sync-codex.sh during planning, check the current guard list rather than assuming this entry's original set is exhaustive.

@@ -25,3 +25,4 @@ Treating the spec's key names as authoritative without checking `get_default_con
 ## Prevention
 - Before implementing a spec that "adds" config keys, grep `get_default_config()` + flowctl.md config table for the surface under any casing; a naming mismatch means amend the spec/task to the shipped contract in the SAME commit as the implementation (reviewer checks all three agree).
 - Any "cross-family review" default must name the reference point: cross-family FROM THE WRITER. Audit every recommendation surface (setup questions, snippets, docs tables) for host-blindness when the writer model varies by host.
+- Since fn-138, a NEW config key also requires a schema entry: extend the TABLE in `scripts/gen_flow_config_schema.py` (or the drift-test allowlist), then regenerate the schema artifact — otherwise `test_flow_config_schema_drift` fails.

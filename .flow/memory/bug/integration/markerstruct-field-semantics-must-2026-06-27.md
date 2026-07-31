@@ -61,3 +61,6 @@ For prose teardown, validate three layers before review:
 2. compare facade invocation prose with CLI validation requirements;
 3. run the complete subsystem test glob and migrate stale prose assertions to
    behavior or boundary assertions.
+
+## Update 2026-08-01
+The original Solution's location claim ("`adapter-interface.md` § `comment` gained a marker-vocabulary table") is stale. `adapter-interface.md` now delegates the closed marker vocabulary to `comments-sync.md` — that is the current pointer for the marker-vocabulary table, not `adapter-interface.md` itself.

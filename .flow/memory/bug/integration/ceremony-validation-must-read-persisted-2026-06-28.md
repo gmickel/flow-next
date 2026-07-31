@@ -50,3 +50,6 @@ projectKey/authScheme/apiVersion/sslVerify from config, creds from env per schem
   explicit "we actually validated" flag, not the absence of an error.
 - For a multi-tracker ceremony, mirror the runtime resolution order (`env > config`)
   in the validation snippet so config-first setups are actually exercised.
+
+## Update 2026-08-01
+The specific Jira readiness bash this entry described in `steps.md` is gone - readiness resolution is now deterministic in `flowctl_tracker` (fn-139-141), not a host-agent-prose bash snippet. The site that originally motivated this entry was torn down; the durable lesson is the general one above (persisted-config reads only, never collapse distinct error states into one accept-on-faith branch) and it still applies wherever a ceremony persists-then-validates a decision.

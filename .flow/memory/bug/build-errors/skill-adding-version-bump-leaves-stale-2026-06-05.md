@@ -21,7 +21,7 @@ When a version-bump task adds a NEW skill, the human-readable skill/command coun
 Impl-review (rp) flagged it P2/confidence-100 and held R12 at `partial` until fixed.
 
 ## What Didn't Work
-Updating only the README prose count. The manifest descriptions are easy to forget because they are JSON `description`/`longDescription` strings, not an obvious "count" field, and they each phrase the count slightly differently (phrasings differ per manifest; as of 2026-07-25 the codex longDescription DOES carry the command count - all three currently agree at 28 skills / 23 commands / 22 subagents).
+Updating only the README prose count. The manifest descriptions are easy to forget because they are JSON `description`/`longDescription` strings, not an obvious "count" field, and they each phrase the count slightly differently (phrasings differ per manifest; as of 2026-08-01 agents/=21, commands/=23, skills/=28 - the manifests had drifted to "22 subagents" and were fixed on 2026-08-01).
 
 ## Solution
 Before committing a skill-adding bump, sweep ALL count surfaces:
@@ -29,4 +29,4 @@ Before committing a skill-adding bump, sweep ALL count surfaces:
 Derive the true counts deterministically: skills = `ls -d plugins/flow-next/skills/*/ | wc -l`; commands = `ls plugins/flow-next/commands/*.md | wc -l` (commands are FLAT - `commands/flow-next/` never existed per agent_docs/adding-skills.md); subagents = `ls plugins/flow-next/agents/*.md | wc -l`. Update every surface to match, then re-run `./scripts/sync-codex.sh`.
 
 ## Prevention
-`bump.sh` updates version numbers + README badges but does NOT touch the prose skill/command counts in the JSON manifest descriptions. When a release ADDS or REMOVES a skill/command/agent, treat the count-sweep as a manual checklist item (or add it to a release smoke check). A grep for the old count across all four manifests + both READMEs catches every surface in one pass.
+`bump.sh` updates version numbers + README badges but does NOT touch the prose skill/command counts in the JSON manifest descriptions. When a release ADDS or REMOVES a skill/command/agent, treat the count-sweep as a manual checklist item (or add it to a release smoke check). A grep for the old count across all four manifests + both READMEs catches every surface in one pass. The lesson stands regardless of the true count at any given date - `bump.sh` still does not sweep prose counts.

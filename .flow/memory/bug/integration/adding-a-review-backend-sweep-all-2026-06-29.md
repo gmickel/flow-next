@@ -30,3 +30,6 @@ NOTE: codex impl-review READS the vault file via its absolute path (flagged the 
 
 ## Prevention
 Before committing a review-backend docs task, run `grep -rniE "rp.{0,3}codex.{0,3}copilot|rp, codex|review.backend" docs/ skills/ README.md GLOSSARY.md | grep -vi <new-backend>` and confirm every hit is either a per-backend section header, a host-platform mention (Codex/Copilot/Droid as *drivers*), or a deliberately-scoped recommendation — never a stale exhaustive enumeration. Same shape as the tracker-adapter sweep (see related entry).
+
+## Update 2026-08-01
+The backend enum has grown since this entry: rp/codex/copilot/cursor/host/none (fn-123 added `host`). Add a new enumeration site to the sweep checklist: the PUBLISHED CONFIG SCHEMA (`scripts/gen_flow_config_schema.py` TABLE + `plugins/flow-next/schema/flow-config.schema.json`). Since fn-138, a new backend or effort value must be added there and the schema artifact regenerated, or `test_flow_config_schema_drift` fails.

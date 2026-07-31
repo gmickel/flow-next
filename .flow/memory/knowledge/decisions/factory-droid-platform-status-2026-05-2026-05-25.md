@@ -45,6 +45,9 @@ Web-verified against Factory's primary docs (`docs.factory.ai/cli/configuration/
 - For Droid specifically: Factory's interop layer is opinionated about which side translates — Claude-first plugins are Droid-compatible automatically; Droid-first plugins (using `SessionStart`, `SessionEnd`, etc.) are not portable back. Author for the shared subset.
 - When surface evidence (missing files, stale commits) suggests dead code, distinguish between "the platform doesn't exist anymore" and "the platform handles this for us now". Different remediation.
 
+## Audit note 2026-08-01
+The R4b verdict's "KEEP the `Bash|Execute` hook matcher in `hooks/hooks.json`" is stale: default hooks no longer ship at all (fn-114, guarded by `tests/test_no_default_hooks.py`), so there is no `plugins/flow-next/hooks/hooks.json` to keep the matcher in. The `Bash|Execute` pattern itself survives in two other places: `docs/platforms.md` (documented) and the project settings that `/flow-next:ralph-init` generates per-repo. The entry's own standing rule (re-verify before reuse, don't assume old findings still hold) is what caught this — it stands as-is.
+
 ## References
 
 - Factory Plugins doc: `https://docs.factory.ai/cli/configuration/plugins`

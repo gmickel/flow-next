@@ -3,7 +3,7 @@ title: "Linear GraphQL: every {nodes} connection needs first: — incl. workflow
 date: "2026-06-03"
 track: bug
 category: performance
-module: plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md
+module: plugins/flow-next/scripts/flowctl_tracker/wire/linear.py
 tags: [fn-52, tracker-sync, linear, graphql, rate-limit, complexity, connection, first, impl-review]
 problem_type: build-error
 symptoms: "Unbounded GraphQL connection (workflowStates, teams) contradicts the file's own 'first: on every connection' rate-limit rule"
@@ -18,7 +18,10 @@ Two impl-review rounds (Major, confidence 100 each) on fn-52.3's Linear GraphQL 
 Bounding only the connections that obviously return many items. `workflowStates` and `teams(filter:{key})` read like point lookups, so the `first:` requirement was overlooked — but in Linear's GraphQL schema they are connections (return `{ nodes }`) and count against the complexity budget like any other.
 
 ## Solution
-Every Linear GraphQL field that returns `{ nodes }` is a connection and MUST carry an explicit `first:` — including small/lookup ones: `workflowStates(first:100, ...)`, `teams(first:1, filter:{key})`. Fixed in linear-graphql.md plus the mirrored shapes in linear-ladder.md (status-map prose + parity table). Verified by grepping all three files for connection-shaped fields.
+Every Linear GraphQL field that returns `{ nodes }` is a connection and MUST carry an explicit `first:` — including small/lookup ones: `workflowStates(first:100, ...)`, `teams(first:1, filter:{key})`. Originally fixed in linear-graphql.md plus the mirrored shapes in linear-ladder.md (status-map prose + parity table). Verified by grepping all three files for connection-shaped fields.
 
 ## Prevention
 When writing/reviewing Linear (or any Relay-style) GraphQL, grep the diff for every `{ nodes` / connection field and confirm each has `first:` — do not exempt "lookup" connections (`workflowStates`, `teams`, `users`, `labels`, `issues`). A file that states a "first: on every connection" rule should be swept against its own rule before review. MCP `limit:` params (e.g. `list_comments(limit:250)`) are NOT GraphQL connections and need no `first:`.
+
+## Update 2026-08-01
+`references/linear-graphql.md` carries zero queries now (prose teardown). Linear GraphQL lives in code: `plugins/flow-next/scripts/flowctl_tracker/wire/linear.py`. Module/pointer updated above; the "every `{ nodes }` connection needs `first:`" lesson stands and now applies to that file's queries.
