@@ -9228,6 +9228,7 @@ def record_review_attempt(
     use_json: bool = False,
     finalize_status_kind: Optional[str] = None,
     reset_rounds_on_ship: bool = False,
+    reviewed_head_sha: Optional[str] = None,
 ) -> dict:
     """Finalize one pre-dispatch reservation and persist its outcome.
 
@@ -9305,7 +9306,9 @@ def record_review_attempt(
             (output or "").encode("utf-8", errors="replace")
         ).hexdigest(),
         "round_consumed": not refunded,
-        "head_sha": _review_head_sha(),
+        # The sha the review OBSERVED (pre-dispatch snapshot) when the caller
+        # has it; finalize-time HEAD is only the fallback (rp/refund paths).
+        "head_sha": reviewed_head_sha or _review_head_sha(),
     }
     attempts = spec_data.get("review_attempts")
     if not isinstance(attempts, list):
@@ -29271,6 +29274,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         review_type="impl",
         task_id=None if standalone else task_id,
         reset_rounds_on_ship=not standalone,
+        reviewed_head_sha=reviewed_head_sha,
     )
 
     review_id = task_id if task_id else "branch"
@@ -29370,6 +29374,7 @@ def _finish_backend_exec(
     finalize_status_kind: Optional[str] = None,
     reset_rounds_on_ship: bool = False,
     attempt_out: Optional[dict] = None,
+    reviewed_head_sha: Optional[str] = None,
 ) -> str:
     """Shared post-exec gates and verdict-aware round finalization.
 
@@ -29391,6 +29396,7 @@ def _finish_backend_exec(
                 use_json=args.json,
                 finalize_status_kind=finalize_status_kind,
                 reset_rounds_on_ship=reset_rounds_on_ship,
+                reviewed_head_sha=reviewed_head_sha,
             )
             if attempt_out is not None:
                 attempt_out.update(summary)
@@ -29593,6 +29599,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         finalize_status_kind="plan",
         reset_rounds_on_ship=True,
         attempt_out=attempt_summary,
+        reviewed_head_sha=reviewed_head_sha,
     )
 
     # issue #279: attempt row, plan_review_status, and the SHIP cap reset all
@@ -29773,6 +29780,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         review_kind="plan",
         review_type="completion",
         reset_rounds_on_ship=True,
+        reviewed_head_sha=reviewed_head_sha,
     )
 
     # Preserve session_id for continuity (avoid clobbering on resumed sessions).

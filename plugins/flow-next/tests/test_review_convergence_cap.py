@@ -1326,5 +1326,24 @@ class TestRpRecorderFailureFences(unittest.TestCase):
         self.assertIn("VERDICT=SHIP", result.stdout)
 
 
+class TestReviewedHeadShaBinding(TestCombinedFinalizeWrite):
+    """The attempt row records the sha the review OBSERVED when supplied
+    (pre-dispatch snapshot beats finalize-time HEAD)."""
+
+    def test_reviewed_head_sha_wins_over_finalize_time_head(self) -> None:
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="codex",
+            output="<verdict>SHIP</verdict>",
+            verdict="SHIP",
+            reviewed_head_sha="a" * 40,
+        )
+        self.assertEqual(
+            self._spec_data()["review_attempts"][-1]["head_sha"], "a" * 40
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

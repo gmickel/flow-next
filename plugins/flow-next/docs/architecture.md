@@ -99,7 +99,8 @@ New fields:
 The spec sidecar carries two views of review state. `review_attempts[]` is the
 authoritative ledger - one row per finalized reservation, with backend,
 outcome, verdict, output hash, and (best-effort) the `head_sha` the review
-observed. `plan_review_status` / `completion_review_status` (plus their
+observed (the pre-dispatch snapshot on the in-process backend paths;
+finalize-time HEAD is the fallback where no snapshot exists, e.g. rp). `plan_review_status` / `completion_review_status` (plus their
 `*_reviewed_at` stamps) are a denormalized read model derived from that
 ledger; when the two ever diverge, the ledger wins.
 
