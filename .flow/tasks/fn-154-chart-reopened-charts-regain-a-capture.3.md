@@ -88,9 +88,8 @@ If that checkout is absent on the machine running this task, do not silently ski
 - [ ] sync-codex.sh run twice, byte-idempotent
 - [ ] Full gate green (parallel suite + ruff)
 ## Done summary
-TBD
-
+Corrected every surface that said or implied the next `chart briefing` after a `chart reopen` is a no-op (flowctl.md envelope + command block + contract rows, chart SKILL/workflow/examples, architecture.md, GLOSSARY.md, docs/README.md Notable updates), documented `supersedes_stale` alongside the envelope error classes with its type and presence/absence rules, and pinned that contract in `test_chart_docs_inventory.py` scoped to the `### v1 JSON envelope` section so the docs cannot drift from the code. Per-briefing `status` is documented where it actually lives (the chart sidecar's `briefings[]`) - the spec's R3 claim that it is in `chart show --json` is wrong and no projection was added. Release staged under `## Unreleased` in CHANGELOG.md with no version bump per the CLAUDE.md:101 batching rule (verified present, cited in the commit); the flow-next.dev docs-site changelog is staged as a separate commit (1928831) in ~/work/flow-next.dev with `pnpm build` green and `FLOW_NEXT_VERSION`/`package.json` untouched; the homepage notable-updates desk is keyed to shipped versions and is deliberately deferred to the batched release.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c733198166709a8d41af4d3f94ba615dc1c97a47, 9e54ab3b1457fe0b1c9c18bce68209f06f0a6f67, be30e74da277e962236267f8a561ec1e8ab78c54, 6bdde651b36c68d59e9b8fd5c91b18fc0c5f8b42
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_briefing test_capture_chart_handoff test_chart_tracker_projection test_chart_docs_inventory -q (baseline: green, 113 tests), python3 scripts/run_tests_parallel.py (files=178 ran=3846 failures=0 errors=0), uvx ruff@0.16.0 check . (All checks passed), cd ~/work/flow-next.dev && pnpm build (80 pages, green), live CLI probe: chart create/resolve/briefing/reopen/briefing verified 'fn-1 briefing B2 status=final (supersedes stale B1)' and supersedes_stale=['B1','B2'] after a second reopen
 - PRs:

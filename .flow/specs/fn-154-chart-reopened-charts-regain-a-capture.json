@@ -10,7 +10,8 @@
   "id": "fn-154-chart-reopened-charts-regain-a-capture",
   "impl_review_rounds": {
     "fn-154-chart-reopened-charts-regain-a-capture.1": 0,
-    "fn-154-chart-reopened-charts-regain-a-capture.2": 0
+    "fn-154-chart-reopened-charts-regain-a-capture.2": 0,
+    "fn-154-chart-reopened-charts-regain-a-capture.3": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -129,12 +130,55 @@
       "task": "fn-154-chart-reopened-charts-regain-a-capture.2",
       "timestamp": "2026-08-01T17:14:13.664394Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "c733198166709a8d41af4d3f94ba615dc1c97a47",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "1bff2b3a09af43baa4b22223cf100bdd9b4105f49ef8a768a8801d2550ebd840",
+      "round_consumed": true,
+      "scope": "impl:fn-154-chart-reopened-charts-regain-a-capture.3",
+      "task": "fn-154-chart-reopened-charts-regain-a-capture.3",
+      "timestamp": "2026-08-01T17:37:22.397839Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "9e54ab3b1457fe0b1c9c18bce68209f06f0a6f67",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "fc2133b6eac1db79d222586207db0c744973ae21ca90ccb4add71e63a3609491",
+      "round_consumed": true,
+      "scope": "impl:fn-154-chart-reopened-charts-regain-a-capture.3",
+      "task": "fn-154-chart-reopened-charts-regain-a-capture.3",
+      "timestamp": "2026-08-01T17:44:14.339901Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "be30e74da277e962236267f8a561ec1e8ab78c54",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "f3d8afa62ade1383b432f95b9a1c6f67cf7df2c7f6bf6d6ce136cbd04dccee10",
+      "round_consumed": true,
+      "scope": "impl:fn-154-chart-reopened-charts-regain-a-capture.3",
+      "task": "fn-154-chart-reopened-charts-regain-a-capture.3",
+      "timestamp": "2026-08-01T17:47:38.729349Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
     "impl:fn-154-chart-reopened-charts-regain-a-capture.1": 0,
     "impl:fn-154-chart-reopened-charts-regain-a-capture.2": 0,
+    "impl:fn-154-chart-reopened-charts-regain-a-capture.3": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-154-chart-reopened-charts-regain-a-capture.md",
@@ -151,5 +195,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T17:14:24.099489Z"
+  "updated_at": "2026-08-01T17:47:52.006597Z"
 }
