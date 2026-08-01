@@ -1109,6 +1109,8 @@ Every `flowctl chart … --json` response uses a versioned envelope:
 
 `error.class` is one of: `not_found | conflict | invalid_state | invalid_graph | stale_claim | validation | io`. Human diagnostics go to stderr; stdout stays machine-parseable under `--json`.
 
+**`result.supersedes_stale`** (`chart.briefing` only) is an array of B-ID strings in sidecar order, e.g. `["B1"]`. It is present **only** on a fresh emission (`noop: false`) that supersedes at least one `stale` briefing, and only when non-empty - **presence is the discriminator**, so a consumer keys on the field existing. It is **absent** from every idempotent-retry result, every first-emission result, and every error envelope, so every non-superseding envelope stays byte-identical to what it was before this field existed; a fresh superseding emission is the one class of result whose shape changes. It reports what the invocation did; it does not replace per-briefing `status`, which lives in the chart sidecar's `briefings[]` (`.flow/charts/<id>.json`) and remains the single source of truth for capture-readiness. `chart show --json` projects `briefable` and `briefing_count`, not per-briefing status.
+
 ### Subcommands
 
 Exact automation surface (all take `--json`):
@@ -1151,6 +1153,8 @@ flowctl chart reopen <chart-id> --reason "<r>" [--json]
 flowctl chart briefing <chart-id> --proposal-file <json> [--force] [--json]
 # proposal-file: {clusters:[{key,rationale,decisions}], shared_context:[]}
 # --force emits draft-only while open/parked remain; never capture-ready; chart stays open
+# identical proposal + untouched ledger = idempotent (same B-ID, noop) within one epoch
+# a reopen starts a new epoch: the same proposal mints B(n+1) and reports supersedes_stale
 flowctl chart link-spec <chart-id> --briefing B1 --spec <spec-id> \
   --decisions D1,D2 [--cluster <key>] [--json]
 
@@ -1172,8 +1176,8 @@ flowctl chart locate <selector> [--json]
 | `resolve` | Answer once, ledger gist, optional sharpen transaction + supersession cascade |
 | `out-of-scope` | Close without ledger answer; writes `## Boundaries` reason |
 | `abandon` | Terminal (except audited `reopen`); decisions preserved |
-| `briefing` | Confirmed split proposal only; first non-draft sets chart `done`; `--force` is draft-only |
-| `reopen` | `done|abandoned -> open`; stales prior briefings and spec links |
+| `briefing` | Confirmed split proposal only; a non-draft briefing sets chart `done`; identical retry is idempotent within an epoch, but after a `reopen` it mints the next B-ID and reports `supersedes_stale`; `--force` is draft-only |
+| `reopen` | `done|abandoned -> open`; stales prior briefings and spec links. The next `briefing` mints `B(n+1)` rather than echoing a staled one; staled spec links stay stale |
 | `locate` | Local ledger only - no remote search, redirect following, or title match |
 | `link-spec` | Idempotent capture handoff into `produced_specs[]` (B-ID + cluster + D-ID set) |
 

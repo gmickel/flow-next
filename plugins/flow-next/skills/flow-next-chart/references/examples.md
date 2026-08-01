@@ -115,6 +115,19 @@ Same prompt, narrowed by the user to *"make `flowctl list` output byte-identical
 
 ---
 
+### 10. "We reopened that chart and finished the extra work - brief it again"
+
+| Field | Value |
+|---|---|
+| **Inferred operation** | Briefing path on a reopened chart: confirm it is briefable again, reuse or re-confirm the cluster proposal, `chart briefing --proposal-file`. The reopen is a new epoch, so the **identical** proposal mints the next B-ID instead of echoing the staled one |
+| **Read-back point** | Before emit: which B-IDs the reopen staled, the clusters being re-briefed, and that the new package supersedes rather than restores. After emit: the minted B-ID plus what it supersedes - `fn-1 briefing B2 status=final (supersedes stale B1)`, `supersedes_stale: ["B1"]` under `--json` |
+| **Evidence/consent boundary** | Draft-vs-final is recomputed from the live chart: open or parked items still mean `--force` draft only, never an inherited `final`. Staled `produced_specs[]` links stay stale - whether specs built from B1 still hold is a human call. Chart still writes nothing under `.flow/specs/` |
+| **Terminal verdict** | `CHART_VERDICT=COMPLETE chart=<id> decision=- reason="re-briefed after reopen; B2 emitted for capture"` |
+
+The staled B1 stays on disk and in the ledger. A re-brief supersedes history; it never rewrites it.
+
+---
+
 ## Four adaptive traces (illustrative - not phases)
 
 These are **possible** journeys. Real charts re-draw after every answer. Do not treat the steps as a fixed ceremony.

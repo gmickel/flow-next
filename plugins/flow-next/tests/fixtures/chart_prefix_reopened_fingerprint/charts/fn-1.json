@@ -1,0 +1,148 @@
+{
+  "briefings": [
+    {
+      "chart_revision": "c7d200ea691221ff7e6dde8914a351eacf3a31798969f2d94480f52b72824e09",
+      "clusters": [
+        {
+          "decisions": [
+            "fn-1.D1",
+            "fn-1.D2"
+          ],
+          "key": "1",
+          "latest_path": ".flow/charts/fn-1-briefing.md",
+          "path": ".flow/charts/fn-1-briefing-B1.md",
+          "rationale": "Single captureable surface"
+        }
+      ],
+      "created": "2026-08-01T16:40:01.830494Z",
+      "created_by": "chart-test@example.com",
+      "fingerprint": "a1d994f6a91613602336f7db7920c0d931b1c3562c2e3557c427fe2296fbbbb6",
+      "force": false,
+      "id": "B1",
+      "paths": {
+        "index": ".flow/charts/fn-1-briefing-B1.md",
+        "latest_index": ".flow/charts/fn-1-briefing.md"
+      },
+      "shared_context": [],
+      "stale_reason": "chart reopened: split into two specs",
+      "staled_at": "2026-08-01T16:40:02.118743Z",
+      "status": "stale"
+    },
+    {
+      "chart_revision": "c7d200ea691221ff7e6dde8914a351eacf3a31798969f2d94480f52b72824e09",
+      "clusters": [
+        {
+          "decisions": [
+            "fn-1.D1"
+          ],
+          "key": "a",
+          "latest_path": ".flow/charts/fn-1-briefing-a.md",
+          "path": ".flow/charts/fn-1-briefing-B2-a.md",
+          "rationale": "Split storage"
+        },
+        {
+          "decisions": [
+            "fn-1.D2"
+          ],
+          "key": "b",
+          "latest_path": ".flow/charts/fn-1-briefing-b.md",
+          "path": ".flow/charts/fn-1-briefing-B2-b.md",
+          "rationale": "Split auth"
+        }
+      ],
+      "created": "2026-08-01T16:40:02.397461Z",
+      "created_by": "chart-test@example.com",
+      "fingerprint": "0f68a20795cf8dcda7c33637a17cecb37fd2c5c79814fee6252152969b0c5dc5",
+      "force": false,
+      "id": "B2",
+      "paths": {
+        "cluster_a": ".flow/charts/fn-1-briefing-B2-a.md",
+        "cluster_b": ".flow/charts/fn-1-briefing-B2-b.md",
+        "index": ".flow/charts/fn-1-briefing-B2.md",
+        "latest_index": ".flow/charts/fn-1-briefing.md"
+      },
+      "shared_context": [],
+      "status": "final"
+    }
+  ],
+  "claim_events": [
+    {
+      "actor": "chart-test@example.com",
+      "briefing": "B1",
+      "chart": "fn-1",
+      "kind": "briefing_done",
+      "timestamp": "2026-08-01T16:40:01.830494Z"
+    },
+    {
+      "actor": "chart-test@example.com",
+      "chart": "fn-1",
+      "kind": "reopen",
+      "prior_status": "done",
+      "reason": "split into two specs",
+      "staled_briefings": [
+        "B1"
+      ],
+      "staled_links": [],
+      "timestamp": "2026-08-01T16:40:02.118743Z"
+    },
+    {
+      "actor": "chart-test@example.com",
+      "briefing": "B2",
+      "chart": "fn-1",
+      "kind": "briefing_done",
+      "timestamp": "2026-08-01T16:40:02.397461Z"
+    }
+  ],
+  "created": "2026-08-01T16:40:00.493000Z",
+  "decisions": [
+    {
+      "attendance": "unattended",
+      "blocked_by": [],
+      "claimed_at": null,
+      "claimed_by": null,
+      "depends_on": [],
+      "id": "fn-1.D1",
+      "record_path": ".flow/charts/fn-1/1.md",
+      "status": "resolved",
+      "title": "Storage choice",
+      "type": "research"
+    },
+    {
+      "attendance": "unattended",
+      "blocked_by": [],
+      "claimed_at": null,
+      "claimed_by": null,
+      "depends_on": [],
+      "id": "fn-1.D2",
+      "record_path": ".flow/charts/fn-1/2.md",
+      "status": "resolved",
+      "title": "Auth model",
+      "type": "research"
+    }
+  ],
+  "done_at": "2026-08-01T16:40:02.397461Z",
+  "done_by": "chart-test@example.com",
+  "done_via_briefing": "B2",
+  "id": "fn-1",
+  "outcome": "Ready to capture",
+  "parked_questions": [],
+  "produced_specs": [],
+  "reopen_reason": "split into two specs",
+  "reopened_at": "2026-08-01T16:40:02.118743Z",
+  "reopened_by": "chart-test@example.com",
+  "status": "done",
+  "title": "Tenant isolation",
+  "tracker": {
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "linkState": "unlinked",
+    "projection": {
+      "completed_steps": [],
+      "event_markers": [],
+      "revision": null
+    },
+    "url": null
+  },
+  "updated_at": "2026-08-01T16:40:02.397461Z"
+}

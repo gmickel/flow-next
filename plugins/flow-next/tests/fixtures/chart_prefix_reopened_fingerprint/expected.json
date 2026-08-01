@@ -1,0 +1,10 @@
+{
+  "chart_id": "fn-1",
+  "chart_status": "done",
+  "reopened_at": "2026-08-01T16:40:02.118743Z",
+  "current_briefing_id": "B2",
+  "current_fingerprint": "0f68a20795cf8dcda7c33637a17cecb37fd2c5c79814fee6252152969b0c5dc5",
+  "current_briefing_status": "final",
+  "stale_briefing_id": "B1",
+  "stale_fingerprint": "a1d994f6a91613602336f7db7920c0d931b1c3562c2e3557c427fe2296fbbbb6"
+}

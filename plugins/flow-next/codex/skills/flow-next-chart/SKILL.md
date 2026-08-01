@@ -110,7 +110,7 @@ Documented for scripting; conversational equivalents in [references/examples.md]
 | `chart create --initial-map-file` / `--force-size --reason` | Atomic chart + ceiling override (audited) |
 | `chart resolve --answer-file` / `--sharpen-file` / `--supersedes` / `--keep-dependents` | Close + optional sharpen/cascade |
 | `chart attach-asset --asset-file` | Safe artefact while open |
-| `chart briefing --proposal-file` / `--force` | Confirmed split proposal; force is draft-only |
+| `chart briefing --proposal-file` / `--force` | Confirmed split proposal; force is draft-only; after a `chart reopen` the same proposal mints the next B-ID |
 | `chart claim` / `release-claim [--break-stale --reason]` | Claims; no silent expiry |
 | `chart locate <selector>` | Local ledger re-entry (may be absent - degrade) |
 

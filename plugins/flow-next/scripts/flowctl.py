@@ -14264,13 +14264,31 @@ def _briefing_fingerprint(
     chart_revision: str,
     normalized_proposal: dict,
     evidence_digest: str = "",
+    reopened_at: Optional[str] = None,
 ) -> str:
+    payload: dict = {
+        "chart_revision": chart_revision,
+        "proposal": normalized_proposal,
+        "evidence": evidence_digest,
+    }
+    # A reopen is a new epoch: `chart reopen` stales every briefing but changes
+    # nothing else this blob hashes, so without the epoch a post-reopen re-brief
+    # over an untouched ledger matches the stale briefing and gets echoed back
+    # instead of minting one (fn-154).
+    #
+    # `reopened_at` and NOT `chart.status`: status also flips on the
+    # final-briefing -> done transition, which chart_decision_revision
+    # deliberately excludes (see the comment above its blob) so an identical
+    # retry against a done chart stays idempotent. `reopened_at` moves on
+    # reopen and only on reopen, which is exactly the epoch we want.
+    #
+    # The key is OMITTED - not hashed as null - when the chart has never been
+    # reopened, so every chart written before this change hashes byte-identically
+    # and its stored B-IDs keep matching an identical retry after the upgrade.
+    if reopened_at:
+        payload["reopened_at"] = reopened_at
     blob = json.dumps(
-        {
-            "chart_revision": chart_revision,
-            "proposal": normalized_proposal,
-            "evidence": evidence_digest,
-        },
+        payload,
         sort_keys=True,
         separators=(",", ":"),
         default=str,
@@ -14892,20 +14910,65 @@ def emit_chart_briefing(
     all_briefs = _load_decision_briefs(flow_dir, chart_id, all_dids)
 
     chart_rev = chart_decision_revision(chart)
+    reopened_at = chart.get("reopened_at")
+    evidence_digest = _briefing_evidence_digest(all_briefs)
     fingerprint = _briefing_fingerprint(
-        chart_rev, normalized, evidence_digest=_briefing_evidence_digest(all_briefs)
+        chart_rev,
+        normalized,
+        evidence_digest=evidence_digest,
+        reopened_at=reopened_at,
     )
+
+    # A chart that was reopened AND re-briefed by a pre-fix binary carries a
+    # live briefing whose stored hash has no epoch in it. Matching only the
+    # epoch-aware fingerprint would make that briefing unreachable on upgrade:
+    # the retry finds nothing and dies on the now-done chart. So the epoch-free
+    # hash stays acceptable - but only for a NON-stale briefing, and since every
+    # reopen stales every briefing, a non-stale one can only have been minted in
+    # the current epoch. A stale legacy match is precisely the defect this task
+    # closes and is refused by the guard below.
+    accepted_fingerprints = {fingerprint}
+    if reopened_at:
+        accepted_fingerprints.add(
+            _briefing_fingerprint(
+                chart_rev, normalized, evidence_digest=evidence_digest
+            )
+        )
 
     existing = list(chart.get("briefings") or [])
     for b in existing:
         if not isinstance(b, dict):
             continue
-        if b.get("fingerprint") == fingerprint:
+        # Set membership hashes its left operand, so an unhashable stored value
+        # (a JSON array or object in a hand-edited or externally produced
+        # sidecar - load_chart_sidecar validates the root object only) would
+        # raise TypeError here and escape as a bare traceback instead of the
+        # versioned error envelope. Every accepted fingerprint is a sha256
+        # hexdigest, so a non-string is simply not a match - which is exactly
+        # how the equality comparison this set replaced already behaved.
+        stored_fingerprint = b.get("fingerprint")
+        if not isinstance(stored_fingerprint, str):
+            continue
+        if stored_fingerprint in accepted_fingerprints:
+            # Never hand back a stale briefing as the idempotent answer: it is
+            # superseded by definition and has no valid reading as "the
+            # requested outcome". The reopen epoch above makes a stale match
+            # unreachable through the CLI, but a sidecar written by a pre-fix
+            # binary or edited by hand can still present one - so the invariant
+            # is enforced where briefings are read, not only where they are
+            # written. Fall through to the ordinary emission path (which mints
+            # B(n+1)), or, on a done|abandoned chart, to the guard below that
+            # names the remedy.
+            if b.get("status") == "stale":
+                continue
             return {
                 "id": chart_id,
                 "briefing_id": b.get("id"),
                 "status": b.get("status"),
-                "fingerprint": fingerprint,
+                # The matched briefing's own hash, which is what identifies it
+                # on disk. Identical to `fingerprint` on every ordinary match;
+                # on a legacy match it is the epoch-free hash actually stored.
+                "fingerprint": b.get("fingerprint"),
                 "noop": True,
                 "chart_status": chart.get("status"),
                 "clusters": b.get("clusters") or [],
@@ -15071,7 +15134,7 @@ def emit_chart_briefing(
 
     run_chart_transaction(flow_dir, "chart.briefing", mutations)
 
-    return {
+    result = {
         "id": chart_id,
         "briefing_id": briefing_id,
         "status": briefing_status,
@@ -15084,6 +15147,25 @@ def emit_chart_briefing(
         "paths": briefing_rec["paths"],
         "unresolved": unresolved if briefing_status == "draft" else None,
     }
+    # fn-154: say what this invocation did when it supersedes stale predecessors
+    # (the post-reopen case). PRESENCE is the discriminator - a consumer keys on
+    # the field existing - so the key is omitted, never emitted empty, on every
+    # other path: idempotent retries, first emissions, and error envelopes stay
+    # byte-identical to what they were before this change.
+    #
+    # Not named `outcome`: that term is already bound to the chart's stated goal
+    # (`chart create --outcome`, the `## Outcome` heading).
+    #
+    # This reports the invocation, it does NOT replace per-briefing `status` in
+    # the sidecar, which stays the single source of truth for capture-readiness.
+    superseded_stale = [
+        str(b["id"])
+        for b in existing
+        if isinstance(b, dict) and b.get("status") == "stale" and b.get("id")
+    ]
+    if superseded_stale:
+        result["supersedes_stale"] = superseded_stale
+    return result
 
 
 def reopen_chart(flow_dir: Path, chart_id: str, reason: str) -> dict:
@@ -24251,7 +24333,13 @@ def cmd_chart_briefing(args: argparse.Namespace) -> None:
         bid = out.get("briefing_id")
         st = out.get("status")
         noop = " (noop)" if out.get("noop") else ""
-        print(f"{out.get('id')} briefing {bid} status={st}{noop}")
+        # A superseding emission says so on the same line: without it a terminal
+        # user reading `status=final` after a reopen cannot tell a fresh briefing
+        # from the stale echo this fix removed (fn-154). Absent on every other
+        # path, so ordinary output is unchanged.
+        stale_ids = out.get("supersedes_stale") or []
+        sup = f" (supersedes stale {', '.join(stale_ids)})" if stale_ids else ""
+        print(f"{out.get('id')} briefing {bid} status={st}{noop}{sup}")
         if out.get("transitioned_done"):
             print(f"chart status -> done via {bid}")
         paths = out.get("paths") or {}

@@ -1,0 +1,19 @@
+{
+  "clusters": [
+    {
+      "key": "a",
+      "rationale": "Split storage",
+      "decisions": [
+        "fn-1.D1"
+      ]
+    },
+    {
+      "key": "b",
+      "rationale": "Split auth",
+      "decisions": [
+        "fn-1.D2"
+      ]
+    }
+  ],
+  "shared_context": []
+}

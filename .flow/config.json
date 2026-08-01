@@ -5,6 +5,10 @@
       "enabled": false
     }
   },
+  "chart": {
+    "claimStaleAfter": 24,
+    "maxDecisions": 12
+  },
   "land": {
     "automatedReviewers": "chatgpt-codex-connector",
     "ciFixBudget": 3,
@@ -54,12 +58,13 @@
     "enabled": true
   },
   "review": {
-    "backend": "codex:gpt-5.6-sol:medium"
+    "backend": "rp"
   },
   "scouts": {
     "github": false
   },
   "tracker": {
+    "charts": "off",
     "conflictTiebreak": "flow-wins",
     "enabled": true,
     "perEvent": {

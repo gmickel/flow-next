@@ -43,7 +43,8 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 │   │   ├── 1.md                 # ## Question body for D1
 │   │   ├── 1.json               # Decision sidecar (type, attendance, status, graph, claim, answer, assets)
 │   │   └── ...
-│   ├── fn-140-briefing.md       # Briefing index (immutable versioned handoff for capture)
+│   ├── fn-140-briefing-B1.md    # Immutable per-version briefing package for capture (B1, B2, ...)
+│   ├── fn-140-briefing.md       # Always-latest briefing index (convenience copy, rewritten each emission)
 │   ├── fn-140-briefing-1.md     # Per-cluster briefing when a multi-spec split is confirmed
 │   └── .transactions/           # (auto-gitignored) write-ahead journal for multi-file chart mutations
 ├── memory/                # Persistent learnings (opt-in, categorized)
@@ -85,9 +86,9 @@ Charts share the native `fn-N` allocation domain with specs: one cross-kind coun
 | Path | Role |
 |---|---|
 | `.flow/charts/<id>.md` | Map body at gist level: `## Outcome`, `## Notes`, append-only `## Decisions` ledger, `## Open Questions`, `## Boundaries`. Never restates full answers. |
-| `.flow/charts/<id>.json` | Sidecar: `id`, `title`, `outcome`, `status` (`open\|done\|abandoned`), `decisions[]`, `briefings[]`, optional `tracker` projection keys, `produced_specs[]`, audited force/break-claim events. |
+| `.flow/charts/<id>.json` | Sidecar: `id`, `title`, `outcome`, `status` (`open\|done\|abandoned`), `decisions[]`, `briefings[]` (append-only; per-briefing `status` lives here and is the single source of truth for capture-readiness), optional `tracker` projection keys, `produced_specs[]`, audited force/break-claim events. |
 | `.flow/charts/<id>/<n>.md` + `.json` | Decision record pair (local number `n` = D-ID). Body is `## Question` only; sidecar holds type, attendance, status, `blocked_by[]` / `depends_on[]`, claim, answer, assets. |
-| `.flow/charts/<id>-briefing.md` (+ `-briefing-<k>.md`) | Immutable versioned briefing package for capture (B1, B2, ...). |
+| `.flow/charts/<id>-briefing-B<k>.md` (+ `-B<k>-<cluster>.md`) | Immutable per-version briefing package for capture (`B1`, `B2`, ...), one file per B-ID plus one per cluster when the proposal splits. The unversioned `<id>-briefing.md` / `<id>-briefing-<cluster>.md` paths are always-latest convenience copies, rewritten on every emission. A `reopen` stales prior packages; the re-brief that follows advances the counter to `B(n+1)` rather than reinstating a staled B-ID, so the reversal stays in the ledger. |
 | `.flow/charts/.transactions/` | Crash-recovery WAL: pre-state fingerprints, intended mutation set, publication phase. Every chart command recovers an incomplete journal under the resource lock before reading state. |
 
 Multi-file chart mutations (map + sidecars + ledger + dependent cascade) are one recoverable transaction: no-clobber creates, staged replacements, atomic rename, rollback to pre-call state on failure. Full CLI contract: [`flowctl.md`](flowctl.md#chart).

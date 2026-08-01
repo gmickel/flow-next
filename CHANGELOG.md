@@ -2,6 +2,56 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Reopening a chart no longer costs you the way back to capture. `chart reopen`
+does not re-open the decisions, so a finished chart is ready to brief again the
+moment it reopens - and asking for that briefing, same proposal over an
+unchanged ledger, used to hand back the briefing the reopen had just staled and
+call it a no-op. You were left with a chart reporting itself ready to brief, no
+capture-ready package, no path to one, and nothing on screen saying why. A
+reopen now counts as a new epoch, so the same proposal mints the next briefing
+package and names what it supersedes.
+
+### Fixed
+
+- **A reopened chart can always be briefed again.** `chart reopen` stales the
+  existing briefing, which is right - it was written before the reopen. But
+  briefing identity was computed from the chart revision, the proposal, and the
+  rendered decision evidence, and from none of what a reopen changes, so
+  re-running the same proposal over an unchanged ledger matched the staled
+  package and echoed it back with `noop: true`. (Change a decision or its
+  evidence first and the hash moved, so that route always minted normally; the
+  stranded case is the one where nothing else changed - and a reopen alone is
+  enough to make a finished chart briefable again.) Nothing hinted that a
+  changed proposal was the only way out, and downstream surfaces that correctly
+  gate capture on a `final` briefing rendered a door that could not open. The
+  chart's reopen timestamp is now part of briefing identity, so a post-reopen
+  re-brief takes the ordinary emission
+  path: it mints `B(n+1)`, recomputes draft-versus-final from the live chart
+  (a stale draft can never silently become `final`), rewrites the convenience
+  copies in step with the sidecar, runs in the existing transaction and lock,
+  and projects to the tracker like any other briefing. Charts that were never
+  reopened keep byte-identical fingerprints - the key is omitted rather than
+  hashed as null - so a B-ID minted by an earlier version still matches an
+  identical retry after the upgrade, proven against a checked-in pre-fix
+  sidecar fixture. A briefing whose status is `stale` is never returned as an
+  idempotent answer even when its stored hash matches, so a sidecar written by
+  an older binary or edited by hand cannot bring the echo back.
+
+### Added
+
+- **The briefing tells you what it just did.** A fresh emission that supersedes
+  staled predecessors now reports them: `supersedes_stale` (array of B-IDs, in
+  sidecar order) in the `--json` result, and `(supersedes stale B1)` on the
+  human line, in place of the misleading `status=stale (noop)` the defect
+  produced. Presence is the discriminator, so the key is absent from first
+  emissions, idempotent retries, and error envelopes: every non-superseding
+  response is byte-unchanged, and the only result whose shape changes is one
+  that genuinely supersedes staled briefings. It reports the invocation only:
+  per-briefing `status` in the chart sidecar's `briefings[]` stays the single
+  source of truth for capture-readiness.
+
 ## [flow-next 3.13.1] - 2026-08-01
 
 Chart's entry condition now matches the test it was always applying, so a

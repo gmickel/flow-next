@@ -1,0 +1,992 @@
+{
+  "artifactId": "305ae1df-e94c-45a4-afc4-ccf517d51dc7",
+  "baseSha": "3f7c8ab63eae371110ae5060f46be4ce877cfc3a",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [
+          "R1"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R1"
+        ],
+        "summary": "chart briefing is idempotent on a content fingerprint, but chart reopen changes nothing that fingerprint hashes - it only stales the briefing. Re-running briefing on the reopened chart therefore matched the old fingerprint and echoed the stale briefing back with noop: true, leaving a briefable chart with no capture-ready briefing and no path to one.",
+        "taskIds": [],
+        "title": "A reopened chart had no capture door"
+      },
+      {
+        "files": [],
+        "kind": "principle",
+        "ordinal": 1,
+        "rIds": [
+          "R2"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R2"
+        ],
+        "summary": "A reopen is a new epoch, so a briefing emitted after one is a different briefing. Making the fingerprint say that routes post-reopen re-briefs through the ordinary emission path, which already mints the next B-ID, recomputes draft-vs-final, rewrites the convenience copies, and runs inside the existing WAL transaction under one lock. The epoch lives in _briefing_fingerprint and NOT in chart_decision_revision, which also supplies the tracker projection revision on every chart command.",
+        "taskIds": [],
+        "title": "Fix the identity function, not the return branch"
+      },
+      {
+        "files": [
+          {
+            "additions": 88,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 10,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Dual-copy propagation of the flowctl change; regenerated, not hand-edited.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Dual-copy propagation of the flowctl change; regenerated, not hand-edited.",
+            "taskIds": []
+          },
+          {
+            "additions": 88,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 10,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "_briefing_fingerprint folds in the reopen epoch (key omitted when absent); the idempotent-return branch refuses any stale match; a fresh superseding emission reports supersedes_stale.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated distribution manifest.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1",
+          "R2",
+          "R6"
+        ],
+        "sourceRefs": [
+          "diff",
+          "rid-R1",
+          "rid-R2",
+          "rid-R6",
+          "task-1",
+          "task-2"
+        ],
+        "summary": "The fix and its dual-copy propagation.",
+        "taskIds": [
+          "fn-154-chart-reopened-charts-regain-a-capture.1",
+          "fn-154-chart-reopened-charts-regain-a-capture.2"
+        ],
+        "title": "Briefing identity becomes reopen-aware"
+      },
+      {
+        "files": [
+          {
+            "additions": 34,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 42,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/charts/fn-1-briefing-B1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 42,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/charts/fn-1-briefing.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 88,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/charts/fn-1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/charts/fn-1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 40,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/charts/fn-1/1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/charts/fn-1/1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 40,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/charts/fn-1/2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/charts/fn-1/2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/expected.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_fingerprint/proposal.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a never-reopened chart minted by the pre-fix binary; proves stored fingerprints still match.",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 42,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1-briefing-B1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1-briefing-B2-a.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1-briefing-B2-b.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 43,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1-briefing-B2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1-briefing-a.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1-briefing-b.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 43,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1-briefing.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 148,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 40,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1/1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1/1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 40,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1/2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/charts/fn-1/2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/expected.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/proposal-b1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prefix_reopened_fingerprint/proposal-b2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Golden fixture: a chart the pre-fix binary reopened AND re-briefed; proves the live briefing stays retrievable after upgrade.",
+            "taskIds": []
+          },
+          {
+            "additions": 615,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_briefing.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Real-CLI regression tests for the reopen epoch, the stale-match refusal, the discriminator, and both transition sequences.",
+            "taskIds": []
+          },
+          {
+            "additions": 63,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_docs_inventory.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pins supersedes_stale and its presence rule inside the v1 envelope section so docs cannot drift from code.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R5",
+          "R7",
+          "R8"
+        ],
+        "sourceRefs": [
+          "diff",
+          "rid-R5",
+          "rid-R7",
+          "rid-R8",
+          "task-1",
+          "task-2"
+        ],
+        "summary": "Real-CLI tests plus two fixture families minted by the pre-fix binary.",
+        "taskIds": [
+          "fn-154-chart-reopened-charts-regain-a-capture.1",
+          "fn-154-chart-reopened-charts-regain-a-capture.2"
+        ],
+        "title": "Proven against binaries that predate the fix"
+      },
+      {
+        "files": [
+          {
+            "additions": 50,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Unreleased entry; no version bump per the batched-release rule.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "GLOSSARY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Briefing package term covers the reopen case.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated Codex mirror of the canonical skill prose.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/references/examples.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated Codex mirror of the canonical skill prose.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated Codex mirror of the canonical skill prose.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Notable-updates line for this behavior change.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/docs/architecture.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "A post-reopen re-brief advances the B-ID counter rather than reinstating a staled one.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Documents supersedes_stale beside the envelope error classes; corrects the briefing and reopen contract rows.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-chart/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Flags table matches the new vocabulary.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/references/examples.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Worked reopen-then-rebrief example in the established shape.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-chart/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Phase 4 and Phase 6 state what the next briefing does after a reopen.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R3",
+          "R9"
+        ],
+        "sourceRefs": [
+          "diff",
+          "rid-R3",
+          "rid-R9",
+          "task-3"
+        ],
+        "summary": "Every surface that said the next briefing after a reopen is a no-op.",
+        "taskIds": [
+          "fn-154-chart-reopened-charts-regain-a-capture.3"
+        ],
+        "title": "Docs corrected and the contract pinned"
+      },
+      {
+        "files": [
+          {
+            "additions": 6,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/config.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review backend set to rp for this run.",
+            "taskIds": []
+          },
+          {
+            "additions": 58,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/bug/data/adding-a-key-to-a-content-hash-orphans-2026-08-01.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review lesson captured during this spec.",
+            "taskIds": []
+          },
+          {
+            "additions": 77,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/bug/data/docs-for-a-hash-identity-fix-inherit-2026-08-01.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review lesson captured during this spec.",
+            "taskIds": []
+          },
+          {
+            "additions": 52,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/bug/test-failures/test-asserted-a-public-envelope-that-2026-08-01.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review lesson captured during this spec.",
+            "taskIds": []
+          },
+          {
+            "additions": 193,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": ".flow/specs/fn-154-chart-reopened-charts-regain-a-capture.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Spec record, including the plan-review and completion-review bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 119,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 17,
+            "path": ".flow/specs/fn-154-chart-reopened-charts-regain-a-capture.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Spec record, including the plan-review and completion-review bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-154-chart-reopened-charts-regain-a-capture.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task record for this spec.",
+            "taskIds": []
+          },
+          {
+            "additions": 72,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-154-chart-reopened-charts-regain-a-capture.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task record for this spec.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-154-chart-reopened-charts-regain-a-capture.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task record for this spec.",
+            "taskIds": []
+          },
+          {
+            "additions": 68,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-154-chart-reopened-charts-regain-a-capture.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task record for this spec.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-154-chart-reopened-charts-regain-a-capture.3.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task record for this spec.",
+            "taskIds": []
+          },
+          {
+            "additions": 95,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-154-chart-reopened-charts-regain-a-capture.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task record for this spec.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [],
+        "sourceRefs": [
+          "diff"
+        ],
+        "summary": "Pipeline bookkeeping written by flowctl, not hand-edited.",
+        "taskIds": [],
+        "title": "Pipeline state"
+      },
+      {
+        "files": [],
+        "kind": "verify",
+        "ordinal": 6,
+        "rIds": [],
+        "sourceRefs": [
+          "spec",
+          "task-1",
+          "task-2",
+          "task-3"
+        ],
+        "summary": "Both defect-repro suites were run against the pre-fix binary in a throwaway worktree and fail there, so neither is vacuous. The R5 legacy fixture was additionally verified to fail against a naive unconditional-key variant. Full suite: 3846 tests, 0 failures; ruff clean; sync-codex byte-idempotent. Plan review and completion review both reached SHIP on a cross-family backend.",
+        "taskIds": [
+          "fn-154-chart-reopened-charts-regain-a-capture.1",
+          "fn-154-chart-reopened-charts-regain-a-capture.2",
+          "fn-154-chart-reopened-charts-regain-a-capture.3"
+        ],
+        "title": "How this was verified"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Repro",
+        "sourceRefs": [
+          "rid-R1",
+          "task-1"
+        ],
+        "value": "reopen then re-brief now mints a final B2"
+      },
+      {
+        "label": "Blast radius",
+        "sourceRefs": [
+          "rid-R2",
+          "diff"
+        ],
+        "value": "epoch scoped to _briefing_fingerprint, 1 caller"
+      },
+      {
+        "label": "Upgrade path",
+        "sourceRefs": [
+          "rid-R5",
+          "task-1"
+        ],
+        "value": "2 golden fixtures minted by the pre-fix binary"
+      },
+      {
+        "label": "Gate",
+        "sourceRefs": [
+          "task-3"
+        ],
+        "value": "3846 tests, 0 failures; ruff clean"
+      }
+    ],
+    "thesis": "A chart reopen is now a new briefing epoch, so a reopened chart can brief again and regain its capture door - fixed in the identity function rather than by special-casing the stale return."
+  },
+  "generatedAt": "2026-08-01T18:03:19Z",
+  "headSha": "258b5e02df8770e8003b611829e1e3751f058a2d",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-154-chart-reopened-charts-regain-a-capture"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "3f7c8ab63eae371110ae5060f46be4ce877cfc3a..258b5e02df8770e8003b611829e1e3751f058a2d"
+    },
+    {
+      "id": "task-1",
+      "kind": "task",
+      "ref": "fn-154-chart-reopened-charts-regain-a-capture.1"
+    },
+    {
+      "id": "task-2",
+      "kind": "task",
+      "ref": "fn-154-chart-reopened-charts-regain-a-capture.2"
+    },
+    {
+      "id": "task-3",
+      "kind": "task",
+      "ref": "fn-154-chart-reopened-charts-regain-a-capture.3"
+    },
+    {
+      "id": "rid-R1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "rid-R2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "rid-R3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "rid-R4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "rid-R5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "rid-R6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "rid-R7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "rid-R8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "rid-R9",
+      "kind": "rid",
+      "ref": "R9"
+    }
+  ],
+  "specId": "fn-154-chart-reopened-charts-regain-a-capture"
+}
