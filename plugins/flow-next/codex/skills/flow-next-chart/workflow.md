@@ -169,9 +169,15 @@ attended_unattended_cost:
 
 Compose blocks with graceful degradation (`scanned: none (<reason>)` when a source is absent), matching prospect's style for strategy/specs/memory/git signals as relevant to the idea.
 
-### 1.2 - No consequential unknowns -> STOP
+### 1.2 - Refuse to chart -> STOP (two shapes)
 
-If after grounding the effort has **no consequential unknowns** (intent and boundaries already stateable; nothing worth parking; no decision that would change capture):
+**Shape A - no nameable destination.** Before anything else, confirm the idea has an end state you can name: the spec, decision, or change this effort is finding its way to. Chart's premise is *destination known, route unknown*. A theme or direction ("make the CLI more deterministic", "improve our test story") has no finish line, so no Outcome can be stated, nothing can be ruled out of scope, and the map never closes. Do not chart it and do not silently chart a guessed narrowing of it. Say what is missing, then offer exactly two routes: narrow to one effort with a stateable end state (invite the narrowed prompt), or run `/flow-next:prospect` when the real ask is which effort to pick. **Create nothing.**
+
+```text
+CHART_VERDICT=NO_WORK chart=- decision=- reason="direction not destination; narrow to one effort or run prospect"
+```
+
+**Shape B - no consequential unknowns.** If after grounding the effort has **no consequential unknowns** (intent and boundaries already stateable; nothing worth parking; no decision that would change capture):
 
 1. Say so clearly.
 2. Recommend `/flow-next:capture` or authoring the spec / direct change path.

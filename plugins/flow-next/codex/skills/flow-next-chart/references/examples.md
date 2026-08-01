@@ -102,6 +102,19 @@ Without consent after warning: create nothing; `CHART_VERDICT=NO_WORK chart=- de
 
 ---
 
+### 9. "Make flow-next more deterministic - chart it"
+
+| Field | Value |
+|---|---|
+| **Inferred operation** | Chart-mode refusal before grounding spend: the prompt names a **direction**, not a destination. No end state means no stateable Outcome, no boundary that can rule anything out of scope, and a map that never closes. Create nothing |
+| **Read-back point** | Say plainly what is missing (the end state), then offer exactly two routes: narrow to one effort whose arrival is nameable (invite the narrowed prompt), or `/flow-next:prospect` when the real ask is which determinism effort to pick |
+| **Evidence/consent boundary** | Do not silently chart a guessed narrowing - the user picks the effort. Do not chart "all of determinism" behind a `--force-size` override; the ceiling is not the problem here, the missing destination is |
+| **Terminal verdict** | `CHART_VERDICT=NO_WORK chart=- decision=- reason="direction not destination; narrow to one effort or run prospect"` |
+
+Same prompt, narrowed by the user to *"make `flowctl list` output byte-identical across machines"*: now the destination is nameable and the route is genuinely unknown - chart it.
+
+---
+
 ## Four adaptive traces (illustrative - not phases)
 
 These are **possible** journeys. Real charts re-draw after every answer. Do not treat the steps as a fixed ceremony.

@@ -22,7 +22,7 @@ Task tracking for AI agents. All state lives in `.flow/`.
 
 ## Chart (optional pre-capture discovery)
 
-One oversized/unclear idea; one decision (`<chart-id>.D<n>`) per invocation; never a pilot stage. `chart frontier` is the sole work-mode selection input; `chart claim` then `chart resolve --answer-file` close it; every work invocation ends with one greppable `CHART_VERDICT=...` line. Chart never writes specs; capture ingests the briefing.
+One oversized/unclear idea whose **destination is nameable but route is not** (a direction like "make X more Y" is refused - narrow it or run prospect); one decision (`<chart-id>.D<n>`) per invocation; never a pilot stage. `chart frontier` is the sole work-mode selection input; `chart claim` then `chart resolve --answer-file` close it; every work invocation ends with one greppable `CHART_VERDICT=...` line. Chart never writes specs; capture ingests the briefing.
 
 ## Common Commands
 
