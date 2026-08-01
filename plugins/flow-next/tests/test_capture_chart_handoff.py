@@ -1,6 +1,6 @@
 """Prompt/workflow contract for capture chart-briefing handoff (fn-135.3).
 
-Canonical capture skill only (no codex mirror — this task does not sync-codex).
+Canonical capture skill only (no codex mirror - this task does not sync-codex).
 Asserts briefing ingestion, draft/stale refusal + override read-back, provenance
 separation, link-spec-after-create ordering, retry-discovers-existing-spec,
 and fn-148 non-preemption (no verified/inferred fact grammar).

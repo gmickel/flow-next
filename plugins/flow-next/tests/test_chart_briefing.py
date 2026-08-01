@@ -196,14 +196,14 @@ class TestBriefingEligibility(unittest.TestCase):
             _init_flow(repo)
             chart_id = _create_chart(repo)
             d1 = _add_decision(repo, chart_id, "Open Q", "research")
-            # Resolve nothing — open frontier.
-            prop = _proposal(
+            # Resolve nothing - open frontier.
+            _proposal(
                 repo,
                 "p.json",
                 [{"key": "1", "rationale": "n/a", "decisions": [d1["id"]]}],
             )
             # Membership also fails (not resolved), but eligibility is the gate
-            # once we have resolved coverage — create a second resolved + leave open.
+            # once we have resolved coverage - create a second resolved + leave open.
             d2 = _add_decision(repo, chart_id, "Done one", "research")
             _resolve(repo, d2["id"], "settled")
             prop2 = _proposal(
@@ -225,7 +225,7 @@ class TestBriefingEligibility(unittest.TestCase):
             _init_flow(repo)
             chart_id = _create_chart(repo)
             d1 = _add_decision(repo, chart_id, "Premise", "research")
-            d2 = _add_decision(repo, chart_id, "Blocked", "research", blocked_by=d1["id"])
+            _add_decision(repo, chart_id, "Blocked", "research", blocked_by=d1["id"])
             _resolve(repo, d1["id"], "premise settled")
             # d2 still open+blocked
             prop = _proposal(
@@ -534,27 +534,7 @@ class TestLinkSpec(unittest.TestCase):
 
             # Fresh link after reopen, then supersede d1 via new decision
             d3 = _add_decision(repo, chart_id, "New storage", "research")
-            # Need a briefable path for supersession tests only via resolve
-            # First re-link after reopen
-            prop_new = _proposal(
-                repo,
-                "prop-re.json",
-                [
-                    {
-                        "key": "1",
-                        "rationale": "still one",
-                        "decisions": [d1["id"], d2["id"]],
-                    }
-                ],
-            )
-            # Chart is open with all resolved (reopen doesn't un-resolve).
-            r_b = _brief(repo, chart_id, prop_new)
-            # Wait - d3 is open so not briefable without force. Resolve d3 first
-            # with supersedes d1 instead of briefing.
-            # Actually for stale-after-supersession we need a linked entry that
-            # is not already stale from reopen. Re-link after reopen:
-            # Clear: reopen staled everything. New final briefing B2 then link.
-            # But d3 is open - resolve it superseding d1.
+            # d3 is still open, so resolve it (superseding d1) before B2.
             _resolve(repo, d3["id"], "Use SQLite instead", supersedes=d1["id"])
             # Now d1 is superseded; resolved set is d2+d3
             prop_b2 = _proposal(
