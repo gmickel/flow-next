@@ -478,6 +478,35 @@ class ChartChangelogEntry(unittest.TestCase):
 
 
 class ChartGuideOptionality(unittest.TestCase):
+    def test_destination_test_documented(self) -> None:
+        """Chart's entry condition is destination-known/route-unknown.
+
+        A theme or direction has no nameable end state, so no Outcome can be
+        stated and no boundary can rule anything out of scope. Both the chart
+        skill and the guide matrix must name that refusal, and the chart skill
+        must carry the verdict a driver greps for.
+        """
+        chart = _read(SKILLS / "flow-next-chart" / "SKILL.md") + "\n" + _read(
+            SKILLS / "flow-next-chart" / "workflow.md"
+        )
+        guide = _read(SKILLS / "flow-next-guide" / "SKILL.md")
+        for label, text in (("chart skill", chart), ("guide skill", guide)):
+            self.assertRegex(
+                text,
+                r"(?i)\bdestination\b",
+                f"{label} must name the destination test (destination known, route unknown)",
+            )
+            self.assertRegex(
+                text,
+                r"(?i)make X more Y|direction",
+                f"{label} must name the direction-not-destination disqualifier",
+            )
+        self.assertIn(
+            'reason="direction not destination; narrow to one effort or run prospect"',
+            chart,
+            "chart skill must carry the exact refusal verdict for a direction-only prompt",
+        )
+
     def test_guide_skill_optional_chart(self) -> None:
         text = _read(SKILLS / "flow-next-guide" / "SKILL.md")
         self.assertRegex(text, r"(?i)optional")

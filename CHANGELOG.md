@@ -2,6 +2,22 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Chart names the test it always applied: can you say what "arrived" looks
+  like?** Chart's premise is *destination known, route unknown*, but the
+  documented entry condition ("one singular effort, oversized, unclear")
+  admitted a theme. A direction like "make the CLI more deterministic" has no
+  end state, so no Outcome can be stated, nothing can be ruled out of scope,
+  and the map never closes. Chart now refuses that shape before spending a
+  grounding pass, says what is missing, and offers the two real routes:
+  narrow to one effort whose arrival is nameable, or run `/flow-next:prospect`
+  when the actual question is which effort to pick. `/flow-next:guide` gains
+  the matching matrix row, and the skill carries a worked example of the
+  refusal plus the narrowing that makes the same idea chartable.
+
 ## [flow-next 3.13.0] - 2026-08-01
 
 An oversized idea that is still wrapped in unknowns no longer has to become a
