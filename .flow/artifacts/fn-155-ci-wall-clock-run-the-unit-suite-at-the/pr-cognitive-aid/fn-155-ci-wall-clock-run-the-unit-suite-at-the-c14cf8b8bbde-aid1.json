@@ -1,0 +1,602 @@
+{
+  "artifactId": "fn-155-ci-wall-clock-run-the-unit-suite-at-the-c14cf8b8bbde-aid1",
+  "baseSha": "5da0d37093f3c733916ee143cccd93016332ec29",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [
+          "R1"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r1",
+          "task1"
+        ],
+        "summary": "The runner reserved two cores for a human at the keyboard. On a 3-core macOS runner max(1, cpu_count-2) returns 1, so CI ran the suite serially; on 4-core Linux it halved available parallelism. Measured baseline: macOS 557.99s at jobs=1.",
+        "taskIds": [
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+        ],
+        "title": "The reservation formula switched macOS parallelism off"
+      },
+      {
+        "files": [
+          {
+            "additions": 26,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "scripts/run_tests_parallel.py",
+            "rIds": [
+              "R1",
+              "R4",
+              "R6"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r1",
+              "r4",
+              "r6",
+              "task1"
+            ],
+            "summary": "CI-aware default plus the rationale and new-precedent note at the site.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1",
+          "R4",
+          "R6"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r1",
+          "r4",
+          "r6",
+          "task1"
+        ],
+        "summary": "_default_jobs() returns the full cpu_count when CI parses truthy and keeps cpu_count-2 locally. Explicit --serial and --jobs still win, in that order.",
+        "taskIds": [
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+        ],
+        "title": "Detect CI and use the full core count"
+      },
+      {
+        "files": [
+          {
+            "additions": 22,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".github/workflows/test-flow-next.yml",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r2",
+              "task1"
+            ],
+            "summary": "Boolean legacy_baseline dispatch input and the conditional JOBS_ARGS composition.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R2"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r2",
+          "task1"
+        ],
+        "summary": "Once CI detection is in the commit, no run from that SHA can reproduce the old baseline. A boolean legacy_baseline workflow_dispatch input recomputes the pre-change formula per runner, read via env and added to shuffle and excludes rather than replacing them. Inert on push and pull_request.",
+        "taskIds": [
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+        ],
+        "title": "Add a measurement lever that works on one commit"
+      },
+      {
+        "files": [
+          {
+            "additions": 270,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_run_tests_parallel.py",
+            "rIds": [
+              "R3",
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r3",
+              "r5",
+              "task1"
+            ],
+            "summary": "15 tests: CI semantics, precedence at main(), corpus parity, exclusions, exit codes.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R3",
+          "R5"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r3",
+          "r5",
+          "task1"
+        ],
+        "summary": "The module had no coverage at all. New tests pin CI value semantics, core-count floors, corpus parity at two job counts, and the --serial > --jobs > default chain at main() where it actually lives.",
+        "taskIds": [
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+        ],
+        "title": "Give the runner its first tests"
+      },
+      {
+        "files": [
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/pr-cognitive-aid.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r7",
+              "task2"
+            ],
+            "summary": "Documents the clock for downstream consumers that vendor this metadata.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.meta.json",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r7",
+              "task2"
+            ],
+            "summary": "performanceBudget names the clock so the fixture cannot drift from the tests.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+            ]
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_pr_cognitive_aid.py",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r7",
+              "task2"
+            ],
+            "summary": "p95 measured on process CPU time; exact-dict assertion updated.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_pr_cognitive_aid_fixture_contract.py",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r7",
+              "task2"
+            ],
+            "summary": "Second exact-dict assertion on the same block, updated in step.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+            ]
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_review_findings_receipts.py",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r7",
+              "task2"
+            ],
+            "summary": "Same clock swap on the identical p95 shape, fixed before it could fail.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R7"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r7",
+          "task2"
+        ],
+        "summary": "Wave 2 failed on Windows: a 30-sample p95 budget hit 167.9ms against 100ms at jobs=4. Wall clock under four sibling interpreters measures scheduler contention, not the in-memory render. Both p95 budgets move to process CPU time; the budget value is unchanged and nothing is skipped or made platform-conditional.",
+        "taskIds": [
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+        ],
+        "title": "Fix the flake the measurement exposed"
+      },
+      {
+        "files": [
+          {
+            "additions": 14,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r6",
+              "task1"
+            ],
+            "summary": "Unreleased entry. No version bump per the batched-release rule.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+            ]
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/tests/test_spec_id_allocation.py",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r6",
+              "task1"
+            ],
+            "summary": "Stale 14-jobs prose corrected; its min(samples) timing left alone.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 6,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r6",
+          "task1"
+        ],
+        "summary": "Docstring, --jobs help, workflow comment, and a laptop-specific 14-jobs comment. Historical surfaces stay frozen.",
+        "taskIds": [
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+        ],
+        "title": "Correct every stale statement of the old default"
+      },
+      {
+        "files": [
+          {
+            "additions": 36,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/bug/build-errors/changelog-entry-landed-in-a-released-2026-08-01.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r6",
+              "task1"
+            ],
+            "summary": "Memory: an Unreleased entry landed inside a released section.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+            ]
+          },
+          {
+            "additions": 80,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/specs/fn-155-ci-wall-clock-run-the-unit-suite-at-the.json",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r2",
+              "task1"
+            ],
+            "summary": "Spec state: review rounds and both gate statuses.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+            ]
+          },
+          {
+            "additions": 75,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/specs/fn-155-ci-wall-clock-run-the-unit-suite-at-the.md",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r2",
+              "task1"
+            ],
+            "summary": "Measured result tables, amended rule, declined finding.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+            ]
+          },
+          {
+            "additions": 5,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-155-ci-wall-clock-run-the-unit-suite-at-the.1.md",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r2",
+              "task1"
+            ],
+            "summary": "Task 1 done summary and evidence.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+            ]
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-155-ci-wall-clock-run-the-unit-suite-at-the.2.json",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r7",
+              "task2"
+            ],
+            "summary": "Task 2 definition.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+            ]
+          },
+          {
+            "additions": 76,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-155-ci-wall-clock-run-the-unit-suite-at-the.2.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r7",
+              "task2"
+            ],
+            "summary": "Task 2 spec, done summary and evidence.",
+            "taskIds": [
+              "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 7,
+        "rIds": [
+          "R2"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r2",
+          "task1",
+          "task2"
+        ],
+        "summary": "flow-next records: the spec now carries the 16 raw measurement rows, the 8-row median aggregate, the amended R2 rule with its original preserved, and the declined completion-review finding. Plus a memory entry for the changelog-section trap the review caught.",
+        "taskIds": [
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1",
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+        ],
+        "title": "Pipeline state and recorded evidence"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 8,
+        "rIds": [
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r3",
+          "r4",
+          "task1"
+        ],
+        "summary": "No test selection and no path filters: the full suite still runs on every triggering change. Override precedence, the corpus, the Windows EXCLUDES block owned by fn-120, and the min(samples) benchmark are all untouched.",
+        "taskIds": [
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+        ],
+        "title": "Deliberately unchanged"
+      },
+      {
+        "files": [],
+        "kind": "verify",
+        "ordinal": 9,
+        "rIds": [
+          "R2",
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r2",
+          "r3",
+          "diff",
+          "c1",
+          "task1"
+        ],
+        "summary": "Four workflow_dispatch runs at head 68b847f9, two per configuration, 16 raw results. Median runner-step deltas: ubuntu 3.11 -20.9%, ubuntu 3.x -18.8%, macOS -43.5%, Windows -32.9%. Whole-job time improved on every row. R2's original 25% rule failed on two rows and was consciously amended, with both versions recorded in the spec.",
+        "taskIds": [
+          "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+        ],
+        "title": "Measured, not assumed"
+      }
+    ],
+    "proof": [
+      {
+        "label": "macOS was serial",
+        "sourceRefs": [
+          "spec",
+          "r2"
+        ],
+        "value": "baseline jobs=1 on a 3-core runner; 557.99s to 315.28s at jobs=3"
+      },
+      {
+        "label": "Measured on 16 runs",
+        "sourceRefs": [
+          "spec",
+          "r2",
+          "diff"
+        ],
+        "value": "4 dispatches x 4 matrix rows at head 68b847f9; median of two per configuration"
+      },
+      {
+        "label": "Coverage identical",
+        "sourceRefs": [
+          "spec",
+          "r3"
+        ],
+        "value": "files=179 ran=3863 failures=0 errors=0 skipped=4 at both jobs=2 and jobs=4"
+      },
+      {
+        "label": "First tests for the runner",
+        "sourceRefs": [
+          "r5",
+          "task1"
+        ],
+        "value": "15 tests where the module previously had none"
+      }
+    ],
+    "thesis": "CI stopped leaving cores idle - and on macOS, stopped running the suite serially - with the win measured on four real matrices rather than assumed, and the one flake that measurement exposed fixed in the same PR."
+  },
+  "generatedAt": "2026-08-02T00:30:00Z",
+  "headSha": "c14cf8b8bbde53401d95f21a4df641bdae32894d",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-155-ci-wall-clock-run-the-unit-suite-at-the"
+    },
+    {
+      "id": "task1",
+      "kind": "task",
+      "ref": "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1"
+    },
+    {
+      "id": "task2",
+      "kind": "task",
+      "ref": "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "5da0d37093f3c733916ee143cccd93016332ec29..c14cf8b8bbde53401d95f21a4df641bdae32894d"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "9abd4d4f3de3f018a28551afff32ebe20d79ab19"
+    },
+    {
+      "id": "r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "r7",
+      "kind": "rid",
+      "ref": "R7"
+    }
+  ],
+  "specId": "fn-155-ci-wall-clock-run-the-unit-suite-at-the"
+}
