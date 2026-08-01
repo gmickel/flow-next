@@ -1,0 +1,2083 @@
+{
+  "artifactId": "fn-135-chart-decision-map-discovery-for-b9052b52-v2",
+  "baseSha": "74a5d69603425703029f45c2978a9b9071918487",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "src-spec"
+        ],
+        "summary": "Between a ranked prospect idea and a capturable spec there was nothing: oversized unclear efforts either became specs full of inferred guesses or meetings whose output evaporated. fn-135 fills that gap with a decision-map discovery primitive whose output is a briefing package for capture.",
+        "taskIds": [],
+        "title": "The pre-capture gap"
+      },
+      {
+        "files": [],
+        "kind": "principle",
+        "ordinal": 1,
+        "rIds": [],
+        "sourceRefs": [
+          "src-spec"
+        ],
+        "summary": "Chart is a menu option, never a mandatory stage: it resolves exactly one decision per invocation via the evidence-first routes, never writes a spec or sets ready, keeps reversals as struck-through history, and keeps D-ID evidence provenance distinct from acceptance-criterion source tags (fn-148 closed with no verdict and licenses nothing).",
+        "taskIds": [],
+        "title": "Optional route, one decision at a time, provenance lanes separate"
+      },
+      {
+        "files": [
+          {
+            "additions": 25,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/schema/flow-config.schema.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Published config schema: chart.maxDecisions, chart.claimStaleAfter, tracker.charts.",
+            "taskIds": []
+          },
+          {
+            "additions": 6985,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 76,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "The chart subsystem core: shared allocator + WAL, graph/claims, resolution/supersession cascades, briefing/link-spec/reopen, projection hooks, locate envelope; spec create refactored onto the shared lock.",
+            "taskIds": []
+          },
+          {
+            "additions": 1659,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_graph_claims.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Deterministic-layer suite: allocation, WAL recovery (subprocess kills at failpoints), graph, claims, resolution.",
+            "taskIds": []
+          },
+          {
+            "additions": 1030,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_resolution.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Deterministic-layer suite: allocation, WAL recovery (subprocess kills at failpoints), graph, claims, resolution.",
+            "taskIds": []
+          },
+          {
+            "additions": 646,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_store.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Deterministic-layer suite: allocation, WAL recovery (subprocess kills at failpoints), graph, claims, resolution.",
+            "taskIds": []
+          },
+          {
+            "additions": 99,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_spec_id_allocation.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Deterministic-layer suite: allocation, WAL recovery (subprocess kills at failpoints), graph, claims, resolution.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "scripts/gen_flow_config_schema.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Published config schema: chart.maxDecisions, chart.claimStaleAfter, tracker.charts.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R14",
+          "R18",
+          "R40",
+          "R23",
+          "R21"
+        ],
+        "sourceRefs": [
+          "src-spec",
+          "src-diff",
+          "src-task-1",
+          "src-task-9",
+          "src-task-2",
+          "src-rid-r14",
+          "src-rid-r18",
+          "src-rid-r40",
+          "src-rid-r23",
+          "src-rid-r21"
+        ],
+        "summary": "One cross-kind fn-N allocation domain shared with specs; crash-recoverable WAL under .flow/charts/.transactions; decision records with derived attendance; atomic graph validation; dependency-ordered frontier; audited claims; immutable resolution with supersession cascades over the transitive depends_on closure; unsafe-evidence refusal at every prose entry point.",
+        "taskIds": [
+          "fn-135-chart-decision-map-discovery-for.1",
+          "fn-135-chart-decision-map-discovery-for.9",
+          "fn-135-chart-decision-map-discovery-for.2"
+        ],
+        "title": "Deterministic chart store, graph, and resolution"
+      },
+      {
+        "files": [
+          {
+            "additions": 24,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/skills/flow-next-capture/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Capture briefing ingestion: draft/stale fail closed, provenance lanes separate, retry-safe link-spec ordering.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-capture/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Capture briefing ingestion: draft/stale fail closed, provenance lanes separate, retry-safe link-spec ordering.",
+            "taskIds": []
+          },
+          {
+            "additions": 71,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-capture/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Capture briefing ingestion: draft/stale fail closed, provenance lanes separate, retry-safe link-spec ordering.",
+            "taskIds": []
+          },
+          {
+            "additions": 145,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_capture_chart_handoff.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Briefing/versioning/handoff suite incl. rollback failpoints and provenance-separation contracts.",
+            "taskIds": []
+          },
+          {
+            "additions": 1300,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_briefing.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Briefing/versioning/handoff suite incl. rollback failpoints and provenance-separation contracts.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R11",
+          "R24",
+          "R41",
+          "R45",
+          "R50"
+        ],
+        "sourceRefs": [
+          "src-spec",
+          "src-diff",
+          "src-task-3",
+          "src-rid-r11",
+          "src-rid-r24",
+          "src-rid-r41",
+          "src-rid-r45",
+          "src-rid-r50"
+        ],
+        "summary": "Fingerprinted immutable B-IDs with per-version paths, forced drafts that never promote, first final briefing transitions the chart to done, audited reopen staling, idempotent identity-safe link-spec, and capture-side ingestion with draft/stale refusal and provenance-lane separation.",
+        "taskIds": [
+          "fn-135-chart-decision-map-discovery-for.3"
+        ],
+        "title": "Versioned briefing and capture handoff"
+      },
+      {
+        "files": [
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".claude-plugin/marketplace.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Registry skill/command count bump (25 commands / 30 skills).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/.claude-plugin/plugin.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Registry skill/command count bump (25 commands / 30 skills).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/.codex-plugin/plugin.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Registry skill/command count bump (25 commands / 30 skills).",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/commands/chart.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Thin command shim forwarding to the skill.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/commands/guide.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Thin command shim forwarding to the skill.",
+            "taskIds": []
+          },
+          {
+            "additions": 134,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Canonical prompt-first chart skill: grounding, adaptive loop, attended gate, verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 185,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/references/examples.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Canonical prompt-first chart skill: grounding, adaptive loop, attended gate, verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 528,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Canonical prompt-first chart skill: grounding, adaptive loop, attended gate, verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 84,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-guide/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Stateless smallest-sufficient router (exact spec matrix; no Write/Edit tools).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-interview/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Chart-aware handover boundary (guide matrix) added to an adjacent skill.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-pilot/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Chart-aware handover boundary (guide matrix) added to an adjacent skill.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-plan/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Chart-aware handover boundary (guide matrix) added to an adjacent skill.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-plan/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Chart-aware handover boundary (guide matrix) added to an adjacent skill.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-prospect/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Chart-aware handover boundary (guide matrix) added to an adjacent skill.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/skills/flow-next-prospect/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Chart-aware handover boundary (guide matrix) added to an adjacent skill.",
+            "taskIds": []
+          },
+          {
+            "additions": 58,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/ambiguous-steering-readback.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 65,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/attended-needs-human.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 58,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/bounded-grounding.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 62,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/conflicting-stale-evidence.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 68,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/frontier-sharpen-growth.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 52,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/guide-ambiguous-blocking.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 52,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/guide-route-capture-brief.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 46,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/guide-route-chart.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 52,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/guide-route-interview.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 52,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/guide-route-plan.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 49,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/guide-skip-chart-clear.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 59,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/known-background-fact.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 63,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/over-ceiling-force-size.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 73,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/prototype-interrupted-resume.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 63,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/prototype-lifecycle.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 70,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/reversal-supersedes.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 50,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/skip-chart-no-unknowns.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 65,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/stale-claim-recovery.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 63,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/tracker-decision-url.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 62,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/tracker-parent-url.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 59,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/tracker-unknown-url.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 81,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/chart_prompt_scenarios/unattended-fanout.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Structured prompt-scenario fixture (prime-eval style).",
+            "taskIds": []
+          },
+          {
+            "additions": 571,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_prompt_scenarios.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Skill/router contract suite over the canonical prose and fixtures.",
+            "taskIds": []
+          },
+          {
+            "additions": 461,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_skill_contract.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Skill/router contract suite over the canonical prose and fixtures.",
+            "taskIds": []
+          },
+          {
+            "additions": 9,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "plugins/flow-next/tests/test_command_shim_flatten.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Skill/router contract suite over the canonical prose and fixtures.",
+            "taskIds": []
+          },
+          {
+            "additions": 322,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_guide_routing.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Skill/router contract suite over the canonical prose and fixtures.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R1",
+          "R8",
+          "R15",
+          "R27",
+          "R30",
+          "R31"
+        ],
+        "sourceRefs": [
+          "src-spec",
+          "src-diff",
+          "src-task-4",
+          "src-task-6",
+          "src-rid-r1",
+          "src-rid-r8",
+          "src-rid-r15",
+          "src-rid-r27",
+          "src-rid-r30",
+          "src-rid-r31"
+        ],
+        "summary": "The canonical /flow-next:chart skill (bounded Grounding Snapshot, cost read-back, frontier-only selection, attended hard gate terminating NEEDS_HUMAN, prototype attach-present-react lifecycle, exact CHART_VERDICT grammar) plus the /flow-next:guide smallest-sufficient router and surgical handover boundaries in five adjacent skills.",
+        "taskIds": [
+          "fn-135-chart-decision-map-discovery-for.4",
+          "fn-135-chart-decision-map-discovery-for.6"
+        ],
+        "title": "Prompt-first chart skill, guide router, and handovers"
+      },
+      {
+        "files": [
+          {
+            "additions": 1807,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/facade/chart_projection.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Chart lifecycle projection: local-first events, markers, hierarchy/blocking, pending-identity recovery, projection lock with holder drain, locate.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/lifecycle/helpers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "NTFS-safe receipt filenames for typed subject tokens.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/relate/ledger.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Provider relation removal primitives + ledger drop for stale native blocking edges.",
+            "taskIds": []
+          },
+          {
+            "additions": 296,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/relate/providers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Provider relation removal primitives + ledger drop for stale native blocking edges.",
+            "taskIds": []
+          },
+          {
+            "additions": 478,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/subjects.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Typed subjects (spec/chart/decision) + lock helpers generalizing the fn-141 facade.",
+            "taskIds": []
+          },
+          {
+            "additions": 91,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Adapter-interface contracts for chart parent/child locators, blocking projection, and degradation.",
+            "taskIds": []
+          },
+          {
+            "additions": 22,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/tracker_callers/oracle-410756ef8f27d14c3cfbcbffe66356c67fd255ad.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Chart caller entry spliced into the pinned fn-141 oracle fixture (22-line semantic insertion).",
+            "taskIds": []
+          },
+          {
+            "additions": 2209,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_tracker_projection.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Projection/locator/caller-matrix suite incl. reconcile and degradation paths.",
+            "taskIds": []
+          },
+          {
+            "additions": 18,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_tracker_caller_execution.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Projection/locator/caller-matrix suite incl. reconcile and degradation paths.",
+            "taskIds": []
+          },
+          {
+            "additions": 20,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_tracker_caller_oracle.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Projection/locator/caller-matrix suite incl. reconcile and degradation paths.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R16",
+          "R42",
+          "R54",
+          "R55"
+        ],
+        "sourceRefs": [
+          "src-spec",
+          "src-diff",
+          "src-task-5",
+          "src-rid-r16",
+          "src-rid-r42",
+          "src-rid-r54",
+          "src-rid-r55"
+        ],
+        "summary": "Optional local-first projection through the fn-141 facade via typed subjects: per-revision event markers with claim/asset/mutation digests, parent/child hierarchy with explicit degradation, two-pass blocking edges with stale-relation removal, pending-identity recovery, a projection lock with holder drain, and strictly-local chart locate URL re-entry.",
+        "taskIds": [
+          "fn-135-chart-decision-map-discovery-for.5"
+        ],
+        "title": "Tracker lifecycle projection and locate"
+      },
+      {
+        "files": [
+          {
+            "additions": 30,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "CLAUDE.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 38,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "GLOSSARY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "optimization/reached-path/pilot-candidates.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Pilot reached-path ledger re-measured for the fn-135 boundary section.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "plugins/flow-next/docs/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 32,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/docs/architecture.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 118,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/orchestration.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/ralph.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/docs/skills.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 27,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/docs/teams.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 43,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/docs/tracker-sync.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Repo docs: chart as optional pre-capture discovery, guide matrix, CLI reference, glossary, changelog Unreleased entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/templates/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Usage template chart section (byte-identical dual copy with .flow/usage.md).",
+            "taskIds": []
+          },
+          {
+            "additions": 488,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_docs_inventory.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Durable docs-inventory assertions: routes, optionality, counts, CLI parity, mirror, usage parity.",
+            "taskIds": []
+          },
+          {
+            "additions": 39,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 21,
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Frozen-contract suite updated deliberately for the chart subsystem (rationale in-code).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_review_prompt_constraints.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Frozen-contract suite updated deliberately for the chart subsystem (rationale in-code).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_token_budgets.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Frozen-contract suite updated deliberately for the chart subsystem (rationale in-code).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 6,
+        "rIds": [
+          "R19",
+          "R32",
+          "R34"
+        ],
+        "sourceRefs": [
+          "src-spec",
+          "src-diff",
+          "src-task-7",
+          "src-rid-r19",
+          "src-rid-r32",
+          "src-rid-r34"
+        ],
+        "summary": "README, docs tree, GLOSSARY terms, changelog Unreleased entry, and usage template teach chart as optional smallest-sufficient routing; a docs-inventory suite pins routes, optionality, counts, CLI parity, and usage parity; frozen-contract updates (CLI surface leaves, subprocess inventory, pilot ledger, usage budget) are deliberate and documented in-code.",
+        "taskIds": [
+          "fn-135-chart-decision-map-discovery-for.7"
+        ],
+        "title": "Documentation and durable assertions"
+      },
+      {
+        "files": [
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/bin/flowctl-help.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Regenerated root-help snapshot (pinned Python 3.14).",
+            "taskIds": []
+          },
+          {
+            "additions": 6985,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 76,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dual-copy propagation of flowctl.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_bootstrap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "HELP_SHA256 pin refresh for the regenerated help snapshot.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Regenerated dual-copy tracker manifest.",
+            "taskIds": []
+          },
+          {
+            "additions": 1807,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl_tracker/facade/chart_projection.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dual-copy propagation of the tracker package (rsync from plugins/).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/helpers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dual-copy propagation of the tracker package (rsync from plugins/).",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl_tracker/relate/ledger.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dual-copy propagation of the tracker package (rsync from plugins/).",
+            "taskIds": []
+          },
+          {
+            "additions": 296,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl_tracker/relate/providers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dual-copy propagation of the tracker package (rsync from plugins/).",
+            "taskIds": []
+          },
+          {
+            "additions": 478,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl_tracker/subjects.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dual-copy propagation of the tracker package (rsync from plugins/).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/config.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "flowctl self-annotated the published config $schema (fn-138).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/specs/fn-135-chart-decision-map-discovery-for.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.6.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.7.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.8.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-135-chart-decision-map-discovery-for.9.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Flow task/spec state: done summaries and evidence for the nine tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Byte-identical dogfood copy of templates/usage.md.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/codex/skills/flow-next-capture/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-capture/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 71,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-capture/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 136,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/agents/openai.yaml",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 185,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/references/examples.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 530,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 86,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-guide/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-guide/agents/openai.yaml",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-interview/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-pilot/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-prospect/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/codex/skills/flow-next-prospect/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 91,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/codex/skills/flow-next-tracker-sync/references/adapter-interface.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/templates/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Generated Codex mirror copy (sync-codex.sh; never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/scripts/flowctl-help.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Regenerated root-help snapshot (chart subcommand).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_bootstrap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "HELP_SHA256 pin refresh.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Regenerated tracker package manifest.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "scripts/sync-codex.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Chart/guide YAML generation + diet entries for the Codex mirror.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 7,
+        "rIds": [],
+        "sourceRefs": [
+          "src-spec",
+          "src-diff",
+          "src-task-7"
+        ],
+        "summary": "Propagation surfaces regenerated, never hand-edited: the Codex mirror (sync-codex x2, byte-idempotent), the .flow/bin dual copies and manifests, help snapshots on the pinned Python, and flow task/spec evidence state.",
+        "taskIds": [
+          "fn-135-chart-decision-map-discovery-for.7"
+        ],
+        "title": "Distribution and generated mirrors"
+      },
+      {
+        "files": [],
+        "kind": "step",
+        "ordinal": 8,
+        "rIds": [],
+        "sourceRefs": [
+          "src-spec",
+          "src-diff",
+          "src-commit-35a7eb6b",
+          "src-commit-627c604f",
+          "src-commit-890b22c3",
+          "src-commit-b2914f15",
+          "src-commit-d66f0351",
+          "src-commit-792e47fd"
+        ],
+        "summary": "Cross-family review of the grok-authored diff produced six waves (26 findings, all fixed, none declined): WAL/projection lock serialization, remote-read abort, briefing version paths and namespace collisions, a Windows backslash traversal, identity recovery, marker-digest identity, claim guards, link provenance strictness, and unsafe-prose refusal - plus three CI-only fixes (NTFS receipt names, frozen prospect fallback, help pins).",
+        "taskIds": [],
+        "title": "Review hardening: six codex waves plus the CI matrix"
+      },
+      {
+        "files": [],
+        "kind": "verify",
+        "ordinal": 9,
+        "rIds": [],
+        "sourceRefs": [
+          "src-diff",
+          "src-task-7",
+          "src-commit-792e47fd"
+        ],
+        "summary": "Focused suites per task during the build; the full parallel suite (3816 tests, 0 failures) plus ruff at every review wave; prospect smoke 80/80; sync-codex byte-idempotent; the full CI matrix (ubuntu/macos/windows, 3.11/3.x, smokes, linkcheck) green on the PR head. Crash recovery is proven with real subprocess kills at named failpoints.",
+        "taskIds": [
+          "fn-135-chart-decision-map-discovery-for.7"
+        ],
+        "title": "Gates"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Tasks",
+        "sourceRefs": [
+          "src-task-1",
+          "src-task-2",
+          "src-task-3",
+          "src-task-4",
+          "src-task-5",
+          "src-task-6",
+          "src-task-7",
+          "src-task-8",
+          "src-task-9"
+        ],
+        "value": "9/9 done with commit + test evidence"
+      },
+      {
+        "label": "Acceptance criteria",
+        "sourceRefs": [
+          "src-spec"
+        ],
+        "value": "R1-R55 all covered; none uncovered"
+      },
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "src-diff",
+          "src-task-7"
+        ],
+        "value": "3816 tests, 0 failures; ruff clean"
+      },
+      {
+        "label": "Cross-family review",
+        "sourceRefs": [
+          "src-commit-35a7eb6b",
+          "src-commit-627c604f",
+          "src-commit-890b22c3",
+          "src-commit-b2914f15",
+          "src-commit-d66f0351",
+          "src-commit-792e47fd"
+        ],
+        "value": "6 codex waves, 26/26 findings fixed"
+      },
+      {
+        "label": "CI",
+        "sourceRefs": [
+          "src-diff"
+        ],
+        "value": "full matrix green on the PR head"
+      }
+    ],
+    "thesis": "/flow-next:chart ships decision-map discovery for one oversized unclear idea before capture: a crash-recoverable git-native chart store sharing the spec allocator, an adaptive prompt-first skill that resolves one decision per invocation through the evidence-first routes, a versioned briefing package handed to capture, an optional tracker projection through the fn-141 facade, and the /flow-next:guide router that keeps the whole pipeline a menu rather than a rail. All 55 acceptance criteria carry task coverage; the diff was implemented by grok-4.5 workers under per-wave host review and hardened by six cross-family codex review waves."
+  },
+  "generatedAt": "2026-08-01T08:09:14Z",
+  "headSha": "b9052b52da92e9bb64fda8fc089908fd4401b072",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "src-spec",
+      "kind": "spec",
+      "ref": "fn-135-chart-decision-map-discovery-for"
+    },
+    {
+      "id": "src-diff",
+      "kind": "diff_metadata",
+      "ref": "74a5d69603425703029f45c2978a9b9071918487..b9052b52da92e9bb64fda8fc089908fd4401b072"
+    },
+    {
+      "id": "src-task-1",
+      "kind": "task",
+      "ref": "fn-135-chart-decision-map-discovery-for.1"
+    },
+    {
+      "id": "src-task-2",
+      "kind": "task",
+      "ref": "fn-135-chart-decision-map-discovery-for.2"
+    },
+    {
+      "id": "src-task-3",
+      "kind": "task",
+      "ref": "fn-135-chart-decision-map-discovery-for.3"
+    },
+    {
+      "id": "src-task-4",
+      "kind": "task",
+      "ref": "fn-135-chart-decision-map-discovery-for.4"
+    },
+    {
+      "id": "src-task-5",
+      "kind": "task",
+      "ref": "fn-135-chart-decision-map-discovery-for.5"
+    },
+    {
+      "id": "src-task-6",
+      "kind": "task",
+      "ref": "fn-135-chart-decision-map-discovery-for.6"
+    },
+    {
+      "id": "src-task-7",
+      "kind": "task",
+      "ref": "fn-135-chart-decision-map-discovery-for.7"
+    },
+    {
+      "id": "src-task-8",
+      "kind": "task",
+      "ref": "fn-135-chart-decision-map-discovery-for.8"
+    },
+    {
+      "id": "src-task-9",
+      "kind": "task",
+      "ref": "fn-135-chart-decision-map-discovery-for.9"
+    },
+    {
+      "id": "src-commit-35a7eb6b",
+      "kind": "commit",
+      "ref": "35a7eb6b5e53e2008a9d97932ef4263337637f8c"
+    },
+    {
+      "id": "src-commit-627c604f",
+      "kind": "commit",
+      "ref": "627c604f75f72f7209adbb256f786e1b6d95816e"
+    },
+    {
+      "id": "src-commit-890b22c3",
+      "kind": "commit",
+      "ref": "890b22c3495c00099ccdf6826590ff48fc8568a0"
+    },
+    {
+      "id": "src-commit-b2914f15",
+      "kind": "commit",
+      "ref": "b2914f15227f3f4da035faf69fc6db4fe50f3270"
+    },
+    {
+      "id": "src-commit-d66f0351",
+      "kind": "commit",
+      "ref": "d66f0351db692aebf77bf5e9cc7849dccc23e13a"
+    },
+    {
+      "id": "src-commit-792e47fd",
+      "kind": "commit",
+      "ref": "792e47fd55607b3e34205aec33a73e304358bef5"
+    },
+    {
+      "id": "src-rid-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "src-rid-r8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "src-rid-r11",
+      "kind": "rid",
+      "ref": "R11"
+    },
+    {
+      "id": "src-rid-r14",
+      "kind": "rid",
+      "ref": "R14"
+    },
+    {
+      "id": "src-rid-r15",
+      "kind": "rid",
+      "ref": "R15"
+    },
+    {
+      "id": "src-rid-r16",
+      "kind": "rid",
+      "ref": "R16"
+    },
+    {
+      "id": "src-rid-r18",
+      "kind": "rid",
+      "ref": "R18"
+    },
+    {
+      "id": "src-rid-r19",
+      "kind": "rid",
+      "ref": "R19"
+    },
+    {
+      "id": "src-rid-r21",
+      "kind": "rid",
+      "ref": "R21"
+    },
+    {
+      "id": "src-rid-r23",
+      "kind": "rid",
+      "ref": "R23"
+    },
+    {
+      "id": "src-rid-r24",
+      "kind": "rid",
+      "ref": "R24"
+    },
+    {
+      "id": "src-rid-r27",
+      "kind": "rid",
+      "ref": "R27"
+    },
+    {
+      "id": "src-rid-r30",
+      "kind": "rid",
+      "ref": "R30"
+    },
+    {
+      "id": "src-rid-r31",
+      "kind": "rid",
+      "ref": "R31"
+    },
+    {
+      "id": "src-rid-r32",
+      "kind": "rid",
+      "ref": "R32"
+    },
+    {
+      "id": "src-rid-r34",
+      "kind": "rid",
+      "ref": "R34"
+    },
+    {
+      "id": "src-rid-r40",
+      "kind": "rid",
+      "ref": "R40"
+    },
+    {
+      "id": "src-rid-r41",
+      "kind": "rid",
+      "ref": "R41"
+    },
+    {
+      "id": "src-rid-r42",
+      "kind": "rid",
+      "ref": "R42"
+    },
+    {
+      "id": "src-rid-r45",
+      "kind": "rid",
+      "ref": "R45"
+    },
+    {
+      "id": "src-rid-r50",
+      "kind": "rid",
+      "ref": "R50"
+    },
+    {
+      "id": "src-rid-r54",
+      "kind": "rid",
+      "ref": "R54"
+    },
+    {
+      "id": "src-rid-r55",
+      "kind": "rid",
+      "ref": "R55"
+    }
+  ],
+  "specId": "fn-135-chart-decision-map-discovery-for"
+}

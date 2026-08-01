@@ -1,0 +1,483 @@
+{
+  "artifactId": "fn-138-a4010638-v1",
+  "baseSha": "da3f564e20a02dcda7ab7895a44fbfec6b661384",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "The ~44-key .flow/config.json surface had no machine-readable contract - editors could not validate or autocomplete it, and external consumers had to scrape docs.",
+        "taskIds": [],
+        "title": "Config surface documented only in prose"
+      },
+      {
+        "files": [
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".gitattributes",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "*.schema.json text eol=lf (windows byte-stability).",
+            "taskIds": []
+          },
+          {
+            "additions": 681,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/schema/flow-config.schema.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "committed draft 2020-12 artifact (generated, byte-stable; review the generator, skim this).",
+            "taskIds": []
+          },
+          {
+            "additions": 166,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_flow_config_schema.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "byte-identity regen, determinism, defaults honesty, description coverage.",
+            "taskIds": []
+          },
+          {
+            "additions": 702,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "scripts/gen_flow_config_schema.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "deterministic schema generator: code-authoritative TABLE, per-backend effort grammar, tracker.resolved permissive shape.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r1",
+          "task1",
+          "c0"
+        ],
+        "summary": "Pure-stdlib generator emits a draft 2020-12 schema from a code-authoritative table (get_default_config leaves + registry constants + resolved_cache SCOPES); byte-stable across the 3-OS matrix; per-backend effort grammar; tracker.resolved modeled permissive.",
+        "taskIds": [
+          "fn-138-published-json-schema-for-flow-config.1"
+        ],
+        "title": "Deterministic generator + committed artifact"
+      },
+      {
+        "files": [
+          {
+            "additions": 496,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_flow_config_schema_drift.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "both-direction drift test + call-site guard + stdlib structural checker + fixtures.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R2",
+          "R4"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r2",
+          "r4",
+          "task2",
+          "c1"
+        ],
+        "summary": "Reader-accepted keys (defaults leaves UNION annotated allowlist, plus a call-site literal guard) must equal schema keys in both directions; a stdlib fail-closed structural checker validates real fixtures. The test caught real drift on first run (makePr.derivedPaths was missing from the schema).",
+        "taskIds": [
+          "fn-138-published-json-schema-for-flow-config.2"
+        ],
+        "title": "Both-direction drift honesty"
+      },
+      {
+        "files": [
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "copied",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-137-global-acceptance-criteria-object/pr-cognitive-aid/.write.lock",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-137 walkthrough artifact exhaust (unrelated).",
+            "taskIds": []
+          },
+          {
+            "additions": 922,
+            "attentionClass": "generated",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-137-global-acceptance-criteria-object/pr-cognitive-aid/fn-137-15960ef3-v1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-137 walkthrough artifact exhaust (unrelated).",
+            "taskIds": []
+          },
+          {
+            "additions": 18,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 38,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": ".flow/specs/fn-138-published-json-schema-for-flow-config.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-138-published-json-schema-for-flow-config.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-138-published-json-schema-for-flow-config.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-138-published-json-schema-for-flow-config.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "flow state/bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 44,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Unreleased entry (user-outcome-first) + downstream-walk publication note.",
+            "taskIds": []
+          },
+          {
+            "additions": 61,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 61,
+            "path": "optimization/reached-path/setup-routing-evidence.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "supporting change.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "codex mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "schema link + corrected memory.enabled/planSync.enabled default rows.",
+            "taskIds": []
+          },
+          {
+            "additions": 18,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "FLOW_CONFIG_SCHEMA_URL constant + $schema stamp on both cmd_init write paths.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "tracker manifest source-sha regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "one-clause note that scaffolded configs carry $schema.",
+            "taskIds": []
+          },
+          {
+            "additions": 158,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_init_schema_stamp.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "$schema stamping paths: fresh, re-init, preserve-pinned, config-set round-trip.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R3",
+          "R5"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r3",
+          "r5",
+          "task3",
+          "c2"
+        ],
+        "summary": "Both flowctl init write paths stamp $schema (one URL constant, latest-mutable); existing configs untouched elsewhere and pinned values survive re-init; flowctl.md links the schema and corrects two wrong default rows; Unreleased CHANGELOG with the docs-site publication walk note.",
+        "taskIds": [
+          "fn-138-published-json-schema-for-flow-config.3"
+        ],
+        "title": "Setup stamps $schema + docs"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 5,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "No config format changes, no runtime validation in flowctl (the URL is an inert string, never fetched), no new dependencies; absent criteria stay silent.",
+        "taskIds": [],
+        "title": "Boundaries held"
+      },
+      {
+        "files": [],
+        "kind": "verify",
+        "ordinal": 6,
+        "rIds": [],
+        "sourceRefs": [
+          "spec",
+          "c2"
+        ],
+        "summary": "45 schema tests + full parallel suite (168 files, 3567 tests, 0 failures) + ruff clean; per-task fable-5 host reviews SHIP x3 (with independent fuzzing of the grammar against BackendSpec.parse) and completion review SHIP.",
+        "taskIds": [],
+        "title": "Full gate + reviews all SHIP"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Coverage",
+        "sourceRefs": [
+          "spec",
+          "task1",
+          "task2",
+          "task3"
+        ],
+        "value": "All 3 tasks done; R1-R5 satisfied; completion review SHIP."
+      },
+      {
+        "label": "Gate",
+        "sourceRefs": [
+          "task3",
+          "c2"
+        ],
+        "value": "Full parallel suite green (168 files, 3567 tests, 0 failures) + ruff 0.16.0 clean at head."
+      },
+      {
+        "label": "Drift-catch",
+        "sourceRefs": [
+          "r2",
+          "task2",
+          "c1"
+        ],
+        "value": "The new honesty test caught real drift on its first run: makePr.derivedPaths was read by flowctl but absent from the schema."
+      }
+    ],
+    "thesis": "The .flow/config.json surface becomes a published, machine-checkable contract: a deterministic draft 2020-12 JSON Schema generated from code, kept honest by both-direction drift tests, and stamped into scaffolded configs so editors validate and autocomplete them."
+  },
+  "generatedAt": "2026-07-31T16:15:01Z",
+  "headSha": "5c806da69d84293ca2a5f26b0dbff023acf5bd20",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-138-published-json-schema-for-flow-config"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "da3f564e20a02dcda7ab7895a44fbfec6b661384..5c806da69d84293ca2a5f26b0dbff023acf5bd20"
+    },
+    {
+      "id": "task1",
+      "kind": "task",
+      "ref": "fn-138-published-json-schema-for-flow-config.1"
+    },
+    {
+      "id": "task2",
+      "kind": "task",
+      "ref": "fn-138-published-json-schema-for-flow-config.2"
+    },
+    {
+      "id": "task3",
+      "kind": "task",
+      "ref": "fn-138-published-json-schema-for-flow-config.3"
+    },
+    {
+      "id": "r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "c0",
+      "kind": "commit",
+      "ref": "f0d2571f237efd10535dd2e88ef4a6923a033e98"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "938b74731d1d53fa692c7a45f69d3d1f0f01c71f"
+    },
+    {
+      "id": "c2",
+      "kind": "commit",
+      "ref": "9524c7a9ef78e57e5089b765eb3ef00456b2d760"
+    }
+  ],
+  "specId": "fn-138-published-json-schema-for-flow-config"
+}

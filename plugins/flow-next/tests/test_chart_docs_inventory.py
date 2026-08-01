@@ -453,21 +453,28 @@ class ChartUsageParity(unittest.TestCase):
         self.assertIn(".D", text)
 
 
-class ChartChangelogUnreleased(unittest.TestCase):
-    def test_unreleased_has_chart_entry_and_preserves_prior(self) -> None:
+class ChartChangelogEntry(unittest.TestCase):
+    """The chart entry must exist and keep its co-tenants, in whichever
+    section currently holds it: `## Unreleased` before the release, the
+    versioned section after `bump.sh` promotes it. Pinning `## Unreleased`
+    would fail the release commit itself."""
+
+    def test_top_section_has_chart_entry_and_preserves_prior(self) -> None:
         text = _read(REPO_ROOT / "CHANGELOG.md")
-        self.assertIn("## Unreleased", text)
-        # Chart entry present
-        self.assertRegex(text, r"(?i)/flow-next:chart")
-        self.assertRegex(text, r"(?i)fn-135")
-        # Prior unreleased fix preserved (review sidecar / #279)
-        self.assertIn("#279", text)
-        self.assertIn("Review sidecar write transaction", text)
-        # No version bump artifacts in this task's entry area - just ensure
-        # Unreleased is still the first section after the title.
         first_heading = re.search(r"^## .+", text, re.MULTILINE)
         self.assertIsNotNone(first_heading)
-        self.assertEqual(first_heading.group(0), "## Unreleased")
+        heading = first_heading.group(0)
+        self.assertRegex(
+            heading,
+            r"^## (Unreleased|\[flow-next \d+\.\d+\.\d+\] - \d{4}-\d{2}-\d{2})$",
+            "the top changelog section must be Unreleased or a released version",
+        )
+        # The chart entry lives in that top section, with its co-tenants.
+        top = text.split(heading, 1)[1].split("\n## ", 1)[0]
+        self.assertRegex(top, r"(?i)/flow-next:chart")
+        self.assertRegex(top, r"(?i)fn-135")
+        self.assertIn("#279", top)
+        self.assertIn("Review sidecar write transaction", top)
 
 
 class ChartGuideOptionality(unittest.TestCase):

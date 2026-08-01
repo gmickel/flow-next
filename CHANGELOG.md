@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.13.0] - 2026-08-01
 
 An oversized idea that is still wrapped in unknowns no longer has to become a
 spec full of guesses or a series of meetings whose output evaporates.
