@@ -110,7 +110,7 @@ Absent, empty, `"false"`, `"0"`, and any unrecognized value all mean **local**. 
 
 **Why not narrow what runs.** The obvious reaction to "16 minutes for a docs change" is to stop running tests for docs changes. PR #285 is the counter-example: the failure CI caught there *was* in prose (a changelog assertion pinned by `test_chart_docs_inventory`), and the guards that catch prose regressions live in the same suite as everything else. Narrowing the trigger would have let it through.
 
-**Why Windows is measured but not gating.** Windows took 974s against ubuntu's 777s. The gap is process-spawn overhead - and this runner spawns one interpreter per test file - so more workers will not close it proportionally. That is why R2's ship condition names `ubuntu-latest/3.11`, `ubuntu-latest/3.x` and `macos-latest/3.11` only: holding Windows to the same threshold would block a change that genuinely helps the other three rows. Windows is still measured and recorded; it just does not gate. Do not write a changelog claim that outruns the measurement.
+**Why Windows was originally excluded, and why the amended rule includes it.** Windows took 974s against ubuntu's 777s in PR #285. The gap is process-spawn overhead - this runner spawns one interpreter per test file - so the original rule assumed more workers would not help it proportionally and excluded it from both conditions, on the reasoning that holding Windows to the same threshold would block a change that helped the other rows. **The measurement disproved that assumption: Windows gained 32.9%.** Under the amended R2 criterion Windows is therefore no longer excluded - it gates the no-regression half alongside the other three rows, and it is eligible for the at-least-one-row 25% condition. Do not write a changelog claim that outruns the measurement.
 
 **The core-count claim is derived, not documented.** Nothing in this repo documents GitHub-hosted runner core counts. `jobs=2` in the CI log implies `cpu_count == 4` through `max(1, cpu_count - 2)`; that is an inference from observed behavior, and R2's measurement is what actually settles the win. Do not restate "4-core runner" as a fact.
 
@@ -124,9 +124,11 @@ Absent, empty, `"false"`, `"0"`, and any unrecognized value all mean **local**. 
 
 - **macOS was running the suite fully serially.** GitHub's macOS runner reports 3 cores, so the old `max(1, cpu_count - 2)` returns **`jobs=1`**. That is not headroom, it is parallelism switched off, and it is a defect the spec never suspected. Fixing it is worth more than the threshold it was measured against (-43.5%).
 - **Ubuntu is genuinely spawn-bound**, not core-starved. Doubling workers buys ~19-21%, which answers the spec's own open question: this runner spends its time spawning one interpreter per test file, not saturating cores.
-- **Windows, excluded from both conditions, gained 32.9%** for the same reason macOS did (`jobs=2 -> 4`).
+- **Windows, excluded from both conditions by the original rule, gained 32.9%** for the same reason macOS did (`jobs=2 -> 4`) - which is why the amended rule stops excluding it.
 
-The revised condition is: ship when **no** gating row regresses on either metric AND at least one row improves materially. All four rows improved on both metrics, so it passes. The 25% bar is retired as an artifact of a wrong model of the bottleneck, not lowered to fit a number. Decision made by the maintainer with the measured tables above in hand.
+*The amended condition, stated once and authoritative in R2:* **ship when, on all four matrix rows, neither the median runner-step `wall=` nor the median whole-job duration regresses against its baseline median, AND at least one row's median runner-step `wall=` improves by at least 25%.** Measured: all four rows improved on both metrics, and macOS (-43.5%) and Windows (-32.9%) each clear 25%, so it passes.
+
+**The 25% bar is not retired and no threshold was lowered.** What changed is its shape: it was a per-row requirement on three named rows, and it is now an at-least-one-row requirement across all four. The rows the original named were chosen on a wrong model of the bottleneck (that every runner was core-starved alike); the numeric bar itself survived the measurement intact. Decision made by the maintainer with the measured tables above in hand.
 
 **The measurement also found a regression the plan did not anticipate, which is why R7 exists.** The `after` leg of wave 2 failed on Windows: `test_validation_plus_render_p95_under_100_ms_for_30_warm_runs`, p95=167.893ms against a 100ms budget. It passed at `jobs=2` in both baseline runs and at `jobs=4` in wave 1, so the higher job count makes it *intermittently* flaky. The budget was measured with `time.perf_counter()`, so under four sibling interpreters on four cores it was measuring scheduler contention rather than the operation. R7 moves both 30-sample p95 budgets onto process CPU time. Shipping the speedup while leaving CI intermittently red would have traded a real gain for a corroded signal.
 
@@ -172,7 +174,7 @@ Every row carries its run link and the head SHA it ran against, so each median b
 | baseline | macos-latest 3.11 | 557.99s | 871.5s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
 | after | macos-latest 3.11 | 315.28s | 721.0s | **-43.5%** | -17.3% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
 | baseline | windows-latest 3.11 | 667.43s | 1062.0s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
-| after | windows-latest 3.11 | 448.01s | 778.5s | -32.9% (non-gating) | -26.7% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
+| after | windows-latest 3.11 | 448.01s | 778.5s | **-32.9%** | -26.7% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
 
 ### R3 coverage parity, full corpus at two job counts (from these same runs)
 
