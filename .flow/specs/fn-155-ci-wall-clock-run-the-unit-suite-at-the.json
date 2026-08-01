@@ -8,7 +8,9 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-155-ci-wall-clock-run-the-unit-suite-at-the",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
@@ -84,10 +86,39 @@
       "task": null,
       "timestamp": "2026-08-01T20:38:20.944517Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "9abd4d4f3de3f018a28551afff32ebe20d79ab19",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "fe171cafb71fc6a3fdd3ea0efc2d33185af7975e3d67e0e9b2d3555bf4ef451c",
+      "round_consumed": true,
+      "scope": "impl:fn-155-ci-wall-clock-run-the-unit-suite-at-the.1",
+      "task": "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1",
+      "timestamp": "2026-08-01T21:07:13.980166Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "fdf218dca02427e03f61391de9d7afeb0dc9940e",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "e8f45fc22408f3a5d58cc4cf277539433081f7efbe88abcd7fa59264e3eef9ee",
+      "round_consumed": true,
+      "scope": "impl:fn-155-ci-wall-clock-run-the-unit-suite-at-the.1",
+      "task": "fn-155-ci-wall-clock-run-the-unit-suite-at-the.1",
+      "timestamp": "2026-08-01T21:12:27.852245Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
+    "impl:fn-155-ci-wall-clock-run-the-unit-suite-at-the.1": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-155-ci-wall-clock-run-the-unit-suite-at-the.md",
@@ -104,5 +135,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T20:38:29.684258Z"
+  "updated_at": "2026-08-01T21:12:36.334262Z"
 }
