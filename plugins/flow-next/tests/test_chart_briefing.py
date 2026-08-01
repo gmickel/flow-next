@@ -640,7 +640,7 @@ class TestLinkSpec(unittest.TestCase):
             side = _chart_json(flow, chart_id)
             self.assertEqual(len(side["produced_specs"]), 1)
 
-            # Different cluster identity is a second link
+            # Different identity (no cluster key) is a second link
             r3 = _run_flowctl(
                 repo,
                 "chart",
@@ -652,8 +652,6 @@ class TestLinkSpec(unittest.TestCase):
                 "fn-901",
                 "--decisions",
                 d2["id"],
-                "--cluster",
-                "2",
                 "--json",
             )
             self.assertEqual(r3.returncode, 0, r3.stderr)
@@ -752,7 +750,7 @@ class TestLinkSpec(unittest.TestCase):
                 "--decisions",
                 d3["id"],
                 "--cluster",
-                "x",
+                "1",
                 "--json",
             )
             self.assertEqual(r_fresh.returncode, 0, r_fresh.stderr)
@@ -866,6 +864,31 @@ class TestLinkSpecDecisionValidation(unittest.TestCase):
             r_retry = _run_flowctl(repo, *good_args)
             self.assertEqual(r_retry.returncode, 0, r_retry.stderr + r_retry.stdout)
             self.assertTrue(json.loads(r_retry.stdout)["result"]["noop"])
+            self.assertEqual(len(_chart_json(flow, chart_id)["produced_specs"]), 1)
+
+            # Unknown cluster key is rejected outright (never falls back to
+            # the briefing-wide union), nothing persisted.
+            r_typo = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-904",
+                "--decisions",
+                d2["id"],
+                "--cluster",
+                "biling",
+                "--json",
+            )
+            self.assertNotEqual(r_typo.returncode, 0)
+            err = json.loads(r_typo.stdout)["error"]
+            self.assertEqual(err["code"], "link_unknown_cluster")
+            self.assertEqual(
+                sorted(err["details"]["valid_clusters"]), ["admin", "billing"]
+            )
             self.assertEqual(len(_chart_json(flow, chart_id)["produced_specs"]), 1)
 
 

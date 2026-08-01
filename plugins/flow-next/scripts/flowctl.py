@@ -14974,18 +14974,37 @@ def link_chart_spec(
             }
 
     # R50: a durable link must only cite evidence the named briefing actually
-    # carries. Validate against the matching cluster's decisions plus
-    # shared_context when --cluster names a briefing cluster; otherwise
-    # against the union across the briefing's clusters. Runs after the
-    # identity no-op check so identical retries stay no-ops.
+    # carries. When the briefing has clusters metadata, --cluster MUST name
+    # one of its keys (a typo silently validated against the briefing-wide
+    # union would persist a nonexistent cluster identity); the matching
+    # cluster's decisions plus shared_context are then the allowed set.
+    # Without --cluster, validate against the union across the briefing's
+    # clusters. Runs after the identity no-op check so identical retries of
+    # historical links stay no-ops.
     allowed: set[str] = set(brief_rec.get("shared_context") or [])
     matched_cluster = None
+    cluster_keys: list[str] = []
     for c in brief_rec.get("clusters") or []:
         if not isinstance(c, dict):
             continue
+        if c.get("key") is not None:
+            cluster_keys.append(str(c.get("key")))
         if cluster_key is not None and str(c.get("key")) == cluster_key:
             matched_cluster = c
         allowed.update(c.get("decisions") or [])
+    if cluster_key is not None and cluster_keys and matched_cluster is None:
+        raise ChartError(
+            "validation",
+            "link_unknown_cluster",
+            f"Cluster '{cluster_key}' not found on briefing {briefing_id}; "
+            "valid clusters: " + ", ".join(cluster_keys),
+            details={
+                "id": chart_id,
+                "briefing": briefing_id,
+                "cluster": cluster_key,
+                "valid_clusters": cluster_keys,
+            },
+        )
     if matched_cluster is not None:
         allowed = set(brief_rec.get("shared_context") or [])
         allowed.update(matched_cluster.get("decisions") or [])
@@ -23324,6 +23343,10 @@ def cmd_chart_park_question(args: argparse.Namespace) -> None:
         "created": out.get("created"),
         "noop": out.get("noop", False),
     }
+    # Parked counts feed the parent rollup - refresh it post-commit.
+    result = _attach_tracker_projection(
+        result, flow_dir, result["chart_id"], "chart.wire",
+    )
     if use_json:
         chart_json_success(command, result)
     else:
@@ -23366,6 +23389,10 @@ def cmd_chart_remove_question(args: argparse.Namespace) -> None:
         "body": out.get("body"),
         "removed": True,
     }
+    # Parked counts feed the parent rollup - refresh it post-commit.
+    result = _attach_tracker_projection(
+        result, flow_dir, result["chart_id"], "chart.wire",
+    )
     if use_json:
         chart_json_success(command, result)
     else:
@@ -23638,6 +23665,11 @@ def cmd_chart_attach_asset(args: argparse.Namespace) -> None:
             details=e.details,
             exit_code=e.exit_code,
         )
+    # Evidence on an open decision must reach the tracker child now - a
+    # prototype awaiting human reaction gets no later resolve event.
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), "chart.attachAsset",
+    )
     if use_json:
         chart_json_success(command, out)
     else:

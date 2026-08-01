@@ -16,6 +16,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -831,6 +832,13 @@ def _rewrite_decision_claim(flow: Path, claimed_by, claimed_at) -> None:
     dpath.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def _rewrite_decision_assets(flow: Path, assets: list[dict]) -> None:
+    dpath = flow / "charts" / "fn-10" / "1.json"
+    data = json.loads(dpath.read_text(encoding="utf-8"))
+    data["assets"] = assets
+    dpath.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Subject writes serialize with chart WAL transactions
 # ---------------------------------------------------------------------------
@@ -1030,6 +1038,50 @@ class ClaimRevisionTests(unittest.TestCase):
             self.assertEqual(len(claim_revs), 2)
 
 
+class AssetRevisionTests(unittest.TestCase):
+    def test_attach_asset_reprojects_with_same_chart_revision(self) -> None:
+        """Assets are sidecar-only (chart_decision_revision omits them);
+        back-to-back attaches must not dedupe into a no-op, while an
+        identical retry with unchanged assets still dedupes."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_linked_pair(flow)
+            chart_rev = "chart-rev-static"
+            ex1 = fake_execute(_linked_refresh_responses())
+            out1 = CP.project_chart(
+                flow, "fn-10", event="chart.attachAsset",
+                revision=chart_rev, execute=ex1,
+            )
+            self.assertIsInstance(out1, dict)
+            self.assertTrue(out1.get("projected"))
+            self.assertFalse(out1.get("deduped"))
+            # Attach evidence locally, then project again with the SAME
+            # chart revision - the asset digest must force a refresh.
+            _rewrite_decision_assets(flow, [{
+                "kind": "prototype",
+                "reference": "proto/tenancy.html",
+                "summary": "clickable spike",
+            }])
+            ex2 = fake_execute(_linked_refresh_responses(with_hierarchy=False))
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.attachAsset",
+                revision=chart_rev, execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertFalse(out2.get("deduped"))
+            self.assertTrue(out2.get("projected"))
+            self.assertIn("wire-update", [c.op for c in ex2.calls])
+            # Unchanged assets: identical retry dedupes, zero remote calls.
+            ex3 = fake_execute({})
+            out3 = CP.project_chart(
+                flow, "fn-10", event="chart.attachAsset",
+                revision=chart_rev, execute=ex3,
+            )
+            self.assertTrue(out3.get("deduped"))
+            self.assertEqual(ex3.calls, [])
+
+
 # ---------------------------------------------------------------------------
 # Locator frontier excludes blocked decisions
 # ---------------------------------------------------------------------------
@@ -1064,6 +1116,332 @@ class LocateFrontierTests(unittest.TestCase):
             frontier_ids = [f["id"] for f in out.get("frontier") or []]
             self.assertEqual(frontier_ids, ["fn-10.D2"])
             self.assertNotIn("fn-10.D3", frontier_ids)
+
+
+# ---------------------------------------------------------------------------
+# Created-but-unlinked identity recovery (link-write failure, then retry)
+# ---------------------------------------------------------------------------
+
+class IdentityRecoveryTests(unittest.TestCase):
+    def test_link_write_failure_recovers_without_duplicate_create(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(flow)
+            parent = _gh_issue(node_id="I_parent_100", number=100)
+            real_write = CP.locked_subject_write
+
+            def chart_writes_fail(flow_dir, kind, subject_id, mutate, **kw):
+                if kind == "chart":
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        "timed out acquiring chart resource lock",
+                        subtype="lock_timeout",
+                    )
+                return real_write(flow_dir, kind, subject_id, mutate, **kw)
+
+            ex1 = fake_execute({"lifecycle-create": [ok(dict(parent))]})
+            with mock.patch.object(
+                CP, "locked_subject_write", chart_writes_fail,
+            ):
+                out1 = CP.project_chart(
+                    flow, "fn-10", event="chart.create",
+                    revision="rev-rec", evidence="evrec", execute=ex1,
+                )
+            self.assertIsInstance(out1, TrackerError)
+            # Created identity rides the error details (receipt evidence).
+            self.assertEqual((out1.details or {}).get("id"), "I_parent_100")
+            pending = flow / "create-first" / "chart-chart-fn-10.json"
+            self.assertTrue(pending.is_file())
+            # Retry: adopts the recorded identity - the ONLY remote create
+            # is the child's (a second parent create would exhaust the
+            # single-response list and fail loudly).
+            child = _gh_issue(node_id="I_child_101", number=101)
+            responses = _gh_create_responses()
+            responses["lifecycle-create"] = [ok(dict(child))]
+            ex2 = fake_execute(responses)
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.create",
+                revision="rev-rec", evidence="evrec", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("projected"))
+            creates = [c for c in ex2.calls if c.op == "lifecycle-create"]
+            self.assertEqual(len(creates), 1)
+            chart = json.loads(
+                (flow / "charts" / "fn-10.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(chart["tracker"]["id"], "I_parent_100")
+            self.assertEqual(out2["steps"]["create_parent"]["kind"], "adopted")
+            self.assertIn("adopt-parent", out2.get("completed_steps") or [])
+            self.assertFalse(pending.is_file())
+
+    def test_transient_link_write_failure_retries_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(flow)
+            real_write = CP.locked_subject_write
+            failures = {"left": 1}
+
+            def first_write_fails(flow_dir, kind, subject_id, mutate, **kw):
+                if failures["left"] > 0:
+                    failures["left"] -= 1
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        "timed out acquiring chart resource lock",
+                        subtype="lock_timeout",
+                    )
+                return real_write(flow_dir, kind, subject_id, mutate, **kw)
+
+            ex = fake_execute(_gh_create_responses())
+            with mock.patch.object(
+                CP, "locked_subject_write", first_write_fails,
+            ):
+                out = CP.project_chart(
+                    flow, "fn-10", event="chart.create",
+                    revision="rev-tr", evidence="evtr", execute=ex,
+                )
+            self.assertIsInstance(out, dict)
+            self.assertTrue(out.get("projected"))
+            self.assertEqual(out["steps"]["create_parent"]["kind"], "created")
+            self.assertFalse(
+                (flow / "create-first" / "chart-chart-fn-10.json").is_file()
+            )
+
+
+# ---------------------------------------------------------------------------
+# Blocking edges project in a second pass over the fully-linked child set
+# ---------------------------------------------------------------------------
+
+def _ln_issue(iid: str, ident: str) -> dict:
+    return {
+        "id": iid, "identifier": ident,
+        "url": f"https://linear.app/acme/issue/{ident}",
+        "title": "t", "description": "b",
+        "state": {"id": "st", "name": "Todo", "type": "unstarted"},
+        "labels": {"nodes": []},
+    }
+
+
+def _ln_create(issue: dict):
+    return ok({"data": {"issueCreate": {"success": True, "issue": dict(issue)}}})
+
+
+def _ln_read(issue: dict):
+    return ok({"data": {"issue": dict(issue)}})
+
+
+def _ln_update(issue: dict):
+    return ok({"data": {"issueUpdate": {"success": True, "issue": dict(issue)}}})
+
+
+def _ln_no_edges(iid: str):
+    empty_conn = {"nodes": [], "pageInfo": {"hasNextPage": False}}
+    return ok({"data": {"issue": {
+        "id": iid, "relations": dict(empty_conn),
+        "inverseRelations": dict(empty_conn),
+    }}})
+
+
+class TwoPassBlockingTests(unittest.TestCase):
+    def test_initial_map_projects_edge_blocked_by_later_decision(self) -> None:
+        """D1 blocked_by D2 on the INITIAL projection: the edge must land
+        even though D2 has no locator while D1 is being created."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, ln_cfg())
+            _seed_chart(
+                flow,
+                decisions=[
+                    {
+                        "id": "fn-10.D1", "title": "Blocked first",
+                        "type": "research", "attendance": "unattended",
+                        "status": "open", "blocked_by": ["fn-10.D2"], "n": 1,
+                    },
+                    {
+                        "id": "fn-10.D2", "title": "Later blocker",
+                        "type": "research", "attendance": "unattended",
+                        "status": "open", "n": 2,
+                    },
+                ],
+            )
+            parent = _ln_issue("lin-parent", "WOR-1")
+            d1 = _ln_issue("lin-d1", "WOR-2")
+            d2 = _ln_issue("lin-d2", "WOR-3")
+            responses = {
+                "lifecycle-create": [
+                    _ln_create(parent), _ln_create(d1), _ln_create(d2),
+                ],
+                # edge probe: no existing relation on D1
+                "relate-list": [_ln_no_edges("lin-d1")],
+                "relate-create": ok({"data": {"issueRelationCreate": {
+                    "success": True, "issueRelation": {"id": "rel-1"},
+                }}}),
+                "wire-read": [_ln_read(parent)],
+                "wire-parent-read": [_ln_read(parent)],
+                "wire-update": [_ln_update(parent)],
+            }
+            ex = fake_execute(responses)
+            out = CP.project_chart(
+                flow, "fn-10", event="chart.create",
+                revision="rev-2p", evidence="ev2p", execute=ex,
+            )
+            self.assertIsInstance(out, dict)
+            self.assertTrue(out.get("projected"))
+            self.assertIn(
+                "blocks:fn-10.D1->fn-10.D2", out.get("completed_steps") or [],
+            )
+            rel_creates = [c for c in ex.calls if c.op == "relate-create"]
+            self.assertEqual(len(rel_creates), 1)
+            # Edge landed on the SAME initial projection - ledger recorded.
+            d1_json = json.loads(
+                (flow / "charts" / "fn-10" / "1.json").read_text(encoding="utf-8")
+            )
+            entries = d1_json["tracker"].get("depRelations") or []
+            self.assertTrue(any(
+                e.get("from_tracker_id") == "lin-d1"
+                and e.get("to_tracker_id") == "lin-d2"
+                and e.get("type") == "blocks"
+                for e in entries
+            ))
+
+
+# ---------------------------------------------------------------------------
+# Stale flow-owned native blocking relations are removed on rewire
+# ---------------------------------------------------------------------------
+
+def _seed_linear_linked_rewired(flow: Path) -> str:
+    """Chart + D1 + D2 all linked; D1's ledger still owns a blocks edge to D2
+    that blocked_by no longer lists (wire-decision cleared it)."""
+    stale_key = CP.dep_relation_key("lin-d1", "lin-d2")
+    _seed_chart(
+        flow,
+        tracker={
+            "id": "lin-parent", "identifier": "WOR-1",
+            "url": "https://linear.app/acme/issue/WOR-1",
+            "linkState": "linked", "depRelations": [],
+            "projection": {"event_markers": []},
+        },
+        decisions=[
+            {
+                "id": "fn-10.D1", "title": "Rewired", "type": "research",
+                "attendance": "unattended", "status": "open",
+                "blocked_by": [], "n": 1,
+                "tracker": {
+                    "id": "lin-d1", "identifier": "WOR-2",
+                    "url": "https://linear.app/acme/issue/WOR-2",
+                    "linkState": "linked",
+                    "depRelations": [{
+                        "key": stale_key,
+                        "dep_spec": "fn-10.D2",
+                        "from_tracker_id": "lin-d1",
+                        "to_tracker_id": "lin-d2",
+                        "type": "blocks",
+                        "source": "flow",
+                        "updatedAt": "2026-01-01T00:00:00Z",
+                    }],
+                },
+            },
+            {
+                "id": "fn-10.D2", "title": "Old blocker", "type": "research",
+                "attendance": "unattended", "status": "open", "n": 2,
+                "tracker": {
+                    "id": "lin-d2", "identifier": "WOR-3",
+                    "url": "https://linear.app/acme/issue/WOR-3",
+                    "linkState": "linked", "depRelations": [],
+                },
+            },
+        ],
+    )
+    return stale_key
+
+
+def _ln_linked_refresh_responses() -> dict:
+    parent = _ln_issue("lin-parent", "WOR-1")
+    d1 = _ln_issue("lin-d1", "WOR-2")
+    d2 = _ln_issue("lin-d2", "WOR-3")
+    return {
+        "wire-read": [_ln_read(d1), _ln_read(d2), _ln_read(parent)],
+        "wire-parent-read": [_ln_read(d1), _ln_read(d2), _ln_read(parent)],
+        "wire-update": [_ln_update(d1), _ln_update(d2), _ln_update(parent)],
+    }
+
+
+class StaleRelationRemovalTests(unittest.TestCase):
+    def test_rewire_removes_stale_native_relation_and_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, ln_cfg())
+            _seed_linear_linked_rewired(flow)
+            responses = _ln_linked_refresh_responses()
+            responses["relate-list"] = [ok({"data": {"issue": {
+                "id": "lin-d1",
+                "inverseRelations": {
+                    "nodes": [{
+                        "id": "rel-9", "type": "blocks",
+                        "issue": {"id": "lin-d2"},
+                    }],
+                    "pageInfo": {"hasNextPage": False},
+                },
+            }}})]
+            responses["relate-delete"] = ok({"data": {
+                "issueRelationDelete": {"success": True},
+            }})
+            ex = fake_execute(responses)
+            out = CP.project_chart(
+                flow, "fn-10", event="chart.wire",
+                revision="rev-rm", evidence="evrm", execute=ex,
+            )
+            self.assertIsInstance(out, dict)
+            self.assertTrue(out.get("projected"))
+            self.assertIn("relate-delete", [c.op for c in ex.calls])
+            self.assertIn(
+                "unblock:fn-10.D1-x>fn-10.D2",
+                out.get("completed_steps") or [],
+            )
+            d1_json = json.loads(
+                (flow / "charts" / "fn-10" / "1.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(d1_json["tracker"].get("depRelations") or [], [])
+            # Converged: the next projection performs no relation work at all.
+            ex2 = fake_execute(_ln_linked_refresh_responses())
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.wire",
+                revision="rev-rm2", evidence="evrm2", execute=ex2,
+            )
+            self.assertTrue(out2.get("projected"))
+            ops2 = [c.op for c in ex2.calls]
+            self.assertNotIn("relate-list", ops2)
+            self.assertNotIn("relate-delete", ops2)
+
+    def test_removal_capability_gates(self) -> None:
+        # GitHub never projected native blocking - nothing remote to remove.
+        gh = gh_cfg()
+        out = CP._remove_blocking(
+            gh, fake_execute({}),
+            from_loc={"durable": "A", "display": "#3"}, to_id="B",
+            caps=gh["tracker"]["resolved"]["capabilities"],
+        )
+        self.assertEqual(out, {"removed": False, "already_absent": True})
+        # A provider without blockedBy reports explicit degradation and the
+        # caller keeps the ledger entry.
+        gl = gl_cfg()
+        gl["tracker"]["resolved"]["capabilities"]["blockedBy"] = False
+        ex = fake_execute({})
+        out = CP._remove_blocking(
+            gl, ex,
+            from_loc={"durable": "A", "display": "g/p#3"}, to_id="B",
+            caps=gl["tracker"]["resolved"]["capabilities"],
+        )
+        self.assertFalse(out.get("removed"))
+        self.assertEqual(
+            (out.get("degraded") or {}).get("capability"), "blockedBy",
+        )
+        self.assertEqual(
+            (out.get("degraded") or {}).get("form"), "stale_native_relation",
+        )
+        self.assertEqual(ex.calls, [])
 
 
 # ---------------------------------------------------------------------------

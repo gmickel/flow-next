@@ -10,6 +10,8 @@ duplicates and never rolls back local chart state.
 
 from __future__ import annotations
 
+import contextlib
+import dataclasses
 import hashlib
 import json
 import re
@@ -18,11 +20,11 @@ from typing import Any, Optional
 from urllib.parse import unquote, urlparse
 
 from ..executor import execute as default_execute
-from ..lifecycle.helpers import (Execute, Result, dict_, now_iso, read_config,
-                                 tracker_type)
+from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
+                                 now_iso, read_config, tracker_type)
 from ..lifecycle.providers import provider_create
-from ..relate.ledger import (dep_relation_key, ledger_append, ledger_finalize,
-                             ledger_has)
+from ..relate.ledger import (dep_relation_key, ledger_append, ledger_drop,
+                             ledger_finalize, ledger_has)
 from ..subjects import (caps_of, load_subject,
                         locked_subject_write, parse_decision_id,
                         projection_gate, subject_collision,
@@ -41,6 +43,7 @@ CHART_EVENTS = frozenset({
     "chart.resolve",
     "chart.supersede",
     "chart.outOfScope",
+    "chart.attachAsset",
     "chart.briefing",
     "chart.abandon",
     "chart.reopen",
@@ -343,6 +346,80 @@ def _link_fields(created: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Created-but-unlinked identity recovery (create-first home, verbs.py pattern):
+# a remote create that lands but whose local link write fails must leave a
+# durable, reconcileable identity - otherwise the next projection re-creates
+# a duplicate remote issue.
+# ---------------------------------------------------------------------------
+
+def _pending_identity_path(flow_dir: Path, kind: str, subject_id: str) -> Path:
+    return Path(flow_dir) / "create-first" / f"chart-{kind}-{subject_id}.json"
+
+
+def _record_pending_identity(flow_dir: Path, kind: str, subject_id: str,
+                             fields: dict) -> None:
+    """Best-effort durable record; the failure receipt carries the same
+    identity, so a write failure here degrades to receipt-only evidence."""
+    atomic_write_json(_pending_identity_path(flow_dir, kind, subject_id), {
+        "kind": kind,
+        "subjectId": subject_id,
+        "id": fields.get("id"),
+        "identifier": fields.get("identifier"),
+        "url": fields.get("url"),
+        "recordedAt": now_iso(),
+    })
+
+
+def _clear_pending_identity(flow_dir: Path, kind: str, subject_id: str) -> None:
+    with contextlib.suppress(OSError):
+        _pending_identity_path(flow_dir, kind, subject_id).unlink()
+
+
+def _pending_identity_fields(flow_dir: Path, kind: str,
+                             subject_id: str) -> Optional[dict]:
+    path = _pending_identity_path(flow_dir, kind, subject_id)
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(obj, dict):
+        return None
+    rid = obj.get("id")
+    if not isinstance(rid, str) or not rid.strip():
+        return None
+    return {
+        "id": rid,
+        "identifier": obj.get("identifier"),
+        "url": obj.get("url"),
+        "linkState": "linked",
+    }
+
+
+def _link_subject(flow_dir: Path, kind: str, subject_id: str, mutate, *,
+                  collision_id: str) -> Result:
+    """Link write with ONE transient-failure retry: the write contends with
+    chart WAL/config locks, so a lock timeout is often momentary."""
+    linked = locked_subject_write(
+        flow_dir, kind, subject_id, mutate, collision_id=collision_id,
+    )
+    if isinstance(linked, TrackerError):
+        linked = locked_subject_write(
+            flow_dir, kind, subject_id, mutate, collision_id=collision_id,
+        )
+    return linked
+
+
+def _identity_error(err: TrackerError, fields: dict) -> TrackerError:
+    """Ride the created identity into the error details (verbs.py pattern)."""
+    return dataclasses.replace(err, details={
+        **(err.details or {}),
+        "id": fields.get("id"),
+        "identifier": fields.get("identifier"),
+        "url": fields.get("url"),
+    })
+
+
 def _create_issue(
     config: dict,
     execute: Execute,
@@ -555,6 +632,52 @@ def _project_blocking(
     }
 
 
+def _remove_blocking(
+    config: dict,
+    execute: Execute,
+    *,
+    from_loc: dict,
+    to_id: str,
+    caps: dict,
+) -> Result:
+    """Remove one stale flow-owned native blocks edge (from was blocked by to).
+
+    GitHub never projects native blocking (local provenance only), so there is
+    nothing remote to remove - the ledger entry alone is stale. Providers
+    without removal support report explicit degradation and KEEP the ledger
+    entry (dropping it would silently disown a live stale relation).
+    """
+    provider = tracker_type(config)
+    if provider == "github":
+        return {"removed": False, "already_absent": True}
+    from ..relate import providers as RP  # noqa: PLC0415
+
+    from_id = str(from_loc["durable"])
+    if caps.get("blockedBy"):
+        if provider == "linear":
+            return RP.linear_remove(config, execute, from_id=from_id,
+                                    to_id=to_id)
+        if provider == "jira":
+            return RP.jira_remove(config, execute, from_id=from_id,
+                                  to_id=to_id)
+        if provider == "gitlab":
+            return RP.gitlab_remove(
+                config, execute, from_id=from_id,
+                from_display=str(from_loc["display"]), to_id=to_id,
+            )
+    return {
+        "removed": False,
+        "degraded": {
+            "capability": "blockedBy",
+            "form": "stale_native_relation",
+            "note": (
+                f"{provider!r} native blocking removal unavailable; "
+                "stale flow-owned relation remains remotely"
+            ),
+        },
+    }
+
+
 def _decision_title(decision: dict) -> str:
     did = decision.get("id") or ""
     title = decision.get("title") or did
@@ -613,17 +736,20 @@ def project_chart(
             for d in decisions if isinstance(d, dict)
         ],
     }, sort_keys=True, default=str))
-    # Extend the marker revision with a claim-state digest: the supplied chart
-    # revision (briefing-fingerprint base) omits claimed_by/claimed_at, so a
-    # claim -> release -> claim sequence would otherwise dedupe the second
-    # claim and skip the owned-block refresh.
-    claim_digest = _sha(json.dumps(
+    # Extend the marker revision with a claim+asset state digest: the supplied
+    # chart revision (briefing-fingerprint base) omits claimed_by/claimed_at
+    # and sidecar-only assets, so a claim -> release -> claim sequence or
+    # back-to-back attach-asset calls would otherwise dedupe the second event
+    # and skip the owned-block refresh. Assets hash their safe rendering -
+    # only changes that can alter the projected body force a re-project.
+    state_digest = _sha(json.dumps(
         sorted(
             (
                 {
                     "id": d.get("id"),
                     "claimed_by": d.get("claimed_by"),
                     "claimed_at": d.get("claimed_at"),
+                    "assets": _safe_assets(d.get("assets")),
                 }
                 for d in decisions if isinstance(d, dict)
             ),
@@ -631,7 +757,7 @@ def project_chart(
         ),
         sort_keys=True, default=str,
     ))
-    revision = _sha(f"{revision}\x00{claim_digest}")
+    revision = _sha(f"{revision}\x00{state_digest}")
     evidence = evidence or revision[:16]
     marker_key = _event_marker_key(event, revision, evidence)
 
@@ -663,14 +789,20 @@ def project_chart(
         "linked" if chart_tracker.get("id") else "unlinked"
     )
     if parent_state == "unlinked" or not chart_tracker.get("id"):
-        created = _create_issue(
-            config, execute, title=parent_title, body=parent_body,
-        )
-        if isinstance(created, TrackerError):
-            # Persist nothing remote; still write partial receipt intent locally
-            # only if something already completed (nothing yet).
-            return created
-        fields = _link_fields(created)
+        # A prior run may have created the remote issue and failed only the
+        # local link write - adopt that identity instead of re-creating.
+        adopted = _pending_identity_fields(flow_dir, "chart", chart_id)
+        if adopted is not None:
+            fields = adopted
+        else:
+            created = _create_issue(
+                config, execute, title=parent_title, body=parent_body,
+            )
+            if isinstance(created, TrackerError):
+                # Persist nothing remote; still write partial receipt intent
+                # locally only if something already completed (nothing yet).
+                return created
+            fields = _link_fields(created)
 
         def _link_parent(t: dict):
             hit = subject_collision(
@@ -682,15 +814,22 @@ def project_chart(
             t.update(fields)
             return t
 
-        linked = locked_subject_write(
+        linked = _link_subject(
             flow_dir, "chart", chart_id, _link_parent, collision_id=fields["id"],
         )
         if isinstance(linked, TrackerError):
-            # Remote create succeeded; record identity for reconcile recovery.
+            if adopted is not None and linked.subtype == "durable_collision":
+                # The recorded identity now belongs to another subject; the
+                # next projection creates fresh.
+                _clear_pending_identity(flow_dir, "chart", chart_id)
+            else:
+                # Remote create succeeded; persist the identity durably so
+                # the NEXT projection adopts it instead of duplicating.
+                _record_pending_identity(flow_dir, "chart", chart_id, fields)
             return fail_result(
-                linked,
-                completed=["create-parent-remote"],
-                statuses=["pushed"],
+                _identity_error(linked, fields),
+                completed=(["create-parent-remote"] if adopted is None else []),
+                statuses=(["pushed"] if adopted is None else []),
                 flow_dir=flow_dir,
                 spec_id=subject_marker_token("chart", chart_id),
                 event=event,
@@ -698,11 +837,17 @@ def project_chart(
                 transport=provider,
                 degraded=None,
             )
+        _clear_pending_identity(flow_dir, "chart", chart_id)
         chart_tracker = linked
-        completed.append("create-parent")
+        completed.append("create-parent" if adopted is None else "adopt-parent")
         statuses.append("pushed")
-        steps["create_parent"] = {"kind": "created", **fields}
+        steps["create_parent"] = {
+            "kind": "created" if adopted is None else "adopted", **fields,
+        }
     else:
+        # Hygiene: a pending identity must never outlive a completed link
+        # (it could be wrongly adopted after a later staleLink unlink).
+        _clear_pending_identity(flow_dir, "chart", chart_id)
         steps["create_parent"] = {
             "kind": "already_linked",
             "id": chart_tracker.get("id"),
@@ -719,8 +864,9 @@ def project_chart(
             transport=provider,
         )
 
-    # --- children create/update ---
+    # --- children create/update (pass one: every child gets a locator) ---
     child_results = []
+    edge_children: list[str] = []
     for decision in decisions:
         if not isinstance(decision, dict) or not decision.get("id"):
             continue
@@ -737,19 +883,23 @@ def project_chart(
             "linked" if dtracker.get("id") else "unlinked"
         )
         if dstate == "unlinked" or not dtracker.get("id"):
-            created = _create_issue(
-                config, execute, title=dtitle, body=dbody,
-            )
-            if isinstance(created, TrackerError):
-                return fail_result(
-                    created, completed=completed, statuses=statuses,
-                    flow_dir=flow_dir,
-                    spec_id=subject_marker_token("chart", chart_id),
-                    event=event, tracker_id=chart_tracker.get("id"),
-                    transport=provider,
-                    degraded=collect_degraded(*degraded_parts),
+            adopted = _pending_identity_fields(flow_dir, "decision", did)
+            if adopted is not None:
+                fields = adopted
+            else:
+                created = _create_issue(
+                    config, execute, title=dtitle, body=dbody,
                 )
-            fields = _link_fields(created)
+                if isinstance(created, TrackerError):
+                    return fail_result(
+                        created, completed=completed, statuses=statuses,
+                        flow_dir=flow_dir,
+                        spec_id=subject_marker_token("chart", chart_id),
+                        event=event, tracker_id=chart_tracker.get("id"),
+                        transport=provider,
+                        degraded=collect_degraded(*degraded_parts),
+                    )
+                fields = _link_fields(created)
 
             def _link_child(t: dict, _fields=fields, _did=did):
                 hit = subject_collision(
@@ -762,21 +912,32 @@ def project_chart(
                 t.update(_fields)
                 return t
 
-            linked = locked_subject_write(
+            linked = _link_subject(
                 flow_dir, "decision", did, _link_child, collision_id=fields["id"],
             )
             if isinstance(linked, TrackerError):
+                if adopted is not None and linked.subtype == "durable_collision":
+                    _clear_pending_identity(flow_dir, "decision", did)
+                else:
+                    _record_pending_identity(flow_dir, "decision", did, fields)
+                extra = [] if adopted is not None else [
+                    f"create-child-remote:{did}",
+                ]
                 return fail_result(
-                    linked,
-                    completed=completed + [f"create-child-remote:{did}"],
-                    statuses=statuses + ["pushed"],
+                    _identity_error(linked, fields),
+                    completed=completed + extra,
+                    statuses=statuses + (["pushed"] if extra else []),
                     flow_dir=flow_dir,
                     spec_id=subject_marker_token("chart", chart_id),
                     event=event, tracker_id=fields.get("id"),
                     transport=provider,
                 )
+            _clear_pending_identity(flow_dir, "decision", did)
             dtracker = linked
-            completed.append(f"create-child:{did}")
+            completed.append(
+                f"create-child:{did}" if adopted is None
+                else f"adopt-child:{did}"
+            )
             statuses.append("pushed")
             # hierarchy after both sides linked
             child_loc = locator_of(dtracker)
@@ -798,9 +959,15 @@ def project_chart(
                     degraded_parts.append(hier["degraded"])
                 elif isinstance(hier, dict) and hier.get("projected"):
                     completed.append(f"hierarchy:{did}")
-            child_results.append({"id": did, "kind": "created", **fields})
+            child_results.append({
+                "id": did,
+                "kind": "created" if adopted is None else "adopted",
+                **fields,
+            })
+            edge_children.append(did)
         else:
             # Update owned body block (claim/release/resolve refresh).
+            _clear_pending_identity(flow_dir, "decision", did)
             child_loc = locator_of(dtracker)
             if isinstance(child_loc, TrackerError):
                 return fail_result(
@@ -873,59 +1040,124 @@ def project_chart(
                 "id_tracker": dtracker.get("id"),
                 "identifier": dtracker.get("identifier"),
             })
-
-        # blocked_by native projection (never depends_on as blocks)
-        dtracker2 = load_subject(flow_dir, "decision", did)
-        if not isinstance(dtracker2, TrackerError):
-            _p, _d, dtr = dtracker2
-            from_loc = locator_of(dtr)
-            if not isinstance(from_loc, TrackerError):
-                for blocker in ddata.get("blocked_by") or []:
-                    b_loaded = load_subject(flow_dir, "decision", str(blocker))
-                    if isinstance(b_loaded, TrackerError):
-                        continue
-                    _bp, _bd, btr = b_loaded
-                    to_loc = locator_of(btr)
-                    if isinstance(to_loc, TrackerError):
-                        continue
-                    key = dep_relation_key(
-                        str(from_loc["durable"]), str(to_loc["durable"]),
-                    )
-                    if ledger_has(dtr, key):
-                        continue
-                    rel = _project_blocking(
-                        config, execute,
-                        from_loc=from_loc, to_loc=to_loc, caps=caps,
-                        dep_subject=str(blocker),
-                    )
-                    if isinstance(rel, TrackerError):
-                        return fail_result(
-                            rel, completed=completed, statuses=statuses,
-                            flow_dir=flow_dir,
-                            spec_id=subject_marker_token("chart", chart_id),
-                            event=event, tracker_id=chart_tracker.get("id"),
-                            transport=provider,
-                            degraded=collect_degraded(*degraded_parts),
-                        )
-                    if isinstance(rel, dict) and rel.get("degraded"):
-                        degraded_parts.append(rel["degraded"])
-                    elif isinstance(rel, dict) and rel.get("projected"):
-                        completed.append(f"blocks:{did}->{blocker}")
-                        statuses.append("pushed")
-
-                        def _ledger(t: dict, _key=key, _blocker=blocker,
-                                    _from=from_loc, _to=to_loc):
-                            t = ledger_append(
-                                t, key=_key, dep_spec=str(_blocker),
-                                from_tracker_id=str(_from["durable"]),
-                                to_tracker_id=str(_to["durable"]),
-                                rel_type="blocks", source="flow",
-                            )
-                            return ledger_finalize(t, key=_key)
-
-                        locked_subject_write(flow_dir, "decision", did, _ledger)
+            edge_children.append(did)
 
     steps["children"] = child_results
+
+    # --- blocking edges (pass two: every child linked before any edge) ---
+    # A single interleaved pass silently skips an edge whose blocker comes
+    # LATER in D-number order (D1 blocked_by D2 on an initial map) and then
+    # records the event marker anyway - the retry dedupes instead of
+    # converging. Projecting after pass one guarantees both locators exist.
+    for did in edge_children:
+        dloaded2 = load_subject(flow_dir, "decision", did)
+        if isinstance(dloaded2, TrackerError):
+            continue
+        _p2, ddata2, dtr = dloaded2
+        from_loc = locator_of(dtr)
+        if isinstance(from_loc, TrackerError):
+            continue
+        desired_keys: set[str] = set()
+        blockers_resolved = True
+        for blocker in ddata2.get("blocked_by") or []:
+            b_loaded = load_subject(flow_dir, "decision", str(blocker))
+            if isinstance(b_loaded, TrackerError):
+                blockers_resolved = False
+                continue
+            _bp, _bd, btr = b_loaded
+            to_loc = locator_of(btr)
+            if isinstance(to_loc, TrackerError):
+                blockers_resolved = False
+                continue
+            key = dep_relation_key(
+                str(from_loc["durable"]), str(to_loc["durable"]),
+            )
+            desired_keys.add(key)
+            if ledger_has(dtr, key):
+                continue
+            rel = _project_blocking(
+                config, execute,
+                from_loc=from_loc, to_loc=to_loc, caps=caps,
+                dep_subject=str(blocker),
+            )
+            if isinstance(rel, TrackerError):
+                return fail_result(
+                    rel, completed=completed, statuses=statuses,
+                    flow_dir=flow_dir,
+                    spec_id=subject_marker_token("chart", chart_id),
+                    event=event, tracker_id=chart_tracker.get("id"),
+                    transport=provider,
+                    degraded=collect_degraded(*degraded_parts),
+                )
+            if isinstance(rel, dict) and rel.get("degraded"):
+                degraded_parts.append(rel["degraded"])
+            elif isinstance(rel, dict) and rel.get("projected"):
+                completed.append(f"blocks:{did}->{blocker}")
+                statuses.append("pushed")
+
+                def _ledger(t: dict, _key=key, _blocker=blocker,
+                            _from=from_loc, _to=to_loc):
+                    t = ledger_append(
+                        t, key=_key, dep_spec=str(_blocker),
+                        from_tracker_id=str(_from["durable"]),
+                        to_tracker_id=str(_to["durable"]),
+                        rel_type="blocks", source="flow",
+                    )
+                    return ledger_finalize(t, key=_key)
+
+                locked_subject_write(flow_dir, "decision", did, _ledger)
+
+        # Reconcile stale flow-owned native blocking (wire-decision repoint
+        # or clear): entries the ledger attributes to flow whose edge is no
+        # longer in blocked_by are removed remotely, then dropped from the
+        # ledger. Relations the ledger does not attribute to flow are never
+        # touched. Skipped when any listed blocker failed to resolve - a
+        # desired key we could not compute must not be judged stale.
+        if not blockers_resolved:
+            continue
+        for entry in list(dtr.get("depRelations") or []):
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("source") != "flow" or entry.get("type") != "blocks":
+                continue
+            if entry.get("status") == "pending":
+                continue
+            key = entry.get("key")
+            if not key or key in desired_keys:
+                continue
+            to_id = str(entry.get("to_tracker_id") or "")
+            if not to_id:
+                continue
+            if str(entry.get("from_tracker_id") or "") != str(from_loc["durable"]):
+                # Identity drift: never address remote relations by an old
+                # (relinked-away) identity.
+                continue
+            rem = _remove_blocking(
+                config, execute, from_loc=from_loc, to_id=to_id, caps=caps,
+            )
+            if isinstance(rem, TrackerError):
+                return fail_result(
+                    rem, completed=completed, statuses=statuses,
+                    flow_dir=flow_dir,
+                    spec_id=subject_marker_token("chart", chart_id),
+                    event=event, tracker_id=chart_tracker.get("id"),
+                    transport=provider,
+                    degraded=collect_degraded(*degraded_parts),
+                )
+            if isinstance(rem, dict) and rem.get("degraded"):
+                # Keep the ledger entry: the stale native edge remains and
+                # flow still owns it.
+                degraded_parts.append(rem["degraded"])
+                continue
+            if isinstance(rem, dict):
+                if rem.get("removed"):
+                    completed.append(f"unblock:{did}-x>{entry.get('dep_spec')}")
+                    statuses.append("pushed")
+
+                def _drop(t: dict, _key=key):
+                    return ledger_drop(t, key=_key)
+
+                locked_subject_write(flow_dir, "decision", did, _drop)
 
     # --- parent rollup refresh ---
     # Claim/release may refresh owned block/counts but never masquerade as

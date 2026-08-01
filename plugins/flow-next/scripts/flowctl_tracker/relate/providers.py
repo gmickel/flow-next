@@ -26,6 +26,7 @@ from ..wire import (
     _gitlab_iid,
     _gl_project,
     _gql,
+    _gql_connection_drain,
     _gh_repo,
     _rest_drain,
     _jira,
@@ -547,6 +548,236 @@ def github_set(config: dict, execute: Execute, *, from_id: str, to_id: str,
         "projected": True, "already": False, "form": "sub_issues",
         "degraded": dict(_GITHUB_HIERARCHY_DEGRADED),
     }
+
+
+# ---------------------------------------------------------------------------
+# Removal - reconcile stale flow-owned blocking edges (fn-135 chart repoint).
+# Absence remotely is convergence, never an error; truncation is unproven
+# absence (same read-before-write discipline as the probes above).
+# ---------------------------------------------------------------------------
+
+def linear_remove(config: dict, execute: Execute, *, from_id: str,
+                  to_id: str) -> Result:
+    """Delete the native blocks relation `from is-blocked-by to`."""
+    def pluck(data: dict) -> Union[dict, TrackerError]:
+        issue = data.get("issue")
+        conn = (issue.get("inverseRelations")
+                if isinstance(issue, dict) else None)
+        if not isinstance(conn, dict):
+            return TrackerError(ErrorClass.TRANSPORT,
+                                "linear relate list malformed",
+                                subtype="malformed_body")
+        return conn
+
+    drained = _gql_connection_drain(
+        execute, "relate-list",
+        "query($id: String!, $after: String) { issue(id: $id) { id "
+        f"inverseRelations(first: {_PAGE_SIZE}, after: $after) "
+        "{ nodes { id type issue { id } } "
+        "pageInfo { hasNextPage endCursor } } } }",
+        {"id": from_id}, pluck)
+    if isinstance(drained, TrackerError):
+        return drained
+    nodes, truncated = drained
+    rel_id = None
+    for n in nodes:
+        if n.get("type") != "blocks":
+            continue
+        blocker = n.get("issue") if isinstance(n.get("issue"), dict) else {}
+        if blocker.get("id") == to_id and n.get("id"):
+            rel_id = str(n["id"])
+            break
+    if rel_id is None:
+        if truncated:
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "linear relation pages truncated at drain cap; edge absence "
+                "unproven",
+                subtype="truncated")
+        return {"removed": False, "already_absent": True, "form": "blocks"}
+    data = _gql(
+        execute, "relate-delete",
+        "mutation($id: String!) { issueRelationDelete(id: $id) { success } }",
+        {"id": rel_id})
+    if isinstance(data, TrackerError):
+        return data
+    mut = data.get("issueRelationDelete")
+    if not isinstance(mut, dict) or mut.get("success") is not True:
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear issueRelationDelete failed",
+                            subtype="mutation_failed")
+    return {"removed": True, "form": "blocks"}
+
+
+def jira_remove(config: dict, execute: Execute, *, from_id: str,
+                to_id: str) -> Result:
+    """Delete the site's blocks link carrying `from is-blocked-by to`."""
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    base = _jira_base(config, dest)
+    if isinstance(base, TrackerError):
+        return base
+    blocks_type = jira_blocks_type(config, execute)
+    if isinstance(blocks_type, TrackerError):
+        return blocks_type
+    data = _jira(
+        execute, "relate-list", "GET",
+        f"{base}/rest/api/2/issue/{quote(str(from_id), safe='')}"
+        f"?fields=issuelinks",
+        idempotent=True,
+    )
+    if isinstance(data, TrackerError):
+        return data
+    if not isinstance(data, dict):
+        return TrackerError(ErrorClass.TRANSPORT, "jira relate list malformed",
+                            subtype="malformed_body")
+    fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
+    link_id = None
+    for link in fields.get("issuelinks") or []:
+        if not isinstance(link, dict):
+            continue
+        typ = link.get("type") if isinstance(link.get("type"), dict) else {}
+        if str(typ.get("name") or "").casefold() != blocks_type.casefold():
+            continue
+        # Same direction rule as _jira_edge_exists: the blocker rides in
+        # inwardIssue from the blocked issue's perspective.
+        inward = (link.get("inwardIssue")
+                  if isinstance(link.get("inwardIssue"), dict) else {})
+        if (inward.get("id") is not None and str(inward.get("id")) == str(to_id)
+                and link.get("id") is not None):
+            link_id = str(link["id"])
+            break
+    if link_id is None:
+        return {"removed": False, "already_absent": True, "form": "blocks"}
+    out = _jira(
+        execute, "relate-delete", "DELETE",
+        f"{base}/rest/api/2/issueLink/{quote(link_id, safe='')}")
+    if isinstance(out, TrackerError):
+        return out
+    return {"removed": True, "form": "blocks"}
+
+
+def _gitlab_deps_body_remove(description: object, drop_refs: set
+                             ) -> Union[str, TrackerError]:
+    """Drop stale blocker refs from flow's fenced dependency block."""
+    if description is None:
+        return ""
+    if not isinstance(description, str):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab issue description is not text",
+            subtype="malformed_body")
+    text = description
+    match = _FLOW_DEPS_RE.search(text)
+    if match is None:
+        return text
+    region = match.group(0)
+    blocked = _BLOCKED_BY_RE.search(region)
+    if blocked is None:
+        return text
+    refs = [ref.strip() for ref in blocked.group(1).split(",") if ref.strip()]
+    kept = [ref for ref in refs if ref not in drop_refs]
+    if kept == refs:
+        return text
+    if kept:
+        replacement = f"**Blocked by:** {', '.join(kept)}"
+        updated_region = (
+            region[:blocked.start()] + replacement + region[blocked.end():])
+    else:
+        # Drop the whole line (and one trailing newline) - an empty
+        # Blocked-by line would read as malformed provenance.
+        updated_region = (
+            region[:blocked.start()]
+            + region[blocked.end():].lstrip("\n"))
+    return text[:match.start()] + updated_region + text[match.end():]
+
+
+def gitlab_remove(config: dict, execute: Execute, *, from_id: str,
+                  from_display: str, to_id: str) -> Result:
+    """Delete the native issue link AND the flow:deps body ref twin."""
+    from_iid = _gitlab_iid(from_display)
+    if isinstance(from_iid, TrackerError):
+        return from_iid
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    pid = _gl_project(dest)
+    if isinstance(pid, TrackerError):
+        return pid
+    guard = display_durable_guard(
+        "gitlab", config, execute,
+        locators=({"durable": from_id, "display": from_display},))
+    if guard:
+        return guard
+    drained = _gitlab_links(config, execute, iid=from_iid)
+    if isinstance(drained, TrackerError):
+        return drained
+    links, truncated = drained
+    target = None
+    for link in links:
+        if not isinstance(link, dict):
+            continue
+        if (str(link.get("id")) == str(to_id)
+                and link.get("link_type") in ("is_blocked_by", "relates_to")
+                and link.get("issue_link_id") is not None):
+            target = link
+            break
+    if target is None:
+        if truncated:
+            return TrackerError(
+                ErrorClass.TRANSPORT,
+                "gitlab issue link pages truncated at drain cap; edge absence "
+                "unproven",
+                subtype="truncated")
+        return {"removed": False, "already_absent": True, "form": "blocks"}
+    data = _cli(execute, "gitlab", config, "relate-delete", "DELETE",
+                f"projects/{pid}/issues/{from_iid}/links/"
+                f"{target['issue_link_id']}")
+    if isinstance(data, TrackerError):
+        return data
+    # Body twin: drop the blocker ref gitlab_set recorded. Candidate refs
+    # cover both identifier shapes the set path may have written.
+    drop_refs = set()
+    refs = target.get("references")
+    if isinstance(refs, dict):
+        for key in ("full", "relative", "short"):
+            if isinstance(refs.get(key), str) and refs[key]:
+                drop_refs.add(refs[key])
+    if target.get("iid") is not None:
+        drop_refs.add(f"#{target['iid']}")
+    parent = _cli(
+        execute, "gitlab", config, "relate-body-read", "GET",
+        f"projects/{pid}/issues/{from_iid}", idempotent=True)
+    if isinstance(parent, TrackerError):
+        return _removal_body_failure(parent)
+    if not isinstance(parent, dict):
+        return _removal_body_failure(TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab dependency body read returned no object",
+            subtype="malformed_body"))
+    current = parent.get("description")
+    body = _gitlab_deps_body_remove(current, drop_refs)
+    if isinstance(body, TrackerError):
+        return _removal_body_failure(body)
+    if body != ("" if current is None else current):
+        data = _cli(
+            execute, "gitlab", config, "relate-body-write", "PUT",
+            f"projects/{pid}/issues/{from_iid}", body={"description": body})
+        if isinstance(data, TrackerError):
+            return _removal_body_failure(data)
+    return {"removed": True, "form": "blocks"}
+
+
+def _removal_body_failure(err: TrackerError) -> TrackerError:
+    """Native link removal landed; the deps-body twin update did not."""
+    import dataclasses  # noqa: PLC0415
+    return dataclasses.replace(err, details={
+        **(err.details or {}),
+        "recoverable": True,
+        "completed_steps": ["relate-delete"],
+        "form": "blocks",
+    })
 
 
 PROVIDERS = {
