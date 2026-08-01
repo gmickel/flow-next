@@ -1,0 +1,59 @@
+{
+  "id": "tracker-unknown-url-no-mutation",
+  "family": "tracker_unknown_url",
+  "description": "Unknown/unsafe tracker URL fails local locate without mutation; offer local chart-id path; never treat URL text as a new Outcome.",
+  "user_prompt": "Continue this chart from this decision link: https://linear.app/acme/issue/DOES-NOT-EXIST-999",
+  "context": {
+    "mode_hint": "re-enter",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "selector": "https://linear.app/acme/issue/DOES-NOT-EXIST-999",
+    "locate_result": {
+      "kind": "failure",
+      "error": "not_found"
+    },
+    "repo_evidence": [],
+    "prior_state": {}
+  },
+  "expected": {
+    "mode": "re-enter",
+    "inferred_operations": [
+      "chart locate",
+      "structured_failure",
+      "offer_local_chart_id_path",
+      "no_create"
+    ],
+    "read_backs": [
+      "locator failed local ledger",
+      "offer local chart id",
+      "no mutation"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart locate"
+      ],
+      "forbidden": [
+        "chart create",
+        "chart claim",
+        "chart resolve",
+        "chart attach-asset",
+        "remote_search",
+        "title_inference"
+      ]
+    },
+    "verdict": "CHART_VERDICT=BLOCKED chart=- decision=- reason=\"locator failed local ledger; no mutation\"",
+    "notes": [
+      "Failures mutate nothing",
+      "Do not treat URL text as new Outcome",
+      "No remote search or title inference"
+    ]
+  },
+  "skill_contract_tokens": [
+    "mutate nothing",
+    "chart locate",
+    "no mutation",
+    "local",
+    "locator"
+  ]
+}

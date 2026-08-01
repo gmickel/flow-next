@@ -1,0 +1,58 @@
+{
+  "id": "bounded-grounding-known-repo-evidence",
+  "family": "bounded_grounding",
+  "description": "Chart mode grounds a multi-tenant idea against known repo strategy and implementation pointers; emits a Grounding Snapshot with cited known_facts before any create.",
+  "user_prompt": "Here is the outcome and what we already know. Ground this in the repo, show the smallest initial frontier, and do not turn background facts into decisions. Outcome: multi-tenant rate isolation that operators can reason about. We already use the provider SDK under src/billing/.",
+  "context": {
+    "mode_hint": "chart",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [
+      "STRATEGY.md mentions multi-tenant isolation track",
+      "src/billing/provider_client.py exists",
+      "docs/rate-limits.md describes current single-tenant caps"
+    ],
+    "prior_state": {}
+  },
+  "expected": {
+    "mode": "chart",
+    "inferred_operations": [
+      "chart_mode",
+      "grounding_snapshot",
+      "propose_frontier",
+      "readback_before_create",
+      "chart create --initial-map-file"
+    ],
+    "read_backs": [
+      "candidate Outcome",
+      "known_facts with safe ref/revision",
+      "smallest_visible_frontier",
+      "parked_unknowns",
+      "attended/unattended cost"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart create --initial-map-file"
+      ],
+      "forbidden": [
+        "chart resolve",
+        "chart claim",
+        "chart briefing"
+      ]
+    },
+    "verdict": "CHART_VERDICT=NO_WORK chart=<id> decision=- reason=\"grounded map persisted; background cited under Notes only\"",
+    "notes": [
+      "Charting resolves nothing",
+      "Background stays under Notes with citations",
+      "No fabricated resolved D-IDs"
+    ]
+  },
+  "skill_contract_tokens": [
+    "Grounding Snapshot",
+    "known_facts",
+    "Charting resolves nothing",
+    "initial-map-file",
+    "read-back"
+  ]
+}

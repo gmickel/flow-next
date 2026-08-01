@@ -69,9 +69,8 @@ cd plugins/flow-next/tests && python3 -m unittest test_chart_briefing test_captu
 - No verified/inferred fact or decision grammar is introduced unless a CONFIRMED, human-approved fn-148 change has already landed.
 - Focused commands pass: `cd plugins/flow-next/tests && python3 -m unittest test_chart_briefing test_capture_chart_handoff -q`.
 ## Done summary
-TBD
-
+Shipped the versioned briefing and capture handoff: flowctl chart briefing validates agent-confirmed proposals (complete non-conflicting resolved-decision membership, shared-context exclusivity, rationale per cluster), emits immutable versioned B-IDs fingerprinted over chart revision + normalized proposal (identical retry reuses the B-ID; done-chart identical retries still no-op), forced output is draft-only with a full unresolved inventory and leaves the chart open; first final briefing transitions open->done atomically. chart reopen (done|abandoned->open) stales prior briefings and produced_specs links with audit; chart link-spec records idempotent briefing+cluster+spec identities; supersession stales affected links without rewriting history. Capture skill ingests briefings as attributable evidence: draft/stale fail closed with named-D-ID risk override, provenance lanes separated (no source tags on D-ID evidence, no verified/inferred grammar - fn-148 STOPPED licenses nothing), link-spec only after create+set-plan, retry discovers the existing B-ID+cluster identity. grok-4.5 impl (18 new tests); host review (Fable) reverted collateral verified->confirmed renames of pre-existing capture prose and cleaned test lints/dead blocks.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9d199bad, e29f8d09
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_briefing test_capture_chart_handoff test_chart_resolution -q
 - PRs:

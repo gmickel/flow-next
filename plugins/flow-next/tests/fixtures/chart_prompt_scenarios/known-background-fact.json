@@ -1,0 +1,59 @@
+{
+  "id": "known-background-fact-citation-no-did",
+  "family": "known_background_fact",
+  "description": "User states a known storage choice; skill records it as cited background under Notes without inventing a resolved D-ID or acceptance-criterion source tag.",
+  "user_prompt": "We know the storage choice. Record it as cited background and show what uncertainty disappears; do not invent a resolved decision or source tag. Storage is Postgres (see ADR-12 and src/store/postgres.py).",
+  "context": {
+    "mode_hint": "chart",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [
+      "docs/adr/012-postgres.md",
+      "src/store/postgres.py"
+    ],
+    "prior_state": {
+      "known_facts": [
+        "Postgres is the storage backend"
+      ]
+    }
+  },
+  "expected": {
+    "mode": "chart",
+    "inferred_operations": [
+      "chart_mode",
+      "grounding_snapshot",
+      "notes_citation_only",
+      "narrow_frontier_without_fabricated_resolve",
+      "chart create --initial-map-file"
+    ],
+    "read_backs": [
+      "Notes line with evidence reference",
+      "uncertainties removed vs still open",
+      "smallest_visible_frontier",
+      "cost before create"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart create --initial-map-file"
+      ],
+      "forbidden": [
+        "chart resolve",
+        "chart claim"
+      ]
+    },
+    "verdict": "CHART_VERDICT=NO_WORK chart=<id> decision=- reason=\"storage noted as cited background; frontier narrowed without fabricated resolve\"",
+    "notes": [
+      "Cited background is not a D-ID",
+      "No acceptance-criterion source tags on chart facts",
+      "fn-148 verified/inferred grammar is out of scope"
+    ]
+  },
+  "skill_contract_tokens": [
+    "cited background",
+    "not a D-ID",
+    "acceptance-criterion",
+    "fn-148",
+    "Notes"
+  ]
+}

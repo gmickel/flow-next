@@ -1,0 +1,81 @@
+{
+  "id": "independent-unattended-fanout-separate-invocations",
+  "family": "unattended_fanout",
+  "description": "After chart create, independent unattended frontier decisions may be offered for parallel dispatch only as separate invocations - each with its own claim and single CHART_VERDICT; no batch grammar.",
+  "user_prompt": "This is too broad to capture; help me find the first decision worth making. After the map, kick off the cheap unattended checks in parallel if you can.",
+  "context": {
+    "mode_hint": "chart",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [
+      "provider docs reachable",
+      "staging environment available for probe"
+    ],
+    "prior_state": {},
+    "follow_on_invocations": [
+      {
+        "prompt": "/flow-next:chart fn-140 --decision 1",
+        "decision": "fn-140.D1",
+        "type": "research"
+      },
+      {
+        "prompt": "/flow-next:chart fn-140 --decision 2",
+        "decision": "fn-140.D2",
+        "type": "probe"
+      }
+    ]
+  },
+  "expected": {
+    "mode": "chart",
+    "inferred_operations": [
+      "chart_mode",
+      "grounding_snapshot",
+      "readback_before_create",
+      "chart create --initial-map-file",
+      "offer_parallel_separate_invocations"
+    ],
+    "read_backs": [
+      "Outcome",
+      "frontier titles/types",
+      "cost",
+      "offer independent unattended frontier as separate invocations"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart create --initial-map-file"
+      ],
+      "forbidden": [
+        "batch_claim",
+        "mixed_result_verdict",
+        "chart claim",
+        "chart resolve"
+      ]
+    },
+    "verdict": "CHART_VERDICT=NO_WORK chart=<id> decision=- reason=\"chart created; frontier offered; chart mode resolves nothing\"",
+    "follow_on_expectations": {
+      "per_invocation": [
+        "exactly one claim",
+        "exactly one CHART_VERDICT",
+        "one D-ID only"
+      ],
+      "forbidden": [
+        "one tick claiming many D-IDs",
+        "batch or mixed-result grammar"
+      ]
+    },
+    "notes": [
+      "Charting session resolves nothing",
+      "Parallelism equals parallel invocations",
+      "Each work invocation owns one D-ID/claim/verdict"
+    ]
+  },
+  "skill_contract_tokens": [
+    "separate",
+    "No batch",
+    "one D-ID",
+    "one claim",
+    "one verdict",
+    "parallel"
+  ]
+}

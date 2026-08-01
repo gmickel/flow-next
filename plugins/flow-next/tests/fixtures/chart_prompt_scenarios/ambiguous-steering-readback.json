@@ -1,0 +1,58 @@
+{
+  "id": "ambiguous-steering-blocking-readback",
+  "family": "ambiguous_steering",
+  "description": "Steering could mean work the next frontier decision or status-only; two interpretations change cost/consent so the skill issues a blocking read-back before any mutation.",
+  "user_prompt": "Look at fn-140 and figure out what's next.",
+  "context": {
+    "mode_hint": "ambiguous",
+    "driver": "attended",
+    "chart_id": "fn-140",
+    "decision_pin": null,
+    "repo_evidence": [],
+    "prior_state": {
+      "chart_status": "open",
+      "frontier_size": 3
+    }
+  },
+  "expected": {
+    "mode": "status_or_work_disambiguate",
+    "inferred_operations": [
+      "disambiguate_mode",
+      "blocking_readback",
+      "optional_chart show",
+      "optional_chart frontier"
+    ],
+    "read_backs": [
+      "Ask whether work next decision or status-only",
+      "pair title + D-ID + record link if listing frontier"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart show",
+        "chart frontier"
+      ],
+      "forbidden": [
+        "chart create",
+        "chart resolve",
+        "chart claim"
+      ]
+    },
+    "verdict": null,
+    "verdict_after_disambiguation": {
+      "status": "CHART_VERDICT=NO_WORK chart=fn-140 decision=- reason=\"status only; no mutations\"",
+      "work": "depends on claimed D-ID after human chooses work mode"
+    },
+    "notes": [
+      "Ask a blocking question only when two interpretations materially change chart, cost, or consent",
+      "Read back state-changing interpretation before persisting",
+      "No claim until mode is clear"
+    ]
+  },
+  "skill_contract_tokens": [
+    "blocking question",
+    "materially change",
+    "Read back",
+    "sole selection input",
+    "status only"
+  ]
+}

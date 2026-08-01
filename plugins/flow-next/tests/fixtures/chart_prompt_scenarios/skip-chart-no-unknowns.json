@@ -1,0 +1,50 @@
+{
+  "id": "skip-chart-no-consequential-unknowns",
+  "family": "skip_chart",
+  "description": "Grounding finds intent and boundaries already stateable with no consequential unknowns; skill stops without create and recommends capture or direct route.",
+  "user_prompt": "Add a --json flag to the list command. Intent is clear, boundaries are the existing CLI surface, and nothing else is unknown.",
+  "context": {
+    "mode_hint": "chart",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [
+      "plugins/flow-next/scripts/flowctl.py already has other --json emitters",
+      "docs/flowctl.md documents list command"
+    ],
+    "prior_state": {}
+  },
+  "expected": {
+    "mode": "chart",
+    "inferred_operations": [
+      "chart_mode",
+      "grounding_snapshot",
+      "stop_without_create",
+      "recommend_capture_or_direct"
+    ],
+    "read_backs": [
+      "no consequential unknowns",
+      "recommend capture or direct route"
+    ],
+    "guarded_mutations": {
+      "allowed": [],
+      "forbidden": [
+        "chart create",
+        "chart resolve",
+        "chart claim",
+        "chart create --initial-map-file"
+      ]
+    },
+    "verdict": "CHART_VERDICT=NO_WORK chart=- decision=- reason=\"no consequential unknowns; capture or direct route\"",
+    "notes": [
+      "Create nothing",
+      "Recommend /flow-next:capture or smaller direct path"
+    ]
+  },
+  "skill_contract_tokens": [
+    "no consequential unknowns",
+    "Create nothing",
+    "capture or direct route",
+    "CHART_VERDICT=NO_WORK chart=- decision=-"
+  ]
+}

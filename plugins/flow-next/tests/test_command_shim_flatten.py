@@ -16,7 +16,7 @@ colon-free.
 This test pins all of that so a regression can't sneak back in:
 
   (a) no plugin-name-colliding nested command directory exists
-  (b) the flat `commands/*.md` shim set is EXACTLY the 23 canonical commands
+  (b) the flat `commands/*.md` shim set is EXACTLY the 24 canonical commands
   (c) `.cursor-plugin/plugin.json` `commands` field == `./commands`
   (d) every shim carries a `name:` (fn-123 R11) and no `name:` contains a colon
   (e) `epic-review.md` is absent (alias removed on all platforms)
@@ -39,15 +39,15 @@ CURSOR_MANIFEST = PLUGIN_DIR / ".cursor-plugin" / "plugin.json"
 
 FRONTMATTER_NAME = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
 
-# The exact canonical command surface after the fn-124 flatten (23 shims,
-# epic-review retired). Pinned so a silent delete-one-add-one swap fails CI:
-# adding or removing a command is a deliberate surface change that MUST update
-# this set. Keep alphabetical.
+# The exact canonical command surface after the fn-124 flatten (+ chart from
+# fn-135.4; epic-review retired). Pinned so a silent delete-one-add-one swap
+# fails CI: adding or removing a command is a deliberate surface change that
+# MUST update this set. Keep alphabetical.
 EXPECTED_COMMANDS = frozenset({
-    "audit", "capture", "impl-review", "interview", "land", "make-pr", "map",
-    "memory-migrate", "pilot", "plan", "plan-review", "prime", "prospect", "qa",
-    "ralph-init", "resolve-pr", "setup", "spec-completion-review", "strategy",
-    "sync", "tracker-sync", "uninstall", "work",
+    "audit", "capture", "chart", "impl-review", "interview", "land", "make-pr",
+    "map", "memory-migrate", "pilot", "plan", "plan-review", "prime", "prospect",
+    "qa", "ralph-init", "resolve-pr", "setup", "spec-completion-review",
+    "strategy", "sync", "tracker-sync", "uninstall", "work",
 })
 
 

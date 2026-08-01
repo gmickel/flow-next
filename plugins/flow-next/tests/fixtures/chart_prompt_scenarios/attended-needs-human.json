@@ -1,0 +1,65 @@
+{
+  "id": "attended-unattended-driver-needs-human",
+  "family": "attended_gating",
+  "description": "Unattended driver reaches a stored attendance:attended decision; must persist no answer and emit NEEDS_HUMAN.",
+  "user_prompt": "Work the next decision on fn-140",
+  "context": {
+    "mode_hint": "work",
+    "driver": "unattended",
+    "unattended_signals": [
+      "FLOW_RALPH=1"
+    ],
+    "chart_id": "fn-140",
+    "decision_pin": null,
+    "repo_evidence": [],
+    "prior_state": {
+      "frontier_top": {
+        "id": "fn-140.D4",
+        "type": "interview",
+        "attendance": "attended",
+        "status": "open"
+      }
+    }
+  },
+  "expected": {
+    "mode": "work",
+    "inferred_operations": [
+      "work_mode",
+      "chart frontier",
+      "chart claim",
+      "attended_hard_gate",
+      "no_answer_write",
+      "chart release-claim"
+    ],
+    "read_backs": [
+      "attended decision requires human",
+      "no answer written"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart claim",
+        "chart release-claim",
+        "chart frontier"
+      ],
+      "forbidden": [
+        "chart resolve",
+        "chart resolve --answer-file",
+        "chart out-of-scope",
+        "chart attach-asset"
+      ]
+    },
+    "verdict": "CHART_VERDICT=NEEDS_HUMAN chart=fn-140 decision=fn-140.D4 reason=\"attended decision requires human; no answer written\"",
+    "notes": [
+      "Persist no answer",
+      "Unattended driver + attendance:attended -> NEEDS_HUMAN",
+      "Never self-answer interview/prototype"
+    ]
+  },
+  "skill_contract_tokens": [
+    "NEEDS_HUMAN",
+    "no answer",
+    "attendance",
+    "Unattended driver",
+    "attended"
+  ]
+}

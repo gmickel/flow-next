@@ -1,0 +1,70 @@
+{
+  "id": "reversal-resolve-supersedes-cascade",
+  "family": "reversal_supersession",
+  "description": "Prototype reaction invalidates a prior assumption; resolve with --supersedes after cascade read-back; ledger lines for superseded stay struck-through.",
+  "user_prompt": "The prototype changed direction. Preserve the old assumption and redraw.",
+  "context": {
+    "mode_hint": "work",
+    "driver": "attended",
+    "chart_id": "fn-140",
+    "decision_pin": "fn-140.D3",
+    "repo_evidence": [],
+    "prior_state": {
+      "decision": {
+        "id": "fn-140.D3",
+        "type": "prototype",
+        "attendance": "attended",
+        "status": "open",
+        "assets": [
+          {
+            "kind": "path",
+            "reference": ".flow/charts/assets/fn-140-d3-mock.html"
+          }
+        ]
+      },
+      "prior_assumption": "fn-140.D2"
+    }
+  },
+  "expected": {
+    "mode": "work",
+    "inferred_operations": [
+      "work_mode",
+      "chart claim",
+      "record_reaction",
+      "readback_cascade",
+      "chart resolve --answer-file --supersedes",
+      "chart frontier"
+    ],
+    "read_backs": [
+      "superseded D-ID(s)",
+      "new answer gist",
+      "cascade implications for depends_on open dependents",
+      "replacement D-IDs unless --keep-dependents"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart claim",
+        "chart resolve --answer-file",
+        "chart resolve --supersedes",
+        "chart frontier"
+      ],
+      "forbidden": [
+        "delete_superseded_ledger_line",
+        "silent_supersession_cascade"
+      ]
+    },
+    "verdict": "CHART_VERDICT=RESOLVED chart=fn-140 decision=fn-140.D3 reason=\"prototype reversed prior assumption; D2 superseded; frontier redrawn\"",
+    "notes": [
+      "Prior answer immutable; struck-through never deleted",
+      "Cascade reported",
+      "Human reaction required for prototype"
+    ]
+  },
+  "skill_contract_tokens": [
+    "--supersedes",
+    "cascade",
+    "struck-through",
+    "keep-dependents",
+    "never deleted"
+  ]
+}
