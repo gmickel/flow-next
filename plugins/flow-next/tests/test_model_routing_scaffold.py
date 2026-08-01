@@ -58,8 +58,9 @@ SENTINEL_RE = re.compile(r"^<!-- probe:(codex|cursor|grok) --> (.*)$")
 CODEX_ROUTE_TOKENS = ("codex exec", "delegate:codex", "review.backend codex")
 CURSOR_ROUTE_TOKENS = ("cursor-agent", "review.backend cursor")
 # fn-121 follow-up: the route line teaches flags-BEFORE--p, so the distinctive
-# invocation token is the permission flag, not the old bare `grok -p` shape.
-GROK_ROUTE_TOKENS = ("grok --permission-mode",)
+# invocation token is the approval flag, not the old bare `grok -p` shape
+# (acceptEdits skips Bash in headless runs - blanket approval is the recipe).
+GROK_ROUTE_TOKENS = ("grok --always-approve",)
 # Probe cli -> (binary name for the install note, route tokens gated on it).
 PROBES = {
     "codex": ("codex", CODEX_ROUTE_TOKENS),
