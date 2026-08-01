@@ -167,7 +167,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-155-ci-wall-clock-run-the-unit-suite-at-the.md",
-  "status": "open",
+  "status": "done",
   "title": "CI wall-clock: run the unit suite at the parallelism the runner actually has",
   "tracker": {
     "baseHashFlow": null,
@@ -180,5 +180,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T22:21:43.532672Z"
+  "updated_at": "2026-08-01T23:50:44.226869Z"
 }
