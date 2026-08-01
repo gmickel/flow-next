@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-157-worker-dispatch-visibility-wrapper",
+  "created_at": "2026-08-01T22:09:31.573554Z",
+  "depends_on_epics": [],
+  "id": "fn-157-worker-dispatch-visibility-wrapper",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-157-worker-dispatch-visibility-wrapper.md",
+  "status": "open",
+  "title": "Worker dispatch visibility: wrapper subagents + streaming discipline",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-01T22:10:07.826951Z"
+}
