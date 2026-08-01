@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-155-ci-wall-clock-run-the-unit-suite-at-the",
+  "created_at": "2026-08-01T15:11:16.636413Z",
+  "depends_on_epics": [],
+  "id": "fn-155-ci-wall-clock-run-the-unit-suite-at-the",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-155-ci-wall-clock-run-the-unit-suite-at-the.md",
+  "status": "open",
+  "title": "CI wall-clock: run the unit suite at the parallelism the runner actually has",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-01T15:11:50.688999Z"
+}
