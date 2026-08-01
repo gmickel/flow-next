@@ -777,18 +777,34 @@ class TestSupersedesStaleDiscriminator(unittest.TestCase):
                 e2["supersedes_stale"],
             )
 
-            # R3: per-briefing status stays the capture-readiness source of
-            # truth, and the discriminator does not leak into other envelopes -
-            # `supersedes_stale` reports what THIS invocation did, nothing more.
-            r_show = _run_flowctl(repo, "chart", "show", chart_id, "--json")
-            self.assertEqual(r_show.returncode, 0, r_show.stderr)
-            self.assertNotIn("supersedes_stale", r_show.stdout)
-            self.assertEqual(json.loads(r_show.stdout)["result"]["briefing_count"], 2)
+            # R3: per-briefing `status` stays the capture-readiness source of
+            # truth. It lives in the chart record `briefings[]` - the artifact
+            # downstream consumers read - and `chart show --json` projects only
+            # `briefing_count`, which this change leaves untouched. So pin the
+            # statuses where they actually live, and pin the projection as
+            # unchanged rather than pretending it carries them.
             side = _chart_json(flow, chart_id)
             self.assertEqual(
                 [b["status"] for b in side["briefings"]], ["stale", "final"]
             )
+            # The discriminator is invocation-scoped: it is never persisted onto
+            # a briefing record, so it can never be mistaken for that status.
             self.assertNotIn("supersedes_stale", side["briefings"][1])
+
+            r_show = _run_flowctl(repo, "chart", "show", chart_id, "--json")
+            self.assertEqual(r_show.returncode, 0, r_show.stderr)
+            show = json.loads(r_show.stdout)["result"]
+            self.assertEqual(show["briefing_count"], 2)
+            self.assertNotIn("supersedes_stale", r_show.stdout)
+
+            # Cross-check the same capture-readiness facts from public command
+            # output, so a corruption of either record or envelope fails here:
+            # `reopen` reported staling B1, and the emission reported B2 final.
+            self.assertEqual(
+                json.loads(r_re.stdout)["result"]["staled_briefings"], ["B1"]
+            )
+            self.assertEqual(e2["status"], "final")
+            self.assertEqual(e2["chart_status"], show["status"])
 
             # The retry that answers with B2 carries no discriminator either.
             r3 = _brief(repo, chart_id, prop)
