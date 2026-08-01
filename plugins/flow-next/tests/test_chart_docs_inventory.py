@@ -469,12 +469,20 @@ class ChartChangelogEntry(unittest.TestCase):
             r"^## (Unreleased|\[flow-next \d+\.\d+\.\d+\] - \d{4}-\d{2}-\d{2})$",
             "the top changelog section must be Unreleased or a released version",
         )
-        # The chart entry lives in that top section, with its co-tenants.
-        top = text.split(heading, 1)[1].split("\n## ", 1)[0]
-        self.assertRegex(top, r"(?i)/flow-next:chart")
-        self.assertRegex(top, r"(?i)fn-135")
-        self.assertIn("#279", top)
-        self.assertIn("Review sidecar write transaction", top)
+        # The chart entry lives in its own release section, with the co-tenants
+        # that shipped alongside it. Anchor on the version, not on position -
+        # every later release pushes 3.13.0 down, and that is not a regression.
+        shipped = re.search(
+            r"^## \[flow-next 3\.13\.0\].*?(?=\n## |\Z)",
+            text,
+            re.MULTILINE | re.DOTALL,
+        )
+        self.assertIsNotNone(shipped, "the flow-next 3.13.0 section must survive")
+        section = shipped.group(0)
+        self.assertRegex(section, r"(?i)/flow-next:chart")
+        self.assertRegex(section, r"(?i)fn-135")
+        self.assertIn("#279", section)
+        self.assertIn("Review sidecar write transaction", section)
 
 
 class ChartGuideOptionality(unittest.TestCase):

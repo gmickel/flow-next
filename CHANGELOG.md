@@ -6,8 +6,8 @@ All notable changes to the flow-next.
 
 ### Changed
 
-- **Chart names the test it always applied: can you say what "arrived" looks
-  like?** Chart's premise is *destination known, route unknown*, but the
+- **`/flow-next:chart` names the test it always applied: can you say what
+  "arrived" looks like?** Chart's premise is *destination known, route unknown*, but the
   documented entry condition ("one singular effort, oversized, unclear")
   admitted a theme. A direction like "make the CLI more deterministic" has no
   end state, so no Outcome can be stated, nothing can be ruled out of scope,
