@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-154-chart-reopened-charts-regain-a-capture",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-01T18:00:24.421547Z",
   "created_at": "2026-08-01T14:54:24.147964Z",
   "default_impl": null,
   "default_review": null,
@@ -172,10 +172,25 @@
       "task": "fn-154-chart-reopened-charts-regain-a-capture.3",
       "timestamp": "2026-08-01T17:47:38.729349Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "f018387d1b931c51bd79edf3aae23fc76ceda6a8",
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "ccbb566bcd99694ad4e8719b0cfcc73dcbd4d639e7aff87386e71eb3881afb42",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-08-01T17:59:56.083358Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-154-chart-reopened-charts-regain-a-capture.1": 0,
     "impl:fn-154-chart-reopened-charts-regain-a-capture.2": 0,
     "impl:fn-154-chart-reopened-charts-regain-a-capture.3": 0,
@@ -195,5 +210,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T17:47:52.006597Z"
+  "updated_at": "2026-08-01T18:00:24.421673Z"
 }
