@@ -709,6 +709,86 @@ class TestStaleBriefingNeverEchoed(unittest.TestCase):
             self.assertEqual(e3["status"], "final")
 
 
+class TestNonStringStoredFingerprint(unittest.TestCase):
+    """A malformed stored fingerprint must not match - and must not crash.
+
+    `load_chart_sidecar` validates the root object only, so `briefings[]`
+    entries reach the match loop exactly as written. The accepted-fingerprint
+    set membership test hashes its left operand, so an externally produced or
+    hand-edited sidecar carrying a JSON array or object in
+    `briefings[].fingerprint` raised TypeError there and escaped as a bare
+    traceback, bypassing the versioned error envelope every other chart
+    failure emits. Every stored fingerprint that is not a string is simply
+    not a match, which is how the pre-set equality comparison behaved.
+    """
+
+    @staticmethod
+    def _plant_array_fingerprint(flow: Path, chart_id: str) -> None:
+        side_path = flow / "charts" / f"{chart_id}.json"
+        side = json.loads(side_path.read_text(encoding="utf-8"))
+        side["briefings"][0]["fingerprint"] = ["not", "a", "string"]
+        side_path.write_text(
+            json.dumps(side, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
+    def _assert_no_traceback(self, r: subprocess.CompletedProcess) -> None:
+        combined = r.stdout + r.stderr
+        self.assertNotIn("Traceback", combined, combined)
+        self.assertNotIn("TypeError", combined, combined)
+        self.assertNotIn("unhashable", combined, combined)
+
+    def test_done_chart_array_fingerprint_gives_error_envelope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            self.assertEqual(json.loads(r1.stdout)["result"]["briefing_id"], "B1")
+
+            self._plant_array_fingerprint(flow, chart_id)
+
+            r2 = _brief(repo, chart_id, prop)
+            self._assert_no_traceback(r2)
+            self.assertNotEqual(r2.returncode, 0, r2.stdout)
+            env = json.loads(r2.stdout)
+            self.assertFalse(env["success"], env)
+            self.assertEqual(env["schema_version"], 1, env)
+            # No match, so the done-chart guard names the remedy - the ordinary
+            # versioned envelope, not an interpreter crash.
+            self.assertEqual(env["error"]["code"], "chart_not_open", env)
+            self.assertIn("reopen", env["error"]["message"], env)
+
+    def test_reopened_chart_array_fingerprint_mints_normally(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            self.assertEqual(json.loads(r1.stdout)["result"]["briefing_id"], "B1")
+
+            self._plant_array_fingerprint(flow, chart_id)
+
+            r_re = _run_flowctl(
+                repo, "chart", "reopen", chart_id, "--reason", "resume", "--json"
+            )
+            self._assert_no_traceback(r_re)
+            self.assertEqual(r_re.returncode, 0, r_re.stderr + r_re.stdout)
+
+            # Open chart, no match -> the ordinary emission path mints B2.
+            r2 = _brief(repo, chart_id, prop)
+            self._assert_no_traceback(r2)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertFalse(e2["noop"], e2)
+            self.assertEqual(e2["briefing_id"], "B2", e2)
+
+
 class TestSupersedesStaleDiscriminator(unittest.TestCase):
     """R9/R4/R3: the emission is self-describing - and only where it should be.
 

@@ -14939,7 +14939,17 @@ def emit_chart_briefing(
     for b in existing:
         if not isinstance(b, dict):
             continue
-        if b.get("fingerprint") in accepted_fingerprints:
+        # Set membership hashes its left operand, so an unhashable stored value
+        # (a JSON array or object in a hand-edited or externally produced
+        # sidecar - load_chart_sidecar validates the root object only) would
+        # raise TypeError here and escape as a bare traceback instead of the
+        # versioned error envelope. Every accepted fingerprint is a sha256
+        # hexdigest, so a non-string is simply not a match - which is exactly
+        # how the equality comparison this set replaced already behaved.
+        stored_fingerprint = b.get("fingerprint")
+        if not isinstance(stored_fingerprint, str):
+            continue
+        if stored_fingerprint in accepted_fingerprints:
             # Never hand back a stale briefing as the idempotent answer: it is
             # superseded by definition and has no valid reading as "the
             # requested outcome". The reopen epoch above makes a stale match
