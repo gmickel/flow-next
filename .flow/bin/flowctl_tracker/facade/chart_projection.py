@@ -439,6 +439,53 @@ def _project_hierarchy(
     return out
 
 
+def _hierarchy_marker_key(parent_loc: dict, child_loc: dict) -> str:
+    """Durable per-child hierarchy-step key on the decision's relation ledger."""
+    return "hier:" + dep_relation_key(
+        str(child_loc["durable"]), str(parent_loc["durable"]),
+    )
+
+
+def _ensure_hierarchy(
+    flow_dir: Path,
+    config: dict,
+    execute: Execute,
+    *,
+    chart_id: str,
+    did: str,
+    dtracker: dict,
+    parent_loc: dict,
+    child_loc: dict,
+    caps: dict,
+) -> Result:
+    """Idempotently assert parent/child hierarchy for a linked child.
+
+    A ledger marker records completion, so a create-ok/hierarchy-fail retry
+    re-attempts hierarchy for already-linked children instead of silently
+    taking the body-update-only branch and orphaning the child.
+    """
+    key = _hierarchy_marker_key(parent_loc, child_loc)
+    if ledger_has(dtracker, key):
+        return {"projected": True, "already": True, "form": "sub_issues"}
+    hier = _project_hierarchy(
+        config, execute, parent_loc=parent_loc, child_loc=child_loc, caps=caps,
+    )
+    if isinstance(hier, dict) and hier.get("projected"):
+        def _mark_hier(t: dict, _key=key):
+            t = ledger_append(
+                t, key=_key, dep_spec=chart_id,
+                from_tracker_id=str(child_loc["durable"]),
+                to_tracker_id=str(parent_loc["durable"]),
+                rel_type="hierarchy", source="flow",
+            )
+            return ledger_finalize(t, key=_key)
+
+        # Marker write failure is non-fatal: hierarchy is idempotent and the
+        # unmarked step is simply re-asserted on the next projection.
+        locked_subject_write(flow_dir, "decision", did, _mark_hier)
+    return hier
+
+
 def _project_blocking(
     config: dict,
     execute: Execute,
@@ -566,6 +613,25 @@ def project_chart(
             for d in decisions if isinstance(d, dict)
         ],
     }, sort_keys=True, default=str))
+    # Extend the marker revision with a claim-state digest: the supplied chart
+    # revision (briefing-fingerprint base) omits claimed_by/claimed_at, so a
+    # claim -> release -> claim sequence would otherwise dedupe the second
+    # claim and skip the owned-block refresh.
+    claim_digest = _sha(json.dumps(
+        sorted(
+            (
+                {
+                    "id": d.get("id"),
+                    "claimed_by": d.get("claimed_by"),
+                    "claimed_at": d.get("claimed_at"),
+                }
+                for d in decisions if isinstance(d, dict)
+            ),
+            key=lambda x: str(x.get("id") or ""),
+        ),
+        sort_keys=True, default=str,
+    ))
+    revision = _sha(f"{revision}\x00{claim_digest}")
     evidence = evidence or revision[:16]
     marker_key = _event_marker_key(event, revision, evidence)
 
@@ -715,8 +781,9 @@ def project_chart(
             # hierarchy after both sides linked
             child_loc = locator_of(dtracker)
             if not isinstance(child_loc, TrackerError):
-                hier = _project_hierarchy(
-                    config, execute,
+                hier = _ensure_hierarchy(
+                    flow_dir, config, execute,
+                    chart_id=chart_id, did=did, dtracker=dtracker,
                     parent_loc=parent_loc, child_loc=child_loc, caps=caps,
                 )
                 if isinstance(hier, TrackerError):
@@ -743,8 +810,18 @@ def project_chart(
                     event=event, tracker_id=chart_tracker.get("id"),
                     transport=provider,
                 )
-            # Read current body when possible; owned-block upsert.
+            # Read current body first; a failed read must abort this step -
+            # updating on top of an unread body would replace real remote
+            # content with only the flow-owned block.
             current = _wire_read(config, execute, child_loc)
+            if isinstance(current, TrackerError):
+                return fail_result(
+                    current, completed=completed, statuses=statuses,
+                    flow_dir=flow_dir,
+                    spec_id=subject_marker_token("chart", chart_id),
+                    event=event, tracker_id=chart_tracker.get("id"),
+                    transport=provider,
+                )
             cur_body = ""
             if isinstance(current, dict):
                 cur_body = current.get("body") or ""
@@ -764,6 +841,33 @@ def project_chart(
                 )
             completed.append(f"update-child:{did}")
             statuses.append("updated")
+            # Re-assert hierarchy for linked children whose hierarchy step is
+            # not marked complete (create-ok/hierarchy-fail retry path). Only
+            # attempted where the provider supports it; degraded providers
+            # already reported flat_linked at create.
+            if caps.get("subIssues"):
+                hier = _ensure_hierarchy(
+                    flow_dir, config, execute,
+                    chart_id=chart_id, did=did, dtracker=dtracker,
+                    parent_loc=parent_loc, child_loc=child_loc, caps=caps,
+                )
+                if isinstance(hier, TrackerError):
+                    return fail_result(
+                        hier, completed=completed, statuses=statuses,
+                        flow_dir=flow_dir,
+                        spec_id=subject_marker_token("chart", chart_id),
+                        event=event, tracker_id=chart_tracker.get("id"),
+                        transport=provider,
+                    )
+                if isinstance(hier, dict) and hier.get("degraded"):
+                    degraded_parts.append(hier["degraded"])
+                elif (
+                    isinstance(hier, dict)
+                    and hier.get("projected")
+                    and not hier.get("already")
+                ):
+                    completed.append(f"hierarchy:{did}")
+                    statuses.append("pushed")
             child_results.append({
                 "id": did, "kind": "updated",
                 "id_tracker": dtracker.get("id"),
@@ -827,6 +931,16 @@ def project_chart(
     # Claim/release may refresh owned block/counts but never masquerade as
     # provider workflow status.
     parent_current = _wire_read(config, execute, parent_loc)
+    if isinstance(parent_current, TrackerError):
+        # Never rebuild the parent body from an unread remote state.
+        return fail_result(
+            parent_current, completed=completed, statuses=statuses,
+            flow_dir=flow_dir,
+            spec_id=subject_marker_token("chart", chart_id),
+            event=event, tracker_id=chart_tracker.get("id"),
+            transport=provider,
+            degraded=collect_degraded(*degraded_parts),
+        )
     parent_cur_body = ""
     if isinstance(parent_current, dict):
         parent_cur_body = parent_current.get("body") or ""
@@ -1249,16 +1363,15 @@ def _decision_locate_result(flow_dir: Path, dec: dict) -> Result:
             cl = load_subject(flow_dir, "chart", chart_id)
             if not isinstance(cl, TrackerError):
                 _cp, chart, _ct = cl
-                # Compact frontier from chart decisions list.
-                open_ids = [
+                # Compact frontier from chart decisions list, using the same
+                # actionable predicate as the canonical frontier computation:
+                # open AND unblocked AND unclaimed (blocked decisions are not
+                # selectable frontier options).
+                compact = [
                     d for d in (chart.get("decisions") or [])
-                    if isinstance(d, dict) and d.get("status") == "open"
-                    and not d.get("claimed_by")
+                    if isinstance(d, dict)
                 ]
-                frontier = [
-                    {"id": d.get("id"), "title": d.get("title")}
-                    for d in open_ids
-                ]
+                frontier = _count_decisions(chart, compact)["frontier"]
         base["history"] = {
             "status": status,
             "gist": _safe_gist(dec.get("answer")),

@@ -14020,12 +14020,34 @@ def chart_decision_revision(chart: dict) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def _briefing_fingerprint(chart_revision: str, normalized_proposal: dict) -> str:
+def _briefing_fingerprint(
+    chart_revision: str,
+    normalized_proposal: dict,
+    evidence_digest: str = "",
+) -> str:
     blob = json.dumps(
         {
             "chart_revision": chart_revision,
             "proposal": normalized_proposal,
+            "evidence": evidence_digest,
         },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _briefing_evidence_digest(all_decision_briefs: list[dict]) -> str:
+    """Digest of the full decision data rendered into briefings.
+
+    chart_decision_revision covers only the compact chart entries; briefing
+    bodies also render sidecar-loaded data (assets, gists, supersession).
+    Hashing the loaded briefs makes the fingerprint change when e.g.
+    attach-asset adds evidence between otherwise identical emissions.
+    """
+    blob = json.dumps(
+        all_decision_briefs,
         sort_keys=True,
         separators=(",", ":"),
         default=str,
@@ -14100,6 +14122,7 @@ def _parse_briefing_proposal_file(
             shared.append(did)
 
     clusters: list[dict] = []
+    keys_seen: set[str] = set()
     for i, raw_c in enumerate(raw_clusters, start=1):
         if not isinstance(raw_c, dict):
             raise ChartError(
@@ -14116,6 +14139,15 @@ def _parse_briefing_proposal_file(
         ).strip()
         if not key:
             key = str(i)
+        if key in keys_seen:
+            raise ChartError(
+                "validation",
+                "proposal_duplicate_cluster_key",
+                f"Duplicate cluster key '{key}' in proposal - every cluster "
+                "needs a distinct key",
+                details={"key": key, "index": i, "path": str(path)},
+            )
+        keys_seen.add(key)
         rationale = (raw_c.get("rationale") or raw_c.get("reason") or "").strip()
         if not rationale:
             raise ChartError(
@@ -14561,8 +14593,17 @@ def emit_chart_briefing(
     else:
         briefing_status = "final"
 
+    all_dids = [
+        d["id"]
+        for d in (chart.get("decisions") or [])
+        if isinstance(d, dict) and d.get("id")
+    ]
+    all_briefs = _load_decision_briefs(flow_dir, chart_id, all_dids)
+
     chart_rev = chart_decision_revision(chart)
-    fingerprint = _briefing_fingerprint(chart_rev, normalized)
+    fingerprint = _briefing_fingerprint(
+        chart_rev, normalized, evidence_digest=_briefing_evidence_digest(all_briefs)
+    )
 
     existing = list(chart.get("briefings") or [])
     for b in existing:
@@ -14596,13 +14637,6 @@ def emit_chart_briefing(
     md_path, _ = chart_pair_paths(flow_dir, chart_id)
     md_text = md_path.read_text(encoding="utf-8") if md_path.is_file() else ""
 
-    all_dids = [
-        d["id"]
-        for d in (chart.get("decisions") or [])
-        if isinstance(d, dict) and d.get("id")
-    ]
-    all_briefs = _load_decision_briefs(flow_dir, chart_id, all_dids)
-
     clusters_meta: list[dict] = []
     cluster_paths: dict[str, str] = {}
     mutations: list[tuple[str, str, str]] = []
@@ -14617,11 +14651,15 @@ def emit_chart_briefing(
         unresolved=unresolved if briefing_status == "draft" else None,
         all_decision_briefs=all_briefs,
     )
+    # R41/R45: each B-ID gets an immutable per-version artifact; the fixed
+    # fn-N-briefing[-<cluster>].md paths are always-latest convenience copies
+    # rewritten on every emission. Recorded metadata points at the versioned
+    # copies so B1's paths still carry B1 content after B2 is emitted.
     index_rel = f"{chart_id}-briefing.md"
-    index_path = charts_dir(flow_dir) / index_rel
-    mutations.append(
-        (index_rel, "update" if index_path.is_file() else "create", index_body)
-    )
+    version_index_rel = f"{chart_id}-briefing-{briefing_id}.md"
+    for rel in (version_index_rel, index_rel):
+        p = charts_dir(flow_dir) / rel
+        mutations.append((rel, "update" if p.is_file() else "create", index_body))
 
     n_clusters = len(proposal["clusters"])
     shared_ids = list(proposal.get("shared_context") or [])
@@ -14643,17 +14681,20 @@ def emit_chart_briefing(
                 shared_briefs=shared_briefs,
             )
             c_rel = f"{chart_id}-briefing-{key}.md"
-            c_path = charts_dir(flow_dir) / c_rel
-            mutations.append(
-                (c_rel, "update" if c_path.is_file() else "create", c_body)
-            )
-            cluster_paths[key] = f".flow/charts/{c_rel}"
+            version_c_rel = f"{chart_id}-briefing-{briefing_id}-{key}.md"
+            for rel in (version_c_rel, c_rel):
+                p = charts_dir(flow_dir) / rel
+                mutations.append(
+                    (rel, "update" if p.is_file() else "create", c_body)
+                )
+            cluster_paths[key] = f".flow/charts/{version_c_rel}"
             clusters_meta.append(
                 {
                     "key": key,
                     "rationale": c.get("rationale"),
                     "decisions": list(c.get("decisions") or []),
-                    "path": f".flow/charts/{c_rel}",
+                    "path": f".flow/charts/{version_c_rel}",
+                    "latest_path": f".flow/charts/{c_rel}",
                 }
             )
     else:
@@ -14663,7 +14704,8 @@ def emit_chart_briefing(
                 "key": str(c0["key"]),
                 "rationale": c0.get("rationale"),
                 "decisions": list(c0.get("decisions") or []),
-                "path": f".flow/charts/{index_rel}",
+                "path": f".flow/charts/{version_index_rel}",
+                "latest_path": f".flow/charts/{index_rel}",
             }
         )
 
@@ -14678,7 +14720,8 @@ def emit_chart_briefing(
         "clusters": clusters_meta,
         "shared_context": shared_ids,
         "paths": {
-            "index": f".flow/charts/{index_rel}",
+            "index": f".flow/charts/{version_index_rel}",
+            "latest_index": f".flow/charts/{index_rel}",
             **{f"cluster_{k}": v for k, v in cluster_paths.items()},
         },
         "force": bool(force and briefing_status == "draft"),
@@ -14929,6 +14972,42 @@ def link_chart_spec(
                 "noop": True,
                 "link": link,
             }
+
+    # R50: a durable link must only cite evidence the named briefing actually
+    # carries. Validate against the matching cluster's decisions plus
+    # shared_context when --cluster names a briefing cluster; otherwise
+    # against the union across the briefing's clusters. Runs after the
+    # identity no-op check so identical retries stay no-ops.
+    allowed: set[str] = set(brief_rec.get("shared_context") or [])
+    matched_cluster = None
+    for c in brief_rec.get("clusters") or []:
+        if not isinstance(c, dict):
+            continue
+        if cluster_key is not None and str(c.get("key")) == cluster_key:
+            matched_cluster = c
+        allowed.update(c.get("decisions") or [])
+    if matched_cluster is not None:
+        allowed = set(brief_rec.get("shared_context") or [])
+        allowed.update(matched_cluster.get("decisions") or [])
+    unknown = sorted(d for d in decs if d not in allowed)
+    if unknown:
+        scope = (
+            f"cluster '{cluster_key}' of briefing {briefing_id}"
+            if matched_cluster is not None
+            else f"briefing {briefing_id}"
+        )
+        raise ChartError(
+            "validation",
+            "link_decisions_not_in_briefing",
+            f"D-ID(s) not part of {scope}: " + ", ".join(unknown),
+            details={
+                "id": chart_id,
+                "briefing": briefing_id,
+                "cluster": cluster_key,
+                "unknown": unknown,
+                "allowed": sorted(allowed),
+            },
+        )
 
     actor = get_actor()
     ts = now_iso()

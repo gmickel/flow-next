@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -523,32 +525,40 @@ class BodyAndEdgeTests(unittest.TestCase):
 # Lifecycle projection with fake adapters
 # ---------------------------------------------------------------------------
 
-class LifecycleProjectionTests(unittest.TestCase):
-    def _gh_issue(self, *, node_id: str, number: int, body: str = "b"):
-        return {
-            "node_id": node_id,
-            "number": number,
-            "html_url": f"https://github.com/acme/demo/issues/{number}",
-            "body": body,
-            "title": "t",
-            "id": 9000 + number,
-        }
+def _gh_issue(*, node_id: str, number: int, body: str = "b"):
+    return {
+        "node_id": node_id,
+        "number": number,
+        "html_url": f"https://github.com/acme/demo/issues/{number}",
+        "body": body,
+        "title": "t",
+        "id": 9000 + number,
+    }
 
-    def _gh_create_responses(self, *, parent_n=100, child_n=101):
-        """Responses for parent + one child create on GitHub."""
-        parent = self._gh_issue(node_id=f"I_parent_{parent_n}", number=parent_n)
-        child = self._gh_issue(node_id=f"I_child_{child_n}", number=child_n)
-        # wire-parent-read is used by update's identity check (many times).
-        parent_reads = [ok(dict(parent)) for _ in range(8)]
-        child_reads = [ok(dict(child)) for _ in range(8)]
-        return {
-            "lifecycle-create": [ok(dict(parent)), ok(dict(child))],
-            "wire-parent-read": parent_reads + child_reads,
-            "wire-read": [ok(dict(parent)), ok(dict(child))] * 4,
-            "wire-update": [ok(dict(parent)), ok(dict(child))] * 4,
-            "relate-child-read": ok(dict(child)),
-            "relate-create": ok({"ok": True}),
-        }
+
+def _gh_create_responses(*, parent_n=100, child_n=101):
+    """Responses for parent + one child create on GitHub."""
+    parent = _gh_issue(node_id=f"I_parent_{parent_n}", number=parent_n)
+    child = _gh_issue(node_id=f"I_child_{child_n}", number=child_n)
+    # wire-parent-read is used by update's identity check (many times).
+    parent_reads = [ok(dict(parent)) for _ in range(8)]
+    child_reads = [ok(dict(child)) for _ in range(8)]
+    return {
+        "lifecycle-create": [ok(dict(parent)), ok(dict(child))],
+        "wire-parent-read": parent_reads + child_reads,
+        "wire-read": [ok(dict(parent)), ok(dict(child))] * 4,
+        "wire-update": [ok(dict(parent)), ok(dict(child))] * 4,
+        "relate-child-read": ok(dict(child)),
+        "relate-create": ok({"ok": True}),
+    }
+
+
+class LifecycleProjectionTests(unittest.TestCase):
+    def _gh_issue(self, **kw):
+        return _gh_issue(**kw)
+
+    def _gh_create_responses(self, **kw):
+        return _gh_create_responses(**kw)
 
     def test_create_wire_projects_parent_and_child(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -678,6 +688,9 @@ class LifecycleProjectionTests(unittest.TestCase):
                 "wire-parent-read": [ok(dict(child)), ok(dict(parent))] * 4,
                 "wire-read": [ok(dict(child)), ok(dict(parent))] * 4,
                 "wire-update": [ok(dict(child)), ok(dict(parent))] * 4,
+                # linked-branch hierarchy re-assertion (no marker yet)
+                "relate-child-read": ok(dict(child)),
+                "relate-create": ok({"ok": True}),
             }
             ex = fake_execute(responses)
             out = CP.project_chart(
@@ -763,6 +776,294 @@ class FourAdapterCapabilityTests(unittest.TestCase):
         })
         self.assertIn("local provenance only", body)
         self.assertNotIn("Blocked by (local): fn-10.D1", body)
+
+
+def _seed_linked_pair(flow: Path, **decision_extra) -> None:
+    """Seed a chart + one decision, both already linked to remote issues."""
+    _seed_chart(
+        flow,
+        tracker={
+            "id": "I_parent_100",
+            "identifier": "#100",
+            "url": "https://github.com/acme/demo/issues/100",
+            "linkState": "linked",
+            "depRelations": [],
+            "projection": {"event_markers": []},
+        },
+        decisions=[{
+            "id": "fn-10.D1",
+            "title": "Pick storage",
+            "type": "research",
+            "attendance": "unattended",
+            "status": "open",
+            "n": 1,
+            "tracker": {
+                "id": "I_child_101",
+                "identifier": "#101",
+                "url": "https://github.com/acme/demo/issues/101",
+                "linkState": "linked",
+                "depRelations": [],
+            },
+            **decision_extra,
+        }],
+    )
+
+
+def _linked_refresh_responses(*, with_hierarchy: bool = True) -> dict:
+    child = _gh_issue(node_id="I_child_101", number=101)
+    parent = _gh_issue(node_id="I_parent_100", number=100)
+    responses = {
+        "wire-parent-read": [ok(dict(child)), ok(dict(parent))] * 4,
+        "wire-read": [ok(dict(child)), ok(dict(parent))] * 4,
+        "wire-update": [ok(dict(child)), ok(dict(parent))] * 4,
+    }
+    if with_hierarchy:
+        responses["relate-child-read"] = ok(dict(child))
+        responses["relate-create"] = ok({"ok": True})
+    return responses
+
+
+def _rewrite_decision_claim(flow: Path, claimed_by, claimed_at) -> None:
+    dpath = flow / "charts" / "fn-10" / "1.json"
+    data = json.loads(dpath.read_text(encoding="utf-8"))
+    data["claimed_by"] = claimed_by
+    data["claimed_at"] = claimed_at
+    dpath.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Subject writes serialize with chart WAL transactions
+# ---------------------------------------------------------------------------
+
+class ProjectionChartLockTests(unittest.TestCase):
+    def test_projection_link_write_waits_for_chart_resource_lock(self) -> None:
+        """A projection sidecar write cannot interleave with a chart command's
+        read-modify-write: while the chart resource lock is held, the tracker
+        link write blocks; after the (stale) publish and release, the
+        projection reloads and lands its link on top - nothing is lost."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(flow)
+            chart_json = flow / "charts" / "fn-10.json"
+            results: dict = {}
+
+            def run_projection() -> None:
+                ex = fake_execute(_gh_create_responses())
+                results["out"] = CP.project_chart(
+                    flow, "fn-10", event="chart.create",
+                    revision="rev-lock", evidence="evl", execute=ex,
+                )
+
+            lock_path = flowctl.charts_resource_lock_path(flow)
+            with flowctl.cross_process_lock(lock_path):
+                t = threading.Thread(target=run_projection)
+                t.start()
+                time.sleep(0.4)
+                # Deterministic: the link write REQUIRES the lock we hold, so
+                # the sidecar cannot carry a tracker id yet.
+                mid = json.loads(chart_json.read_text(encoding="utf-8"))
+                self.assertIsNone((mid.get("tracker") or {}).get("id"))
+                # Simulate the overlapped chart command publishing its staged
+                # (pre-projection) JSON while still holding the lock.
+                mid["title"] = "Tenancy chart (mutated)"
+                chart_json.write_text(
+                    json.dumps(mid, indent=2) + "\n", encoding="utf-8"
+                )
+            t.join(timeout=30)
+            self.assertFalse(t.is_alive())
+            out = results["out"]
+            self.assertIsInstance(out, dict)
+            self.assertTrue(out.get("projected"))
+            after = json.loads(chart_json.read_text(encoding="utf-8"))
+            # Both survive: the concurrent mutation AND the projection link.
+            self.assertEqual(after["title"], "Tenancy chart (mutated)")
+            self.assertEqual(after["tracker"]["id"], "I_parent_100")
+
+
+# ---------------------------------------------------------------------------
+# Remote read failure aborts the update step
+# ---------------------------------------------------------------------------
+
+class ReadFailureAbortsUpdateTests(unittest.TestCase):
+    def test_child_read_error_aborts_without_update(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_linked_pair(flow)
+            responses = _linked_refresh_responses()
+            responses["wire-read"] = [
+                TrackerError(ErrorClass.TRANSPORT, "read timed out",
+                             subtype="timeout"),
+            ]
+            responses["wire-parent-read"] = [
+                TrackerError(ErrorClass.TRANSPORT, "read timed out",
+                             subtype="timeout"),
+            ]
+            ex = fake_execute(responses)
+            out = CP.project_chart(
+                flow, "fn-10", event="chart.claim",
+                revision="rev-rf", evidence="evrf", execute=ex,
+            )
+            self.assertIsInstance(out, TrackerError)
+            # Never update on top of an unread body.
+            self.assertNotIn("wire-update", [c.op for c in ex.calls])
+            # Retry with healthy reads converges.
+            ex2 = fake_execute(_linked_refresh_responses())
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.claim",
+                revision="rev-rf", evidence="evrf", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("projected"))
+            self.assertIn("wire-update", [c.op for c in ex2.calls])
+
+
+# ---------------------------------------------------------------------------
+# Hierarchy retry for already-linked children
+# ---------------------------------------------------------------------------
+
+class HierarchyRetryTests(unittest.TestCase):
+    def test_create_ok_hierarchy_fail_retry_converges(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(flow)
+            responses = _gh_create_responses()
+            responses["relate-create"] = [
+                TrackerError(ErrorClass.TRANSPORT, "hierarchy write failed",
+                             subtype="timeout"),
+            ]
+            ex1 = fake_execute(responses)
+            out1 = CP.project_chart(
+                flow, "fn-10", event="chart.create",
+                revision="rev-h", evidence="evh", execute=ex1,
+            )
+            self.assertIsInstance(out1, TrackerError)
+            # Child is linked locally despite the hierarchy failure.
+            child = json.loads(
+                (flow / "charts" / "fn-10" / "1.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(child["tracker"]["id"], "I_child_101")
+            # Retry (same event+revision; no marker was recorded) must
+            # re-attempt hierarchy through the linked-child branch.
+            ex2 = fake_execute(_linked_refresh_responses())
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.create",
+                revision="rev-h", evidence="evh", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("projected"))
+            self.assertIn(
+                "hierarchy:fn-10.D1", out2.get("completed_steps") or [],
+            )
+            self.assertIn("relate-create", [c.op for c in ex2.calls])
+            # Completion marker persisted on the decision ledger.
+            child = json.loads(
+                (flow / "charts" / "fn-10" / "1.json").read_text(encoding="utf-8")
+            )
+            keys = [
+                e.get("key")
+                for e in child["tracker"].get("depRelations") or []
+            ]
+            self.assertTrue(any(str(k).startswith("hier:") for k in keys))
+            # Third projection (new revision): marker respected, no re-set.
+            ex3 = fake_execute(_linked_refresh_responses(with_hierarchy=False))
+            out3 = CP.project_chart(
+                flow, "fn-10", event="chart.wire",
+                revision="rev-h2", evidence="evh2", execute=ex3,
+            )
+            self.assertIsInstance(out3, dict)
+            self.assertTrue(out3.get("projected"))
+            self.assertNotIn("relate-create", [c.op for c in ex3.calls])
+
+
+# ---------------------------------------------------------------------------
+# Claim state is part of the projection marker revision
+# ---------------------------------------------------------------------------
+
+class ClaimRevisionTests(unittest.TestCase):
+    def test_claim_release_claim_refreshes_each_time(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_linked_pair(
+                flow,
+                claimed_by="alice",
+                claimed_at="2026-01-02T00:00:00Z",
+            )
+            chart_rev = "chart-rev-static"  # chart_decision_revision omits claims
+            ex1 = fake_execute(_linked_refresh_responses())
+            out1 = CP.project_chart(
+                flow, "fn-10", event="chart.claim",
+                revision=chart_rev, execute=ex1,
+            )
+            self.assertTrue(out1.get("projected"))
+            self.assertFalse(out1.get("deduped"))
+            # Release locally, project, then claim again (same chart revision).
+            _rewrite_decision_claim(flow, None, None)
+            ex2 = fake_execute(_linked_refresh_responses(with_hierarchy=False))
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.release",
+                revision=chart_rev, execute=ex2,
+            )
+            self.assertTrue(out2.get("projected"))
+            _rewrite_decision_claim(flow, "alice", "2026-01-03T00:00:00Z")
+            ex3 = fake_execute(_linked_refresh_responses(with_hierarchy=False))
+            out3 = CP.project_chart(
+                flow, "fn-10", event="chart.claim",
+                revision=chart_rev, execute=ex3,
+            )
+            # The second claim must NOT dedupe against the first claim marker.
+            self.assertIsInstance(out3, dict)
+            self.assertFalse(out3.get("deduped"))
+            self.assertTrue(out3.get("projected"))
+            self.assertIn("wire-update", [c.op for c in ex3.calls])
+            # Distinct marker revisions for the two claim events.
+            chart = json.loads(
+                (flow / "charts" / "fn-10.json").read_text(encoding="utf-8")
+            )
+            markers = chart["tracker"]["projection"]["event_markers"]
+            claim_revs = {
+                m["revision"] for m in markers if m["event"] == "chart.claim"
+            }
+            self.assertEqual(len(claim_revs), 2)
+
+
+# ---------------------------------------------------------------------------
+# Locator frontier excludes blocked decisions
+# ---------------------------------------------------------------------------
+
+class LocateFrontierTests(unittest.TestCase):
+    def test_blocked_decisions_excluded_from_history_frontier(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(
+                flow,
+                decisions=[
+                    {
+                        "id": "fn-10.D1", "title": "Done", "type": "research",
+                        "attendance": "unattended", "status": "resolved",
+                        "answer": {"gist": "use postgres"}, "n": 1,
+                    },
+                    {
+                        "id": "fn-10.D2", "title": "Next", "type": "research",
+                        "attendance": "unattended", "status": "open", "n": 2,
+                    },
+                    {
+                        "id": "fn-10.D3", "title": "Waiting", "type": "research",
+                        "attendance": "unattended", "status": "open",
+                        "blocked_by": ["fn-10.D2"], "n": 3,
+                    },
+                ],
+            )
+            out = CP.locate_selector(flow, "fn-10.D1")
+            self.assertIsInstance(out, dict)
+            self.assertEqual(out["status"], "resolved")
+            frontier_ids = [f["id"] for f in out.get("frontier") or []]
+            self.assertEqual(frontier_ids, ["fn-10.D2"])
+            self.assertNotIn("fn-10.D3", frontier_ids)
 
 
 # ---------------------------------------------------------------------------

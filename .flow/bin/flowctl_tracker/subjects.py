@@ -8,9 +8,14 @@ spec metadata or treating tracker ids as chart identity.
 
 from __future__ import annotations
 
+import contextlib
+import errno
+import os
 import re
+import stat as stat_mod
+import time
 from pathlib import Path
-from typing import Optional, Union
+from typing import Iterator, Optional, Union
 
 from .lifecycle.helpers import (Result, atomic_write_json, default_tracker,
                                 derive_link_state, dict_, leaf_is_safe,
@@ -144,6 +149,108 @@ def write_subject_tracker(
     return atomic_write_json(path, data)
 
 
+# Chart resource lock: the SAME lock file flowctl's chart WAL transactions
+# hold around their sidecar read-modify-write cycles. Projection sidecar
+# writes must contend on it, or a post-commit projection can persist a tracker
+# link between another chart command's load and publish and be clobbered by
+# that command's older JSON (duplicate remote issues on the next projection).
+_CHARTS_RESOURCE_LOCK_NAME = "charts-resource.lock"
+_CHARTS_LOCK_TIMEOUT_S = 10.0
+_CHARTS_LOCK_POLL_S = 0.02
+
+
+def charts_resource_lock_file(flow_dir: Path) -> Path:
+    """Path of flowctl's chart WAL/mutation lock (.flow/locks/charts-resource.lock)."""
+    return Path(flow_dir) / "locks" / _CHARTS_RESOURCE_LOCK_NAME
+
+
+def _try_kernel_lock(fd: int) -> bool:
+    """One non-blocking exclusive acquisition - same mechanism as flowctl's
+    cross_process_lock (flock on POSIX, msvcrt byte lock on Windows) so the
+    two sides genuinely contend on the shared lock file."""
+    if os.name == "nt":  # pragma: no cover - exercised on the Windows CI row
+        import msvcrt  # noqa: PLC0415
+
+        os.lseek(fd, 0, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError as e:
+            if e.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                return False
+            raise
+
+    import fcntl  # noqa: PLC0415
+
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError as e:
+        if e.errno in (errno.EACCES, errno.EAGAIN):
+            return False
+        raise
+
+
+def _release_kernel_lock(fd: int) -> None:
+    if os.name == "nt":  # pragma: no cover - exercised on the Windows CI row
+        import msvcrt  # noqa: PLC0415
+
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        return
+
+    import fcntl  # noqa: PLC0415
+
+    fcntl.flock(fd, fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def charts_resource_lock(
+    flow_dir: Path, *, timeout_s: float = _CHARTS_LOCK_TIMEOUT_S
+) -> Iterator[None]:
+    """Bounded exclusive kernel lock on the chart resource lock file.
+
+    Raises ConfigLockTimeout on timeout so locked_subject_write maps it to
+    the same CONFLICT/lock_timeout TrackerError as the config writer lock.
+    """
+    from .config_lock import ConfigLockTimeout  # noqa: PLC0415
+
+    lock_path = charts_resource_lock_file(flow_dir)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        st = os.lstat(lock_path)
+        if not stat_mod.S_ISREG(st.st_mode):
+            raise ConfigLockTimeout(
+                f"chart resource lock path is not a regular file: {lock_path}"
+            )
+    except FileNotFoundError:
+        pass
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(lock_path, flags, 0o600)
+    acquired = False
+    try:
+        if os.fstat(fd).st_size == 0:
+            os.write(fd, b"\0")
+        deadline = time.monotonic() + max(0.0, timeout_s)
+        while not acquired:
+            acquired = _try_kernel_lock(fd)
+            if acquired:
+                break
+            if time.monotonic() >= deadline:
+                raise ConfigLockTimeout(
+                    f"timed out acquiring chart resource lock {lock_path} "
+                    f"after {timeout_s:g}s"
+                )
+            time.sleep(_CHARTS_LOCK_POLL_S)
+        yield
+    finally:
+        if acquired:
+            with contextlib.suppress(OSError):
+                _release_kernel_lock(fd)
+        with contextlib.suppress(OSError):
+            os.close(fd)
+
+
 def locked_subject_write(
     flow_dir: Path,
     kind: str,
@@ -152,11 +259,20 @@ def locked_subject_write(
     *,
     collision_id: Optional[str] = None,
 ) -> Result:
-    """Reload + mutate + persist subject tracker under the shared writer lock."""
+    """Reload + mutate + persist subject tracker under the shared writer lock.
+
+    Chart/decision subjects additionally serialize against flowctl's chart
+    resource lock (taken FIRST, matching chart commands' charts-then-inner
+    ordering) so projection writes cannot interleave with a chart command's
+    WAL read-modify-write on the same sidecar.
+    """
     from .config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
 
     try:
-        with config_lock(flow_dir):
+        with contextlib.ExitStack() as stack:
+            if (kind or "").strip().lower() in ("chart", "decision"):
+                stack.enter_context(charts_resource_lock(flow_dir))
+            stack.enter_context(config_lock(flow_dir))
             loaded = load_subject(flow_dir, kind, subject_id)
             if isinstance(loaded, TrackerError):
                 return loaded

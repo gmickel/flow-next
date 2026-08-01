@@ -407,6 +407,150 @@ class TestFingerprintVersioning(unittest.TestCase):
             self.assertTrue(e3["transitioned_done"])
 
 
+class TestEvidenceFingerprint(unittest.TestCase):
+    def test_attach_asset_between_forced_drafts_mints_new_briefing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Settled", "research")
+            d2 = _add_decision(repo, chart_id, "Still open", "research")
+            _resolve(repo, d1["id"], "settled answer")
+            prop = _proposal(
+                repo,
+                "p.json",
+                [{"key": "1", "rationale": "partial handoff", "decisions": [d1["id"]]}],
+            )
+            r1 = _brief(repo, chart_id, prop, force=True)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            e1 = json.loads(r1.stdout)["result"]
+            self.assertEqual(e1["briefing_id"], "B1")
+
+            # Attach evidence to the still-open decision; the chart's compact
+            # entries are unchanged, but rendered briefing content is not.
+            (repo / "docs").mkdir()
+            (repo / "docs" / "evidence.md").write_text("mock", encoding="utf-8")
+            _git(repo, "add", "docs/evidence.md")
+            _git(repo, "commit", "-q", "-m", "evidence")
+            af = repo / "asset.json"
+            af.write_text(
+                json.dumps(
+                    {
+                        "kind": "path",
+                        "reference": "docs/evidence.md",
+                        "display": "late evidence",
+                        "revision": "rev-1",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            r_att = _run_flowctl(
+                repo,
+                "chart",
+                "attach-asset",
+                d2["id"],
+                "--asset-file",
+                str(af),
+                "--json",
+            )
+            self.assertEqual(r_att.returncode, 0, r_att.stderr + r_att.stdout)
+
+            # Same proposal again: evidence changed, so this must NOT no-op.
+            r2 = _brief(repo, chart_id, prop, force=True)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertFalse(e2["noop"])
+            self.assertEqual(e2["briefing_id"], "B2")
+            self.assertNotEqual(e2["fingerprint"], e1["fingerprint"])
+
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(len(side["briefings"]), 2)
+            index = (flow / "charts" / f"{chart_id}-briefing.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("docs/evidence.md", index)
+
+
+class TestVersionedBriefingPaths(unittest.TestCase):
+    def test_b1_recorded_paths_survive_b2_emission(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, d1, d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            e1 = json.loads(r1.stdout)["result"]
+            b1_paths = e1["paths"]
+            # Recorded index path is per-version; a stable latest also exists.
+            self.assertIn("-briefing-B1.md", b1_paths["index"])
+            self.assertTrue(b1_paths["latest_index"].endswith("-briefing.md"))
+            b1_index = repo / b1_paths["index"]
+            self.assertTrue(b1_index.is_file())
+            b1_content = b1_index.read_text(encoding="utf-8")
+            self.assertIn("briefing B1", b1_content)
+
+            _run_flowctl(
+                repo, "chart", "reopen", chart_id, "--reason", "resplit", "--json"
+            )
+            prop2 = _proposal(
+                repo,
+                "prop-two.json",
+                [
+                    {"key": "a", "rationale": "Split storage", "decisions": [d1["id"]]},
+                    {"key": "b", "rationale": "Split auth", "decisions": [d2["id"]]},
+                ],
+            )
+            r2 = _brief(repo, chart_id, prop2)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertEqual(e2["briefing_id"], "B2")
+            # B2 gets versioned index and cluster paths.
+            self.assertIn("-briefing-B2.md", e2["paths"]["index"])
+            self.assertIn("-briefing-B2-a.md", e2["paths"]["cluster_a"])
+            self.assertIn("-briefing-B2-b.md", e2["paths"]["cluster_b"])
+            for rel in e2["paths"].values():
+                self.assertTrue((repo / rel).is_file(), rel)
+
+            # B1's recorded artifact is untouched by the B2 emission.
+            self.assertEqual(
+                b1_index.read_text(encoding="utf-8"), b1_content
+            )
+            # The stable latest copy now carries B2.
+            latest = (repo / b1_paths["latest_index"]).read_text(encoding="utf-8")
+            self.assertIn("briefing B2", latest)
+            self.assertNotIn("briefing B1", latest)
+
+            # Sidecar records agree with the emit result.
+            side = _chart_json(flow, chart_id)
+            self.assertIn("-briefing-B1.md", side["briefings"][0]["paths"]["index"])
+            self.assertIn("-briefing-B2.md", side["briefings"][1]["paths"]["index"])
+
+
+class TestProposalDuplicateClusterKey(unittest.TestCase):
+    def test_duplicate_cluster_key_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id, _prop, d1, d2 = _ready_single_cluster(repo)
+            prop = _proposal(
+                repo,
+                "dup.json",
+                [
+                    {"key": "core", "rationale": "first", "decisions": [d1["id"]]},
+                    {"key": "core", "rationale": "second", "decisions": [d2["id"]]},
+                ],
+            )
+            r = _brief(repo, chart_id, prop)
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["code"], "proposal_duplicate_cluster_key")
+            self.assertEqual(err["details"]["key"], "core")
+
+
 class TestDoneAndMutations(unittest.TestCase):
     def test_first_final_sets_done_and_blocks_mutations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -620,6 +764,109 @@ class TestLinkSpec(unittest.TestCase):
             self.assertEqual(len(fresh), 1)
             self.assertEqual(fresh[0]["status"], "stale")
             self.assertIn("superseded", (fresh[0].get("stale_note") or "").lower())
+
+
+class TestLinkSpecDecisionValidation(unittest.TestCase):
+    def test_rejects_unknown_and_cross_cluster_dids_but_retries_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Shared tenancy model", "research")
+            d2 = _add_decision(repo, chart_id, "Billing surface", "research")
+            d3 = _add_decision(repo, chart_id, "Admin UI", "research")
+            _resolve(repo, d1["id"], "shared schema with RLS")
+            _resolve(repo, d2["id"], "usage-based billing")
+            _resolve(repo, d3["id"], "admin console v1")
+            prop = _proposal(
+                repo,
+                "split.json",
+                [
+                    {
+                        "key": "billing",
+                        "rationale": "Billing alone",
+                        "decisions": [d1["id"], d2["id"]],
+                    },
+                    {
+                        "key": "admin",
+                        "rationale": "Admin alone",
+                        "decisions": [d1["id"], d3["id"]],
+                    },
+                ],
+                shared=[d1["id"]],
+            )
+            r = _brief(repo, chart_id, prop)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            bid = json.loads(r.stdout)["result"]["briefing_id"]
+
+            # Nonexistent D-ID is rejected, nothing persisted.
+            r_bad = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                "D999",
+                "--cluster",
+                "billing",
+                "--json",
+            )
+            self.assertNotEqual(r_bad.returncode, 0)
+            err = json.loads(r_bad.stdout)["error"]
+            self.assertEqual(err["code"], "link_decisions_not_in_briefing")
+            self.assertIn(f"{chart_id}.D999", err["details"]["unknown"])
+            self.assertEqual(len(_chart_json(flow, chart_id).get("produced_specs") or []), 0)
+
+            # D-ID from the other cluster is rejected for the named cluster.
+            r_cross = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                d3["id"],
+                "--cluster",
+                "billing",
+                "--json",
+            )
+            self.assertNotEqual(r_cross.returncode, 0)
+            err = json.loads(r_cross.stdout)["error"]
+            self.assertEqual(err["code"], "link_decisions_not_in_briefing")
+            self.assertIn(d3["id"], err["details"]["unknown"])
+
+            # Valid link (cluster set + shared context) succeeds.
+            good_args = [
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                f"{d1['id']},{d2['id']}",
+                "--cluster",
+                "billing",
+                "--json",
+            ]
+            r_ok = _run_flowctl(repo, *good_args)
+            self.assertEqual(r_ok.returncode, 0, r_ok.stderr + r_ok.stdout)
+            self.assertFalse(json.loads(r_ok.stdout)["result"]["noop"])
+
+            # Identical retry stays a no-op.
+            r_retry = _run_flowctl(repo, *good_args)
+            self.assertEqual(r_retry.returncode, 0, r_retry.stderr + r_retry.stdout)
+            self.assertTrue(json.loads(r_retry.stdout)["result"]["noop"])
+            self.assertEqual(len(_chart_json(flow, chart_id)["produced_specs"]), 1)
 
 
 class TestMultiClusterAndShared(unittest.TestCase):
