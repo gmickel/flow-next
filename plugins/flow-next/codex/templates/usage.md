@@ -15,32 +15,14 @@ Task tracking for AI agents. All state lives in `.flow/`.
 
 - Specs: `fn-N-slug` where slug is derived from title (e.g., fn-1-add-oauth, fn-2-fix-login-bug)
 - Tasks: `fn-N-slug.M` (e.g., fn-1-add-oauth.1, fn-2-fix-login-bug.2)
-- Charts: same native `fn-N` domain as specs (cross-kind allocator; chart and spec never share an id)
-- Decisions: `<chart-id>.D<n>` (e.g., fn-140.D2)
+- Charts share the native `fn-N` domain with specs (never the same id)
 - Tracker-keyed ids coexist and resolve (`wor-17-slug`, `gh-123-slug`, `gl-456-slug`). Default: `config set tracker.specIds tracker`.
 
 **Backwards compatibility**: Legacy formats `fn-N`, `fn-N-xxx`, `fn-N.M`, and `fn-N-xxx.M` still work.
 
 ## Chart (optional pre-capture discovery)
 
-Optional decision-map discovery for **one** oversized/unclear idea. Not a pilot stage. Prompt-first via `$flow-next-chart`; exact flags below for automation. One decision per invocation; unattended types may fan out as separate invocations only.
-
-```bash
-.flow/bin/flowctl chart list
-.flow/bin/flowctl chart show <chart-id>
-.flow/bin/flowctl chart frontier <chart-id>          # sole work-mode selection input
-.flow/bin/flowctl chart claim <chart-id>.D<n>
-.flow/bin/flowctl chart resolve <chart-id>.D<n> --answer-file a.md
-.flow/bin/flowctl chart locate <selector>            # local ledger only (chart/D-ID / stored tracker URL)
-```
-
-Skill work mode ends with exactly one greppable line:
-
-```
-CHART_VERDICT=<RESOLVED|BLOCKED|NEEDS_HUMAN|COMPLETE|NO_WORK> chart=<id> decision=<D> reason="<one line>"
-```
-
-Unsure whether to chart? `$flow-next-guide`. Skip chart when intent is already stateable. Capture ingests the briefing - chart never writes specs.
+One oversized/unclear idea; one decision (`<chart-id>.D<n>`) per invocation; never a pilot stage. `chart frontier` is the sole work-mode selection input; `chart claim` then `chart resolve --answer-file` close it; every work invocation ends with one greppable `CHART_VERDICT=...` line. Chart never writes specs; capture ingests the briefing.
 
 ## Common Commands
 
