@@ -215,6 +215,51 @@ def _ready_single_cluster(repo: Path) -> tuple[str, Path, dict, dict]:
     return chart_id, prop, d1, d2
 
 
+def _forced_draft_then_abandon_reopen(repo: Path) -> tuple[str, Path, dict, dict]:
+    """Force-draft B1 on an unbriefable chart, then abandon -> reopen.
+
+    Leaves a chart whose ONLY briefing is a staled forced draft, reached from
+    the `abandoned` source state. `abandon` is legal only from `open` and never
+    touches briefings, so this is the only way an abandoned-sourced reopen
+    carries a briefing at all: abandon a chart with none and the later
+    reopen-then-brief simply mints B1, exercising no stale handling whatsoever.
+
+    Returns (chart_id, proposal covering the one resolved decision, resolved
+    decision, still-open decision).
+    """
+    chart_id = _create_chart(repo)
+    d1 = _add_decision(repo, chart_id, "Storage choice", "research")
+    d2 = _add_decision(repo, chart_id, "Still open", "research")
+    _resolve(repo, d1["id"], "Use Postgres for tenant metadata")
+    prop = _proposal(
+        repo,
+        "prop-forced.json",
+        [{"key": "1", "rationale": "partial handoff", "decisions": [d1["id"]]}],
+    )
+
+    r = _brief(repo, chart_id, prop, force=True)
+    assert r.returncode == 0, r.stderr + r.stdout
+    first = json.loads(r.stdout)["result"]
+    # The premise: a DRAFT B1 on a chart that stays open (an unbriefable chart
+    # cannot reach `done`, so `abandoned` is the only terminal state available).
+    assert first["briefing_id"] == "B1", first
+    assert first["status"] == "draft", first
+    assert first["chart_status"] == "open", first
+
+    r_ab = _run_flowctl(
+        repo, "chart", "abandon", chart_id, "--reason", "paused discovery", "--json"
+    )
+    assert r_ab.returncode == 0, r_ab.stderr + r_ab.stdout
+    r_re = _run_flowctl(
+        repo, "chart", "reopen", chart_id, "--reason", "resume discovery", "--json"
+    )
+    assert r_re.returncode == 0, r_re.stderr + r_re.stdout
+    reopened = json.loads(r_re.stdout)["result"]
+    assert reopened["prior_status"] == "abandoned", reopened
+    assert reopened["staled_briefings"] == ["B1"], reopened
+    return chart_id, prop, d1, d2
+
+
 class TestBriefingEligibility(unittest.TestCase):
     def test_refuses_open_unblocked(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -662,6 +707,304 @@ class TestStaleBriefingNeverEchoed(unittest.TestCase):
             self.assertTrue(e3["noop"])
             self.assertEqual(e3["briefing_id"], "B2")
             self.assertEqual(e3["status"], "final")
+
+
+class TestSupersedesStaleDiscriminator(unittest.TestCase):
+    """R9/R4/R3: the emission is self-describing - and only where it should be.
+
+    PRESENCE of `supersedes_stale` is the discriminator, so its absence on every
+    other path is what makes the byte-unchanged claim for existing envelopes
+    checkable rather than merely intended.
+    """
+
+    def test_absent_from_first_emission_retry_and_error_envelopes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id, prop, d1, d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            e1 = json.loads(r1.stdout)["result"]
+            self.assertEqual(e1["briefing_id"], "B1")
+            self.assertFalse(e1["noop"])
+            # First emission: nothing was superseded.
+            self.assertNotIn("supersedes_stale", e1)
+
+            r2 = _brief(repo, chart_id, prop)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertTrue(e2["noop"])
+            self.assertNotIn("supersedes_stale", e2)
+
+            # Error envelope: a changed proposal against the done chart.
+            prop2 = _proposal(
+                repo,
+                "prop-split.json",
+                [
+                    {"key": "a", "rationale": "Split storage", "decisions": [d1["id"]]},
+                    {"key": "b", "rationale": "Split auth", "decisions": [d2["id"]]},
+                ],
+            )
+            r3 = _brief(repo, chart_id, prop2)
+            self.assertNotEqual(r3.returncode, 0, r3.stdout)
+            self.assertEqual(json.loads(r3.stdout)["error"]["code"], "chart_not_open")
+            self.assertNotIn("supersedes_stale", r3.stdout)
+
+    def test_present_on_a_superseding_emission_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            self.assertEqual(_brief(repo, chart_id, prop).returncode, 0)
+            r_re = _run_flowctl(
+                repo, "chart", "reopen", chart_id, "--reason", "more work", "--json"
+            )
+            self.assertEqual(r_re.returncode, 0, r_re.stderr)
+
+            r2 = _brief(repo, chart_id, prop)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertFalse(e2["noop"])
+            self.assertEqual(e2["briefing_id"], "B2")
+            # Array of B-ID strings, in sidecar order.
+            self.assertEqual(e2["supersedes_stale"], ["B1"])
+            self.assertTrue(
+                all(isinstance(x, str) for x in e2["supersedes_stale"]),
+                e2["supersedes_stale"],
+            )
+
+            # R3: per-briefing status stays the capture-readiness source of
+            # truth, and the discriminator does not leak into other envelopes -
+            # `supersedes_stale` reports what THIS invocation did, nothing more.
+            r_show = _run_flowctl(repo, "chart", "show", chart_id, "--json")
+            self.assertEqual(r_show.returncode, 0, r_show.stderr)
+            self.assertNotIn("supersedes_stale", r_show.stdout)
+            self.assertEqual(json.loads(r_show.stdout)["result"]["briefing_count"], 2)
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(
+                [b["status"] for b in side["briefings"]], ["stale", "final"]
+            )
+            self.assertNotIn("supersedes_stale", side["briefings"][1])
+
+            # The retry that answers with B2 carries no discriminator either.
+            r3 = _brief(repo, chart_id, prop)
+            self.assertEqual(r3.returncode, 0, r3.stderr + r3.stdout)
+            e3 = json.loads(r3.stdout)["result"]
+            self.assertTrue(e3["noop"])
+            self.assertEqual(e3["briefing_id"], "B2")
+            self.assertNotIn("supersedes_stale", e3)
+
+    def test_human_output_reports_the_superseding_emission(self) -> None:
+        # The bug report's complaint was the terminal output: `status=<val>
+        # (noop)` told the operator nothing about what actually happened.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r1 = _run_flowctl(
+                repo, "chart", "briefing", chart_id, "--proposal-file", str(prop)
+            )
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            # Ordinary output is unchanged - no discriminator anywhere.
+            self.assertIn(f"{chart_id} briefing B1 status=final\n", r1.stdout)
+            self.assertNotIn("supersedes", r1.stdout)
+
+            r_re = _run_flowctl(
+                repo, "chart", "reopen", chart_id, "--reason", "more work", "--json"
+            )
+            self.assertEqual(r_re.returncode, 0, r_re.stderr)
+
+            r2 = _run_flowctl(
+                repo, "chart", "briefing", chart_id, "--proposal-file", str(prop)
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            self.assertIn(
+                f"{chart_id} briefing B2 status=final (supersedes stale B1)\n",
+                r2.stdout,
+            )
+            self.assertIn("chart status -> done via B2", r2.stdout)
+
+
+class TestDraftRecomputedAfterReopen(unittest.TestCase):
+    """R7: draft-vs-final is decided per invocation from the live chart.
+
+    `reopen` flattens `draft` and `final` alike to `stale`, so a stored status
+    can never tell the two apart afterwards - inheriting one would silently
+    promote a forced draft to final, or demote a final to draft.
+    """
+
+    def test_staled_forced_draft_goes_final_only_when_briefable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, d1, d2 = _forced_draft_then_abandon_reopen(repo)
+
+            # Snapshot AFTER the reopen: settling anything from here would move
+            # the fingerprint on its own and the retry below would mint for the
+            # ordinary reason instead of the epoch.
+            ledger_after_reopen = _ledger_snapshot(flow, chart_id)
+
+            r = _brief(repo, chart_id, prop, force=True)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            e = json.loads(r.stdout)["result"]
+            self.assertFalse(e["noop"])
+            self.assertEqual(e["briefing_id"], "B2")
+            # Recomputed, not inherited: the chart is still unbriefable.
+            self.assertEqual(e["status"], "draft")
+            self.assertEqual(e["chart_status"], "open")
+            self.assertFalse(e["transitioned_done"])
+            self.assertEqual(e["supersedes_stale"], ["B1"])
+            self.assertEqual(_ledger_snapshot(flow, chart_id), ledger_after_reopen)
+
+            # ...unless the chart is genuinely briefable: resolve the last open
+            # decision and an ordinary, unforced emission reaches final.
+            _resolve(repo, d2["id"], "settled after the reopen")
+            prop_all = _proposal(
+                repo,
+                "prop-all.json",
+                [{"key": "1", "rationale": "whole map", "decisions": [d1["id"], d2["id"]]}],
+            )
+            r2 = _brief(repo, chart_id, prop_all)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertEqual(e2["briefing_id"], "B3")
+            self.assertEqual(e2["status"], "final")
+            self.assertEqual(e2["chart_status"], "done")
+            self.assertTrue(e2["transitioned_done"])
+            # B2 is a live draft, not stale, so it is not listed.
+            self.assertEqual(e2["supersedes_stale"], ["B1"])
+
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(
+                [b["status"] for b in side["briefings"]], ["stale", "draft", "final"]
+            )
+
+    def test_staled_final_does_not_make_a_forced_emission_final(self) -> None:
+        # The other direction: a stale predecessor that WAS final must not lend
+        # its status to an emission on a chart that is no longer briefable.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            self.assertEqual(json.loads(r1.stdout)["result"]["status"], "final")
+
+            r_re = _run_flowctl(
+                repo, "chart", "reopen", chart_id, "--reason", "one more question", "--json"
+            )
+            self.assertEqual(r_re.returncode, 0, r_re.stderr)
+            self.assertEqual(_chart_json(flow, chart_id)["briefings"][0]["status"], "stale")
+
+            # A new open decision makes the chart unbriefable again.
+            _add_decision(repo, chart_id, "Newly opened", "research")
+
+            r2 = _brief(repo, chart_id, prop, force=True)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertEqual(e2["briefing_id"], "B2")
+            self.assertEqual(e2["status"], "draft")
+            self.assertEqual(e2["chart_status"], "open")
+            self.assertFalse(e2["transitioned_done"])
+            self.assertEqual(e2["supersedes_stale"], ["B1"])
+            self.assertEqual(_chart_json(flow, chart_id)["status"], "open")
+
+
+class TestReopenSourceStateAgnostic(unittest.TestCase):
+    """R8: the fix does not care which terminal state the reopen came from, and
+    it repeats - a second reopen mints again rather than re-matching."""
+
+    def test_abandoned_source_mints_a_draft_b2_not_a_final(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            # open chart with an UNRESOLVED decision -> `briefing --force` mints
+            # draft B1, chart stays open -> abandon -> reopen (asserted inside).
+            chart_id, prop, _d1, _d2 = _forced_draft_then_abandon_reopen(repo)
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(side["status"], "open")
+            self.assertEqual(side["briefings"][0]["status"], "stale")
+            ledger_after_reopen = _ledger_snapshot(flow, chart_id)
+
+            # `briefing --force` with the IDENTICAL proposal.
+            r = _brief(repo, chart_id, prop, force=True)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            e = json.loads(r.stdout)["result"]
+            self.assertFalse(e["noop"])
+            self.assertEqual(e["briefing_id"], "B2")
+            self.assertEqual(e["status"], "draft")
+            self.assertEqual(e["chart_status"], "open")
+            self.assertEqual(e["supersedes_stale"], ["B1"])
+            # Same ledger on both sides of the emission: the new B-ID came from
+            # the reopen epoch, not from something settled in between.
+            self.assertEqual(_ledger_snapshot(flow, chart_id), ledger_after_reopen)
+
+            side = _chart_json(flow, chart_id)
+            self.assertEqual([b["status"] for b in side["briefings"]], ["stale", "draft"])
+            self.assertEqual(side["status"], "open")
+
+    def test_second_reopen_mints_b3_rather_than_rematching_b2(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            e1 = json.loads(r1.stdout)["result"]
+            self.assertEqual(e1["briefing_id"], "B1")
+
+            r_re1 = _run_flowctl(
+                repo, "chart", "reopen", chart_id, "--reason", "first pass", "--json"
+            )
+            self.assertEqual(r_re1.returncode, 0, r_re1.stderr)
+            r2 = _brief(repo, chart_id, prop)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertEqual(e2["briefing_id"], "B2")
+            self.assertEqual(e2["status"], "final")
+            self.assertEqual(e2["chart_status"], "done")
+
+            # Second round trip, identical proposal throughout.
+            r_re2 = _run_flowctl(
+                repo, "chart", "reopen", chart_id, "--reason", "second pass", "--json"
+            )
+            self.assertEqual(r_re2.returncode, 0, r_re2.stderr)
+            # B1 was already stale; only B2 transitions here.
+            self.assertEqual(
+                json.loads(r_re2.stdout)["result"]["staled_briefings"], ["B2"]
+            )
+            ledger_after_second_reopen = _ledger_snapshot(flow, chart_id)
+
+            r3 = _brief(repo, chart_id, prop)
+            self.assertEqual(r3.returncode, 0, r3.stderr + r3.stdout)
+            e3 = json.loads(r3.stdout)["result"]
+            self.assertFalse(e3["noop"])
+            self.assertEqual(e3["briefing_id"], "B3")
+            self.assertEqual(e3["status"], "final")
+            self.assertEqual(e3["chart_status"], "done")
+            self.assertTrue(e3["transitioned_done"])
+            self.assertEqual(e3["supersedes_stale"], ["B1", "B2"])
+            self.assertNotIn(e3["fingerprint"], (e1["fingerprint"], e2["fingerprint"]))
+            self.assertEqual(
+                _ledger_snapshot(flow, chart_id), ledger_after_second_reopen
+            )
+
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(
+                [b["status"] for b in side["briefings"]], ["stale", "stale", "final"]
+            )
 
 
 class TestEvidenceFingerprint(unittest.TestCase):

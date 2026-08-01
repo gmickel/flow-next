@@ -15124,7 +15124,7 @@ def emit_chart_briefing(
 
     run_chart_transaction(flow_dir, "chart.briefing", mutations)
 
-    return {
+    result = {
         "id": chart_id,
         "briefing_id": briefing_id,
         "status": briefing_status,
@@ -15137,6 +15137,25 @@ def emit_chart_briefing(
         "paths": briefing_rec["paths"],
         "unresolved": unresolved if briefing_status == "draft" else None,
     }
+    # fn-154: say what this invocation did when it supersedes stale predecessors
+    # (the post-reopen case). PRESENCE is the discriminator - a consumer keys on
+    # the field existing - so the key is omitted, never emitted empty, on every
+    # other path: idempotent retries, first emissions, and error envelopes stay
+    # byte-identical to what they were before this change.
+    #
+    # Not named `outcome`: that term is already bound to the chart's stated goal
+    # (`chart create --outcome`, the `## Outcome` heading).
+    #
+    # This reports the invocation, it does NOT replace per-briefing `status` in
+    # the sidecar, which stays the single source of truth for capture-readiness.
+    superseded_stale = [
+        str(b["id"])
+        for b in existing
+        if isinstance(b, dict) and b.get("status") == "stale" and b.get("id")
+    ]
+    if superseded_stale:
+        result["supersedes_stale"] = superseded_stale
+    return result
 
 
 def reopen_chart(flow_dir: Path, chart_id: str, reason: str) -> dict:
@@ -24304,7 +24323,13 @@ def cmd_chart_briefing(args: argparse.Namespace) -> None:
         bid = out.get("briefing_id")
         st = out.get("status")
         noop = " (noop)" if out.get("noop") else ""
-        print(f"{out.get('id')} briefing {bid} status={st}{noop}")
+        # A superseding emission says so on the same line: without it a terminal
+        # user reading `status=final` after a reopen cannot tell a fresh briefing
+        # from the stale echo this fix removed (fn-154). Absent on every other
+        # path, so ordinary output is unchanged.
+        stale_ids = out.get("supersedes_stale") or []
+        sup = f" (supersedes stale {', '.join(stale_ids)})" if stale_ids else ""
+        print(f"{out.get('id')} briefing {bid} status={st}{noop}{sup}")
         if out.get("transitioned_done"):
             print(f"chart status -> done via {bid}")
         paths = out.get("paths") or {}
