@@ -2,7 +2,11 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.13.1] - 2026-08-01
+
+Chart's entry condition now matches the test it was always applying, so a
+direction with no finish line gets an honest refusal and a route instead of a
+map that can never close.
 
 ### Changed
 
