@@ -12,6 +12,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
 sys.path.insert(0, str(ROOT / "scripts"))
 FLOWCTL_PY = ROOT / "scripts" / "flowctl.py"
 
@@ -166,6 +168,30 @@ def _brief(
 
 def _chart_json(flow: Path, chart_id: str) -> dict:
     return json.loads((flow / "charts" / f"{chart_id}.json").read_text(encoding="utf-8"))
+
+
+def _ledger_snapshot(flow: Path, chart_id: str) -> dict:
+    """Every decision-state input the briefing fingerprint hashes.
+
+    Chart body, the compact entries chart_decision_revision covers, and the
+    decision records _briefing_evidence_digest loads. Comparing two snapshots
+    proves nothing was settled between two emissions - without that, a test
+    that mints a new briefing after a reopen may only have moved the ledger.
+    """
+    charts = flow / "charts"
+    side = json.loads((charts / f"{chart_id}.json").read_text(encoding="utf-8"))
+    snap = {
+        "chart.md": (charts / f"{chart_id}.md").read_text(encoding="utf-8"),
+        "id": side.get("id"),
+        "title": side.get("title"),
+        "outcome": side.get("outcome"),
+        "decisions": side.get("decisions"),
+        "parked_questions": side.get("parked_questions"),
+    }
+    for p in sorted((charts / chart_id).glob("*")):
+        if p.is_file():
+            snap[f"record/{p.name}"] = p.read_text(encoding="utf-8")
+    return snap
 
 
 def _ready_single_cluster(repo: Path) -> tuple[str, Path, dict, dict]:
@@ -406,6 +432,178 @@ class TestFingerprintVersioning(unittest.TestCase):
             self.assertEqual(e3["status"], "final")
             self.assertNotEqual(e3["fingerprint"], fp1)
             self.assertTrue(e3["transitioned_done"])
+
+
+class TestReopenEpochFingerprint(unittest.TestCase):
+    """fn-154: a reopen is a new briefing epoch.
+
+    Before the fix, `reopen` staled every briefing but moved nothing the
+    fingerprint hashed, so re-briefing the same proposal over an untouched
+    ledger echoed the stale briefing back with noop and left the operator on a
+    briefable chart with no capture-ready briefing.
+    """
+
+    def test_reopen_then_identical_brief_mints_final(self) -> None:
+        # R1: reopen -> brief with the SAME proposal and an untouched ledger
+        # ends on a final briefing.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            e1 = json.loads(r1.stdout)["result"]
+            self.assertEqual(e1["briefing_id"], "B1")
+            self.assertEqual(e1["status"], "final")
+            self.assertEqual(e1["chart_status"], "done")
+
+            r_re = _run_flowctl(
+                repo,
+                "chart",
+                "reopen",
+                chart_id,
+                "--reason",
+                "more work needed",
+                "--json",
+            )
+            self.assertEqual(r_re.returncode, 0, r_re.stderr)
+            self.assertIn("B1", json.loads(r_re.stdout)["result"]["staled_briefings"])
+
+            # Snapshot AFTER the reopen: settling anything from here would move
+            # the fingerprint on its own and the test would pass without ever
+            # exercising the defect.
+            ledger_after_reopen = _ledger_snapshot(flow, chart_id)
+
+            r2 = _brief(repo, chart_id, prop)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertFalse(e2["noop"])
+            self.assertEqual(e2["briefing_id"], "B2")
+            self.assertEqual(e2["status"], "final")
+            self.assertEqual(e2["chart_status"], "done")
+            self.assertTrue(e2["transitioned_done"])
+            self.assertNotEqual(e2["fingerprint"], e1["fingerprint"])
+
+            self.assertEqual(_ledger_snapshot(flow, chart_id), ledger_after_reopen)
+
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(len(side["briefings"]), 2)
+            b1, b2 = side["briefings"]
+            self.assertEqual(b1["status"], "stale")
+            self.assertEqual(b2["status"], "final")
+            # Identical decision state across both emissions: the new B-ID came
+            # from the reopen epoch alone.
+            self.assertEqual(b2["chart_revision"], b1["chart_revision"])
+            self.assertEqual(side["status"], "done")
+
+    def test_same_version_retry_still_noops(self) -> None:
+        # R5b: ordinary idempotence regression. This is NOT proof that pre-fix
+        # charts still match - see TestPreFixFingerprintCompatibility for that.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            e1 = json.loads(r1.stdout)["result"]
+
+            r2 = _brief(repo, chart_id, prop)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertTrue(e2["noop"])
+            self.assertEqual(e2["briefing_id"], "B1")
+            self.assertEqual(e2["fingerprint"], e1["fingerprint"])
+            self.assertEqual(len(_chart_json(flow, chart_id)["briefings"]), 1)
+
+
+class TestPreFixFingerprintCompatibility(unittest.TestCase):
+    """R5a: charts written before the epoch change keep their B-IDs."""
+
+    def test_prefix_fixture_still_matches_and_noops(self) -> None:
+        fixture = FIXTURES / "chart_prefix_fingerprint"
+        expected = json.loads((fixture / "expected.json").read_text(encoding="utf-8"))
+        chart_id = expected["chart_id"]
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            # A chart whose stored fingerprint was minted by the pre-fix
+            # algorithm, checked in as bytes. It carries no reopened_at, so the
+            # epoch key must be absent from the hashed blob entirely.
+            shutil.copytree(fixture / "charts", flow / "charts", dirs_exist_ok=True)
+            side_path = flow / "charts" / f"{chart_id}.json"
+            side_before = side_path.read_text(encoding="utf-8")
+
+            r = _brief(repo, chart_id, fixture / "proposal.json")
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            res = json.loads(r.stdout)["result"]
+            self.assertTrue(res["noop"])
+            self.assertEqual(res["briefing_id"], expected["briefing_id"])
+            self.assertEqual(res["fingerprint"], expected["fingerprint"])
+            self.assertEqual(res["status"], expected["briefing_status"])
+            self.assertEqual(res["chart_status"], expected["chart_status"])
+            # An idempotent answer writes nothing.
+            self.assertEqual(side_path.read_text(encoding="utf-8"), side_before)
+
+
+class TestStaleBriefingNeverEchoed(unittest.TestCase):
+    """R6: a stale briefing is never an idempotent answer, match or not."""
+
+    def test_planted_stale_match_mints_instead_of_echoing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            e1 = json.loads(r1.stdout)["result"]
+            self.assertEqual(e1["briefing_id"], "B1")
+
+            # Plant exactly what a pre-fix binary's reopen left behind: chart
+            # open again, B1 staled, and NO reopened_at epoch - so the stored
+            # fingerprint still matches under the current algorithm.
+            side_path = flow / "charts" / f"{chart_id}.json"
+            side = json.loads(side_path.read_text(encoding="utf-8"))
+            side["status"] = "open"
+            for key in ("done_at", "done_by", "done_via_briefing"):
+                side.pop(key, None)
+            side["briefings"][0]["status"] = "stale"
+            side["briefings"][0]["staled_at"] = "2026-01-01T00:00:00Z"
+            side["briefings"][0]["stale_reason"] = "chart reopened by a pre-fix binary"
+            self.assertNotIn("reopened_at", side)
+            side_path.write_text(
+                json.dumps(side, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+
+            r2 = _brief(repo, chart_id, prop)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertFalse(e2["noop"])
+            self.assertEqual(e2["briefing_id"], "B2")
+            self.assertEqual(e2["status"], "final")
+            self.assertEqual(e2["chart_status"], "done")
+            # The fingerprint still matches B1's - the defensive guard, not the
+            # epoch, is what refused the echo here.
+            self.assertEqual(e2["fingerprint"], e1["fingerprint"])
+
+            side_after = _chart_json(flow, chart_id)
+            self.assertEqual(len(side_after["briefings"]), 2)
+            self.assertEqual(side_after["briefings"][0]["status"], "stale")
+            self.assertEqual(side_after["briefings"][1]["status"], "final")
+
+            # And the fresh briefing is what a retry now answers with.
+            r3 = _brief(repo, chart_id, prop)
+            self.assertEqual(r3.returncode, 0, r3.stderr + r3.stdout)
+            e3 = json.loads(r3.stdout)["result"]
+            self.assertTrue(e3["noop"])
+            self.assertEqual(e3["briefing_id"], "B2")
+            self.assertEqual(e3["status"], "final")
 
 
 class TestEvidenceFingerprint(unittest.TestCase):

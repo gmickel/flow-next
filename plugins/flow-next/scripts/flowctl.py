@@ -14264,13 +14264,31 @@ def _briefing_fingerprint(
     chart_revision: str,
     normalized_proposal: dict,
     evidence_digest: str = "",
+    reopened_at: Optional[str] = None,
 ) -> str:
+    payload: dict = {
+        "chart_revision": chart_revision,
+        "proposal": normalized_proposal,
+        "evidence": evidence_digest,
+    }
+    # A reopen is a new epoch: `chart reopen` stales every briefing but changes
+    # nothing else this blob hashes, so without the epoch a post-reopen re-brief
+    # over an untouched ledger matches the stale briefing and gets echoed back
+    # instead of minting one (fn-154).
+    #
+    # `reopened_at` and NOT `chart.status`: status also flips on the
+    # final-briefing -> done transition, which chart_decision_revision
+    # deliberately excludes (see the comment above its blob) so an identical
+    # retry against a done chart stays idempotent. `reopened_at` moves on
+    # reopen and only on reopen, which is exactly the epoch we want.
+    #
+    # The key is OMITTED - not hashed as null - when the chart has never been
+    # reopened, so every chart written before this change hashes byte-identically
+    # and its stored B-IDs keep matching an identical retry after the upgrade.
+    if reopened_at:
+        payload["reopened_at"] = reopened_at
     blob = json.dumps(
-        {
-            "chart_revision": chart_revision,
-            "proposal": normalized_proposal,
-            "evidence": evidence_digest,
-        },
+        payload,
         sort_keys=True,
         separators=(",", ":"),
         default=str,
@@ -14893,7 +14911,10 @@ def emit_chart_briefing(
 
     chart_rev = chart_decision_revision(chart)
     fingerprint = _briefing_fingerprint(
-        chart_rev, normalized, evidence_digest=_briefing_evidence_digest(all_briefs)
+        chart_rev,
+        normalized,
+        evidence_digest=_briefing_evidence_digest(all_briefs),
+        reopened_at=chart.get("reopened_at"),
     )
 
     existing = list(chart.get("briefings") or [])
@@ -14901,6 +14922,17 @@ def emit_chart_briefing(
         if not isinstance(b, dict):
             continue
         if b.get("fingerprint") == fingerprint:
+            # Never hand back a stale briefing as the idempotent answer: it is
+            # superseded by definition and has no valid reading as "the
+            # requested outcome". The reopen epoch above makes a stale match
+            # unreachable through the CLI, but a sidecar written by a pre-fix
+            # binary or edited by hand can still present one - so the invariant
+            # is enforced where briefings are read, not only where they are
+            # written. Fall through to the ordinary emission path (which mints
+            # B(n+1)), or, on a done|abandoned chart, to the guard below that
+            # names the remedy.
+            if b.get("status") == "stale":
+                continue
             return {
                 "id": chart_id,
                 "briefing_id": b.get("id"),

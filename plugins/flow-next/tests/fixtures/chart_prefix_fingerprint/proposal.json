@@ -1,0 +1,13 @@
+{
+  "clusters": [
+    {
+      "key": "1",
+      "rationale": "Single captureable surface",
+      "decisions": [
+        "fn-1.D1",
+        "fn-1.D2"
+      ]
+    }
+  ],
+  "shared_context": []
+}

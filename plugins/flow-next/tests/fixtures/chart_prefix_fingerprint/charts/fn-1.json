@@ -1,0 +1,88 @@
+{
+  "briefings": [
+    {
+      "chart_revision": "c7d200ea691221ff7e6dde8914a351eacf3a31798969f2d94480f52b72824e09",
+      "clusters": [
+        {
+          "decisions": [
+            "fn-1.D1",
+            "fn-1.D2"
+          ],
+          "key": "1",
+          "latest_path": ".flow/charts/fn-1-briefing.md",
+          "path": ".flow/charts/fn-1-briefing-B1.md",
+          "rationale": "Single captureable surface"
+        }
+      ],
+      "created": "2026-08-01T16:24:26.191499Z",
+      "created_by": "chart-test@example.com",
+      "fingerprint": "a1d994f6a91613602336f7db7920c0d931b1c3562c2e3557c427fe2296fbbbb6",
+      "force": false,
+      "id": "B1",
+      "paths": {
+        "index": ".flow/charts/fn-1-briefing-B1.md",
+        "latest_index": ".flow/charts/fn-1-briefing.md"
+      },
+      "shared_context": [],
+      "status": "final"
+    }
+  ],
+  "claim_events": [
+    {
+      "actor": "chart-test@example.com",
+      "briefing": "B1",
+      "chart": "fn-1",
+      "kind": "briefing_done",
+      "timestamp": "2026-08-01T16:24:26.191499Z"
+    }
+  ],
+  "created": "2026-08-01T16:24:24.692713Z",
+  "decisions": [
+    {
+      "attendance": "unattended",
+      "blocked_by": [],
+      "claimed_at": null,
+      "claimed_by": null,
+      "depends_on": [],
+      "id": "fn-1.D1",
+      "record_path": ".flow/charts/fn-1/1.md",
+      "status": "resolved",
+      "title": "Storage choice",
+      "type": "research"
+    },
+    {
+      "attendance": "unattended",
+      "blocked_by": [],
+      "claimed_at": null,
+      "claimed_by": null,
+      "depends_on": [],
+      "id": "fn-1.D2",
+      "record_path": ".flow/charts/fn-1/2.md",
+      "status": "resolved",
+      "title": "Auth model",
+      "type": "research"
+    }
+  ],
+  "done_at": "2026-08-01T16:24:26.191499Z",
+  "done_by": "chart-test@example.com",
+  "done_via_briefing": "B1",
+  "id": "fn-1",
+  "outcome": "Ready to capture",
+  "parked_questions": [],
+  "produced_specs": [],
+  "status": "done",
+  "title": "Tenant isolation",
+  "tracker": {
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "linkState": "unlinked",
+    "projection": {
+      "completed_steps": [],
+      "event_markers": [],
+      "revision": null
+    },
+    "url": null
+  },
+  "updated_at": "2026-08-01T16:24:26.191499Z"
+}
