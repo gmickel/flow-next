@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-155-ci-wall-clock-run-the-unit-suite-at-the",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-01T22:21:43.532518Z",
   "created_at": "2026-08-01T15:11:16.636413Z",
   "default_impl": null,
   "default_review": null,
@@ -13,7 +13,7 @@
     "fn-155-ci-wall-clock-run-the-unit-suite-at-the.2": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-08-01T20:38:29.296834Z",
   "ready": true,
@@ -143,6 +143,20 @@
       "task": null,
       "timestamp": "2026-08-01T22:15:58.412590Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "11bdc7a5e5c889b93dfdaeb3ebbf0277c1bc9937",
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "1c1e430a229fd5c9a8a69af02bd2117bc1fa0e0d1bf8ae104f1278ecd5ac7777",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-08-01T22:21:33.450591Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
@@ -166,5 +180,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T22:15:58.482858Z"
+  "updated_at": "2026-08-01T22:21:43.532672Z"
 }
