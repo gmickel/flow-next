@@ -426,6 +426,85 @@ class TestResolveBasic(unittest.TestCase):
             self.assertEqual(len(side["assets"]), 1)
 
 
+class TestResolveRetryAssets(unittest.TestCase):
+    def test_retry_asset_subset_noop_and_new_asset_rejected(self) -> None:
+        """A retry is identical only when its assets are a subset of the
+        stored set; a NEW asset after resolve is divergent evidence and must
+        be refused (attach-asset also refuses resolved decisions), never
+        silently dropped by a successful no-op."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Proto retry", "prototype")
+            for name in ("proto.md", "extra.md"):
+                (repo / name).write_text("mock\n", encoding="utf-8")
+            _git(repo, "add", "proto.md", "extra.md")
+            _git(repo, "commit", "-q", "-m", "assets")
+            asset_a = {
+                "kind": "path",
+                "reference": "proto.md",
+                "display": "throwaway proto",
+                "revision": "r1",
+            }
+            asset_b = {
+                "kind": "path",
+                "reference": "extra.md",
+                "display": "late evidence",
+                "revision": "r1",
+            }
+            af = _write_answer(repo, "ans.txt", "Ship the layout")
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "resolve",
+                d1["id"],
+                "--answer-file",
+                str(af),
+                "--assets",
+                json.dumps([asset_a]),
+                "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+
+            # Matching-subset retry: same answer, same asset -> no-op.
+            r2 = _run_flowctl(
+                repo,
+                "chart",
+                "resolve",
+                d1["id"],
+                "--answer-file",
+                str(af),
+                "--assets",
+                json.dumps([asset_a]),
+                "--json",
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            self.assertTrue(json.loads(r2.stdout)["result"]["noop"])
+
+            # Same answer + NEW asset: refused, nothing persisted.
+            r3 = _run_flowctl(
+                repo,
+                "chart",
+                "resolve",
+                d1["id"],
+                "--answer-file",
+                str(af),
+                "--assets",
+                json.dumps([asset_a, asset_b]),
+                "--json",
+            )
+            self.assertNotEqual(r3.returncode, 0)
+            err = json.loads(r3.stdout)["error"]
+            self.assertEqual(err["class"], "invalid_state")
+            self.assertEqual(err["code"], "decision_immutable")
+            self.assertEqual(err["details"]["divergent_assets"], ["extra.md"])
+            side = _decision_json(flow, chart_id, 1)
+            self.assertEqual(len(side["assets"]), 1)
+            self.assertEqual(side["assets"][0]["reference"], "proto.md")
+
+
 class TestSupersession(unittest.TestCase):
     def test_supersedes_strikes_ledger_and_cascades(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -291,6 +291,69 @@ class TestChartEnvelopesAndCreate(unittest.TestCase):
             self.assertEqual(ctx.exception.error_class, "conflict")
 
 
+class TestMutationPathValidation(unittest.TestCase):
+    def test_traversal_paths_rejected_atomically(self) -> None:
+        """Traversal relpaths - both separator styles, absolute, drive-letter,
+        '.'/'' components - are refused with no file writes. The backslash
+        strings are DATA here (Windows resolves them as separators; POSIX must
+        still reject them by component)."""
+        bad = [
+            "../escape.md",
+            "a/../../escape.md",
+            "x\\..\\..\\..\\escape.md",
+            "..\\escape.md",
+            "/abs/escape.md",
+            "\\abs\\escape.md",
+            "C:\\escape.md",
+            "a//b.md",
+            "./a.md",
+            "a/./b.md",
+            "",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            (repo / "escape.md").write_text("pristine\n", encoding="utf-8")
+            charts = flow / "charts"
+            for relpath in bad:
+                with self.assertRaises(flowctl.ChartError, msg=relpath) as ctx:
+                    flowctl.run_chart_transaction(
+                        flow, "chart.test", [(relpath, "create", "owned\n")]
+                    )
+                self.assertEqual(
+                    ctx.exception.code, "invalid_mutation_path", relpath
+                )
+                # No transaction residue and no writes landed anywhere.
+                tx_root = flow / "charts" / ".transactions"
+                if tx_root.is_dir():
+                    self.assertEqual(list(tx_root.iterdir()), [], relpath)
+                if charts.is_dir():
+                    stray = [
+                        p for p in charts.rglob("*")
+                        if p.is_file() and p.name == "escape.md"
+                    ]
+                    self.assertEqual(stray, [], relpath)
+            # Repo file outside .flow/charts is untouched.
+            self.assertEqual(
+                (repo / "escape.md").read_text(encoding="utf-8"), "pristine\n"
+            )
+        # A plain nested relpath still works.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            flowctl.run_chart_transaction(
+                flow, "chart.test", [("fn-1/1.json", "create", "{}\n")]
+            )
+            self.assertEqual(
+                (flow / "charts" / "fn-1" / "1.json").read_text(
+                    encoding="utf-8"
+                ),
+                "{}\n",
+            )
+
+
 class TestChartHandledFailure(unittest.TestCase):
     def test_injected_raise_after_first_publish_rolls_back(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

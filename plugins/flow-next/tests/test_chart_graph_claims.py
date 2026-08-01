@@ -728,6 +728,129 @@ class TestClaimReleaseBreakStale(unittest.TestCase):
             self.assertTrue(any(n.get("kind") == "break_stale" for n in notes))
 
 
+class TestSupersedeClaimGuard(unittest.TestCase):
+    def test_supersede_of_claimed_open_target_conflicts(self) -> None:
+        """resolve --supersedes on an OPEN target claimed by another actor is
+        a claim_conflict (release-claim / --break-stale is the sanctioned
+        route); the DEPENDENT cascade keeps its audited claim-clearing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Replacement")
+            d2 = _add_decision(repo, chart_id, "Old direction")
+            d3 = _add_decision(
+                repo, chart_id, "Derived work", depends_on=d2["id"]
+            )
+            for did, actor in ((d2["id"], "bob"), (d3["id"], "carol")):
+                r = _run_flowctl(
+                    repo, "chart", "claim", did, "--json",
+                    env={"FLOW_ACTOR": actor},
+                )
+                self.assertEqual(r.returncode, 0, r.stderr)
+
+            af = repo / "ans.txt"
+            af.write_text("New direction supersedes old", encoding="utf-8")
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "resolve",
+                d1["id"],
+                "--answer-file",
+                str(af),
+                "--supersedes",
+                d2["id"],
+                "--json",
+                env={"FLOW_ACTOR": "alice"},
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["class"], "conflict")
+            self.assertEqual(err["code"], "claim_conflict")
+            self.assertEqual(err["details"]["id"], d2["id"])
+            self.assertEqual(err["details"]["claimed_by"], "bob")
+            self.assertEqual(err["details"]["actor"], "alice")
+            # Nothing applied: target open, claim intact; primary still open.
+            d2_side = json.loads(
+                (flow / "charts" / chart_id / "2.json").read_text(
+                    encoding="utf-8")
+            )
+            self.assertEqual(d2_side["status"], "open")
+            self.assertEqual(d2_side["claimed_by"], "bob")
+            d1_side = json.loads(
+                (flow / "charts" / chart_id / "1.json").read_text(
+                    encoding="utf-8")
+            )
+            self.assertEqual(d1_side["status"], "open")
+
+            # Unclaimed target proceeds; the dependent cascade still clears
+            # carol's claim on D3 (audited exception, by design).
+            rel = _run_flowctl(
+                repo, "chart", "release-claim", d2["id"], "--json",
+                env={"FLOW_ACTOR": "bob"},
+            )
+            self.assertEqual(rel.returncode, 0, rel.stderr)
+            r2 = _run_flowctl(
+                repo,
+                "chart",
+                "resolve",
+                d1["id"],
+                "--answer-file",
+                str(af),
+                "--supersedes",
+                d2["id"],
+                "--json",
+                env={"FLOW_ACTOR": "alice"},
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            d2_side = json.loads(
+                (flow / "charts" / chart_id / "2.json").read_text(
+                    encoding="utf-8")
+            )
+            self.assertEqual(d2_side["status"], "superseded")
+            d3_side = json.loads(
+                (flow / "charts" / chart_id / "3.json").read_text(
+                    encoding="utf-8")
+            )
+            self.assertEqual(d3_side["status"], "open")
+            self.assertIsNone(d3_side["claimed_by"])
+
+    def test_supersede_same_actor_claim_proceeds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Replacement")
+            d2 = _add_decision(repo, chart_id, "Old direction")
+            r = _run_flowctl(
+                repo, "chart", "claim", d2["id"], "--json",
+                env={"FLOW_ACTOR": "alice"},
+            )
+            self.assertEqual(r.returncode, 0, r.stderr)
+            af = repo / "ans.txt"
+            af.write_text("Alice replaces her own work", encoding="utf-8")
+            r2 = _run_flowctl(
+                repo,
+                "chart",
+                "resolve",
+                d1["id"],
+                "--answer-file",
+                str(af),
+                "--supersedes",
+                d2["id"],
+                "--json",
+                env={"FLOW_ACTOR": "alice"},
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            d2_side = json.loads(
+                (flow / "charts" / chart_id / "2.json").read_text(
+                    encoding="utf-8")
+            )
+            self.assertEqual(d2_side["status"], "superseded")
+
+
 class TestParkQuestion(unittest.TestCase):
     def test_park_idempotent_remove_and_body_normalized(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

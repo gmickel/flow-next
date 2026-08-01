@@ -10806,6 +10806,35 @@ def recover_chart_transactions(flow_dir: Path) -> list[str]:
     return recovered
 
 
+def _validate_chart_mutation_relpath(charts: Path, relpath: str) -> None:
+    """Reject traversal and absolute mutation paths with platform semantics.
+
+    Components are validated across BOTH separators (Windows resolves
+    backslashes as path separators, so a '/'-only split misses a
+    backslash-written dot-dot traversal), and the resolved target must stay
+    under the charts directory.
+    """
+    def _reject() -> None:
+        raise ChartError(
+            "validation",
+            "invalid_mutation_path",
+            f"Invalid mutation path: {relpath}",
+            details={"relpath": relpath},
+        )
+
+    if not relpath or relpath.startswith(("/", "\\")):
+        _reject()
+    for comp in re.split(r"[/\\]", relpath):
+        # Empty components, '.'/'..', and drive-letter colons are all
+        # rejected regardless of host platform.
+        if comp in ("", ".", "..") or ":" in comp:
+            _reject()
+    charts_res = charts.resolve()
+    target = (charts_res / relpath).resolve()
+    if target == charts_res or not target.is_relative_to(charts_res):
+        _reject()
+
+
 def _begin_chart_transaction(
     flow_dir: Path,
     command: str,
@@ -10818,6 +10847,10 @@ def _begin_chart_transaction(
     """
     charts = charts_dir(flow_dir)
     charts.mkdir(parents=True, exist_ok=True)
+    # Validate every relpath before any journal/staging work so a refused
+    # mutation set leaves no transaction residue behind.
+    for relpath, _op, _content in mutations:
+        _validate_chart_mutation_relpath(charts, relpath)
     tx_root = chart_transactions_dir(flow_dir)
     tx_root.mkdir(parents=True, exist_ok=True)
     txn_id = f"{int(datetime.now(timezone.utc).timestamp() * 1000):x}-{uuid.uuid4().hex[:12]}"
@@ -10829,13 +10862,6 @@ def _begin_chart_transaction(
     pre_state: dict[str, dict] = {}
     mut_records: list[dict] = []
     for relpath, op, _content in mutations:
-        if ".." in relpath.split("/"):
-            raise ChartError(
-                "validation",
-                "invalid_mutation_path",
-                f"Invalid mutation path: {relpath}",
-                details={"relpath": relpath},
-            )
         target = charts / relpath
         exists = target.is_file()
         entry: dict[str, Any] = {"exists": exists}
@@ -13165,6 +13191,33 @@ def resolve_chart_decision(
                 canonicalize_decision_id(s, chart_id=chart_id)
                 for s in (supersedes or [])
             ]
+            # A retry is identical only when its assets are a subset of the
+            # stored set - a new or changed asset is divergent evidence that
+            # can never be attached afterward (attach-asset refuses resolved
+            # decisions), so a silent no-op would drop it.
+            stored_assets = list(full.get("assets") or [])
+            divergent_assets = [
+                a.get("reference") or a.get("display") or a.get("kind")
+                for a in incoming_assets
+                if (
+                    (m := _find_matching_asset(stored_assets, a)) is None
+                    or not _assets_equivalent(m, a)
+                )
+            ]
+            if divergent_assets:
+                raise ChartError(
+                    "invalid_state",
+                    "decision_immutable",
+                    f"Decision {did} is already resolved; retry supplies "
+                    "new or changed assets and resolved decisions are "
+                    "immutable (evidence cannot be attached post-resolve)",
+                    details={
+                        "id": did,
+                        "status": status,
+                        "existing_gist": existing_gist,
+                        "divergent_assets": divergent_assets,
+                    },
+                )
             if sorted(existing_sup) == sorted(want_sup) or not want_sup:
                 return {
                     "id": did,
@@ -13285,6 +13338,23 @@ def resolve_chart_decision(
                 "(legal: open|resolved -> superseded)",
                 details={"id": s, "status": st},
             )
+        # Direct supersession of an OPEN target another actor holds is a
+        # conflict, matching the primary resolve path - the dependent cascade
+        # keeps its audited claim-clearing, but a named target is terminated
+        # outright and needs the claim owner (or an explicit stale break).
+        if st == "open":
+            s_claim = by_id[s].get("claimed_by") or (
+                full_by_id.get(s) or {}
+            ).get("claimed_by")
+            if s_claim and s_claim != actor:
+                raise ChartError(
+                    "conflict",
+                    "claim_conflict",
+                    f"Supersede target {s} is claimed by '{s_claim}'; "
+                    "superseding an open decision requires the claim owner "
+                    "(release-claim or --break-stale first)",
+                    details={"id": s, "claimed_by": s_claim, "actor": actor},
+                )
 
     # --- Apply resolution to primary decision ---
     primary = dict(full)
@@ -14139,6 +14209,23 @@ def _parse_briefing_proposal_file(
         ).strip()
         if not key:
             key = str(i)
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", key):
+            raise ChartError(
+                "validation",
+                "proposal_cluster_key_invalid",
+                f"Cluster key '{key}' is invalid - keys become briefing "
+                "file names and must match [A-Za-z0-9_-]{1,64}",
+                details={"key": key, "index": i, "path": str(path)},
+            )
+        if re.fullmatch(r"[Bb][0-9]+", key):
+            raise ChartError(
+                "validation",
+                "proposal_cluster_key_reserved",
+                f"Cluster key '{key}' is reserved - the B<n> namespace "
+                "names versioned briefing indexes "
+                f"({chart_id}-briefing-B<n>.md)",
+                details={"key": key, "index": i, "path": str(path)},
+            )
         if key in keys_seen:
             raise ChartError(
                 "validation",
@@ -14759,6 +14846,19 @@ def emit_chart_briefing(
     )
     if md_path.is_file():
         mutations.insert(1, (f"{chart_id}.md", "update", md_text))
+
+    # Belt-and-braces after reserved-key validation: generated relpaths must
+    # be pairwise distinct - a collision would stage one path twice and let a
+    # cluster body overwrite the immutable versioned index.
+    rels = [m[0] for m in mutations]
+    if len(set(rels)) != len(rels):
+        dupes = sorted({r for r in rels if rels.count(r) > 1})
+        raise ChartError(
+            "validation",
+            "briefing_path_collision",
+            "Briefing artifact paths collide: " + ", ".join(dupes),
+            details={"paths": dupes, "briefing_id": briefing_id},
+        )
 
     run_chart_transaction(flow_dir, "chart.briefing", mutations)
 

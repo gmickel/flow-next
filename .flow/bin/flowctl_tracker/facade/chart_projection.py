@@ -1202,7 +1202,22 @@ def project_chart(
                 def _drop(t: dict, _key=key):
                     return ledger_drop(t, key=_key)
 
-                locked_subject_write(flow_dir, "decision", did, _drop)
+                dropped = locked_subject_write(flow_dir, "decision", did, _drop)
+                if isinstance(dropped, TrackerError):
+                    # The native edge is gone but the ledger entry survived.
+                    # Recording success would freeze the stale entry: a later
+                    # re-add of the same edge is suppressed by ledger_has and
+                    # never re-created remotely. Partial failure instead: no
+                    # marker, so the retry re-runs removal (the provider
+                    # reports already_absent) and lands the ledger drop.
+                    return fail_result(
+                        dropped, completed=completed, statuses=statuses,
+                        flow_dir=flow_dir,
+                        spec_id=subject_marker_token("chart", chart_id),
+                        event=event, tracker_id=chart_tracker.get("id"),
+                        transport=provider,
+                        degraded=collect_degraded(*degraded_parts),
+                    )
 
     # --- parent rollup refresh ---
     # Claim/release may refresh owned block/counts but never masquerade as

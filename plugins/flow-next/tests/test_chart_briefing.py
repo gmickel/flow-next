@@ -17,6 +17,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -549,6 +550,80 @@ class TestProposalDuplicateClusterKey(unittest.TestCase):
             err = json.loads(r.stdout)["error"]
             self.assertEqual(err["code"], "proposal_duplicate_cluster_key")
             self.assertEqual(err["details"]["key"], "core")
+
+
+class TestClusterKeyNamespace(unittest.TestCase):
+    def test_reserved_and_invalid_cluster_keys_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, _prop, d1, d2 = _ready_single_cluster(repo)
+            # 'B1' would make the cluster path equal the immutable versioned
+            # index path fn-N-briefing-B1.md; separators/traversal escape the
+            # generated-path namespace entirely.
+            cases = [
+                ("B1", "proposal_cluster_key_reserved"),
+                ("b7", "proposal_cluster_key_reserved"),
+                ("x/y", "proposal_cluster_key_invalid"),
+                ("..", "proposal_cluster_key_invalid"),
+            ]
+            for i, (key, code) in enumerate(cases):
+                prop = _proposal(
+                    repo,
+                    f"key-{i}.json",
+                    [
+                        {"key": key, "rationale": "first", "decisions": [d1["id"]]},
+                        {"key": "ok", "rationale": "second", "decisions": [d2["id"]]},
+                    ],
+                )
+                r = _brief(repo, chart_id, prop)
+                self.assertNotEqual(r.returncode, 0, key)
+                err = json.loads(r.stdout)["error"]
+                self.assertEqual(err["code"], code, key)
+                self.assertEqual(err["details"]["key"], key)
+            # Nothing was emitted for any refused proposal.
+            self.assertFalse(
+                (flow / "charts" / f"{chart_id}-briefing-B1.md").is_file()
+            )
+            self.assertFalse(
+                (flow / "charts" / f"{chart_id}-briefing.md").is_file()
+            )
+
+    def test_emission_relpath_collision_guard(self) -> None:
+        """Belt-and-braces behind key validation: a forged proposal whose
+        generated paths collide is refused before any staging."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, d1, d2 = _ready_single_cluster(repo)
+            forged = {
+                "clusters": [
+                    {
+                        "key": "B1",
+                        "rationale": "collides with versioned index",
+                        "decisions": [d1["id"]],
+                    },
+                    {"key": "ok", "rationale": "fine", "decisions": [d2["id"]]},
+                ],
+                "shared_context": [],
+            }
+            with mock.patch.object(
+                flowctl, "_parse_briefing_proposal_file", return_value=forged
+            ):
+                with self.assertRaises(flowctl.ChartError) as ctx:
+                    flowctl.emit_chart_briefing(flow, chart_id, prop)
+            self.assertEqual(ctx.exception.code, "briefing_path_collision")
+            self.assertIn(
+                f"{chart_id}-briefing-B1.md", ctx.exception.details["paths"]
+            )
+            self.assertFalse(
+                (flow / "charts" / f"{chart_id}-briefing-B1.md").is_file()
+            )
+            self.assertFalse(
+                (flow / "charts" / f"{chart_id}-briefing.md").is_file()
+            )
 
 
 class TestDoneAndMutations(unittest.TestCase):

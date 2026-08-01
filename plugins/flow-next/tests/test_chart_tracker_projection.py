@@ -1736,6 +1736,83 @@ class BlockingLedgerWriteTests(unittest.TestCase):
             )
 
 
+class LedgerDropWriteTests(unittest.TestCase):
+    def test_unblock_ok_drop_fail_is_partial_and_retry_converges(self) -> None:
+        """Native removal succeeded but the ledger-drop sidecar write fails:
+        the event marker must NOT record success (the stale depRelations
+        entry would make ledger_has suppress a later re-add of the same
+        edge). Retry re-runs removal (provider reports already_absent) and
+        lands the drop."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, ln_cfg())
+            stale_key = _seed_linear_linked_rewired(flow)
+            real_write = CP.locked_subject_write
+
+            def decision_writes_fail(flow_dir, kind, subject_id, mutate, **kw):
+                if kind == "decision":
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        "timed out acquiring chart resource lock",
+                        subtype="lock_timeout",
+                    )
+                return real_write(flow_dir, kind, subject_id, mutate, **kw)
+
+            r1 = _ln_linked_refresh_responses()
+            r1["relate-list"] = [_ln_inverse("lin-d1", "rel-9", "lin-d2")]
+            r1["relate-delete"] = _ln_rel_delete()
+            ex1 = fake_execute(r1)
+            with mock.patch.object(
+                CP, "locked_subject_write", decision_writes_fail,
+            ):
+                out1 = CP.project_chart(
+                    flow, "fn-10", event="chart.wire", revision="rev-dd",
+                    evidence="evdd", execute=ex1,
+                )
+            self.assertIsInstance(out1, TrackerError)
+            self.assertIn(
+                "unblock:fn-10.D1-x>fn-10.D2",
+                (out1.details or {}).get("completed_steps") or [],
+            )
+            # No success marker; the stale ledger entry is still present.
+            chart = json.loads(
+                (flow / "charts" / "fn-10.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                chart["tracker"]["projection"]["event_markers"], [],
+            )
+            d1_json = json.loads(
+                (flow / "charts" / "fn-10" / "1.json").read_text(
+                    encoding="utf-8")
+            )
+            entries = d1_json["tracker"].get("depRelations") or []
+            self.assertTrue(any(e.get("key") == stale_key for e in entries))
+
+            # Retry: the native edge is already absent - no second delete,
+            # the drop lands, the marker persists.
+            r2 = _ln_linked_refresh_responses()
+            r2["relate-list"] = [_ln_no_edges("lin-d1")]
+            ex2 = fake_execute(r2)
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.wire", revision="rev-dd",
+                evidence="evdd", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("projected"))
+            self.assertNotIn("relate-delete", [c.op for c in ex2.calls])
+            d1_json = json.loads(
+                (flow / "charts" / "fn-10" / "1.json").read_text(
+                    encoding="utf-8")
+            )
+            self.assertEqual(d1_json["tracker"].get("depRelations") or [], [])
+            chart = json.loads(
+                (flow / "charts" / "fn-10.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(
+                chart["tracker"]["projection"]["event_markers"],
+            )
+
+
 # ---------------------------------------------------------------------------
 # GitLab: an already-landed delete still reconciles the flow:deps body twin
 # ---------------------------------------------------------------------------
