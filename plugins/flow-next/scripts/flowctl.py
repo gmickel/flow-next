@@ -206,6 +206,26 @@ CHART_ERROR_CLASSES = frozenset(
 # Single cross-kind lock leaf under .flow/locks/ for specs + charts.
 NATIVE_FN_ALLOC_LOCK_NAME = "native-fn-id-alloc.lock"
 CHARTS_RESOURCE_LOCK_NAME = "charts-resource.lock"
+# Chart discovery size/claim defaults (fn-135.9).
+CHART_DEFAULT_MAX_DECISIONS = 12
+# Stale-claim age threshold in hours; break-stale requires age >= this.
+CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS = 24
+CHART_DECISION_TYPES = frozenset(
+    {"research", "probe", "eval", "prototype", "interview", "task"}
+)
+# Derived attendance for five types; task requires an explicit value.
+CHART_TYPE_ATTENDANCE = {
+    "research": "unattended",
+    "probe": "unattended",
+    "eval": "unattended",
+    "prototype": "attended",
+    "interview": "attended",
+}
+CHART_ATTENDANCE_VALUES = frozenset({"attended", "unattended"})
+CHART_DECISION_STATUS_VALUES = frozenset(
+    {"open", "resolved", "superseded", "out-of-scope"}
+)
+CHART_CLOSED_STATUSES = frozenset({"resolved", "superseded", "out-of-scope"})
 CONFIG_FILE = "config.json"
 # Post-1.0 layout sentinel. Presence of `.flow/.flow_version` means the repo
 # uses the canonical specs/ write path (see get_specs_json_write_dir). Payload
@@ -1359,6 +1379,16 @@ def get_default_config() -> dict:
         # flowctl only stores/serves the knob; the QA stage is host-agent
         # skill wiring (no new subcommand/engine).
         "pipeline": {"qa": "off"},
+        # fn-135.9 — chart discovery size ceiling and stale-claim threshold.
+        # Seeded so `config get chart.maxDecisions` / `chart.claimStaleAfter`
+        # return defaults (NOT null) on a fresh repo via the defaults MERGE.
+        # maxDecisions is a charting-time guard only (later sharpening may
+        # grow past it). claimStaleAfter is hours; break-stale requires age
+        # >= this value and always records actor/prior owner/age/reason.
+        "chart": {
+            "maxDecisions": CHART_DEFAULT_MAX_DECISIONS,
+            "claimStaleAfter": CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS,
+        },
         # fn-68.1 — pilot backlog-mode autonomy gate, seeded so
         # `config get pilot.autonomy` returns the enum string "ready" (NOT
         # null) on a fresh repo via the defaults MERGE. SCALAR STRING-ENUM
@@ -10387,6 +10417,7 @@ def chart_sidecar_data(
         "status": "open",
         "created": ts,
         "decisions": [],
+        "parked_questions": [],
         "briefings": [],
         "tracker": {
             "id": None,
@@ -10394,14 +10425,60 @@ def chart_sidecar_data(
             "url": None,
         },
         "produced_specs": [],
+        "claim_events": [],
+    }
+
+
+def compact_decision_entry(decision: dict) -> dict:
+    """Compact decision metadata for chart sidecars and navigation (no answer/assets)."""
+    return {
+        "id": decision.get("id"),
+        "title": decision.get("title"),
+        "type": decision.get("type"),
+        "attendance": decision.get("attendance"),
+        "status": decision.get("status"),
+        "blocked_by": list(decision.get("blocked_by") or []),
+        "depends_on": list(decision.get("depends_on") or []),
+        "claimed_by": decision.get("claimed_by"),
+        "claimed_at": decision.get("claimed_at"),
+        "record_path": decision.get("record_path"),
     }
 
 
 def compact_chart_metadata(data: dict) -> dict:
-    """Compact show/list metadata (no graph/frontier/claims in task 1)."""
+    """Compact show/list metadata from the chart sidecar only (no decision bodies)."""
     decisions = data.get("decisions") or []
     if not isinstance(decisions, list):
         decisions = []
+    parked = data.get("parked_questions") or []
+    if not isinstance(parked, list):
+        parked = []
+    open_decs = [
+        d
+        for d in decisions
+        if isinstance(d, dict) and d.get("status") == "open"
+    ]
+    closed = [
+        d
+        for d in decisions
+        if isinstance(d, dict) and d.get("status") in CHART_CLOSED_STATUSES
+    ]
+    status_index = {
+        d["id"]: d.get("status")
+        for d in decisions
+        if isinstance(d, dict) and d.get("id")
+    }
+    blocked_open = [
+        d
+        for d in open_decs
+        if _decision_is_blocked(d, status_index)
+    ]
+    claimed_open = [d for d in open_decs if d.get("claimed_by")]
+    remaining = [
+        d for d in open_decs if isinstance(d.get("attendance"), str)
+    ]
+    cost = chart_cost_estimate(remaining)
+    completion = chart_completion_predicate(data)
     return {
         "id": data.get("id"),
         "title": data.get("title"),
@@ -10409,6 +10486,19 @@ def compact_chart_metadata(data: dict) -> dict:
         "status": data.get("status"),
         "created": data.get("created"),
         "decision_count": len(decisions),
+        "open_count": len(open_decs),
+        "resolved_count": sum(
+            1 for d in closed if d.get("status") == "resolved"
+        ),
+        "blocked_count": len(blocked_open),
+        "claimed_count": len(claimed_open),
+        "parked_count": len(parked),
+        "briefable": completion["briefable"],
+        "stuck_reasons": completion["stuck_reasons"],
+        "unattended_count": cost["unattended_count"],
+        "attended_count": cost["attended_count"],
+        "estimated_sessions": cost["estimated_sessions"],
+        "cost_line": cost["cost_line"],
         "briefing_count": len(data.get("briefings") or [])
         if isinstance(data.get("briefings"), list)
         else 0,
@@ -10771,37 +10861,6 @@ def run_chart_transaction(
         ) from e
 
 
-def create_chart_pair(
-    flow_dir: Path,
-    chart_id: str,
-    title: str,
-    outcome: str,
-) -> dict:
-    """Allocate-time publication of a new chart md/json pair (empty ledger).
-
-    Caller must hold the shared native-fn allocation lock and the charts
-    resource lock, and must have already run recovery.
-    """
-    chart_id = canonicalize_chart_id(chart_id)
-    md_path, json_path = chart_pair_paths(flow_dir, chart_id)
-    if md_path.exists() or json_path.exists():
-        raise ChartError(
-            "conflict",
-            "chart_exists",
-            f"Refusing to overwrite existing chart {chart_id}",
-            details={"id": chart_id},
-        )
-    data = chart_sidecar_data(chart_id, title, outcome)
-    md_content = chart_body_text(chart_id, title, outcome)
-    json_content = json.dumps(data, indent=2, sort_keys=True) + "\n"
-    mutations = [
-        (f"{chart_id}.json", "create", json_content),
-        (f"{chart_id}.md", "create", md_content),
-    ]
-    run_chart_transaction(flow_dir, "chart.create", mutations)
-    return data
-
-
 def load_chart_sidecar(flow_dir: Path, chart_id: str) -> dict:
     """Load chart JSON sidecar or raise ChartError not_found/io."""
     chart_id = canonicalize_chart_id(chart_id)
@@ -10860,6 +10919,1391 @@ def list_chart_ids(flow_dir: Path) -> list[str]:
     except OSError:
         return []
     return sorted(ids, key=lambda s: int(s.split("-", 1)[1]))
+
+
+# ---------------------------------------------------------------------------
+# Chart graph, parked questions, frontier, claims (fn-135.9)
+# ---------------------------------------------------------------------------
+
+
+def get_chart_max_decisions() -> int:
+    """Configured charting-time decision ceiling (default 12)."""
+    raw = get_config("chart.maxDecisions", CHART_DEFAULT_MAX_DECISIONS)
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return CHART_DEFAULT_MAX_DECISIONS
+    if n < 1:
+        return CHART_DEFAULT_MAX_DECISIONS
+    return n
+
+
+def get_chart_claim_stale_after_hours() -> float:
+    """Configured stale-claim age threshold in hours (default 24)."""
+    raw = get_config(
+        "chart.claimStaleAfter", CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS
+    )
+    try:
+        n = float(raw)
+    except (TypeError, ValueError):
+        return float(CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS)
+    if n < 0:
+        return float(CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS)
+    return n
+
+
+def decision_record_relpaths(chart_id: str, d_num: int) -> tuple[str, str]:
+    """Journal relpaths (under charts/) for decision md/json."""
+    chart_id = canonicalize_chart_id(chart_id)
+    return (f"{chart_id}/{d_num}.md", f"{chart_id}/{d_num}.json")
+
+
+def decision_record_link(chart_id: str, d_num: int) -> str:
+    chart_id = canonicalize_chart_id(chart_id)
+    return f"{FLOW_DIR}/{CHARTS_DIR}/{chart_id}/{d_num}.md"
+
+
+def decision_body_text(question: str) -> str:
+    """Decision markdown body: only the Question section."""
+    q = (question or "").strip()
+    return f"## Question\n{q}\n"
+
+
+def decision_sidecar_data(
+    chart_id: str,
+    d_num: int,
+    title: str,
+    dtype: str,
+    attendance: str,
+    question: str,
+    *,
+    blocked_by: Optional[list[str]] = None,
+    depends_on: Optional[list[str]] = None,
+    created: Optional[str] = None,
+) -> dict:
+    """Full decision JSON sidecar (answer/assets empty until resolution)."""
+    chart_id = canonicalize_chart_id(chart_id)
+    did = f"{chart_id}.D{d_num}"
+    ts = created or now_iso()
+    return {
+        "id": did,
+        "chart": chart_id,
+        "n": d_num,
+        "title": title,
+        "type": dtype,
+        "attendance": attendance,
+        "status": "open",
+        "question": question,
+        "blocked_by": list(blocked_by or []),
+        "depends_on": list(depends_on or []),
+        "supersedes": [],
+        "superseded_by": None,
+        "claimed_by": None,
+        "claimed_at": None,
+        "claim_note": None,
+        "assets": [],
+        "answer": None,
+        "transition_notes": [],
+        "created": ts,
+        "updated_at": ts,
+        "record_path": decision_record_link(chart_id, d_num),
+    }
+
+
+def derive_decision_attendance(
+    dtype: str, attendance: Optional[str] = None
+) -> str:
+    """Derive or validate attendance for a decision type.
+
+    Five route types derive attendance; task requires an explicit value.
+    """
+    dtype = (dtype or "").strip().lower()
+    if dtype not in CHART_DECISION_TYPES:
+        raise ChartError(
+            "validation",
+            "invalid_decision_type",
+            f"Invalid decision type '{dtype}' "
+            f"(expected one of {', '.join(sorted(CHART_DECISION_TYPES))})",
+            details={"type": dtype},
+        )
+    if dtype == "task":
+        if attendance is None or not str(attendance).strip():
+            raise ChartError(
+                "validation",
+                "attendance_required",
+                "Decision type 'task' requires --attendance attended|unattended",
+                details={"type": "task"},
+            )
+        att = str(attendance).strip().lower()
+        if att not in CHART_ATTENDANCE_VALUES:
+            raise ChartError(
+                "validation",
+                "invalid_attendance",
+                f"Invalid attendance '{attendance}' (expected attended|unattended)",
+                details={"attendance": attendance},
+            )
+        return att
+    derived = CHART_TYPE_ATTENDANCE[dtype]
+    if attendance is not None and str(attendance).strip():
+        att = str(attendance).strip().lower()
+        if att not in CHART_ATTENDANCE_VALUES:
+            raise ChartError(
+                "validation",
+                "invalid_attendance",
+                f"Invalid attendance '{attendance}' (expected attended|unattended)",
+                details={"attendance": attendance},
+            )
+        if att != derived:
+            raise ChartError(
+                "validation",
+                "attendance_mismatch",
+                f"Type '{dtype}' requires attendance '{derived}', got '{att}'",
+                details={"type": dtype, "expected": derived, "got": att},
+            )
+    return derived
+
+
+def normalize_parked_question_body(body: str) -> str:
+    """Collapse whitespace and strip for stable parked-question identity."""
+    if body is None:
+        return ""
+    text = unicodedata.normalize("NFKC", str(body))
+    text = re.sub(r"\s+", " ", text.strip())
+    return text
+
+
+def parked_question_key(body: str) -> str:
+    """Stable key for a parked question (sha256 of normalized body, 16 hex)."""
+    normalized = normalize_parked_question_body(body)
+    if not normalized:
+        raise ChartError(
+            "validation",
+            "empty_parked_question",
+            "Parked question body must be non-empty",
+        )
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def chart_cost_estimate(decisions: list[dict]) -> dict:
+    """Session-cost estimate from attendance fields (never from prose)."""
+    unattended = 0
+    attended = 0
+    for d in decisions:
+        if not isinstance(d, dict):
+            continue
+        att = d.get("attendance")
+        if att == "unattended":
+            unattended += 1
+        elif att == "attended":
+            attended += 1
+    # Unattended routes run in parallel (~1 session batch); attended are serial.
+    sessions = attended + (1 if unattended else 0)
+    total = unattended + attended
+    cost_line = (
+        f"{total} decisions: {unattended} unattended (parallel, ~1 session), "
+        f"{attended} attended (~{attended} sessions). "
+        f"Estimated {sessions} working sessions with you."
+    )
+    return {
+        "decision_count": total,
+        "unattended_count": unattended,
+        "attended_count": attended,
+        "estimated_sessions": sessions,
+        "cost_line": cost_line,
+    }
+
+
+def _decision_is_blocked(decision: dict, status_index: dict[str, str]) -> bool:
+    """True when any blocked_by target is still open (or missing)."""
+    for bid in decision.get("blocked_by") or []:
+        st = status_index.get(bid)
+        if st is None or st == "open":
+            return True
+    return False
+
+
+def _decision_is_claimed(decision: dict) -> bool:
+    return bool(decision.get("claimed_by"))
+
+
+def chart_completion_predicate(data: dict) -> dict:
+    """Briefable only when no open decisions and no parked questions.
+
+    Stuck charts report why (blocked open, claimed open, parked).
+    """
+    decisions = data.get("decisions") or []
+    if not isinstance(decisions, list):
+        decisions = []
+    parked = data.get("parked_questions") or []
+    if not isinstance(parked, list):
+        parked = []
+    status_index = {
+        d["id"]: d.get("status")
+        for d in decisions
+        if isinstance(d, dict) and d.get("id")
+    }
+    open_decs = [
+        d
+        for d in decisions
+        if isinstance(d, dict) and d.get("status") == "open"
+    ]
+    stuck_reasons: list[str] = []
+    blocked = [d for d in open_decs if _decision_is_blocked(d, status_index)]
+    claimed = [d for d in open_decs if _decision_is_claimed(d)]
+    if blocked:
+        stuck_reasons.append(
+            f"{len(blocked)} open decision(s) blocked: "
+            + ", ".join(d["id"] for d in blocked if d.get("id"))
+        )
+    if claimed:
+        stuck_reasons.append(
+            f"{len(claimed)} open decision(s) claimed: "
+            + ", ".join(
+                f"{d['id']} by {d.get('claimed_by')}"
+                for d in claimed
+                if d.get("id")
+            )
+        )
+    unblocked_unclaimed = [
+        d
+        for d in open_decs
+        if not _decision_is_blocked(d, status_index)
+        and not _decision_is_claimed(d)
+    ]
+    if unblocked_unclaimed:
+        stuck_reasons.append(
+            f"{len(unblocked_unclaimed)} open unblocked unclaimed decision(s): "
+            + ", ".join(d["id"] for d in unblocked_unclaimed if d.get("id"))
+        )
+    if parked:
+        stuck_reasons.append(f"{len(parked)} parked open question(s)")
+    briefable = len(open_decs) == 0 and len(parked) == 0
+    return {
+        "briefable": briefable,
+        "stuck_reasons": stuck_reasons,
+        "open_count": len(open_decs),
+        "parked_count": len(parked),
+        "blocked_open_ids": [d["id"] for d in blocked if d.get("id")],
+        "claimed_open_ids": [d["id"] for d in claimed if d.get("id")],
+        "frontier_ids": [d["id"] for d in unblocked_unclaimed if d.get("id")],
+    }
+
+
+def _parse_edge_list(
+    raw: Optional[str],
+    chart_id: str,
+    *,
+    field_name: str,
+) -> list[str]:
+    """Parse a comma-separated edge list into canonical D-IDs (dedupe later)."""
+    if raw is None or not str(raw).strip():
+        return []
+    parts = [p.strip() for p in str(raw).split(",")]
+    out: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        out.append(canonicalize_decision_id(part, chart_id=chart_id))
+    return out
+
+
+def _normalize_edge_refs(
+    refs: list[Any],
+    chart_id: str,
+    *,
+    field_name: str,
+    local_map: Optional[dict[str, str]] = None,
+) -> list[str]:
+    """Normalize edge refs to canonical D-IDs.
+
+    local_map maps provisional labels (D1, 1, local titles unused) to
+    allocated ids during initial-map create.
+    """
+    out: list[str] = []
+    for ref in refs:
+        if ref is None:
+            continue
+        text = str(ref).strip()
+        if not text:
+            continue
+        if local_map is not None:
+            key = text.lower()
+            if key in local_map:
+                out.append(local_map[key])
+                continue
+            bare = _CHART_DID_BARE_RE.fullmatch(key)
+            if bare and bare.group(1) in local_map:
+                out.append(local_map[bare.group(1)])
+                continue
+            dform = f"d{bare.group(1)}" if bare else None
+            if dform and dform in local_map:
+                out.append(local_map[dform])
+                continue
+        out.append(canonicalize_decision_id(text, chart_id=chart_id))
+    return out
+
+
+def validate_chart_graph(
+    decisions: list[dict],
+    *,
+    chart_id: Optional[str] = None,
+) -> None:
+    """Reject missing targets, self-edges, duplicates, and cycles atomically.
+
+    Validates both blocked_by (readiness) and depends_on (premise) graphs.
+    Raises ChartError(invalid_graph, ...) before any write.
+    """
+    if not isinstance(decisions, list):
+        raise ChartError(
+            "invalid_graph",
+            "invalid_decisions",
+            "Chart decisions must be a list",
+        )
+    ids: set[str] = set()
+    for d in decisions:
+        if not isinstance(d, dict) or not d.get("id"):
+            raise ChartError(
+                "invalid_graph",
+                "invalid_decision_entry",
+                "Every decision entry needs an id",
+            )
+        did = d["id"]
+        if did in ids:
+            raise ChartError(
+                "invalid_graph",
+                "duplicate_decision_id",
+                f"Duplicate decision id {did}",
+                details={"id": did},
+            )
+        ids.add(did)
+
+    def _check_edges(field: str) -> dict[str, list[str]]:
+        adj: dict[str, list[str]] = {i: [] for i in ids}
+        for d in decisions:
+            did = d["id"]
+            raw_edges = d.get(field) or []
+            if not isinstance(raw_edges, list):
+                raise ChartError(
+                    "invalid_graph",
+                    "invalid_edge_list",
+                    f"{field} for {did} must be a list",
+                    details={"id": did, "field": field},
+                )
+            seen: set[str] = set()
+            clean: list[str] = []
+            for edge in raw_edges:
+                if not isinstance(edge, str) or not edge:
+                    raise ChartError(
+                        "invalid_graph",
+                        "invalid_edge",
+                        f"Invalid {field} edge on {did}",
+                        details={"id": did, "field": field, "edge": edge},
+                    )
+                if edge == did:
+                    raise ChartError(
+                        "invalid_graph",
+                        "self_edge",
+                        f"Self-edge not allowed: {did} {field} {edge}",
+                        details={"id": did, "field": field, "edge": edge},
+                    )
+                if edge not in ids:
+                    raise ChartError(
+                        "invalid_graph",
+                        "missing_edge_target",
+                        f"Missing {field} target {edge} from {did}",
+                        details={"id": did, "field": field, "edge": edge},
+                    )
+                if edge in seen:
+                    raise ChartError(
+                        "invalid_graph",
+                        "duplicate_edge",
+                        f"Duplicate {field} edge {edge} on {did}",
+                        details={"id": did, "field": field, "edge": edge},
+                    )
+                seen.add(edge)
+                clean.append(edge)
+            d[field] = clean
+            adj[did] = list(clean)
+        # Cycle detection (DFS white/gray/black) on the directed graph.
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {i: WHITE for i in ids}
+
+        def dfs(node: str, stack: list[str]) -> None:
+            color[node] = GRAY
+            stack.append(node)
+            for nxt in adj.get(node) or []:
+                if color[nxt] == GRAY:
+                    cycle = stack[stack.index(nxt) :] + [nxt]
+                    raise ChartError(
+                        "invalid_graph",
+                        "cycle",
+                        f"Cycle in {field}: {' -> '.join(cycle)}",
+                        details={"field": field, "cycle": cycle},
+                    )
+                if color[nxt] == WHITE:
+                    dfs(nxt, stack)
+            stack.pop()
+            color[node] = BLACK
+
+        for node in ids:
+            if color[node] == WHITE:
+                dfs(node, [])
+        return adj
+
+    _check_edges("blocked_by")
+    _check_edges("depends_on")
+
+
+def compute_frontier(data: dict) -> list[dict]:
+    """Open, unblocked, unclaimed decisions in dependency (blocked_by) order."""
+    decisions = [
+        d
+        for d in (data.get("decisions") or [])
+        if isinstance(d, dict) and d.get("id")
+    ]
+    status_index = {d["id"]: d.get("status") for d in decisions}
+    candidates = [
+        d
+        for d in decisions
+        if d.get("status") == "open"
+        and not _decision_is_blocked(d, status_index)
+        and not _decision_is_claimed(d)
+    ]
+    # Topological order among candidates using blocked_by edges that stay
+    # inside the candidate set (usually empty); fall back to allocation order.
+    cand_ids = {d["id"] for d in candidates}
+    indeg = {d["id"]: 0 for d in candidates}
+    adj: dict[str, list[str]] = {d["id"]: [] for d in candidates}
+    for d in candidates:
+        for b in d.get("blocked_by") or []:
+            if b in cand_ids:
+                adj[b].append(d["id"])
+                indeg[d["id"]] += 1
+    # Stable by local number when ties.
+    def _local_n(did: str) -> int:
+        try:
+            return decision_local_number(did)
+        except ChartError:
+            return 0
+
+    ready = sorted(
+        [i for i, deg in indeg.items() if deg == 0],
+        key=_local_n,
+    )
+    ordered_ids: list[str] = []
+    while ready:
+        n = ready.pop(0)
+        ordered_ids.append(n)
+        for m in sorted(adj.get(n) or [], key=_local_n):
+            indeg[m] -= 1
+            if indeg[m] == 0:
+                ready.append(m)
+                ready.sort(key=_local_n)
+    if len(ordered_ids) != len(candidates):
+        # Residual (should not happen after validation); allocation order.
+        ordered_ids = sorted(cand_ids, key=_local_n)
+    by_id = {d["id"]: d for d in candidates}
+    return [
+        {
+            "id": by_id[i]["id"],
+            "title": by_id[i].get("title"),
+            "type": by_id[i].get("type"),
+            "attendance": by_id[i].get("attendance"),
+            "status": by_id[i].get("status"),
+            "blocked_by": list(by_id[i].get("blocked_by") or []),
+            "depends_on": list(by_id[i].get("depends_on") or []),
+            "record_path": by_id[i].get("record_path")
+            or decision_record_link(
+                by_id[i]["id"].rsplit(".", 1)[0],
+                decision_local_number(by_id[i]["id"]),
+            ),
+        }
+        for i in ordered_ids
+        if i in by_id
+    ]
+
+
+def _render_open_questions_section(parked: list[dict]) -> str:
+    """Render ## Open Questions section body (bullets only, no heading)."""
+    if not parked:
+        return ""
+    lines = []
+    for entry in parked:
+        body = entry.get("body") if isinstance(entry, dict) else str(entry)
+        body = normalize_parked_question_body(body or "")
+        if body:
+            lines.append(f"- {body}")
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def _replace_chart_section(body: str, heading: str, new_content: str) -> str:
+    """Replace a ## Section body in a chart map; preserve other sections."""
+    pattern = re.compile(
+        rf"(^##\s+{re.escape(heading)}\s*\n)(.*?)(?=^##\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    content = new_content
+    if content and not content.endswith("\n"):
+        content = content + "\n"
+    # Function replacement: content is literal text, never a template
+    # (a parked question containing backslashes must not expand as backrefs).
+    if pattern.search(body):
+        return pattern.sub(lambda m: m.group(1) + content, body, count=1)
+    # Section missing: append.
+    if not body.endswith("\n"):
+        body += "\n"
+    return body + f"\n## {heading}\n{content}"
+
+
+def load_decision_sidecar(
+    flow_dir: Path, chart_id: str, d_num: int, *, compact: bool = False
+) -> dict:
+    """Load a decision JSON sidecar.
+
+    compact=True still loads the same JSON (metadata lives there) but callers
+    must not request answer/assets fields for navigation; use chart sidecar
+    decisions[] for show/list/frontier instead.
+    """
+    _md, json_path = decision_record_paths(flow_dir, chart_id, d_num)
+    if not json_path.is_file():
+        raise ChartError(
+            "not_found",
+            "decision_not_found",
+            f"Decision not found: {canonicalize_chart_id(chart_id)}.D{d_num}",
+            details={
+                "id": f"{canonicalize_chart_id(chart_id)}.D{d_num}",
+            },
+        )
+    try:
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "io",
+            "decision_invalid_json",
+            f"Decision sidecar invalid JSON: {json_path} ({e})",
+            details={"path": str(json_path)},
+        ) from e
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "decision_unreadable",
+            f"Decision sidecar unreadable: {json_path} ({e})",
+            details={"path": str(json_path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "io",
+            "decision_invalid_json",
+            f"Decision sidecar must be a JSON object: {json_path}",
+            details={"path": str(json_path)},
+        )
+    if compact:
+        return compact_decision_entry(data)
+    return data
+
+
+def _next_decision_number(chart_data: dict) -> int:
+    """Next sequential D-number (max existing + 1); never reuse gaps."""
+    max_n = 0
+    for d in chart_data.get("decisions") or []:
+        if not isinstance(d, dict):
+            continue
+        did = d.get("id")
+        if isinstance(did, str):
+            try:
+                max_n = max(max_n, decision_local_number(did))
+            except ChartError:
+                pass
+        n = d.get("n")
+        if isinstance(n, int):
+            max_n = max(max_n, n)
+    return max_n + 1
+
+
+def _find_decision_entry(chart_data: dict, did: str) -> tuple[int, dict]:
+    decisions = chart_data.get("decisions") or []
+    for i, d in enumerate(decisions):
+        if isinstance(d, dict) and d.get("id") == did:
+            return i, d
+    raise ChartError(
+        "not_found",
+        "decision_not_found",
+        f"Decision not found: {did}",
+        details={"id": did},
+    )
+
+
+def _sidecar_json(data: dict) -> str:
+    return json.dumps(data, indent=2, sort_keys=True) + "\n"
+
+
+def _chart_md_with_parked(chart_id: str, title: str, outcome: str, parked: list) -> str:
+    body = chart_body_text(chart_id, title, outcome)
+    return _replace_chart_section(
+        body, "Open Questions", _render_open_questions_section(parked)
+    )
+
+
+def _apply_parked_to_chart_body(md_text: str, parked: list) -> str:
+    return _replace_chart_section(
+        md_text, "Open Questions", _render_open_questions_section(parked)
+    )
+
+
+def _parse_iso_ts(raw: Optional[str]) -> Optional[datetime]:
+    if not raw or not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _claim_age_hours(claimed_at: Optional[str]) -> Optional[float]:
+    ts = _parse_iso_ts(claimed_at)
+    if ts is None:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    return max(0.0, (now - ts).total_seconds() / 3600.0)
+
+
+def parse_initial_map_file(path: Path) -> dict:
+    """Load and lightly shape an initial-map JSON file."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "initial_map_unreadable",
+            f"Cannot read initial-map file: {path} ({e})",
+            details={"path": str(path)},
+        ) from e
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "validation",
+            "initial_map_invalid_json",
+            f"Initial-map file is not valid JSON: {e}",
+            details={"path": str(path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "validation",
+            "initial_map_invalid",
+            "Initial-map file must be a JSON object",
+            details={"path": str(path)},
+        )
+    decisions = data.get("decisions")
+    if decisions is None:
+        decisions = []
+    if not isinstance(decisions, list):
+        raise ChartError(
+            "validation",
+            "initial_map_invalid_decisions",
+            "initial-map 'decisions' must be a list",
+        )
+    parked = data.get("parked_questions")
+    if parked is None:
+        parked = data.get("parked") or []
+    if not isinstance(parked, list):
+        raise ChartError(
+            "validation",
+            "initial_map_invalid_parked",
+            "initial-map 'parked_questions' must be a list",
+        )
+    return {"decisions": decisions, "parked_questions": parked}
+
+
+def validate_and_build_initial_map(
+    chart_id: str,
+    map_data: dict,
+    *,
+    force_size: bool = False,
+    force_reason: Optional[str] = None,
+) -> dict:
+    """Validate titled decisions/attendance/edges/parked; enforce ceiling.
+
+    Returns a ready-to-persist structure. Refuses over maxDecisions before
+    allocation when force_size is false.
+    """
+    raw_decs = map_data.get("decisions") or []
+    raw_parked = map_data.get("parked_questions") or []
+    ceiling = get_chart_max_decisions()
+    count = len(raw_decs)
+    if count > ceiling and not force_size:
+        raise ChartError(
+            "validation",
+            "max_decisions_exceeded",
+            f"Initial map has {count} decisions; chart.maxDecisions is {ceiling}. "
+            "Narrow the Outcome, split into two charts, or pass "
+            "--force-size --reason after explicit consent.",
+            details={
+                "count": count,
+                "ceiling": ceiling,
+                "maxDecisions": ceiling,
+            },
+        )
+    if count > ceiling and force_size:
+        if not force_reason or not str(force_reason).strip():
+            raise ChartError(
+                "validation",
+                "force_size_reason_required",
+                "--force-size requires --reason",
+                details={"count": count, "ceiling": ceiling},
+            )
+
+    # First pass: allocate provisional D-IDs in file order and derive attendance.
+    local_map: dict[str, str] = {}
+    built: list[dict] = []
+    for i, raw in enumerate(raw_decs, start=1):
+        if not isinstance(raw, dict):
+            raise ChartError(
+                "validation",
+                "invalid_initial_decision",
+                f"Initial decision #{i} must be an object",
+                details={"index": i},
+            )
+        title = (raw.get("title") or "").strip()
+        if not title:
+            raise ChartError(
+                "validation",
+                "title_required",
+                f"Initial decision #{i} requires a title",
+                details={"index": i},
+            )
+        dtype = (raw.get("type") or "").strip().lower()
+        attendance = derive_decision_attendance(dtype, raw.get("attendance"))
+        question = (
+            raw.get("question")
+            or raw.get("body")
+            or title
+        )
+        question = str(question).strip()
+        did = f"{chart_id}.D{i}"
+        local_map[str(i)] = did
+        local_map[f"d{i}"] = did
+        local_map[did.lower()] = did
+        # Optional explicit local id in the map file.
+        if raw.get("id"):
+            local_map[str(raw["id"]).strip().lower()] = did
+        built.append(
+            {
+                "n": i,
+                "id": did,
+                "title": title,
+                "type": dtype,
+                "attendance": attendance,
+                "question": question,
+                "raw_blocked_by": raw.get("blocked_by") or [],
+                "raw_depends_on": raw.get("depends_on") or [],
+            }
+        )
+
+    # Second pass: resolve edges against the local map, then validate graph.
+    decisions_for_graph: list[dict] = []
+    for b in built:
+        blocked = _normalize_edge_refs(
+            list(b["raw_blocked_by"]),
+            chart_id,
+            field_name="blocked_by",
+            local_map=local_map,
+        )
+        depends = _normalize_edge_refs(
+            list(b["raw_depends_on"]),
+            chart_id,
+            field_name="depends_on",
+            local_map=local_map,
+        )
+        decisions_for_graph.append(
+            {
+                "id": b["id"],
+                "title": b["title"],
+                "type": b["type"],
+                "attendance": b["attendance"],
+                "status": "open",
+                "blocked_by": blocked,
+                "depends_on": depends,
+                "n": b["n"],
+                "question": b["question"],
+                "claimed_by": None,
+                "claimed_at": None,
+                "record_path": decision_record_link(chart_id, b["n"]),
+            }
+        )
+    validate_chart_graph(decisions_for_graph, chart_id=chart_id)
+
+    parked_out: list[dict] = []
+    seen_keys: set[str] = set()
+    for raw_q in raw_parked:
+        if isinstance(raw_q, dict):
+            body = raw_q.get("body") or raw_q.get("question") or ""
+        else:
+            body = str(raw_q)
+        body_norm = normalize_parked_question_body(body)
+        if not body_norm:
+            raise ChartError(
+                "validation",
+                "empty_parked_question",
+                "Parked question body must be non-empty",
+            )
+        key = parked_question_key(body_norm)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        parked_out.append(
+            {
+                "key": key,
+                "body": body_norm,
+                "created": now_iso(),
+            }
+        )
+
+    cost = chart_cost_estimate(decisions_for_graph)
+    force_audit = None
+    if count > ceiling and force_size:
+        force_audit = {
+            "actor": get_actor(),
+            "ceiling": ceiling,
+            "count": count,
+            "timestamp": now_iso(),
+            "reason": str(force_reason).strip(),
+        }
+    return {
+        "decisions": decisions_for_graph,
+        "parked_questions": parked_out,
+        "cost": cost,
+        "force_size_audit": force_audit,
+        "ceiling": ceiling,
+    }
+
+
+def create_chart_pair(
+    flow_dir: Path,
+    chart_id: str,
+    title: str,
+    outcome: str,
+    *,
+    initial: Optional[dict] = None,
+) -> dict:
+    """Allocate-time publication of a new chart md/json pair.
+
+    Caller must hold the shared native-fn allocation lock and the charts
+    resource lock, and must have already run recovery. Optional `initial` is
+    the output of validate_and_build_initial_map (decisions + parked + audit).
+    """
+    chart_id = canonicalize_chart_id(chart_id)
+    md_path, json_path = chart_pair_paths(flow_dir, chart_id)
+    if md_path.exists() or json_path.exists():
+        raise ChartError(
+            "conflict",
+            "chart_exists",
+            f"Refusing to overwrite existing chart {chart_id}",
+            details={"id": chart_id},
+        )
+    data = chart_sidecar_data(chart_id, title, outcome)
+    parked: list[dict] = []
+    mutations: list[tuple[str, str, str]] = []
+    if initial:
+        parked = list(initial.get("parked_questions") or [])
+        data["parked_questions"] = parked
+        compact_decs: list[dict] = []
+        for d in initial.get("decisions") or []:
+            d_num = int(d["n"])
+            full = decision_sidecar_data(
+                chart_id,
+                d_num,
+                d["title"],
+                d["type"],
+                d["attendance"],
+                d.get("question") or d["title"],
+                blocked_by=d.get("blocked_by"),
+                depends_on=d.get("depends_on"),
+            )
+            compact_decs.append(compact_decision_entry(full))
+            md_rel, json_rel = decision_record_relpaths(chart_id, d_num)
+            mutations.append(
+                (md_rel, "create", decision_body_text(full["question"]))
+            )
+            mutations.append((json_rel, "create", _sidecar_json(full)))
+        data["decisions"] = compact_decs
+        if initial.get("force_size_audit"):
+            data["force_size_audit"] = initial["force_size_audit"]
+    md_content = _chart_md_with_parked(chart_id, title, outcome, parked)
+    mutations = [
+        (f"{chart_id}.json", "create", _sidecar_json(data)),
+        (f"{chart_id}.md", "create", md_content),
+        *mutations,
+    ]
+    run_chart_transaction(flow_dir, "chart.create", mutations)
+    return data
+
+
+def add_chart_decision(
+    flow_dir: Path,
+    chart_id: str,
+    title: str,
+    dtype: str,
+    *,
+    attendance: Optional[str] = None,
+    question: str = "",
+    blocked_by: Optional[list[str]] = None,
+    depends_on: Optional[list[str]] = None,
+) -> dict:
+    """Allocate next D-ID and publish decision + chart sidecar update."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    if chart.get("status") not in (None, "open"):
+        raise ChartError(
+            "invalid_state",
+            "chart_not_open",
+            f"Chart {chart_id} is {chart.get('status')}; cannot add decisions",
+            details={"id": chart_id, "status": chart.get("status")},
+        )
+    att = derive_decision_attendance(dtype, attendance)
+    title = (title or "").strip()
+    if not title:
+        raise ChartError(
+            "validation",
+            "title_required",
+            "add-decision requires --title",
+        )
+    question = (question or title).strip()
+    d_num = _next_decision_number(chart)
+    blocked = list(blocked_by or [])
+    depends = list(depends_on or [])
+    # Canonicalize edges against this chart.
+    blocked = [
+        canonicalize_decision_id(e, chart_id=chart_id) for e in blocked
+    ]
+    depends = [
+        canonicalize_decision_id(e, chart_id=chart_id) for e in depends
+    ]
+    full = decision_sidecar_data(
+        chart_id,
+        d_num,
+        title,
+        dtype.strip().lower(),
+        att,
+        question,
+        blocked_by=blocked,
+        depends_on=depends,
+    )
+    new_entry = compact_decision_entry(full)
+    proposed = list(chart.get("decisions") or []) + [new_entry]
+    validate_chart_graph(proposed, chart_id=chart_id)
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    # Chart body unchanged on add (ledger is resolution-only); still update
+    # sidecar under the transaction with decision files.
+    md_rel, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (md_rel, "create", decision_body_text(question)),
+        (json_rel, "create", _sidecar_json(full)),
+    ]
+    # Touch chart.md only if present so recovery stays paired; no content change.
+    if md_path.is_file():
+        mutations.insert(
+            1,
+            (
+                f"{chart_id}.md",
+                "update",
+                md_path.read_text(encoding="utf-8"),
+            ),
+        )
+    run_chart_transaction(flow_dir, "chart.add-decision", mutations)
+    return full
+
+
+def park_chart_question(flow_dir: Path, chart_id: str, body: str) -> dict:
+    """Add a normalized parked question; identical key is a no-op."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    body_norm = normalize_parked_question_body(body)
+    key = parked_question_key(body_norm)
+    parked = list(chart.get("parked_questions") or [])
+    for entry in parked:
+        if isinstance(entry, dict) and entry.get("key") == key:
+            return {
+                "key": key,
+                "body": entry.get("body") or body_norm,
+                "created": entry.get("created"),
+                "noop": True,
+            }
+    entry = {"key": key, "body": body_norm, "created": now_iso()}
+    parked.append(entry)
+    chart = dict(chart)
+    chart["parked_questions"] = parked
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if not md_path.is_file():
+        raise ChartError(
+            "io",
+            "chart_body_missing",
+            f"Chart body missing for {chart_id}",
+            details={"id": chart_id},
+        )
+    new_md = _apply_parked_to_chart_body(
+        md_path.read_text(encoding="utf-8"), parked
+    )
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (f"{chart_id}.md", "update", new_md),
+    ]
+    run_chart_transaction(flow_dir, "chart.park-question", mutations)
+    return {"key": key, "body": body_norm, "created": entry["created"], "noop": False}
+
+
+def remove_chart_question(
+    flow_dir: Path, chart_id: str, question_key: str
+) -> dict:
+    """Remove a parked question by stable key; fails if absent."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    key = (question_key or "").strip()
+    if not key:
+        raise ChartError(
+            "validation",
+            "question_key_required",
+            "remove-question requires --question <key>",
+        )
+    parked = list(chart.get("parked_questions") or [])
+    new_parked = [
+        e
+        for e in parked
+        if not (isinstance(e, dict) and e.get("key") == key)
+    ]
+    if len(new_parked) == len(parked):
+        raise ChartError(
+            "not_found",
+            "parked_question_not_found",
+            f"Parked question key not found: {key}",
+            details={"key": key, "chart_id": chart_id},
+        )
+    removed = next(
+        e for e in parked if isinstance(e, dict) and e.get("key") == key
+    )
+    chart = dict(chart)
+    chart["parked_questions"] = new_parked
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if not md_path.is_file():
+        raise ChartError(
+            "io",
+            "chart_body_missing",
+            f"Chart body missing for {chart_id}",
+            details={"id": chart_id},
+        )
+    new_md = _apply_parked_to_chart_body(
+        md_path.read_text(encoding="utf-8"), new_parked
+    )
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (f"{chart_id}.md", "update", new_md),
+    ]
+    run_chart_transaction(flow_dir, "chart.remove-question", mutations)
+    return {
+        "key": key,
+        "body": removed.get("body"),
+        "removed": True,
+    }
+
+
+def wire_chart_decision(
+    flow_dir: Path,
+    did: str,
+    *,
+    blocked_by: Optional[list[str]] = None,
+    depends_on: Optional[list[str]] = None,
+    replace_blocked: bool = False,
+    replace_depends: bool = False,
+) -> dict:
+    """Atomically replace validated graph edges for one decision."""
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    idx, entry = _find_decision_entry(chart, did)
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    new_blocked = (
+        list(blocked_by)
+        if replace_blocked
+        else list(entry.get("blocked_by") or full.get("blocked_by") or [])
+    )
+    new_depends = (
+        list(depends_on)
+        if replace_depends
+        else list(entry.get("depends_on") or full.get("depends_on") or [])
+    )
+    new_blocked = [
+        canonicalize_decision_id(e, chart_id=chart_id) for e in new_blocked
+    ]
+    new_depends = [
+        canonicalize_decision_id(e, chart_id=chart_id) for e in new_depends
+    ]
+    proposed = [dict(d) if isinstance(d, dict) else d for d in (chart.get("decisions") or [])]
+    proposed[idx] = dict(proposed[idx])
+    proposed[idx]["blocked_by"] = new_blocked
+    proposed[idx]["depends_on"] = new_depends
+    validate_chart_graph(proposed, chart_id=chart_id)
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    full = dict(full)
+    full["blocked_by"] = new_blocked
+    full["depends_on"] = new_depends
+    full["updated_at"] = now_iso()
+    md_rel, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.wire-decision", mutations)
+    return compact_decision_entry(full)
+
+
+def claim_chart_decision(flow_dir: Path, did: str) -> dict:
+    """Atomic claim; does not change decision status. Conflicts if owned."""
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    idx, entry = _find_decision_entry(chart, did)
+    if entry.get("status") != "open":
+        raise ChartError(
+            "invalid_state",
+            "decision_not_open",
+            f"Cannot claim {did}: status is {entry.get('status')}",
+            details={"id": did, "status": entry.get("status")},
+        )
+    actor = get_actor()
+    existing = entry.get("claimed_by")
+    if existing and existing != actor:
+        raise ChartError(
+            "conflict",
+            "claim_conflict",
+            f"Decision {did} is claimed by '{existing}'",
+            details={
+                "id": did,
+                "claimed_by": existing,
+                "claimed_at": entry.get("claimed_at"),
+                "actor": actor,
+            },
+        )
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    ts = entry.get("claimed_at") or now_iso()
+    if not existing:
+        ts = now_iso()
+    # Claiming never changes status.
+    entry = dict(entry)
+    entry["claimed_by"] = actor
+    entry["claimed_at"] = ts
+    proposed = list(chart.get("decisions") or [])
+    proposed[idx] = entry
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    full = dict(full)
+    full["claimed_by"] = actor
+    full["claimed_at"] = ts
+    full["updated_at"] = now_iso()
+    # status deliberately untouched
+    status_before = full.get("status")
+    _, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.claim", mutations)
+    return {
+        "id": did,
+        "title": entry.get("title"),
+        "status": status_before,
+        "claimed_by": actor,
+        "claimed_at": ts,
+        "record_path": entry.get("record_path")
+        or decision_record_link(chart_id, d_num),
+        "noop": bool(existing),
+    }
+
+
+def release_chart_claim(
+    flow_dir: Path,
+    did: str,
+    *,
+    break_stale: bool = False,
+    reason: Optional[str] = None,
+) -> dict:
+    """Owner release, or age-gated audited stale break."""
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    idx, entry = _find_decision_entry(chart, did)
+    actor = get_actor()
+    existing = entry.get("claimed_by")
+    if not existing:
+        raise ChartError(
+            "invalid_state",
+            "not_claimed",
+            f"Decision {did} is not claimed",
+            details={"id": did},
+        )
+    age = _claim_age_hours(entry.get("claimed_at"))
+    audit = None
+    if existing != actor:
+        if not break_stale:
+            raise ChartError(
+                "conflict",
+                "claim_conflict",
+                f"Decision {did} is claimed by '{existing}'; "
+                "owner may release, or use --break-stale --reason after "
+                "chart.claimStaleAfter",
+                details={
+                    "id": did,
+                    "claimed_by": existing,
+                    "claimed_at": entry.get("claimed_at"),
+                    "actor": actor,
+                    "age_hours": age,
+                },
+            )
+        if not reason or not str(reason).strip():
+            raise ChartError(
+                "validation",
+                "break_stale_reason_required",
+                "--break-stale requires --reason",
+                details={"id": did},
+            )
+        threshold = get_chart_claim_stale_after_hours()
+        if age is None or age < threshold:
+            raise ChartError(
+                "stale_claim",
+                "claim_not_stale",
+                f"Claim on {did} is not stale yet "
+                f"(age_hours={age}, claimStaleAfter={threshold})",
+                details={
+                    "id": did,
+                    "claimed_by": existing,
+                    "claimed_at": entry.get("claimed_at"),
+                    "age_hours": age,
+                    "threshold_hours": threshold,
+                    "actor": actor,
+                },
+            )
+        audit = {
+            "actor": actor,
+            "prior_owner": existing,
+            "age_hours": age,
+            "reason": str(reason).strip(),
+            "timestamp": now_iso(),
+            "decision": did,
+            "kind": "break_stale",
+        }
+    elif break_stale:
+        # Owner releasing with break-stale is fine; still require reason if set.
+        if reason and str(reason).strip():
+            audit = {
+                "actor": actor,
+                "prior_owner": existing,
+                "age_hours": age,
+                "reason": str(reason).strip(),
+                "timestamp": now_iso(),
+                "decision": did,
+                "kind": "owner_release",
+            }
+
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    prior_owner = existing
+    prior_at = entry.get("claimed_at")
+    entry = dict(entry)
+    entry["claimed_by"] = None
+    entry["claimed_at"] = None
+    proposed = list(chart.get("decisions") or [])
+    proposed[idx] = entry
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    events = list(chart.get("claim_events") or [])
+    if audit:
+        events.append(audit)
+        chart["claim_events"] = events
+    full = dict(full)
+    note = None
+    if audit:
+        note = (
+            f"claim released ({audit['kind']}): actor={audit['actor']} "
+            f"prior={audit['prior_owner']} age_hours={audit.get('age_hours')} "
+            f"reason={audit['reason']}"
+        )
+        notes = list(full.get("transition_notes") or [])
+        notes.append(
+            {
+                "at": audit["timestamp"],
+                "kind": audit["kind"],
+                "text": note,
+                "actor": audit["actor"],
+                "prior_owner": audit["prior_owner"],
+                "age_hours": audit.get("age_hours"),
+                "reason": audit["reason"],
+            }
+        )
+        full["transition_notes"] = notes
+        full["claim_note"] = note
+    else:
+        note = f"claim released by owner {actor}"
+        notes = list(full.get("transition_notes") or [])
+        notes.append(
+            {
+                "at": now_iso(),
+                "kind": "owner_release",
+                "text": note,
+                "actor": actor,
+                "prior_owner": prior_owner,
+            }
+        )
+        full["transition_notes"] = notes
+        full["claim_note"] = note
+    full["claimed_by"] = None
+    full["claimed_at"] = None
+    full["updated_at"] = now_iso()
+    # status deliberately untouched
+    status_after = full.get("status")
+    _, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.release-claim", mutations)
+    return {
+        "id": did,
+        "title": entry.get("title"),
+        "status": status_after,
+        "released": True,
+        "prior_owner": prior_owner,
+        "prior_claimed_at": prior_at,
+        "actor": actor,
+        "audit": audit,
+        "record_path": entry.get("record_path")
+        or decision_record_link(chart_id, d_num),
+    }
+
+
+def human_decision_line(decision: dict) -> str:
+    """Always pair title + full D-ID + record link."""
+    did = decision.get("id") or ""
+    title = decision.get("title") or ""
+    link = decision.get("record_path") or ""
+    if not link and did:
+        try:
+            chart_id = did.rsplit(".", 1)[0]
+            n = decision_local_number(did)
+            link = decision_record_link(chart_id, n)
+        except ChartError:
+            link = ""
+    return f"{did}  {title}  {link}".rstrip()
 
 
 def get_specs_json_write_dir(flow_dir: Path) -> Path:
@@ -18667,7 +20111,7 @@ def _chart_ensure_flow(use_json: bool, command: str) -> Path:
 
 
 def cmd_chart_create(args: argparse.Namespace) -> None:
-    """Create a chart with empty ledger (allocator/store foundation only)."""
+    """Create a chart; optional --initial-map-file validates/enforces ceiling first."""
     command = "chart.create"
     use_json = bool(getattr(args, "json", False))
     flow_dir = _chart_ensure_flow(use_json, command)
@@ -18691,13 +20135,59 @@ def cmd_chart_create(args: argparse.Namespace) -> None:
             "Chart create requires --outcome",
         )
 
+    initial_path = getattr(args, "initial_map_file", None)
+    force_size = bool(getattr(args, "force_size", False))
+    force_reason = getattr(args, "reason", None)
+    if force_size and not initial_path:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "force_size_needs_map",
+            "--force-size applies only with --initial-map-file",
+        )
+
     try:
+        # Validate initial map BEFORE allocation so over-ceiling creates
+        # reserve no chart id.
+        built_initial = None
+        if initial_path:
+            map_data = parse_initial_map_file(Path(initial_path))
+            # Provisional chart id for edge canonicalization; rewritten after alloc.
+            # Edges use local D1/D2 labels resolved inside validate_and_build.
+            # Must be a valid fn-N shape (fn-0 is rejected by canonicalize_chart_id).
+            # Discarded after allocation; real ids are rebound below.
+            _PROVISIONAL_CHART_ID = "fn-999999999"
+            provisional = validate_and_build_initial_map(
+                _PROVISIONAL_CHART_ID,
+                map_data,
+                force_size=force_size,
+                force_reason=force_reason,
+            )
+            built_initial = provisional
+
         with cross_process_lock(charts_resource_lock_path(flow_dir)):
             recover_chart_transactions(flow_dir)
             with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
                 next_n = scan_max_native_fn_spec_id(flow_dir) + 1
                 chart_id = f"fn-{next_n}"
-                data = create_chart_pair(flow_dir, chart_id, title, outcome)
+                initial_for_create = None
+                if built_initial is not None:
+                    # Re-bind provisional placeholder ids to the allocated chart id.
+                    rebound = validate_and_build_initial_map(
+                        chart_id,
+                        map_data,
+                        force_size=force_size,
+                        force_reason=force_reason,
+                    )
+                    initial_for_create = rebound
+                data = create_chart_pair(
+                    flow_dir,
+                    chart_id,
+                    title,
+                    outcome,
+                    initial=initial_for_create,
+                )
     except CrossProcessLockError as e:
         chart_fail(
             command,
@@ -18717,6 +20207,7 @@ def cmd_chart_create(args: argparse.Namespace) -> None:
             exit_code=e.exit_code,
         )
 
+    meta = compact_chart_metadata(data)
     result = {
         "id": data["id"],
         "title": data["title"],
@@ -18724,16 +20215,43 @@ def cmd_chart_create(args: argparse.Namespace) -> None:
         "status": data["status"],
         "created": data["created"],
         "chart_path": f"{FLOW_DIR}/{CHARTS_DIR}/{data['id']}.md",
-        "decision_count": 0,
+        "decision_count": meta["decision_count"],
+        "parked_count": meta["parked_count"],
+        "unattended_count": meta["unattended_count"],
+        "attended_count": meta["attended_count"],
+        "estimated_sessions": meta["estimated_sessions"],
+        "cost_line": meta["cost_line"],
+        "decisions": [
+            {
+                "id": d.get("id"),
+                "title": d.get("title"),
+                "type": d.get("type"),
+                "attendance": d.get("attendance"),
+                "record_path": d.get("record_path"),
+            }
+            for d in (data.get("decisions") or [])
+            if isinstance(d, dict)
+        ],
+        "parked_questions": [
+            {"key": p.get("key"), "body": p.get("body")}
+            for p in (data.get("parked_questions") or [])
+            if isinstance(p, dict)
+        ],
     }
+    if data.get("force_size_audit"):
+        result["force_size_audit"] = data["force_size_audit"]
     if use_json:
         chart_json_success(command, result)
     else:
         print(f"Chart {data['id']} created: {data['title']}")
+        print(meta["cost_line"])
+        for d in data.get("decisions") or []:
+            if isinstance(d, dict):
+                print(human_decision_line(d))
 
 
 def cmd_chart_show(args: argparse.Namespace) -> None:
-    """Show compact chart metadata (no graph/frontier/claims in task 1)."""
+    """Show compact chart metadata + map body (no decision answer/assets)."""
     command = "chart.show"
     use_json = bool(getattr(args, "json", False))
     flow_dir = _chart_ensure_flow(use_json, command)
@@ -18756,6 +20274,12 @@ def cmd_chart_show(args: argparse.Namespace) -> None:
                         f"Chart body unreadable: {chart_id} ({e})",
                         details={"id": chart_id},
                     ) from e
+            # Compact decision list from sidecar only - never open decision files.
+            decisions_out = [
+                compact_decision_entry(d)
+                for d in (data.get("decisions") or [])
+                if isinstance(d, dict)
+            ]
     except CrossProcessLockError as e:
         chart_fail(
             command,
@@ -18779,20 +20303,37 @@ def cmd_chart_show(args: argparse.Namespace) -> None:
         **meta,
         "chart_path": f"{FLOW_DIR}/{CHARTS_DIR}/{meta['id']}.md",
         "body": body,
+        "decisions": decisions_out,
+        "parked_questions": [
+            {"key": p.get("key"), "body": p.get("body")}
+            for p in (data.get("parked_questions") or [])
+            if isinstance(p, dict)
+        ],
     }
     if use_json:
         chart_json_success(command, result)
     else:
         print(f"{meta['id']}  {meta['title']}  [{meta['status']}]")
         print(f"Outcome: {meta['outcome']}")
-        print(f"Decisions: {meta['decision_count']}")
+        print(
+            f"Decisions: {meta['decision_count']} "
+            f"(open={meta['open_count']} blocked={meta['blocked_count']} "
+            f"claimed={meta['claimed_count']} parked={meta['parked_count']})"
+        )
+        print(meta["cost_line"])
+        if not meta["briefable"]:
+            print("Not briefable:")
+            for reason in meta["stuck_reasons"]:
+                print(f"  - {reason}")
+        for d in decisions_out:
+            print(human_decision_line(d))
         if body:
             print()
             sys.stdout.write(body if body.endswith("\n") else body + "\n")
 
 
 def cmd_chart_list(args: argparse.Namespace) -> None:
-    """List charts with compact metadata."""
+    """List charts with compact progress + remaining attended cost."""
     command = "chart.list"
     use_json = bool(getattr(args, "json", False))
     flow_dir = _chart_ensure_flow(use_json, command)
@@ -18835,8 +20376,397 @@ def cmd_chart_list(args: argparse.Namespace) -> None:
         for c in charts_out:
             print(
                 f"{c['id']}  {c['title']}  [{c['status']}]  "
-                f"decisions={c['decision_count']}"
+                f"decisions={c['decision_count']} "
+                f"open={c['open_count']} attended_left={c['attended_count']}"
             )
+
+
+def cmd_chart_add_decision(args: argparse.Namespace) -> None:
+    """Allocate the next D-ID under a chart."""
+    command = "chart.add-decision"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    title = (getattr(args, "title", None) or "").strip()
+    dtype = (getattr(args, "type", None) or "").strip()
+    attendance = getattr(args, "attendance", None)
+    body_file = getattr(args, "body_file", None)
+    question = ""
+    if body_file:
+        try:
+            question = Path(body_file).read_text(encoding="utf-8")
+        except OSError as e:
+            chart_fail(
+                command,
+                use_json,
+                "io",
+                "body_file_unreadable",
+                f"Cannot read --body-file: {e}",
+                details={"path": str(body_file)},
+            )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            blocked = _parse_edge_list(
+                getattr(args, "blocked_by", None),
+                chart_id,
+                field_name="blocked_by",
+            )
+            depends = _parse_edge_list(
+                getattr(args, "depends_on", None),
+                chart_id,
+                field_name="depends_on",
+            )
+            full = add_chart_decision(
+                flow_dir,
+                chart_id,
+                title,
+                dtype,
+                attendance=attendance,
+                question=question,
+                blocked_by=blocked,
+                depends_on=depends,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+
+    result = {
+        "id": full["id"],
+        "title": full["title"],
+        "type": full["type"],
+        "attendance": full["attendance"],
+        "status": full["status"],
+        "blocked_by": full.get("blocked_by") or [],
+        "depends_on": full.get("depends_on") or [],
+        "record_path": full.get("record_path"),
+        "chart": full.get("chart"),
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(human_decision_line(result))
+        print(f"type={result['type']} attendance={result['attendance']}")
+
+
+def cmd_chart_park_question(args: argparse.Namespace) -> None:
+    command = "chart.park-question"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    body_file = getattr(args, "body_file", None)
+    if not body_file:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "body_file_required",
+            "park-question requires --body-file",
+        )
+    try:
+        body = Path(body_file).read_text(encoding="utf-8")
+    except OSError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "body_file_unreadable",
+            f"Cannot read --body-file: {e}",
+            details={"path": str(body_file)},
+        )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            out = park_chart_question(flow_dir, chart_id, body)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    result = {
+        "chart_id": canonicalize_chart_id(raw_id),
+        "key": out["key"],
+        "body": out["body"],
+        "created": out.get("created"),
+        "noop": out.get("noop", False),
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(f"Parked question key={result['key']}")
+        print(result["body"])
+
+
+def cmd_chart_remove_question(args: argparse.Namespace) -> None:
+    command = "chart.remove-question"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    qkey = getattr(args, "question", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            out = remove_chart_question(flow_dir, chart_id, qkey)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    result = {
+        "chart_id": canonicalize_chart_id(raw_id),
+        "key": out["key"],
+        "body": out.get("body"),
+        "removed": True,
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(f"Removed parked question key={result['key']}")
+
+
+def cmd_chart_wire_decision(args: argparse.Namespace) -> None:
+    command = "chart.wire-decision"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    # Replace only the edge sets the caller supplied (None = leave unchanged).
+    blocked_raw = getattr(args, "blocked_by", None)
+    depends_raw = getattr(args, "depends_on", None)
+    replace_blocked = blocked_raw is not None
+    replace_depends = depends_raw is not None
+    if not replace_blocked and not replace_depends:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "edges_required",
+            "wire-decision requires --blocked-by and/or --depends-on "
+            "(pass empty string to clear)",
+        )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            did = canonicalize_decision_id(raw_did)
+            chart_id = did.rsplit(".", 1)[0]
+            blocked = (
+                _parse_edge_list(blocked_raw, chart_id, field_name="blocked_by")
+                if replace_blocked
+                else None
+            )
+            depends = (
+                _parse_edge_list(depends_raw, chart_id, field_name="depends_on")
+                if replace_depends
+                else None
+            )
+            out = wire_chart_decision(
+                flow_dir,
+                did,
+                blocked_by=blocked,
+                depends_on=depends,
+                replace_blocked=replace_blocked,
+                replace_depends=replace_depends,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(
+            f"blocked_by={','.join(out.get('blocked_by') or []) or '-'} "
+            f"depends_on={','.join(out.get('depends_on') or []) or '-'}"
+        )
+
+
+def cmd_chart_frontier(args: argparse.Namespace) -> None:
+    command = "chart.frontier"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            data = load_chart_sidecar(flow_dir, chart_id)
+            # Frontier from compact sidecar only - never open decision files.
+            frontier = compute_frontier(data)
+            completion = chart_completion_predicate(data)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    result = {
+        "chart_id": chart_id,
+        "frontier": frontier,
+        "count": len(frontier),
+        "briefable": completion["briefable"],
+        "stuck_reasons": completion["stuck_reasons"],
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        if not frontier:
+            print(f"Frontier empty for {chart_id}")
+            if completion["stuck_reasons"]:
+                print("Stuck:")
+                for reason in completion["stuck_reasons"]:
+                    print(f"  - {reason}")
+            elif completion["briefable"]:
+                print("Chart is briefable (no open decisions or parked questions).")
+            return
+        for d in frontier:
+            print(human_decision_line(d))
+
+
+def cmd_chart_claim(args: argparse.Namespace) -> None:
+    command = "chart.claim"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = claim_chart_decision(flow_dir, raw_did)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(f"claimed_by={out['claimed_by']} claimed_at={out['claimed_at']}")
+
+
+def cmd_chart_release_claim(args: argparse.Namespace) -> None:
+    command = "chart.release-claim"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    break_stale = bool(getattr(args, "break_stale", False))
+    reason = getattr(args, "reason", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = release_chart_claim(
+                flow_dir,
+                raw_did,
+                break_stale=break_stale,
+                reason=reason,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(f"released prior_owner={out.get('prior_owner')}")
+        if out.get("audit"):
+            print(f"audit={json.dumps(out['audit'], default=str)}")
 
 
 # ---------- PR cognitive-aid artifact (fn-136.6) ------------------------
@@ -37496,8 +39426,8 @@ def main() -> None:
     )
     p_prospect_promote.set_defaults(func=cmd_prospect_promote)
 
-    # chart (fn-135) — decision-map discovery store foundation.
-    # Task 1 owns create/show/list + shared allocator + journal recovery only.
+    # chart (fn-135) — decision-map discovery store.
+    # Task 1: create/show/list + allocator + journal. Task 9: graph/claims.
     p_chart = subparsers.add_parser(
         "chart",
         help="Chart commands (decision-map discovery; fn-135)",
@@ -37506,13 +39436,29 @@ def main() -> None:
 
     p_chart_create = chart_sub.add_parser(
         "create",
-        help="Allocate a chart id and write body + sidecar with empty ledger",
+        help="Allocate a chart id; optional initial-map validates size first",
     )
     p_chart_create.add_argument("--title", required=True, help="Chart title")
     p_chart_create.add_argument(
         "--outcome",
         required=True,
         help="What reaching the end of this chart looks like",
+    )
+    p_chart_create.add_argument(
+        "--initial-map-file",
+        dest="initial_map_file",
+        default=None,
+        help="JSON file of titled decisions + parked questions (validated pre-alloc)",
+    )
+    p_chart_create.add_argument(
+        "--force-size",
+        action="store_true",
+        help="Override chart.maxDecisions (requires --reason; audited)",
+    )
+    p_chart_create.add_argument(
+        "--reason",
+        default=None,
+        help="Reason for --force-size override (recorded in create transaction)",
     )
     p_chart_create.add_argument("--json", action="store_true", help="JSON output")
     p_chart_create.set_defaults(func=cmd_chart_create)
@@ -37531,6 +39477,127 @@ def main() -> None:
     )
     p_chart_list.add_argument("--json", action="store_true", help="JSON output")
     p_chart_list.set_defaults(func=cmd_chart_list)
+
+    p_chart_add = chart_sub.add_parser(
+        "add-decision",
+        help="Allocate next D-ID under a chart",
+    )
+    p_chart_add.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_add.add_argument("--title", required=True, help="Decision title")
+    p_chart_add.add_argument(
+        "--type",
+        required=True,
+        help="research|probe|eval|prototype|interview|task",
+    )
+    p_chart_add.add_argument(
+        "--attendance",
+        default=None,
+        help="attended|unattended (required for type=task; derived otherwise)",
+    )
+    p_chart_add.add_argument(
+        "--body-file",
+        dest="body_file",
+        default=None,
+        help="File containing the ## Question body",
+    )
+    p_chart_add.add_argument(
+        "--blocked-by",
+        dest="blocked_by",
+        default=None,
+        help="Comma-separated D-IDs that must close before this is actionable",
+    )
+    p_chart_add.add_argument(
+        "--depends-on",
+        dest="depends_on",
+        default=None,
+        help="Comma-separated premise D-IDs (provenance; not readiness)",
+    )
+    p_chart_add.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_add.set_defaults(func=cmd_chart_add_decision)
+
+    p_chart_park = chart_sub.add_parser(
+        "park-question",
+        help="Add a normalized parked Open Question; returns stable key",
+    )
+    p_chart_park.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_park.add_argument(
+        "--body-file",
+        dest="body_file",
+        required=True,
+        help="File containing the parked question text",
+    )
+    p_chart_park.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_park.set_defaults(func=cmd_chart_park_question)
+
+    p_chart_rmq = chart_sub.add_parser(
+        "remove-question",
+        help="Remove a parked question by stable key",
+    )
+    p_chart_rmq.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_rmq.add_argument(
+        "--question",
+        required=True,
+        help="Stable parked-question key from park-question",
+    )
+    p_chart_rmq.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_rmq.set_defaults(func=cmd_chart_remove_question)
+
+    p_chart_wire = chart_sub.add_parser(
+        "wire-decision",
+        help="Atomically replace blocked_by/depends_on for a decision",
+    )
+    p_chart_wire.add_argument(
+        "decision_id",
+        help="Decision id (<chart-id>.D<n> or D<n> with chart context)",
+    )
+    p_chart_wire.add_argument(
+        "--blocked-by",
+        dest="blocked_by",
+        default=None,
+        help="Replacement blocked_by list (comma-separated; empty clears)",
+    )
+    p_chart_wire.add_argument(
+        "--depends-on",
+        dest="depends_on",
+        default=None,
+        help="Replacement depends_on list (comma-separated; empty clears)",
+    )
+    p_chart_wire.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_wire.set_defaults(func=cmd_chart_wire_decision)
+
+    p_chart_frontier = chart_sub.add_parser(
+        "frontier",
+        help="Open, unblocked, unclaimed decisions (dependency-ordered)",
+    )
+    p_chart_frontier.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_frontier.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_frontier.set_defaults(func=cmd_chart_frontier)
+
+    p_chart_claim = chart_sub.add_parser(
+        "claim",
+        help="Atomic claim; does not change decision status",
+    )
+    p_chart_claim.add_argument("decision_id", help="Decision id (<chart-id>.D<n>)")
+    p_chart_claim.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_claim.set_defaults(func=cmd_chart_claim)
+
+    p_chart_release = chart_sub.add_parser(
+        "release-claim",
+        help="Owner release or age-gated --break-stale --reason",
+    )
+    p_chart_release.add_argument("decision_id", help="Decision id (<chart-id>.D<n>)")
+    p_chart_release.add_argument(
+        "--break-stale",
+        action="store_true",
+        help="Break another actor's claim after chart.claimStaleAfter",
+    )
+    p_chart_release.add_argument(
+        "--reason",
+        default=None,
+        help="Required with --break-stale; audited with actor/prior/age",
+    )
+    p_chart_release.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_release.set_defaults(func=cmd_chart_release_claim)
 
     # anchor (fn-83.3) — single-call worker anchor bundle: the verbatim
     # outputs of every worker Phase-1 re-anchor read in one deterministic
