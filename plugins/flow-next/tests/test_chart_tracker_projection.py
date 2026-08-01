@@ -963,6 +963,139 @@ class ProjectionSerializationTests(unittest.TestCase):
             self.assertTrue(out2.get("deduped"))
             self.assertEqual(ex2.calls, [])
 
+    def test_holder_drains_mutation_committed_during_remote_span(self) -> None:
+        """A chart mutation committed locally WHILE the holder is mid-remote-
+        span must not leave the tracker stale: the end-of-pass marker
+        recompute absorbs only the holder's OWN sidecar writes, so a foreign
+        change surfaces as stale_revision and project_chart's drain loop
+        re-projects the newer state before releasing the lock. Convergence no
+        longer depends on the (possibly timed-out) waiter's own projection."""
+        from flowctl_tracker.relate.ledger import dep_relation_key
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            hier_key = "hier:" + dep_relation_key("I_child_101", "I_parent_100")
+            _seed_chart(
+                flow,
+                tracker={
+                    "id": "I_parent_100",
+                    "identifier": "#100",
+                    "url": "https://github.com/acme/demo/issues/100",
+                    "linkState": "linked",
+                    "depRelations": [],
+                    "projection": {"event_markers": []},
+                },
+                decisions=[{
+                    "id": "fn-10.D1",
+                    "title": "Pick storage",
+                    "type": "research",
+                    "attendance": "unattended",
+                    "status": "open",
+                    "n": 1,
+                    "tracker": {
+                        "id": "I_child_101",
+                        "identifier": "#101",
+                        "url": "https://github.com/acme/demo/issues/101",
+                        "linkState": "linked",
+                        # Hierarchy already marked so the pass writes NO
+                        # decision sidecars (self_wrote stays empty and the
+                        # mid-span mutation is unambiguously foreign).
+                        "depRelations": [{
+                            "key": hier_key,
+                            "dep_spec": "fn-10",
+                            "from_tracker_id": "I_child_101",
+                            "to_tracker_id": "I_parent_100",
+                            "type": "hierarchy",
+                            "source": "flow",
+                        }],
+                    },
+                }],
+            )
+            child = {
+                "node_id": "I_child_101", "number": 101, "body": "c",
+                "title": "t", "id": 9101,
+            }
+            parent = {
+                "node_id": "I_parent_100", "number": 100, "body": "p",
+                "title": "t", "id": 9100,
+            }
+            dpath = flow / "charts" / "fn-10" / "1.json"
+            cpath = flow / "charts" / "fn-10.json"
+            mutated = {"done": False}
+
+            def mutate_then_child(_request):
+                # Simulates a second chart command committing during the
+                # holder's remote span: chart commands take only the WAL
+                # lock, never the projection lock, so this happens for real.
+                if not mutated["done"]:
+                    mutated["done"] = True
+                    dec = json.loads(dpath.read_text(encoding="utf-8"))
+                    dec["title"] = "Pick storage (retitled mid-span)"
+                    dec["updated_at"] = "2026-01-03T00:00:00Z"
+                    dpath.write_text(
+                        json.dumps(dec, indent=2) + "\n", encoding="utf-8"
+                    )
+                    chart = json.loads(cpath.read_text(encoding="utf-8"))
+                    chart["decisions"][0]["title"] = (
+                        "Pick storage (retitled mid-span)"
+                    )
+                    cpath.write_text(
+                        json.dumps(chart, indent=2) + "\n", encoding="utf-8"
+                    )
+                return ok(dict(child))
+
+            responses = {
+                # First child read triggers the mid-span mutation; the pass
+                # already built the child body from the pre-mutation load.
+                "wire-read": [
+                    mutate_then_child, ok(dict(parent)),
+                    ok(dict(child)), ok(dict(parent)),
+                ],
+                "wire-parent-read": [ok(dict(child)), ok(dict(parent))] * 4,
+                "wire-update": [ok(dict(child)), ok(dict(parent))] * 4,
+            }
+            ex = fake_execute(responses)
+            out = CP.project_chart(
+                flow, "fn-10", event="chart.wire", execute=ex,
+            )
+            self.assertIsInstance(out, dict)
+            self.assertTrue(out.get("projected"))
+            self.assertNotIn("drain_exhausted", out)
+            self.assertNotIn("stale_revision", out)
+            # The drain pass pushed the NEWER (mid-span mutated) content.
+            updates = [c for c in ex.calls if c.op == "wire-update"]
+            self.assertTrue(any(
+                b"retitled mid-span" in (c.body or b"") for c in updates
+            ))
+            # Convergence: a fresh projection of the mutated state dedupes
+            # against the drain pass's marker with zero remote calls.
+            ex2 = fake_execute({})
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.wire", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("deduped"))
+            self.assertEqual(ex2.calls, [])
+
+    def test_waiter_timeout_exceeds_single_request_budget(self) -> None:
+        """The projection-lock waiter must outlast a normally-held lock: a
+        holder spans remote requests with a 30s default budget each, so the
+        old 10s wait abandoned projections queued behind a healthy holder."""
+        import inspect
+
+        from flowctl_tracker import subjects as SJ
+        from flowctl_tracker.types import DEFAULT_TIMEOUT_S
+
+        self.assertGreater(
+            SJ._CHART_PROJECTION_LOCK_TIMEOUT_S, DEFAULT_TIMEOUT_S,
+        )
+        sig = inspect.signature(SJ.chart_projection_lock)
+        self.assertEqual(
+            sig.parameters["timeout_s"].default,
+            SJ._CHART_PROJECTION_LOCK_TIMEOUT_S,
+        )
+
     def test_lock_timeout_is_best_effort_error(self) -> None:
         """Lock-acquisition failure degrades to the standard lock_timeout
         error shape - it never blocks past the bounded wait."""

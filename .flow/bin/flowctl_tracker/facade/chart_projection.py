@@ -64,6 +64,12 @@ _DEFAULT_HOSTS = {
 }
 
 
+#: Bounded holder-drain passes per project_chart call: how many times the lock
+#: holder re-projects state that other chart commands committed while it was
+#: mid-remote-span (see project_chart's drain loop).
+_PROJECTION_DRAIN_LIMIT = 3
+
+
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -87,21 +93,37 @@ def _mutation_state_digest(decisions: list) -> str:
     break retry dedupe.
     """
     return _sha(json.dumps(
-        sorted(
-            (
-                {
-                    "id": d.get("id"),
-                    "updated_at": d.get("updated_at"),
-                    "claimed_by": d.get("claimed_by"),
-                    "claimed_at": d.get("claimed_at"),
-                    "assets": _safe_assets(d.get("assets")),
-                }
-                for d in decisions if isinstance(d, dict)
-            ),
-            key=lambda x: str(x.get("id") or ""),
-        ),
-        sort_keys=True, default=str,
+        _digest_entries(decisions), sort_keys=True, default=str,
     ))
+
+
+def _digest_entries(decisions: list) -> list[dict]:
+    """Per-decision mutation-identity entries backing _mutation_state_digest."""
+    return sorted(
+        (
+            {
+                "id": d.get("id"),
+                "updated_at": d.get("updated_at"),
+                "claimed_by": d.get("claimed_by"),
+                "claimed_at": d.get("claimed_at"),
+                "assets": _safe_assets(d.get("assets")),
+            }
+            for d in decisions if isinstance(d, dict)
+        ),
+        key=lambda x: str(x.get("id") or ""),
+    )
+
+
+def _chart_base_revision(chart: dict, decisions: list) -> str:
+    """Fallback marker base when the caller supplied no revision."""
+    return _sha(json.dumps({
+        "id": chart.get("id"),
+        "status": chart.get("status"),
+        "decisions": [
+            {"id": d.get("id"), "status": d.get("status")}
+            for d in decisions if isinstance(d, dict)
+        ],
+    }, sort_keys=True, default=str))
 
 
 def _projection_state(tracker: dict) -> dict:
@@ -780,11 +802,31 @@ def project_chart(
 
     try:
         with chart_projection_lock(flow_dir):
-            return _project_chart_locked(
-                flow_dir, config, gate, chart_id,
-                event=event, revision=revision, evidence=evidence,
-                execute=execute,
-            )
+            result: Result = {}
+            for _ in range(_PROJECTION_DRAIN_LIMIT):
+                result = _project_chart_locked(
+                    flow_dir, config, gate, chart_id,
+                    event=event, revision=revision, evidence=evidence,
+                    execute=execute,
+                )
+                if not (isinstance(result, dict)
+                        and result.get("stale_revision")):
+                    return result
+                # Holder drain: a chart mutation committed locally while this
+                # holder was mid-remote-span (the mutation's own projection
+                # attempt may have timed out on this very lock). Re-project
+                # the newer persisted state before releasing the lock - the
+                # marker was keyed on the state actually pushed, so the
+                # re-entry projects instead of deduping. This is what keeps
+                # contended projections convergent even when a waiter gives
+                # up: whatever it committed, the holder drains it here.
+            # Drains exhausted under sustained mutation pressure: return the
+            # last successful projection, naming the remaining unprojected
+            # revision (stale_revision) so the caller can see the tracker is
+            # one step behind; the next projection event picks it up.
+            result = dict(result)
+            result["drain_exhausted"] = True
+            return result
     except ConfigLockTimeout as exc:
         return TrackerError(
             ErrorClass.CONFLICT, str(exc), subtype="lock_timeout",
@@ -808,14 +850,9 @@ def _project_chart_locked(
     if isinstance(bundle, TrackerError):
         return bundle
     chart_path, chart, chart_tracker, decisions = bundle
-    base_revision = revision or _sha(json.dumps({
-        "id": chart.get("id"),
-        "status": chart.get("status"),
-        "decisions": [
-            {"id": d.get("id"), "status": d.get("status")}
-            for d in decisions if isinstance(d, dict)
-        ],
-    }, sort_keys=True, default=str))
+    supplied_revision = revision
+    start_skeleton = _chart_base_revision(chart, decisions)
+    base_revision = revision or start_skeleton
     # Extend the marker revision with the projection-side state digest
     # (claims, assets, per-decision mutation identity - see
     # _mutation_state_digest for why the base revision alone dedupes wrongly).
@@ -843,6 +880,11 @@ def _project_chart_locked(
     statuses: list = []
     degraded_parts: list = []
     steps: dict[str, Any] = {}
+    # Decision ids whose sidecar THIS holder wrote (link adoption, hierarchy
+    # marker, relation ledger). The end-of-pass marker recompute absorbs only
+    # these self-inflicted updated_at bumps; any other digest change is a
+    # foreign mutation the drain loop must re-project.
+    self_wrote: set[str] = set()
 
     parent_body = build_parent_rollup(chart, decisions)
     parent_title = _chart_title(chart)
@@ -997,6 +1039,7 @@ def _project_chart_locked(
                 )
             _clear_pending_identity(flow_dir, "decision", did)
             dtracker = linked
+            self_wrote.add(did)
             completed.append(
                 f"create-child:{did}" if adopted is None
                 else f"adopt-child:{did}"
@@ -1021,6 +1064,8 @@ def _project_chart_locked(
                 if isinstance(hier, dict) and hier.get("degraded"):
                     degraded_parts.append(hier["degraded"])
                 elif isinstance(hier, dict) and hier.get("projected"):
+                    if not hier.get("already"):
+                        self_wrote.add(did)
                     completed.append(f"hierarchy:{did}")
             child_results.append({
                 "id": did,
@@ -1096,6 +1141,7 @@ def _project_chart_locked(
                     and hier.get("projected")
                     and not hier.get("already")
                 ):
+                    self_wrote.add(did)
                     completed.append(f"hierarchy:{did}")
                     statuses.append("pushed")
             child_results.append({
@@ -1171,6 +1217,7 @@ def _project_chart_locked(
                 ledgered = locked_subject_write(
                     flow_dir, "decision", did, _ledger,
                 )
+                self_wrote.add(did)
                 if isinstance(ledgered, TrackerError):
                     # The native edge landed but flow ownership did not
                     # persist. Without the ledger entry a later rewire cannot
@@ -1240,6 +1287,7 @@ def _project_chart_locked(
                     return ledger_drop(t, key=_key)
 
                 dropped = locked_subject_write(flow_dir, "decision", did, _drop)
+                self_wrote.add(did)
                 if isinstance(dropped, TrackerError):
                     # The native edge is gone but the ledger entry survived.
                     # Recording success would freeze the stale entry: a later
@@ -1308,13 +1356,43 @@ def _project_chart_locked(
     # retry (same sidecar bytes) recomputes the same key and dedupes, while
     # any committed mutation since - including one returning the graph to a
     # prior state - mints a fresh marker.
+    # ONLY this holder's own writes may be absorbed that way. A foreign chart
+    # mutation committed during the remote span must not be folded into the
+    # marker: the pushed remote content predates it, so absorbing it would
+    # make that mutation's own projection (or any retry) dedupe against
+    # content that was never pushed - the tracker stays stale indefinitely.
+    # On foreign change the marker stays keyed on the state actually
+    # projected, and stale_revision names the remaining state so
+    # project_chart's drain loop re-projects it before releasing the lock.
+    stale_revision = None
     end_bundle = _load_chart_bundle(flow_dir, chart_id)
     if not isinstance(end_bundle, TrackerError):
-        revision = _sha(
-            f"{base_revision}\x00{_mutation_state_digest(end_bundle[3])}"
+        _ep, end_chart, _et, end_decisions = end_bundle
+        start_by_id = {
+            str(e.get("id")): e for e in _digest_entries(decisions)
+        }
+        end_by_id = {
+            str(e.get("id")): e for e in _digest_entries(end_decisions)
+        }
+        foreign = (
+            _chart_base_revision(end_chart, end_decisions) != start_skeleton
+            or set(end_by_id) != set(start_by_id)
+            or any(
+                did not in self_wrote and entry != start_by_id[did]
+                for did, entry in end_by_id.items()
+            )
         )
-        if not evidence_supplied:
-            evidence = revision[:16]
+        if foreign:
+            stale_revision = _sha(
+                f"{supplied_revision or _chart_base_revision(end_chart, end_decisions)}"
+                f"\x00{_mutation_state_digest(end_decisions)}"
+            )
+        else:
+            revision = _sha(
+                f"{base_revision}\x00{_mutation_state_digest(end_decisions)}"
+            )
+            if not evidence_supplied:
+                evidence = revision[:16]
 
     def _mark(t: dict):
         t = _append_event_marker(
@@ -1371,7 +1449,7 @@ def _project_chart_locked(
             transport=provider, degraded=degraded,
         )
 
-    return ok_result({
+    data = {
         "op": "chart_project",
         "projected": True,
         "chart_id": chart_id,
@@ -1379,7 +1457,11 @@ def _project_chart_locked(
         "revision": revision,
         "steps": steps,
         "tracker_id": marked.get("id") if isinstance(marked, dict) else None,
-    }, statuses=statuses, completed=completed, degraded=degraded)
+    }
+    if stale_revision is not None:
+        data["stale_revision"] = stale_revision
+    return ok_result(data, statuses=statuses, completed=completed,
+                     degraded=degraded)
 
 
 # ---------------------------------------------------------------------------

@@ -696,6 +696,109 @@ class TestLinkSpec(unittest.TestCase):
             side = _chart_json(flow, chart_id)
             self.assertEqual(side["produced_specs"], [])
 
+    def test_changed_decision_set_on_retry_conflicts(self) -> None:
+        """Same link identity with a DIFFERENT decision set must not report a
+        successful no-op: the stored provenance would silently stay stale and
+        supersession staling could never match the corrected D-IDs. Set-equal
+        retry is a no-op; a mismatch is an idempotency conflict; unknown ids
+        still fail as membership validation, not conflict."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, d1, d2 = _ready_single_cluster(repo)
+            r = _brief(repo, chart_id, prop)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            bid = json.loads(r.stdout)["result"]["briefing_id"]
+
+            r1 = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                d1["id"],
+                "--cluster",
+                "1",
+                "--json",
+            )
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            self.assertFalse(json.loads(r1.stdout)["result"]["noop"])
+
+            # Same identity, corrected (different) set -> conflict, not no-op.
+            r2 = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                f"{d1['id']},{d2['id']}",
+                "--cluster",
+                "1",
+                "--json",
+            )
+            self.assertNotEqual(r2.returncode, 0)
+            err = json.loads(r2.stdout)["error"]
+            self.assertEqual(err["class"], "conflict")
+            self.assertEqual(err["code"], "link_decisions_mismatch")
+            self.assertEqual(err["details"]["stored"], [d1["id"]])
+            self.assertEqual(
+                err["details"]["incoming"], sorted([d1["id"], d2["id"]])
+            )
+            # Stored provenance unchanged.
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(len(side["produced_specs"]), 1)
+            self.assertEqual(side["produced_specs"][0]["decisions"], [d1["id"]])
+
+            # Unknown id on the same identity: membership validation wins
+            # over the idempotency conflict.
+            r3 = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                f"{chart_id}.D9",
+                "--cluster",
+                "1",
+                "--json",
+            )
+            self.assertNotEqual(r3.returncode, 0)
+            err3 = json.loads(r3.stdout)["error"]
+            self.assertEqual(err3["class"], "validation")
+            self.assertEqual(err3["code"], "link_decisions_not_in_briefing")
+
+            # Identical retry still a clean no-op.
+            r4 = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                d1["id"],
+                "--cluster",
+                "1",
+                "--json",
+            )
+            self.assertEqual(r4.returncode, 0, r4.stderr + r4.stdout)
+            self.assertTrue(json.loads(r4.stdout)["result"]["noop"])
+
     def test_idempotent_cluster_identity_and_stale_after_supersession(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"

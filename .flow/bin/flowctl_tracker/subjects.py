@@ -157,6 +157,14 @@ def write_subject_tracker(
 _CHARTS_RESOURCE_LOCK_NAME = "charts-resource.lock"
 _CHART_PROJECTION_LOCK_NAME = "chart-projection.lock"
 _CHARTS_LOCK_TIMEOUT_S = 10.0
+# The projection waiter must outlast a normally-held lock: a holder spans
+# several remote requests, each with a 30s default budget
+# (types.DEFAULT_TIMEOUT_S), so a 10s wait would abandon projections that are
+# merely queued behind a healthy holder. A still-failing acquisition keeps the
+# best-effort lock_timeout error shape; convergence then rests on the holder's
+# drain loop in project_chart, which re-projects any state a timed-out waiter
+# committed locally.
+_CHART_PROJECTION_LOCK_TIMEOUT_S = 120.0
 _CHARTS_LOCK_POLL_S = 0.02
 
 
@@ -270,7 +278,7 @@ def charts_resource_lock(
 
 @contextlib.contextmanager
 def chart_projection_lock(
-    flow_dir: Path, *, timeout_s: float = _CHARTS_LOCK_TIMEOUT_S
+    flow_dir: Path, *, timeout_s: float = _CHART_PROJECTION_LOCK_TIMEOUT_S
 ) -> Iterator[None]:
     """Cross-process serialization of whole chart projections.
 

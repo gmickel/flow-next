@@ -940,6 +940,48 @@ class TestUnsafeEvidence(unittest.TestCase):
             self.assertEqual(side["status"], "resolved")
             self.assertNotIn("sk-FAKE", side["answer"])
 
+    def test_refuse_unsafe_prose_in_sharpen_created_decision(self) -> None:
+        """Sharpening CREATES decisions (R20/R48): a sharpen-file decision
+        whose title/question embeds a secret shape refuses before anything -
+        answer, removals, or the new decision - persists."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            sharpen = {
+                "decisions": [
+                    {
+                        "title": "Creds follow-up",
+                        "type": "research",
+                        # Obviously fake credential shape.
+                        "question": "rotate password=hunter2-FAKE first?",
+                    }
+                ],
+            }
+            sf = repo / "sharpen.json"
+            sf.write_text(json.dumps(sharpen), encoding="utf-8")
+            af = _write_answer(repo, "ans.txt", "Safe answer text")
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "resolve",
+                d1["id"],
+                "--answer-file",
+                str(af),
+                "--sharpen-file",
+                str(sf),
+                "--json",
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["class"], "validation")
+            self.assertEqual(err["code"], "unsafe_prose_content")
+            # Nothing persisted: decision still open, no D2 allocated.
+            self.assertEqual(_decision_json(flow, chart_id, 1)["status"], "open")
+            self.assertFalse((flow / "charts" / chart_id / "2.json").exists())
+
     def test_refuse_destructive_command_shape_in_answer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"

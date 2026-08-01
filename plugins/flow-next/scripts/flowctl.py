@@ -11813,6 +11813,10 @@ def validate_and_build_initial_map(
             or title
         )
         question = str(question).strip()
+        # R20/R48: refuse unsafe prose before any allocation or persistence.
+        refuse_if_unsafe_prose(
+            f"{title}\n{question}", field=f"Initial decision #{i}"
+        )
         did = f"{chart_id}.D{i}"
         local_map[str(i)] = did
         local_map[f"d{i}"] = did
@@ -11880,6 +11884,7 @@ def validate_and_build_initial_map(
                 "empty_parked_question",
                 "Parked question body must be non-empty",
             )
+        refuse_if_unsafe_prose(body_norm, field="Parked question")
         key = parked_question_key(body_norm)
         if key in seen_keys:
             continue
@@ -12002,6 +12007,8 @@ def add_chart_decision(
             "add-decision requires --title",
         )
     question = (question or title).strip()
+    # R20/R48: refuse unsafe prose before D-ID allocation or persistence.
+    refuse_if_unsafe_prose(f"{title}\n{question}", field="Decision")
     d_num = _next_decision_number(chart)
     blocked = list(blocked_by or [])
     depends = list(depends_on or [])
@@ -12056,6 +12063,8 @@ def park_chart_question(flow_dir: Path, chart_id: str, body: str) -> dict:
     chart = load_chart_sidecar(flow_dir, chart_id)
     _require_chart_mutable(chart, command="chart.park-question")
     body_norm = normalize_parked_question_body(body)
+    # R20/R48: refuse unsafe prose before the no-op/key path can persist it.
+    refuse_if_unsafe_prose(body_norm, field="Parked question")
     key = parked_question_key(body_norm)
     parked = list(chart.get("parked_questions") or [])
     for entry in parked:
@@ -12557,6 +12566,31 @@ def refuse_if_unsafe_answer(answer: str) -> None:
         "answer body and an approved evidence reference (attach-asset / "
         "--assets); never silently strip bytes from the source.",
         details={"kinds": kinds, "hit_count": len(hits)},
+    )
+
+
+def refuse_if_unsafe_prose(text: str, *, field: str) -> None:
+    """Raise ChartError(validation) when decision/question prose would embed
+    unsafe content.
+
+    Same refusal contract as refuse_if_unsafe_answer (R20/R48): every prose
+    field entering a git-tracked chart record - initial-map decisions and
+    parked questions, add-decision title/body, park-question bodies, and
+    sharpen-created decisions - refuses BEFORE any allocation or persistence.
+    """
+    hits = scan_unsafe_evidence(text or "")
+    if not hits:
+        return
+    kinds = sorted({h["kind"] for h in hits})
+    raise ChartError(
+        "validation",
+        "unsafe_prose_content",
+        f"{field} contains obvious secret or destructive-command shapes and "
+        "must not be embedded in git-tracked chart data. Describe the "
+        "credential or command in safe prose (or reference evidence via "
+        "attach-asset / --assets) instead of pasting it verbatim; never "
+        "silently strip bytes from the source.",
+        details={"field": field, "kinds": kinds, "hit_count": len(hits)},
     )
 
 
@@ -13692,6 +13726,11 @@ def resolve_chart_decision(
             question = str(
                 raw.get("question") or raw.get("body") or title
             ).strip()
+            # R20/R48: sharpening CREATES decisions - same refusal as
+            # initial-map/add-decision, before D-ID allocation.
+            refuse_if_unsafe_prose(
+                f"{title}\n{question}", field=f"Sharpen decision #{i}"
+            )
             n = next_n
             next_n += 1
             new_id = f"{chart_id}.D{n}"
@@ -15084,6 +15123,7 @@ def link_chart_spec(
 
     identity = _produced_spec_identity(briefing_id, cluster_key, spec_id)
     existing_links = list(chart.get("produced_specs") or [])
+    matched_link: Optional[dict] = None
     for link in existing_links:
         if not isinstance(link, dict):
             continue
@@ -15093,16 +15133,27 @@ def link_chart_spec(
             str(link.get("spec") or ""),
         )
         if lid == identity:
-            return {
-                "id": chart_id,
-                "briefing": briefing_id,
-                "cluster": cluster_key,
-                "spec": spec_id,
-                "decisions": list(link.get("decisions") or decs),
-                "status": link.get("status") or "linked",
-                "noop": True,
-                "link": link,
-            }
+            matched_link = link
+            break
+    # Identical retry (same identity AND set-equal canonical decisions) is a
+    # no-op. A changed decision set on the same identity is NOT: silently
+    # keeping the stored set would freeze stale provenance, so supersession
+    # staling could never match the corrected D-IDs. Set-mismatch handling
+    # happens below, AFTER membership validation, so unknown ids fail as
+    # validation rather than conflict.
+    if matched_link is not None and (
+        set(matched_link.get("decisions") or []) == set(decs)
+    ):
+        return {
+            "id": chart_id,
+            "briefing": briefing_id,
+            "cluster": cluster_key,
+            "spec": spec_id,
+            "decisions": list(matched_link.get("decisions") or decs),
+            "status": matched_link.get("status") or "linked",
+            "noop": True,
+            "link": matched_link,
+        }
 
     # R50: a durable link must only cite evidence the named briefing actually
     # carries. When the briefing has clusters metadata, --cluster MUST name
@@ -15156,6 +15207,28 @@ def link_chart_spec(
                 "cluster": cluster_key,
                 "unknown": unknown,
                 "allowed": sorted(allowed),
+            },
+        )
+
+    if matched_link is not None:
+        stored = sorted(set(matched_link.get("decisions") or []))
+        raise ChartError(
+            "conflict",
+            "link_decisions_mismatch",
+            f"Link {briefing_id}"
+            + (f"/{cluster_key}" if cluster_key is not None else "")
+            + f" -> {spec_id} already exists with a different decision set. "
+            f"Stored: {', '.join(stored) or '(none)'}. "
+            f"Incoming: {', '.join(sorted(set(decs)))}. A retry must supply "
+            "the identical set; a genuinely corrected set needs a new link "
+            "identity (or human review of the stored provenance).",
+            details={
+                "id": chart_id,
+                "briefing": briefing_id,
+                "cluster": cluster_key,
+                "spec": spec_id,
+                "stored": stored,
+                "incoming": sorted(set(decs)),
             },
         )
 

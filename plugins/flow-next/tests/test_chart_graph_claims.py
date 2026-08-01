@@ -1488,6 +1488,158 @@ class TestCompactReads(unittest.TestCase):
             )
 
 
+class TestUnsafeProse(unittest.TestCase):
+    """R20/R48: EVERY prose entry point into git-tracked chart records
+    refuses obvious secret / destructive-command shapes before allocation or
+    persistence - not only the resolution answer path. Fixtures are obviously
+    fake shapes; destructive commands are described, never executed."""
+
+    def test_initial_map_refuses_unsafe_prose_before_allocation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            map_path = repo / "map.json"
+            map_path.write_text(
+                json.dumps({
+                    "decisions": [
+                        {"title": "Fine decision", "type": "research"},
+                        {
+                            "title": "Creds",
+                            "type": "research",
+                            # Obviously fake credential shape.
+                            "question": "use password=hunter2-FAKE for db",
+                        },
+                    ],
+                }),
+                encoding="utf-8",
+            )
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "create",
+                "--title",
+                "Bad map",
+                "--outcome",
+                "Out",
+                "--initial-map-file",
+                str(map_path),
+                "--json",
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["class"], "validation")
+            self.assertEqual(err["code"], "unsafe_prose_content")
+            self.assertIn("secret", err["details"]["kinds"])
+            # Refused BEFORE any allocation or persistence.
+            self.assertEqual(list((flow / "charts").glob("fn-*.json")), [])
+
+    def test_initial_map_refuses_unsafe_parked_question(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            map_path = repo / "map.json"
+            map_path.write_text(
+                json.dumps({
+                    "decisions": [
+                        {"title": "Fine decision", "type": "research"},
+                    ],
+                    "parked_questions": [
+                        # Destructive command described in prose per guard
+                        # rules; the literal shape must still refuse.
+                        "should cleanup use git reset --hard here?",
+                    ],
+                }),
+                encoding="utf-8",
+            )
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "create",
+                "--title",
+                "Bad parked",
+                "--outcome",
+                "Out",
+                "--initial-map-file",
+                str(map_path),
+                "--json",
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["code"], "unsafe_prose_content")
+            self.assertIn("destructive_command", err["details"]["kinds"])
+            self.assertEqual(list((flow / "charts").glob("fn-*.json")), [])
+
+    def test_add_decision_refuses_unsafe_body(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            _add_decision(repo, chart_id, "First")
+            body = repo / "body.md"
+            body.write_text(
+                "token is sk-FAKESECRETVALUE0000000000\n", encoding="utf-8"
+            )
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "add-decision",
+                chart_id,
+                "--title",
+                "Creds",
+                "--type",
+                "research",
+                "--body-file",
+                str(body),
+                "--json",
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["class"], "validation")
+            self.assertEqual(err["code"], "unsafe_prose_content")
+            # No D-ID allocated, no record persisted.
+            self.assertFalse((flow / "charts" / chart_id / "2.json").exists())
+            side = json.loads(
+                (flow / "charts" / f"{chart_id}.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(len(side["decisions"]), 1)
+
+    def test_park_question_refuses_unsafe_body(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            _add_decision(repo, chart_id, "First")
+            qf = repo / "park.txt"
+            qf.write_text(
+                "is api_key=FAKE-NOT-REAL-1234 still valid?\n",
+                encoding="utf-8",
+            )
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "park-question",
+                chart_id,
+                "--body-file",
+                str(qf),
+                "--json",
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["code"], "unsafe_prose_content")
+            side = json.loads(
+                (flow / "charts" / f"{chart_id}.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(side.get("parked_questions") or [], [])
+
+
 class TestCostEstimate(unittest.TestCase):
     def test_cost_reads_attendance_field(self) -> None:
         cost = flowctl.chart_cost_estimate(
