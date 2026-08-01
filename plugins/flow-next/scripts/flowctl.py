@@ -12335,7 +12335,7 @@ _CHART_DESTRUCTIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 
 def _require_chart_mutable(chart: dict, *, command: str = "chart") -> None:
-    """Refuse mutations on done/abandoned charts (reopen is a later task)."""
+    """Refuse mutations on done/abandoned charts (use chart reopen --reason)."""
     status = chart.get("status") or "open"
     if status == "open":
         return
@@ -12343,7 +12343,8 @@ def _require_chart_mutable(chart: dict, *, command: str = "chart") -> None:
     raise ChartError(
         "invalid_state",
         "chart_not_open",
-        f"Chart {chart_id} is {status}; mutations require status open",
+        f"Chart {chart_id} is {status}; mutations require status open "
+        "(use chart reopen --reason)",
         details={"id": chart_id, "status": status, "command": command},
     )
 
@@ -13599,6 +13600,19 @@ def resolve_chart_decision(
     new_chart["parked_questions"] = parked
     new_chart["updated_at"] = ts
 
+    # Later supersession marks affected produced_specs links stale (fn-135.3)
+    # without rewriting briefings or linked specs.
+    superseded_for_links: list[str] = list(supersede_ids) + list(cascade_resolved)
+    new_links, staled_links = mark_produced_specs_stale_for_superseded(
+        new_chart,
+        superseded_for_links,
+        via=did,
+        actor=actor,
+        ts=ts,
+    )
+    if staled_links:
+        new_chart["produced_specs"] = new_links
+
     # Build mutations: chart pair + every touched decision sidecar (+ md creates).
     mutations: list[tuple[str, str, str]] = [
         (f"{chart_id}.json", "update", _sidecar_json(new_chart)),
@@ -13645,6 +13659,7 @@ def resolve_chart_decision(
         "replacements": replacements,
         "sharpened": sharpened,
         "removed_questions": removed_questions,
+        "staled_links": staled_links,
         "record_path": primary.get("record_path")
         or decision_record_link(chart_id, d_num),
         "ledger_line": _render_ledger_line(
@@ -13846,6 +13861,1050 @@ def abandon_chart(flow_dir: Path, chart_id: str, reason: str) -> dict:
         "abandoned_by": actor,
         "noop": False,
     }
+
+
+# ---------------------------------------------------------------------------
+# Chart briefing, reopen, link-spec (fn-135.3)
+# ---------------------------------------------------------------------------
+
+
+def chart_decision_revision(chart: dict) -> str:
+    """Stable content revision of decision/outcome state (excludes briefings).
+
+    Fingerprint input for briefing versioning: identical decision/outcome/parked
+    state yields the same revision; briefings[] and produced_specs[] are not
+    part of this hash so a re-emit of the same proposal on the same map is
+    idempotent.
+    """
+    decisions: list[dict] = []
+    for d in chart.get("decisions") or []:
+        if not isinstance(d, dict) or not d.get("id"):
+            continue
+        decisions.append(
+            {
+                "id": d.get("id"),
+                "status": d.get("status"),
+                "title": d.get("title"),
+                "type": d.get("type"),
+                "blocked_by": list(d.get("blocked_by") or []),
+                "depends_on": list(d.get("depends_on") or []),
+            }
+        )
+    decisions.sort(key=lambda x: str(x.get("id") or ""))
+    parked: list[dict] = []
+    for p in chart.get("parked_questions") or []:
+        if not isinstance(p, dict):
+            continue
+        parked.append(
+            {
+                "key": p.get("key"),
+                "body": p.get("body"),
+            }
+        )
+    parked.sort(key=lambda x: str(x.get("key") or ""))
+    # Deliberately exclude chart.status so a final-briefing -> done
+    # transition does not break identical fingerprint retries.
+    blob = json.dumps(
+        {
+            "id": chart.get("id"),
+            "outcome": chart.get("outcome"),
+            "title": chart.get("title"),
+            "decisions": decisions,
+            "parked_questions": parked,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _briefing_fingerprint(chart_revision: str, normalized_proposal: dict) -> str:
+    blob = json.dumps(
+        {
+            "chart_revision": chart_revision,
+            "proposal": normalized_proposal,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _next_briefing_id(briefings: list) -> str:
+    max_n = 0
+    for b in briefings:
+        if not isinstance(b, dict):
+            continue
+        bid = str(b.get("id") or "")
+        m = re.fullmatch(r"B([1-9][0-9]*)", bid)
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    return f"B{max_n + 1}"
+
+
+def _parse_briefing_proposal_file(
+    path: Path,
+    chart_id: str,
+) -> dict:
+    """Load agent-confirmed proposal JSON: clusters + shared_context."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "proposal_unreadable",
+            f"Cannot read proposal file: {path} ({e})",
+            details={"path": str(path)},
+        ) from e
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "validation",
+            "proposal_invalid_json",
+            f"Proposal file is not valid JSON: {e}",
+            details={"path": str(path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "validation",
+            "proposal_invalid",
+            "Proposal file must be a JSON object",
+            details={"path": str(path)},
+        )
+    raw_clusters = data.get("clusters")
+    if not isinstance(raw_clusters, list) or not raw_clusters:
+        raise ChartError(
+            "validation",
+            "proposal_clusters_required",
+            "Proposal requires a non-empty clusters array",
+            details={"path": str(path)},
+        )
+    shared_raw = data.get("shared_context") or data.get("shared_context_ids") or []
+    if not isinstance(shared_raw, list):
+        raise ChartError(
+            "validation",
+            "proposal_shared_invalid",
+            "shared_context must be an array of D-IDs",
+            details={"path": str(path)},
+        )
+    shared: list[str] = []
+    shared_seen: set[str] = set()
+    for s in shared_raw:
+        did = canonicalize_decision_id(str(s), chart_id=chart_id)
+        if did not in shared_seen:
+            shared_seen.add(did)
+            shared.append(did)
+
+    clusters: list[dict] = []
+    for i, raw_c in enumerate(raw_clusters, start=1):
+        if not isinstance(raw_c, dict):
+            raise ChartError(
+                "validation",
+                "proposal_cluster_invalid",
+                f"Cluster #{i} must be an object",
+                details={"index": i},
+            )
+        key = str(
+            raw_c.get("key")
+            or raw_c.get("id")
+            or raw_c.get("cluster")
+            or i
+        ).strip()
+        if not key:
+            key = str(i)
+        rationale = (raw_c.get("rationale") or raw_c.get("reason") or "").strip()
+        if not rationale:
+            raise ChartError(
+                "validation",
+                "proposal_rationale_required",
+                f"Cluster '{key}' requires a one-line rationale",
+                details={"key": key, "index": i},
+            )
+        refuse_if_unsafe_answer(rationale)
+        raw_decs = raw_c.get("decisions") or raw_c.get("decision_ids") or []
+        if not isinstance(raw_decs, list) or not raw_decs:
+            raise ChartError(
+                "validation",
+                "proposal_cluster_empty",
+                f"Cluster '{key}' requires a non-empty decisions array",
+                details={"key": key, "index": i},
+            )
+        decs: list[str] = []
+        dec_seen: set[str] = set()
+        for d in raw_decs:
+            did = canonicalize_decision_id(str(d), chart_id=chart_id)
+            if did not in dec_seen:
+                dec_seen.add(did)
+                decs.append(did)
+        clusters.append(
+            {
+                "key": key,
+                "rationale": rationale,
+                "decisions": decs,
+            }
+        )
+    return {"clusters": clusters, "shared_context": shared}
+
+
+def _normalize_briefing_proposal(proposal: dict) -> dict:
+    """Deterministic proposal form for fingerprinting (sorted membership)."""
+    clusters_out = []
+    for c in proposal.get("clusters") or []:
+        clusters_out.append(
+            {
+                "key": str(c.get("key")),
+                "rationale": str(c.get("rationale") or "").strip(),
+                "decisions": sorted(c.get("decisions") or []),
+            }
+        )
+    # Sort by key so reordering alone does not mint a new B-ID.
+    clusters_out.sort(key=lambda x: x["key"])
+    return {
+        "clusters": clusters_out,
+        "shared_context": sorted(proposal.get("shared_context") or []),
+    }
+
+
+def _decision_status(chart: dict, did: str) -> Optional[str]:
+    for d in chart.get("decisions") or []:
+        if isinstance(d, dict) and d.get("id") == did:
+            return d.get("status")
+    return None
+
+
+def _validate_briefing_membership(
+    chart: dict,
+    proposal: dict,
+    chart_id: str,
+) -> None:
+    """Require complete non-conflicting membership of all RESOLVED decisions.
+
+    Shared-context D-IDs may appear in multiple clusters and must be listed
+    under shared_context. Non-shared membership is exclusive.
+    """
+    resolved_ids: set[str] = set()
+    all_ids: set[str] = set()
+    for d in chart.get("decisions") or []:
+        if not isinstance(d, dict) or not d.get("id"):
+            continue
+        all_ids.add(d["id"])
+        if d.get("status") == "resolved":
+            resolved_ids.add(d["id"])
+
+    shared = set(proposal.get("shared_context") or [])
+    for sid in shared:
+        if sid not in all_ids:
+            raise ChartError(
+                "validation",
+                "shared_context_unknown",
+                f"shared_context D-ID not on chart: {sid}",
+                details={"id": sid, "chart_id": chart_id},
+            )
+        if sid not in resolved_ids:
+            raise ChartError(
+                "validation",
+                "shared_context_not_resolved",
+                f"shared_context D-ID is not resolved: {sid}",
+                details={"id": sid, "status": _decision_status(chart, sid)},
+            )
+
+    membership: dict[str, list[str]] = {}
+    for c in proposal.get("clusters") or []:
+        key = c["key"]
+        for did in c.get("decisions") or []:
+            if did not in all_ids:
+                raise ChartError(
+                    "validation",
+                    "proposal_decision_unknown",
+                    f"Cluster '{key}' references unknown D-ID: {did}",
+                    details={"key": key, "id": did},
+                )
+            if did not in resolved_ids:
+                raise ChartError(
+                    "validation",
+                    "proposal_decision_not_resolved",
+                    f"Cluster '{key}' includes non-resolved D-ID: {did}",
+                    details={
+                        "key": key,
+                        "id": did,
+                        "status": _decision_status(chart, did),
+                    },
+                )
+            membership.setdefault(did, []).append(key)
+
+    for did, keys in membership.items():
+        if len(keys) > 1 and did not in shared:
+            raise ChartError(
+                "validation",
+                "proposal_membership_conflict",
+                f"D-ID {did} appears in clusters {keys} but is not listed "
+                "in shared_context",
+                details={"id": did, "clusters": keys},
+            )
+
+    covered = set(membership.keys())
+    missing = sorted(resolved_ids - covered)
+    if missing:
+        raise ChartError(
+            "validation",
+            "proposal_incomplete_membership",
+            "Proposal does not cover all resolved decisions: "
+            + ", ".join(missing),
+            details={"missing": missing, "chart_id": chart_id},
+        )
+
+    for sid in shared:
+        if sid not in covered:
+            raise ChartError(
+                "validation",
+                "shared_context_not_in_cluster",
+                f"shared_context D-ID {sid} is not a member of any cluster",
+                details={"id": sid},
+            )
+
+
+def _extract_chart_section_body(md_text: str, heading: str) -> str:
+    pattern = re.compile(
+        rf"(^##\s+{re.escape(heading)}\s*\n)(.*?)(?=^##\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    m = pattern.search(md_text or "")
+    if not m:
+        return ""
+    return m.group(2).strip()
+
+
+def _unresolved_briefing_inventory(chart: dict) -> dict:
+    """List every open/blocked/claimed decision and parked question for drafts."""
+    completion = chart_completion_predicate(chart)
+    decisions = chart.get("decisions") or []
+    status_index = {
+        d["id"]: d.get("status")
+        for d in decisions
+        if isinstance(d, dict) and d.get("id")
+    }
+    open_items: list[dict] = []
+    for d in decisions:
+        if not isinstance(d, dict) or d.get("status") != "open":
+            continue
+        did = d.get("id")
+        kind = "open"
+        if _decision_is_blocked(d, status_index):
+            kind = "blocked"
+        if _decision_is_claimed(d):
+            kind = "claimed" if kind == "open" else f"{kind}+claimed"
+        open_items.append(
+            {
+                "id": did,
+                "title": d.get("title"),
+                "kind": kind,
+                "claimed_by": d.get("claimed_by"),
+            }
+        )
+    parked = []
+    for p in chart.get("parked_questions") or []:
+        if isinstance(p, dict):
+            parked.append({"key": p.get("key"), "body": p.get("body")})
+    return {
+        "open_decisions": open_items,
+        "parked_questions": parked,
+        "stuck_reasons": list(completion.get("stuck_reasons") or []),
+        "briefable": bool(completion.get("briefable")),
+    }
+
+
+def _load_decision_briefs(
+    flow_dir: Path, chart_id: str, dids: list[str]
+) -> list[dict]:
+    out: list[dict] = []
+    for did in dids:
+        n = decision_local_number(did)
+        try:
+            full = load_decision_sidecar(flow_dir, chart_id, n)
+        except ChartError:
+            full = {"id": did, "title": did, "status": "unknown"}
+        gist = full.get("answer_gist")
+        if not gist and isinstance(full.get("answer"), str):
+            gist = answer_gist(full["answer"])
+        out.append(
+            {
+                "id": did,
+                "title": full.get("title") or did,
+                "status": full.get("status"),
+                "gist": gist or "",
+                "record_path": full.get("record_path")
+                or decision_record_link(chart_id, n),
+                "superseded_by": full.get("superseded_by"),
+                "assets": list(full.get("assets") or []),
+            }
+        )
+    return out
+
+
+def _render_briefing_index_md(
+    chart: dict,
+    *,
+    briefing_id: str,
+    status: str,
+    md_text: str,
+    clusters: list[dict],
+    shared_context: list[str],
+    unresolved: Optional[dict],
+    all_decision_briefs: list[dict],
+) -> str:
+    chart_id = chart.get("id") or "?"
+    title = chart.get("title") or chart_id
+    outcome = chart.get("outcome") or ""
+    lines: list[str] = [
+        f"# {chart_id} briefing {briefing_id}",
+        "",
+        f"**Briefing:** {briefing_id}",
+        f"**Status:** {status}",
+        f"**Chart:** {chart_id} - {title}",
+        f"**Chart status:** {chart.get('status')}",
+        "",
+        "## Outcome",
+        "",
+        outcome.strip() or "(none)",
+        "",
+        "## Decisions",
+        "",
+    ]
+    resolved = [d for d in all_decision_briefs if d.get("status") == "resolved"]
+    superseded = [
+        d for d in all_decision_briefs if d.get("status") == "superseded"
+    ]
+    if resolved:
+        for d in resolved:
+            lines.append(
+                f"- **{d['id']}:** {d.get('title')} - {d.get('gist') or '(no gist)'} "
+                f"- [record]({d.get('record_path')})"
+            )
+    else:
+        lines.append("(no resolved decisions)")
+    lines.extend(["", "## Superseded decisions", ""])
+    if superseded:
+        for d in superseded:
+            lines.append(
+                f"- ~~**{d['id']}:**~~ {d.get('title')} - {d.get('gist') or ''} "
+                f"- superseded by **{d.get('superseded_by') or '?'}** "
+                f"- [record]({d.get('record_path')})"
+            )
+    else:
+        lines.append("(none)")
+    ledger = _extract_chart_section_body(md_text, "Decisions")
+    if ledger:
+        lines.extend(["", "## Ledger (chart)", "", ledger, ""])
+    boundaries = _extract_chart_section_body(md_text, "Boundaries")
+    lines.extend(["## Boundaries", "", boundaries or "(none)", ""])
+    lines.extend(["## Assets", ""])
+    any_asset = False
+    for d in all_decision_briefs:
+        for a in d.get("assets") or []:
+            if not isinstance(a, dict):
+                continue
+            any_asset = True
+            lines.append(
+                f"- **{d['id']}:** {a.get('kind')} `{a.get('reference')}` "
+                f"- {a.get('display') or ''}"
+            )
+    if not any_asset:
+        lines.append("(none)")
+    lines.extend(["", "## Clusters", ""])
+    for c in clusters:
+        lines.append(
+            f"- **cluster {c['key']}:** {c.get('rationale')} "
+            f"- decisions: {', '.join(c.get('decisions') or [])}"
+        )
+    lines.extend(["", "## Shared context", ""])
+    if shared_context:
+        for sid in shared_context:
+            lines.append(f"- {sid}")
+    else:
+        lines.append("(none)")
+    if status == "draft" and unresolved is not None:
+        lines.extend(
+            [
+                "",
+                "## DRAFT - unresolved inventory",
+                "",
+                "This briefing is **draft-only**. It is not capture-ready. "
+                "A forced draft can never be promoted to final.",
+                "",
+            ]
+        )
+        for item in unresolved.get("open_decisions") or []:
+            lines.append(
+                f"- open decision **{item.get('id')}** ({item.get('kind')}): "
+                f"{item.get('title') or ''}"
+                + (
+                    f" claimed_by={item.get('claimed_by')}"
+                    if item.get("claimed_by")
+                    else ""
+                )
+            )
+        for p in unresolved.get("parked_questions") or []:
+            lines.append(
+                f"- parked question `{p.get('key')}`: {p.get('body') or ''}"
+            )
+        if unresolved.get("stuck_reasons"):
+            lines.extend(["", "Stuck reasons:", ""])
+            for r in unresolved["stuck_reasons"]:
+                lines.append(f"- {r}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_cluster_briefing_md(
+    chart: dict,
+    *,
+    briefing_id: str,
+    status: str,
+    cluster: dict,
+    shared_context: list[str],
+    cluster_briefs: list[dict],
+    shared_briefs: list[dict],
+) -> str:
+    chart_id = chart.get("id") or "?"
+    outcome = chart.get("outcome") or ""
+    key = cluster.get("key")
+    lines: list[str] = [
+        f"# {chart_id} briefing {briefing_id} cluster {key}",
+        "",
+        f"**Briefing:** {briefing_id}",
+        f"**Status:** {status}",
+        f"**Cluster:** {key}",
+        f"**Rationale:** {cluster.get('rationale')}",
+        f"**Chart:** {chart_id}",
+        "",
+        "## Outcome",
+        "",
+        outcome.strip() or "(none)",
+        "",
+        "## Cluster decisions",
+        "",
+    ]
+    for d in cluster_briefs:
+        lines.append(
+            f"- **{d['id']}:** {d.get('title')} - {d.get('gist') or '(no gist)'} "
+            f"- [record]({d.get('record_path')})"
+        )
+        for a in d.get("assets") or []:
+            if isinstance(a, dict):
+                lines.append(
+                    f"  - asset: {a.get('kind')} `{a.get('reference')}` "
+                    f"- {a.get('display') or ''}"
+                )
+    lines.extend(["", "## Shared context", ""])
+    if shared_briefs:
+        lines.append(
+            "Shared-context D-IDs are attributable evidence for this cluster "
+            "but are not duplicated acceptance requirements by default."
+        )
+        lines.append("")
+        for d in shared_briefs:
+            lines.append(
+                f"- **{d['id']}:** {d.get('title')} - {d.get('gist') or ''} "
+                f"- [record]({d.get('record_path')})"
+            )
+    else:
+        lines.append("(none)")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def emit_chart_briefing(
+    flow_dir: Path,
+    chart_id: str,
+    proposal_path: Path,
+    *,
+    force: bool = False,
+) -> dict:
+    """Validate confirmed proposal and emit immutable versioned briefing.
+
+    No clustering algorithm: agent supplies the proposal; flowctl validates
+    and publishes. First non-draft briefing transitions open->done atomically.
+    """
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    status = chart.get("status") or "open"
+    proposal = _parse_briefing_proposal_file(proposal_path, chart_id)
+    normalized = _normalize_briefing_proposal(proposal)
+    _validate_briefing_membership(chart, proposal, chart_id)
+
+    completion = chart_completion_predicate(chart)
+    unresolved = _unresolved_briefing_inventory(chart)
+    if not completion["briefable"] and not force:
+        raise ChartError(
+            "invalid_state",
+            "chart_not_briefable",
+            f"Chart {chart_id} is not briefable: "
+            + "; ".join(completion.get("stuck_reasons") or ["open work remains"]),
+            details={
+                "id": chart_id,
+                "stuck_reasons": completion.get("stuck_reasons"),
+                "open_count": completion.get("open_count"),
+                "parked_count": completion.get("parked_count"),
+                "blocked_open_ids": completion.get("blocked_open_ids"),
+                "claimed_open_ids": completion.get("claimed_open_ids"),
+            },
+        )
+
+    # Forced incomplete charts are draft-only; complete charts are always final
+    # (force on a complete chart is a no-op force).
+    if force and not completion["briefable"]:
+        briefing_status = "draft"
+    else:
+        briefing_status = "final"
+
+    chart_rev = chart_decision_revision(chart)
+    fingerprint = _briefing_fingerprint(chart_rev, normalized)
+
+    existing = list(chart.get("briefings") or [])
+    for b in existing:
+        if not isinstance(b, dict):
+            continue
+        if b.get("fingerprint") == fingerprint:
+            return {
+                "id": chart_id,
+                "briefing_id": b.get("id"),
+                "status": b.get("status"),
+                "fingerprint": fingerprint,
+                "noop": True,
+                "chart_status": chart.get("status"),
+                "clusters": b.get("clusters") or [],
+                "paths": b.get("paths") or {},
+            }
+
+    if status in ("done", "abandoned"):
+        raise ChartError(
+            "invalid_state",
+            "chart_not_open",
+            f"Chart {chart_id} is {status}; new briefings require "
+            "chart reopen --reason (identical fingerprint retries still work)",
+            details={"id": chart_id, "status": status},
+        )
+
+    briefing_id = _next_briefing_id(existing)
+    actor = get_actor()
+    ts = now_iso()
+
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    md_text = md_path.read_text(encoding="utf-8") if md_path.is_file() else ""
+
+    all_dids = [
+        d["id"]
+        for d in (chart.get("decisions") or [])
+        if isinstance(d, dict) and d.get("id")
+    ]
+    all_briefs = _load_decision_briefs(flow_dir, chart_id, all_dids)
+
+    clusters_meta: list[dict] = []
+    cluster_paths: dict[str, str] = {}
+    mutations: list[tuple[str, str, str]] = []
+
+    index_body = _render_briefing_index_md(
+        chart,
+        briefing_id=briefing_id,
+        status=briefing_status,
+        md_text=md_text,
+        clusters=proposal["clusters"],
+        shared_context=list(proposal.get("shared_context") or []),
+        unresolved=unresolved if briefing_status == "draft" else None,
+        all_decision_briefs=all_briefs,
+    )
+    index_rel = f"{chart_id}-briefing.md"
+    index_path = charts_dir(flow_dir) / index_rel
+    mutations.append(
+        (index_rel, "update" if index_path.is_file() else "create", index_body)
+    )
+
+    n_clusters = len(proposal["clusters"])
+    shared_ids = list(proposal.get("shared_context") or [])
+    shared_briefs = _load_decision_briefs(flow_dir, chart_id, shared_ids)
+
+    if n_clusters > 1:
+        for c in proposal["clusters"]:
+            key = str(c["key"])
+            c_briefs = _load_decision_briefs(
+                flow_dir, chart_id, list(c.get("decisions") or [])
+            )
+            c_body = _render_cluster_briefing_md(
+                chart,
+                briefing_id=briefing_id,
+                status=briefing_status,
+                cluster=c,
+                shared_context=shared_ids,
+                cluster_briefs=c_briefs,
+                shared_briefs=shared_briefs,
+            )
+            c_rel = f"{chart_id}-briefing-{key}.md"
+            c_path = charts_dir(flow_dir) / c_rel
+            mutations.append(
+                (c_rel, "update" if c_path.is_file() else "create", c_body)
+            )
+            cluster_paths[key] = f".flow/charts/{c_rel}"
+            clusters_meta.append(
+                {
+                    "key": key,
+                    "rationale": c.get("rationale"),
+                    "decisions": list(c.get("decisions") or []),
+                    "path": f".flow/charts/{c_rel}",
+                }
+            )
+    else:
+        c0 = proposal["clusters"][0]
+        clusters_meta.append(
+            {
+                "key": str(c0["key"]),
+                "rationale": c0.get("rationale"),
+                "decisions": list(c0.get("decisions") or []),
+                "path": f".flow/charts/{index_rel}",
+            }
+        )
+
+    new_chart = dict(chart)
+    briefing_rec = {
+        "id": briefing_id,
+        "fingerprint": fingerprint,
+        "status": briefing_status,
+        "created": ts,
+        "created_by": actor,
+        "chart_revision": chart_rev,
+        "clusters": clusters_meta,
+        "shared_context": shared_ids,
+        "paths": {
+            "index": f".flow/charts/{index_rel}",
+            **{f"cluster_{k}": v for k, v in cluster_paths.items()},
+        },
+        "force": bool(force and briefing_status == "draft"),
+    }
+    new_briefings = list(existing) + [briefing_rec]
+    new_chart["briefings"] = new_briefings
+    new_chart["updated_at"] = ts
+
+    transitioned_done = False
+    if briefing_status == "final" and status == "open":
+        prior_final = any(
+            isinstance(b, dict) and b.get("status") == "final"
+            for b in existing
+        )
+        if not prior_final:
+            new_chart["status"] = "done"
+            new_chart["done_at"] = ts
+            new_chart["done_by"] = actor
+            new_chart["done_via_briefing"] = briefing_id
+            transitioned_done = True
+            events = list(new_chart.get("claim_events") or [])
+            events.append(
+                {
+                    "kind": "briefing_done",
+                    "actor": actor,
+                    "briefing": briefing_id,
+                    "timestamp": ts,
+                    "chart": chart_id,
+                }
+            )
+            new_chart["claim_events"] = events
+
+    mutations.insert(
+        0, (f"{chart_id}.json", "update", _sidecar_json(new_chart))
+    )
+    if md_path.is_file():
+        mutations.insert(1, (f"{chart_id}.md", "update", md_text))
+
+    run_chart_transaction(flow_dir, "chart.briefing", mutations)
+
+    return {
+        "id": chart_id,
+        "briefing_id": briefing_id,
+        "status": briefing_status,
+        "fingerprint": fingerprint,
+        "noop": False,
+        "chart_status": new_chart.get("status"),
+        "transitioned_done": transitioned_done,
+        "clusters": clusters_meta,
+        "shared_context": shared_ids,
+        "paths": briefing_rec["paths"],
+        "unresolved": unresolved if briefing_status == "draft" else None,
+    }
+
+
+def reopen_chart(flow_dir: Path, chart_id: str, reason: str) -> dict:
+    """Transition done|abandoned -> open; stale all briefings and produced_specs."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    reason_text = (reason or "").strip()
+    if not reason_text:
+        raise ChartError(
+            "validation",
+            "reason_required",
+            "reopen requires --reason",
+            details={"id": chart_id},
+        )
+    refuse_if_unsafe_answer(reason_text)
+    status = chart.get("status") or "open"
+    if status == "open":
+        raise ChartError(
+            "invalid_state",
+            "chart_already_open",
+            f"Chart {chart_id} is already open",
+            details={"id": chart_id, "status": status},
+        )
+    if status not in ("done", "abandoned"):
+        raise ChartError(
+            "invalid_state",
+            "illegal_transition",
+            f"Cannot reopen chart {chart_id}: status is {status} "
+            "(legal: done|abandoned -> open)",
+            details={"id": chart_id, "status": status},
+        )
+
+    actor = get_actor()
+    ts = now_iso()
+    new_chart = dict(chart)
+    new_chart["status"] = "open"
+    new_chart["reopened_at"] = ts
+    new_chart["reopened_by"] = actor
+    new_chart["reopen_reason"] = reason_text
+    new_chart["updated_at"] = ts
+
+    staled_briefings: list[str] = []
+    briefings = []
+    for b in chart.get("briefings") or []:
+        if not isinstance(b, dict):
+            continue
+        nb = dict(b)
+        if nb.get("status") != "stale":
+            nb["status"] = "stale"
+            nb["staled_at"] = ts
+            nb["stale_reason"] = f"chart reopened: {reason_text}"
+            staled_briefings.append(str(nb.get("id") or "?"))
+        briefings.append(nb)
+    new_chart["briefings"] = briefings
+
+    staled_links: list[dict] = []
+    links = []
+    for link in chart.get("produced_specs") or []:
+        if not isinstance(link, dict):
+            continue
+        nl = dict(link)
+        if nl.get("status") != "stale":
+            nl["status"] = "stale"
+            nl["staled_at"] = ts
+            nl["stale_note"] = f"chart reopened: {reason_text}"
+            staled_links.append(
+                {
+                    "briefing": nl.get("briefing"),
+                    "cluster": nl.get("cluster"),
+                    "spec": nl.get("spec"),
+                }
+            )
+        links.append(nl)
+    new_chart["produced_specs"] = links
+
+    events = list(new_chart.get("claim_events") or [])
+    events.append(
+        {
+            "kind": "reopen",
+            "actor": actor,
+            "reason": reason_text,
+            "timestamp": ts,
+            "chart": chart_id,
+            "prior_status": status,
+            "staled_briefings": staled_briefings,
+            "staled_links": staled_links,
+        }
+    )
+    new_chart["claim_events"] = events
+
+    mutations: list[tuple[str, str, str]] = [
+        (f"{chart_id}.json", "update", _sidecar_json(new_chart)),
+    ]
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if md_path.is_file():
+        mutations.append(
+            (f"{chart_id}.md", "update", md_path.read_text(encoding="utf-8"))
+        )
+    run_chart_transaction(flow_dir, "chart.reopen", mutations)
+    return {
+        "id": chart_id,
+        "status": "open",
+        "prior_status": status,
+        "reason": reason_text,
+        "reopened_at": ts,
+        "reopened_by": actor,
+        "staled_briefings": staled_briefings,
+        "staled_links": staled_links,
+        "noop": False,
+    }
+
+
+def _produced_spec_identity(
+    briefing: str, cluster: Optional[str], spec: str
+) -> tuple[str, Optional[str], str]:
+    return (str(briefing), str(cluster) if cluster is not None else None, str(spec))
+
+
+def link_chart_spec(
+    flow_dir: Path,
+    chart_id: str,
+    *,
+    briefing: str,
+    spec: str,
+    decisions: list[str],
+    cluster: Optional[str] = None,
+) -> dict:
+    """Idempotently record a successful capture handoff in produced_specs[].
+
+    Stable identity: briefing + cluster + spec. Identical retry is a no-op.
+    """
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    briefing_id = (briefing or "").strip()
+    if not re.fullmatch(r"B[1-9][0-9]*", briefing_id):
+        raise ChartError(
+            "validation",
+            "invalid_briefing_id",
+            f"Invalid briefing id '{briefing}' (expected B1, B2, ...)",
+            details={"briefing": briefing},
+        )
+    spec_id = (spec or "").strip()
+    if not spec_id:
+        raise ChartError(
+            "validation",
+            "spec_required",
+            "link-spec requires --spec",
+            details={"chart_id": chart_id},
+        )
+    briefings = chart.get("briefings") or []
+    brief_rec = None
+    for b in briefings:
+        if isinstance(b, dict) and b.get("id") == briefing_id:
+            brief_rec = b
+            break
+    if brief_rec is None:
+        raise ChartError(
+            "not_found",
+            "briefing_not_found",
+            f"Briefing {briefing_id} not found on chart {chart_id}",
+            details={"id": chart_id, "briefing": briefing_id},
+        )
+
+    cluster_key = (
+        str(cluster).strip()
+        if cluster is not None and str(cluster).strip()
+        else None
+    )
+    decs: list[str] = []
+    seen: set[str] = set()
+    for raw in decisions or []:
+        did = canonicalize_decision_id(str(raw), chart_id=chart_id)
+        if did not in seen:
+            seen.add(did)
+            decs.append(did)
+
+    identity = _produced_spec_identity(briefing_id, cluster_key, spec_id)
+    existing_links = list(chart.get("produced_specs") or [])
+    for link in existing_links:
+        if not isinstance(link, dict):
+            continue
+        lid = _produced_spec_identity(
+            str(link.get("briefing") or ""),
+            str(link["cluster"]) if link.get("cluster") is not None else None,
+            str(link.get("spec") or ""),
+        )
+        if lid == identity:
+            return {
+                "id": chart_id,
+                "briefing": briefing_id,
+                "cluster": cluster_key,
+                "spec": spec_id,
+                "decisions": list(link.get("decisions") or decs),
+                "status": link.get("status") or "linked",
+                "noop": True,
+                "link": link,
+            }
+
+    actor = get_actor()
+    ts = now_iso()
+    link_rec = {
+        "briefing": briefing_id,
+        "cluster": cluster_key,
+        "spec": spec_id,
+        "decisions": decs,
+        "status": "linked",
+        "linked_at": ts,
+        "linked_by": actor,
+    }
+    new_chart = dict(chart)
+    new_chart["produced_specs"] = existing_links + [link_rec]
+    new_chart["updated_at"] = ts
+    mutations: list[tuple[str, str, str]] = [
+        (f"{chart_id}.json", "update", _sidecar_json(new_chart)),
+    ]
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if md_path.is_file():
+        mutations.append(
+            (f"{chart_id}.md", "update", md_path.read_text(encoding="utf-8"))
+        )
+    run_chart_transaction(flow_dir, "chart.link-spec", mutations)
+    return {
+        "id": chart_id,
+        "briefing": briefing_id,
+        "cluster": cluster_key,
+        "spec": spec_id,
+        "decisions": decs,
+        "status": "linked",
+        "noop": False,
+        "link": link_rec,
+    }
+
+
+def mark_produced_specs_stale_for_superseded(
+    chart: dict,
+    superseded_ids: list[str],
+    *,
+    via: str,
+    actor: Optional[str] = None,
+    ts: Optional[str] = None,
+) -> tuple[list[dict], list[dict]]:
+    """Mark produced_specs links containing superseded D-IDs as stale.
+
+    Does not rewrite briefings or specs. Returns (new_links, staled_entries).
+    """
+    if not superseded_ids:
+        return list(chart.get("produced_specs") or []), []
+    supersede_set = set(superseded_ids)
+    actor = actor or get_actor()
+    ts = ts or now_iso()
+    new_links: list[dict] = []
+    staled: list[dict] = []
+    for link in chart.get("produced_specs") or []:
+        if not isinstance(link, dict):
+            continue
+        nl = dict(link)
+        link_decs = list(nl.get("decisions") or [])
+        hit = [d for d in link_decs if d in supersede_set]
+        if hit and nl.get("status") != "stale":
+            nl["status"] = "stale"
+            nl["staled_at"] = ts
+            nl["stale_note"] = (
+                f"superseded D-ID(s) {', '.join(hit)} via {via}"
+            )
+            staled.append(
+                {
+                    "briefing": nl.get("briefing"),
+                    "cluster": nl.get("cluster"),
+                    "spec": nl.get("spec"),
+                    "superseded": hit,
+                }
+            )
+        new_links.append(nl)
+    return new_links, staled
 
 
 def human_decision_line(decision: dict) -> str:
@@ -22543,6 +23602,152 @@ def cmd_chart_abandon(args: argparse.Namespace) -> None:
         chart_json_success(command, out)
     else:
         print(f"{out.get('id')} abandoned: {out.get('reason')}")
+
+
+def cmd_chart_briefing(args: argparse.Namespace) -> None:
+    command = "chart.briefing"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    proposal = getattr(args, "proposal_file", None)
+    force = bool(getattr(args, "force", False))
+    if not proposal:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "proposal_file_required",
+            "chart briefing requires --proposal-file",
+        )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = emit_chart_briefing(
+                flow_dir,
+                raw_id,
+                Path(proposal),
+                force=force,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        bid = out.get("briefing_id")
+        st = out.get("status")
+        noop = " (noop)" if out.get("noop") else ""
+        print(f"{out.get('id')} briefing {bid} status={st}{noop}")
+        if out.get("transitioned_done"):
+            print(f"chart status -> done via {bid}")
+        paths = out.get("paths") or {}
+        if paths.get("index"):
+            print(f"index={paths['index']}")
+
+
+def cmd_chart_reopen(args: argparse.Namespace) -> None:
+    command = "chart.reopen"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    reason = getattr(args, "reason", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = reopen_chart(flow_dir, raw_id, reason or "")
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(
+            f"{out.get('id')} reopened (was {out.get('prior_status')}): "
+            f"{out.get('reason')}"
+        )
+        if out.get("staled_briefings"):
+            print(f"staled briefings: {', '.join(out['staled_briefings'])}")
+
+
+def cmd_chart_link_spec(args: argparse.Namespace) -> None:
+    command = "chart.link-spec"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    briefing = getattr(args, "briefing", None)
+    spec = getattr(args, "spec", None)
+    cluster = getattr(args, "cluster", None)
+    decisions_raw = getattr(args, "decisions", None) or ""
+    decisions = [p.strip() for p in str(decisions_raw).split(",") if p.strip()]
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = link_chart_spec(
+                flow_dir,
+                raw_id,
+                briefing=briefing or "",
+                spec=spec or "",
+                decisions=decisions,
+                cluster=cluster,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        noop = " (noop)" if out.get("noop") else ""
+        cl = out.get("cluster")
+        cl_part = f" cluster={cl}" if cl else ""
+        print(
+            f"{out.get('id')} link-spec {out.get('briefing')}{cl_part} "
+            f"-> {out.get('spec')} status={out.get('status')}{noop}"
+        )
 
 
 # ---------- PR cognitive-aid artifact (fn-136.6) ------------------------
@@ -41458,6 +42663,75 @@ def main() -> None:
     )
     p_chart_abandon.add_argument("--json", action="store_true", help="JSON output")
     p_chart_abandon.set_defaults(func=cmd_chart_abandon)
+
+    p_chart_briefing = chart_sub.add_parser(
+        "briefing",
+        help=(
+            "Validate a confirmed split proposal and emit an immutable "
+            "versioned briefing (B1, B2, ...); first final sets done"
+        ),
+    )
+    p_chart_briefing.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_briefing.add_argument(
+        "--proposal-file",
+        required=True,
+        dest="proposal_file",
+        help=(
+            "Agent-confirmed proposal JSON: clusters[{key,rationale,decisions}], "
+            "shared_context[]"
+        ),
+    )
+    p_chart_briefing.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Emit an explicitly draft briefing while open/blocked/claimed/"
+            "parked items remain; leaves chart open; never capture-ready"
+        ),
+    )
+    p_chart_briefing.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_briefing.set_defaults(func=cmd_chart_briefing)
+
+    p_chart_reopen = chart_sub.add_parser(
+        "reopen",
+        help="Reopen done/abandoned chart; stale prior briefings and spec links",
+    )
+    p_chart_reopen.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_reopen.add_argument(
+        "--reason",
+        required=True,
+        help="Why discovery reopens (recorded; prior briefings/links staled)",
+    )
+    p_chart_reopen.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_reopen.set_defaults(func=cmd_chart_reopen)
+
+    p_chart_link = chart_sub.add_parser(
+        "link-spec",
+        help="Idempotently record a successful capture handoff in produced_specs[]",
+    )
+    p_chart_link.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_link.add_argument(
+        "--briefing",
+        required=True,
+        help="Briefing id (B1, B2, ...)",
+    )
+    p_chart_link.add_argument(
+        "--spec",
+        required=True,
+        help="Spec id produced by capture",
+    )
+    p_chart_link.add_argument(
+        "--decisions",
+        required=True,
+        help="Comma-separated D-IDs mapped into this spec",
+    )
+    p_chart_link.add_argument(
+        "--cluster",
+        default=None,
+        help="Optional cluster key from the briefing proposal",
+    )
+    p_chart_link.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_link.set_defaults(func=cmd_chart_link_spec)
 
     # anchor (fn-83.3) — single-call worker anchor bundle: the verbatim
     # outputs of every worker Phase-1 re-anchor read in one deterministic

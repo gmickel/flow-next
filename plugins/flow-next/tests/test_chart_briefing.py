@@ -1,0 +1,837 @@
+"""Unit tests for chart briefing, reopen, link-spec (fn-135.3).
+
+Covers: completion refusal (blocked/claimed/open/parked), forced draft,
+fingerprint versioning B1 idempotent / B2 on change, first-final->done,
+done-chart mutation rejection, reopen stales briefings+links, link-spec
+idempotency + cluster identity + stale-after-supersession, multi-cluster
+emission, shared-context handling, failpoint rollback during publication.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+FLOWCTL_PY = ROOT / "scripts" / "flowctl.py"
+
+spec = importlib.util.spec_from_file_location("flowctl", ROOT / "scripts" / "flowctl.py")
+flowctl = importlib.util.module_from_spec(spec)
+sys.modules["flowctl"] = flowctl
+spec.loader.exec_module(flowctl)
+
+
+def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        check=check,
+    )
+
+
+def _init_repo(repo: Path) -> None:
+    repo.mkdir(parents=True, exist_ok=True)
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "chart-test@example.com")
+    _git(repo, "config", "user.name", "chart-test")
+    _git(repo, "config", "commit.gpgsign", "false")
+
+
+def _init_flow(repo: Path) -> Path:
+    r = subprocess.run(
+        [sys.executable, str(FLOWCTL_PY), "init"],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(f"flowctl init failed: {r.stderr}\n{r.stdout}")
+    return repo / ".flow"
+
+
+def _run_flowctl(
+    cwd: Path, *args: str, env: dict | None = None
+) -> subprocess.CompletedProcess:
+    full_env = os.environ.copy()
+    if env:
+        full_env.update(env)
+    full_env.setdefault("FLOWCTL_CHART_FAILPOINT", "")
+    if env is None or "FLOWCTL_CHART_FAILPOINT" not in env:
+        full_env.pop("FLOWCTL_CHART_FAILPOINT", None)
+    return subprocess.run(
+        [sys.executable, str(FLOWCTL_PY), *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=full_env,
+    )
+
+
+def _create_chart(repo: Path, title: str = "Tenant isolation", outcome: str = "Ready") -> str:
+    r = _run_flowctl(
+        repo,
+        "chart",
+        "create",
+        "--title",
+        title,
+        "--outcome",
+        outcome,
+        "--json",
+    )
+    assert r.returncode == 0, r.stderr + r.stdout
+    return json.loads(r.stdout)["result"]["id"]
+
+
+def _add_decision(
+    repo: Path,
+    chart_id: str,
+    title: str,
+    dtype: str = "research",
+    *,
+    blocked_by: str | None = None,
+    depends_on: str | None = None,
+) -> dict:
+    args = [
+        "chart",
+        "add-decision",
+        chart_id,
+        "--title",
+        title,
+        "--type",
+        dtype,
+        "--json",
+    ]
+    if blocked_by is not None:
+        args.extend(["--blocked-by", blocked_by])
+    if depends_on is not None:
+        args.extend(["--depends-on", depends_on])
+    r = _run_flowctl(repo, *args)
+    assert r.returncode == 0, r.stderr + r.stdout
+    return json.loads(r.stdout)["result"]
+
+
+def _resolve(repo: Path, did: str, answer: str, *, supersedes: str | None = None) -> dict:
+    af = repo / f"ans-{did.replace('.', '-')}.txt"
+    af.write_text(answer, encoding="utf-8")
+    args = ["chart", "resolve", did, "--answer-file", str(af), "--json"]
+    if supersedes:
+        args.extend(["--supersedes", supersedes])
+    r = _run_flowctl(repo, *args)
+    assert r.returncode == 0, r.stderr + r.stdout
+    return json.loads(r.stdout)["result"]
+
+
+def _proposal(
+    repo: Path,
+    name: str,
+    clusters: list[dict],
+    shared: list[str] | None = None,
+) -> Path:
+    p = repo / name
+    payload = {"clusters": clusters, "shared_context": shared or []}
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    return p
+
+
+def _brief(
+    repo: Path,
+    chart_id: str,
+    proposal: Path,
+    *,
+    force: bool = False,
+) -> subprocess.CompletedProcess:
+    args = [
+        "chart",
+        "briefing",
+        chart_id,
+        "--proposal-file",
+        str(proposal),
+        "--json",
+    ]
+    if force:
+        args.append("--force")
+    return _run_flowctl(repo, *args)
+
+
+def _chart_json(flow: Path, chart_id: str) -> dict:
+    return json.loads((flow / "charts" / f"{chart_id}.json").read_text(encoding="utf-8"))
+
+
+def _ready_single_cluster(repo: Path) -> tuple[str, Path, dict, dict]:
+    """Create chart with two resolved decisions and a single-cluster proposal."""
+    chart_id = _create_chart(repo)
+    d1 = _add_decision(repo, chart_id, "Storage choice", "research")
+    d2 = _add_decision(repo, chart_id, "Auth model", "research")
+    _resolve(repo, d1["id"], "Use Postgres for tenant metadata")
+    _resolve(repo, d2["id"], "OIDC with per-tenant issuers")
+    prop = _proposal(
+        repo,
+        "prop-one.json",
+        [
+            {
+                "key": "1",
+                "rationale": "Single captureable surface",
+                "decisions": [d1["id"], d2["id"]],
+            }
+        ],
+    )
+    return chart_id, prop, d1, d2
+
+
+class TestBriefingEligibility(unittest.TestCase):
+    def test_refuses_open_unblocked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Open Q", "research")
+            # Resolve nothing — open frontier.
+            prop = _proposal(
+                repo,
+                "p.json",
+                [{"key": "1", "rationale": "n/a", "decisions": [d1["id"]]}],
+            )
+            # Membership also fails (not resolved), but eligibility is the gate
+            # once we have resolved coverage — create a second resolved + leave open.
+            d2 = _add_decision(repo, chart_id, "Done one", "research")
+            _resolve(repo, d2["id"], "settled")
+            prop2 = _proposal(
+                repo,
+                "p2.json",
+                [{"key": "1", "rationale": "partial", "decisions": [d2["id"]]}],
+            )
+            r = _brief(repo, chart_id, prop2)
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)
+            self.assertEqual(err["error"]["code"], "chart_not_briefable")
+            self.assertIn("open", " ".join(err["error"]["details"].get("stuck_reasons") or []).lower()
+                          or err["error"]["message"].lower())
+
+    def test_refuses_blocked_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Premise", "research")
+            d2 = _add_decision(repo, chart_id, "Blocked", "research", blocked_by=d1["id"])
+            _resolve(repo, d1["id"], "premise settled")
+            # d2 still open+blocked
+            prop = _proposal(
+                repo,
+                "p.json",
+                [{"key": "1", "rationale": "only resolved", "decisions": [d1["id"]]}],
+            )
+            r = _brief(repo, chart_id, prop)
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)
+            self.assertEqual(err["error"]["code"], "chart_not_briefable")
+            self.assertTrue(
+                any("blocked" in s.lower() for s in err["error"]["details"].get("stuck_reasons") or [])
+                or "blocked" in err["error"]["message"].lower()
+            )
+
+    def test_refuses_claimed_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Claimed open", "research")
+            d2 = _add_decision(repo, chart_id, "Resolved", "research")
+            _resolve(repo, d2["id"], "done")
+            r_claim = _run_flowctl(repo, "chart", "claim", d1["id"], "--json")
+            self.assertEqual(r_claim.returncode, 0, r_claim.stderr)
+            prop = _proposal(
+                repo,
+                "p.json",
+                [{"key": "1", "rationale": "only resolved", "decisions": [d2["id"]]}],
+            )
+            r = _brief(repo, chart_id, prop)
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)
+            self.assertEqual(err["error"]["code"], "chart_not_briefable")
+            self.assertTrue(
+                any("claimed" in s.lower() for s in err["error"]["details"].get("stuck_reasons") or [])
+                or "claimed" in err["error"]["message"].lower()
+            )
+
+    def test_refuses_parked_questions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Only", "research")
+            _resolve(repo, d1["id"], "done")
+            body = repo / "park.txt"
+            body.write_text("What about multi-region failover?", encoding="utf-8")
+            r_park = _run_flowctl(
+                repo,
+                "chart",
+                "park-question",
+                chart_id,
+                "--body-file",
+                str(body),
+                "--json",
+            )
+            self.assertEqual(r_park.returncode, 0, r_park.stderr)
+            prop = _proposal(
+                repo,
+                "p.json",
+                [{"key": "1", "rationale": "single", "decisions": [d1["id"]]}],
+            )
+            r = _brief(repo, chart_id, prop)
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)
+            self.assertEqual(err["error"]["code"], "chart_not_briefable")
+
+
+class TestForcedDraft(unittest.TestCase):
+    def test_force_draft_lists_unresolved_and_leaves_open(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Settled", "research")
+            d2 = _add_decision(repo, chart_id, "Still open", "research")
+            _resolve(repo, d1["id"], "settled answer")
+            prop = _proposal(
+                repo,
+                "p.json",
+                [{"key": "1", "rationale": "partial handoff", "decisions": [d1["id"]]}],
+            )
+            r = _brief(repo, chart_id, prop, force=True)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            env = json.loads(r.stdout)
+            self.assertTrue(env["success"])
+            self.assertEqual(env["result"]["status"], "draft")
+            self.assertEqual(env["result"]["chart_status"], "open")
+            self.assertFalse(env["result"]["transitioned_done"])
+            self.assertEqual(env["result"]["briefing_id"], "B1")
+
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(side["status"], "open")
+            self.assertEqual(side["briefings"][0]["status"], "draft")
+
+            index = (flow / "charts" / f"{chart_id}-briefing.md").read_text(encoding="utf-8")
+            self.assertIn("draft-only", index.lower())
+            self.assertIn(d2["id"], index)
+            self.assertIn("DRAFT", index)
+
+
+class TestFingerprintVersioning(unittest.TestCase):
+    def test_b1_idempotent_and_b2_on_change(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, d1, d2 = _ready_single_cluster(repo)
+
+            r1 = _brief(repo, chart_id, prop)
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            e1 = json.loads(r1.stdout)["result"]
+            self.assertEqual(e1["briefing_id"], "B1")
+            self.assertEqual(e1["status"], "final")
+            self.assertTrue(e1["transitioned_done"])
+            self.assertEqual(e1["chart_status"], "done")
+            fp1 = e1["fingerprint"]
+
+            # Identical retry on done chart returns B1.
+            r2 = _brief(repo, chart_id, prop)
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            e2 = json.loads(r2.stdout)["result"]
+            self.assertTrue(e2["noop"])
+            self.assertEqual(e2["briefing_id"], "B1")
+            self.assertEqual(e2["fingerprint"], fp1)
+
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(len(side["briefings"]), 1)
+
+            # Changed proposal needs reopen first.
+            prop2 = _proposal(
+                repo,
+                "prop-two.json",
+                [
+                    {
+                        "key": "a",
+                        "rationale": "Split storage",
+                        "decisions": [d1["id"]],
+                    },
+                    {
+                        "key": "b",
+                        "rationale": "Split auth",
+                        "decisions": [d2["id"]],
+                    },
+                ],
+            )
+            r_bad = _brief(repo, chart_id, prop2)
+            self.assertNotEqual(r_bad.returncode, 0)
+            self.assertEqual(json.loads(r_bad.stdout)["error"]["code"], "chart_not_open")
+
+            r_re = _run_flowctl(
+                repo,
+                "chart",
+                "reopen",
+                chart_id,
+                "--reason",
+                "need a two-spec split",
+                "--json",
+            )
+            self.assertEqual(r_re.returncode, 0, r_re.stderr)
+            re_out = json.loads(r_re.stdout)["result"]
+            self.assertEqual(re_out["status"], "open")
+            self.assertIn("B1", re_out["staled_briefings"])
+
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(side["briefings"][0]["status"], "stale")
+
+            r3 = _brief(repo, chart_id, prop2)
+            self.assertEqual(r3.returncode, 0, r3.stderr + r3.stdout)
+            e3 = json.loads(r3.stdout)["result"]
+            self.assertEqual(e3["briefing_id"], "B2")
+            self.assertEqual(e3["status"], "final")
+            self.assertNotEqual(e3["fingerprint"], fp1)
+            self.assertTrue(e3["transitioned_done"])
+
+
+class TestDoneAndMutations(unittest.TestCase):
+    def test_first_final_sets_done_and_blocks_mutations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+            r = _brief(repo, chart_id, prop)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(_chart_json(flow, chart_id)["status"], "done")
+
+            # add-decision rejected
+            r_add = _run_flowctl(
+                repo,
+                "chart",
+                "add-decision",
+                chart_id,
+                "--title",
+                "Late",
+                "--type",
+                "research",
+                "--json",
+            )
+            self.assertNotEqual(r_add.returncode, 0)
+            self.assertEqual(json.loads(r_add.stdout)["error"]["code"], "chart_not_open")
+
+            # show/list still work
+            r_show = _run_flowctl(repo, "chart", "show", chart_id, "--json")
+            self.assertEqual(r_show.returncode, 0, r_show.stderr)
+            self.assertEqual(json.loads(r_show.stdout)["result"]["status"], "done")
+            r_list = _run_flowctl(repo, "chart", "list", "--json")
+            self.assertEqual(r_list.returncode, 0, r_list.stderr)
+
+
+class TestLinkSpec(unittest.TestCase):
+    def test_idempotent_cluster_identity_and_stale_after_supersession(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, d1, d2 = _ready_single_cluster(repo)
+            r = _brief(repo, chart_id, prop)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            bid = json.loads(r.stdout)["result"]["briefing_id"]
+
+            # Link with cluster key
+            r1 = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                f"{d1['id']},{d2['id']}",
+                "--cluster",
+                "1",
+                "--json",
+            )
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+            e1 = json.loads(r1.stdout)["result"]
+            self.assertFalse(e1["noop"])
+            self.assertEqual(e1["status"], "linked")
+            self.assertEqual(e1["cluster"], "1")
+
+            # Identical retry no-op
+            r2 = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                f"{d1['id']},{d2['id']}",
+                "--cluster",
+                "1",
+                "--json",
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr)
+            self.assertTrue(json.loads(r2.stdout)["result"]["noop"])
+
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(len(side["produced_specs"]), 1)
+
+            # Different cluster identity is a second link
+            r3 = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-901",
+                "--decisions",
+                d2["id"],
+                "--cluster",
+                "2",
+                "--json",
+            )
+            self.assertEqual(r3.returncode, 0, r3.stderr)
+            self.assertFalse(json.loads(r3.stdout)["result"]["noop"])
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(len(side["produced_specs"]), 2)
+
+            # Supersession after reopen stales links containing that D-ID
+            r_re = _run_flowctl(
+                repo,
+                "chart",
+                "reopen",
+                chart_id,
+                "--reason",
+                "revisit storage",
+                "--json",
+            )
+            self.assertEqual(r_re.returncode, 0, r_re.stderr)
+            side = _chart_json(flow, chart_id)
+            for link in side["produced_specs"]:
+                self.assertEqual(link["status"], "stale")
+
+            # Fresh link after reopen, then supersede d1 via new decision
+            d3 = _add_decision(repo, chart_id, "New storage", "research")
+            # Need a briefable path for supersession tests only via resolve
+            # First re-link after reopen
+            prop_new = _proposal(
+                repo,
+                "prop-re.json",
+                [
+                    {
+                        "key": "1",
+                        "rationale": "still one",
+                        "decisions": [d1["id"], d2["id"]],
+                    }
+                ],
+            )
+            # Chart is open with all resolved (reopen doesn't un-resolve).
+            r_b = _brief(repo, chart_id, prop_new)
+            # Wait - d3 is open so not briefable without force. Resolve d3 first
+            # with supersedes d1 instead of briefing.
+            # Actually for stale-after-supersession we need a linked entry that
+            # is not already stale from reopen. Re-link after reopen:
+            # Clear: reopen staled everything. New final briefing B2 then link.
+            # But d3 is open - resolve it superseding d1.
+            _resolve(repo, d3["id"], "Use SQLite instead", supersedes=d1["id"])
+            # Now d1 is superseded; resolved set is d2+d3
+            prop_b2 = _proposal(
+                repo,
+                "prop-b2.json",
+                [
+                    {
+                        "key": "1",
+                        "rationale": "post-supersession",
+                        "decisions": [d2["id"], d3["id"]],
+                    }
+                ],
+            )
+            r_b2 = _brief(repo, chart_id, prop_b2)
+            self.assertEqual(r_b2.returncode, 0, r_b2.stderr + r_b2.stdout)
+            b2 = json.loads(r_b2.stdout)["result"]["briefing_id"]
+            self.assertEqual(b2, "B2")
+
+            r_link = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                b2,
+                "--spec",
+                "fn-902",
+                "--decisions",
+                f"{d2['id']},{d3['id']}",
+                "--cluster",
+                "1",
+                "--json",
+            )
+            self.assertEqual(r_link.returncode, 0, r_link.stderr)
+            side = _chart_json(flow, chart_id)
+            linked = [
+                x
+                for x in side["produced_specs"]
+                if x.get("spec") == "fn-902" and x.get("status") == "linked"
+            ]
+            self.assertEqual(len(linked), 1)
+
+            # Reopen to allow supersession of a linked D-ID (d3)
+            _run_flowctl(
+                repo,
+                "chart",
+                "reopen",
+                chart_id,
+                "--reason",
+                "supersede linked d3",
+                "--json",
+            )
+            # Re-link again after reopen staled B2 link
+            # After reopen all links stale; create d4 superseding d3 while chart open
+            d4 = _add_decision(repo, chart_id, "Even newer storage", "research")
+            # Manually re-link first (simulating capture before supersession)
+            # Need to un-stale by writing a new link with different identity? Or
+            # test supersession path by calling resolve with supersedes on a
+            # chart that has a linked entry that is currently "linked".
+            # Reopen staled all. Insert a fresh linked entry via link-spec with
+            # a new identity, then supersede.
+            r_fresh = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                b2,
+                "--spec",
+                "fn-903",
+                "--decisions",
+                d3["id"],
+                "--cluster",
+                "x",
+                "--json",
+            )
+            self.assertEqual(r_fresh.returncode, 0, r_fresh.stderr)
+            self.assertEqual(json.loads(r_fresh.stdout)["result"]["status"], "linked")
+
+            _resolve(repo, d4["id"], "object store", supersedes=d3["id"])
+            side = _chart_json(flow, chart_id)
+            fresh = [x for x in side["produced_specs"] if x.get("spec") == "fn-903"]
+            self.assertEqual(len(fresh), 1)
+            self.assertEqual(fresh[0]["status"], "stale")
+            self.assertIn("superseded", (fresh[0].get("stale_note") or "").lower())
+
+
+class TestMultiClusterAndShared(unittest.TestCase):
+    def test_multi_cluster_files_and_shared_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Shared tenancy model", "research")
+            d2 = _add_decision(repo, chart_id, "Billing surface", "research")
+            d3 = _add_decision(repo, chart_id, "Admin UI", "research")
+            _resolve(repo, d1["id"], "shared schema with RLS")
+            _resolve(repo, d2["id"], "usage-based billing")
+            _resolve(repo, d3["id"], "admin console v1")
+
+            prop = _proposal(
+                repo,
+                "split.json",
+                [
+                    {
+                        "key": "billing",
+                        "rationale": "Billing can ship alone",
+                        "decisions": [d1["id"], d2["id"]],
+                    },
+                    {
+                        "key": "admin",
+                        "rationale": "Admin UI is a separate capture",
+                        "decisions": [d1["id"], d3["id"]],
+                    },
+                ],
+                shared=[d1["id"]],
+            )
+            r = _brief(repo, chart_id, prop)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            env = json.loads(r.stdout)["result"]
+            self.assertEqual(env["briefing_id"], "B1")
+            self.assertEqual(env["status"], "final")
+
+            index = flow / "charts" / f"{chart_id}-briefing.md"
+            c_billing = flow / "charts" / f"{chart_id}-briefing-billing.md"
+            c_admin = flow / "charts" / f"{chart_id}-briefing-admin.md"
+            self.assertTrue(index.is_file())
+            self.assertTrue(c_billing.is_file())
+            self.assertTrue(c_admin.is_file())
+
+            billing_txt = c_billing.read_text(encoding="utf-8")
+            self.assertIn("Shared context", billing_txt)
+            self.assertIn(d1["id"], billing_txt)
+            self.assertIn(d2["id"], billing_txt)
+            self.assertIn("Outcome", billing_txt)
+
+            # Conflict without shared_context listing
+            prop_bad = _proposal(
+                repo,
+                "bad.json",
+                [
+                    {
+                        "key": "a",
+                        "rationale": "a",
+                        "decisions": [d1["id"], d2["id"]],
+                    },
+                    {
+                        "key": "b",
+                        "rationale": "b",
+                        "decisions": [d1["id"], d3["id"]],
+                    },
+                ],
+                shared=[],
+            )
+            # Chart is done; reopen to test validation
+            _run_flowctl(
+                repo, "chart", "reopen", chart_id, "--reason", "test conflict", "--json"
+            )
+            r_bad = _brief(repo, chart_id, prop_bad)
+            self.assertNotEqual(r_bad.returncode, 0)
+            self.assertEqual(
+                json.loads(r_bad.stdout)["error"]["code"],
+                "proposal_membership_conflict",
+            )
+
+
+class TestBriefingFailpoint(unittest.TestCase):
+    def test_kill_during_publication_rolls_back(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r = _brief(
+                repo,
+                chart_id,
+                prop,
+            )
+            # First establish clean path works without failpoint.
+            self.assertEqual(r.returncode, 0, r.stderr)
+
+            # Reopen and try failpoint on second briefing
+            _run_flowctl(
+                repo,
+                "chart",
+                "reopen",
+                chart_id,
+                "--reason",
+                "failpoint test",
+                "--json",
+            )
+            side_before = _chart_json(flow, chart_id)
+            self.assertEqual(side_before["status"], "open")
+            brief_count_before = len(side_before.get("briefings") or [])
+
+            prop2 = _proposal(
+                repo,
+                "prop-fp.json",
+                [
+                    {
+                        "key": "1",
+                        "rationale": "failpoint proposal change",
+                        "decisions": [_d1["id"], _d2["id"]],
+                    }
+                ],
+            )
+            # Note: _ready_single_cluster locals not available as _d1 - fix by re-reading
+            # Actually we unpacked _d1, _d2 from ready - they're the decision dicts.
+            # Wait I used _d1 in the prop above incorrectly - prop uses d1 from unpack.
+            # Looking at my code: chart_id, prop, _d1, _d2 = _ready_single_cluster
+            # prop2 uses _d1['id'] - good.
+
+            r_kill = _run_flowctl(
+                repo,
+                "chart",
+                "briefing",
+                chart_id,
+                "--proposal-file",
+                str(prop2),
+                "--json",
+                env={"FLOWCTL_CHART_FAILPOINT": "exit:after_first_publish"},
+            )
+            self.assertNotEqual(r_kill.returncode, 0)
+
+            # Recovery on next command
+            r_show = _run_flowctl(repo, "chart", "show", chart_id, "--json")
+            self.assertEqual(r_show.returncode, 0, r_show.stderr)
+            side = _chart_json(flow, chart_id)
+            # After kill mid-publish, recovery should restore or complete.
+            # Either rolled back (status open, same brief count as after reopen)
+            # or rolled forward. Assert no partial txn left.
+            txn_dir = flow / "charts" / ".transactions"
+            if txn_dir.is_dir():
+                left = [p for p in txn_dir.iterdir() if p.is_dir()]
+                # Recovery on show should have cleaned committed/restored txns
+                # Allow empty after recovery
+                self.assertEqual(len(left), 0, f"leftover txns: {left}")
+
+            # Chart should be consistent: either open (restored) or done (rolled forward)
+            self.assertIn(side["status"], ("open", "done"))
+            # briefings count: if rolled back, same as after reopen; if forward, +1
+            n = len(side.get("briefings") or [])
+            self.assertIn(n, (brief_count_before, brief_count_before + 1))
+
+
+class TestReopenFromAbandoned(unittest.TestCase):
+    def test_reopen_abandoned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            r_ab = _run_flowctl(
+                repo,
+                "chart",
+                "abandon",
+                chart_id,
+                "--reason",
+                "stopped discovery",
+                "--json",
+            )
+            self.assertEqual(r_ab.returncode, 0, r_ab.stderr)
+            r_re = _run_flowctl(
+                repo,
+                "chart",
+                "reopen",
+                chart_id,
+                "--reason",
+                "resume discovery",
+                "--json",
+            )
+            self.assertEqual(r_re.returncode, 0, r_re.stderr)
+            self.assertEqual(_chart_json(flow, chart_id)["status"], "open")
+            self.assertEqual(json.loads(r_re.stdout)["result"]["prior_status"], "abandoned")
+
+
+if __name__ == "__main__":
+    unittest.main()
