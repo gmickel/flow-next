@@ -51,9 +51,8 @@ cd plugins/flow-next/tests && python3 -m unittest test_guide_routing test_chart_
 - Guide output leads with a natural-language next prompt, not flags; one blocking question is used only for materially different routes.
 - Behavioral scenario fixtures prove ambiguous read-back and unambiguous routing into skip-chart, chart, capture, interview, and plan; registries/shims and focused tests pass.
 ## Done summary
-TBD
-
+Shipped the /flow-next:guide router (approved fn-67 scope + chart-aware matrix): stateless prompt-first skill with the exact smallest-sufficient matrix - every route names its positive signal, safe skip/narrow condition, and skip kind (signal absent vs despite unresolved risk); leads with a natural-language next prompt; at most one blocking question, only when routes materially differ; no Write/Edit tools, no flowctl mutation, chart never mandatory, no fixed conveyor. Thin command shim; registry counts 25/30. Surgical handover boundaries: prospect (selected survivor -> chart only when still singular+oversized+unclear; chart option in the Phase 6 handoff), capture (clear ideas/briefings route here, no chart manufacturing), interview (clarification primary; backward to chart only when the effort is unspecifiable), plan (ready specs stay; unshaped oversized Route-B input recommends chart), pilot (chart outside the build loop; unattended chart driving terminates NEEDS_HUMAN; chart added to the never-a-stage list). Tests: guide routing contract suite + 6 guide scenario fixtures + guide in the shim inventory (73 focused tests green). Host review (Fable) re-aligned prospect's hard-coded artifact Next-step template line with flowctl's deterministic writer, which pinned tests protect.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2fa16b27
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_guide_routing test_chart_prompt_scenarios test_chart_skill_contract test_command_shim_flatten -q, cd plugins/flow-next/tests && python3 -m unittest test_prospect_artifact test_prospect_cli test_prospect_promote -q
 - PRs:
