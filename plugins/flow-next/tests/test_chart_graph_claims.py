@@ -1494,6 +1494,44 @@ class TestUnsafeProse(unittest.TestCase):
     persistence - not only the resolution answer path. Fixtures are obviously
     fake shapes; destructive commands are described, never executed."""
 
+    def test_chart_create_refuses_unsafe_title_and_outcome(self) -> None:
+        """--title/--outcome land in git-tracked chart md/json (and the
+        tracker parent rollup); both refuse unsafe shapes before any
+        allocation, same error shape as decision prose."""
+        cases = [
+            (
+                ["--title", "use password=hunter2-FAKE for db",
+                 "--outcome", "Out"],
+                "Chart title",
+                "secret",
+            ),
+            (
+                ["--title", "Fine title",
+                 "--outcome", "weekly cleanup runs git reset --hard"],
+                "Chart outcome",
+                "destructive_command",
+            ),
+        ]
+        for extra_args, field, kind in cases:
+            with self.subTest(field=field):
+                with tempfile.TemporaryDirectory() as tmp:
+                    repo = Path(tmp) / "repo"
+                    _init_repo(repo)
+                    flow = _init_flow(repo)
+                    r = _run_flowctl(
+                        repo, "chart", "create", *extra_args, "--json",
+                    )
+                    self.assertNotEqual(r.returncode, 0)
+                    err = json.loads(r.stdout)["error"]
+                    self.assertEqual(err["class"], "validation")
+                    self.assertEqual(err["code"], "unsafe_prose_content")
+                    self.assertEqual(err["details"]["field"], field)
+                    self.assertIn(kind, err["details"]["kinds"])
+                    # Refused BEFORE any allocation or persistence.
+                    self.assertEqual(
+                        list((flow / "charts").glob("fn-*")), [],
+                    )
+
     def test_initial_map_refuses_unsafe_prose_before_allocation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"

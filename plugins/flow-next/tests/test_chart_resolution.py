@@ -505,6 +505,80 @@ class TestResolveRetryAssets(unittest.TestCase):
             self.assertEqual(side["assets"][0]["reference"], "proto.md")
 
 
+class TestResolveRetrySharpen(unittest.TestCase):
+    def test_retry_with_sharpen_rejected_clean_retry_noops(self) -> None:
+        """A resolved retry is identical only when it carries NO sharpen
+        content: resolve-time sharpening creates decisions and removes
+        parked questions, so a successful no-op would silently drop them.
+        The clean retry (no sharpen) stays an idempotent no-op."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            park_body = repo / "park.txt"
+            park_body.write_text(
+                "How do tenants share indexes?", encoding="utf-8"
+            )
+            park = _run_flowctl(
+                repo, "chart", "park-question", chart_id,
+                "--body-file", str(park_body), "--json",
+            )
+            self.assertEqual(park.returncode, 0, park.stderr)
+            pkey = json.loads(park.stdout)["result"]["key"]
+
+            af = _write_answer(repo, "ans.txt", "Shared indexes")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+
+            # Clean identical retry: no-op.
+            r2 = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--json",
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            self.assertTrue(json.loads(r2.stdout)["result"]["noop"])
+
+            # Same answer + sharpen content: refused, nothing created or
+            # removed - the no-op branch must not swallow it.
+            sharpen = {
+                "decisions": [
+                    {
+                        "title": "Index sharing model",
+                        "type": "research",
+                        "question": "Share or isolate?",
+                    }
+                ],
+                "remove_questions": [pkey],
+            }
+            sf = repo / "sharpen.json"
+            sf.write_text(json.dumps(sharpen), encoding="utf-8")
+            r3 = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af),
+                "--sharpen-file", str(sf), "--json",
+            )
+            self.assertNotEqual(r3.returncode, 0)
+            err = json.loads(r3.stdout)["error"]
+            self.assertEqual(err["class"], "invalid_state")
+            self.assertEqual(err["code"], "decision_immutable")
+            ignored = err["details"]["ignored_sharpen"]
+            self.assertEqual(ignored["decisions"], ["Index sharing model"])
+            self.assertEqual(ignored["remove_questions"], [pkey])
+            # No decision allocated, parked question intact.
+            self.assertFalse(
+                (flow / "charts" / chart_id / "2.json").exists()
+            )
+            chart = _chart_json(flow, chart_id)
+            self.assertEqual(
+                [q["key"] for q in chart["parked_questions"]], [pkey],
+            )
+
+
 class TestSupersession(unittest.TestCase):
     def test_supersedes_strikes_ledger_and_cascades(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

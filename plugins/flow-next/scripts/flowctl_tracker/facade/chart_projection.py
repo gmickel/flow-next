@@ -78,7 +78,16 @@ def _event_marker_key(event: str, revision: str, evidence: str) -> str:
     return _sha(f"{event}\x00{revision}\x00{evidence}")[:16]
 
 
-def _mutation_state_digest(decisions: list) -> str:
+def _parked_keys(chart: dict) -> list[str]:
+    """Stable identity of the chart's parked-question set."""
+    return sorted(
+        str(q.get("key") or q.get("body") or "")
+        for q in (chart.get("parked_questions") or [])
+        if isinstance(q, dict)
+    )
+
+
+def _mutation_state_digest(chart: dict, decisions: list) -> str:
     """Projection-side marker digest: claim/asset state + mutation identity.
 
     The supplied chart revision (chart_decision_revision, the briefing-
@@ -91,10 +100,16 @@ def _mutation_state_digest(decisions: list) -> str:
     (same sidecar bytes) still dedupes. The chart's own updated_at is
     deliberately excluded: the success-marker write bumps it, which would
     break retry dedupe.
+
+    Parked-question keys fold in for the same reason: park-question /
+    remove-question mutate ONLY the chart sidecar (no decision status or
+    digest changes), yet the parent rollup's parked count depends on them.
+    The marker write never touches parked state, so retry dedupe holds.
     """
-    return _sha(json.dumps(
-        _digest_entries(decisions), sort_keys=True, default=str,
-    ))
+    return _sha(json.dumps({
+        "decisions": _digest_entries(decisions),
+        "parked": _parked_keys(chart),
+    }, sort_keys=True, default=str))
 
 
 def _digest_entries(decisions: list) -> list[dict]:
@@ -123,6 +138,11 @@ def _chart_base_revision(chart: dict, decisions: list) -> str:
             {"id": d.get("id"), "status": d.get("status")}
             for d in decisions if isinstance(d, dict)
         ],
+        # Parked-only mutations (park-question / remove-question) change no
+        # decision status or digest; without the parked set here the drain's
+        # foreign-change predicate never fires and the parent rollup keeps a
+        # stale parked count until an unrelated event.
+        "parked": _parked_keys(chart),
     }, sort_keys=True, default=str))
 
 
@@ -412,17 +432,25 @@ def _pending_identity_path(flow_dir: Path, kind: str, subject_id: str) -> Path:
 
 
 def _record_pending_identity(flow_dir: Path, kind: str, subject_id: str,
-                             fields: dict) -> None:
-    """Best-effort durable record; the failure receipt carries the same
-    identity, so a write failure here degrades to receipt-only evidence."""
-    atomic_write_json(_pending_identity_path(flow_dir, kind, subject_id), {
+                             fields: dict) -> Optional[TrackerError]:
+    """Durable identity record, ONE retry on write failure.
+
+    Returns the write error when the record could not be persisted; the
+    caller then decides whether the failure receipt still covers recovery
+    (see _receipt_identity_fields) or must refuse retryably-unsafe state."""
+    path = _pending_identity_path(flow_dir, kind, subject_id)
+    payload = {
         "kind": kind,
         "subjectId": subject_id,
         "id": fields.get("id"),
         "identifier": fields.get("identifier"),
         "url": fields.get("url"),
         "recordedAt": now_iso(),
-    })
+    }
+    err = atomic_write_json(path, payload)
+    if err is not None:
+        err = atomic_write_json(path, payload)
+    return err
 
 
 def _clear_pending_identity(flow_dir: Path, kind: str, subject_id: str) -> None:
@@ -430,24 +458,98 @@ def _clear_pending_identity(flow_dir: Path, kind: str, subject_id: str) -> None:
         _pending_identity_path(flow_dir, kind, subject_id).unlink()
 
 
-def _pending_identity_fields(flow_dir: Path, kind: str,
+def _tombstone_pending_identity(flow_dir: Path, kind: str,
+                                subject_id: str) -> None:
+    """Retire a recorded identity after a durable collision.
+
+    An EXISTING pending file with a null id suppresses BOTH adoption
+    sources (file and receipt fallback), so the next projection creates
+    fresh instead of re-adopting the collided identity from an immutable
+    failure receipt forever. Best-effort: an unwritable tombstone means the
+    next projection collides loudly again - never silently duplicates."""
+    atomic_write_json(_pending_identity_path(flow_dir, kind, subject_id), {
+        "kind": kind,
+        "subjectId": subject_id,
+        "id": None,
+        "reason": "durable_collision",
+        "supersededAt": now_iso(),
+    })
+
+
+def _receipt_identity_fields(flow_dir: Path, kind: str,
                              subject_id: str) -> Optional[dict]:
-    path = _pending_identity_path(flow_dir, kind, subject_id)
+    """Failure-receipt fallback when no pending-identity file exists.
+
+    The create-ok/link-fail receipt carries the created identity in its
+    details (id/identifier/url plus the create-*-remote step). Only the
+    LATEST receipt for the chart token is consulted: every later projection
+    - success or a different failure - writes a newer receipt without that
+    step, so a stale identity is never adopted after the subject moved on
+    (e.g. a deliberate unlink)."""
+    chart_id = subject_id if kind == "chart" else subject_id.rsplit(".D", 1)[0]
+    token_fname = subject_marker_token("chart", chart_id).replace(":", "-")
+    runs = Path(flow_dir) / "sync-runs"
     try:
-        obj = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        paths = list(runs.glob(f"sync-{token_fname}-*.json"))
+    except OSError:
         return None
-    if not isinstance(obj, dict):
+    latest: Optional[dict] = None
+    latest_key = ("", "")
+    for p in sorted(paths):
+        try:
+            obj = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(obj, dict):
+            continue
+        key = (str(obj.get("timestamp") or ""), p.name)
+        if key >= latest_key:
+            latest_key = key
+            latest = obj
+    if latest is None:
         return None
-    rid = obj.get("id")
+    details = latest.get("details")
+    if not isinstance(details, dict):
+        return None
+    step = ("create-parent-remote" if kind == "chart"
+            else f"create-child-remote:{subject_id}")
+    if step not in (details.get("completed_steps") or []):
+        return None
+    rid = details.get("id")
     if not isinstance(rid, str) or not rid.strip():
         return None
     return {
         "id": rid,
-        "identifier": obj.get("identifier"),
-        "url": obj.get("url"),
+        "identifier": details.get("identifier"),
+        "url": details.get("url"),
         "linkState": "linked",
     }
+
+
+def _pending_identity_fields(flow_dir: Path, kind: str,
+                             subject_id: str) -> Optional[dict]:
+    path = _pending_identity_path(flow_dir, kind, subject_id)
+    if path.exists():
+        try:
+            obj = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(obj, dict):
+            return None
+        rid = obj.get("id")
+        if not isinstance(rid, str) or not rid.strip():
+            # Tombstone (durable-collision supersession): suppress the
+            # receipt fallback too - the next projection creates fresh.
+            return None
+        return {
+            "id": rid,
+            "identifier": obj.get("identifier"),
+            "url": obj.get("url"),
+            "linkState": "linked",
+        }
+    # No pending file at all (its write may itself have failed): fall back
+    # to the last failure receipt's recorded created identity.
+    return _receipt_identity_fields(flow_dir, kind, subject_id)
 
 
 def _link_subject(flow_dir: Path, kind: str, subject_id: str, mutate, *,
@@ -472,6 +574,43 @@ def _identity_error(err: TrackerError, fields: dict) -> TrackerError:
         "identifier": fields.get("identifier"),
         "url": fields.get("url"),
     })
+
+
+def _refuse_unpersisted_identity(err: TrackerError, *, kind: str,
+                                 subject_id: str, fields: dict,
+                                 pend_err: Optional[TrackerError]
+                                 ) -> TrackerError:
+    """Escalate when NOTHING durable names a created remote issue.
+
+    The pending-identity write failed (twice) AND the failure receipt could
+    not be written (fail_result marked receipt_status "unwritten"): a retry
+    would see an unlinked subject and create a duplicate. Refuse retry;
+    the identity rides the error message and details as the last copy."""
+    if pend_err is None:
+        return err
+    if (err.details or {}).get("receipt_status") != "unwritten":
+        return err
+    ident = fields.get("identifier") or fields.get("id")
+    return dataclasses.replace(
+        err,
+        subtype="created_identity_unpersisted",
+        auto_retryable=False,
+        message=(
+            f"remote issue {ident} was created for {kind} {subject_id} but "
+            "neither the local link, the pending-identity record, nor the "
+            "failure receipt could be written; link it manually "
+            f"({fields.get('url') or ident}) before retrying - a blind "
+            "retry would create a duplicate"
+        ),
+        details={
+            **(err.details or {}),
+            "pending_write_failed": {
+                "class": pend_err.cls.value,
+                "subtype": pend_err.subtype,
+                "message": pend_err.message,
+            },
+        },
+    )
 
 
 def _create_issue(
@@ -856,7 +995,9 @@ def _project_chart_locked(
     # Extend the marker revision with the projection-side state digest
     # (claims, assets, per-decision mutation identity - see
     # _mutation_state_digest for why the base revision alone dedupes wrongly).
-    revision = _sha(f"{base_revision}\x00{_mutation_state_digest(decisions)}")
+    revision = _sha(
+        f"{base_revision}\x00{_mutation_state_digest(chart, decisions)}"
+    )
     evidence_supplied = evidence is not None
     evidence = evidence or revision[:16]
     marker_key = _event_marker_key(event, revision, evidence)
@@ -923,15 +1064,19 @@ def _project_chart_locked(
             flow_dir, "chart", chart_id, _link_parent, collision_id=fields["id"],
         )
         if isinstance(linked, TrackerError):
+            pend_err: Optional[TrackerError] = None
             if adopted is not None and linked.subtype == "durable_collision":
-                # The recorded identity now belongs to another subject; the
-                # next projection creates fresh.
-                _clear_pending_identity(flow_dir, "chart", chart_id)
+                # The recorded identity now belongs to another subject; a
+                # tombstone (not a bare clear) retires receipt evidence
+                # too, so the next projection creates fresh.
+                _tombstone_pending_identity(flow_dir, "chart", chart_id)
             else:
                 # Remote create succeeded; persist the identity durably so
                 # the NEXT projection adopts it instead of duplicating.
-                _record_pending_identity(flow_dir, "chart", chart_id, fields)
-            return fail_result(
+                pend_err = _record_pending_identity(
+                    flow_dir, "chart", chart_id, fields,
+                )
+            err = fail_result(
                 _identity_error(linked, fields),
                 completed=(["create-parent-remote"] if adopted is None else []),
                 statuses=(["pushed"] if adopted is None else []),
@@ -941,6 +1086,10 @@ def _project_chart_locked(
                 tracker_id=fields.get("id"),
                 transport=provider,
                 degraded=None,
+            )
+            return _refuse_unpersisted_identity(
+                err, kind="chart", subject_id=chart_id, fields=fields,
+                pend_err=pend_err,
             )
         _clear_pending_identity(flow_dir, "chart", chart_id)
         chart_tracker = linked
@@ -1021,14 +1170,17 @@ def _project_chart_locked(
                 flow_dir, "decision", did, _link_child, collision_id=fields["id"],
             )
             if isinstance(linked, TrackerError):
+                pend_err = None
                 if adopted is not None and linked.subtype == "durable_collision":
-                    _clear_pending_identity(flow_dir, "decision", did)
+                    _tombstone_pending_identity(flow_dir, "decision", did)
                 else:
-                    _record_pending_identity(flow_dir, "decision", did, fields)
+                    pend_err = _record_pending_identity(
+                        flow_dir, "decision", did, fields,
+                    )
                 extra = [] if adopted is not None else [
                     f"create-child-remote:{did}",
                 ]
-                return fail_result(
+                err = fail_result(
                     _identity_error(linked, fields),
                     completed=completed + extra,
                     statuses=statuses + (["pushed"] if extra else []),
@@ -1036,6 +1188,10 @@ def _project_chart_locked(
                     spec_id=subject_marker_token("chart", chart_id),
                     event=event, tracker_id=fields.get("id"),
                     transport=provider,
+                )
+                return _refuse_unpersisted_identity(
+                    err, kind="decision", subject_id=did, fields=fields,
+                    pend_err=pend_err,
                 )
             _clear_pending_identity(flow_dir, "decision", did)
             dtracker = linked
@@ -1385,11 +1541,12 @@ def _project_chart_locked(
         if foreign:
             stale_revision = _sha(
                 f"{supplied_revision or _chart_base_revision(end_chart, end_decisions)}"
-                f"\x00{_mutation_state_digest(end_decisions)}"
+                f"\x00{_mutation_state_digest(end_chart, end_decisions)}"
             )
         else:
             revision = _sha(
-                f"{base_revision}\x00{_mutation_state_digest(end_decisions)}"
+                f"{base_revision}"
+                f"\x00{_mutation_state_digest(end_chart, end_decisions)}"
             )
             if not evidence_supplied:
                 evidence = revision[:16]

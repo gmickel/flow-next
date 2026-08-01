@@ -1078,6 +1078,109 @@ class ProjectionSerializationTests(unittest.TestCase):
             self.assertTrue(out2.get("deduped"))
             self.assertEqual(ex2.calls, [])
 
+    def test_holder_drains_parked_only_mutation_committed_mid_span(self) -> None:
+        """park-question / remove-question mutate ONLY the chart sidecar:
+        no decision status changes, no decision digest changes. The drain's
+        foreign-change predicate must still fire, or the holder publishes
+        the old parked count and the parent rollup stays stale until an
+        unrelated event."""
+        from flowctl_tracker.relate.ledger import dep_relation_key
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            hier_key = "hier:" + dep_relation_key("I_child_101", "I_parent_100")
+            _seed_chart(
+                flow,
+                tracker={
+                    "id": "I_parent_100",
+                    "identifier": "#100",
+                    "url": "https://github.com/acme/demo/issues/100",
+                    "linkState": "linked",
+                    "depRelations": [],
+                    "projection": {"event_markers": []},
+                },
+                decisions=[{
+                    "id": "fn-10.D1",
+                    "title": "Pick storage",
+                    "type": "research",
+                    "attendance": "unattended",
+                    "status": "open",
+                    "n": 1,
+                    "tracker": {
+                        "id": "I_child_101",
+                        "identifier": "#101",
+                        "url": "https://github.com/acme/demo/issues/101",
+                        "linkState": "linked",
+                        "depRelations": [{
+                            "key": hier_key,
+                            "dep_spec": "fn-10",
+                            "from_tracker_id": "I_child_101",
+                            "to_tracker_id": "I_parent_100",
+                            "type": "hierarchy",
+                            "source": "flow",
+                        }],
+                    },
+                }],
+            )
+            child = {
+                "node_id": "I_child_101", "number": 101, "body": "c",
+                "title": "t", "id": 9101,
+            }
+            parent = {
+                "node_id": "I_parent_100", "number": 100, "body": "p",
+                "title": "t", "id": 9100,
+            }
+            cpath = flow / "charts" / "fn-10.json"
+            mutated = {"done": False}
+
+            def park_then_child(_request):
+                # A park-question commits during the holder's remote span
+                # (chart commands take only the WAL lock, never the
+                # projection lock).
+                if not mutated["done"]:
+                    mutated["done"] = True
+                    chart = json.loads(cpath.read_text(encoding="utf-8"))
+                    chart["parked_questions"] = [{
+                        "key": "pq-late",
+                        "body": "Late parked question",
+                        "created": "2026-01-03T00:00:00Z",
+                    }]
+                    cpath.write_text(
+                        json.dumps(chart, indent=2) + "\n", encoding="utf-8"
+                    )
+                return ok(dict(child))
+
+            responses = {
+                "wire-read": [
+                    park_then_child, ok(dict(parent)),
+                    ok(dict(child)), ok(dict(parent)),
+                ],
+                "wire-parent-read": [ok(dict(child)), ok(dict(parent))] * 4,
+                "wire-update": [ok(dict(child)), ok(dict(parent))] * 4,
+            }
+            ex = fake_execute(responses)
+            out = CP.project_chart(
+                flow, "fn-10", event="chart.wire", execute=ex,
+            )
+            self.assertIsInstance(out, dict)
+            self.assertTrue(out.get("projected"))
+            self.assertNotIn("drain_exhausted", out)
+            self.assertNotIn("stale_revision", out)
+            # The drain pass pushed the NEW parked count to the rollup.
+            updates = [c for c in ex.calls if c.op == "wire-update"]
+            self.assertTrue(any(
+                b"parked=1" in (c.body or b"") for c in updates
+            ))
+            # Convergence: a fresh projection of the parked state dedupes.
+            ex2 = fake_execute({})
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.wire", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("deduped"))
+            self.assertEqual(ex2.calls, [])
+
     def test_waiter_timeout_exceeds_single_request_budget(self) -> None:
         """The projection-lock waiter must outlast a normally-held lock: a
         holder spans remote requests with a 30s default budget each, so the
@@ -1418,6 +1521,128 @@ class IdentityRecoveryTests(unittest.TestCase):
             self.assertEqual(out2["steps"]["create_parent"]["kind"], "adopted")
             self.assertIn("adopt-parent", out2.get("completed_steps") or [])
             self.assertFalse(pending.is_file())
+
+    def test_pending_write_failure_recovers_from_failure_receipt(self) -> None:
+        """Create ok, link write fails twice, AND the .flow/create-first
+        pending-identity write fails: the next projection must still adopt
+        the created identity from the failure receipt's recorded details
+        instead of creating a duplicate remote issue."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(flow)
+            parent = _gh_issue(node_id="I_parent_100", number=100)
+            real_write = CP.locked_subject_write
+            real_awj = CP.atomic_write_json
+
+            def chart_writes_fail(flow_dir, kind, subject_id, mutate, **kw):
+                if kind == "chart":
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        "timed out acquiring chart resource lock",
+                        subtype="lock_timeout",
+                    )
+                return real_write(flow_dir, kind, subject_id, mutate, **kw)
+
+            def pending_writes_fail(path, data):
+                if "create-first" in str(path):
+                    return TrackerError(
+                        ErrorClass.TRANSPORT, "disk full", subtype="write",
+                    )
+                return real_awj(path, data)
+
+            ex1 = fake_execute({"lifecycle-create": [ok(dict(parent))]})
+            with mock.patch.object(
+                CP, "locked_subject_write", chart_writes_fail,
+            ), mock.patch.object(
+                CP, "atomic_write_json", pending_writes_fail,
+            ):
+                out1 = CP.project_chart(
+                    flow, "fn-10", event="chart.create",
+                    revision="rev-rcpt", evidence="evrcpt", execute=ex1,
+                )
+            self.assertIsInstance(out1, TrackerError)
+            self.assertEqual((out1.details or {}).get("id"), "I_parent_100")
+            # No pending file could be persisted - the receipt is the only
+            # durable copy of the created identity.
+            pending = flow / "create-first" / "chart-chart-fn-10.json"
+            self.assertFalse(pending.is_file())
+            receipts = list((flow / "sync-runs").glob("sync-chart-fn-10-*.json"))
+            self.assertEqual(len(receipts), 1)
+            # Retry: adopts the receipt identity - the ONLY remote create is
+            # the child's.
+            child = _gh_issue(node_id="I_child_101", number=101)
+            responses = _gh_create_responses()
+            responses["lifecycle-create"] = [ok(dict(child))]
+            ex2 = fake_execute(responses)
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.create",
+                revision="rev-rcpt", evidence="evrcpt", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("projected"))
+            creates = [c for c in ex2.calls if c.op == "lifecycle-create"]
+            self.assertEqual(len(creates), 1)
+            chart = json.loads(
+                (flow / "charts" / "fn-10.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(chart["tracker"]["id"], "I_parent_100")
+            self.assertEqual(out2["steps"]["create_parent"]["kind"], "adopted")
+
+    def test_unpersistable_identity_is_non_retryable(self) -> None:
+        """Create ok, link fails, pending-identity write fails, AND the
+        failure receipt cannot be written: NOTHING durable names the created
+        remote issue, so a blind retry would duplicate it. The error must be
+        distinct, non-retryable, and carry the identity as the last copy."""
+        from flowctl_tracker.facade import steps as FS
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(flow)
+            parent = _gh_issue(node_id="I_parent_100", number=100)
+            real_write = CP.locked_subject_write
+            real_awj = CP.atomic_write_json
+
+            def chart_writes_fail(flow_dir, kind, subject_id, mutate, **kw):
+                if kind == "chart":
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        "timed out acquiring chart resource lock",
+                        subtype="lock_timeout",
+                    )
+                return real_write(flow_dir, kind, subject_id, mutate, **kw)
+
+            def pending_writes_fail(path, data):
+                if "create-first" in str(path):
+                    return TrackerError(
+                        ErrorClass.TRANSPORT, "disk full", subtype="write",
+                    )
+                return real_awj(path, data)
+
+            def receipt_writes_fail(*_a, **_k):
+                return TrackerError(
+                    ErrorClass.TRANSPORT, "receipt disk full", subtype="write",
+                )
+
+            ex = fake_execute({"lifecycle-create": [ok(dict(parent))]})
+            with mock.patch.object(
+                CP, "locked_subject_write", chart_writes_fail,
+            ), mock.patch.object(
+                CP, "atomic_write_json", pending_writes_fail,
+            ), mock.patch.object(
+                FS, "write_aggregate_receipt", receipt_writes_fail,
+            ):
+                out = CP.project_chart(
+                    flow, "fn-10", event="chart.create",
+                    revision="rev-dead", evidence="evdead", execute=ex,
+                )
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "created_identity_unpersisted")
+            self.assertFalse(out.auto_retryable)
+            self.assertEqual((out.details or {}).get("id"), "I_parent_100")
+            self.assertIn("duplicate", out.message)
+            self.assertIn("pending_write_failed", out.details or {})
 
     def test_transient_link_write_failure_retries_once(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

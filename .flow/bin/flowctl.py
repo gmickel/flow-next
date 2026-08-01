@@ -11931,6 +11931,11 @@ def create_chart_pair(
     the output of validate_and_build_initial_map (decisions + parked + audit).
     """
     chart_id = canonicalize_chart_id(chart_id)
+    # R20/R48: chart title/outcome are git-tracked prose too (chart md/json
+    # and the tracker parent rollup) - same refusal as decision and
+    # parked-question prose, BEFORE any allocation or persistence.
+    refuse_if_unsafe_prose(title, field="Chart title")
+    refuse_if_unsafe_prose(outcome, field="Chart outcome")
     md_path, json_path = chart_pair_paths(flow_dir, chart_id)
     if md_path.exists() or json_path.exists():
         raise ChartError(
@@ -13271,6 +13276,44 @@ def resolve_chart_decision(
                         "status": status,
                         "existing_gist": existing_gist,
                         "divergent_assets": divergent_assets,
+                    },
+                )
+            # A retry is identical only when it carries NO sharpen content:
+            # resolve-time sharpening creates decisions and removes parked
+            # questions, none of which happened when this decision first
+            # resolved - a silent no-op would drop them. Post-resolve
+            # sharpening belongs to add-decision / wire-decision (and
+            # remove-question for parked cleanup).
+            sharpen_new = list((sharpen or {}).get("decisions") or [])
+            sharpen_removes = list(
+                (sharpen or {}).get("remove_questions") or []
+            )
+            if sharpen_new or sharpen_removes:
+                raise ChartError(
+                    "invalid_state",
+                    "decision_immutable",
+                    f"Decision {did} is already resolved; retry supplies "
+                    "sharpen content (new decisions or parked-question "
+                    "removals) that a no-op would silently ignore. Create "
+                    "follow-up decisions via add-decision/wire-decision "
+                    "and drop parked questions via remove-question.",
+                    details={
+                        "id": did,
+                        "status": status,
+                        "existing_gist": existing_gist,
+                        "ignored_sharpen": {
+                            "decisions": [
+                                (
+                                    d.get("title")
+                                    if isinstance(d, dict)
+                                    else str(d)
+                                )
+                                for d in sharpen_new
+                            ],
+                            "remove_questions": [
+                                str(k) for k in sharpen_removes
+                            ],
+                        },
                     },
                 )
             if sorted(existing_sup) == sorted(want_sup) or not want_sup:
