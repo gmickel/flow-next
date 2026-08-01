@@ -550,6 +550,64 @@ class TestPreFixFingerprintCompatibility(unittest.TestCase):
             self.assertEqual(side_path.read_text(encoding="utf-8"), side_before)
 
 
+class TestPreFixReopenedChartUpgrade(unittest.TestCase):
+    """R4: upgrading must not orphan a briefing a pre-fix binary minted after a
+    reopen. That chart carries a reopened_at but an epoch-free stored hash, so
+    the epoch-aware fingerprint alone would miss it and refuse the retry on the
+    now-done chart."""
+
+    @staticmethod
+    def _plant(repo: Path, flow: Path) -> dict:
+        fixture = FIXTURES / "chart_prefix_reopened_fingerprint"
+        shutil.copytree(fixture / "charts", flow / "charts", dirs_exist_ok=True)
+        return json.loads((fixture / "expected.json").read_text(encoding="utf-8"))
+
+    def test_live_prefix_briefing_still_noops_after_upgrade(self) -> None:
+        fixture = FIXTURES / "chart_prefix_reopened_fingerprint"
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            expected = self._plant(repo, flow)
+            chart_id = expected["chart_id"]
+            # Precondition the fixture exists to test: reopened, and its live
+            # briefing was minted after that reopen by the pre-fix binary.
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(side.get("reopened_at"), expected["reopened_at"])
+            self.assertEqual(side["status"], "done")
+
+            r = _brief(repo, chart_id, fixture / "proposal-b2.json")
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            res = json.loads(r.stdout)["result"]
+            self.assertTrue(res["noop"])
+            self.assertEqual(res["briefing_id"], expected["current_briefing_id"])
+            self.assertEqual(res["status"], expected["current_briefing_status"])
+            self.assertEqual(res["fingerprint"], expected["current_fingerprint"])
+            self.assertEqual(res["chart_status"], expected["chart_status"])
+
+    def test_prefix_stale_briefing_is_still_refused(self) -> None:
+        # R6 on the same real pre-fix data: B1's epoch-free hash matches the
+        # proposal it was built from, but B1 is stale - the legacy fallback
+        # must not resurrect it.
+        fixture = FIXTURES / "chart_prefix_reopened_fingerprint"
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            expected = self._plant(repo, flow)
+            chart_id = expected["chart_id"]
+
+            r = _brief(repo, chart_id, fixture / "proposal-b1.json")
+            self.assertNotEqual(r.returncode, 0, r.stdout)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["code"], "chart_not_open")
+            # The error names the remedy rather than echoing the stale briefing.
+            self.assertIn("reopen", err["message"])
+            self.assertNotIn(
+                expected["stale_briefing_id"], json.dumps(err.get("details") or {})
+            )
+
+
 class TestStaleBriefingNeverEchoed(unittest.TestCase):
     """R6: a stale briefing is never an idempotent answer, match or not."""
 

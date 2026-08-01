@@ -1,0 +1,40 @@
+{
+  "answer": "OIDC with per-tenant issuers",
+  "answer_gist": "OIDC with per-tenant issuers",
+  "assets": [],
+  "attendance": "unattended",
+  "blocked_by": [],
+  "chart": "fn-1",
+  "claim_note": null,
+  "claimed_at": null,
+  "claimed_by": null,
+  "created": "2026-08-01T16:40:00.966264Z",
+  "depends_on": [],
+  "id": "fn-1.D2",
+  "n": 2,
+  "question": "Auth model",
+  "record_path": ".flow/charts/fn-1/2.md",
+  "status": "resolved",
+  "superseded_by": null,
+  "supersedes": [],
+  "title": "Auth model",
+  "tracker": {
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "linkState": "unlinked",
+    "url": null
+  },
+  "transition_notes": [
+    {
+      "actor": "chart-test@example.com",
+      "at": "2026-08-01T16:40:01.528461Z",
+      "keep_dependents": false,
+      "kind": "resolved",
+      "supersedes": [],
+      "text": "resolved by chart-test@example.com"
+    }
+  ],
+  "type": "research",
+  "updated_at": "2026-08-01T16:40:01.528013Z"
+}

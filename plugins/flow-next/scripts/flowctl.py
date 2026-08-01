@@ -14910,18 +14910,36 @@ def emit_chart_briefing(
     all_briefs = _load_decision_briefs(flow_dir, chart_id, all_dids)
 
     chart_rev = chart_decision_revision(chart)
+    reopened_at = chart.get("reopened_at")
+    evidence_digest = _briefing_evidence_digest(all_briefs)
     fingerprint = _briefing_fingerprint(
         chart_rev,
         normalized,
-        evidence_digest=_briefing_evidence_digest(all_briefs),
-        reopened_at=chart.get("reopened_at"),
+        evidence_digest=evidence_digest,
+        reopened_at=reopened_at,
     )
+
+    # A chart that was reopened AND re-briefed by a pre-fix binary carries a
+    # live briefing whose stored hash has no epoch in it. Matching only the
+    # epoch-aware fingerprint would make that briefing unreachable on upgrade:
+    # the retry finds nothing and dies on the now-done chart. So the epoch-free
+    # hash stays acceptable - but only for a NON-stale briefing, and since every
+    # reopen stales every briefing, a non-stale one can only have been minted in
+    # the current epoch. A stale legacy match is precisely the defect this task
+    # closes and is refused by the guard below.
+    accepted_fingerprints = {fingerprint}
+    if reopened_at:
+        accepted_fingerprints.add(
+            _briefing_fingerprint(
+                chart_rev, normalized, evidence_digest=evidence_digest
+            )
+        )
 
     existing = list(chart.get("briefings") or [])
     for b in existing:
         if not isinstance(b, dict):
             continue
-        if b.get("fingerprint") == fingerprint:
+        if b.get("fingerprint") in accepted_fingerprints:
             # Never hand back a stale briefing as the idempotent answer: it is
             # superseded by definition and has no valid reading as "the
             # requested outcome". The reopen epoch above makes a stale match
@@ -14937,7 +14955,10 @@ def emit_chart_briefing(
                 "id": chart_id,
                 "briefing_id": b.get("id"),
                 "status": b.get("status"),
-                "fingerprint": fingerprint,
+                # The matched briefing's own hash, which is what identifies it
+                # on disk. Identical to `fingerprint` on every ordinary match;
+                # on a legacy match it is the epoch-free hash actually stored.
+                "fingerprint": b.get("fingerprint"),
                 "noop": True,
                 "chart_status": chart.get("status"),
                 "clusters": b.get("clusters") or [],
