@@ -90,6 +90,7 @@ Absent, empty, `"false"`, `"0"`, and any unrecognized value all mean **local**. 
 - **R3:** Coverage is unchanged, **proven rather than asserted**: run the suite at `--jobs 2` and at the auto default on the same corpus and compare the **sorted `--list-only` output** (the runner prints one filename per line) as well as the `parallel-runner: <n> file(s)` line and the `SUMMARY files=/ran=/failures=/errors=/skipped=` counts - all three must be identical. Counts alone are not proof: two different file sets can have the same file and test totals (`files=178 ran=3846` at time of writing, allowing for tests added since). The new test module additionally pins the contracts a job-count change could plausibly disturb: `--exclude` still drops exactly the named files and still prints its `EXCLUDED` line, a zero-match pattern still exits 2, and a failing file still exits 1. No path-based test selection is introduced.
 - **R4:** `--jobs` and `--serial` keep working as explicit overrides and still win over auto-detection, in that precedence order (`--serial` beats `--jobs` beats the default, as today at `:350-359`). A `--jobs` value below 1 is still rejected.
 - **R5:** `scripts/run_tests_parallel.py` gains its first tests. There is no existing coverage to extend (`grep -rn "import run_tests_parallel"` returns nothing), so the task creates the module. `_default_jobs()` is covered directly for the local default, the CI default, and the value semantics of `CI` (absent / empty / `"false"` / `"TRUE"` / `"0"`). **Precedence is covered at `main()`, not at the parser** - the chain lives at `:350-359`, after parsing, so a parser-level test cannot prove it. With `run_suite` and `_default_jobs` patched, assert: bare invocation calls `_default_jobs`; `--jobs 6` uses 6 and never calls `_default_jobs`; `--serial --jobs 6` resolves to 1; `--jobs 0` returns exit code 2 without running the suite.
+- **R7:** Raising the job count must not make any test flaky. The 30-sample p95 latency budgets in `test_pr_cognitive_aid.py` and `test_review_findings_receipts.py` are measured on **process CPU time**, not wall clock, so sibling test processes cannot push them over budget. The budget value is unchanged and no test is skipped or made conditional on platform or CI. (Added after measurement - see Decision Context.)
 - **R6:** Every place that states the old default is updated in the same change: the module docstring (`:5-6`), the `--jobs` help string (`:304`), and the workflow comment (`.github/workflows/test-flow-next.yml:121`). The stale "the full suite runs 14 jobs in parallel" comment in `plugins/flow-next/tests/test_spec_id_allocation.py:495-506` is corrected too - its skip heuristic is live-computed and unaffected, but the prose is laptop-specific and would mislead. **Frozen surfaces are NOT edited:** the shipped `CHANGELOG.md:789` entry and `.flow/specs/fn-119-*.md` are historical records.
 
 ## Boundaries
@@ -112,7 +113,63 @@ Absent, empty, `"false"`, `"0"`, and any unrecognized value all mean **local**. 
 
 **The core-count claim is derived, not documented.** Nothing in this repo documents GitHub-hosted runner core counts. `jobs=2` in the CI log implies `cpu_count == 4` through `max(1, cpu_count - 2)`; that is an inference from observed behavior, and R2's measurement is what actually settles the win. Do not restate "4-core runner" as a fact.
 
+**R2's ship rule was tested, failed, and then consciously amended - both versions are recorded here.**
+
+*As originally written:* ship only if the median runner-step `wall=` improves by at least **25%** on all three of `ubuntu-latest/3.11`, `ubuntu-latest/3.x` and `macos-latest/3.11`, with no more than a 5% whole-job regression on those same rows.
+
+*Measured against it:* ubuntu-latest/3.11 **-20.9%**, ubuntu-latest/3.x **-18.8%**, macos-latest/3.11 **-43.5%**. Two of the three gating rows miss the bar. **As written, the rule says stop.**
+
+*Amended, and why:* the measurement did not merely miss a threshold, it showed the rule was gating on the wrong rows. It was drafted on the assumption that every runner was core-starved the same way, so it named the rows believed most representative and excluded Windows for being spawn-dominated. The data inverts that:
+
+- **macOS was running the suite fully serially.** GitHub's macOS runner reports 3 cores, so the old `max(1, cpu_count - 2)` returns **`jobs=1`**. That is not headroom, it is parallelism switched off, and it is a defect the spec never suspected. Fixing it is worth more than the threshold it was measured against (-43.5%).
+- **Ubuntu is genuinely spawn-bound**, not core-starved. Doubling workers buys ~19-21%, which answers the spec's own open question: this runner spends its time spawning one interpreter per test file, not saturating cores.
+- **Windows, excluded from both conditions, gained 32.9%** for the same reason macOS did (`jobs=2 -> 4`).
+
+The revised condition is: ship when **no** gating row regresses on either metric AND at least one row improves materially. All four rows improved on both metrics, so it passes. The 25% bar is retired as an artifact of a wrong model of the bottleneck, not lowered to fit a number. Decision made by the maintainer with the measured tables above in hand.
+
+**The measurement also found a regression the plan did not anticipate, which is why R7 exists.** The `after` leg of wave 2 failed on Windows: `test_validation_plus_render_p95_under_100_ms_for_30_warm_runs`, p95=167.893ms against a 100ms budget. It passed at `jobs=2` in both baseline runs and at `jobs=4` in wave 1, so the higher job count makes it *intermittently* flaky. The budget was measured with `time.perf_counter()`, so under four sibling interpreters on four cores it was measuring scheduler contention rather than the operation. R7 moves both 30-sample p95 budgets onto process CPU time. Shipping the speedup while leaving CI intermittently red would have traded a real gain for a corroded signal.
+
 **Open question for implementation:** whether the suite is CPU-saturated at full core count or still spawn-dominated. R2's before/after is the cheapest way to find out, and the answer decides whether CI-job sharding is worth a follow-up.
+
+## Measured result (R2)
+
+Four `workflow_dispatch` runs on branch head `68b847f9`, two per configuration, all four matrix rows each = 16 raw results.
+
+### Raw (16 rows)
+
+| run | configuration | matrix | jobs | runner `wall=` | whole job |
+|---|---|---|---|---|---|
+| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | baseline | ubuntu-latest 3.11 | 2 | 364.19s | 734s |
+| 30718829508 | baseline | ubuntu-latest 3.x | 2 | 432.10s | 861s |
+| 30718829508 | baseline | macos-latest 3.11 | 1 | 567.38s | 895s |
+| 30718829508 | baseline | windows-latest 3.11 | 2 | 687.59s | 1086s |
+| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | baseline | ubuntu-latest 3.11 | 2 | 396.53s | 808s |
+| 30719506525 | baseline | ubuntu-latest 3.x | 2 | 491.92s | 994s |
+| 30719506525 | baseline | macos-latest 3.11 | 1 | 548.59s | 848s |
+| 30719506525 | baseline | windows-latest 3.11 | 2 | 647.27s | 1038s |
+| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | after | ubuntu-latest 3.11 | 4 | 313.28s | 727s |
+| 30718834791 | after | ubuntu-latest 3.x | 4 | 400.62s | 918s |
+| 30718834791 | after | macos-latest 3.11 | 3 | 367.33s | 793s |
+| 30718834791 | after | windows-latest 3.11 | 4 | 470.91s | 754s |
+| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | after | ubuntu-latest 3.11 | 4 | 288.09s | 674s |
+| 30719512156 | after | ubuntu-latest 3.x | 4 | 349.67s | 798s |
+| 30719512156 | after | macos-latest 3.11 | 3 | 263.23s | 649s |
+| 30719512156 | after | windows-latest 3.11 | 4 | 425.10s (job **failed** - see below) | 803s |
+
+### Aggregate (median of two, 8 rows)
+
+| configuration | matrix | median `wall=` | median whole job | `wall=` delta | whole-job delta |
+|---|---|---|---|---|---|
+| baseline | ubuntu-latest 3.11 | 380.36s | 771.0s | - | - |
+| after | ubuntu-latest 3.11 | 300.69s | 700.5s | **-20.9%** | -9.1% |
+| baseline | ubuntu-latest 3.x | 462.01s | 927.5s | - | - |
+| after | ubuntu-latest 3.x | 375.15s | 858.0s | **-18.8%** | -7.5% |
+| baseline | macos-latest 3.11 | 557.99s | 871.5s | - | - |
+| after | macos-latest 3.11 | 315.28s | 721.0s | **-43.5%** | -17.3% |
+| baseline | windows-latest 3.11 | 667.43s | 1062.0s | - | - |
+| after | windows-latest 3.11 | 448.01s | 778.5s | -32.9% (non-gating) | -26.7% |
+
+No whole-job regression on any row; every row improved, so the "no more than 5% whole-job regression" condition passes everywhere with room to spare.
 
 ## Early proof point
 
@@ -128,6 +185,7 @@ Task fn-155-ci-wall-clock-run-the-unit-suite-at-the.1 is the whole behavior chan
 | R4 | `--jobs` / `--serial` precedence intact | .1 | - |
 | R5 | First tests for the parallel runner, precedence at main() | .1 | - |
 | R6 | Stale default documented in step; frozen surfaces untouched | .1 | - |
+| R7 | p95 budgets on CPU time so parallelism cannot make them flaky | .2 | Added after measurement |
 
 ## References
 
