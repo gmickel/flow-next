@@ -11,8 +11,8 @@
   "impl_review_rounds": {},
   "next_task": 1,
   "plan_review_rounds": 0,
-  "plan_review_status": "needs_work",
-  "plan_reviewed_at": "2026-08-01T18:40:22.780185Z",
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-08-01T20:38:29.296834Z",
   "ready": true,
   "review_attempts": [
     {
@@ -70,6 +70,20 @@
       "task": null,
       "timestamp": "2026-08-01T18:39:23.181184Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "7072da76fbf039ccb72b1848d9672fd5e614954c",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "bc1e4827b70dc21084934c5f0720fa8b5888486b8eb0f62955f86b7ddb355580",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T20:38:20.944517Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
@@ -90,5 +104,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T20:32:19.829986Z"
+  "updated_at": "2026-08-01T20:38:29.684258Z"
 }
