@@ -589,6 +589,65 @@ class TestClaimReleaseBreakStale(unittest.TestCase):
             self.assertEqual(r3.returncode, 0, r3.stderr)
             self.assertTrue(json.loads(r3.stdout)["result"]["noop"])
 
+    def test_claim_blocked_decision_rejected_until_blocker_resolves(self) -> None:
+        """A blocked decision is not claimable (it would vanish from the
+        frontier as blocked-then-claimed and wedge the chart); the rejection
+        names the open blockers, and the claim succeeds once they resolve."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Blocker")
+            d2 = _add_decision(repo, chart_id, "Dependent", blocked_by=d1["id"])
+
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "claim",
+                d2["id"],
+                "--json",
+                env={"FLOW_ACTOR": "alice"},
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["class"], "invalid_state")
+            self.assertEqual(err["code"], "decision_blocked")
+            self.assertIn(d1["id"], err["message"])
+            self.assertEqual(err["details"]["blocked_by"], [d1["id"]])
+            # Nothing persisted: sidecar stays unclaimed.
+            dside = json.loads(
+                (flow / "charts" / chart_id / "2.json").read_text(encoding="utf-8")
+            )
+            self.assertIsNone(dside["claimed_by"])
+
+            # Resolve the blocker; the claim now succeeds.
+            af = repo / "ans.txt"
+            af.write_text("Blocker settled", encoding="utf-8")
+            r_res = _run_flowctl(
+                repo,
+                "chart",
+                "resolve",
+                d1["id"],
+                "--answer-file",
+                str(af),
+                "--json",
+                env={"FLOW_ACTOR": "alice"},
+            )
+            self.assertEqual(r_res.returncode, 0, r_res.stderr)
+            r2 = _run_flowctl(
+                repo,
+                "chart",
+                "claim",
+                d2["id"],
+                "--json",
+                env={"FLOW_ACTOR": "alice"},
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            self.assertEqual(
+                json.loads(r2.stdout)["result"]["claimed_by"], "alice"
+            )
+
     def test_owner_release(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"

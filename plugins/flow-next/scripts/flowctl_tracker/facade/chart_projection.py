@@ -25,7 +25,7 @@ from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
 from ..lifecycle.providers import provider_create
 from ..relate.ledger import (dep_relation_key, ledger_append, ledger_drop,
                              ledger_finalize, ledger_has)
-from ..subjects import (caps_of, load_subject,
+from ..subjects import (caps_of, chart_projection_lock, load_subject,
                         locked_subject_write, parse_decision_id,
                         projection_gate, subject_collision,
                         subject_marker_token)
@@ -744,6 +744,15 @@ def project_chart(
 ) -> Result:
     """Project one chart lifecycle event. Local state already committed.
 
+    The whole remote read/update span runs under a dedicated cross-process
+    projection lock (chart_projection_lock - NOT the chart WAL lock, which
+    local mutations must never wait on across network latency). Chart +
+    decision state is reloaded INSIDE the lock, so two overlapping chart
+    commands cannot interleave a stale projection over a newer one: the
+    later entrant re-projects the newest committed state (convergent).
+    Best-effort: lock timeout is a CONFLICT/lock_timeout TrackerError; it
+    never blocks or fails the local mutation result.
+
     Returns a data dict (success/skip/partial) or TrackerError with completed_steps.
     Never raises. Never rolls back local chart files.
     """
@@ -767,6 +776,34 @@ def project_chart(
             subtype="event",
         )
 
+    from ..config_lock import ConfigLockTimeout  # noqa: PLC0415
+
+    try:
+        with chart_projection_lock(flow_dir):
+            return _project_chart_locked(
+                flow_dir, config, gate, chart_id,
+                event=event, revision=revision, evidence=evidence,
+                execute=execute,
+            )
+    except ConfigLockTimeout as exc:
+        return TrackerError(
+            ErrorClass.CONFLICT, str(exc), subtype="lock_timeout",
+            details={"completed_steps": []},
+        )
+
+
+def _project_chart_locked(
+    flow_dir: Path,
+    config: dict,
+    gate: dict,
+    chart_id: str,
+    *,
+    event: str,
+    revision: Optional[str],
+    evidence: Optional[str],
+    execute: Execute,
+) -> Result:
+    """project_chart body; caller holds chart_projection_lock."""
     bundle = _load_chart_bundle(flow_dir, chart_id)
     if isinstance(bundle, TrackerError):
         return bundle

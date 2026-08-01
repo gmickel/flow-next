@@ -890,6 +890,116 @@ class ProjectionChartLockTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Projection-wide serialization (dedicated cross-process projection lock)
+# ---------------------------------------------------------------------------
+
+class ProjectionSerializationTests(unittest.TestCase):
+    def test_stale_caller_reprojects_reloaded_state_inside_lock(self) -> None:
+        """Two overlapping chart commands cannot project stale-over-newer:
+        the whole projection serializes on chart_projection_lock and reloads
+        chart + decision state INSIDE the lock, so the older caller projects
+        the newest committed content (convergent, never a stale overwrite)."""
+        from flowctl_tracker import subjects as SJ
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(flow)
+            results: dict = {}
+
+            def run_projection() -> None:
+                ex = fake_execute(_gh_create_responses())
+                results["ex"] = ex
+                results["out"] = CP.project_chart(
+                    flow, "fn-10", event="chart.wire",
+                    revision="rev-stale-caller", evidence="evA", execute=ex,
+                )
+
+            with SJ.chart_projection_lock(flow):
+                t = threading.Thread(target=run_projection)
+                t.start()
+                time.sleep(0.4)
+                # Deterministic: the whole projection needs the lock we hold,
+                # so no remote call has happened yet.
+                self.assertTrue(t.is_alive())
+                self.assertEqual(results["ex"].calls, [])
+                # Simulate a NEWER chart command (B) committing + projecting
+                # while the stale caller (A) waits on the lock.
+                dpath = flow / "charts" / "fn-10" / "1.json"
+                dec = json.loads(dpath.read_text(encoding="utf-8"))
+                dec["title"] = "Pick storage (retitled by B)"
+                dec["updated_at"] = "2026-01-02T00:00:00Z"
+                dpath.write_text(
+                    json.dumps(dec, indent=2) + "\n", encoding="utf-8"
+                )
+                cpath = flow / "charts" / "fn-10.json"
+                chart = json.loads(cpath.read_text(encoding="utf-8"))
+                chart["decisions"][0]["title"] = "Pick storage (retitled by B)"
+                cpath.write_text(
+                    json.dumps(chart, indent=2) + "\n", encoding="utf-8"
+                )
+            t.join(timeout=30)
+            self.assertFalse(t.is_alive())
+            out = results["out"]
+            self.assertIsInstance(out, dict)
+            self.assertTrue(out.get("projected"))
+            # The child create used the RELOADED (newer) decision content,
+            # not the stale caller's pre-lock view.
+            creates = [
+                c for c in results["ex"].calls if c.op == "lifecycle-create"
+            ]
+            self.assertEqual(len(creates), 2)  # parent + child
+            self.assertTrue(any(
+                b"retitled by B" in (c.body or b"") for c in creates
+            ))
+            # Marker dedupe still holds: an identical retry (same supplied
+            # revision, same on-disk state) makes zero remote calls.
+            ex2 = fake_execute({})
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.wire",
+                revision="rev-stale-caller", evidence="evA", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("deduped"))
+            self.assertEqual(ex2.calls, [])
+
+    def test_lock_timeout_is_best_effort_error(self) -> None:
+        """Lock-acquisition failure degrades to the standard lock_timeout
+        error shape - it never blocks past the bounded wait."""
+        from flowctl_tracker import subjects as SJ
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(flow)
+            def short_lock(flow_dir, *, timeout_s=0.1):
+                return SJ.chart_projection_lock(flow_dir, timeout_s=timeout_s)
+
+            with SJ.chart_projection_lock(flow), mock.patch.object(
+                CP, "chart_projection_lock", short_lock
+            ):
+                results: dict = {}
+
+                def run_projection() -> None:
+                    ex = fake_execute({})
+                    results["out"] = CP.project_chart(
+                        flow, "fn-10", event="chart.wire", execute=ex,
+                    )
+                    results["calls"] = ex.calls
+
+                t = threading.Thread(target=run_projection)
+                t.start()
+                t.join(timeout=30)
+            self.assertFalse(t.is_alive())
+            out = results["out"]
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.cls, ErrorClass.CONFLICT)
+            self.assertEqual(out.subtype, "lock_timeout")
+            # No remote work happened without the lock.
+            self.assertEqual(results["calls"], [])
+
+
+# ---------------------------------------------------------------------------
 # Remote read failure aborts the update step
 # ---------------------------------------------------------------------------
 

@@ -155,6 +155,7 @@ def write_subject_tracker(
 # link between another chart command's load and publish and be clobbered by
 # that command's older JSON (duplicate remote issues on the next projection).
 _CHARTS_RESOURCE_LOCK_NAME = "charts-resource.lock"
+_CHART_PROJECTION_LOCK_NAME = "chart-projection.lock"
 _CHARTS_LOCK_TIMEOUT_S = 10.0
 _CHARTS_LOCK_POLL_S = 0.02
 
@@ -162,6 +163,11 @@ _CHARTS_LOCK_POLL_S = 0.02
 def charts_resource_lock_file(flow_dir: Path) -> Path:
     """Path of flowctl's chart WAL/mutation lock (.flow/locks/charts-resource.lock)."""
     return Path(flow_dir) / "locks" / _CHARTS_RESOURCE_LOCK_NAME
+
+
+def chart_projection_lock_file(flow_dir: Path) -> Path:
+    """Path of the chart projection lock (.flow/locks/chart-projection.lock)."""
+    return Path(flow_dir) / "locks" / _CHART_PROJECTION_LOCK_NAME
 
 
 def _try_kernel_lock(fd: int) -> bool:
@@ -205,23 +211,22 @@ def _release_kernel_lock(fd: int) -> None:
 
 
 @contextlib.contextmanager
-def charts_resource_lock(
-    flow_dir: Path, *, timeout_s: float = _CHARTS_LOCK_TIMEOUT_S
+def _bounded_file_lock(
+    lock_path: Path, *, timeout_s: float, label: str
 ) -> Iterator[None]:
-    """Bounded exclusive kernel lock on the chart resource lock file.
+    """Bounded exclusive kernel lock on a named lock file.
 
-    Raises ConfigLockTimeout on timeout so locked_subject_write maps it to
-    the same CONFLICT/lock_timeout TrackerError as the config writer lock.
+    Raises ConfigLockTimeout on timeout so callers map it to the same
+    CONFLICT/lock_timeout TrackerError as the config writer lock.
     """
     from .config_lock import ConfigLockTimeout  # noqa: PLC0415
 
-    lock_path = charts_resource_lock_file(flow_dir)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         st = os.lstat(lock_path)
         if not stat_mod.S_ISREG(st.st_mode):
             raise ConfigLockTimeout(
-                f"chart resource lock path is not a regular file: {lock_path}"
+                f"{label} lock path is not a regular file: {lock_path}"
             )
     except FileNotFoundError:
         pass
@@ -238,7 +243,7 @@ def charts_resource_lock(
                 break
             if time.monotonic() >= deadline:
                 raise ConfigLockTimeout(
-                    f"timed out acquiring chart resource lock {lock_path} "
+                    f"timed out acquiring {label} lock {lock_path} "
                     f"after {timeout_s:g}s"
                 )
             time.sleep(_CHARTS_LOCK_POLL_S)
@@ -249,6 +254,39 @@ def charts_resource_lock(
                 _release_kernel_lock(fd)
         with contextlib.suppress(OSError):
             os.close(fd)
+
+
+@contextlib.contextmanager
+def charts_resource_lock(
+    flow_dir: Path, *, timeout_s: float = _CHARTS_LOCK_TIMEOUT_S
+) -> Iterator[None]:
+    """Bounded exclusive kernel lock on the chart resource lock file."""
+    with _bounded_file_lock(
+        charts_resource_lock_file(flow_dir),
+        timeout_s=timeout_s, label="chart resource",
+    ):
+        yield
+
+
+@contextlib.contextmanager
+def chart_projection_lock(
+    flow_dir: Path, *, timeout_s: float = _CHARTS_LOCK_TIMEOUT_S
+) -> Iterator[None]:
+    """Cross-process serialization of whole chart projections.
+
+    A DEDICATED lock file, not the chart WAL lock: holding the WAL lock
+    across the remote read/update span would block local chart mutations on
+    network latency. The projection reloads chart + decision state inside
+    this lock, so an older caller re-projects the newest committed state
+    (convergent) instead of overwriting remote bodies with stale content.
+    Lock ordering: projection lock OUTERMOST, then charts_resource_lock,
+    then config_lock (via locked_subject_write).
+    """
+    with _bounded_file_lock(
+        chart_projection_lock_file(flow_dir),
+        timeout_s=timeout_s, label="chart projection",
+    ):
+        yield
 
 
 def locked_subject_write(

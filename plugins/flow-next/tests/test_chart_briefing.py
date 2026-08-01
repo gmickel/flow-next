@@ -661,6 +661,41 @@ class TestDoneAndMutations(unittest.TestCase):
 
 
 class TestLinkSpec(unittest.TestCase):
+    def test_empty_decision_set_rejected(self) -> None:
+        """--decisions '' must not persist a provenance-free link: an empty
+        decision list passes membership vacuously and later supersession
+        staling can never match it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+            r = _brief(repo, chart_id, prop)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            bid = json.loads(r.stdout)["result"]["briefing_id"]
+
+            r1 = _run_flowctl(
+                repo,
+                "chart",
+                "link-spec",
+                chart_id,
+                "--briefing",
+                bid,
+                "--spec",
+                "fn-900",
+                "--decisions",
+                "",
+                "--json",
+            )
+            self.assertNotEqual(r1.returncode, 0)
+            err = json.loads(r1.stdout)["error"]
+            self.assertEqual(err["class"], "validation")
+            self.assertEqual(err["code"], "link_decisions_required")
+            self.assertEqual(err["details"]["briefing"], bid)
+            # Nothing persisted.
+            side = _chart_json(flow, chart_id)
+            self.assertEqual(side["produced_specs"], [])
+
     def test_idempotent_cluster_identity_and_stale_after_supersession(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"

@@ -12211,6 +12211,27 @@ def claim_chart_decision(flow_dir: Path, did: str) -> dict:
             f"Cannot claim {did}: status is {entry.get('status')}",
             details={"id": did, "status": entry.get("status")},
         )
+    # Blocked decisions are not claimable: a claim on one never reappears on
+    # the frontier (blocked first, then claimed) and wedges the chart until a
+    # manual release. Same predicate as the frontier computation.
+    status_index = {
+        d["id"]: d.get("status")
+        for d in chart.get("decisions") or []
+        if isinstance(d, dict) and d.get("id")
+    }
+    if _decision_is_blocked(entry, status_index):
+        blockers = sorted(
+            bid
+            for bid in entry.get("blocked_by") or []
+            if status_index.get(bid) is None or status_index.get(bid) == "open"
+        )
+        raise ChartError(
+            "invalid_state",
+            "decision_blocked",
+            f"Cannot claim {did}: blocked by open decision(s) "
+            + ", ".join(blockers),
+            details={"id": did, "blocked_by": blockers},
+        )
     actor = get_actor()
     existing = entry.get("claimed_by")
     if existing and existing != actor:
@@ -15050,6 +15071,16 @@ def link_chart_spec(
         if did not in seen:
             seen.add(did)
             decs.append(did)
+    # A link without decision provenance is untrustworthy AND unmaintainable:
+    # later supersession staling matches on decision membership, so an empty
+    # set can never be marked stale. Validated before the identity/no-op path.
+    if not decs:
+        raise ChartError(
+            "validation",
+            "link_decisions_required",
+            "link-spec requires at least one decision id (--decisions)",
+            details={"id": chart_id, "briefing": briefing_id, "spec": spec_id},
+        )
 
     identity = _produced_spec_identity(briefing_id, cluster_key, spec_id)
     existing_links = list(chart.get("produced_specs") or [])
