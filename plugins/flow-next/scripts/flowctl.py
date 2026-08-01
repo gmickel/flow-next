@@ -11927,6 +11927,7 @@ def park_chart_question(flow_dir: Path, chart_id: str, body: str) -> dict:
     """Add a normalized parked question; identical key is a no-op."""
     chart_id = canonicalize_chart_id(chart_id)
     chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.park-question")
     body_norm = normalize_parked_question_body(body)
     key = parked_question_key(body_norm)
     parked = list(chart.get("parked_questions") or [])
@@ -11967,6 +11968,7 @@ def remove_chart_question(
     """Remove a parked question by stable key; fails if absent."""
     chart_id = canonicalize_chart_id(chart_id)
     chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.remove-question")
     key = (question_key or "").strip()
     if not key:
         raise ChartError(
@@ -12028,6 +12030,7 @@ def wire_chart_decision(
     did = canonicalize_decision_id(did)
     chart_id = did.rsplit(".", 1)[0]
     chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.wire-decision")
     idx, entry = _find_decision_entry(chart, did)
     d_num = decision_local_number(did)
     full = load_decision_sidecar(flow_dir, chart_id, d_num)
@@ -12072,6 +12075,7 @@ def claim_chart_decision(flow_dir: Path, did: str) -> dict:
     did = canonicalize_decision_id(did)
     chart_id = did.rsplit(".", 1)[0]
     chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.claim")
     idx, entry = _find_decision_entry(chart, did)
     if entry.get("status") != "open":
         raise ChartError(
@@ -12288,6 +12292,1559 @@ def release_chart_claim(
         "audit": audit,
         "record_path": entry.get("record_path")
         or decision_record_link(chart_id, d_num),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Chart resolution, assets, supersession, scope, abandon (fn-135.2)
+# ---------------------------------------------------------------------------
+
+# Asset kinds accepted by attach-asset / resolve --assets.
+CHART_ASSET_KINDS = frozenset(
+    {"path", "git_ref", "branch", "commit", "url", "https"}
+)
+# Safe gist length for the compact ## Decisions ledger line.
+CHART_LEDGER_GIST_MAX = 120
+# Ledger comment preserved under ## Decisions.
+_CHART_LEDGER_COMMENT = (
+    "<!-- the ledger: one line per resolved decision, append-only, "
+    "D-IDs never reused -->"
+)
+
+# Obvious secret shapes. Patterns use FAKE-safe test fixtures (sk-FAKE...,
+# AKIA...EXAMPLE). Never embed real credentials in source or fixtures.
+_CHART_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)\bsk-[A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"(?i)\b(password|passwd|pwd)\s*[=:]\s*\S+"),
+    re.compile(r"(?i)\b(api[_-]?key|secret[_-]?key|access[_-]?token)\s*[=:]\s*\S+"),
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._\-]{20,}\b"),
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(r"(?i)\bghp_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"(?i)\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
+)
+# Literal destructive shell shapes that repo guards match on sight.
+_CHART_DESTRUCTIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\brm\s+-[A-Za-z]*[rf][A-Za-z]*\b"),
+    re.compile(r"\bgit\s+clean\b"),
+    re.compile(r"\bgit\s+reset\s+--hard\b"),
+    re.compile(r"\bdd\s+if="),
+    re.compile(r"\bmkfs\."),
+    re.compile(r">\s*/dev/sd[a-z]"),
+)
+
+
+def _require_chart_mutable(chart: dict, *, command: str = "chart") -> None:
+    """Refuse mutations on done/abandoned charts (reopen is a later task)."""
+    status = chart.get("status") or "open"
+    if status == "open":
+        return
+    chart_id = chart.get("id") or "?"
+    raise ChartError(
+        "invalid_state",
+        "chart_not_open",
+        f"Chart {chart_id} is {status}; mutations require status open",
+        details={"id": chart_id, "status": status, "command": command},
+    )
+
+
+def answer_gist(answer: str, *, max_len: int = CHART_LEDGER_GIST_MAX) -> str:
+    """One-line gist for the compact ledger (never the full answer)."""
+    text = (answer or "").strip()
+    if not text:
+        return "(empty)"
+    first = text.splitlines()[0].strip()
+    first = re.sub(r"\s+", " ", first)
+    if len(first) > max_len:
+        # Reserve 3 chars for the ellipsis so total length <= max_len.
+        cut = max(1, max_len - 3)
+        return first[:cut].rstrip() + "..."
+    return first
+
+
+def scan_unsafe_evidence(text: str) -> list[dict]:
+    """Return structured hits for secret/destructive content that must not embed.
+
+    Never rewrites the source. Callers refuse and require a safe redacted
+    summary plus an approved evidence reference.
+    """
+    if not text:
+        return []
+    hits: list[dict] = []
+    for pat in _CHART_SECRET_PATTERNS:
+        m = pat.search(text)
+        if m:
+            hits.append(
+                {
+                    "kind": "secret",
+                    "pattern": pat.pattern,
+                    "span": [m.start(), m.end()],
+                }
+            )
+    for pat in _CHART_DESTRUCTIVE_PATTERNS:
+        m = pat.search(text)
+        if m:
+            hits.append(
+                {
+                    "kind": "destructive_command",
+                    "pattern": pat.pattern,
+                    "span": [m.start(), m.end()],
+                }
+            )
+    return hits
+
+
+def refuse_if_unsafe_answer(answer: str) -> None:
+    """Raise ChartError(validation) when answer would embed unsafe content."""
+    hits = scan_unsafe_evidence(answer or "")
+    if not hits:
+        return
+    kinds = sorted({h["kind"] for h in hits})
+    raise ChartError(
+        "validation",
+        "unsafe_answer_content",
+        "Answer content contains obvious secret or destructive-command shapes "
+        "and must not be embedded. Supply a safe redacted summary as the "
+        "answer body and an approved evidence reference (attach-asset / "
+        "--assets); never silently strip bytes from the source.",
+        details={"kinds": kinds, "hit_count": len(hits)},
+    )
+
+
+def _git_check_ignored(repo_root: Path, relpath: str) -> bool:
+    """True when git considers relpath ignored (or check fails closed for missing)."""
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(repo_root), "check-ignore", "-q", "--", relpath],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        return r.returncode == 0
+    except OSError:
+        return False
+
+
+def _normalize_asset_dict(raw: Any, *, repo_root: Optional[Path] = None) -> dict:
+    """Validate and normalize one asset reference to a safe structured entry."""
+    if not isinstance(raw, dict):
+        raise ChartError(
+            "validation",
+            "invalid_asset",
+            "Asset must be a JSON object with kind/reference/display",
+        )
+    kind = str(raw.get("kind") or "").strip().lower()
+    if kind == "https":
+        kind = "url"
+    if kind not in CHART_ASSET_KINDS:
+        raise ChartError(
+            "validation",
+            "invalid_asset_kind",
+            f"Invalid asset kind '{raw.get('kind')}' "
+            f"(expected path|git_ref|branch|commit|url)",
+            details={"kind": raw.get("kind")},
+        )
+    reference = str(raw.get("reference") or raw.get("ref") or "").strip()
+    if not reference:
+        raise ChartError(
+            "validation",
+            "asset_reference_required",
+            "Asset requires a non-empty reference",
+            details={"kind": kind},
+        )
+    display = str(
+        raw.get("display") or raw.get("summary") or raw.get("display_summary") or ""
+    ).strip()
+    if not display:
+        display = reference if len(reference) <= 80 else reference[:77] + "..."
+    revision = raw.get("revision") or raw.get("fingerprint") or raw.get("sha")
+    if revision is not None:
+        revision = str(revision).strip() or None
+    fingerprint = raw.get("fingerprint")
+    if fingerprint is not None:
+        fingerprint = str(fingerprint).strip() or None
+    if revision is None and fingerprint is not None:
+        revision = fingerprint
+
+    if kind == "path":
+        _validate_asset_path(reference, repo_root=repo_root)
+    elif kind == "url":
+        _validate_asset_url(reference)
+    elif kind in ("git_ref", "branch", "commit"):
+        _validate_git_ref_shape(reference, kind=kind)
+
+    refuse_if_unsafe_answer(f"{display}\n{reference}")
+
+    out: dict[str, Any] = {
+        "kind": kind,
+        "reference": reference,
+        "display": display,
+    }
+    if revision:
+        out["revision"] = revision
+    if fingerprint and fingerprint != revision:
+        out["fingerprint"] = fingerprint
+    return out
+
+
+def _validate_asset_path(reference: str, *, repo_root: Optional[Path] = None) -> None:
+    """Accept repo-relative paths; reject abs, escapes, missing, ignored, symlinks."""
+    if not reference or reference.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", reference):
+        raise ChartError(
+            "validation",
+            "asset_path_outside_repo",
+            f"Asset path must be repository-relative: {reference}",
+            details={"reference": reference},
+        )
+    if "\\" in reference:
+        raise ChartError(
+            "validation",
+            "asset_path_invalid",
+            f"Asset path must use forward slashes: {reference}",
+            details={"reference": reference},
+        )
+    # Normalize without resolving yet.
+    parts = Path(reference).parts
+    if ".." in parts or reference.startswith("./../"):
+        # Allow only if final resolved stays in repo - still reject explicit ..
+        # for clarity (symlink escape covered below).
+        pass
+    root = repo_root
+    if root is None:
+        try:
+            root = get_repo_root()
+        except Exception:
+            root = Path.cwd()
+    root = root.resolve()
+    candidate = (root / reference).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as e:
+        raise ChartError(
+            "validation",
+            "asset_path_outside_repo",
+            f"Asset path escapes repository: {reference}",
+            details={"reference": reference},
+        ) from e
+    # Symlink escape: any path component that is a symlink outside.
+    probe = root
+    for part in Path(reference).parts:
+        probe = probe / part
+        if probe.is_symlink():
+            target = probe.resolve()
+            try:
+                target.relative_to(root)
+            except ValueError as e:
+                raise ChartError(
+                    "validation",
+                    "asset_path_symlink_escape",
+                    f"Asset path symlink escapes repository: {reference}",
+                    details={"reference": reference},
+                ) from e
+    if not candidate.exists():
+        raise ChartError(
+            "validation",
+            "asset_path_missing",
+            f"Asset path does not exist: {reference}",
+            details={"reference": reference},
+        )
+    # Prefer the unresolved path for ignore check (git wants repo-relative).
+    rel = str(Path(*Path(reference).parts))
+    if _git_check_ignored(root, rel):
+        raise ChartError(
+            "validation",
+            "asset_path_ignored",
+            f"Asset path is gitignored: {reference}",
+            details={"reference": reference},
+        )
+
+
+def _validate_asset_url(reference: str) -> None:
+    """Approved HTTPS only; reject credentials, non-https, and redirect-as-id."""
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(reference)
+    except Exception as e:
+        raise ChartError(
+            "validation",
+            "asset_url_invalid",
+            f"Invalid asset URL: {reference}",
+            details={"reference": reference},
+        ) from e
+    if parsed.scheme.lower() != "https":
+        raise ChartError(
+            "validation",
+            "asset_url_not_https",
+            f"Asset URL must be https: {reference}",
+            details={"reference": reference},
+        )
+    if parsed.username or parsed.password:
+        raise ChartError(
+            "validation",
+            "asset_url_credentials",
+            "Asset URL must not carry credentials",
+            details={"reference": reference},
+        )
+    if "@" in (parsed.netloc or "") and parsed.username is None:
+        # user:pass@host form sometimes lands only in netloc.
+        raise ChartError(
+            "validation",
+            "asset_url_credentials",
+            "Asset URL must not carry credentials",
+            details={"reference": reference},
+        )
+    if not parsed.netloc:
+        raise ChartError(
+            "validation",
+            "asset_url_invalid",
+            f"Invalid asset URL host: {reference}",
+            details={"reference": reference},
+        )
+
+
+def _validate_git_ref_shape(reference: str, *, kind: str) -> None:
+    """Lightweight shape check for branch/commit/git_ref (no network)."""
+    if not reference or any(c.isspace() for c in reference):
+        raise ChartError(
+            "validation",
+            "invalid_git_ref",
+            f"Invalid {kind} reference: {reference!r}",
+            details={"kind": kind, "reference": reference},
+        )
+    if kind == "commit":
+        if not re.fullmatch(r"[0-9a-fA-F]{7,40}", reference):
+            raise ChartError(
+                "validation",
+                "invalid_commit_sha",
+                f"Commit reference must be a hex sha (7-40): {reference}",
+                details={"reference": reference},
+            )
+    if ".." in reference or reference.startswith("-"):
+        raise ChartError(
+            "validation",
+            "invalid_git_ref",
+            f"Invalid {kind} reference: {reference}",
+            details={"kind": kind, "reference": reference},
+        )
+
+
+def _asset_identity_key(asset: dict) -> tuple:
+    """Identity for idempotent attach: kind + reference + revision/fingerprint."""
+    return (
+        asset.get("kind"),
+        asset.get("reference"),
+        asset.get("revision") or asset.get("fingerprint") or "",
+    )
+
+
+def _assets_equivalent(a: dict, b: dict) -> bool:
+    """True when two assets are identical for idempotent retry."""
+    keys = ("kind", "reference", "display", "revision", "fingerprint")
+    for k in keys:
+        if (a.get(k) or None) != (b.get(k) or None):
+            return False
+    return True
+
+
+def _find_matching_asset(assets: list, candidate: dict) -> Optional[dict]:
+    """Return existing asset with same identity key, if any."""
+    key = _asset_identity_key(candidate)
+    for existing in assets:
+        if isinstance(existing, dict) and _asset_identity_key(existing) == key:
+            return existing
+    return None
+
+
+def _parse_assets_json(raw: Any, *, repo_root: Optional[Path] = None) -> list[dict]:
+    """Parse --assets json (list or {assets:[...]}) into normalized assets."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError as e:
+            raise ChartError(
+                "validation",
+                "assets_invalid_json",
+                f"--assets is not valid JSON: {e}",
+            ) from e
+    if isinstance(raw, dict) and "assets" in raw:
+        raw = raw["assets"]
+    if not isinstance(raw, list):
+        raise ChartError(
+            "validation",
+            "assets_not_list",
+            "--assets must be a JSON list of asset objects",
+        )
+    return [_normalize_asset_dict(item, repo_root=repo_root) for item in raw]
+
+
+def _render_ledger_line(
+    d_num: int,
+    gist: str,
+    link: str,
+    *,
+    superseded_by: Optional[str] = None,
+) -> str:
+    """One compact ledger bullet. Full answer never appears here."""
+    gist = re.sub(r"\s+", " ", (gist or "").strip()) or "(empty)"
+    # Bare local D-ID in ledger; record link carries chart path.
+    if superseded_by:
+        # Extract bare D form from full or bare id.
+        sup = superseded_by
+        m = re.search(r"D([1-9][0-9]*)$", sup, re.IGNORECASE)
+        sup_label = f"D{m.group(1)}" if m else sup
+        return (
+            f"- ~~**D{d_num}:**~~ {gist} -- superseded by **{sup_label}** "
+            f"-- [record]({link})"
+        )
+    return f"- **D{d_num}:** {gist} -- [record]({link})"
+
+
+def _ledger_section_body(lines: list[str]) -> str:
+    body = _CHART_LEDGER_COMMENT + "\n"
+    if lines:
+        body += "\n" + "\n".join(lines) + "\n"
+    else:
+        body += "\n"
+    return body
+
+
+def _extract_ledger_lines(md_text: str) -> list[str]:
+    """Extract existing decision bullet lines from ## Decisions."""
+    pattern = re.compile(
+        r"(^##\s+Decisions\s*\n)(.*?)(?=^##\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    m = pattern.search(md_text)
+    if not m:
+        return []
+    section = m.group(2)
+    lines: list[str] = []
+    for line in section.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- ") and "**D" in stripped:
+            lines.append(stripped)
+    return lines
+
+
+def _ledger_line_d_num(line: str) -> Optional[int]:
+    m = re.search(r"\*\*D([1-9][0-9]*):\*\*", line)
+    if not m:
+        m = re.search(r"~~\*\*D([1-9][0-9]*):\*\*~~", line)
+    if not m:
+        return None
+    return int(m.group(1))
+
+
+def _apply_ledger_lines(md_text: str, lines: list[str]) -> str:
+    return _replace_chart_section(md_text, "Decisions", _ledger_section_body(lines))
+
+
+def _upsert_ledger_line(md_text: str, d_num: int, new_line: str) -> str:
+    lines = _extract_ledger_lines(md_text)
+    found = False
+    for i, line in enumerate(lines):
+        if _ledger_line_d_num(line) == d_num:
+            lines[i] = new_line
+            found = True
+            break
+    if not found:
+        lines.append(new_line)
+    # Stable order by D-number.
+    lines.sort(key=lambda ln: _ledger_line_d_num(ln) or 0)
+    return _apply_ledger_lines(md_text, lines)
+
+
+def _append_boundary_line(md_text: str, d_num: int, reason: str) -> str:
+    """Append one out-of-scope reason under ## Boundaries (no Decisions entry)."""
+    pattern = re.compile(
+        r"(^##\s+Boundaries\s*\n)(.*?)(?=^##\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    reason = re.sub(r"\s+", " ", (reason or "").strip())
+    bullet = f"- **D{d_num}:** out of scope - {reason}"
+    m = pattern.search(md_text)
+    if not m:
+        if not md_text.endswith("\n"):
+            md_text += "\n"
+        return md_text + f"\n## Boundaries\n{bullet}\n"
+    existing = m.group(2)
+    # Idempotent: if same D-num boundary already present with same text, keep.
+    lines = [ln for ln in existing.splitlines() if ln.strip()]
+    for ln in lines:
+        if ln.strip().startswith(f"- **D{d_num}:**"):
+            if ln.strip() == bullet:
+                return md_text
+            # Replace conflicting boundary line for this D-ID.
+            lines = [
+                bullet if x.strip().startswith(f"- **D{d_num}:**") else x
+                for x in lines
+            ]
+            content = "\n".join(lines) + "\n"
+            return pattern.sub(
+                lambda mm, c=content: mm.group(1) + c, md_text, count=1
+            )
+    lines.append(bullet)
+    content = "\n".join(lines) + "\n"
+    return pattern.sub(lambda mm: mm.group(1) + content, md_text, count=1)
+
+
+def _depends_on_reverse_index(decisions: list[dict]) -> dict[str, list[str]]:
+    """Map premise D-ID -> list of decision ids that depend_on it."""
+    rev: dict[str, list[str]] = {}
+    for d in decisions:
+        if not isinstance(d, dict) or not d.get("id"):
+            continue
+        for dep in d.get("depends_on") or []:
+            if not isinstance(dep, str):
+                continue
+            rev.setdefault(dep, []).append(d["id"])
+    return rev
+
+
+def _depends_on_closure(
+    seeds: list[str], decisions: list[dict]
+) -> list[str]:
+    """Direct + transitive dependents via depends_on (excludes seeds)."""
+    rev = _depends_on_reverse_index(decisions)
+    seen: set[str] = set()
+    order: list[str] = []
+    stack = list(seeds)
+    seed_set = set(seeds)
+    while stack:
+        node = stack.pop()
+        for dep in rev.get(node) or []:
+            if dep in seed_set or dep in seen:
+                continue
+            seen.add(dep)
+            order.append(dep)
+            stack.append(dep)
+    # Stable by local number.
+    order.sort(key=lambda did: decision_local_number(did))
+    return order
+
+
+def _transition_note(
+    kind: str,
+    text: str,
+    *,
+    actor: Optional[str] = None,
+    **extra: Any,
+) -> dict:
+    note: dict[str, Any] = {
+        "at": now_iso(),
+        "kind": kind,
+        "text": text,
+    }
+    if actor:
+        note["actor"] = actor
+    for k, v in extra.items():
+        if v is not None:
+            note[k] = v
+    return note
+
+
+def _load_all_decision_sidecars(
+    flow_dir: Path, chart_id: str, decisions: list[dict]
+) -> dict[str, dict]:
+    """Load full decision sidecars keyed by canonical id."""
+    out: dict[str, dict] = {}
+    for d in decisions:
+        if not isinstance(d, dict) or not d.get("id"):
+            continue
+        did = d["id"]
+        n = decision_local_number(did)
+        out[did] = load_decision_sidecar(flow_dir, chart_id, n)
+    return out
+
+
+def attach_chart_asset(
+    flow_dir: Path,
+    did: str,
+    asset_raw: Any,
+    *,
+    repo_root: Optional[Path] = None,
+) -> dict:
+    """Idempotently attach a safe asset while the decision remains open.
+
+    Identical retries are no-ops. Conflicting reuse of the same identity with
+    different display/metadata is conflict. Attach never writes an answer or
+    closes the D-ID.
+    """
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.attach-asset")
+    idx, entry = _find_decision_entry(chart, did)
+    if entry.get("status") != "open":
+        raise ChartError(
+            "invalid_state",
+            "decision_not_open",
+            f"Cannot attach-asset to {did}: status is {entry.get('status')}",
+            details={"id": did, "status": entry.get("status")},
+        )
+    if repo_root is None:
+        try:
+            repo_root = get_repo_root()
+        except Exception:
+            repo_root = flow_dir.parent
+    asset = _normalize_asset_dict(asset_raw, repo_root=repo_root)
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    assets = list(full.get("assets") or [])
+    existing = _find_matching_asset(assets, asset)
+    if existing is not None:
+        if _assets_equivalent(existing, asset):
+            return {
+                "id": did,
+                "asset": existing,
+                "assets": assets,
+                "status": full.get("status"),
+                "noop": True,
+                "record_path": full.get("record_path")
+                or decision_record_link(chart_id, d_num),
+            }
+        raise ChartError(
+            "conflict",
+            "asset_conflict",
+            f"Asset identity already attached to {did} with different metadata",
+            details={
+                "id": did,
+                "existing": existing,
+                "incoming": asset,
+            },
+        )
+    assets.append(asset)
+    full = dict(full)
+    full["assets"] = assets
+    full["updated_at"] = now_iso()
+    # Chart compact entry does not carry assets; leave chart.json unchanged
+    # except updated_at is not on chart for decisions. Touch decision only.
+    _, json_rel = decision_record_relpaths(chart_id, d_num)
+    # Still journal chart.json for recovery pairing when other ops expect it;
+    # content unchanged except we bump nothing - skip chart if no change.
+    mutations = [
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.attach-asset", mutations)
+    return {
+        "id": did,
+        "asset": asset,
+        "assets": assets,
+        "status": full.get("status"),
+        "noop": False,
+        "record_path": full.get("record_path")
+        or decision_record_link(chart_id, d_num),
+    }
+
+
+def _parse_sharpen_file(path: Path) -> dict:
+    """Load resolve --sharpen-file JSON: decisions + remove_questions keys."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "sharpen_file_unreadable",
+            f"Cannot read --sharpen-file: {path} ({e})",
+            details={"path": str(path)},
+        ) from e
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "validation",
+            "sharpen_file_invalid_json",
+            f"--sharpen-file is not valid JSON: {e}",
+            details={"path": str(path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "validation",
+            "sharpen_file_invalid",
+            "--sharpen-file must be a JSON object",
+            details={"path": str(path)},
+        )
+    decisions = data.get("decisions")
+    if decisions is None:
+        decisions = []
+    if not isinstance(decisions, list):
+        raise ChartError(
+            "validation",
+            "sharpen_file_invalid_decisions",
+            "sharpen-file 'decisions' must be a list",
+        )
+    remove_keys = (
+        data.get("remove_questions")
+        or data.get("remove_parked")
+        or data.get("parked_removals")
+        or []
+    )
+    if not isinstance(remove_keys, list):
+        raise ChartError(
+            "validation",
+            "sharpen_file_invalid_removals",
+            "sharpen-file remove_questions must be a list of keys",
+        )
+    remove_keys = [str(k).strip() for k in remove_keys if str(k).strip()]
+    return {"decisions": decisions, "remove_questions": remove_keys}
+
+
+def resolve_chart_decision(
+    flow_dir: Path,
+    did: str,
+    answer: str,
+    *,
+    assets_raw: Any = None,
+    sharpen: Optional[dict] = None,
+    supersedes: Optional[list[str]] = None,
+    keep_dependents: bool = False,
+    repo_root: Optional[Path] = None,
+) -> dict:
+    """Resolve a decision: write answer once, close, ledger gist, cascades.
+
+    Legal transitions: open -> resolved. Identical retry is idempotent;
+    conflicting retry is invalid_state. Prototype requires >=1 safe asset.
+    """
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.resolve")
+    idx, entry = _find_decision_entry(chart, did)
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    status = entry.get("status") or full.get("status") or "open"
+
+    # Claims are checked before any work: resolving a decision another actor
+    # holds is a conflict, never a silent bypass (cascade claim-clearing on
+    # dependents is the audited exception, not this path).
+    claimant = entry.get("claimed_by") or full.get("claimed_by")
+    if status == "open" and claimant and claimant != get_actor():
+        raise ChartError(
+            "conflict",
+            "claim_conflict",
+            f"Decision {did} is claimed by '{claimant}'; resolve requires the "
+            "claim owner (release-claim or --break-stale first)",
+            details={"id": did, "claimed_by": claimant, "actor": get_actor()},
+        )
+
+    answer_text = answer if answer is not None else ""
+    refuse_if_unsafe_answer(answer_text)
+    gist = answer_gist(answer_text)
+    if repo_root is None:
+        try:
+            repo_root = get_repo_root()
+        except Exception:
+            repo_root = flow_dir.parent
+    incoming_assets = _parse_assets_json(assets_raw, repo_root=repo_root)
+
+    # Idempotent identical retry on already-resolved.
+    if status == "resolved":
+        existing_answer = full.get("answer")
+        existing_gist = full.get("answer_gist") or answer_gist(
+            existing_answer if isinstance(existing_answer, str) else ""
+        )
+        same_answer = existing_answer == answer_text or (
+            isinstance(existing_answer, dict)
+            and existing_answer.get("text") == answer_text
+        )
+        if same_answer or (
+            isinstance(existing_answer, str) and existing_answer == answer_text
+        ):
+            # Also require matching supersedes set if provided.
+            existing_sup = list(full.get("supersedes") or [])
+            want_sup = [
+                canonicalize_decision_id(s, chart_id=chart_id)
+                for s in (supersedes or [])
+            ]
+            if sorted(existing_sup) == sorted(want_sup) or not want_sup:
+                return {
+                    "id": did,
+                    "status": "resolved",
+                    "answer_gist": existing_gist,
+                    "noop": True,
+                    "affected": [did],
+                    "record_path": full.get("record_path")
+                    or decision_record_link(chart_id, d_num),
+                    "ledger_line": None,
+                    "replacements": [],
+                    "sharpened": [],
+                    "removed_questions": [],
+                }
+        raise ChartError(
+            "invalid_state",
+            "decision_immutable",
+            f"Decision {did} is already resolved; answers are immutable "
+            "(identical retry is a no-op; conflicting retry is refused)",
+            details={
+                "id": did,
+                "status": status,
+                "existing_gist": existing_gist,
+            },
+        )
+    if status != "open":
+        raise ChartError(
+            "invalid_state",
+            "illegal_transition",
+            f"Cannot resolve {did}: legal transition is open->resolved "
+            f"(current status={status})",
+            details={"id": did, "status": status},
+        )
+
+    # Merge assets: existing + incoming; identity conflicts error.
+    assets = list(full.get("assets") or [])
+    for asset in incoming_assets:
+        existing = _find_matching_asset(assets, asset)
+        if existing is not None:
+            if not _assets_equivalent(existing, asset):
+                raise ChartError(
+                    "conflict",
+                    "asset_conflict",
+                    f"Asset identity already attached to {did} with different metadata",
+                    details={"id": did, "existing": existing, "incoming": asset},
+                )
+            continue
+        assets.append(asset)
+
+    dtype = (full.get("type") or entry.get("type") or "").strip().lower()
+    if dtype == "prototype" and not assets:
+        raise ChartError(
+            "validation",
+            "prototype_asset_required",
+            f"Prototype decision {did} cannot resolve without a persisted "
+            "safe artefact reference. attach-asset first, or pass --assets.",
+            details={"id": did, "type": "prototype"},
+        )
+
+    actor = get_actor()
+    ts = now_iso()
+    supersede_ids = [
+        canonicalize_decision_id(s, chart_id=chart_id)
+        for s in (supersedes or [])
+    ]
+    # Dedup while preserving order.
+    seen_sup: set[str] = set()
+    clean_sup: list[str] = []
+    for s in supersede_ids:
+        if s == did:
+            raise ChartError(
+                "invalid_graph",
+                "self_supersede",
+                f"Decision {did} cannot supersede itself",
+                details={"id": did},
+            )
+        if s not in seen_sup:
+            seen_sup.add(s)
+            clean_sup.append(s)
+    supersede_ids = clean_sup
+
+    # Working copies of chart decisions + full sidecars we will mutate.
+    chart_decs: list[dict] = [
+        dict(d) if isinstance(d, dict) else d
+        for d in (chart.get("decisions") or [])
+    ]
+    by_id: dict[str, dict] = {
+        d["id"]: d for d in chart_decs if isinstance(d, dict) and d.get("id")
+    }
+    full_by_id = _load_all_decision_sidecars(flow_dir, chart_id, chart_decs)
+
+    # Validate supersede targets exist and allow resolved->superseded or open->superseded.
+    for s in supersede_ids:
+        if s not in by_id:
+            raise ChartError(
+                "not_found",
+                "decision_not_found",
+                f"Supersede target not found: {s}",
+                details={"id": s},
+            )
+        st = by_id[s].get("status")
+        if st == "superseded":
+            # Idempotent if already superseded by this decision.
+            existing_by = (full_by_id.get(s) or {}).get("superseded_by")
+            if existing_by == did:
+                continue
+            raise ChartError(
+                "invalid_state",
+                "already_superseded",
+                f"Decision {s} is already superseded by {existing_by}",
+                details={"id": s, "superseded_by": existing_by},
+            )
+        if st not in ("open", "resolved"):
+            raise ChartError(
+                "invalid_state",
+                "illegal_transition",
+                f"Cannot supersede {s}: status is {st} "
+                "(legal: open|resolved -> superseded)",
+                details={"id": s, "status": st},
+            )
+
+    # --- Apply resolution to primary decision ---
+    primary = dict(full)
+    primary["status"] = "resolved"
+    primary["answer"] = answer_text
+    primary["answer_gist"] = gist
+    primary["assets"] = assets
+    primary["supersedes"] = list(supersede_ids)
+    primary["claimed_by"] = None
+    primary["claimed_at"] = None
+    primary["updated_at"] = ts
+    notes = list(primary.get("transition_notes") or [])
+    notes.append(
+        _transition_note(
+            "resolved",
+            f"resolved by {actor}",
+            actor=actor,
+            supersedes=list(supersede_ids),
+            keep_dependents=keep_dependents,
+        )
+    )
+    if keep_dependents and supersede_ids:
+        notes.append(
+            _transition_note(
+                "keep_dependents",
+                f"keep-dependents: cascade suppressed for supersession of "
+                f"{', '.join(supersede_ids)}",
+                actor=actor,
+                supersedes=list(supersede_ids),
+            )
+        )
+    primary["transition_notes"] = notes
+    full_by_id[did] = primary
+    by_id[did] = compact_decision_entry(primary)
+    # Preserve depends/blocked from compact after compact_decision_entry
+    by_id[did]["blocked_by"] = list(primary.get("blocked_by") or [])
+    by_id[did]["depends_on"] = list(primary.get("depends_on") or [])
+
+    affected: list[str] = [did]
+    replacements: list[dict] = []
+    cascade_open: list[str] = []
+    cascade_resolved: list[str] = []
+
+    # --- Supersede named decisions ---
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if not md_path.is_file():
+        raise ChartError(
+            "io",
+            "chart_body_missing",
+            f"Chart body missing for {chart_id}",
+            details={"id": chart_id},
+        )
+    md_text = md_path.read_text(encoding="utf-8")
+    md_text = _upsert_ledger_line(
+        md_text,
+        d_num,
+        _render_ledger_line(
+            d_num, gist, decision_record_link(chart_id, d_num)
+        ),
+    )
+
+    for s in supersede_ids:
+        s_full = dict(full_by_id[s])
+        s_num = decision_local_number(s)
+        if s_full.get("status") == "superseded" and s_full.get("superseded_by") == did:
+            affected.append(s)
+            continue
+        old_gist = s_full.get("answer_gist") or answer_gist(
+            s_full.get("answer") if isinstance(s_full.get("answer"), str) else ""
+        )
+        if not old_gist or old_gist == "(empty)":
+            old_gist = (s_full.get("title") or s)[:CHART_LEDGER_GIST_MAX]
+        s_full["status"] = "superseded"
+        s_full["superseded_by"] = did
+        s_full["claimed_by"] = None
+        s_full["claimed_at"] = None
+        s_full["updated_at"] = ts
+        s_notes = list(s_full.get("transition_notes") or [])
+        s_notes.append(
+            _transition_note(
+                "superseded",
+                f"superseded by {did}",
+                actor=actor,
+                superseded_by=did,
+            )
+        )
+        s_full["transition_notes"] = s_notes
+        full_by_id[s] = s_full
+        by_id[s] = compact_decision_entry(s_full)
+        by_id[s]["blocked_by"] = list(s_full.get("blocked_by") or [])
+        by_id[s]["depends_on"] = list(s_full.get("depends_on") or [])
+        md_text = _upsert_ledger_line(
+            md_text,
+            s_num,
+            _render_ledger_line(
+                s_num,
+                old_gist,
+                decision_record_link(chart_id, s_num),
+                superseded_by=did,
+            ),
+        )
+        if s not in affected:
+            affected.append(s)
+
+    # --- Dependent cascade (unless --keep-dependents) ---
+    dependent_ids = _depends_on_closure(supersede_ids, list(by_id.values()))
+    # Exclude the resolving decision itself if it somehow depends.
+    dependent_ids = [d for d in dependent_ids if d != did]
+
+    if keep_dependents:
+        for dep in dependent_ids:
+            dep_full = dict(full_by_id[dep])
+            dep_notes = list(dep_full.get("transition_notes") or [])
+            dep_notes.append(
+                _transition_note(
+                    "keep_dependents",
+                    f"keep-dependents: premise supersession by {did} of "
+                    f"{', '.join(supersede_ids)} did not cascade",
+                    actor=actor,
+                    superseded_by_chain=list(supersede_ids),
+                    via=did,
+                )
+            )
+            dep_full["transition_notes"] = dep_notes
+            dep_full["updated_at"] = ts
+            full_by_id[dep] = dep_full
+            if dep not in affected:
+                affected.append(dep)
+    else:
+        next_n = _next_decision_number({"decisions": list(by_id.values())})
+        for dep in dependent_ids:
+            dep_entry = by_id[dep]
+            dep_full = dict(full_by_id[dep])
+            dep_status = dep_entry.get("status") or dep_full.get("status")
+            if dep_status == "open":
+                # Stay open; lose claim; premise-invalidated note.
+                prior_claim = dep_full.get("claimed_by")
+                dep_full["claimed_by"] = None
+                dep_full["claimed_at"] = None
+                dep_notes = list(dep_full.get("transition_notes") or [])
+                dep_notes.append(
+                    _transition_note(
+                        "premise_invalidated",
+                        f"premise invalidated: {did} superseded "
+                        f"{', '.join(supersede_ids)}; claim cleared"
+                        + (f" (was {prior_claim})" if prior_claim else ""),
+                        actor=actor,
+                        via=did,
+                        superseded=list(supersede_ids),
+                        prior_claimed_by=prior_claim,
+                    )
+                )
+                dep_full["transition_notes"] = dep_notes
+                dep_full["updated_at"] = ts
+                # status remains open
+                full_by_id[dep] = dep_full
+                by_id[dep] = compact_decision_entry(dep_full)
+                by_id[dep]["blocked_by"] = list(dep_full.get("blocked_by") or [])
+                by_id[dep]["depends_on"] = list(dep_full.get("depends_on") or [])
+                cascade_open.append(dep)
+                if dep not in affected:
+                    affected.append(dep)
+            elif dep_status == "resolved":
+                # Immutable: create replacement D-ID that supersedes this one.
+                rep_n = next_n
+                next_n += 1
+                rep_id = f"{chart_id}.D{rep_n}"
+                reason = (
+                    f"re-evaluate after {did} superseded "
+                    f"{', '.join(supersede_ids)} "
+                    f"(replacement for {dep})"
+                )
+                question = (
+                    dep_full.get("question")
+                    or dep_full.get("title")
+                    or dep_entry.get("title")
+                    or ""
+                )
+                rep_full = decision_sidecar_data(
+                    chart_id,
+                    rep_n,
+                    dep_full.get("title") or dep_entry.get("title") or f"Re-evaluate {dep}",
+                    dep_full.get("type") or dep_entry.get("type") or "research",
+                    dep_full.get("attendance")
+                    or dep_entry.get("attendance")
+                    or "unattended",
+                    question,
+                    blocked_by=list(dep_full.get("blocked_by") or []),
+                    depends_on=list(dep_full.get("depends_on") or []),
+                    created=ts,
+                )
+                rep_full["supersedes"] = [dep]
+                rep_full["transition_notes"] = [
+                    _transition_note(
+                        "replacement_after_supersession",
+                        reason,
+                        actor=actor,
+                        replaces=dep,
+                        via=did,
+                        superseded_premises=list(supersede_ids),
+                    )
+                ]
+                # Supersede the old resolved dependent.
+                old_gist = dep_full.get("answer_gist") or answer_gist(
+                    dep_full.get("answer")
+                    if isinstance(dep_full.get("answer"), str)
+                    else ""
+                )
+                dep_full["status"] = "superseded"
+                dep_full["superseded_by"] = rep_id
+                dep_full["claimed_by"] = None
+                dep_full["claimed_at"] = None
+                dep_full["updated_at"] = ts
+                dep_notes = list(dep_full.get("transition_notes") or [])
+                dep_notes.append(
+                    _transition_note(
+                        "superseded",
+                        f"superseded by replacement {rep_id} after premise "
+                        f"invalidation via {did}",
+                        actor=actor,
+                        superseded_by=rep_id,
+                        via=did,
+                    )
+                )
+                dep_full["transition_notes"] = dep_notes
+                full_by_id[dep] = dep_full
+                full_by_id[rep_id] = rep_full
+                by_id[dep] = compact_decision_entry(dep_full)
+                by_id[dep]["blocked_by"] = list(dep_full.get("blocked_by") or [])
+                by_id[dep]["depends_on"] = list(dep_full.get("depends_on") or [])
+                by_id[rep_id] = compact_decision_entry(rep_full)
+                by_id[rep_id]["blocked_by"] = list(rep_full.get("blocked_by") or [])
+                by_id[rep_id]["depends_on"] = list(rep_full.get("depends_on") or [])
+                # Strike old dependent ledger line; no ledger line for open replacement.
+                dep_num = decision_local_number(dep)
+                md_text = _upsert_ledger_line(
+                    md_text,
+                    dep_num,
+                    _render_ledger_line(
+                        dep_num,
+                        old_gist or (dep_full.get("title") or dep),
+                        decision_record_link(chart_id, dep_num),
+                        superseded_by=rep_id,
+                    ),
+                )
+                replacements.append(
+                    {
+                        "id": rep_id,
+                        "replaces": dep,
+                        "title": rep_full.get("title"),
+                        "reason": reason,
+                        "record_path": rep_full.get("record_path"),
+                    }
+                )
+                cascade_resolved.append(dep)
+                if dep not in affected:
+                    affected.append(dep)
+                affected.append(rep_id)
+            else:
+                # superseded / out-of-scope: still report as affected for visibility.
+                if dep not in affected:
+                    affected.append(dep)
+
+    # --- Sharpening: new decisions + parked removals ---
+    sharpened: list[dict] = []
+    removed_questions: list[dict] = []
+    parked = list(chart.get("parked_questions") or [])
+    if sharpen:
+        remove_keys = list(sharpen.get("remove_questions") or [])
+        raw_new = list(sharpen.get("decisions") or [])
+        # Removals first (by key); absent key fails unless already gone in this txn.
+        for key in remove_keys:
+            found = None
+            new_parked = []
+            for e in parked:
+                if isinstance(e, dict) and e.get("key") == key:
+                    found = e
+                else:
+                    new_parked.append(e)
+            if found is None:
+                raise ChartError(
+                    "not_found",
+                    "parked_question_not_found",
+                    f"Parked question key not found for sharpening removal: {key}",
+                    details={"key": key, "chart_id": chart_id},
+                )
+            parked = new_parked
+            removed_questions.append(
+                {"key": key, "body": found.get("body")}
+            )
+        # Allocate new decisions after any cascade replacements.
+        next_n = _next_decision_number({"decisions": list(by_id.values())})
+        # First pass provisional for edge binding among new decisions.
+        local_map: dict[str, str] = {}
+        built_new: list[dict] = []
+        for i, raw in enumerate(raw_new, start=1):
+            if not isinstance(raw, dict):
+                raise ChartError(
+                    "validation",
+                    "invalid_sharpen_decision",
+                    f"Sharpen decision #{i} must be an object",
+                    details={"index": i},
+                )
+            title = (raw.get("title") or "").strip()
+            if not title:
+                raise ChartError(
+                    "validation",
+                    "title_required",
+                    f"Sharpen decision #{i} requires a title",
+                    details={"index": i},
+                )
+            dtype_new = (raw.get("type") or "").strip().lower()
+            att_new = derive_decision_attendance(dtype_new, raw.get("attendance"))
+            question = str(
+                raw.get("question") or raw.get("body") or title
+            ).strip()
+            n = next_n
+            next_n += 1
+            new_id = f"{chart_id}.D{n}"
+            local_map[str(i)] = new_id
+            local_map[f"d{i}"] = new_id
+            local_map[f"D{i}".lower()] = new_id
+            local_map[new_id.lower()] = new_id
+            if raw.get("id"):
+                local_map[str(raw["id"]).strip().lower()] = new_id
+            built_new.append(
+                {
+                    "n": n,
+                    "id": new_id,
+                    "title": title,
+                    "type": dtype_new,
+                    "attendance": att_new,
+                    "question": question,
+                    "raw_blocked_by": raw.get("blocked_by") or [],
+                    "raw_depends_on": raw.get("depends_on") or [],
+                }
+            )
+        # Existing decisions also available as edge targets via their ids.
+        for existing_id in by_id:
+            local_map[existing_id.lower()] = existing_id
+            bare = existing_id.rsplit(".", 1)[-1].lower()
+            local_map[bare] = existing_id
+            if bare.startswith("d"):
+                local_map[bare[1:]] = existing_id
+
+        for b in built_new:
+            blocked = _normalize_edge_refs(
+                list(b["raw_blocked_by"]),
+                chart_id,
+                field_name="blocked_by",
+                local_map=local_map,
+            )
+            depends = _normalize_edge_refs(
+                list(b["raw_depends_on"]),
+                chart_id,
+                field_name="depends_on",
+                local_map=local_map,
+            )
+            new_full = decision_sidecar_data(
+                chart_id,
+                b["n"],
+                b["title"],
+                b["type"],
+                b["attendance"],
+                b["question"],
+                blocked_by=blocked,
+                depends_on=depends,
+                created=ts,
+            )
+            new_full["transition_notes"] = [
+                _transition_note(
+                    "sharpened",
+                    f"created by resolve sharpening of {did}",
+                    actor=actor,
+                    via=did,
+                )
+            ]
+            full_by_id[b["id"]] = new_full
+            by_id[b["id"]] = compact_decision_entry(new_full)
+            by_id[b["id"]]["blocked_by"] = blocked
+            by_id[b["id"]]["depends_on"] = depends
+            sharpened.append(
+                {
+                    "id": b["id"],
+                    "title": b["title"],
+                    "type": b["type"],
+                    "attendance": b["attendance"],
+                    "record_path": new_full.get("record_path"),
+                }
+            )
+            if b["id"] not in affected:
+                affected.append(b["id"])
+
+        md_text = _apply_parked_to_chart_body(md_text, parked)
+
+    # Validate entire post-resolution graph before publish.
+    graph_list = list(by_id.values())
+    validate_chart_graph(graph_list, chart_id=chart_id)
+
+    # Rebuild ordered decisions list: preserve original order, append new at end.
+    ordered_ids: list[str] = []
+    seen_ord: set[str] = set()
+    for d in chart.get("decisions") or []:
+        if isinstance(d, dict) and d.get("id") and d["id"] in by_id:
+            ordered_ids.append(d["id"])
+            seen_ord.add(d["id"])
+    for did_k in sorted(by_id.keys(), key=lambda x: decision_local_number(x)):
+        if did_k not in seen_ord:
+            ordered_ids.append(did_k)
+            seen_ord.add(did_k)
+
+    new_chart = dict(chart)
+    new_chart["decisions"] = [by_id[i] for i in ordered_ids]
+    new_chart["parked_questions"] = parked
+    new_chart["updated_at"] = ts
+
+    # Build mutations: chart pair + every touched decision sidecar (+ md creates).
+    mutations: list[tuple[str, str, str]] = [
+        (f"{chart_id}.json", "update", _sidecar_json(new_chart)),
+        (f"{chart_id}.md", "update", md_text),
+    ]
+    original_ids = {
+        d["id"]
+        for d in (chart.get("decisions") or [])
+        if isinstance(d, dict) and d.get("id")
+    }
+    for did_k, full_k in full_by_id.items():
+        n = decision_local_number(did_k)
+        md_rel, json_rel = decision_record_relpaths(chart_id, n)
+        if did_k in original_ids:
+            # Update json; md body (question) stays for existing.
+            mutations.append((json_rel, "update", _sidecar_json(full_k)))
+        else:
+            mutations.append(
+                (md_rel, "create", decision_body_text(full_k.get("question") or ""))
+            )
+            mutations.append((json_rel, "create", _sidecar_json(full_k)))
+
+    run_chart_transaction(flow_dir, "chart.resolve", mutations)
+
+    # Dedup affected preserving order.
+    aff_out: list[str] = []
+    aff_seen: set[str] = set()
+    for a in affected:
+        if a not in aff_seen:
+            aff_seen.add(a)
+            aff_out.append(a)
+
+    return {
+        "id": did,
+        "status": "resolved",
+        "answer_gist": gist,
+        "noop": False,
+        "assets": assets,
+        "supersedes": list(supersede_ids),
+        "keep_dependents": keep_dependents,
+        "affected": aff_out,
+        "cascade_open": cascade_open,
+        "cascade_resolved": cascade_resolved,
+        "replacements": replacements,
+        "sharpened": sharpened,
+        "removed_questions": removed_questions,
+        "record_path": primary.get("record_path")
+        or decision_record_link(chart_id, d_num),
+        "ledger_line": _render_ledger_line(
+            d_num, gist, decision_record_link(chart_id, d_num)
+        ),
+    }
+
+
+def out_of_scope_chart_decision(
+    flow_dir: Path,
+    did: str,
+    reason: str,
+) -> dict:
+    """Close open decision as out-of-scope; write ## Boundaries line only."""
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.out-of-scope")
+    idx, entry = _find_decision_entry(chart, did)
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    status = entry.get("status") or full.get("status")
+    claimant = entry.get("claimed_by") or full.get("claimed_by")
+    if status == "open" and claimant and claimant != get_actor():
+        raise ChartError(
+            "conflict",
+            "claim_conflict",
+            f"Decision {did} is claimed by '{claimant}'; out-of-scope requires "
+            "the claim owner (release-claim or --break-stale first)",
+            details={"id": did, "claimed_by": claimant, "actor": get_actor()},
+        )
+    reason_text = (reason or "").strip()
+    if not reason_text:
+        raise ChartError(
+            "validation",
+            "reason_required",
+            "out-of-scope requires --reason",
+            details={"id": did},
+        )
+    refuse_if_unsafe_answer(reason_text)
+
+    if status == "out-of-scope":
+        existing_reason = full.get("out_of_scope_reason") or ""
+        if existing_reason == reason_text:
+            return {
+                "id": did,
+                "status": "out-of-scope",
+                "reason": reason_text,
+                "noop": True,
+                "record_path": full.get("record_path")
+                or decision_record_link(chart_id, d_num),
+            }
+        raise ChartError(
+            "invalid_state",
+            "decision_immutable",
+            f"Decision {did} is already out-of-scope with a different reason",
+            details={"id": did, "existing_reason": existing_reason},
+        )
+    if status != "open":
+        raise ChartError(
+            "invalid_state",
+            "illegal_transition",
+            f"Cannot mark {did} out-of-scope: status is {status} "
+            "(legal: open -> out-of-scope)",
+            details={"id": did, "status": status},
+        )
+
+    actor = get_actor()
+    ts = now_iso()
+    full = dict(full)
+    full["status"] = "out-of-scope"
+    full["out_of_scope_reason"] = reason_text
+    full["claimed_by"] = None
+    full["claimed_at"] = None
+    full["updated_at"] = ts
+    notes = list(full.get("transition_notes") or [])
+    notes.append(
+        _transition_note(
+            "out_of_scope",
+            f"out-of-scope: {reason_text}",
+            actor=actor,
+            reason=reason_text,
+        )
+    )
+    full["transition_notes"] = notes
+
+    entry = dict(entry)
+    entry["status"] = "out-of-scope"
+    entry["claimed_by"] = None
+    entry["claimed_at"] = None
+    proposed = list(chart.get("decisions") or [])
+    proposed[idx] = entry
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    chart["updated_at"] = ts
+
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if not md_path.is_file():
+        raise ChartError(
+            "io",
+            "chart_body_missing",
+            f"Chart body missing for {chart_id}",
+            details={"id": chart_id},
+        )
+    md_text = md_path.read_text(encoding="utf-8")
+    # No ## Decisions ledger entry for out-of-scope.
+    md_text = _append_boundary_line(md_text, d_num, reason_text)
+
+    md_rel, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (f"{chart_id}.md", "update", md_text),
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.out-of-scope", mutations)
+    return {
+        "id": did,
+        "status": "out-of-scope",
+        "reason": reason_text,
+        "noop": False,
+        "record_path": full.get("record_path")
+        or decision_record_link(chart_id, d_num),
+    }
+
+
+def abandon_chart(flow_dir: Path, chart_id: str, reason: str) -> dict:
+    """Mark chart abandoned with reason; nothing deleted. Terminal for mutations."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    reason_text = (reason or "").strip()
+    if not reason_text:
+        raise ChartError(
+            "validation",
+            "reason_required",
+            "abandon requires --reason",
+            details={"id": chart_id},
+        )
+    refuse_if_unsafe_answer(reason_text)
+    status = chart.get("status") or "open"
+    if status == "abandoned":
+        existing = chart.get("abandon_reason") or ""
+        if existing == reason_text:
+            return {
+                "id": chart_id,
+                "status": "abandoned",
+                "reason": reason_text,
+                "noop": True,
+            }
+        raise ChartError(
+            "invalid_state",
+            "chart_already_abandoned",
+            f"Chart {chart_id} is already abandoned with a different reason",
+            details={"id": chart_id, "existing_reason": existing},
+        )
+    if status != "open":
+        raise ChartError(
+            "invalid_state",
+            "illegal_transition",
+            f"Cannot abandon chart {chart_id}: status is {status} "
+            "(legal: open -> abandoned)",
+            details={"id": chart_id, "status": status},
+        )
+
+    actor = get_actor()
+    ts = now_iso()
+    chart = dict(chart)
+    chart["status"] = "abandoned"
+    chart["abandon_reason"] = reason_text
+    chart["abandoned_at"] = ts
+    chart["abandoned_by"] = actor
+    chart["updated_at"] = ts
+    events = list(chart.get("claim_events") or [])
+    events.append(
+        {
+            "kind": "abandon",
+            "actor": actor,
+            "reason": reason_text,
+            "timestamp": ts,
+            "chart": chart_id,
+        }
+    )
+    chart["claim_events"] = events
+
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    mutations: list[tuple[str, str, str]] = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+    ]
+    if md_path.is_file():
+        # Preserve body; abandon does not rewrite map sections.
+        mutations.append(
+            (f"{chart_id}.md", "update", md_path.read_text(encoding="utf-8"))
+        )
+    run_chart_transaction(flow_dir, "chart.abandon", mutations)
+    return {
+        "id": chart_id,
+        "status": "abandoned",
+        "reason": reason_text,
+        "abandoned_at": ts,
+        "abandoned_by": actor,
+        "noop": False,
     }
 
 
@@ -20767,6 +22324,225 @@ def cmd_chart_release_claim(args: argparse.Namespace) -> None:
         print(f"released prior_owner={out.get('prior_owner')}")
         if out.get("audit"):
             print(f"audit={json.dumps(out['audit'], default=str)}")
+
+
+def cmd_chart_attach_asset(args: argparse.Namespace) -> None:
+    command = "chart.attach-asset"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    asset_file = getattr(args, "asset_file", None)
+    if not asset_file:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "asset_file_required",
+            "attach-asset requires --asset-file",
+        )
+    try:
+        asset_raw = json.loads(Path(asset_file).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "asset_file_invalid_json",
+            f"--asset-file is not valid JSON: {e}",
+            details={"path": str(asset_file)},
+        )
+    except OSError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "asset_file_unreadable",
+            f"Cannot read --asset-file: {e}",
+            details={"path": str(asset_file)},
+        )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = attach_chart_asset(flow_dir, raw_did, asset_raw)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        asset = out.get("asset") or {}
+        print(
+            f"asset kind={asset.get('kind')} ref={asset.get('reference')} "
+            f"noop={out.get('noop')}"
+        )
+
+
+def cmd_chart_resolve(args: argparse.Namespace) -> None:
+    command = "chart.resolve"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    answer_file = getattr(args, "answer_file", None)
+    if not answer_file:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "answer_file_required",
+            "resolve requires --answer-file",
+        )
+    try:
+        answer = Path(answer_file).read_text(encoding="utf-8")
+    except OSError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "answer_file_unreadable",
+            f"Cannot read --answer-file: {e}",
+            details={"path": str(answer_file)},
+        )
+    assets_raw = getattr(args, "assets", None)
+    sharpen_path = getattr(args, "sharpen_file", None)
+    supersedes_raw = getattr(args, "supersedes", None)
+    keep_dependents = bool(getattr(args, "keep_dependents", False))
+    try:
+        sharpen = None
+        if sharpen_path:
+            sharpen = _parse_sharpen_file(Path(sharpen_path))
+        supersedes = None
+        if supersedes_raw is not None and str(supersedes_raw).strip():
+            supersedes = [
+                p.strip()
+                for p in str(supersedes_raw).split(",")
+                if p.strip()
+            ]
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = resolve_chart_decision(
+                flow_dir,
+                raw_did,
+                answer,
+                assets_raw=assets_raw,
+                sharpen=sharpen,
+                supersedes=supersedes,
+                keep_dependents=keep_dependents,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(f"status={out.get('status')} gist={out.get('answer_gist')}")
+        if out.get("affected"):
+            print(f"affected={','.join(out['affected'])}")
+        if out.get("replacements"):
+            for rep in out["replacements"]:
+                print(
+                    f"replacement {rep.get('id')} replaces {rep.get('replaces')}"
+                )
+
+
+def cmd_chart_out_of_scope(args: argparse.Namespace) -> None:
+    command = "chart.out-of-scope"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    reason = getattr(args, "reason", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = out_of_scope_chart_decision(flow_dir, raw_did, reason or "")
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(f"status=out-of-scope reason={out.get('reason')}")
+
+
+def cmd_chart_abandon(args: argparse.Namespace) -> None:
+    command = "chart.abandon"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    reason = getattr(args, "reason", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = abandon_chart(flow_dir, raw_id, reason or "")
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(f"{out.get('id')} abandoned: {out.get('reason')}")
 
 
 # ---------- PR cognitive-aid artifact (fn-136.6) ------------------------
@@ -39598,6 +41374,90 @@ def main() -> None:
     )
     p_chart_release.add_argument("--json", action="store_true", help="JSON output")
     p_chart_release.set_defaults(func=cmd_chart_release_claim)
+
+    p_chart_attach = chart_sub.add_parser(
+        "attach-asset",
+        help="Idempotently attach a safe evidence/prototype asset; decision stays open",
+    )
+    p_chart_attach.add_argument(
+        "decision_id",
+        help="Decision id (<chart-id>.D<n>)",
+    )
+    p_chart_attach.add_argument(
+        "--asset-file",
+        dest="asset_file",
+        required=True,
+        help="JSON file: {kind, reference, display, revision?}",
+    )
+    p_chart_attach.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_attach.set_defaults(func=cmd_chart_attach_asset)
+
+    p_chart_resolve = chart_sub.add_parser(
+        "resolve",
+        help="Write answer once, close decision, ledger gist; optional supersession/sharpen",
+    )
+    p_chart_resolve.add_argument(
+        "decision_id",
+        help="Decision id (<chart-id>.D<n>)",
+    )
+    p_chart_resolve.add_argument(
+        "--answer-file",
+        dest="answer_file",
+        required=True,
+        help="File containing the answer body (safe content only)",
+    )
+    p_chart_resolve.add_argument(
+        "--assets",
+        default=None,
+        help="JSON list of asset objects to merge at resolve time",
+    )
+    p_chart_resolve.add_argument(
+        "--sharpen-file",
+        dest="sharpen_file",
+        default=None,
+        help="JSON: new titled decisions + remove_questions keys (one transaction)",
+    )
+    p_chart_resolve.add_argument(
+        "--supersedes",
+        default=None,
+        help="Comma-separated D-IDs this answer supersedes",
+    )
+    p_chart_resolve.add_argument(
+        "--keep-dependents",
+        action="store_true",
+        help="Suppress depends_on cascade; record the judgment on affected records",
+    )
+    p_chart_resolve.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_resolve.set_defaults(func=cmd_chart_resolve)
+
+    p_chart_oos = chart_sub.add_parser(
+        "out-of-scope",
+        help="Close decision without ledger answer; write ## Boundaries reason",
+    )
+    p_chart_oos.add_argument(
+        "decision_id",
+        help="Decision id (<chart-id>.D<n>)",
+    )
+    p_chart_oos.add_argument(
+        "--reason",
+        required=True,
+        help="One-line reason recorded under ## Boundaries",
+    )
+    p_chart_oos.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_oos.set_defaults(func=cmd_chart_out_of_scope)
+
+    p_chart_abandon = chart_sub.add_parser(
+        "abandon",
+        help="Close chart as abandoned with reason; nothing deleted",
+    )
+    p_chart_abandon.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_abandon.add_argument(
+        "--reason",
+        required=True,
+        help="Why discovery stops (recorded; decisions preserved)",
+    )
+    p_chart_abandon.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_abandon.set_defaults(func=cmd_chart_abandon)
 
     # anchor (fn-83.3) — single-call worker anchor bundle: the verbatim
     # outputs of every worker Phase-1 re-anchor read in one deterministic
