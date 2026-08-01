@@ -71,7 +71,7 @@ Absent, empty, `"false"`, `"0"`, and any unrecognized value all mean **local**. 
 ## Acceptance Criteria
 <!-- scope: both -->
 
-- **R1:** On a CI runner the unit suite runs at the runner's full core count; on a developer machine the default still reserves headroom. The chosen signal and the reservation's rationale (*it exists for machines with a human on them*) are documented in a comment at `_default_jobs()`.
+- **R1:** On a CI runner the unit suite runs at the runner's full core count; on a developer machine the default still reserves headroom - **including a developer machine whose shell sets `CI=1`**. Cursor's agent shell does exactly that (`plugins/flow-next/skills/flow-next-setup/workflow.md`), which is the case the reservation protects, so a non-empty `CURSOR_AGENT` forces the local branch. Hosted runners never set it. The chosen signal and the reservation's rationale (*it exists for machines with a human on them*) are documented in a comment at `_default_jobs()`.
 - **R2:** Wall-clock is **measured, not assumed**, and the measurement is **executable on one commit**. Adding CI detection makes every run from that SHA use the new behavior, so the baseline needs an explicit lever: a **boolean** `workflow_dispatch` input `legacy_baseline`. When true, the step computes the pre-change formula **on each runner** and passes it through the existing override:
 
   ```bash

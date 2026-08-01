@@ -82,9 +82,22 @@ def _default_jobs() -> int:
     New precedent, on purpose: nothing else in this repo branches on "am I on
     CI". The one live convention is `RUNNER_OS`, which only ever branches on
     operating system (.github/workflows/test-flow-next.yml, the smoke scripts).
+
+    `CI` alone is not sufficient: Cursor's agent shell sets `CI=1` on a
+    developer machine (documented in
+    plugins/flow-next/skills/flow-next-setup/workflow.md), which is precisely
+    the case the reservation protects - the editor and the agent driving the
+    session are both competing for those cores. `CURSOR_AGENT` is Cursor's own
+    canonical signal, so its presence forces the local branch. Hosted runners
+    never set it, so this cannot mis-detect real CI. Note `CURSOR_AGENT` is
+    inherited by child processes; that is the desired behavior here, because a
+    process spawned from a Cursor agent shell is still running on the
+    developer's machine.
     """
     cpus = os.cpu_count() or 2
     ci = os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
+    if os.environ.get("CURSOR_AGENT", "").strip():
+        ci = False
     if ci:
         return max(1, cpus)
     return max(1, cpus - 2)

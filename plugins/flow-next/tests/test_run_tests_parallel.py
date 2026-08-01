@@ -81,10 +81,16 @@ class DefaultJobsTest(unittest.TestCase):
     def setUp(self):
         self.mod = _load_runner()
 
-    def _jobs(self, ci_value, cpus=8):
-        env = {k: v for k, v in os.environ.items() if k != "CI"}
+    def _jobs(self, ci_value, cpus=8, cursor_agent=None):
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("CI", "CURSOR_AGENT")
+        }
         if ci_value is not None:
             env["CI"] = ci_value
+        if cursor_agent is not None:
+            env["CURSOR_AGENT"] = cursor_agent
         with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(
             self.mod.os, "cpu_count", return_value=cpus
         ):
@@ -105,6 +111,29 @@ class DefaultJobsTest(unittest.TestCase):
 
     def test_absent_ci_is_local(self):
         self.assertEqual(self._jobs(None), 6)
+
+    def test_cursor_agent_shell_keeps_local_headroom_despite_ci(self):
+        """Cursor's agent shell sets CI=1 on a developer machine.
+
+        Documented in plugins/flow-next/skills/flow-next-setup/workflow.md.
+        That is exactly the case the reservation protects - the editor and the
+        agent driving the session compete for the same cores - so CURSOR_AGENT
+        must force the local branch even though CI parses truthy.
+        """
+        for ci_value in ("1", "true", "yes", "TRUE"):
+            with self.subTest(ci=ci_value):
+                self.assertEqual(
+                    self._jobs(ci_value, cursor_agent="1"), 6
+                )
+
+    def test_cursor_agent_empty_or_absent_does_not_suppress_ci(self):
+        """Only a non-empty CURSOR_AGENT forces local; hosted CI never sets it."""
+        self.assertEqual(self._jobs("true", cursor_agent=None), 8)
+        self.assertEqual(self._jobs("true", cursor_agent=""), 8)
+        self.assertEqual(self._jobs("true", cursor_agent="   "), 8)
+
+    def test_cursor_agent_alone_is_still_local(self):
+        self.assertEqual(self._jobs(None, cursor_agent="1"), 6)
 
     def test_low_core_machines_never_go_below_one(self):
         self.assertEqual(self._jobs(None, cpus=1), 1)

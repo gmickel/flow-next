@@ -15,6 +15,7 @@ package and names what it supersedes.
 
 ### Fixed
 
+- **Running the suite from a Cursor agent session keeps its local headroom.** Cursor sets `CI=1` in its agent shell, so CI detection alone would have handed the whole machine to the test runner on a developer box - starving the editor and the agent that the two-core reservation exists to protect. A non-empty `CURSOR_AGENT` now forces the local branch; hosted runners never set it, so real CI is unaffected.
 - **A reopened chart can always be briefed again.** `chart reopen` stales the
   existing briefing, which is right - it was written before the reopen. But
   briefing identity was computed from the chart revision, the proposal, and the
