@@ -8,7 +8,9 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-154-chart-reopened-charts-regain-a-capture",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-154-chart-reopened-charts-regain-a-capture.1": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
@@ -70,10 +72,39 @@
       "task": null,
       "timestamp": "2026-08-01T16:18:51.313248Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "c3e4cfd176513d2562c10ec456512abf3b1893b3",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "0af353d56677bb2ee036a795c7db273fadadf694b269ba33abe24d0649c565c9",
+      "round_consumed": true,
+      "scope": "impl:fn-154-chart-reopened-charts-regain-a-capture.1",
+      "task": "fn-154-chart-reopened-charts-regain-a-capture.1",
+      "timestamp": "2026-08-01T16:39:04.937134Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "9fe2dd5af287b8f80b37d6e61cd57d5ba0d09cb8",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "0c2dff49ef8d552c2a8a0f8101d9f57fd4468cfdbffe511a424e7bc96fc5a8ef",
+      "round_consumed": true,
+      "scope": "impl:fn-154-chart-reopened-charts-regain-a-capture.1",
+      "task": "fn-154-chart-reopened-charts-regain-a-capture.1",
+      "timestamp": "2026-08-01T16:46:08.174212Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
+    "impl:fn-154-chart-reopened-charts-regain-a-capture.1": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-154-chart-reopened-charts-regain-a-capture.md",
@@ -90,5 +121,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T16:18:56.797708Z"
+  "updated_at": "2026-08-01T16:46:21.189057Z"
 }

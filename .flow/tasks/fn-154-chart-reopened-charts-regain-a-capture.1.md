@@ -65,9 +65,8 @@ The conditional-omission rule in change 1 is the whole of R5: an unconditional k
 - [ ] All pre-existing chart briefing tests pass unmodified
 - [ ] Propagation chain run and focused suite green
 ## Done summary
-TBD
-
+Folded the reopen epoch (`reopened_at`) into `_briefing_fingerprint` so a post-reopen re-brief over an untouched ledger mints a fresh final briefing instead of echoing the stale one, and made the idempotent-return branch refuse to hand back a `stale` briefing. The epoch key is omitted when a chart carries no reopen, and the epoch-free hash is still accepted for a non-stale briefing on an already-reopened chart, so both classes of chart written by a pre-fix binary keep their B-IDs across the upgrade.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c3e4cfd176513d2562c10ec456512abf3b1893b3, 9fe2dd5af287b8f80b37d6e61cd57d5ba0d09cb8
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_briefing test_capture_chart_handoff test_chart_tracker_projection -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:
