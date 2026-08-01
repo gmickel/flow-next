@@ -188,6 +188,38 @@ Options:
 
 Exit 2.
 
+### 0.5b — Chart briefing admission (fn-135)
+
+When the conversation or `$ARGUMENTS` names a chart briefing input — a path matching `.flow/charts/*-briefing*.md`, an explicit B-ID (`B1`, `B2`, …), or a chart id whose sidecar lists briefings — resolve it before drafting:
+
+```bash
+# Example probes (agent-owned paths; type literal paths, never shell vars across prompt turns):
+# Read the briefing markdown, and the chart sidecar for status of that B-ID:
+# .flow/charts/<chart-id>.json -> briefings[].id / .status (final|draft|stale)
+# .flow/charts/<chart-id>-briefing.md
+# .flow/charts/<chart-id>-briefing-<k>.md # multi-cluster
+```
+
+**Refuse (ordinary capture, fail closed):**
+
+- Briefing `status: draft` (forced incomplete briefing) — never treat a forced draft as final.
+- Briefing `status: stale` (after `chart reopen` or supersession of linked D-IDs).
+
+```text
+Error: chart briefing <B> is <draft|stale> and is refused for ordinary capture.
+Unresolved / invalidated items: <named D-IDs or parked questions from the briefing>.
+A forced draft can never be promoted to final.
+
+To proceed anyway, re-run with an explicit risk override that names those D-IDs;
+capture will read back the risk and still leave the briefing draft/stale in provenance.
+```
+
+**Explicit risk override:** the user must name the unresolved or invalidated D-IDs. The agent reads back the exact risk (print-then-ask) before any write. The override never rewrites the briefing status to final and never erases the draft/stale flag from evidence recorded in the spec.
+
+**Decline** (user aborts): record nothing in `produced_specs[]`; the chart remains resumable.
+
+When no chart briefing is in play, this step is a silent no-op.
+
 ### 0.6 — Idempotency (R8)
 
 If `REWRITE_TARGET` is set:
@@ -268,6 +300,26 @@ The orchestrator (this skill, on the main thread) merges results into Phase 2's 
 
 For 1-2 file references, investigate on the main thread — no subagent overhead is worth it.
 
+### 1.2b — Chart briefing evidence (when admitted)
+
+When Phase 0.5b admitted a chart briefing (final, or draft/stale under explicit risk override), extract into the evidence surface (and later into `## Decision Context` / evidence sections of the draft):
+
+- Chart id, B-ID, cluster key (if multi-spec / cluster file), briefing path(s).
+- Each cluster D-ID with title, gist, and record link from the briefing.
+- Shared-context D-IDs (attributable evidence; not automatic acceptance requirements).
+- Approved asset references (kind/reference/display) listed on those decisions.
+- If override: the named unresolved/invalidated D-IDs and the risk read-back text.
+
+These are **structural evidence references**. Do **not** attach acceptance-criterion source tags (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`) to D-ID lines, chart facts, assets, or briefing membership. Preserve them as navigable links.
+
+Also check for an already-linked identity (retry recovery):
+
+```bash
+# From chart sidecar produced_specs[]: match briefing + cluster (+ optional spec).
+# If a linked entry already exists for this B-ID+cluster, record SPEC_ID_EXISTING
+# and skip minting a duplicate in Phase 5 — link-spec the existing spec instead.
+```
+
 ### 1.3 — Initial title extraction
 
 From the conversation, draft a candidate spec title. Heuristic:
@@ -307,12 +359,14 @@ Pure prose sections (Goal & Context narrative, Architecture overview) do not nee
 
 The canonical section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the single source of truth for the section sequence and per-section ownership annotations (per R17 — never re-embed the section list inline; cross-link the template). At runtime the template is resolved via the 4-tier discovery cascade (first match wins): `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. Walk the resolved template in its declared order and draft each section's body using the source-tag conventions below. Before any template section, prepend `## Conversation Evidence` (Phase 1 output verbatim); after the template, append `## Requirement coverage` (the R-ID → task mapping placeholder).
 
-Source-tag application is per-tag, not per-section:
+Source-tag application is per-tag, not per-section — and **only on content capture newly authors**:
 
 - **`[user]`** dominates where the conversation gave verbatim content (goal framing, user-stated acceptance, named non-goals, rejected alternatives the user surfaced).
 - **`[paraphrase]`** is for spec-language restatements of user intent — preserving meaning, tightening wording.
 - **`[inferred]`** covers agent fill-in for completeness (default conventions: error formats, retry policies, observability hooks, file / component refs the user did NOT name). **Untouched by §2.6 biz-routing** — biz destinations only accept `[user]` / `[paraphrase]`.
 - **`[strategy:<track>]`** activates only when Phase 0 strategy snapshot was populated.
+
+**Chart provenance separation (fn-135 / R49):** chart decision provenance is structural (D-ID, answer gist, assets, briefing membership). Preserve those as evidence links in `## Decision Context` (and conversation-evidence footnotes). Never source-tag D-ID evidence. Never retag an existing criterion authored by an earlier pass. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]` — apply the four-tag grammar only to acceptance criteria this capture pass newly authors, judged against conversation + briefing context. Shared-context D-IDs do not become duplicated acceptance requirements across output specs unless each target's read-back independently confirms that guarantee. **No verified/inferred fact or decision grammar** (fn-148 closed STOPPED with no verdict — licenses nothing here).
 
 Auxiliary section rules layered on the template:
 
@@ -802,12 +856,28 @@ fi
 # from agent context (path-persistence rule: never a shell variable across prompt turns).
 "$FLOWCTL" spec set-plan "$SPEC_ID" --file "${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<suffix>.md" --json
 
+# Chart handoff (fn-135) — ONLY after successful create + set-plan.
+# Order is load-bearing: never link-spec before the spec body exists.
+# On retry: if produced_specs already has this B-ID+cluster identity, discover
+# that entry and link the existing spec instead of minting another (Phase 1.2b).
+if [[ -n "$CHART_ID" && -n "$BRIEFING_ID" ]]; then
+ LINK_ARGS=(chart link-spec "$CHART_ID" --briefing "$BRIEFING_ID" --spec "$SPEC_ID" --decisions "$CHART_DECISIONS" --json)
+ [[ -n "$CLUSTER_KEY" ]] && LINK_ARGS+=(--cluster "$CLUSTER_KEY")
+ "$FLOWCTL" "${LINK_ARGS[@]}"
+fi
+
 # Run anchor for Phase 6's sync check — written at the write step, BEFORE the
 # 5.7 dispatch, so it lower-bounds this run's receipts.
 date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 ```
 
 The draft file round-trips embedded markdown and newlines byte-exact — `read_file_or_stdin` in `flowctl.py` handles `--file <path>` directly. No re-authoring: the approved content is consumed from disk, exactly as the user read it back.
+
+**Chart handoff retry rules (fn-135 R50):**
+
+- Capture decline / abort: call nothing; no `produced_specs[]` entry; chart stays resumable.
+- Partial multi-spec: record only successful `link-spec` calls; resume the failed cluster without duplicating the first.
+- Interruption after `spec create` / `spec set-plan` but before `link-spec`: on retry, discover the existing B-ID+cluster identity (chart sidecar `produced_specs[]` or matching specs) and link that same spec — never mint a second.
 
 ### 5.3 — Rewrite branch
 

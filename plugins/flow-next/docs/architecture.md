@@ -36,6 +36,16 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 │   ├── fn-1-add-oauth.1.json    # Task metadata (id, status, priority, deps, assignee, `spec` field)
 │   ├── fn-1-add-oauth.1.md      # Task spec (description, acceptance, done summary)
 │   └── ...
+├── charts/                # Optional pre-capture decision maps (fn-135)
+│   ├── fn-140.md                # Chart map body (Outcome, Notes, Decisions ledger, Open Questions, Boundaries)
+│   ├── fn-140.json              # Chart metadata (id, title, outcome, status, decisions[], briefings[], tracker, produced_specs[])
+│   ├── fn-140/                  # Decision records (one pair per D-ID)
+│   │   ├── 1.md                 # ## Question body for D1
+│   │   ├── 1.json               # Decision sidecar (type, attendance, status, graph, claim, answer, assets)
+│   │   └── ...
+│   ├── fn-140-briefing.md       # Briefing index (immutable versioned handoff for capture)
+│   ├── fn-140-briefing-1.md     # Per-cluster briefing when a multi-spec split is confirmed
+│   └── .transactions/           # (auto-gitignored) write-ahead journal for multi-file chart mutations
 ├── memory/                # Persistent learnings (opt-in, categorized)
 │   ├── bug/               # Track: failures / defects
 │   │   ├── build-errors/
@@ -66,7 +76,21 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 └── .cache/                # (auto-gitignored) CLI model-resolution cache
 ```
 
-`flowctl init` creates `specs/`, `tasks/`, `memory/`, `meta.json`, `config.json`, and the auto-managed `.gitignore`. `/flow-next:setup` additionally stamps `bin/`, `templates/`, and `usage.md`. Runtime dirs (`sync-runs/`, `pilot-runs/`, `locks/`, `tmp/`, `receipts/`, `.cache/`) appear on first use and stay gitignored.
+`flowctl init` creates `specs/`, `tasks/`, `memory/`, `meta.json`, `config.json`, and the auto-managed `.gitignore`. `/flow-next:setup` additionally stamps `bin/`, `templates/`, and `usage.md`. Runtime dirs (`sync-runs/`, `pilot-runs/`, `locks/`, `tmp/`, `receipts/`, `.cache/`) appear on first use and stay gitignored. `charts/` and `charts/.transactions/` appear on first `/flow-next:chart` / `flowctl chart create` (the WAL is gitignored; chart maps and decision records are tracked like specs).
+
+### Charts layout (fn-135)
+
+Charts share the native `fn-N` allocation domain with specs: one cross-kind counter under a shared lock scans specs and charts across the working tree, linked worktrees, and visible refs, then reserves the next id with no-clobber creation. `flowctl spec create` and `flowctl chart create` therefore cannot race into the same id. Chart kind is distinct so `flowctl list` can render charts separately.
+
+| Path | Role |
+|---|---|
+| `.flow/charts/<id>.md` | Map body at gist level: `## Outcome`, `## Notes`, append-only `## Decisions` ledger, `## Open Questions`, `## Boundaries`. Never restates full answers. |
+| `.flow/charts/<id>.json` | Sidecar: `id`, `title`, `outcome`, `status` (`open\|done\|abandoned`), `decisions[]`, `briefings[]`, optional `tracker` projection keys, `produced_specs[]`, audited force/break-claim events. |
+| `.flow/charts/<id>/<n>.md` + `.json` | Decision record pair (local number `n` = D-ID). Body is `## Question` only; sidecar holds type, attendance, status, `blocked_by[]` / `depends_on[]`, claim, answer, assets. |
+| `.flow/charts/<id>-briefing.md` (+ `-briefing-<k>.md`) | Immutable versioned briefing package for capture (B1, B2, ...). |
+| `.flow/charts/.transactions/` | Crash-recovery WAL: pre-state fingerprints, intended mutation set, publication phase. Every chart command recovers an incomplete journal under the resource lock before reading state. |
+
+Multi-file chart mutations (map + sidecars + ledger + dependent cascade) are one recoverable transaction: no-clobber creates, staged replacements, atomic rename, rollback to pre-call state on failure. Full CLI contract: [`flowctl.md`](flowctl.md#chart).
 
 Review receipts may contain the optional versioned `findings` projection. Before
 advancing a latest receipt pointer, Flow-Next preserves its valid prior
@@ -128,12 +152,13 @@ Write-ordering differs by path, on purpose:
 
 - **Spec**: `fn-N-slug` where `slug` is derived from the spec title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)
 - **Task**: `fn-N-slug.M` (e.g., `fn-1-add-oauth.1`, `fn-2-fix-login-bug.2`)
+- **Chart**: same native `fn-N` (or `fn-N-slug`) domain as specs; kind is chart, never a task. Decision: `<chart-id>.D<n>` (e.g., `fn-140.D2`); local form `D<n>` is chart-scoped.
 
 The slug is automatically generated from the spec title (lowercase, hyphens for spaces, max 40 chars). This makes IDs human-readable and self-documenting.
 
 **Backwards compatibility**: Legacy formats `fn-N` (no suffix) and `fn-N-xxx` (random 3-char suffix) are still fully supported. Existing specs don't need migration.
 
-**Native `fn-N` allocation (fn-134)** takes the max across the working tree, every registered git worktree's `.flow/specs/`, and every ref (monotonic; fail-open on git problems). That shrinks parallel-agent collisions; separate unfetched clones can still collide.
+**Native `fn-N` allocation (fn-134 + fn-135)** takes the max across the working tree, every registered git worktree's `.flow/specs/` **and** `.flow/charts/`, and every ref (monotonic; fail-open on git problems). Specs and charts share one allocator under one lock - a chart and a spec never share an id. That shrinks parallel-agent collisions; separate unfetched clones can still collide.
 
 **Hybrid id model (tracker-sync, R16 / fn-134)**: a tracker-linked spec may be keyed two ways, which coexist with `fn-NN`. A **tracker-first** spec is canonically `wor-17-slug` (Linear/Jira native `KEY-N`) or synthetic `gh-123-slug` / `gl-456-slug` (GitHub `#123` / GitLab project-scoped `iid`); bare `wor-17` / `gh-123` / `gl-456` resolve as aliases. A **flow-first** spec keeps `fn-NN-slug` and stores the tracker key in `tracker.identifier` as a resolvable display alias. `tracker.specIds=tracker` makes skills route to tracker-first by default when the bridge is active. flowctl widened the **id resolver / canonicalizer** so every command inherits **case-insensitive** resolution, and the **origin-branched id generator** (`spec create --tracker-first`) keys by the tracker identifier instead of allocating a fresh `fn-NN`. **`fn` is the only globally reserved prefix**; synthetic `gh`/`gl` are reserved only while `tracker.type` matches. Native `fn-N` allocation counts `fn-*` only. **One tracker team per repo**; **ids never rename** on link. Full model: [`tracker-sync.md`](tracker-sync.md).
 
@@ -181,8 +206,8 @@ The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The 
 
 - Task tracking lives in `.flow/` (no external tracker). flowctl reaches it either as a repo-local copy (`.flow/bin/`, copy mode) or straight off the plugin's PATH-injected `bin/` (plugin mode, Claude Code — see [platforms.md → Setup modes](platforms.md#setup-modes-plugin-vs-copy-fn-121)).
 - Install: plugin only - no external services, no config-file edits.
-- Artifacts: `.flow/specs/` (markdown + JSON sidecar) and `.flow/tasks/` (markdown + JSON sidecar).
-- Multi-user safe: scan-based IDs + soft claims.
+- Artifacts: `.flow/specs/` (markdown + JSON sidecar), `.flow/tasks/` (markdown + JSON sidecar), and optionally `.flow/charts/` (decision maps + decision records + briefings).
+- Multi-user safe: scan-based IDs + soft claims (task assignee; chart decision claims).
 - Uninstall: delete `.flow/` (and `scripts/ralph/` if enabled). `GLOSSARY.md` / `STRATEGY.md` at the repo root persist by design.
 
 ## See also
@@ -191,6 +216,7 @@ The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The 
 - [`memory-schema.md`](memory-schema.md) - categorized `.flow/memory/` schema.
 - [`review-findings.md`](review-findings.md) - portable structured-review
   receipt contract and currentness rules.
-- [`flowctl.md`](flowctl.md) - full CLI reference.
+- [`flowctl.md`](flowctl.md) - full CLI reference (including [`chart`](flowctl.md#chart)).
+- [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md) - optional pre-capture decision-map skill.
 - [`../README.md`](../README.md) - plugin overview.
-- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) - Spec, Task, Handover object, Receipt.
+- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) - Spec, Chart, D-ID, Task, Handover object, Receipt.

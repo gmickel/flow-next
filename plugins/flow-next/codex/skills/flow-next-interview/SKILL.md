@@ -10,6 +10,10 @@ Conduct an extremely thorough interview about a task/spec and write refined deta
 
 **IMPORTANT**: This plugin uses `.flow/` for ALL task tracking. Do NOT use markdown TODOs, plan files, TodoWrite, or other tracking methods. All task state must be read and written via `flowctl`.
 
+### Chart boundary (fn-135)
+
+Existing-spec clarification stays **primary**. Interview refines a valid spec with unresolved judgment questions. Do **not** reopen discovery as `/flow-next:chart` unless the answers reveal that the **effort itself is not yet specifiable** - only then route backward to chart. Clear work that never needed a chart stays out of chart. Unsure of the hop: `/flow-next:guide`.
+
 ## Preamble
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks use `$FLOWCTL`:

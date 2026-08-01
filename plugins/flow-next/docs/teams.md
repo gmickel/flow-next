@@ -4,7 +4,7 @@ Agentic engineering compresses implementation from weeks to hours — and the to
 
 The vocabulary on this page — *handover objects*, *Delegate / Review / Own*, *lifecycle steps [1]–[9]* — comes from the [AI-x-SDLC Starter-Kit methodology guide](https://github.com/gmickel/AI-x-SDLC-Starter-Kit/blob/main/guides/methodology.md). That document is the *theory*. This page is the *implementation* — the same lifecycle, mapped to concrete `flowctl` commands and `.flow/` artefacts.
 
-> **Solo dev?** You can skip most of this page. The single-developer flow is `prospect → capture → plan → work → make-pr`, covered in the [root README](../../../README.md). This page is for teams running multiple humans + multiple agents against the same repo.
+> **Solo dev?** You can skip most of this page. The single-developer flow is `prospect → [optional chart] → capture → plan → work → make-pr`, covered in the [root README](../../../README.md). Chart is only for one oversized/unclear idea; skip it when intent is already stateable. This page is for teams running multiple humans + multiple agents against the same repo.
 
 ---
 
@@ -39,7 +39,10 @@ The starter-kit methodology defines a nine-step lifecycle from rough idea to mer
 ```mermaid
 flowchart LR
     Idea([💡 Idea]) --> Prospect[/flow-next:prospect/]
+    Idea --> Chart[/flow-next:chart/]
+    Prospect --> Chart
     Prospect --> Capture[/flow-next:capture/]
+    Chart -->|briefing package| Capture
     Idea --> Capture
     Capture --> Interview[/flow-next:interview/]
     Interview -.scoped operation.-> InterviewScope{{"--scope=business · --scope=technical · --scope=both<br/>(default: --scope=technical)"}}
@@ -60,7 +63,7 @@ flowchart LR
     Audit -.-> Memory[(.flow/memory/)]
 ```
 
-The map is not strictly linear. `/prospect` is optional. `/capture` and `/interview` are interchangeable entry points depending on whether the spec emerged from conversation (`/capture`) or needs structured discovery (`/interview`). `/flow-next:interview` is a **scoped operation** — one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. `/flow-next:qa` is an **optional live-app QA stage** between spec-completion review and make-pr — it only runs when there's a live deploy + a driver, and a NO verdict (an open P0/P1 confirmed against the running app) sends you back to `/work`. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`.
+The map is not strictly linear. `/prospect` is optional. `/flow-next:chart` is an **optional pre-capture discovery route** for one oversized or unclear idea - never a mandatory stage and never a pilot stage. Skip chart when intent and boundaries are already stateable (`signal absent`); if you skip despite residual risk, evidence/consent/review contracts still apply later. Unsure which path is smallest? `/flow-next:guide`. `/capture` and `/interview` remain entry points depending on whether the spec emerged from conversation or a chart briefing (`/capture`) or needs structured discovery on an existing spec (`/interview`). `/flow-next:interview` is a **scoped operation** - one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. `/flow-next:qa` is an **optional live-app QA stage** between spec-completion review and make-pr - it only runs when there's a live deploy + a driver, and a NO verdict (an open P0/P1 confirmed against the running app) sends you back to `/work`. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`.
 
 ---
 
@@ -70,7 +73,8 @@ The methodology calls a *handover object* a named, reviewable artefact that carr
 
 | # | Handover | Flow-Next artefact path | Produced by | Verified by |
 |---|----------|-------------------------|-------------|-------------|
-| 1 | Spec — business-layer complete (PO → tech lead) | `.flow/specs/<spec-id>.md` (business sections filled; technical sections may carry `*Pending technical-scope interview pass.*` placeholders) | `/flow-next:capture` or `/flow-next:interview --scope=business` | `/flow-next:plan-review` |
+| 0 | Pre-spec decision map + briefing (optional) | `.flow/charts/<chart-id>.md` + decision records; briefing `.flow/charts/<chart-id>-briefing*.md` | `/flow-next:chart` | Human read-back of Outcome/frontier/cost; capture read-back of ingested briefing |
+| 1 | Spec — business-layer complete (PO → tech lead) | `.flow/specs/<spec-id>.md` (business sections filled; technical sections may carry `*Pending technical-scope interview pass.*` placeholders) | `/flow-next:capture` (from conversation or chart briefing) or `/flow-next:interview --scope=business` | `/flow-next:plan-review` |
 | 2 | Spec — fully complete (tech lead → developer) | same `.flow/specs/<spec-id>.md` after `/flow-next:interview --scope=technical` fills the technical sections | `/flow-next:interview --scope=technical` | `/flow-next:plan-review` |
 | 3 | Implementation plan (spec → tasks) | `.flow/tasks/<spec-id>.M.md` | `/flow-next:plan` | `/flow-next:plan-review` |
 | 4 | Working implementation (tasks → code) | task `done_summary` + evidence commits | `/flow-next:work` (worker subagent) | `/flow-next:impl-review` |
@@ -84,7 +88,24 @@ All six properties of a real handover object hold:
 3. **Verifiable against the prior artefact.** R-IDs in the spec are tracked through `satisfies: [R1, R3]` frontmatter on tasks and through commit-message references; `/flow-next:make-pr` emits an R-ID coverage table that maps every R# to the satisfying task and evidence commit.
 4. **Frozen at handover.** Spec acceptance criteria are numbered `**R1:**`, `**R2:**`, ... and **never renumbered** after the first review cycle (deletions leave gaps). Anyone reading R5 in a six-month-old commit is reading the same R5 today.
 
-The artefact chain is the conversation that did not happen. Pre-agentic Agile relied on standups, refinement, design reviews, and hallway conversation to keep a 2–3 week implementation aligned. Flow-Next runs that implementation in a few hours per task — those touchpoints are gone, and the artefact chain replaces them.
+The artefact chain is the conversation that did not happen. Pre-agentic Agile relied on standups, refinement, design reviews, and hallway conversation to keep a 2–3 week implementation aligned. Flow-Next runs that implementation in a few hours per task - those touchpoints are gone, and the artefact chain replaces them.
+
+### Chart as durable pre-spec decision handover
+
+When an effort is too large and unclear for a single capture session, `/flow-next:chart` is the team surface where product, quality, research, and engineering contribute **decisions and evidence** without turning meetings or tracker comments into the source of truth. The chart is git-native under `.flow/charts/`; tracker projection (`tracker.charts`) is optional visibility only.
+
+**Attended vs unattended boundaries**
+
+| Attendance | Decision types | Who resolves |
+|---|---|---|
+| Unattended | `research`, `probe`, `eval`, unattended `task` | Agent evidence routes; may fan out as **separate invocations** (one claim + one `CHART_VERDICT` each) |
+| Attended | `prototype`, `interview`, attended `task` | Human side of the exchange is mandatory; unattended drivers terminate `NEEDS_HUMAN` and write no answer |
+
+**One attended decision per session.** Resolving more than one attended decision in a session reintroduces context collapse. Parallel unattended fan-out is allowed only as separate invocations - never a batch tick that aggregates mixed outcomes.
+
+**Capture is the handoff.** Chart never writes under `.flow/specs/` and never sets `ready`. Capture ingests the briefing as attributable evidence (chart id, B-ID, cluster, D-ID links, assets), applies criterion source tags only to newly authored acceptance criteria, and records `chart link-spec`. D-ID/evidence provenance stays structural and distinct from `[user]` / `[paraphrase]` / `[inferred]` author tags.
+
+Example journeys (research-led, prototype-led reversal with supersession, multi-spec split, skip-chart) are **illustrative**, not a canonical checklist - chart has no fixed discovery phase order.
 
 > **Optional render-lens companions (2.0.0+).** With HTML artifact mode on (`flowctl config set artifacts.html.enabled true`), the two human review surfaces gain a rendered companion: spec review gets a self-contained spec visualizer at `.flow/artifacts/<spec-id>/spec.html` (acceptance criteria with provenance chips; task DAG + R-ID coverage once planned — useful for POs/PMs reviewing handovers #1–#3) and diff review gets a read-only PR instrument at `pr.html` (churn map, R-ID → evidence table, where-to-look checklist — handover #6). The markdown artefacts above remain the record; lenses are regenerable derivations. OFF by default. See [`html-artifacts.md`](html-artifacts.md).
 
@@ -94,7 +115,7 @@ The artefact chain is the conversation that did not happen. Pre-agentic Agile re
 
 | Role | Triggers | Reviews | Notes |
 |------|----------|---------|-------|
-| **Product Owner / PM** | `/flow-next:capture`, `/flow-next:interview --scope=business` | `.flow/specs/<id>.md` after capture; `/flow-next:plan-review` output | The PO drafts the spec from a `prospect`-promoted candidate or directly from conversation via `capture`. |
+| **Product Owner / PM** | `/flow-next:chart` (optional), `/flow-next:capture`, `/flow-next:interview --scope=business` | Chart Outcome/frontier/cost; `.flow/specs/<id>.md` after capture; `/flow-next:plan-review` output | The PO may chart an oversized unclear idea, or draft the spec from a `prospect`-promoted candidate / conversation / chart briefing via `capture`. |
 | **Tech lead / Senior eng** | `/flow-next:interview --scope=technical` (optionally `--strategy --docs` for doc-aware mode), `/flow-next:plan` | Tasks under `.flow/tasks/`; review-backend choice (`flowctl review-backend`) | Owns the technical layer of the spec, the plan, and which review backend gates `/work`. |
 | **Implementing eng (human or agent)** | `/flow-next:work`, `/flow-next:impl-review` | Per-task `done_summary` + evidence | Re-anchors before each task (re-reads spec + git state). Worker subagent gets fresh context per task. |
 | **Reviewer** | `/flow-next:resolve-pr` (after PR review threads land) | PR body produced by `/flow-next:make-pr`, the diff itself | Reads the cognitive-aid body first; uses R-ID coverage + Critical Changes + Where to Look as the reading order. |
@@ -471,7 +492,7 @@ The collaboration doesn't disappear. The *ceremony tax* does. Standups, refineme
 
 ## Adoption ladder
 
-Don't try to roll out all 23 commands at once. Layer them in.
+Don't try to roll out all 25 commands at once. Layer them in.
 
 ### Week 1: Prove it works
 

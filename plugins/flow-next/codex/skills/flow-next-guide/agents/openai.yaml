@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Guide"
+  short_description: "Prompt-first router for the smallest sufficient flow-next workflow"
+  brand_color: "#3B82F6"
+policy:
+  allow_implicit_invocation: true

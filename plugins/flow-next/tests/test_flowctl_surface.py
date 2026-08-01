@@ -62,6 +62,24 @@ EXPECTED_LEAF_PATHS = frozenset(
     """anchor
 block
 cat
+chart abandon
+chart add-decision
+chart attach-asset
+chart briefing
+chart claim
+chart create
+chart frontier
+chart link-spec
+chart list
+chart locate
+chart out-of-scope
+chart park-question
+chart release-claim
+chart remove-question
+chart reopen
+chart resolve
+chart show
+chart wire-decision
 checkpoint restore
 checkpoint save
 codex classify-result
@@ -110,23 +128,23 @@ memory search
 models resolve
 next
 pilot-log append
-prime classify
 pr-cognitive-aid current
 pr-cognitive-aid html-input
 pr-cognitive-aid render
 pr-cognitive-aid validate
 pr-cognitive-aid write
+prime classify
 prospect archive
 prospect promote
 ready
 repo-map list
 review-backend
 review-deep-auto
+review-findings attach
 review-rounds attempts
 review-rounds increment
 review-rounds record
 review-rounds reset
-review-findings attach
 review-walkthrough-defer
 review-walkthrough-record
 rp chat-send
@@ -166,11 +184,11 @@ strategy status
 sync active
 sync check
 sync check-collisions
+sync clear
 sync create-first-clear
 sync create-first-get
 sync create-first-key
 sync create-first-put
-sync clear
 sync defer
 sync get-state
 sync list-dep-relations
@@ -181,27 +199,6 @@ sync set-dep-relation
 sync set-last-synced
 sync set-merge-base
 sync set-tracker-id
-tracker resolve
-tracker create
-tracker create-first
-tracker persist-external
-tracker status
-tracker relate
-tracker sync-body
-tracker sync
-tracker wire read
-tracker wire update
-tracker wire comment-add
-tracker wire comment-list
-tracker wire comment-update
-tracker wire comment-delete
-tracker wire label
-tracker wire assign
-tracker wire list-open
-tracker wire relation-list
-tracker wire question
-tracker wire attach
-tracker wire attach-get
 task create
 task reset
 task set-acceptance
@@ -210,6 +207,27 @@ task set-description
 task set-spec
 task set-title
 tasks
+tracker create
+tracker create-first
+tracker persist-external
+tracker relate
+tracker resolve
+tracker status
+tracker sync
+tracker sync-body
+tracker wire assign
+tracker wire attach
+tracker wire attach-get
+tracker wire comment-add
+tracker wire comment-delete
+tracker wire comment-list
+tracker wire comment-update
+tracker wire label
+tracker wire list-open
+tracker wire question
+tracker wire read
+tracker wire relation-list
+tracker wire update
 triage-skip
 usage
 validate""".splitlines()

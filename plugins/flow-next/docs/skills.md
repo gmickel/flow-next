@@ -1,19 +1,21 @@
 # Skills catalog
 
-Every skill flow-next ships, in one table. 28 skills: 22 slash-command-triggered (`/flow-next:<name>`), 6 phrase-triggered (no command file — describe what you want and the host agent matches the skill description). Each row links the canonical `SKILL.md`.
+Every skill flow-next ships, in one table. 30 skills: 24 slash-command-triggered (`/flow-next:<name>`), 6 phrase-triggered (no command file - describe what you want and the host agent matches the skill description). Each row links the canonical `SKILL.md`.
 
-> Lifecycle position and narrative for the core commands: [root README — How the flow works](../../../README.md#how-the-flow-works). Slash commands also appear in the [root README — Commands table](../../../README.md#commands) with flags and opt-in notes.
+> Lifecycle position and narrative for the core commands: [root README - How the flow works](../../../README.md#how-the-flow-works). Slash commands also appear in the [root README - Commands table](../../../README.md#commands) with flags and opt-in notes.
 
 ## Lifecycle skills
 
-The spec-to-merge pipeline, in order.
+The idea-to-merge pipeline, in order. Chart and guide sit **upstream of capture** and are optional - never mandatory stages.
 
 | Skill | Trigger | What it does |
 |---|---|---|
-| [`flow-next-strategy`](../skills/flow-next-strategy/SKILL.md) | `/flow-next:strategy` | Create or maintain repo-root `STRATEGY.md` — target problem, approach, who it's for, key metrics, active tracks. Downstream skills read it for grounding. |
+| [`flow-next-strategy`](../skills/flow-next-strategy/SKILL.md) | `/flow-next:strategy` | Create or maintain repo-root `STRATEGY.md` - target problem, approach, who it's for, key metrics, active tracks. Downstream skills read it for grounding. |
 | [`flow-next-prospect`](../skills/flow-next-prospect/SKILL.md) | `/flow-next:prospect` | Generate ranked candidate ideas grounded in the repo, upstream of capture/plan. Optional focus hint (concept, path, constraint, volume). |
-| [`flow-next-capture`](../skills/flow-next-capture/SKILL.md) | `/flow-next:capture` | Synthesize the current conversation into a spec — source-tagged acceptance criteria (`[user]` / `[paraphrase]` / `[inferred]`), mandatory read-back before write. |
-| [`flow-next-interview`](../skills/flow-next-interview/SKILL.md) | `/flow-next:interview` | Deep Q&A over a spec or task to extract complete detail — lead-with-recommendation, confidence tiers, codebase-first investigation; `--scope=business\|technical\|both`. |
+| [`flow-next-guide`](../skills/flow-next-guide/SKILL.md) | `/flow-next:guide` | Prompt-first router: recommends the **smallest sufficient** next workflow from the starting state (when to chart, skip chart, capture, interview, plan, or direct change). Stateless - no flowctl mutations. Use when unsure which pre-build stage applies. |
+| [`flow-next-chart`](../skills/flow-next-chart/SKILL.md) | `/flow-next:chart` | **Optional** pre-capture decision-map discovery for **one** oversized/unclear idea. Grounds a bounded snapshot, resolves **one decision (D-ID) per invocation**, re-charts the frontier, emits a briefing for capture. Never writes a spec, never sets `ready`. Skip when intent is already stateable. |
+| [`flow-next-capture`](../skills/flow-next-capture/SKILL.md) | `/flow-next:capture` | Synthesize the current conversation (or chart briefing) into a spec - source-tagged acceptance criteria (`[user]` / `[paraphrase]` / `[inferred]`), mandatory read-back before write. Chart handoff preserves D-ID/evidence links; criterion tags apply only to newly authored bullets. |
+| [`flow-next-interview`](../skills/flow-next-interview/SKILL.md) | `/flow-next:interview` | Deep Q&A over a spec or task to extract complete detail - lead-with-recommendation, confidence tiers, codebase-first investigation; `--scope=business\|technical\|both`. |
 | [`flow-next-plan`](../skills/flow-next-plan/SKILL.md) | `/flow-next:plan` | Research the codebase via parallel scouts, then break a spec into dependency-ordered, context-fit tasks. Writes the plan, never code. |
 | [`flow-next-plan-review`](../skills/flow-next-plan-review/SKILL.md) | `/flow-next:plan-review` | Carmack-level cross-model review of a spec or plan (RepoPrompt / Codex / Copilot / Cursor backend). |
 | [`flow-next-work`](../skills/flow-next-work/SKILL.md) | `/flow-next:work` | Execute a spec or task — git setup, fresh-context worker subagents, re-anchoring, quality checks, commits, evidence. Opt-in `delegate:codex` implementation offload. |

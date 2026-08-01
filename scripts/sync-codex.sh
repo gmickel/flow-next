@@ -1479,6 +1479,8 @@ generate_openai_yaml "flow-next-work"      "Flow Work"      "Execute planned tas
 generate_openai_yaml "flow-next-interview" "Flow Interview" "Deep Q&A to refine specs and requirements"            "#3B82F6" true
 generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" true
 generate_openai_yaml "flow-next-prospect"  "Flow Prospect"  "Generate ranked candidate ideas grounded in the repo" "#3B82F6" true "What should we build next? "
+generate_openai_yaml "flow-next-chart"     "Flow Chart"     "Decision-map discovery for one oversized unclear idea before capture" "#3B82F6" true "Chart out: "
+generate_openai_yaml "flow-next-guide"     "Flow Guide"     "Prompt-first router for the smallest sufficient flow-next workflow"   "#3B82F6" true
 generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next spec" "#3B82F6" true "Capture this as a spec: "
 generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" true
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" true
@@ -1547,6 +1549,8 @@ DIET = {
     "flow-next-capture": "Synthesize the current conversation into a flow-next spec with read-back gating. Use when asked to capture this as a spec.",
     "flow-next-setup": "Install or refresh flowctl and project instructions for flow-next in this repo. Use when asked to set up flow-next.",
     "flow-next-prospect": "Generate ranked candidate ideas grounded in the repo. Use when asked what to build next.",
+    "flow-next-chart": "Decision-map discovery for one oversized unclear idea before capture. Resolve one decision per invocation, brief for capture. Use when asked to chart an idea or work a chart decision.",
+    "flow-next-guide": "Recommend the smallest sufficient flow-next workflow from the starting state. Stateless router. Use when unsure which command or stage applies next.",
     "flow-next-strategy": "Create or update repo-root STRATEGY.md (problem, approach, users, metrics, tracks). Use for strategy or roadmap doc requests.",
     "flow-next-audit": "Audit .flow/memory/ entries against current code and keep, update, consolidate, replace, delete, or harden each. Use when asked to audit memory or graduate a recurring lesson into a gate.",
     "flow-next-memory-migrate": "Migrate legacy flat .flow/memory files to the categorized YAML schema. One-time ceremony. Use when asked to migrate flow memory.",

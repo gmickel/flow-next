@@ -188,6 +188,44 @@ TASKS_DIR = "tasks"
 MEMORY_DIR = "memory"
 PROSPECTS_DIR = "prospects"
 PROSPECTS_ARCHIVE_DIR = "_archive"
+# fn-135: charts share the native fn-N allocation domain with specs.
+CHARTS_DIR = "charts"
+CHART_TRANSACTIONS_DIR = ".transactions"
+CHART_JSON_SCHEMA_VERSION = 1
+CHART_ERROR_CLASSES = frozenset(
+    {
+        "not_found",
+        "conflict",
+        "invalid_state",
+        "invalid_graph",
+        "stale_claim",
+        "validation",
+        "io",
+    }
+)
+# Single cross-kind lock leaf under .flow/locks/ for specs + charts.
+NATIVE_FN_ALLOC_LOCK_NAME = "native-fn-id-alloc.lock"
+CHARTS_RESOURCE_LOCK_NAME = "charts-resource.lock"
+# Chart discovery size/claim defaults (fn-135.9).
+CHART_DEFAULT_MAX_DECISIONS = 12
+# Stale-claim age threshold in hours; break-stale requires age >= this.
+CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS = 24
+CHART_DECISION_TYPES = frozenset(
+    {"research", "probe", "eval", "prototype", "interview", "task"}
+)
+# Derived attendance for five types; task requires an explicit value.
+CHART_TYPE_ATTENDANCE = {
+    "research": "unattended",
+    "probe": "unattended",
+    "eval": "unattended",
+    "prototype": "attended",
+    "interview": "attended",
+}
+CHART_ATTENDANCE_VALUES = frozenset({"attended", "unattended"})
+CHART_DECISION_STATUS_VALUES = frozenset(
+    {"open", "resolved", "superseded", "out-of-scope"}
+)
+CHART_CLOSED_STATUSES = frozenset({"resolved", "superseded", "out-of-scope"})
 CONFIG_FILE = "config.json"
 # Post-1.0 layout sentinel. Presence of `.flow/.flow_version` means the repo
 # uses the canonical specs/ write path (see get_specs_json_write_dir). Payload
@@ -1108,6 +1146,11 @@ def get_default_tracker_config() -> dict:
             # optional verdict comment, never the (MERGED-gated) status write.
             "land": {"merged": "off"},
         },
+        # fn-135.5 — optional chart lifecycle projection. String-enum off|on
+        # (NOT a bool): only the literal "on" activates parent/child chart
+        # projection through the post-fn-141 facade. Default off keeps every
+        # existing repo silent; local chart ops always succeed either way.
+        "charts": "off",
         "perTracker": {
             "teamId": None,
             "projectId": None,
@@ -1341,6 +1384,16 @@ def get_default_config() -> dict:
         # flowctl only stores/serves the knob; the QA stage is host-agent
         # skill wiring (no new subcommand/engine).
         "pipeline": {"qa": "off"},
+        # fn-135.9 — chart discovery size ceiling and stale-claim threshold.
+        # Seeded so `config get chart.maxDecisions` / `chart.claimStaleAfter`
+        # return defaults (NOT null) on a fresh repo via the defaults MERGE.
+        # maxDecisions is a charting-time guard only (later sharpening may
+        # grow past it). claimStaleAfter is hours; break-stale requires age
+        # >= this value and always records actor/prior owner/age/reason.
+        "chart": {
+            "maxDecisions": CHART_DEFAULT_MAX_DECISIONS,
+            "claimStaleAfter": CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS,
+        },
         # fn-68.1 — pilot backlog-mode autonomy gate, seeded so
         # `config get pilot.autonomy` returns the enum string "ready" (NOT
         # null) on a fresh repo via the defaults MERGE. SCALAR STRING-ENUM
@@ -9792,9 +9845,14 @@ def _scan_max_fn_names_in_dir(directory: Path) -> int:
 
 
 def _scan_max_fn_in_flow_dir(flow_dir: Path) -> int:
-    """In-process max native fn-N across epics/ + specs/ of one .flow/ tree."""
+    """In-process max native fn-N across epics/ + specs/ + charts/ of one .flow/.
+
+    One cross-kind allocation domain (fn-135): charts and specs share the
+    monotonic native counter. Decision records under charts/<id>/<n>.* are
+    not scanned (names do not match the native fn-N filename pattern).
+    """
     max_n = 0
-    for sub in (EPICS_DIR, SPECS_DIR):
+    for sub in (EPICS_DIR, SPECS_DIR, CHARTS_DIR):
         n = _scan_max_fn_names_in_dir(flow_dir / sub)
         if n > max_n:
             max_n = n
@@ -9890,7 +9948,11 @@ def _scan_max_fn_from_refs(repo_root: Path) -> int:
     exists to provide. It costs nothing measurable (both forms run well inside
     the R3 budget).
     """
-    pathspecs = [f"{FLOW_DIR}/{SPECS_DIR}", f"{FLOW_DIR}/{EPICS_DIR}"]
+    pathspecs = [
+        f"{FLOW_DIR}/{SPECS_DIR}",
+        f"{FLOW_DIR}/{EPICS_DIR}",
+        f"{FLOW_DIR}/{CHARTS_DIR}",
+    ]
     rc, out, _err = _spec_alloc_git(
         repo_root,
         [
@@ -9924,23 +9986,30 @@ def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
     """Union max of native `fn-N` across working tree, worktrees, and refs.
 
     NATIVE-`fn`-ONLY (fn-52.10): this feeds `fn-N` allocation in
-    `cmd_spec_create`, so tracker-key specs (`wor-9999-foo`) must NOT count —
-    else a high tracker number would push the next flow-first spec to a far
-    higher `fn-N`. Tracker-key specs are still visible to enumeration
-    (`iter_spec_json_files`); they just don't drive the native allocator.
+    `cmd_spec_create` and `cmd_chart_create`, so tracker-key specs
+    (`wor-9999-foo`) must NOT count - else a high tracker number would push
+    the next flow-first id to a far higher `fn-N`. Tracker-key specs are
+    still visible to enumeration (`iter_spec_json_files`); they just don't
+    drive the native allocator.
 
-    Three sources, take the maximum (fn-134):
-      1. Current working tree `.flow/epics/` + `.flow/specs/` (always).
+    Cross-kind domain (fn-135): specs and charts share one counter. A chart
+    at `.flow/charts/fn-N` and a spec at `.flow/specs/fn-N-slug` both reserve
+    number N under the same allocation lock.
+
+    Three sources, take the maximum (fn-134 + fn-135):
+      1. Current working tree `.flow/epics/` + `.flow/specs/` + `.flow/charts/`
+         (always).
       2. Every registered git worktree's `.flow/` (in-process scandir).
       3. Every ref via one `git log --all --full-history --diff-filter=A` over
-         the specs dirs (`--full-history` keeps pruned side branches visible).
+         the specs/epics/charts dirs (`--full-history` keeps pruned side
+         branches visible).
 
     Handles legacy (fn-N.json), short suffix (fn-N-xxx.json), and slug
     (fn-N-slug.json) formats. Returns 0 if none exist.
 
     Fail-open on every git problem (absent git, not a repo, stale worktree
     path, missing/unreadable `.flow/`, non-zero git exit): degrade to whatever
-    sources worked, worst case source 1 alone. Never blocks spec creation.
+    sources worked, worst case source 1 alone. Never blocks allocation.
     Monotonic: a number that was allocated and later deleted is never reused
     because source 3 still sees the historical add.
     """
@@ -9977,6 +10046,4981 @@ def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
 # prefer the explicit name). Backward-compat `scan_max_epic_id` preserved too.
 scan_max_spec_id = scan_max_native_fn_spec_id
 scan_max_epic_id = scan_max_native_fn_spec_id
+
+
+def native_fn_alloc_lock_path(flow_dir: Path) -> Path:
+    """Shared lock path for the cross-kind native fn-N allocator (specs+charts)."""
+    return flow_dir / "locks" / NATIVE_FN_ALLOC_LOCK_NAME
+
+
+def charts_resource_lock_path(flow_dir: Path) -> Path:
+    """Lock path coordinating chart recovery and multi-file mutations."""
+    return flow_dir / "locks" / CHARTS_RESOURCE_LOCK_NAME
+
+
+def charts_dir(flow_dir: Path) -> Path:
+    return flow_dir / CHARTS_DIR
+
+
+def chart_transactions_dir(flow_dir: Path) -> Path:
+    return charts_dir(flow_dir) / CHART_TRANSACTIONS_DIR
+
+
+# Chart id is plain native `fn-N` (no slug). Specs keep `fn-N-slug`; the shared
+# allocator only cares about the numeric component.
+_CHART_ID_RE = re.compile(r"^fn-([1-9][0-9]*)$")
+# Full external D-ID: <chart-id>.D<n>
+_CHART_DID_FULL_RE = re.compile(r"^(fn-[1-9][0-9]*)\.D([1-9][0-9]*)$", re.IGNORECASE)
+# Bare decision forms accepted only when a chart context is supplied.
+_CHART_DID_BARE_RE = re.compile(r"^(?:D)?([1-9][0-9]*)$", re.IGNORECASE)
+# Ambiguous bare-or-local forms that look like another chart: fn-X.DY or fn-X.Y
+_CHART_DID_CROSS_RE = re.compile(
+    r"^(fn-[1-9][0-9]*)\.(?:D)?([1-9][0-9]*)$", re.IGNORECASE
+)
+
+
+class ChartError(Exception):
+    """Structured chart command failure (maps to v1 error envelope)."""
+
+    def __init__(
+        self,
+        error_class: str,
+        code: str,
+        message: str,
+        details: Optional[dict] = None,
+        exit_code: int = 1,
+    ) -> None:
+        if error_class not in CHART_ERROR_CLASSES:
+            raise ValueError(f"unknown chart error class: {error_class}")
+        super().__init__(message)
+        self.error_class = error_class
+        self.code = code
+        self.message = message
+        self.details = details if details is not None else {}
+        self.exit_code = exit_code
+
+
+def chart_json_success(command: str, result: dict) -> None:
+    """Emit exact v1 success envelope for chart commands."""
+    print(
+        json.dumps(
+            {
+                "success": True,
+                "schema_version": CHART_JSON_SCHEMA_VERSION,
+                "command": command,
+                "result": result,
+            },
+            indent=2,
+            default=str,
+        )
+    )
+
+
+def chart_json_error(
+    command: str,
+    error_class: str,
+    code: str,
+    message: str,
+    details: Optional[dict] = None,
+    exit_code: int = 1,
+) -> None:
+    """Emit exact v1 failure envelope and exit."""
+    if error_class not in CHART_ERROR_CLASSES:
+        error_class = "io"
+        code = "internal_error_class"
+    print(
+        json.dumps(
+            {
+                "success": False,
+                "schema_version": CHART_JSON_SCHEMA_VERSION,
+                "command": command,
+                "error": {
+                    "class": error_class,
+                    "code": code,
+                    "message": message,
+                    "details": details if details is not None else {},
+                },
+            },
+            indent=2,
+            default=str,
+        )
+    )
+    sys.exit(exit_code)
+
+
+def chart_fail(
+    command: str,
+    use_json: bool,
+    error_class: str,
+    code: str,
+    message: str,
+    details: Optional[dict] = None,
+    exit_code: int = 1,
+) -> None:
+    """Surface a chart failure (JSON envelope or stderr). Never returns."""
+    if use_json:
+        chart_json_error(
+            command, error_class, code, message, details=details, exit_code=exit_code
+        )
+    print(f"Error: {message}", file=sys.stderr)
+    sys.exit(exit_code)
+
+
+def _maybe_project_chart(
+    flow_dir: Path,
+    chart_id: str,
+    *,
+    event: str,
+    revision: Optional[str] = None,
+) -> dict:
+    """Best-effort post-commit chart tracker projection (fn-135.5).
+
+    Local chart mutation has already committed. Projection failures never
+    roll back local state; the result describes skip/degradation/partial.
+    """
+    try:
+        from flowctl_tracker.facade.chart_projection import (  # noqa: PLC0415
+            project_chart,
+        )
+        from flowctl_tracker.types import TrackerError  # noqa: PLC0415
+    except ImportError:
+        return {
+            "projected": False,
+            "skipped": "facade_unavailable",
+            "reason": "flowctl_tracker package not available",
+        }
+    out = project_chart(
+        flow_dir, chart_id, event=event, revision=revision,
+    )
+    if isinstance(out, TrackerError):
+        return {
+            "projected": False,
+            "error": {
+                "class": out.cls.value if hasattr(out.cls, "value") else str(out.cls),
+                "code": out.subtype or (
+                    out.cls.value if hasattr(out.cls, "value") else "error"
+                ),
+                "message": out.message,
+                "details": out.details,
+            },
+            "completed_steps": list((out.details or {}).get("completed_steps") or []),
+        }
+    if isinstance(out, dict):
+        return out
+    return {"projected": False, "skipped": "unknown_result"}
+
+
+def _attach_tracker_projection(
+    result: dict,
+    flow_dir: Path,
+    chart_id: Optional[str],
+    event: str,
+) -> dict:
+    """Merge tracker_projection into a chart command result dict."""
+    if not chart_id:
+        result = dict(result)
+        result["tracker_projection"] = {
+            "projected": False,
+            "skipped": "no_chart_id",
+        }
+        return result
+    try:
+        chart = load_chart_sidecar(flow_dir, chart_id)
+        revision = chart_decision_revision(chart)
+    except Exception:  # noqa: BLE001 - projection is best-effort
+        revision = None
+    proj = _maybe_project_chart(
+        flow_dir, chart_id, event=event, revision=revision,
+    )
+    result = dict(result)
+    result["tracker_projection"] = proj
+    return result
+
+
+def _chart_id_from_decision_result(out: dict) -> Optional[str]:
+    cid = out.get("chart") or out.get("chart_id")
+    if cid:
+        return str(cid)
+    did = out.get("id") or out.get("decision_id")
+    if isinstance(did, str) and ".D" in did:
+        return did.split(".D", 1)[0]
+    return None
+
+
+def canonicalize_chart_id(raw: str) -> str:
+    """Return canonical chart id `fn-N` or raise ChartError(validation).
+
+    Rejects empty, slug-bearing, tracker-key, and ambiguous forms before I/O.
+    """
+    if raw is None or not isinstance(raw, str):
+        raise ChartError(
+            "validation",
+            "invalid_chart_id",
+            "Chart id is required (expected fn-N)",
+            details={"raw": raw},
+        )
+    text = raw.strip().lower()
+    if not text:
+        raise ChartError(
+            "validation",
+            "invalid_chart_id",
+            "Chart id is required (expected fn-N)",
+            details={"raw": raw},
+        )
+    match = _CHART_ID_RE.fullmatch(text)
+    if not match:
+        raise ChartError(
+            "validation",
+            "invalid_chart_id",
+            f"Invalid chart id '{raw.strip()}' (expected fn-N with no slug)",
+            details={"raw": raw.strip()},
+        )
+    return f"fn-{int(match.group(1))}"
+
+
+def canonicalize_decision_id(
+    raw: str, chart_id: Optional[str] = None
+) -> str:
+    """Return canonical external D-ID `<chart-id>.D<n>` or raise ChartError.
+
+    Accepts `fn-N.DM`, `fn-N.M`, `DM`, or `M` when chart_id is provided.
+    Rejects cross-chart identifiers and ambiguous forms before I/O.
+    """
+    if raw is None or not isinstance(raw, str) or not raw.strip():
+        raise ChartError(
+            "validation",
+            "invalid_decision_id",
+            "Decision id is required (expected <chart-id>.D<n> or D<n>)",
+            details={"raw": raw},
+        )
+    text = raw.strip()
+    # Normalize only the chart/D markers for matching; preserve digits.
+    text_norm = text.lower()
+    full = _CHART_DID_FULL_RE.fullmatch(text_norm)
+    if full:
+        chart_part = canonicalize_chart_id(full.group(1))
+        d_num = int(full.group(2))
+        if chart_id is not None:
+            expected = canonicalize_chart_id(chart_id)
+            if chart_part != expected:
+                raise ChartError(
+                    "validation",
+                    "cross_chart_decision_id",
+                    f"Decision id '{text}' belongs to {chart_part}, not {expected}",
+                    details={"raw": text, "chart_id": expected, "other_chart": chart_part},
+                )
+        return f"{chart_part}.D{d_num}"
+
+    cross = _CHART_DID_CROSS_RE.fullmatch(text_norm)
+    if cross:
+        # Form fn-N.M without the D prefix - still chart-qualified.
+        chart_part = canonicalize_chart_id(cross.group(1))
+        d_num = int(cross.group(2))
+        if chart_id is not None:
+            expected = canonicalize_chart_id(chart_id)
+            if chart_part != expected:
+                raise ChartError(
+                    "validation",
+                    "cross_chart_decision_id",
+                    f"Decision id '{text}' belongs to {chart_part}, not {expected}",
+                    details={"raw": text, "chart_id": expected, "other_chart": chart_part},
+                )
+        return f"{chart_part}.D{d_num}"
+
+    bare = _CHART_DID_BARE_RE.fullmatch(text_norm)
+    if bare:
+        if chart_id is None:
+            raise ChartError(
+                "validation",
+                "ambiguous_decision_id",
+                f"Bare decision id '{text}' requires a chart context",
+                details={"raw": text},
+            )
+        chart_part = canonicalize_chart_id(chart_id)
+        return f"{chart_part}.D{int(bare.group(1))}"
+
+    raise ChartError(
+        "validation",
+        "invalid_decision_id",
+        f"Invalid decision id '{text}' (expected <chart-id>.D<n> or D<n>)",
+        details={"raw": text},
+    )
+
+
+def decision_local_number(canonical_did: str) -> int:
+    """Extract the chart-local decision number from a canonical `<chart>.D<n>`."""
+    full = _CHART_DID_FULL_RE.fullmatch(canonical_did)
+    if not full:
+        raise ChartError(
+            "validation",
+            "invalid_decision_id",
+            f"Not a canonical decision id: {canonical_did}",
+            details={"raw": canonical_did},
+        )
+    return int(full.group(2))
+
+
+def decision_record_paths(flow_dir: Path, chart_id: str, d_num: int) -> tuple[Path, Path]:
+    """Return (md_path, json_path) for decision local number under the chart."""
+    chart_id = canonicalize_chart_id(chart_id)
+    base = charts_dir(flow_dir) / chart_id / str(d_num)
+    return (base.with_suffix(".md"), base.with_suffix(".json"))
+
+
+def chart_pair_paths(flow_dir: Path, chart_id: str) -> tuple[Path, Path]:
+    """Return (md_path, json_path) for a chart root pair."""
+    chart_id = canonicalize_chart_id(chart_id)
+    base = charts_dir(flow_dir) / chart_id
+    return (base.with_suffix(".md"), base.with_suffix(".json"))
+
+
+def _file_sha256(path: Path) -> Optional[str]:
+    """Content fingerprint for journal pre-state; None if missing."""
+    try:
+        if not path.is_file():
+            return None
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def _fsync_path(path: Path) -> None:
+    """Best-effort fsync of a file."""
+    try:
+        fd = os.open(str(path), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def _fsync_dir(path: Path) -> None:
+    """Best-effort directory fsync (metadata flush before rename)."""
+    try:
+        fd = os.open(str(path), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def _chart_failpoint(name: str) -> None:
+    """Test injection: FLOWCTL_CHART_FAILPOINT=exit:NAME or raise:NAME."""
+    raw = os.environ.get("FLOWCTL_CHART_FAILPOINT") or ""
+    if not raw:
+        return
+    if raw == f"exit:{name}":
+        # Hard process death without cleanup (simulates kill -9 at a failpoint).
+        os._exit(99)
+    if raw == f"raise:{name}":
+        raise RuntimeError(f"injected chart failpoint: {name}")
+
+
+def _write_bytes_fsync(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+        _fsync_path(path)
+        _fsync_dir(path.parent)
+    except Exception:
+        try:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _write_text_fsync(path: Path, content: str) -> None:
+    _write_bytes_fsync(path, content.encode("utf-8"))
+
+
+def _write_json_fsync(path: Path, data: dict) -> None:
+    content = json.dumps(data, indent=2, sort_keys=True) + "\n"
+    _write_text_fsync(path, content)
+
+
+def _chart_relpath(flow_dir: Path, path: Path) -> str:
+    """Path relative to charts/ for journal entries."""
+    charts = charts_dir(flow_dir)
+    try:
+        return path.resolve().relative_to(charts.resolve()).as_posix()
+    except ValueError:
+        return path.name
+
+
+def chart_body_text(chart_id: str, title: str, outcome: str) -> str:
+    """Canonical empty-ledger chart map body."""
+    return (
+        f"# {chart_id} {title}\n"
+        f"\n"
+        f"## Outcome\n"
+        f"{outcome}\n"
+        f"\n"
+        f"## Notes\n"
+        f"\n"
+        f"## Decisions\n"
+        f"<!-- the ledger: one line per resolved decision, append-only, "
+        f"D-IDs never reused -->\n"
+        f"\n"
+        f"## Open Questions\n"
+        f"\n"
+        f"## Boundaries\n"
+        f"\n"
+    )
+
+
+def chart_sidecar_data(
+    chart_id: str,
+    title: str,
+    outcome: str,
+    *,
+    created: Optional[str] = None,
+) -> dict:
+    """v1 chart JSON sidecar with empty ledger."""
+    ts = created or now_iso()
+    return {
+        "id": chart_id,
+        "title": title,
+        "outcome": outcome,
+        "status": "open",
+        "created": ts,
+        "decisions": [],
+        "parked_questions": [],
+        "briefings": [],
+        "tracker": {
+            "id": None,
+            "identifier": None,
+            "url": None,
+            "linkState": "unlinked",
+            "depRelations": [],
+            "projection": {
+                "revision": None,
+                "event_markers": [],
+                "completed_steps": [],
+            },
+        },
+        "produced_specs": [],
+        "claim_events": [],
+    }
+
+
+def compact_decision_entry(decision: dict) -> dict:
+    """Compact decision metadata for chart sidecars and navigation (no answer/assets)."""
+    return {
+        "id": decision.get("id"),
+        "title": decision.get("title"),
+        "type": decision.get("type"),
+        "attendance": decision.get("attendance"),
+        "status": decision.get("status"),
+        "blocked_by": list(decision.get("blocked_by") or []),
+        "depends_on": list(decision.get("depends_on") or []),
+        "claimed_by": decision.get("claimed_by"),
+        "claimed_at": decision.get("claimed_at"),
+        "record_path": decision.get("record_path"),
+    }
+
+
+def compact_chart_metadata(data: dict) -> dict:
+    """Compact show/list metadata from the chart sidecar only (no decision bodies)."""
+    decisions = data.get("decisions") or []
+    if not isinstance(decisions, list):
+        decisions = []
+    parked = data.get("parked_questions") or []
+    if not isinstance(parked, list):
+        parked = []
+    open_decs = [
+        d
+        for d in decisions
+        if isinstance(d, dict) and d.get("status") == "open"
+    ]
+    closed = [
+        d
+        for d in decisions
+        if isinstance(d, dict) and d.get("status") in CHART_CLOSED_STATUSES
+    ]
+    status_index = {
+        d["id"]: d.get("status")
+        for d in decisions
+        if isinstance(d, dict) and d.get("id")
+    }
+    blocked_open = [
+        d
+        for d in open_decs
+        if _decision_is_blocked(d, status_index)
+    ]
+    claimed_open = [d for d in open_decs if d.get("claimed_by")]
+    remaining = [
+        d for d in open_decs if isinstance(d.get("attendance"), str)
+    ]
+    cost = chart_cost_estimate(remaining)
+    completion = chart_completion_predicate(data)
+    return {
+        "id": data.get("id"),
+        "title": data.get("title"),
+        "outcome": data.get("outcome"),
+        "status": data.get("status"),
+        "created": data.get("created"),
+        "decision_count": len(decisions),
+        "open_count": len(open_decs),
+        "resolved_count": sum(
+            1 for d in closed if d.get("status") == "resolved"
+        ),
+        "blocked_count": len(blocked_open),
+        "claimed_count": len(claimed_open),
+        "parked_count": len(parked),
+        "briefable": completion["briefable"],
+        "stuck_reasons": completion["stuck_reasons"],
+        "unattended_count": cost["unattended_count"],
+        "attended_count": cost["attended_count"],
+        "estimated_sessions": cost["estimated_sessions"],
+        "cost_line": cost["cost_line"],
+        "briefing_count": len(data.get("briefings") or [])
+        if isinstance(data.get("briefings"), list)
+        else 0,
+        "produced_spec_count": len(data.get("produced_specs") or [])
+        if isinstance(data.get("produced_specs"), list)
+        else 0,
+    }
+
+
+def _journal_path(txn_dir: Path) -> Path:
+    return txn_dir / "journal.json"
+
+
+def _list_incomplete_chart_txns(flow_dir: Path) -> list[Path]:
+    tx_root = chart_transactions_dir(flow_dir)
+    if not tx_root.is_dir():
+        return []
+    found: list[Path] = []
+    try:
+        with os.scandir(tx_root) as it:
+            for entry in it:
+                if not entry.is_dir(follow_symlinks=False):
+                    continue
+                if entry.name.startswith("."):
+                    continue
+                jpath = Path(entry.path) / "journal.json"
+                if jpath.is_file():
+                    found.append(Path(entry.path))
+    except OSError:
+        return found
+    return sorted(found, key=lambda p: p.name)
+
+
+def _load_journal(txn_dir: Path) -> Optional[dict]:
+    jpath = _journal_path(txn_dir)
+    try:
+        with open(jpath, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+    return None
+
+
+def _rm_tree(path: Path) -> None:
+    if not path.exists():
+        return
+    try:
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    except OSError:
+        pass
+
+
+def _restore_pre_state(flow_dir: Path, journal: dict, txn_dir: Path) -> None:
+    """Restore recorded pre-state for every mutation target."""
+    charts = charts_dir(flow_dir)
+    pre_state = journal.get("pre_state") or {}
+    mutations = journal.get("mutations") or []
+    for mut in mutations:
+        if not isinstance(mut, dict):
+            continue
+        rel = mut.get("relpath")
+        if not isinstance(rel, str) or not rel or ".." in rel.split("/"):
+            continue
+        target = charts / rel
+        info = pre_state.get(rel) if isinstance(pre_state, dict) else None
+        if not info or not info.get("exists"):
+            # Pre-state absent: remove any partial publication.
+            try:
+                if target.is_file() or target.is_symlink():
+                    target.unlink()
+            except OSError:
+                pass
+            continue
+        backup_rel = info.get("backup")
+        if isinstance(backup_rel, str) and backup_rel:
+            backup = txn_dir / backup_rel
+            if backup.is_file():
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(backup, target)
+                    _fsync_path(target)
+                except OSError:
+                    pass
+                continue
+        # Exists-in-pre but no backup: leave target alone if fingerprint matches;
+        # otherwise delete (safer than inventing content).
+        expected = info.get("sha256")
+        current = _file_sha256(target)
+        if expected and current and expected == current:
+            continue
+        try:
+            if target.is_file() or target.is_symlink():
+                target.unlink()
+        except OSError:
+            pass
+
+
+def _publish_staged_mutation(
+    flow_dir: Path, txn_dir: Path, mut: dict
+) -> None:
+    """Publish one staged mutation (create = no-clobber link, update = replace)."""
+    charts = charts_dir(flow_dir)
+    rel = mut["relpath"]
+    op = mut.get("op") or "create"
+    staged = txn_dir / "staged" / rel
+    target = charts / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not staged.is_file():
+        raise ChartError(
+            "io",
+            "missing_staged_file",
+            f"Staged file missing for {rel}",
+            details={"relpath": rel},
+        )
+    content = staged.read_text(encoding="utf-8")
+    if op == "create":
+        if target.exists():
+            # Idempotent roll-forward: already published with matching content.
+            try:
+                if target.read_text(encoding="utf-8") == content:
+                    return
+            except OSError:
+                pass
+            raise ChartError(
+                "conflict",
+                "chart_path_exists",
+                f"Refusing to overwrite existing chart path {rel}",
+                details={"relpath": rel},
+            )
+        atomic_create(target, content)
+    else:
+        atomic_write(target, content)
+    _fsync_path(target)
+    _fsync_dir(target.parent)
+
+
+def _roll_forward_journal(flow_dir: Path, txn_dir: Path, journal: dict) -> None:
+    """Publish all staged mutations then drop the transaction."""
+    mutations = journal.get("mutations") or []
+    for mut in mutations:
+        if isinstance(mut, dict) and mut.get("relpath"):
+            _publish_staged_mutation(flow_dir, txn_dir, mut)
+    _chart_failpoint("after_publish_before_commit")
+    # Mark committed then remove txn dir.
+    journal = dict(journal)
+    journal["phase"] = "committed"
+    try:
+        _write_json_fsync(_journal_path(txn_dir), journal)
+    except OSError:
+        pass
+    _rm_tree(txn_dir)
+
+
+def recover_chart_transactions(flow_dir: Path) -> list[str]:
+    """Recover incomplete chart journals under the charts resource lock.
+
+    Deterministic policy:
+      - phase staging / unknown / corrupt: restore pre-state, drop txn
+      - phase ready or publishing with complete staged set: roll forward
+      - phase committed: drop txn
+    Returns list of recovered txn ids (for diagnostics/tests).
+    """
+    recovered: list[str] = []
+    for txn_dir in _list_incomplete_chart_txns(flow_dir):
+        journal = _load_journal(txn_dir)
+        txn_id = txn_dir.name
+        if journal is None:
+            # Corrupt journal: best-effort cleanup of any staged-only debris
+            # without touching live chart files (pre-state unknown).
+            _rm_tree(txn_dir)
+            recovered.append(txn_id)
+            continue
+        phase = journal.get("phase")
+        mutations = journal.get("mutations") or []
+        staged_complete = True
+        for mut in mutations:
+            if not isinstance(mut, dict):
+                staged_complete = False
+                break
+            rel = mut.get("relpath")
+            if not isinstance(rel, str):
+                staged_complete = False
+                break
+            if not (txn_dir / "staged" / rel).is_file():
+                staged_complete = False
+                break
+
+        if phase == "committed":
+            _rm_tree(txn_dir)
+            recovered.append(txn_id)
+            continue
+
+        if phase in ("ready", "publishing") and staged_complete:
+            try:
+                _roll_forward_journal(flow_dir, txn_dir, journal)
+            except ChartError:
+                # Roll-forward conflict: fall back to pre-state restore.
+                _restore_pre_state(flow_dir, journal, txn_dir)
+                _rm_tree(txn_dir)
+            recovered.append(txn_id)
+            continue
+
+        # Incomplete staging or unknown phase: restore pre-state.
+        _restore_pre_state(flow_dir, journal, txn_dir)
+        _rm_tree(txn_dir)
+        recovered.append(txn_id)
+    return recovered
+
+
+def _begin_chart_transaction(
+    flow_dir: Path,
+    command: str,
+    mutations: list[tuple[str, str, str]],
+) -> Path:
+    """Create a write-ahead journal with pre-state fingerprints.
+
+    mutations: list of (relpath, op, content) where op is create|update.
+    Returns the txn directory path. Caller stages contents then publishes.
+    """
+    charts = charts_dir(flow_dir)
+    charts.mkdir(parents=True, exist_ok=True)
+    tx_root = chart_transactions_dir(flow_dir)
+    tx_root.mkdir(parents=True, exist_ok=True)
+    txn_id = f"{int(datetime.now(timezone.utc).timestamp() * 1000):x}-{uuid.uuid4().hex[:12]}"
+    txn_dir = tx_root / txn_id
+    txn_dir.mkdir(parents=True, exist_ok=False)
+    (txn_dir / "staged").mkdir()
+    (txn_dir / "pre").mkdir()
+
+    pre_state: dict[str, dict] = {}
+    mut_records: list[dict] = []
+    for relpath, op, _content in mutations:
+        if ".." in relpath.split("/"):
+            raise ChartError(
+                "validation",
+                "invalid_mutation_path",
+                f"Invalid mutation path: {relpath}",
+                details={"relpath": relpath},
+            )
+        target = charts / relpath
+        exists = target.is_file()
+        entry: dict[str, Any] = {"exists": exists}
+        if exists:
+            sha = _file_sha256(target)
+            entry["sha256"] = sha
+            backup_rel = f"pre/{relpath.replace('/', '__')}"
+            backup_path = txn_dir / backup_rel
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(target, backup_path)
+            _fsync_path(backup_path)
+            entry["backup"] = backup_rel
+        pre_state[relpath] = entry
+        mut_records.append({"relpath": relpath, "op": op})
+
+    journal = {
+        "schema_version": 1,
+        "txn_id": txn_id,
+        "command": command,
+        "phase": "staging",
+        "created_at": now_iso(),
+        "pre_state": pre_state,
+        "mutations": mut_records,
+    }
+    _write_json_fsync(_journal_path(txn_dir), journal)
+    _fsync_dir(txn_dir)
+    _fsync_dir(tx_root)
+    _chart_failpoint("after_journal")
+    return txn_dir
+
+
+def _stage_chart_mutation(txn_dir: Path, relpath: str, content: str) -> None:
+    staged = txn_dir / "staged" / relpath
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    _write_text_fsync(staged, content)
+
+
+def _finalize_chart_transaction(flow_dir: Path, txn_dir: Path) -> None:
+    """Mark staged set ready, then roll forward to publication."""
+    journal = _load_journal(txn_dir)
+    if journal is None:
+        raise ChartError(
+            "io",
+            "journal_missing",
+            "Chart transaction journal missing after staging",
+            details={"txn": txn_dir.name},
+        )
+    # Verify every mutation is staged before leaving staging phase.
+    for mut in journal.get("mutations") or []:
+        rel = mut.get("relpath") if isinstance(mut, dict) else None
+        if not isinstance(rel, str) or not (txn_dir / "staged" / rel).is_file():
+            raise ChartError(
+                "io",
+                "incomplete_staging",
+                f"Staged content missing for {rel}",
+                details={"txn": txn_dir.name, "relpath": rel},
+            )
+    _chart_failpoint("after_stage")
+    journal["phase"] = "ready"
+    _write_json_fsync(_journal_path(txn_dir), journal)
+    _fsync_dir(txn_dir)
+    _chart_failpoint("before_publish")
+    journal["phase"] = "publishing"
+    _write_json_fsync(_journal_path(txn_dir), journal)
+    # Publish first mutation with a mid-publish failpoint for kill tests.
+    mutations = [m for m in (journal.get("mutations") or []) if isinstance(m, dict)]
+    if mutations:
+        _publish_staged_mutation(flow_dir, txn_dir, mutations[0])
+        _chart_failpoint("after_first_publish")
+        for mut in mutations[1:]:
+            _publish_staged_mutation(flow_dir, txn_dir, mut)
+    _chart_failpoint("after_publish_before_commit")
+    journal["phase"] = "committed"
+    _write_json_fsync(_journal_path(txn_dir), journal)
+    _rm_tree(txn_dir)
+
+
+def run_chart_transaction(
+    flow_dir: Path,
+    command: str,
+    mutations: list[tuple[str, str, str]],
+) -> None:
+    """Journal + stage + publish a multi-file chart mutation set.
+
+    On handled failure, restore pre-state and remove the txn. Crash recovery
+    is performed by recover_chart_transactions on the next chart command.
+    """
+    txn_dir: Optional[Path] = None
+    try:
+        txn_dir = _begin_chart_transaction(flow_dir, command, mutations)
+        for relpath, _op, content in mutations:
+            _stage_chart_mutation(txn_dir, relpath, content)
+        _finalize_chart_transaction(flow_dir, txn_dir)
+    except ChartError:
+        if txn_dir is not None and txn_dir.exists():
+            journal = _load_journal(txn_dir) or {
+                "pre_state": {},
+                "mutations": [{"relpath": r} for r, _o, _c in mutations],
+            }
+            _restore_pre_state(flow_dir, journal, txn_dir)
+            _rm_tree(txn_dir)
+        raise
+    except Exception as e:
+        if txn_dir is not None and txn_dir.exists():
+            journal = _load_journal(txn_dir) or {
+                "pre_state": {},
+                "mutations": [{"relpath": r} for r, _o, _c in mutations],
+            }
+            _restore_pre_state(flow_dir, journal, txn_dir)
+            _rm_tree(txn_dir)
+        raise ChartError(
+            "io",
+            "chart_transaction_failed",
+            f"Chart transaction failed: {e}",
+            details={"command": command},
+        ) from e
+
+
+def load_chart_sidecar(flow_dir: Path, chart_id: str) -> dict:
+    """Load chart JSON sidecar or raise ChartError not_found/io."""
+    chart_id = canonicalize_chart_id(chart_id)
+    _md_path, json_path = chart_pair_paths(flow_dir, chart_id)
+    if not json_path.is_file():
+        raise ChartError(
+            "not_found",
+            "chart_not_found",
+            f"Chart not found: {chart_id}",
+            details={"id": chart_id},
+        )
+    try:
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "io",
+            "chart_invalid_json",
+            f"Chart sidecar invalid JSON: {chart_id} ({e})",
+            details={"id": chart_id, "path": str(json_path)},
+        ) from e
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "chart_unreadable",
+            f"Chart sidecar unreadable: {chart_id} ({e})",
+            details={"id": chart_id, "path": str(json_path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "io",
+            "chart_invalid_json",
+            f"Chart sidecar must be a JSON object: {chart_id}",
+            details={"id": chart_id},
+        )
+    return data
+
+
+def list_chart_ids(flow_dir: Path) -> list[str]:
+    """Sorted chart ids present as .json sidecars under charts/."""
+    cdir = charts_dir(flow_dir)
+    if not cdir.is_dir():
+        return []
+    ids: list[str] = []
+    try:
+        with os.scandir(cdir) as it:
+            for entry in it:
+                name = entry.name
+                if not name.endswith(".json"):
+                    continue
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                stem = name[: -len(".json")]
+                if _CHART_ID_RE.fullmatch(stem):
+                    ids.append(stem)
+    except OSError:
+        return []
+    return sorted(ids, key=lambda s: int(s.split("-", 1)[1]))
+
+
+# ---------------------------------------------------------------------------
+# Chart graph, parked questions, frontier, claims (fn-135.9)
+# ---------------------------------------------------------------------------
+
+
+def get_chart_max_decisions() -> int:
+    """Configured charting-time decision ceiling (default 12)."""
+    raw = get_config("chart.maxDecisions", CHART_DEFAULT_MAX_DECISIONS)
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return CHART_DEFAULT_MAX_DECISIONS
+    if n < 1:
+        return CHART_DEFAULT_MAX_DECISIONS
+    return n
+
+
+def get_chart_claim_stale_after_hours() -> float:
+    """Configured stale-claim age threshold in hours (default 24)."""
+    raw = get_config(
+        "chart.claimStaleAfter", CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS
+    )
+    try:
+        n = float(raw)
+    except (TypeError, ValueError):
+        return float(CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS)
+    if n < 0:
+        return float(CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS)
+    return n
+
+
+def decision_record_relpaths(chart_id: str, d_num: int) -> tuple[str, str]:
+    """Journal relpaths (under charts/) for decision md/json."""
+    chart_id = canonicalize_chart_id(chart_id)
+    return (f"{chart_id}/{d_num}.md", f"{chart_id}/{d_num}.json")
+
+
+def decision_record_link(chart_id: str, d_num: int) -> str:
+    chart_id = canonicalize_chart_id(chart_id)
+    return f"{FLOW_DIR}/{CHARTS_DIR}/{chart_id}/{d_num}.md"
+
+
+def decision_body_text(question: str) -> str:
+    """Decision markdown body: only the Question section."""
+    q = (question or "").strip()
+    return f"## Question\n{q}\n"
+
+
+def decision_sidecar_data(
+    chart_id: str,
+    d_num: int,
+    title: str,
+    dtype: str,
+    attendance: str,
+    question: str,
+    *,
+    blocked_by: Optional[list[str]] = None,
+    depends_on: Optional[list[str]] = None,
+    created: Optional[str] = None,
+) -> dict:
+    """Full decision JSON sidecar (answer/assets empty until resolution)."""
+    chart_id = canonicalize_chart_id(chart_id)
+    did = f"{chart_id}.D{d_num}"
+    ts = created or now_iso()
+    return {
+        "id": did,
+        "chart": chart_id,
+        "n": d_num,
+        "title": title,
+        "type": dtype,
+        "attendance": attendance,
+        "status": "open",
+        "question": question,
+        "blocked_by": list(blocked_by or []),
+        "depends_on": list(depends_on or []),
+        "supersedes": [],
+        "superseded_by": None,
+        "claimed_by": None,
+        "claimed_at": None,
+        "claim_note": None,
+        "assets": [],
+        "answer": None,
+        "transition_notes": [],
+        "created": ts,
+        "updated_at": ts,
+        "record_path": decision_record_link(chart_id, d_num),
+        # fn-135.5 — optional tracker locator for decision children (not identity).
+        "tracker": {
+            "id": None,
+            "identifier": None,
+            "url": None,
+            "linkState": "unlinked",
+            "depRelations": [],
+        },
+    }
+
+
+def derive_decision_attendance(
+    dtype: str, attendance: Optional[str] = None
+) -> str:
+    """Derive or validate attendance for a decision type.
+
+    Five route types derive attendance; task requires an explicit value.
+    """
+    dtype = (dtype or "").strip().lower()
+    if dtype not in CHART_DECISION_TYPES:
+        raise ChartError(
+            "validation",
+            "invalid_decision_type",
+            f"Invalid decision type '{dtype}' "
+            f"(expected one of {', '.join(sorted(CHART_DECISION_TYPES))})",
+            details={"type": dtype},
+        )
+    if dtype == "task":
+        if attendance is None or not str(attendance).strip():
+            raise ChartError(
+                "validation",
+                "attendance_required",
+                "Decision type 'task' requires --attendance attended|unattended",
+                details={"type": "task"},
+            )
+        att = str(attendance).strip().lower()
+        if att not in CHART_ATTENDANCE_VALUES:
+            raise ChartError(
+                "validation",
+                "invalid_attendance",
+                f"Invalid attendance '{attendance}' (expected attended|unattended)",
+                details={"attendance": attendance},
+            )
+        return att
+    derived = CHART_TYPE_ATTENDANCE[dtype]
+    if attendance is not None and str(attendance).strip():
+        att = str(attendance).strip().lower()
+        if att not in CHART_ATTENDANCE_VALUES:
+            raise ChartError(
+                "validation",
+                "invalid_attendance",
+                f"Invalid attendance '{attendance}' (expected attended|unattended)",
+                details={"attendance": attendance},
+            )
+        if att != derived:
+            raise ChartError(
+                "validation",
+                "attendance_mismatch",
+                f"Type '{dtype}' requires attendance '{derived}', got '{att}'",
+                details={"type": dtype, "expected": derived, "got": att},
+            )
+    return derived
+
+
+def normalize_parked_question_body(body: str) -> str:
+    """Collapse whitespace and strip for stable parked-question identity."""
+    if body is None:
+        return ""
+    text = unicodedata.normalize("NFKC", str(body))
+    text = re.sub(r"\s+", " ", text.strip())
+    return text
+
+
+def parked_question_key(body: str) -> str:
+    """Stable key for a parked question (sha256 of normalized body, 16 hex)."""
+    normalized = normalize_parked_question_body(body)
+    if not normalized:
+        raise ChartError(
+            "validation",
+            "empty_parked_question",
+            "Parked question body must be non-empty",
+        )
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def chart_cost_estimate(decisions: list[dict]) -> dict:
+    """Session-cost estimate from attendance fields (never from prose)."""
+    unattended = 0
+    attended = 0
+    for d in decisions:
+        if not isinstance(d, dict):
+            continue
+        att = d.get("attendance")
+        if att == "unattended":
+            unattended += 1
+        elif att == "attended":
+            attended += 1
+    # Unattended routes run in parallel (~1 session batch); attended are serial.
+    sessions = attended + (1 if unattended else 0)
+    total = unattended + attended
+    cost_line = (
+        f"{total} decisions: {unattended} unattended (parallel, ~1 session), "
+        f"{attended} attended (~{attended} sessions). "
+        f"Estimated {sessions} working sessions with you."
+    )
+    return {
+        "decision_count": total,
+        "unattended_count": unattended,
+        "attended_count": attended,
+        "estimated_sessions": sessions,
+        "cost_line": cost_line,
+    }
+
+
+def _decision_is_blocked(decision: dict, status_index: dict[str, str]) -> bool:
+    """True when any blocked_by target is still open (or missing)."""
+    for bid in decision.get("blocked_by") or []:
+        st = status_index.get(bid)
+        if st is None or st == "open":
+            return True
+    return False
+
+
+def _decision_is_claimed(decision: dict) -> bool:
+    return bool(decision.get("claimed_by"))
+
+
+def chart_completion_predicate(data: dict) -> dict:
+    """Briefable only when no open decisions and no parked questions.
+
+    Stuck charts report why (blocked open, claimed open, parked).
+    """
+    decisions = data.get("decisions") or []
+    if not isinstance(decisions, list):
+        decisions = []
+    parked = data.get("parked_questions") or []
+    if not isinstance(parked, list):
+        parked = []
+    status_index = {
+        d["id"]: d.get("status")
+        for d in decisions
+        if isinstance(d, dict) and d.get("id")
+    }
+    open_decs = [
+        d
+        for d in decisions
+        if isinstance(d, dict) and d.get("status") == "open"
+    ]
+    stuck_reasons: list[str] = []
+    blocked = [d for d in open_decs if _decision_is_blocked(d, status_index)]
+    claimed = [d for d in open_decs if _decision_is_claimed(d)]
+    if blocked:
+        stuck_reasons.append(
+            f"{len(blocked)} open decision(s) blocked: "
+            + ", ".join(d["id"] for d in blocked if d.get("id"))
+        )
+    if claimed:
+        stuck_reasons.append(
+            f"{len(claimed)} open decision(s) claimed: "
+            + ", ".join(
+                f"{d['id']} by {d.get('claimed_by')}"
+                for d in claimed
+                if d.get("id")
+            )
+        )
+    unblocked_unclaimed = [
+        d
+        for d in open_decs
+        if not _decision_is_blocked(d, status_index)
+        and not _decision_is_claimed(d)
+    ]
+    if unblocked_unclaimed:
+        stuck_reasons.append(
+            f"{len(unblocked_unclaimed)} open unblocked unclaimed decision(s): "
+            + ", ".join(d["id"] for d in unblocked_unclaimed if d.get("id"))
+        )
+    if parked:
+        stuck_reasons.append(f"{len(parked)} parked open question(s)")
+    briefable = len(open_decs) == 0 and len(parked) == 0
+    return {
+        "briefable": briefable,
+        "stuck_reasons": stuck_reasons,
+        "open_count": len(open_decs),
+        "parked_count": len(parked),
+        "blocked_open_ids": [d["id"] for d in blocked if d.get("id")],
+        "claimed_open_ids": [d["id"] for d in claimed if d.get("id")],
+        "frontier_ids": [d["id"] for d in unblocked_unclaimed if d.get("id")],
+    }
+
+
+def _parse_edge_list(
+    raw: Optional[str],
+    chart_id: str,
+    *,
+    field_name: str,
+) -> list[str]:
+    """Parse a comma-separated edge list into canonical D-IDs (dedupe later)."""
+    if raw is None or not str(raw).strip():
+        return []
+    parts = [p.strip() for p in str(raw).split(",")]
+    out: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        out.append(canonicalize_decision_id(part, chart_id=chart_id))
+    return out
+
+
+def _normalize_edge_refs(
+    refs: list[Any],
+    chart_id: str,
+    *,
+    field_name: str,
+    local_map: Optional[dict[str, str]] = None,
+) -> list[str]:
+    """Normalize edge refs to canonical D-IDs.
+
+    local_map maps provisional labels (D1, 1, local titles unused) to
+    allocated ids during initial-map create.
+    """
+    out: list[str] = []
+    for ref in refs:
+        if ref is None:
+            continue
+        text = str(ref).strip()
+        if not text:
+            continue
+        if local_map is not None:
+            key = text.lower()
+            if key in local_map:
+                out.append(local_map[key])
+                continue
+            bare = _CHART_DID_BARE_RE.fullmatch(key)
+            if bare and bare.group(1) in local_map:
+                out.append(local_map[bare.group(1)])
+                continue
+            dform = f"d{bare.group(1)}" if bare else None
+            if dform and dform in local_map:
+                out.append(local_map[dform])
+                continue
+        out.append(canonicalize_decision_id(text, chart_id=chart_id))
+    return out
+
+
+def validate_chart_graph(
+    decisions: list[dict],
+    *,
+    chart_id: Optional[str] = None,
+) -> None:
+    """Reject missing targets, self-edges, duplicates, and cycles atomically.
+
+    Validates both blocked_by (readiness) and depends_on (premise) graphs.
+    Raises ChartError(invalid_graph, ...) before any write.
+    """
+    if not isinstance(decisions, list):
+        raise ChartError(
+            "invalid_graph",
+            "invalid_decisions",
+            "Chart decisions must be a list",
+        )
+    ids: set[str] = set()
+    for d in decisions:
+        if not isinstance(d, dict) or not d.get("id"):
+            raise ChartError(
+                "invalid_graph",
+                "invalid_decision_entry",
+                "Every decision entry needs an id",
+            )
+        did = d["id"]
+        if did in ids:
+            raise ChartError(
+                "invalid_graph",
+                "duplicate_decision_id",
+                f"Duplicate decision id {did}",
+                details={"id": did},
+            )
+        ids.add(did)
+
+    def _check_edges(field: str) -> dict[str, list[str]]:
+        adj: dict[str, list[str]] = {i: [] for i in ids}
+        for d in decisions:
+            did = d["id"]
+            raw_edges = d.get(field) or []
+            if not isinstance(raw_edges, list):
+                raise ChartError(
+                    "invalid_graph",
+                    "invalid_edge_list",
+                    f"{field} for {did} must be a list",
+                    details={"id": did, "field": field},
+                )
+            seen: set[str] = set()
+            clean: list[str] = []
+            for edge in raw_edges:
+                if not isinstance(edge, str) or not edge:
+                    raise ChartError(
+                        "invalid_graph",
+                        "invalid_edge",
+                        f"Invalid {field} edge on {did}",
+                        details={"id": did, "field": field, "edge": edge},
+                    )
+                if edge == did:
+                    raise ChartError(
+                        "invalid_graph",
+                        "self_edge",
+                        f"Self-edge not allowed: {did} {field} {edge}",
+                        details={"id": did, "field": field, "edge": edge},
+                    )
+                if edge not in ids:
+                    raise ChartError(
+                        "invalid_graph",
+                        "missing_edge_target",
+                        f"Missing {field} target {edge} from {did}",
+                        details={"id": did, "field": field, "edge": edge},
+                    )
+                if edge in seen:
+                    raise ChartError(
+                        "invalid_graph",
+                        "duplicate_edge",
+                        f"Duplicate {field} edge {edge} on {did}",
+                        details={"id": did, "field": field, "edge": edge},
+                    )
+                seen.add(edge)
+                clean.append(edge)
+            d[field] = clean
+            adj[did] = list(clean)
+        # Cycle detection (DFS white/gray/black) on the directed graph.
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {i: WHITE for i in ids}
+
+        def dfs(node: str, stack: list[str]) -> None:
+            color[node] = GRAY
+            stack.append(node)
+            for nxt in adj.get(node) or []:
+                if color[nxt] == GRAY:
+                    cycle = stack[stack.index(nxt) :] + [nxt]
+                    raise ChartError(
+                        "invalid_graph",
+                        "cycle",
+                        f"Cycle in {field}: {' -> '.join(cycle)}",
+                        details={"field": field, "cycle": cycle},
+                    )
+                if color[nxt] == WHITE:
+                    dfs(nxt, stack)
+            stack.pop()
+            color[node] = BLACK
+
+        for node in ids:
+            if color[node] == WHITE:
+                dfs(node, [])
+        return adj
+
+    _check_edges("blocked_by")
+    _check_edges("depends_on")
+
+
+def compute_frontier(data: dict) -> list[dict]:
+    """Open, unblocked, unclaimed decisions in dependency (blocked_by) order."""
+    decisions = [
+        d
+        for d in (data.get("decisions") or [])
+        if isinstance(d, dict) and d.get("id")
+    ]
+    status_index = {d["id"]: d.get("status") for d in decisions}
+    candidates = [
+        d
+        for d in decisions
+        if d.get("status") == "open"
+        and not _decision_is_blocked(d, status_index)
+        and not _decision_is_claimed(d)
+    ]
+    # Topological order among candidates using blocked_by edges that stay
+    # inside the candidate set (usually empty); fall back to allocation order.
+    cand_ids = {d["id"] for d in candidates}
+    indeg = {d["id"]: 0 for d in candidates}
+    adj: dict[str, list[str]] = {d["id"]: [] for d in candidates}
+    for d in candidates:
+        for b in d.get("blocked_by") or []:
+            if b in cand_ids:
+                adj[b].append(d["id"])
+                indeg[d["id"]] += 1
+    # Stable by local number when ties.
+    def _local_n(did: str) -> int:
+        try:
+            return decision_local_number(did)
+        except ChartError:
+            return 0
+
+    ready = sorted(
+        [i for i, deg in indeg.items() if deg == 0],
+        key=_local_n,
+    )
+    ordered_ids: list[str] = []
+    while ready:
+        n = ready.pop(0)
+        ordered_ids.append(n)
+        for m in sorted(adj.get(n) or [], key=_local_n):
+            indeg[m] -= 1
+            if indeg[m] == 0:
+                ready.append(m)
+                ready.sort(key=_local_n)
+    if len(ordered_ids) != len(candidates):
+        # Residual (should not happen after validation); allocation order.
+        ordered_ids = sorted(cand_ids, key=_local_n)
+    by_id = {d["id"]: d for d in candidates}
+    return [
+        {
+            "id": by_id[i]["id"],
+            "title": by_id[i].get("title"),
+            "type": by_id[i].get("type"),
+            "attendance": by_id[i].get("attendance"),
+            "status": by_id[i].get("status"),
+            "blocked_by": list(by_id[i].get("blocked_by") or []),
+            "depends_on": list(by_id[i].get("depends_on") or []),
+            "record_path": by_id[i].get("record_path")
+            or decision_record_link(
+                by_id[i]["id"].rsplit(".", 1)[0],
+                decision_local_number(by_id[i]["id"]),
+            ),
+        }
+        for i in ordered_ids
+        if i in by_id
+    ]
+
+
+def _render_open_questions_section(parked: list[dict]) -> str:
+    """Render ## Open Questions section body (bullets only, no heading)."""
+    if not parked:
+        return ""
+    lines = []
+    for entry in parked:
+        body = entry.get("body") if isinstance(entry, dict) else str(entry)
+        body = normalize_parked_question_body(body or "")
+        if body:
+            lines.append(f"- {body}")
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def _replace_chart_section(body: str, heading: str, new_content: str) -> str:
+    """Replace a ## Section body in a chart map; preserve other sections."""
+    pattern = re.compile(
+        rf"(^##\s+{re.escape(heading)}\s*\n)(.*?)(?=^##\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    content = new_content
+    if content and not content.endswith("\n"):
+        content = content + "\n"
+    # Function replacement: content is literal text, never a template
+    # (a parked question containing backslashes must not expand as backrefs).
+    if pattern.search(body):
+        return pattern.sub(lambda m: m.group(1) + content, body, count=1)
+    # Section missing: append.
+    if not body.endswith("\n"):
+        body += "\n"
+    return body + f"\n## {heading}\n{content}"
+
+
+def load_decision_sidecar(
+    flow_dir: Path, chart_id: str, d_num: int, *, compact: bool = False
+) -> dict:
+    """Load a decision JSON sidecar.
+
+    compact=True still loads the same JSON (metadata lives there) but callers
+    must not request answer/assets fields for navigation; use chart sidecar
+    decisions[] for show/list/frontier instead.
+    """
+    _md, json_path = decision_record_paths(flow_dir, chart_id, d_num)
+    if not json_path.is_file():
+        raise ChartError(
+            "not_found",
+            "decision_not_found",
+            f"Decision not found: {canonicalize_chart_id(chart_id)}.D{d_num}",
+            details={
+                "id": f"{canonicalize_chart_id(chart_id)}.D{d_num}",
+            },
+        )
+    try:
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "io",
+            "decision_invalid_json",
+            f"Decision sidecar invalid JSON: {json_path} ({e})",
+            details={"path": str(json_path)},
+        ) from e
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "decision_unreadable",
+            f"Decision sidecar unreadable: {json_path} ({e})",
+            details={"path": str(json_path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "io",
+            "decision_invalid_json",
+            f"Decision sidecar must be a JSON object: {json_path}",
+            details={"path": str(json_path)},
+        )
+    if compact:
+        return compact_decision_entry(data)
+    return data
+
+
+def _next_decision_number(chart_data: dict) -> int:
+    """Next sequential D-number (max existing + 1); never reuse gaps."""
+    max_n = 0
+    for d in chart_data.get("decisions") or []:
+        if not isinstance(d, dict):
+            continue
+        did = d.get("id")
+        if isinstance(did, str):
+            try:
+                max_n = max(max_n, decision_local_number(did))
+            except ChartError:
+                pass
+        n = d.get("n")
+        if isinstance(n, int):
+            max_n = max(max_n, n)
+    return max_n + 1
+
+
+def _find_decision_entry(chart_data: dict, did: str) -> tuple[int, dict]:
+    decisions = chart_data.get("decisions") or []
+    for i, d in enumerate(decisions):
+        if isinstance(d, dict) and d.get("id") == did:
+            return i, d
+    raise ChartError(
+        "not_found",
+        "decision_not_found",
+        f"Decision not found: {did}",
+        details={"id": did},
+    )
+
+
+def _sidecar_json(data: dict) -> str:
+    return json.dumps(data, indent=2, sort_keys=True) + "\n"
+
+
+def _chart_md_with_parked(chart_id: str, title: str, outcome: str, parked: list) -> str:
+    body = chart_body_text(chart_id, title, outcome)
+    return _replace_chart_section(
+        body, "Open Questions", _render_open_questions_section(parked)
+    )
+
+
+def _apply_parked_to_chart_body(md_text: str, parked: list) -> str:
+    return _replace_chart_section(
+        md_text, "Open Questions", _render_open_questions_section(parked)
+    )
+
+
+def _parse_iso_ts(raw: Optional[str]) -> Optional[datetime]:
+    if not raw or not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _claim_age_hours(claimed_at: Optional[str]) -> Optional[float]:
+    ts = _parse_iso_ts(claimed_at)
+    if ts is None:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    return max(0.0, (now - ts).total_seconds() / 3600.0)
+
+
+def parse_initial_map_file(path: Path) -> dict:
+    """Load and lightly shape an initial-map JSON file."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "initial_map_unreadable",
+            f"Cannot read initial-map file: {path} ({e})",
+            details={"path": str(path)},
+        ) from e
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "validation",
+            "initial_map_invalid_json",
+            f"Initial-map file is not valid JSON: {e}",
+            details={"path": str(path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "validation",
+            "initial_map_invalid",
+            "Initial-map file must be a JSON object",
+            details={"path": str(path)},
+        )
+    decisions = data.get("decisions")
+    if decisions is None:
+        decisions = []
+    if not isinstance(decisions, list):
+        raise ChartError(
+            "validation",
+            "initial_map_invalid_decisions",
+            "initial-map 'decisions' must be a list",
+        )
+    parked = data.get("parked_questions")
+    if parked is None:
+        parked = data.get("parked") or []
+    if not isinstance(parked, list):
+        raise ChartError(
+            "validation",
+            "initial_map_invalid_parked",
+            "initial-map 'parked_questions' must be a list",
+        )
+    return {"decisions": decisions, "parked_questions": parked}
+
+
+def validate_and_build_initial_map(
+    chart_id: str,
+    map_data: dict,
+    *,
+    force_size: bool = False,
+    force_reason: Optional[str] = None,
+) -> dict:
+    """Validate titled decisions/attendance/edges/parked; enforce ceiling.
+
+    Returns a ready-to-persist structure. Refuses over maxDecisions before
+    allocation when force_size is false.
+    """
+    raw_decs = map_data.get("decisions") or []
+    raw_parked = map_data.get("parked_questions") or []
+    ceiling = get_chart_max_decisions()
+    count = len(raw_decs)
+    if count > ceiling and not force_size:
+        raise ChartError(
+            "validation",
+            "max_decisions_exceeded",
+            f"Initial map has {count} decisions; chart.maxDecisions is {ceiling}. "
+            "Narrow the Outcome, split into two charts, or pass "
+            "--force-size --reason after explicit consent.",
+            details={
+                "count": count,
+                "ceiling": ceiling,
+                "maxDecisions": ceiling,
+            },
+        )
+    if count > ceiling and force_size:
+        if not force_reason or not str(force_reason).strip():
+            raise ChartError(
+                "validation",
+                "force_size_reason_required",
+                "--force-size requires --reason",
+                details={"count": count, "ceiling": ceiling},
+            )
+
+    # First pass: allocate provisional D-IDs in file order and derive attendance.
+    local_map: dict[str, str] = {}
+    built: list[dict] = []
+    for i, raw in enumerate(raw_decs, start=1):
+        if not isinstance(raw, dict):
+            raise ChartError(
+                "validation",
+                "invalid_initial_decision",
+                f"Initial decision #{i} must be an object",
+                details={"index": i},
+            )
+        title = (raw.get("title") or "").strip()
+        if not title:
+            raise ChartError(
+                "validation",
+                "title_required",
+                f"Initial decision #{i} requires a title",
+                details={"index": i},
+            )
+        dtype = (raw.get("type") or "").strip().lower()
+        attendance = derive_decision_attendance(dtype, raw.get("attendance"))
+        question = (
+            raw.get("question")
+            or raw.get("body")
+            or title
+        )
+        question = str(question).strip()
+        did = f"{chart_id}.D{i}"
+        local_map[str(i)] = did
+        local_map[f"d{i}"] = did
+        local_map[did.lower()] = did
+        # Optional explicit local id in the map file.
+        if raw.get("id"):
+            local_map[str(raw["id"]).strip().lower()] = did
+        built.append(
+            {
+                "n": i,
+                "id": did,
+                "title": title,
+                "type": dtype,
+                "attendance": attendance,
+                "question": question,
+                "raw_blocked_by": raw.get("blocked_by") or [],
+                "raw_depends_on": raw.get("depends_on") or [],
+            }
+        )
+
+    # Second pass: resolve edges against the local map, then validate graph.
+    decisions_for_graph: list[dict] = []
+    for b in built:
+        blocked = _normalize_edge_refs(
+            list(b["raw_blocked_by"]),
+            chart_id,
+            field_name="blocked_by",
+            local_map=local_map,
+        )
+        depends = _normalize_edge_refs(
+            list(b["raw_depends_on"]),
+            chart_id,
+            field_name="depends_on",
+            local_map=local_map,
+        )
+        decisions_for_graph.append(
+            {
+                "id": b["id"],
+                "title": b["title"],
+                "type": b["type"],
+                "attendance": b["attendance"],
+                "status": "open",
+                "blocked_by": blocked,
+                "depends_on": depends,
+                "n": b["n"],
+                "question": b["question"],
+                "claimed_by": None,
+                "claimed_at": None,
+                "record_path": decision_record_link(chart_id, b["n"]),
+            }
+        )
+    validate_chart_graph(decisions_for_graph, chart_id=chart_id)
+
+    parked_out: list[dict] = []
+    seen_keys: set[str] = set()
+    for raw_q in raw_parked:
+        if isinstance(raw_q, dict):
+            body = raw_q.get("body") or raw_q.get("question") or ""
+        else:
+            body = str(raw_q)
+        body_norm = normalize_parked_question_body(body)
+        if not body_norm:
+            raise ChartError(
+                "validation",
+                "empty_parked_question",
+                "Parked question body must be non-empty",
+            )
+        key = parked_question_key(body_norm)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        parked_out.append(
+            {
+                "key": key,
+                "body": body_norm,
+                "created": now_iso(),
+            }
+        )
+
+    cost = chart_cost_estimate(decisions_for_graph)
+    force_audit = None
+    if count > ceiling and force_size:
+        force_audit = {
+            "actor": get_actor(),
+            "ceiling": ceiling,
+            "count": count,
+            "timestamp": now_iso(),
+            "reason": str(force_reason).strip(),
+        }
+    return {
+        "decisions": decisions_for_graph,
+        "parked_questions": parked_out,
+        "cost": cost,
+        "force_size_audit": force_audit,
+        "ceiling": ceiling,
+    }
+
+
+def create_chart_pair(
+    flow_dir: Path,
+    chart_id: str,
+    title: str,
+    outcome: str,
+    *,
+    initial: Optional[dict] = None,
+) -> dict:
+    """Allocate-time publication of a new chart md/json pair.
+
+    Caller must hold the shared native-fn allocation lock and the charts
+    resource lock, and must have already run recovery. Optional `initial` is
+    the output of validate_and_build_initial_map (decisions + parked + audit).
+    """
+    chart_id = canonicalize_chart_id(chart_id)
+    md_path, json_path = chart_pair_paths(flow_dir, chart_id)
+    if md_path.exists() or json_path.exists():
+        raise ChartError(
+            "conflict",
+            "chart_exists",
+            f"Refusing to overwrite existing chart {chart_id}",
+            details={"id": chart_id},
+        )
+    data = chart_sidecar_data(chart_id, title, outcome)
+    parked: list[dict] = []
+    mutations: list[tuple[str, str, str]] = []
+    if initial:
+        parked = list(initial.get("parked_questions") or [])
+        data["parked_questions"] = parked
+        compact_decs: list[dict] = []
+        for d in initial.get("decisions") or []:
+            d_num = int(d["n"])
+            full = decision_sidecar_data(
+                chart_id,
+                d_num,
+                d["title"],
+                d["type"],
+                d["attendance"],
+                d.get("question") or d["title"],
+                blocked_by=d.get("blocked_by"),
+                depends_on=d.get("depends_on"),
+            )
+            compact_decs.append(compact_decision_entry(full))
+            md_rel, json_rel = decision_record_relpaths(chart_id, d_num)
+            mutations.append(
+                (md_rel, "create", decision_body_text(full["question"]))
+            )
+            mutations.append((json_rel, "create", _sidecar_json(full)))
+        data["decisions"] = compact_decs
+        if initial.get("force_size_audit"):
+            data["force_size_audit"] = initial["force_size_audit"]
+    md_content = _chart_md_with_parked(chart_id, title, outcome, parked)
+    mutations = [
+        (f"{chart_id}.json", "create", _sidecar_json(data)),
+        (f"{chart_id}.md", "create", md_content),
+        *mutations,
+    ]
+    run_chart_transaction(flow_dir, "chart.create", mutations)
+    return data
+
+
+def add_chart_decision(
+    flow_dir: Path,
+    chart_id: str,
+    title: str,
+    dtype: str,
+    *,
+    attendance: Optional[str] = None,
+    question: str = "",
+    blocked_by: Optional[list[str]] = None,
+    depends_on: Optional[list[str]] = None,
+) -> dict:
+    """Allocate next D-ID and publish decision + chart sidecar update."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    if chart.get("status") not in (None, "open"):
+        raise ChartError(
+            "invalid_state",
+            "chart_not_open",
+            f"Chart {chart_id} is {chart.get('status')}; cannot add decisions",
+            details={"id": chart_id, "status": chart.get("status")},
+        )
+    att = derive_decision_attendance(dtype, attendance)
+    title = (title or "").strip()
+    if not title:
+        raise ChartError(
+            "validation",
+            "title_required",
+            "add-decision requires --title",
+        )
+    question = (question or title).strip()
+    d_num = _next_decision_number(chart)
+    blocked = list(blocked_by or [])
+    depends = list(depends_on or [])
+    # Canonicalize edges against this chart.
+    blocked = [
+        canonicalize_decision_id(e, chart_id=chart_id) for e in blocked
+    ]
+    depends = [
+        canonicalize_decision_id(e, chart_id=chart_id) for e in depends
+    ]
+    full = decision_sidecar_data(
+        chart_id,
+        d_num,
+        title,
+        dtype.strip().lower(),
+        att,
+        question,
+        blocked_by=blocked,
+        depends_on=depends,
+    )
+    new_entry = compact_decision_entry(full)
+    proposed = list(chart.get("decisions") or []) + [new_entry]
+    validate_chart_graph(proposed, chart_id=chart_id)
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    # Chart body unchanged on add (ledger is resolution-only); still update
+    # sidecar under the transaction with decision files.
+    md_rel, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (md_rel, "create", decision_body_text(question)),
+        (json_rel, "create", _sidecar_json(full)),
+    ]
+    # Touch chart.md only if present so recovery stays paired; no content change.
+    if md_path.is_file():
+        mutations.insert(
+            1,
+            (
+                f"{chart_id}.md",
+                "update",
+                md_path.read_text(encoding="utf-8"),
+            ),
+        )
+    run_chart_transaction(flow_dir, "chart.add-decision", mutations)
+    return full
+
+
+def park_chart_question(flow_dir: Path, chart_id: str, body: str) -> dict:
+    """Add a normalized parked question; identical key is a no-op."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.park-question")
+    body_norm = normalize_parked_question_body(body)
+    key = parked_question_key(body_norm)
+    parked = list(chart.get("parked_questions") or [])
+    for entry in parked:
+        if isinstance(entry, dict) and entry.get("key") == key:
+            return {
+                "key": key,
+                "body": entry.get("body") or body_norm,
+                "created": entry.get("created"),
+                "noop": True,
+            }
+    entry = {"key": key, "body": body_norm, "created": now_iso()}
+    parked.append(entry)
+    chart = dict(chart)
+    chart["parked_questions"] = parked
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if not md_path.is_file():
+        raise ChartError(
+            "io",
+            "chart_body_missing",
+            f"Chart body missing for {chart_id}",
+            details={"id": chart_id},
+        )
+    new_md = _apply_parked_to_chart_body(
+        md_path.read_text(encoding="utf-8"), parked
+    )
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (f"{chart_id}.md", "update", new_md),
+    ]
+    run_chart_transaction(flow_dir, "chart.park-question", mutations)
+    return {"key": key, "body": body_norm, "created": entry["created"], "noop": False}
+
+
+def remove_chart_question(
+    flow_dir: Path, chart_id: str, question_key: str
+) -> dict:
+    """Remove a parked question by stable key; fails if absent."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.remove-question")
+    key = (question_key or "").strip()
+    if not key:
+        raise ChartError(
+            "validation",
+            "question_key_required",
+            "remove-question requires --question <key>",
+        )
+    parked = list(chart.get("parked_questions") or [])
+    new_parked = [
+        e
+        for e in parked
+        if not (isinstance(e, dict) and e.get("key") == key)
+    ]
+    if len(new_parked) == len(parked):
+        raise ChartError(
+            "not_found",
+            "parked_question_not_found",
+            f"Parked question key not found: {key}",
+            details={"key": key, "chart_id": chart_id},
+        )
+    removed = next(
+        e for e in parked if isinstance(e, dict) and e.get("key") == key
+    )
+    chart = dict(chart)
+    chart["parked_questions"] = new_parked
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if not md_path.is_file():
+        raise ChartError(
+            "io",
+            "chart_body_missing",
+            f"Chart body missing for {chart_id}",
+            details={"id": chart_id},
+        )
+    new_md = _apply_parked_to_chart_body(
+        md_path.read_text(encoding="utf-8"), new_parked
+    )
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (f"{chart_id}.md", "update", new_md),
+    ]
+    run_chart_transaction(flow_dir, "chart.remove-question", mutations)
+    return {
+        "key": key,
+        "body": removed.get("body"),
+        "removed": True,
+    }
+
+
+def wire_chart_decision(
+    flow_dir: Path,
+    did: str,
+    *,
+    blocked_by: Optional[list[str]] = None,
+    depends_on: Optional[list[str]] = None,
+    replace_blocked: bool = False,
+    replace_depends: bool = False,
+) -> dict:
+    """Atomically replace validated graph edges for one decision."""
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.wire-decision")
+    idx, entry = _find_decision_entry(chart, did)
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    new_blocked = (
+        list(blocked_by)
+        if replace_blocked
+        else list(entry.get("blocked_by") or full.get("blocked_by") or [])
+    )
+    new_depends = (
+        list(depends_on)
+        if replace_depends
+        else list(entry.get("depends_on") or full.get("depends_on") or [])
+    )
+    new_blocked = [
+        canonicalize_decision_id(e, chart_id=chart_id) for e in new_blocked
+    ]
+    new_depends = [
+        canonicalize_decision_id(e, chart_id=chart_id) for e in new_depends
+    ]
+    proposed = [dict(d) if isinstance(d, dict) else d for d in (chart.get("decisions") or [])]
+    proposed[idx] = dict(proposed[idx])
+    proposed[idx]["blocked_by"] = new_blocked
+    proposed[idx]["depends_on"] = new_depends
+    validate_chart_graph(proposed, chart_id=chart_id)
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    full = dict(full)
+    full["blocked_by"] = new_blocked
+    full["depends_on"] = new_depends
+    full["updated_at"] = now_iso()
+    md_rel, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.wire-decision", mutations)
+    return compact_decision_entry(full)
+
+
+def claim_chart_decision(flow_dir: Path, did: str) -> dict:
+    """Atomic claim; does not change decision status. Conflicts if owned."""
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.claim")
+    idx, entry = _find_decision_entry(chart, did)
+    if entry.get("status") != "open":
+        raise ChartError(
+            "invalid_state",
+            "decision_not_open",
+            f"Cannot claim {did}: status is {entry.get('status')}",
+            details={"id": did, "status": entry.get("status")},
+        )
+    actor = get_actor()
+    existing = entry.get("claimed_by")
+    if existing and existing != actor:
+        raise ChartError(
+            "conflict",
+            "claim_conflict",
+            f"Decision {did} is claimed by '{existing}'",
+            details={
+                "id": did,
+                "claimed_by": existing,
+                "claimed_at": entry.get("claimed_at"),
+                "actor": actor,
+            },
+        )
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    ts = entry.get("claimed_at") or now_iso()
+    if not existing:
+        ts = now_iso()
+    # Claiming never changes status.
+    entry = dict(entry)
+    entry["claimed_by"] = actor
+    entry["claimed_at"] = ts
+    proposed = list(chart.get("decisions") or [])
+    proposed[idx] = entry
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    full = dict(full)
+    full["claimed_by"] = actor
+    full["claimed_at"] = ts
+    full["updated_at"] = now_iso()
+    # status deliberately untouched
+    status_before = full.get("status")
+    _, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.claim", mutations)
+    return {
+        "id": did,
+        "title": entry.get("title"),
+        "status": status_before,
+        "claimed_by": actor,
+        "claimed_at": ts,
+        "record_path": entry.get("record_path")
+        or decision_record_link(chart_id, d_num),
+        "noop": bool(existing),
+    }
+
+
+def release_chart_claim(
+    flow_dir: Path,
+    did: str,
+    *,
+    break_stale: bool = False,
+    reason: Optional[str] = None,
+) -> dict:
+    """Owner release, or age-gated audited stale break."""
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    idx, entry = _find_decision_entry(chart, did)
+    actor = get_actor()
+    existing = entry.get("claimed_by")
+    if not existing:
+        raise ChartError(
+            "invalid_state",
+            "not_claimed",
+            f"Decision {did} is not claimed",
+            details={"id": did},
+        )
+    age = _claim_age_hours(entry.get("claimed_at"))
+    audit = None
+    if existing != actor:
+        if not break_stale:
+            raise ChartError(
+                "conflict",
+                "claim_conflict",
+                f"Decision {did} is claimed by '{existing}'; "
+                "owner may release, or use --break-stale --reason after "
+                "chart.claimStaleAfter",
+                details={
+                    "id": did,
+                    "claimed_by": existing,
+                    "claimed_at": entry.get("claimed_at"),
+                    "actor": actor,
+                    "age_hours": age,
+                },
+            )
+        if not reason or not str(reason).strip():
+            raise ChartError(
+                "validation",
+                "break_stale_reason_required",
+                "--break-stale requires --reason",
+                details={"id": did},
+            )
+        threshold = get_chart_claim_stale_after_hours()
+        if age is None or age < threshold:
+            raise ChartError(
+                "stale_claim",
+                "claim_not_stale",
+                f"Claim on {did} is not stale yet "
+                f"(age_hours={age}, claimStaleAfter={threshold})",
+                details={
+                    "id": did,
+                    "claimed_by": existing,
+                    "claimed_at": entry.get("claimed_at"),
+                    "age_hours": age,
+                    "threshold_hours": threshold,
+                    "actor": actor,
+                },
+            )
+        audit = {
+            "actor": actor,
+            "prior_owner": existing,
+            "age_hours": age,
+            "reason": str(reason).strip(),
+            "timestamp": now_iso(),
+            "decision": did,
+            "kind": "break_stale",
+        }
+    elif break_stale:
+        # Owner releasing with break-stale is fine; still require reason if set.
+        if reason and str(reason).strip():
+            audit = {
+                "actor": actor,
+                "prior_owner": existing,
+                "age_hours": age,
+                "reason": str(reason).strip(),
+                "timestamp": now_iso(),
+                "decision": did,
+                "kind": "owner_release",
+            }
+
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    prior_owner = existing
+    prior_at = entry.get("claimed_at")
+    entry = dict(entry)
+    entry["claimed_by"] = None
+    entry["claimed_at"] = None
+    proposed = list(chart.get("decisions") or [])
+    proposed[idx] = entry
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    events = list(chart.get("claim_events") or [])
+    if audit:
+        events.append(audit)
+        chart["claim_events"] = events
+    full = dict(full)
+    note = None
+    if audit:
+        note = (
+            f"claim released ({audit['kind']}): actor={audit['actor']} "
+            f"prior={audit['prior_owner']} age_hours={audit.get('age_hours')} "
+            f"reason={audit['reason']}"
+        )
+        notes = list(full.get("transition_notes") or [])
+        notes.append(
+            {
+                "at": audit["timestamp"],
+                "kind": audit["kind"],
+                "text": note,
+                "actor": audit["actor"],
+                "prior_owner": audit["prior_owner"],
+                "age_hours": audit.get("age_hours"),
+                "reason": audit["reason"],
+            }
+        )
+        full["transition_notes"] = notes
+        full["claim_note"] = note
+    else:
+        note = f"claim released by owner {actor}"
+        notes = list(full.get("transition_notes") or [])
+        notes.append(
+            {
+                "at": now_iso(),
+                "kind": "owner_release",
+                "text": note,
+                "actor": actor,
+                "prior_owner": prior_owner,
+            }
+        )
+        full["transition_notes"] = notes
+        full["claim_note"] = note
+    full["claimed_by"] = None
+    full["claimed_at"] = None
+    full["updated_at"] = now_iso()
+    # status deliberately untouched
+    status_after = full.get("status")
+    _, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.release-claim", mutations)
+    return {
+        "id": did,
+        "title": entry.get("title"),
+        "status": status_after,
+        "released": True,
+        "prior_owner": prior_owner,
+        "prior_claimed_at": prior_at,
+        "actor": actor,
+        "audit": audit,
+        "record_path": entry.get("record_path")
+        or decision_record_link(chart_id, d_num),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Chart resolution, assets, supersession, scope, abandon (fn-135.2)
+# ---------------------------------------------------------------------------
+
+# Asset kinds accepted by attach-asset / resolve --assets.
+CHART_ASSET_KINDS = frozenset(
+    {"path", "git_ref", "branch", "commit", "url", "https"}
+)
+# Safe gist length for the compact ## Decisions ledger line.
+CHART_LEDGER_GIST_MAX = 120
+# Ledger comment preserved under ## Decisions.
+_CHART_LEDGER_COMMENT = (
+    "<!-- the ledger: one line per resolved decision, append-only, "
+    "D-IDs never reused -->"
+)
+
+# Obvious secret shapes. Patterns use FAKE-safe test fixtures (sk-FAKE...,
+# AKIA...EXAMPLE). Never embed real credentials in source or fixtures.
+_CHART_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)\bsk-[A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"(?i)\b(password|passwd|pwd)\s*[=:]\s*\S+"),
+    re.compile(r"(?i)\b(api[_-]?key|secret[_-]?key|access[_-]?token)\s*[=:]\s*\S+"),
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._\-]{20,}\b"),
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(r"(?i)\bghp_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"(?i)\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
+)
+# Literal destructive shell shapes that repo guards match on sight.
+_CHART_DESTRUCTIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\brm\s+-[A-Za-z]*[rf][A-Za-z]*\b"),
+    re.compile(r"\bgit\s+clean\b"),
+    re.compile(r"\bgit\s+reset\s+--hard\b"),
+    re.compile(r"\bdd\s+if="),
+    re.compile(r"\bmkfs\."),
+    re.compile(r">\s*/dev/sd[a-z]"),
+)
+
+
+def _require_chart_mutable(chart: dict, *, command: str = "chart") -> None:
+    """Refuse mutations on done/abandoned charts (use chart reopen --reason)."""
+    status = chart.get("status") or "open"
+    if status == "open":
+        return
+    chart_id = chart.get("id") or "?"
+    raise ChartError(
+        "invalid_state",
+        "chart_not_open",
+        f"Chart {chart_id} is {status}; mutations require status open "
+        "(use chart reopen --reason)",
+        details={"id": chart_id, "status": status, "command": command},
+    )
+
+
+def answer_gist(answer: str, *, max_len: int = CHART_LEDGER_GIST_MAX) -> str:
+    """One-line gist for the compact ledger (never the full answer)."""
+    text = (answer or "").strip()
+    if not text:
+        return "(empty)"
+    first = text.splitlines()[0].strip()
+    first = re.sub(r"\s+", " ", first)
+    if len(first) > max_len:
+        # Reserve 3 chars for the ellipsis so total length <= max_len.
+        cut = max(1, max_len - 3)
+        return first[:cut].rstrip() + "..."
+    return first
+
+
+def scan_unsafe_evidence(text: str) -> list[dict]:
+    """Return structured hits for secret/destructive content that must not embed.
+
+    Never rewrites the source. Callers refuse and require a safe redacted
+    summary plus an approved evidence reference.
+    """
+    if not text:
+        return []
+    hits: list[dict] = []
+    for pat in _CHART_SECRET_PATTERNS:
+        m = pat.search(text)
+        if m:
+            hits.append(
+                {
+                    "kind": "secret",
+                    "pattern": pat.pattern,
+                    "span": [m.start(), m.end()],
+                }
+            )
+    for pat in _CHART_DESTRUCTIVE_PATTERNS:
+        m = pat.search(text)
+        if m:
+            hits.append(
+                {
+                    "kind": "destructive_command",
+                    "pattern": pat.pattern,
+                    "span": [m.start(), m.end()],
+                }
+            )
+    return hits
+
+
+def refuse_if_unsafe_answer(answer: str) -> None:
+    """Raise ChartError(validation) when answer would embed unsafe content."""
+    hits = scan_unsafe_evidence(answer or "")
+    if not hits:
+        return
+    kinds = sorted({h["kind"] for h in hits})
+    raise ChartError(
+        "validation",
+        "unsafe_answer_content",
+        "Answer content contains obvious secret or destructive-command shapes "
+        "and must not be embedded. Supply a safe redacted summary as the "
+        "answer body and an approved evidence reference (attach-asset / "
+        "--assets); never silently strip bytes from the source.",
+        details={"kinds": kinds, "hit_count": len(hits)},
+    )
+
+
+def _git_check_ignored(repo_root: Path, relpath: str) -> bool:
+    """True when git considers relpath ignored (or check fails closed for missing)."""
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(repo_root), "check-ignore", "-q", "--", relpath],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        return r.returncode == 0
+    except OSError:
+        return False
+
+
+def _normalize_asset_dict(raw: Any, *, repo_root: Optional[Path] = None) -> dict:
+    """Validate and normalize one asset reference to a safe structured entry."""
+    if not isinstance(raw, dict):
+        raise ChartError(
+            "validation",
+            "invalid_asset",
+            "Asset must be a JSON object with kind/reference/display",
+        )
+    kind = str(raw.get("kind") or "").strip().lower()
+    if kind == "https":
+        kind = "url"
+    if kind not in CHART_ASSET_KINDS:
+        raise ChartError(
+            "validation",
+            "invalid_asset_kind",
+            f"Invalid asset kind '{raw.get('kind')}' "
+            f"(expected path|git_ref|branch|commit|url)",
+            details={"kind": raw.get("kind")},
+        )
+    reference = str(raw.get("reference") or raw.get("ref") or "").strip()
+    if not reference:
+        raise ChartError(
+            "validation",
+            "asset_reference_required",
+            "Asset requires a non-empty reference",
+            details={"kind": kind},
+        )
+    display = str(
+        raw.get("display") or raw.get("summary") or raw.get("display_summary") or ""
+    ).strip()
+    if not display:
+        display = reference if len(reference) <= 80 else reference[:77] + "..."
+    revision = raw.get("revision") or raw.get("fingerprint") or raw.get("sha")
+    if revision is not None:
+        revision = str(revision).strip() or None
+    fingerprint = raw.get("fingerprint")
+    if fingerprint is not None:
+        fingerprint = str(fingerprint).strip() or None
+    if revision is None and fingerprint is not None:
+        revision = fingerprint
+
+    if kind == "path":
+        _validate_asset_path(reference, repo_root=repo_root)
+    elif kind == "url":
+        _validate_asset_url(reference)
+    elif kind in ("git_ref", "branch", "commit"):
+        _validate_git_ref_shape(reference, kind=kind)
+
+    refuse_if_unsafe_answer(f"{display}\n{reference}")
+
+    out: dict[str, Any] = {
+        "kind": kind,
+        "reference": reference,
+        "display": display,
+    }
+    if revision:
+        out["revision"] = revision
+    if fingerprint and fingerprint != revision:
+        out["fingerprint"] = fingerprint
+    return out
+
+
+def _validate_asset_path(reference: str, *, repo_root: Optional[Path] = None) -> None:
+    """Accept repo-relative paths; reject abs, escapes, missing, ignored, symlinks."""
+    if not reference or reference.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", reference):
+        raise ChartError(
+            "validation",
+            "asset_path_outside_repo",
+            f"Asset path must be repository-relative: {reference}",
+            details={"reference": reference},
+        )
+    if "\\" in reference:
+        raise ChartError(
+            "validation",
+            "asset_path_invalid",
+            f"Asset path must use forward slashes: {reference}",
+            details={"reference": reference},
+        )
+    # Normalize without resolving yet.
+    parts = Path(reference).parts
+    if ".." in parts or reference.startswith("./../"):
+        # Allow only if final resolved stays in repo - still reject explicit ..
+        # for clarity (symlink escape covered below).
+        pass
+    root = repo_root
+    if root is None:
+        try:
+            root = get_repo_root()
+        except Exception:
+            root = Path.cwd()
+    root = root.resolve()
+    candidate = (root / reference).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as e:
+        raise ChartError(
+            "validation",
+            "asset_path_outside_repo",
+            f"Asset path escapes repository: {reference}",
+            details={"reference": reference},
+        ) from e
+    # Symlink escape: any path component that is a symlink outside.
+    probe = root
+    for part in Path(reference).parts:
+        probe = probe / part
+        if probe.is_symlink():
+            target = probe.resolve()
+            try:
+                target.relative_to(root)
+            except ValueError as e:
+                raise ChartError(
+                    "validation",
+                    "asset_path_symlink_escape",
+                    f"Asset path symlink escapes repository: {reference}",
+                    details={"reference": reference},
+                ) from e
+    if not candidate.exists():
+        raise ChartError(
+            "validation",
+            "asset_path_missing",
+            f"Asset path does not exist: {reference}",
+            details={"reference": reference},
+        )
+    # Prefer the unresolved path for ignore check (git wants repo-relative).
+    rel = str(Path(*Path(reference).parts))
+    if _git_check_ignored(root, rel):
+        raise ChartError(
+            "validation",
+            "asset_path_ignored",
+            f"Asset path is gitignored: {reference}",
+            details={"reference": reference},
+        )
+
+
+def _validate_asset_url(reference: str) -> None:
+    """Approved HTTPS only; reject credentials, non-https, and redirect-as-id."""
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(reference)
+    except Exception as e:
+        raise ChartError(
+            "validation",
+            "asset_url_invalid",
+            f"Invalid asset URL: {reference}",
+            details={"reference": reference},
+        ) from e
+    if parsed.scheme.lower() != "https":
+        raise ChartError(
+            "validation",
+            "asset_url_not_https",
+            f"Asset URL must be https: {reference}",
+            details={"reference": reference},
+        )
+    if parsed.username or parsed.password:
+        raise ChartError(
+            "validation",
+            "asset_url_credentials",
+            "Asset URL must not carry credentials",
+            details={"reference": reference},
+        )
+    if "@" in (parsed.netloc or "") and parsed.username is None:
+        # user:pass@host form sometimes lands only in netloc.
+        raise ChartError(
+            "validation",
+            "asset_url_credentials",
+            "Asset URL must not carry credentials",
+            details={"reference": reference},
+        )
+    if not parsed.netloc:
+        raise ChartError(
+            "validation",
+            "asset_url_invalid",
+            f"Invalid asset URL host: {reference}",
+            details={"reference": reference},
+        )
+
+
+def _validate_git_ref_shape(reference: str, *, kind: str) -> None:
+    """Lightweight shape check for branch/commit/git_ref (no network)."""
+    if not reference or any(c.isspace() for c in reference):
+        raise ChartError(
+            "validation",
+            "invalid_git_ref",
+            f"Invalid {kind} reference: {reference!r}",
+            details={"kind": kind, "reference": reference},
+        )
+    if kind == "commit":
+        if not re.fullmatch(r"[0-9a-fA-F]{7,40}", reference):
+            raise ChartError(
+                "validation",
+                "invalid_commit_sha",
+                f"Commit reference must be a hex sha (7-40): {reference}",
+                details={"reference": reference},
+            )
+    if ".." in reference or reference.startswith("-"):
+        raise ChartError(
+            "validation",
+            "invalid_git_ref",
+            f"Invalid {kind} reference: {reference}",
+            details={"kind": kind, "reference": reference},
+        )
+
+
+def _asset_identity_key(asset: dict) -> tuple:
+    """Identity for idempotent attach: kind + reference + revision/fingerprint."""
+    return (
+        asset.get("kind"),
+        asset.get("reference"),
+        asset.get("revision") or asset.get("fingerprint") or "",
+    )
+
+
+def _assets_equivalent(a: dict, b: dict) -> bool:
+    """True when two assets are identical for idempotent retry."""
+    keys = ("kind", "reference", "display", "revision", "fingerprint")
+    for k in keys:
+        if (a.get(k) or None) != (b.get(k) or None):
+            return False
+    return True
+
+
+def _find_matching_asset(assets: list, candidate: dict) -> Optional[dict]:
+    """Return existing asset with same identity key, if any."""
+    key = _asset_identity_key(candidate)
+    for existing in assets:
+        if isinstance(existing, dict) and _asset_identity_key(existing) == key:
+            return existing
+    return None
+
+
+def _parse_assets_json(raw: Any, *, repo_root: Optional[Path] = None) -> list[dict]:
+    """Parse --assets json (list or {assets:[...]}) into normalized assets."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError as e:
+            raise ChartError(
+                "validation",
+                "assets_invalid_json",
+                f"--assets is not valid JSON: {e}",
+            ) from e
+    if isinstance(raw, dict) and "assets" in raw:
+        raw = raw["assets"]
+    if not isinstance(raw, list):
+        raise ChartError(
+            "validation",
+            "assets_not_list",
+            "--assets must be a JSON list of asset objects",
+        )
+    return [_normalize_asset_dict(item, repo_root=repo_root) for item in raw]
+
+
+def _render_ledger_line(
+    d_num: int,
+    gist: str,
+    link: str,
+    *,
+    superseded_by: Optional[str] = None,
+) -> str:
+    """One compact ledger bullet. Full answer never appears here."""
+    gist = re.sub(r"\s+", " ", (gist or "").strip()) or "(empty)"
+    # Bare local D-ID in ledger; record link carries chart path.
+    if superseded_by:
+        # Extract bare D form from full or bare id.
+        sup = superseded_by
+        m = re.search(r"D([1-9][0-9]*)$", sup, re.IGNORECASE)
+        sup_label = f"D{m.group(1)}" if m else sup
+        return (
+            f"- ~~**D{d_num}:**~~ {gist} -- superseded by **{sup_label}** "
+            f"-- [record]({link})"
+        )
+    return f"- **D{d_num}:** {gist} -- [record]({link})"
+
+
+def _ledger_section_body(lines: list[str]) -> str:
+    body = _CHART_LEDGER_COMMENT + "\n"
+    if lines:
+        body += "\n" + "\n".join(lines) + "\n"
+    else:
+        body += "\n"
+    return body
+
+
+def _extract_ledger_lines(md_text: str) -> list[str]:
+    """Extract existing decision bullet lines from ## Decisions."""
+    pattern = re.compile(
+        r"(^##\s+Decisions\s*\n)(.*?)(?=^##\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    m = pattern.search(md_text)
+    if not m:
+        return []
+    section = m.group(2)
+    lines: list[str] = []
+    for line in section.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- ") and "**D" in stripped:
+            lines.append(stripped)
+    return lines
+
+
+def _ledger_line_d_num(line: str) -> Optional[int]:
+    m = re.search(r"\*\*D([1-9][0-9]*):\*\*", line)
+    if not m:
+        m = re.search(r"~~\*\*D([1-9][0-9]*):\*\*~~", line)
+    if not m:
+        return None
+    return int(m.group(1))
+
+
+def _apply_ledger_lines(md_text: str, lines: list[str]) -> str:
+    return _replace_chart_section(md_text, "Decisions", _ledger_section_body(lines))
+
+
+def _upsert_ledger_line(md_text: str, d_num: int, new_line: str) -> str:
+    lines = _extract_ledger_lines(md_text)
+    found = False
+    for i, line in enumerate(lines):
+        if _ledger_line_d_num(line) == d_num:
+            lines[i] = new_line
+            found = True
+            break
+    if not found:
+        lines.append(new_line)
+    # Stable order by D-number.
+    lines.sort(key=lambda ln: _ledger_line_d_num(ln) or 0)
+    return _apply_ledger_lines(md_text, lines)
+
+
+def _append_boundary_line(md_text: str, d_num: int, reason: str) -> str:
+    """Append one out-of-scope reason under ## Boundaries (no Decisions entry)."""
+    pattern = re.compile(
+        r"(^##\s+Boundaries\s*\n)(.*?)(?=^##\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    reason = re.sub(r"\s+", " ", (reason or "").strip())
+    bullet = f"- **D{d_num}:** out of scope - {reason}"
+    m = pattern.search(md_text)
+    if not m:
+        if not md_text.endswith("\n"):
+            md_text += "\n"
+        return md_text + f"\n## Boundaries\n{bullet}\n"
+    existing = m.group(2)
+    # Idempotent: if same D-num boundary already present with same text, keep.
+    lines = [ln for ln in existing.splitlines() if ln.strip()]
+    for ln in lines:
+        if ln.strip().startswith(f"- **D{d_num}:**"):
+            if ln.strip() == bullet:
+                return md_text
+            # Replace conflicting boundary line for this D-ID.
+            lines = [
+                bullet if x.strip().startswith(f"- **D{d_num}:**") else x
+                for x in lines
+            ]
+            content = "\n".join(lines) + "\n"
+            return pattern.sub(
+                lambda mm, c=content: mm.group(1) + c, md_text, count=1
+            )
+    lines.append(bullet)
+    content = "\n".join(lines) + "\n"
+    return pattern.sub(lambda mm: mm.group(1) + content, md_text, count=1)
+
+
+def _depends_on_reverse_index(decisions: list[dict]) -> dict[str, list[str]]:
+    """Map premise D-ID -> list of decision ids that depend_on it."""
+    rev: dict[str, list[str]] = {}
+    for d in decisions:
+        if not isinstance(d, dict) or not d.get("id"):
+            continue
+        for dep in d.get("depends_on") or []:
+            if not isinstance(dep, str):
+                continue
+            rev.setdefault(dep, []).append(d["id"])
+    return rev
+
+
+def _depends_on_closure(
+    seeds: list[str], decisions: list[dict]
+) -> list[str]:
+    """Direct + transitive dependents via depends_on (excludes seeds)."""
+    rev = _depends_on_reverse_index(decisions)
+    seen: set[str] = set()
+    order: list[str] = []
+    stack = list(seeds)
+    seed_set = set(seeds)
+    while stack:
+        node = stack.pop()
+        for dep in rev.get(node) or []:
+            if dep in seed_set or dep in seen:
+                continue
+            seen.add(dep)
+            order.append(dep)
+            stack.append(dep)
+    # Stable by local number.
+    order.sort(key=lambda did: decision_local_number(did))
+    return order
+
+
+def _transition_note(
+    kind: str,
+    text: str,
+    *,
+    actor: Optional[str] = None,
+    **extra: Any,
+) -> dict:
+    note: dict[str, Any] = {
+        "at": now_iso(),
+        "kind": kind,
+        "text": text,
+    }
+    if actor:
+        note["actor"] = actor
+    for k, v in extra.items():
+        if v is not None:
+            note[k] = v
+    return note
+
+
+def _load_all_decision_sidecars(
+    flow_dir: Path, chart_id: str, decisions: list[dict]
+) -> dict[str, dict]:
+    """Load full decision sidecars keyed by canonical id."""
+    out: dict[str, dict] = {}
+    for d in decisions:
+        if not isinstance(d, dict) or not d.get("id"):
+            continue
+        did = d["id"]
+        n = decision_local_number(did)
+        out[did] = load_decision_sidecar(flow_dir, chart_id, n)
+    return out
+
+
+def attach_chart_asset(
+    flow_dir: Path,
+    did: str,
+    asset_raw: Any,
+    *,
+    repo_root: Optional[Path] = None,
+) -> dict:
+    """Idempotently attach a safe asset while the decision remains open.
+
+    Identical retries are no-ops. Conflicting reuse of the same identity with
+    different display/metadata is conflict. Attach never writes an answer or
+    closes the D-ID.
+    """
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.attach-asset")
+    idx, entry = _find_decision_entry(chart, did)
+    if entry.get("status") != "open":
+        raise ChartError(
+            "invalid_state",
+            "decision_not_open",
+            f"Cannot attach-asset to {did}: status is {entry.get('status')}",
+            details={"id": did, "status": entry.get("status")},
+        )
+    if repo_root is None:
+        try:
+            repo_root = get_repo_root()
+        except Exception:
+            repo_root = flow_dir.parent
+    asset = _normalize_asset_dict(asset_raw, repo_root=repo_root)
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    assets = list(full.get("assets") or [])
+    existing = _find_matching_asset(assets, asset)
+    if existing is not None:
+        if _assets_equivalent(existing, asset):
+            return {
+                "id": did,
+                "asset": existing,
+                "assets": assets,
+                "status": full.get("status"),
+                "noop": True,
+                "record_path": full.get("record_path")
+                or decision_record_link(chart_id, d_num),
+            }
+        raise ChartError(
+            "conflict",
+            "asset_conflict",
+            f"Asset identity already attached to {did} with different metadata",
+            details={
+                "id": did,
+                "existing": existing,
+                "incoming": asset,
+            },
+        )
+    assets.append(asset)
+    full = dict(full)
+    full["assets"] = assets
+    full["updated_at"] = now_iso()
+    # Chart compact entry does not carry assets; leave chart.json unchanged
+    # except updated_at is not on chart for decisions. Touch decision only.
+    _, json_rel = decision_record_relpaths(chart_id, d_num)
+    # Still journal chart.json for recovery pairing when other ops expect it;
+    # content unchanged except we bump nothing - skip chart if no change.
+    mutations = [
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.attach-asset", mutations)
+    return {
+        "id": did,
+        "asset": asset,
+        "assets": assets,
+        "status": full.get("status"),
+        "noop": False,
+        "record_path": full.get("record_path")
+        or decision_record_link(chart_id, d_num),
+    }
+
+
+def _parse_sharpen_file(path: Path) -> dict:
+    """Load resolve --sharpen-file JSON: decisions + remove_questions keys."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "sharpen_file_unreadable",
+            f"Cannot read --sharpen-file: {path} ({e})",
+            details={"path": str(path)},
+        ) from e
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "validation",
+            "sharpen_file_invalid_json",
+            f"--sharpen-file is not valid JSON: {e}",
+            details={"path": str(path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "validation",
+            "sharpen_file_invalid",
+            "--sharpen-file must be a JSON object",
+            details={"path": str(path)},
+        )
+    decisions = data.get("decisions")
+    if decisions is None:
+        decisions = []
+    if not isinstance(decisions, list):
+        raise ChartError(
+            "validation",
+            "sharpen_file_invalid_decisions",
+            "sharpen-file 'decisions' must be a list",
+        )
+    remove_keys = (
+        data.get("remove_questions")
+        or data.get("remove_parked")
+        or data.get("parked_removals")
+        or []
+    )
+    if not isinstance(remove_keys, list):
+        raise ChartError(
+            "validation",
+            "sharpen_file_invalid_removals",
+            "sharpen-file remove_questions must be a list of keys",
+        )
+    remove_keys = [str(k).strip() for k in remove_keys if str(k).strip()]
+    return {"decisions": decisions, "remove_questions": remove_keys}
+
+
+def resolve_chart_decision(
+    flow_dir: Path,
+    did: str,
+    answer: str,
+    *,
+    assets_raw: Any = None,
+    sharpen: Optional[dict] = None,
+    supersedes: Optional[list[str]] = None,
+    keep_dependents: bool = False,
+    repo_root: Optional[Path] = None,
+) -> dict:
+    """Resolve a decision: write answer once, close, ledger gist, cascades.
+
+    Legal transitions: open -> resolved. Identical retry is idempotent;
+    conflicting retry is invalid_state. Prototype requires >=1 safe asset.
+    """
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.resolve")
+    idx, entry = _find_decision_entry(chart, did)
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    status = entry.get("status") or full.get("status") or "open"
+
+    # Claims are checked before any work: resolving a decision another actor
+    # holds is a conflict, never a silent bypass (cascade claim-clearing on
+    # dependents is the audited exception, not this path).
+    claimant = entry.get("claimed_by") or full.get("claimed_by")
+    if status == "open" and claimant and claimant != get_actor():
+        raise ChartError(
+            "conflict",
+            "claim_conflict",
+            f"Decision {did} is claimed by '{claimant}'; resolve requires the "
+            "claim owner (release-claim or --break-stale first)",
+            details={"id": did, "claimed_by": claimant, "actor": get_actor()},
+        )
+
+    answer_text = answer if answer is not None else ""
+    refuse_if_unsafe_answer(answer_text)
+    gist = answer_gist(answer_text)
+    if repo_root is None:
+        try:
+            repo_root = get_repo_root()
+        except Exception:
+            repo_root = flow_dir.parent
+    incoming_assets = _parse_assets_json(assets_raw, repo_root=repo_root)
+
+    # Idempotent identical retry on already-resolved.
+    if status == "resolved":
+        existing_answer = full.get("answer")
+        existing_gist = full.get("answer_gist") or answer_gist(
+            existing_answer if isinstance(existing_answer, str) else ""
+        )
+        same_answer = existing_answer == answer_text or (
+            isinstance(existing_answer, dict)
+            and existing_answer.get("text") == answer_text
+        )
+        if same_answer or (
+            isinstance(existing_answer, str) and existing_answer == answer_text
+        ):
+            # Also require matching supersedes set if provided.
+            existing_sup = list(full.get("supersedes") or [])
+            want_sup = [
+                canonicalize_decision_id(s, chart_id=chart_id)
+                for s in (supersedes or [])
+            ]
+            if sorted(existing_sup) == sorted(want_sup) or not want_sup:
+                return {
+                    "id": did,
+                    "status": "resolved",
+                    "answer_gist": existing_gist,
+                    "noop": True,
+                    "affected": [did],
+                    "record_path": full.get("record_path")
+                    or decision_record_link(chart_id, d_num),
+                    "ledger_line": None,
+                    "replacements": [],
+                    "sharpened": [],
+                    "removed_questions": [],
+                }
+        raise ChartError(
+            "invalid_state",
+            "decision_immutable",
+            f"Decision {did} is already resolved; answers are immutable "
+            "(identical retry is a no-op; conflicting retry is refused)",
+            details={
+                "id": did,
+                "status": status,
+                "existing_gist": existing_gist,
+            },
+        )
+    if status != "open":
+        raise ChartError(
+            "invalid_state",
+            "illegal_transition",
+            f"Cannot resolve {did}: legal transition is open->resolved "
+            f"(current status={status})",
+            details={"id": did, "status": status},
+        )
+
+    # Merge assets: existing + incoming; identity conflicts error.
+    assets = list(full.get("assets") or [])
+    for asset in incoming_assets:
+        existing = _find_matching_asset(assets, asset)
+        if existing is not None:
+            if not _assets_equivalent(existing, asset):
+                raise ChartError(
+                    "conflict",
+                    "asset_conflict",
+                    f"Asset identity already attached to {did} with different metadata",
+                    details={"id": did, "existing": existing, "incoming": asset},
+                )
+            continue
+        assets.append(asset)
+
+    dtype = (full.get("type") or entry.get("type") or "").strip().lower()
+    if dtype == "prototype" and not assets:
+        raise ChartError(
+            "validation",
+            "prototype_asset_required",
+            f"Prototype decision {did} cannot resolve without a persisted "
+            "safe artefact reference. attach-asset first, or pass --assets.",
+            details={"id": did, "type": "prototype"},
+        )
+
+    actor = get_actor()
+    ts = now_iso()
+    supersede_ids = [
+        canonicalize_decision_id(s, chart_id=chart_id)
+        for s in (supersedes or [])
+    ]
+    # Dedup while preserving order.
+    seen_sup: set[str] = set()
+    clean_sup: list[str] = []
+    for s in supersede_ids:
+        if s == did:
+            raise ChartError(
+                "invalid_graph",
+                "self_supersede",
+                f"Decision {did} cannot supersede itself",
+                details={"id": did},
+            )
+        if s not in seen_sup:
+            seen_sup.add(s)
+            clean_sup.append(s)
+    supersede_ids = clean_sup
+
+    # Working copies of chart decisions + full sidecars we will mutate.
+    chart_decs: list[dict] = [
+        dict(d) if isinstance(d, dict) else d
+        for d in (chart.get("decisions") or [])
+    ]
+    by_id: dict[str, dict] = {
+        d["id"]: d for d in chart_decs if isinstance(d, dict) and d.get("id")
+    }
+    full_by_id = _load_all_decision_sidecars(flow_dir, chart_id, chart_decs)
+
+    # Validate supersede targets exist and allow resolved->superseded or open->superseded.
+    for s in supersede_ids:
+        if s not in by_id:
+            raise ChartError(
+                "not_found",
+                "decision_not_found",
+                f"Supersede target not found: {s}",
+                details={"id": s},
+            )
+        st = by_id[s].get("status")
+        if st == "superseded":
+            # Idempotent if already superseded by this decision.
+            existing_by = (full_by_id.get(s) or {}).get("superseded_by")
+            if existing_by == did:
+                continue
+            raise ChartError(
+                "invalid_state",
+                "already_superseded",
+                f"Decision {s} is already superseded by {existing_by}",
+                details={"id": s, "superseded_by": existing_by},
+            )
+        if st not in ("open", "resolved"):
+            raise ChartError(
+                "invalid_state",
+                "illegal_transition",
+                f"Cannot supersede {s}: status is {st} "
+                "(legal: open|resolved -> superseded)",
+                details={"id": s, "status": st},
+            )
+
+    # --- Apply resolution to primary decision ---
+    primary = dict(full)
+    primary["status"] = "resolved"
+    primary["answer"] = answer_text
+    primary["answer_gist"] = gist
+    primary["assets"] = assets
+    primary["supersedes"] = list(supersede_ids)
+    primary["claimed_by"] = None
+    primary["claimed_at"] = None
+    primary["updated_at"] = ts
+    notes = list(primary.get("transition_notes") or [])
+    notes.append(
+        _transition_note(
+            "resolved",
+            f"resolved by {actor}",
+            actor=actor,
+            supersedes=list(supersede_ids),
+            keep_dependents=keep_dependents,
+        )
+    )
+    if keep_dependents and supersede_ids:
+        notes.append(
+            _transition_note(
+                "keep_dependents",
+                f"keep-dependents: cascade suppressed for supersession of "
+                f"{', '.join(supersede_ids)}",
+                actor=actor,
+                supersedes=list(supersede_ids),
+            )
+        )
+    primary["transition_notes"] = notes
+    full_by_id[did] = primary
+    by_id[did] = compact_decision_entry(primary)
+    # Preserve depends/blocked from compact after compact_decision_entry
+    by_id[did]["blocked_by"] = list(primary.get("blocked_by") or [])
+    by_id[did]["depends_on"] = list(primary.get("depends_on") or [])
+
+    affected: list[str] = [did]
+    replacements: list[dict] = []
+    cascade_open: list[str] = []
+    cascade_resolved: list[str] = []
+
+    # --- Supersede named decisions ---
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if not md_path.is_file():
+        raise ChartError(
+            "io",
+            "chart_body_missing",
+            f"Chart body missing for {chart_id}",
+            details={"id": chart_id},
+        )
+    md_text = md_path.read_text(encoding="utf-8")
+    md_text = _upsert_ledger_line(
+        md_text,
+        d_num,
+        _render_ledger_line(
+            d_num, gist, decision_record_link(chart_id, d_num)
+        ),
+    )
+
+    for s in supersede_ids:
+        s_full = dict(full_by_id[s])
+        s_num = decision_local_number(s)
+        if s_full.get("status") == "superseded" and s_full.get("superseded_by") == did:
+            affected.append(s)
+            continue
+        old_gist = s_full.get("answer_gist") or answer_gist(
+            s_full.get("answer") if isinstance(s_full.get("answer"), str) else ""
+        )
+        if not old_gist or old_gist == "(empty)":
+            old_gist = (s_full.get("title") or s)[:CHART_LEDGER_GIST_MAX]
+        s_full["status"] = "superseded"
+        s_full["superseded_by"] = did
+        s_full["claimed_by"] = None
+        s_full["claimed_at"] = None
+        s_full["updated_at"] = ts
+        s_notes = list(s_full.get("transition_notes") or [])
+        s_notes.append(
+            _transition_note(
+                "superseded",
+                f"superseded by {did}",
+                actor=actor,
+                superseded_by=did,
+            )
+        )
+        s_full["transition_notes"] = s_notes
+        full_by_id[s] = s_full
+        by_id[s] = compact_decision_entry(s_full)
+        by_id[s]["blocked_by"] = list(s_full.get("blocked_by") or [])
+        by_id[s]["depends_on"] = list(s_full.get("depends_on") or [])
+        md_text = _upsert_ledger_line(
+            md_text,
+            s_num,
+            _render_ledger_line(
+                s_num,
+                old_gist,
+                decision_record_link(chart_id, s_num),
+                superseded_by=did,
+            ),
+        )
+        if s not in affected:
+            affected.append(s)
+
+    # --- Dependent cascade (unless --keep-dependents) ---
+    dependent_ids = _depends_on_closure(supersede_ids, list(by_id.values()))
+    # Exclude the resolving decision itself if it somehow depends.
+    dependent_ids = [d for d in dependent_ids if d != did]
+
+    if keep_dependents:
+        for dep in dependent_ids:
+            dep_full = dict(full_by_id[dep])
+            dep_notes = list(dep_full.get("transition_notes") or [])
+            dep_notes.append(
+                _transition_note(
+                    "keep_dependents",
+                    f"keep-dependents: premise supersession by {did} of "
+                    f"{', '.join(supersede_ids)} did not cascade",
+                    actor=actor,
+                    superseded_by_chain=list(supersede_ids),
+                    via=did,
+                )
+            )
+            dep_full["transition_notes"] = dep_notes
+            dep_full["updated_at"] = ts
+            full_by_id[dep] = dep_full
+            if dep not in affected:
+                affected.append(dep)
+    else:
+        next_n = _next_decision_number({"decisions": list(by_id.values())})
+        for dep in dependent_ids:
+            dep_entry = by_id[dep]
+            dep_full = dict(full_by_id[dep])
+            dep_status = dep_entry.get("status") or dep_full.get("status")
+            if dep_status == "open":
+                # Stay open; lose claim; premise-invalidated note.
+                prior_claim = dep_full.get("claimed_by")
+                dep_full["claimed_by"] = None
+                dep_full["claimed_at"] = None
+                dep_notes = list(dep_full.get("transition_notes") or [])
+                dep_notes.append(
+                    _transition_note(
+                        "premise_invalidated",
+                        f"premise invalidated: {did} superseded "
+                        f"{', '.join(supersede_ids)}; claim cleared"
+                        + (f" (was {prior_claim})" if prior_claim else ""),
+                        actor=actor,
+                        via=did,
+                        superseded=list(supersede_ids),
+                        prior_claimed_by=prior_claim,
+                    )
+                )
+                dep_full["transition_notes"] = dep_notes
+                dep_full["updated_at"] = ts
+                # status remains open
+                full_by_id[dep] = dep_full
+                by_id[dep] = compact_decision_entry(dep_full)
+                by_id[dep]["blocked_by"] = list(dep_full.get("blocked_by") or [])
+                by_id[dep]["depends_on"] = list(dep_full.get("depends_on") or [])
+                cascade_open.append(dep)
+                if dep not in affected:
+                    affected.append(dep)
+            elif dep_status == "resolved":
+                # Immutable: create replacement D-ID that supersedes this one.
+                rep_n = next_n
+                next_n += 1
+                rep_id = f"{chart_id}.D{rep_n}"
+                reason = (
+                    f"re-evaluate after {did} superseded "
+                    f"{', '.join(supersede_ids)} "
+                    f"(replacement for {dep})"
+                )
+                question = (
+                    dep_full.get("question")
+                    or dep_full.get("title")
+                    or dep_entry.get("title")
+                    or ""
+                )
+                rep_full = decision_sidecar_data(
+                    chart_id,
+                    rep_n,
+                    dep_full.get("title") or dep_entry.get("title") or f"Re-evaluate {dep}",
+                    dep_full.get("type") or dep_entry.get("type") or "research",
+                    dep_full.get("attendance")
+                    or dep_entry.get("attendance")
+                    or "unattended",
+                    question,
+                    blocked_by=list(dep_full.get("blocked_by") or []),
+                    depends_on=list(dep_full.get("depends_on") or []),
+                    created=ts,
+                )
+                rep_full["supersedes"] = [dep]
+                rep_full["transition_notes"] = [
+                    _transition_note(
+                        "replacement_after_supersession",
+                        reason,
+                        actor=actor,
+                        replaces=dep,
+                        via=did,
+                        superseded_premises=list(supersede_ids),
+                    )
+                ]
+                # Supersede the old resolved dependent.
+                old_gist = dep_full.get("answer_gist") or answer_gist(
+                    dep_full.get("answer")
+                    if isinstance(dep_full.get("answer"), str)
+                    else ""
+                )
+                dep_full["status"] = "superseded"
+                dep_full["superseded_by"] = rep_id
+                dep_full["claimed_by"] = None
+                dep_full["claimed_at"] = None
+                dep_full["updated_at"] = ts
+                dep_notes = list(dep_full.get("transition_notes") or [])
+                dep_notes.append(
+                    _transition_note(
+                        "superseded",
+                        f"superseded by replacement {rep_id} after premise "
+                        f"invalidation via {did}",
+                        actor=actor,
+                        superseded_by=rep_id,
+                        via=did,
+                    )
+                )
+                dep_full["transition_notes"] = dep_notes
+                full_by_id[dep] = dep_full
+                full_by_id[rep_id] = rep_full
+                by_id[dep] = compact_decision_entry(dep_full)
+                by_id[dep]["blocked_by"] = list(dep_full.get("blocked_by") or [])
+                by_id[dep]["depends_on"] = list(dep_full.get("depends_on") or [])
+                by_id[rep_id] = compact_decision_entry(rep_full)
+                by_id[rep_id]["blocked_by"] = list(rep_full.get("blocked_by") or [])
+                by_id[rep_id]["depends_on"] = list(rep_full.get("depends_on") or [])
+                # Strike old dependent ledger line; no ledger line for open replacement.
+                dep_num = decision_local_number(dep)
+                md_text = _upsert_ledger_line(
+                    md_text,
+                    dep_num,
+                    _render_ledger_line(
+                        dep_num,
+                        old_gist or (dep_full.get("title") or dep),
+                        decision_record_link(chart_id, dep_num),
+                        superseded_by=rep_id,
+                    ),
+                )
+                replacements.append(
+                    {
+                        "id": rep_id,
+                        "replaces": dep,
+                        "title": rep_full.get("title"),
+                        "reason": reason,
+                        "record_path": rep_full.get("record_path"),
+                    }
+                )
+                cascade_resolved.append(dep)
+                if dep not in affected:
+                    affected.append(dep)
+                affected.append(rep_id)
+            else:
+                # superseded / out-of-scope: still report as affected for visibility.
+                if dep not in affected:
+                    affected.append(dep)
+
+    # --- Sharpening: new decisions + parked removals ---
+    sharpened: list[dict] = []
+    removed_questions: list[dict] = []
+    parked = list(chart.get("parked_questions") or [])
+    if sharpen:
+        remove_keys = list(sharpen.get("remove_questions") or [])
+        raw_new = list(sharpen.get("decisions") or [])
+        # Removals first (by key); absent key fails unless already gone in this txn.
+        for key in remove_keys:
+            found = None
+            new_parked = []
+            for e in parked:
+                if isinstance(e, dict) and e.get("key") == key:
+                    found = e
+                else:
+                    new_parked.append(e)
+            if found is None:
+                raise ChartError(
+                    "not_found",
+                    "parked_question_not_found",
+                    f"Parked question key not found for sharpening removal: {key}",
+                    details={"key": key, "chart_id": chart_id},
+                )
+            parked = new_parked
+            removed_questions.append(
+                {"key": key, "body": found.get("body")}
+            )
+        # Allocate new decisions after any cascade replacements.
+        next_n = _next_decision_number({"decisions": list(by_id.values())})
+        # First pass provisional for edge binding among new decisions.
+        local_map: dict[str, str] = {}
+        built_new: list[dict] = []
+        for i, raw in enumerate(raw_new, start=1):
+            if not isinstance(raw, dict):
+                raise ChartError(
+                    "validation",
+                    "invalid_sharpen_decision",
+                    f"Sharpen decision #{i} must be an object",
+                    details={"index": i},
+                )
+            title = (raw.get("title") or "").strip()
+            if not title:
+                raise ChartError(
+                    "validation",
+                    "title_required",
+                    f"Sharpen decision #{i} requires a title",
+                    details={"index": i},
+                )
+            dtype_new = (raw.get("type") or "").strip().lower()
+            att_new = derive_decision_attendance(dtype_new, raw.get("attendance"))
+            question = str(
+                raw.get("question") or raw.get("body") or title
+            ).strip()
+            n = next_n
+            next_n += 1
+            new_id = f"{chart_id}.D{n}"
+            local_map[str(i)] = new_id
+            local_map[f"d{i}"] = new_id
+            local_map[f"D{i}".lower()] = new_id
+            local_map[new_id.lower()] = new_id
+            if raw.get("id"):
+                local_map[str(raw["id"]).strip().lower()] = new_id
+            built_new.append(
+                {
+                    "n": n,
+                    "id": new_id,
+                    "title": title,
+                    "type": dtype_new,
+                    "attendance": att_new,
+                    "question": question,
+                    "raw_blocked_by": raw.get("blocked_by") or [],
+                    "raw_depends_on": raw.get("depends_on") or [],
+                }
+            )
+        # Existing decisions also available as edge targets via their ids.
+        for existing_id in by_id:
+            local_map[existing_id.lower()] = existing_id
+            bare = existing_id.rsplit(".", 1)[-1].lower()
+            local_map[bare] = existing_id
+            if bare.startswith("d"):
+                local_map[bare[1:]] = existing_id
+
+        for b in built_new:
+            blocked = _normalize_edge_refs(
+                list(b["raw_blocked_by"]),
+                chart_id,
+                field_name="blocked_by",
+                local_map=local_map,
+            )
+            depends = _normalize_edge_refs(
+                list(b["raw_depends_on"]),
+                chart_id,
+                field_name="depends_on",
+                local_map=local_map,
+            )
+            new_full = decision_sidecar_data(
+                chart_id,
+                b["n"],
+                b["title"],
+                b["type"],
+                b["attendance"],
+                b["question"],
+                blocked_by=blocked,
+                depends_on=depends,
+                created=ts,
+            )
+            new_full["transition_notes"] = [
+                _transition_note(
+                    "sharpened",
+                    f"created by resolve sharpening of {did}",
+                    actor=actor,
+                    via=did,
+                )
+            ]
+            full_by_id[b["id"]] = new_full
+            by_id[b["id"]] = compact_decision_entry(new_full)
+            by_id[b["id"]]["blocked_by"] = blocked
+            by_id[b["id"]]["depends_on"] = depends
+            sharpened.append(
+                {
+                    "id": b["id"],
+                    "title": b["title"],
+                    "type": b["type"],
+                    "attendance": b["attendance"],
+                    "record_path": new_full.get("record_path"),
+                }
+            )
+            if b["id"] not in affected:
+                affected.append(b["id"])
+
+        md_text = _apply_parked_to_chart_body(md_text, parked)
+
+    # Validate entire post-resolution graph before publish.
+    graph_list = list(by_id.values())
+    validate_chart_graph(graph_list, chart_id=chart_id)
+
+    # Rebuild ordered decisions list: preserve original order, append new at end.
+    ordered_ids: list[str] = []
+    seen_ord: set[str] = set()
+    for d in chart.get("decisions") or []:
+        if isinstance(d, dict) and d.get("id") and d["id"] in by_id:
+            ordered_ids.append(d["id"])
+            seen_ord.add(d["id"])
+    for did_k in sorted(by_id.keys(), key=lambda x: decision_local_number(x)):
+        if did_k not in seen_ord:
+            ordered_ids.append(did_k)
+            seen_ord.add(did_k)
+
+    new_chart = dict(chart)
+    new_chart["decisions"] = [by_id[i] for i in ordered_ids]
+    new_chart["parked_questions"] = parked
+    new_chart["updated_at"] = ts
+
+    # Later supersession marks affected produced_specs links stale (fn-135.3)
+    # without rewriting briefings or linked specs.
+    superseded_for_links: list[str] = list(supersede_ids) + list(cascade_resolved)
+    new_links, staled_links = mark_produced_specs_stale_for_superseded(
+        new_chart,
+        superseded_for_links,
+        via=did,
+        actor=actor,
+        ts=ts,
+    )
+    if staled_links:
+        new_chart["produced_specs"] = new_links
+
+    # Build mutations: chart pair + every touched decision sidecar (+ md creates).
+    mutations: list[tuple[str, str, str]] = [
+        (f"{chart_id}.json", "update", _sidecar_json(new_chart)),
+        (f"{chart_id}.md", "update", md_text),
+    ]
+    original_ids = {
+        d["id"]
+        for d in (chart.get("decisions") or [])
+        if isinstance(d, dict) and d.get("id")
+    }
+    for did_k, full_k in full_by_id.items():
+        n = decision_local_number(did_k)
+        md_rel, json_rel = decision_record_relpaths(chart_id, n)
+        if did_k in original_ids:
+            # Update json; md body (question) stays for existing.
+            mutations.append((json_rel, "update", _sidecar_json(full_k)))
+        else:
+            mutations.append(
+                (md_rel, "create", decision_body_text(full_k.get("question") or ""))
+            )
+            mutations.append((json_rel, "create", _sidecar_json(full_k)))
+
+    run_chart_transaction(flow_dir, "chart.resolve", mutations)
+
+    # Dedup affected preserving order.
+    aff_out: list[str] = []
+    aff_seen: set[str] = set()
+    for a in affected:
+        if a not in aff_seen:
+            aff_seen.add(a)
+            aff_out.append(a)
+
+    return {
+        "id": did,
+        "status": "resolved",
+        "answer_gist": gist,
+        "noop": False,
+        "assets": assets,
+        "supersedes": list(supersede_ids),
+        "keep_dependents": keep_dependents,
+        "affected": aff_out,
+        "cascade_open": cascade_open,
+        "cascade_resolved": cascade_resolved,
+        "replacements": replacements,
+        "sharpened": sharpened,
+        "removed_questions": removed_questions,
+        "staled_links": staled_links,
+        "record_path": primary.get("record_path")
+        or decision_record_link(chart_id, d_num),
+        "ledger_line": _render_ledger_line(
+            d_num, gist, decision_record_link(chart_id, d_num)
+        ),
+    }
+
+
+def out_of_scope_chart_decision(
+    flow_dir: Path,
+    did: str,
+    reason: str,
+) -> dict:
+    """Close open decision as out-of-scope; write ## Boundaries line only."""
+    did = canonicalize_decision_id(did)
+    chart_id = did.rsplit(".", 1)[0]
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    _require_chart_mutable(chart, command="chart.out-of-scope")
+    idx, entry = _find_decision_entry(chart, did)
+    d_num = decision_local_number(did)
+    full = load_decision_sidecar(flow_dir, chart_id, d_num)
+    status = entry.get("status") or full.get("status")
+    claimant = entry.get("claimed_by") or full.get("claimed_by")
+    if status == "open" and claimant and claimant != get_actor():
+        raise ChartError(
+            "conflict",
+            "claim_conflict",
+            f"Decision {did} is claimed by '{claimant}'; out-of-scope requires "
+            "the claim owner (release-claim or --break-stale first)",
+            details={"id": did, "claimed_by": claimant, "actor": get_actor()},
+        )
+    reason_text = (reason or "").strip()
+    if not reason_text:
+        raise ChartError(
+            "validation",
+            "reason_required",
+            "out-of-scope requires --reason",
+            details={"id": did},
+        )
+    refuse_if_unsafe_answer(reason_text)
+
+    if status == "out-of-scope":
+        existing_reason = full.get("out_of_scope_reason") or ""
+        if existing_reason == reason_text:
+            return {
+                "id": did,
+                "status": "out-of-scope",
+                "reason": reason_text,
+                "noop": True,
+                "record_path": full.get("record_path")
+                or decision_record_link(chart_id, d_num),
+            }
+        raise ChartError(
+            "invalid_state",
+            "decision_immutable",
+            f"Decision {did} is already out-of-scope with a different reason",
+            details={"id": did, "existing_reason": existing_reason},
+        )
+    if status != "open":
+        raise ChartError(
+            "invalid_state",
+            "illegal_transition",
+            f"Cannot mark {did} out-of-scope: status is {status} "
+            "(legal: open -> out-of-scope)",
+            details={"id": did, "status": status},
+        )
+
+    actor = get_actor()
+    ts = now_iso()
+    full = dict(full)
+    full["status"] = "out-of-scope"
+    full["out_of_scope_reason"] = reason_text
+    full["claimed_by"] = None
+    full["claimed_at"] = None
+    full["updated_at"] = ts
+    notes = list(full.get("transition_notes") or [])
+    notes.append(
+        _transition_note(
+            "out_of_scope",
+            f"out-of-scope: {reason_text}",
+            actor=actor,
+            reason=reason_text,
+        )
+    )
+    full["transition_notes"] = notes
+
+    entry = dict(entry)
+    entry["status"] = "out-of-scope"
+    entry["claimed_by"] = None
+    entry["claimed_at"] = None
+    proposed = list(chart.get("decisions") or [])
+    proposed[idx] = entry
+    chart = dict(chart)
+    chart["decisions"] = proposed
+    chart["updated_at"] = ts
+
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if not md_path.is_file():
+        raise ChartError(
+            "io",
+            "chart_body_missing",
+            f"Chart body missing for {chart_id}",
+            details={"id": chart_id},
+        )
+    md_text = md_path.read_text(encoding="utf-8")
+    # No ## Decisions ledger entry for out-of-scope.
+    md_text = _append_boundary_line(md_text, d_num, reason_text)
+
+    md_rel, json_rel = decision_record_relpaths(chart_id, d_num)
+    mutations = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+        (f"{chart_id}.md", "update", md_text),
+        (json_rel, "update", _sidecar_json(full)),
+    ]
+    run_chart_transaction(flow_dir, "chart.out-of-scope", mutations)
+    return {
+        "id": did,
+        "status": "out-of-scope",
+        "reason": reason_text,
+        "noop": False,
+        "record_path": full.get("record_path")
+        or decision_record_link(chart_id, d_num),
+    }
+
+
+def abandon_chart(flow_dir: Path, chart_id: str, reason: str) -> dict:
+    """Mark chart abandoned with reason; nothing deleted. Terminal for mutations."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    reason_text = (reason or "").strip()
+    if not reason_text:
+        raise ChartError(
+            "validation",
+            "reason_required",
+            "abandon requires --reason",
+            details={"id": chart_id},
+        )
+    refuse_if_unsafe_answer(reason_text)
+    status = chart.get("status") or "open"
+    if status == "abandoned":
+        existing = chart.get("abandon_reason") or ""
+        if existing == reason_text:
+            return {
+                "id": chart_id,
+                "status": "abandoned",
+                "reason": reason_text,
+                "noop": True,
+            }
+        raise ChartError(
+            "invalid_state",
+            "chart_already_abandoned",
+            f"Chart {chart_id} is already abandoned with a different reason",
+            details={"id": chart_id, "existing_reason": existing},
+        )
+    if status != "open":
+        raise ChartError(
+            "invalid_state",
+            "illegal_transition",
+            f"Cannot abandon chart {chart_id}: status is {status} "
+            "(legal: open -> abandoned)",
+            details={"id": chart_id, "status": status},
+        )
+
+    actor = get_actor()
+    ts = now_iso()
+    chart = dict(chart)
+    chart["status"] = "abandoned"
+    chart["abandon_reason"] = reason_text
+    chart["abandoned_at"] = ts
+    chart["abandoned_by"] = actor
+    chart["updated_at"] = ts
+    events = list(chart.get("claim_events") or [])
+    events.append(
+        {
+            "kind": "abandon",
+            "actor": actor,
+            "reason": reason_text,
+            "timestamp": ts,
+            "chart": chart_id,
+        }
+    )
+    chart["claim_events"] = events
+
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    mutations: list[tuple[str, str, str]] = [
+        (f"{chart_id}.json", "update", _sidecar_json(chart)),
+    ]
+    if md_path.is_file():
+        # Preserve body; abandon does not rewrite map sections.
+        mutations.append(
+            (f"{chart_id}.md", "update", md_path.read_text(encoding="utf-8"))
+        )
+    run_chart_transaction(flow_dir, "chart.abandon", mutations)
+    return {
+        "id": chart_id,
+        "status": "abandoned",
+        "reason": reason_text,
+        "abandoned_at": ts,
+        "abandoned_by": actor,
+        "noop": False,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Chart briefing, reopen, link-spec (fn-135.3)
+# ---------------------------------------------------------------------------
+
+
+def chart_decision_revision(chart: dict) -> str:
+    """Stable content revision of decision/outcome state (excludes briefings).
+
+    Fingerprint input for briefing versioning: identical decision/outcome/parked
+    state yields the same revision; briefings[] and produced_specs[] are not
+    part of this hash so a re-emit of the same proposal on the same map is
+    idempotent.
+    """
+    decisions: list[dict] = []
+    for d in chart.get("decisions") or []:
+        if not isinstance(d, dict) or not d.get("id"):
+            continue
+        decisions.append(
+            {
+                "id": d.get("id"),
+                "status": d.get("status"),
+                "title": d.get("title"),
+                "type": d.get("type"),
+                "blocked_by": list(d.get("blocked_by") or []),
+                "depends_on": list(d.get("depends_on") or []),
+            }
+        )
+    decisions.sort(key=lambda x: str(x.get("id") or ""))
+    parked: list[dict] = []
+    for p in chart.get("parked_questions") or []:
+        if not isinstance(p, dict):
+            continue
+        parked.append(
+            {
+                "key": p.get("key"),
+                "body": p.get("body"),
+            }
+        )
+    parked.sort(key=lambda x: str(x.get("key") or ""))
+    # Deliberately exclude chart.status so a final-briefing -> done
+    # transition does not break identical fingerprint retries.
+    blob = json.dumps(
+        {
+            "id": chart.get("id"),
+            "outcome": chart.get("outcome"),
+            "title": chart.get("title"),
+            "decisions": decisions,
+            "parked_questions": parked,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _briefing_fingerprint(chart_revision: str, normalized_proposal: dict) -> str:
+    blob = json.dumps(
+        {
+            "chart_revision": chart_revision,
+            "proposal": normalized_proposal,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _next_briefing_id(briefings: list) -> str:
+    max_n = 0
+    for b in briefings:
+        if not isinstance(b, dict):
+            continue
+        bid = str(b.get("id") or "")
+        m = re.fullmatch(r"B([1-9][0-9]*)", bid)
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    return f"B{max_n + 1}"
+
+
+def _parse_briefing_proposal_file(
+    path: Path,
+    chart_id: str,
+) -> dict:
+    """Load agent-confirmed proposal JSON: clusters + shared_context."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ChartError(
+            "io",
+            "proposal_unreadable",
+            f"Cannot read proposal file: {path} ({e})",
+            details={"path": str(path)},
+        ) from e
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ChartError(
+            "validation",
+            "proposal_invalid_json",
+            f"Proposal file is not valid JSON: {e}",
+            details={"path": str(path)},
+        ) from e
+    if not isinstance(data, dict):
+        raise ChartError(
+            "validation",
+            "proposal_invalid",
+            "Proposal file must be a JSON object",
+            details={"path": str(path)},
+        )
+    raw_clusters = data.get("clusters")
+    if not isinstance(raw_clusters, list) or not raw_clusters:
+        raise ChartError(
+            "validation",
+            "proposal_clusters_required",
+            "Proposal requires a non-empty clusters array",
+            details={"path": str(path)},
+        )
+    shared_raw = data.get("shared_context") or data.get("shared_context_ids") or []
+    if not isinstance(shared_raw, list):
+        raise ChartError(
+            "validation",
+            "proposal_shared_invalid",
+            "shared_context must be an array of D-IDs",
+            details={"path": str(path)},
+        )
+    shared: list[str] = []
+    shared_seen: set[str] = set()
+    for s in shared_raw:
+        did = canonicalize_decision_id(str(s), chart_id=chart_id)
+        if did not in shared_seen:
+            shared_seen.add(did)
+            shared.append(did)
+
+    clusters: list[dict] = []
+    for i, raw_c in enumerate(raw_clusters, start=1):
+        if not isinstance(raw_c, dict):
+            raise ChartError(
+                "validation",
+                "proposal_cluster_invalid",
+                f"Cluster #{i} must be an object",
+                details={"index": i},
+            )
+        key = str(
+            raw_c.get("key")
+            or raw_c.get("id")
+            or raw_c.get("cluster")
+            or i
+        ).strip()
+        if not key:
+            key = str(i)
+        rationale = (raw_c.get("rationale") or raw_c.get("reason") or "").strip()
+        if not rationale:
+            raise ChartError(
+                "validation",
+                "proposal_rationale_required",
+                f"Cluster '{key}' requires a one-line rationale",
+                details={"key": key, "index": i},
+            )
+        refuse_if_unsafe_answer(rationale)
+        raw_decs = raw_c.get("decisions") or raw_c.get("decision_ids") or []
+        if not isinstance(raw_decs, list) or not raw_decs:
+            raise ChartError(
+                "validation",
+                "proposal_cluster_empty",
+                f"Cluster '{key}' requires a non-empty decisions array",
+                details={"key": key, "index": i},
+            )
+        decs: list[str] = []
+        dec_seen: set[str] = set()
+        for d in raw_decs:
+            did = canonicalize_decision_id(str(d), chart_id=chart_id)
+            if did not in dec_seen:
+                dec_seen.add(did)
+                decs.append(did)
+        clusters.append(
+            {
+                "key": key,
+                "rationale": rationale,
+                "decisions": decs,
+            }
+        )
+    return {"clusters": clusters, "shared_context": shared}
+
+
+def _normalize_briefing_proposal(proposal: dict) -> dict:
+    """Deterministic proposal form for fingerprinting (sorted membership)."""
+    clusters_out = []
+    for c in proposal.get("clusters") or []:
+        clusters_out.append(
+            {
+                "key": str(c.get("key")),
+                "rationale": str(c.get("rationale") or "").strip(),
+                "decisions": sorted(c.get("decisions") or []),
+            }
+        )
+    # Sort by key so reordering alone does not mint a new B-ID.
+    clusters_out.sort(key=lambda x: x["key"])
+    return {
+        "clusters": clusters_out,
+        "shared_context": sorted(proposal.get("shared_context") or []),
+    }
+
+
+def _decision_status(chart: dict, did: str) -> Optional[str]:
+    for d in chart.get("decisions") or []:
+        if isinstance(d, dict) and d.get("id") == did:
+            return d.get("status")
+    return None
+
+
+def _validate_briefing_membership(
+    chart: dict,
+    proposal: dict,
+    chart_id: str,
+) -> None:
+    """Require complete non-conflicting membership of all RESOLVED decisions.
+
+    Shared-context D-IDs may appear in multiple clusters and must be listed
+    under shared_context. Non-shared membership is exclusive.
+    """
+    resolved_ids: set[str] = set()
+    all_ids: set[str] = set()
+    for d in chart.get("decisions") or []:
+        if not isinstance(d, dict) or not d.get("id"):
+            continue
+        all_ids.add(d["id"])
+        if d.get("status") == "resolved":
+            resolved_ids.add(d["id"])
+
+    shared = set(proposal.get("shared_context") or [])
+    for sid in shared:
+        if sid not in all_ids:
+            raise ChartError(
+                "validation",
+                "shared_context_unknown",
+                f"shared_context D-ID not on chart: {sid}",
+                details={"id": sid, "chart_id": chart_id},
+            )
+        if sid not in resolved_ids:
+            raise ChartError(
+                "validation",
+                "shared_context_not_resolved",
+                f"shared_context D-ID is not resolved: {sid}",
+                details={"id": sid, "status": _decision_status(chart, sid)},
+            )
+
+    membership: dict[str, list[str]] = {}
+    for c in proposal.get("clusters") or []:
+        key = c["key"]
+        for did in c.get("decisions") or []:
+            if did not in all_ids:
+                raise ChartError(
+                    "validation",
+                    "proposal_decision_unknown",
+                    f"Cluster '{key}' references unknown D-ID: {did}",
+                    details={"key": key, "id": did},
+                )
+            if did not in resolved_ids:
+                raise ChartError(
+                    "validation",
+                    "proposal_decision_not_resolved",
+                    f"Cluster '{key}' includes non-resolved D-ID: {did}",
+                    details={
+                        "key": key,
+                        "id": did,
+                        "status": _decision_status(chart, did),
+                    },
+                )
+            membership.setdefault(did, []).append(key)
+
+    for did, keys in membership.items():
+        if len(keys) > 1 and did not in shared:
+            raise ChartError(
+                "validation",
+                "proposal_membership_conflict",
+                f"D-ID {did} appears in clusters {keys} but is not listed "
+                "in shared_context",
+                details={"id": did, "clusters": keys},
+            )
+
+    covered = set(membership.keys())
+    missing = sorted(resolved_ids - covered)
+    if missing:
+        raise ChartError(
+            "validation",
+            "proposal_incomplete_membership",
+            "Proposal does not cover all resolved decisions: "
+            + ", ".join(missing),
+            details={"missing": missing, "chart_id": chart_id},
+        )
+
+    for sid in shared:
+        if sid not in covered:
+            raise ChartError(
+                "validation",
+                "shared_context_not_in_cluster",
+                f"shared_context D-ID {sid} is not a member of any cluster",
+                details={"id": sid},
+            )
+
+
+def _extract_chart_section_body(md_text: str, heading: str) -> str:
+    pattern = re.compile(
+        rf"(^##\s+{re.escape(heading)}\s*\n)(.*?)(?=^##\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    m = pattern.search(md_text or "")
+    if not m:
+        return ""
+    return m.group(2).strip()
+
+
+def _unresolved_briefing_inventory(chart: dict) -> dict:
+    """List every open/blocked/claimed decision and parked question for drafts."""
+    completion = chart_completion_predicate(chart)
+    decisions = chart.get("decisions") or []
+    status_index = {
+        d["id"]: d.get("status")
+        for d in decisions
+        if isinstance(d, dict) and d.get("id")
+    }
+    open_items: list[dict] = []
+    for d in decisions:
+        if not isinstance(d, dict) or d.get("status") != "open":
+            continue
+        did = d.get("id")
+        kind = "open"
+        if _decision_is_blocked(d, status_index):
+            kind = "blocked"
+        if _decision_is_claimed(d):
+            kind = "claimed" if kind == "open" else f"{kind}+claimed"
+        open_items.append(
+            {
+                "id": did,
+                "title": d.get("title"),
+                "kind": kind,
+                "claimed_by": d.get("claimed_by"),
+            }
+        )
+    parked = []
+    for p in chart.get("parked_questions") or []:
+        if isinstance(p, dict):
+            parked.append({"key": p.get("key"), "body": p.get("body")})
+    return {
+        "open_decisions": open_items,
+        "parked_questions": parked,
+        "stuck_reasons": list(completion.get("stuck_reasons") or []),
+        "briefable": bool(completion.get("briefable")),
+    }
+
+
+def _load_decision_briefs(
+    flow_dir: Path, chart_id: str, dids: list[str]
+) -> list[dict]:
+    out: list[dict] = []
+    for did in dids:
+        n = decision_local_number(did)
+        try:
+            full = load_decision_sidecar(flow_dir, chart_id, n)
+        except ChartError:
+            full = {"id": did, "title": did, "status": "unknown"}
+        gist = full.get("answer_gist")
+        if not gist and isinstance(full.get("answer"), str):
+            gist = answer_gist(full["answer"])
+        out.append(
+            {
+                "id": did,
+                "title": full.get("title") or did,
+                "status": full.get("status"),
+                "gist": gist or "",
+                "record_path": full.get("record_path")
+                or decision_record_link(chart_id, n),
+                "superseded_by": full.get("superseded_by"),
+                "assets": list(full.get("assets") or []),
+            }
+        )
+    return out
+
+
+def _render_briefing_index_md(
+    chart: dict,
+    *,
+    briefing_id: str,
+    status: str,
+    md_text: str,
+    clusters: list[dict],
+    shared_context: list[str],
+    unresolved: Optional[dict],
+    all_decision_briefs: list[dict],
+) -> str:
+    chart_id = chart.get("id") or "?"
+    title = chart.get("title") or chart_id
+    outcome = chart.get("outcome") or ""
+    lines: list[str] = [
+        f"# {chart_id} briefing {briefing_id}",
+        "",
+        f"**Briefing:** {briefing_id}",
+        f"**Status:** {status}",
+        f"**Chart:** {chart_id} - {title}",
+        f"**Chart status:** {chart.get('status')}",
+        "",
+        "## Outcome",
+        "",
+        outcome.strip() or "(none)",
+        "",
+        "## Decisions",
+        "",
+    ]
+    resolved = [d for d in all_decision_briefs if d.get("status") == "resolved"]
+    superseded = [
+        d for d in all_decision_briefs if d.get("status") == "superseded"
+    ]
+    if resolved:
+        for d in resolved:
+            lines.append(
+                f"- **{d['id']}:** {d.get('title')} - {d.get('gist') or '(no gist)'} "
+                f"- [record]({d.get('record_path')})"
+            )
+    else:
+        lines.append("(no resolved decisions)")
+    lines.extend(["", "## Superseded decisions", ""])
+    if superseded:
+        for d in superseded:
+            lines.append(
+                f"- ~~**{d['id']}:**~~ {d.get('title')} - {d.get('gist') or ''} "
+                f"- superseded by **{d.get('superseded_by') or '?'}** "
+                f"- [record]({d.get('record_path')})"
+            )
+    else:
+        lines.append("(none)")
+    ledger = _extract_chart_section_body(md_text, "Decisions")
+    if ledger:
+        lines.extend(["", "## Ledger (chart)", "", ledger, ""])
+    boundaries = _extract_chart_section_body(md_text, "Boundaries")
+    lines.extend(["## Boundaries", "", boundaries or "(none)", ""])
+    lines.extend(["## Assets", ""])
+    any_asset = False
+    for d in all_decision_briefs:
+        for a in d.get("assets") or []:
+            if not isinstance(a, dict):
+                continue
+            any_asset = True
+            lines.append(
+                f"- **{d['id']}:** {a.get('kind')} `{a.get('reference')}` "
+                f"- {a.get('display') or ''}"
+            )
+    if not any_asset:
+        lines.append("(none)")
+    lines.extend(["", "## Clusters", ""])
+    for c in clusters:
+        lines.append(
+            f"- **cluster {c['key']}:** {c.get('rationale')} "
+            f"- decisions: {', '.join(c.get('decisions') or [])}"
+        )
+    lines.extend(["", "## Shared context", ""])
+    if shared_context:
+        for sid in shared_context:
+            lines.append(f"- {sid}")
+    else:
+        lines.append("(none)")
+    if status == "draft" and unresolved is not None:
+        lines.extend(
+            [
+                "",
+                "## DRAFT - unresolved inventory",
+                "",
+                "This briefing is **draft-only**. It is not capture-ready. "
+                "A forced draft can never be promoted to final.",
+                "",
+            ]
+        )
+        for item in unresolved.get("open_decisions") or []:
+            lines.append(
+                f"- open decision **{item.get('id')}** ({item.get('kind')}): "
+                f"{item.get('title') or ''}"
+                + (
+                    f" claimed_by={item.get('claimed_by')}"
+                    if item.get("claimed_by")
+                    else ""
+                )
+            )
+        for p in unresolved.get("parked_questions") or []:
+            lines.append(
+                f"- parked question `{p.get('key')}`: {p.get('body') or ''}"
+            )
+        if unresolved.get("stuck_reasons"):
+            lines.extend(["", "Stuck reasons:", ""])
+            for r in unresolved["stuck_reasons"]:
+                lines.append(f"- {r}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_cluster_briefing_md(
+    chart: dict,
+    *,
+    briefing_id: str,
+    status: str,
+    cluster: dict,
+    shared_context: list[str],
+    cluster_briefs: list[dict],
+    shared_briefs: list[dict],
+) -> str:
+    chart_id = chart.get("id") or "?"
+    outcome = chart.get("outcome") or ""
+    key = cluster.get("key")
+    lines: list[str] = [
+        f"# {chart_id} briefing {briefing_id} cluster {key}",
+        "",
+        f"**Briefing:** {briefing_id}",
+        f"**Status:** {status}",
+        f"**Cluster:** {key}",
+        f"**Rationale:** {cluster.get('rationale')}",
+        f"**Chart:** {chart_id}",
+        "",
+        "## Outcome",
+        "",
+        outcome.strip() or "(none)",
+        "",
+        "## Cluster decisions",
+        "",
+    ]
+    for d in cluster_briefs:
+        lines.append(
+            f"- **{d['id']}:** {d.get('title')} - {d.get('gist') or '(no gist)'} "
+            f"- [record]({d.get('record_path')})"
+        )
+        for a in d.get("assets") or []:
+            if isinstance(a, dict):
+                lines.append(
+                    f"  - asset: {a.get('kind')} `{a.get('reference')}` "
+                    f"- {a.get('display') or ''}"
+                )
+    lines.extend(["", "## Shared context", ""])
+    if shared_briefs:
+        lines.append(
+            "Shared-context D-IDs are attributable evidence for this cluster "
+            "but are not duplicated acceptance requirements by default."
+        )
+        lines.append("")
+        for d in shared_briefs:
+            lines.append(
+                f"- **{d['id']}:** {d.get('title')} - {d.get('gist') or ''} "
+                f"- [record]({d.get('record_path')})"
+            )
+    else:
+        lines.append("(none)")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def emit_chart_briefing(
+    flow_dir: Path,
+    chart_id: str,
+    proposal_path: Path,
+    *,
+    force: bool = False,
+) -> dict:
+    """Validate confirmed proposal and emit immutable versioned briefing.
+
+    No clustering algorithm: agent supplies the proposal; flowctl validates
+    and publishes. First non-draft briefing transitions open->done atomically.
+    """
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    status = chart.get("status") or "open"
+    proposal = _parse_briefing_proposal_file(proposal_path, chart_id)
+    normalized = _normalize_briefing_proposal(proposal)
+    _validate_briefing_membership(chart, proposal, chart_id)
+
+    completion = chart_completion_predicate(chart)
+    unresolved = _unresolved_briefing_inventory(chart)
+    if not completion["briefable"] and not force:
+        raise ChartError(
+            "invalid_state",
+            "chart_not_briefable",
+            f"Chart {chart_id} is not briefable: "
+            + "; ".join(completion.get("stuck_reasons") or ["open work remains"]),
+            details={
+                "id": chart_id,
+                "stuck_reasons": completion.get("stuck_reasons"),
+                "open_count": completion.get("open_count"),
+                "parked_count": completion.get("parked_count"),
+                "blocked_open_ids": completion.get("blocked_open_ids"),
+                "claimed_open_ids": completion.get("claimed_open_ids"),
+            },
+        )
+
+    # Forced incomplete charts are draft-only; complete charts are always final
+    # (force on a complete chart is a no-op force).
+    if force and not completion["briefable"]:
+        briefing_status = "draft"
+    else:
+        briefing_status = "final"
+
+    chart_rev = chart_decision_revision(chart)
+    fingerprint = _briefing_fingerprint(chart_rev, normalized)
+
+    existing = list(chart.get("briefings") or [])
+    for b in existing:
+        if not isinstance(b, dict):
+            continue
+        if b.get("fingerprint") == fingerprint:
+            return {
+                "id": chart_id,
+                "briefing_id": b.get("id"),
+                "status": b.get("status"),
+                "fingerprint": fingerprint,
+                "noop": True,
+                "chart_status": chart.get("status"),
+                "clusters": b.get("clusters") or [],
+                "paths": b.get("paths") or {},
+            }
+
+    if status in ("done", "abandoned"):
+        raise ChartError(
+            "invalid_state",
+            "chart_not_open",
+            f"Chart {chart_id} is {status}; new briefings require "
+            "chart reopen --reason (identical fingerprint retries still work)",
+            details={"id": chart_id, "status": status},
+        )
+
+    briefing_id = _next_briefing_id(existing)
+    actor = get_actor()
+    ts = now_iso()
+
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    md_text = md_path.read_text(encoding="utf-8") if md_path.is_file() else ""
+
+    all_dids = [
+        d["id"]
+        for d in (chart.get("decisions") or [])
+        if isinstance(d, dict) and d.get("id")
+    ]
+    all_briefs = _load_decision_briefs(flow_dir, chart_id, all_dids)
+
+    clusters_meta: list[dict] = []
+    cluster_paths: dict[str, str] = {}
+    mutations: list[tuple[str, str, str]] = []
+
+    index_body = _render_briefing_index_md(
+        chart,
+        briefing_id=briefing_id,
+        status=briefing_status,
+        md_text=md_text,
+        clusters=proposal["clusters"],
+        shared_context=list(proposal.get("shared_context") or []),
+        unresolved=unresolved if briefing_status == "draft" else None,
+        all_decision_briefs=all_briefs,
+    )
+    index_rel = f"{chart_id}-briefing.md"
+    index_path = charts_dir(flow_dir) / index_rel
+    mutations.append(
+        (index_rel, "update" if index_path.is_file() else "create", index_body)
+    )
+
+    n_clusters = len(proposal["clusters"])
+    shared_ids = list(proposal.get("shared_context") or [])
+    shared_briefs = _load_decision_briefs(flow_dir, chart_id, shared_ids)
+
+    if n_clusters > 1:
+        for c in proposal["clusters"]:
+            key = str(c["key"])
+            c_briefs = _load_decision_briefs(
+                flow_dir, chart_id, list(c.get("decisions") or [])
+            )
+            c_body = _render_cluster_briefing_md(
+                chart,
+                briefing_id=briefing_id,
+                status=briefing_status,
+                cluster=c,
+                shared_context=shared_ids,
+                cluster_briefs=c_briefs,
+                shared_briefs=shared_briefs,
+            )
+            c_rel = f"{chart_id}-briefing-{key}.md"
+            c_path = charts_dir(flow_dir) / c_rel
+            mutations.append(
+                (c_rel, "update" if c_path.is_file() else "create", c_body)
+            )
+            cluster_paths[key] = f".flow/charts/{c_rel}"
+            clusters_meta.append(
+                {
+                    "key": key,
+                    "rationale": c.get("rationale"),
+                    "decisions": list(c.get("decisions") or []),
+                    "path": f".flow/charts/{c_rel}",
+                }
+            )
+    else:
+        c0 = proposal["clusters"][0]
+        clusters_meta.append(
+            {
+                "key": str(c0["key"]),
+                "rationale": c0.get("rationale"),
+                "decisions": list(c0.get("decisions") or []),
+                "path": f".flow/charts/{index_rel}",
+            }
+        )
+
+    new_chart = dict(chart)
+    briefing_rec = {
+        "id": briefing_id,
+        "fingerprint": fingerprint,
+        "status": briefing_status,
+        "created": ts,
+        "created_by": actor,
+        "chart_revision": chart_rev,
+        "clusters": clusters_meta,
+        "shared_context": shared_ids,
+        "paths": {
+            "index": f".flow/charts/{index_rel}",
+            **{f"cluster_{k}": v for k, v in cluster_paths.items()},
+        },
+        "force": bool(force and briefing_status == "draft"),
+    }
+    new_briefings = list(existing) + [briefing_rec]
+    new_chart["briefings"] = new_briefings
+    new_chart["updated_at"] = ts
+
+    transitioned_done = False
+    if briefing_status == "final" and status == "open":
+        prior_final = any(
+            isinstance(b, dict) and b.get("status") == "final"
+            for b in existing
+        )
+        if not prior_final:
+            new_chart["status"] = "done"
+            new_chart["done_at"] = ts
+            new_chart["done_by"] = actor
+            new_chart["done_via_briefing"] = briefing_id
+            transitioned_done = True
+            events = list(new_chart.get("claim_events") or [])
+            events.append(
+                {
+                    "kind": "briefing_done",
+                    "actor": actor,
+                    "briefing": briefing_id,
+                    "timestamp": ts,
+                    "chart": chart_id,
+                }
+            )
+            new_chart["claim_events"] = events
+
+    mutations.insert(
+        0, (f"{chart_id}.json", "update", _sidecar_json(new_chart))
+    )
+    if md_path.is_file():
+        mutations.insert(1, (f"{chart_id}.md", "update", md_text))
+
+    run_chart_transaction(flow_dir, "chart.briefing", mutations)
+
+    return {
+        "id": chart_id,
+        "briefing_id": briefing_id,
+        "status": briefing_status,
+        "fingerprint": fingerprint,
+        "noop": False,
+        "chart_status": new_chart.get("status"),
+        "transitioned_done": transitioned_done,
+        "clusters": clusters_meta,
+        "shared_context": shared_ids,
+        "paths": briefing_rec["paths"],
+        "unresolved": unresolved if briefing_status == "draft" else None,
+    }
+
+
+def reopen_chart(flow_dir: Path, chart_id: str, reason: str) -> dict:
+    """Transition done|abandoned -> open; stale all briefings and produced_specs."""
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    reason_text = (reason or "").strip()
+    if not reason_text:
+        raise ChartError(
+            "validation",
+            "reason_required",
+            "reopen requires --reason",
+            details={"id": chart_id},
+        )
+    refuse_if_unsafe_answer(reason_text)
+    status = chart.get("status") or "open"
+    if status == "open":
+        raise ChartError(
+            "invalid_state",
+            "chart_already_open",
+            f"Chart {chart_id} is already open",
+            details={"id": chart_id, "status": status},
+        )
+    if status not in ("done", "abandoned"):
+        raise ChartError(
+            "invalid_state",
+            "illegal_transition",
+            f"Cannot reopen chart {chart_id}: status is {status} "
+            "(legal: done|abandoned -> open)",
+            details={"id": chart_id, "status": status},
+        )
+
+    actor = get_actor()
+    ts = now_iso()
+    new_chart = dict(chart)
+    new_chart["status"] = "open"
+    new_chart["reopened_at"] = ts
+    new_chart["reopened_by"] = actor
+    new_chart["reopen_reason"] = reason_text
+    new_chart["updated_at"] = ts
+
+    staled_briefings: list[str] = []
+    briefings = []
+    for b in chart.get("briefings") or []:
+        if not isinstance(b, dict):
+            continue
+        nb = dict(b)
+        if nb.get("status") != "stale":
+            nb["status"] = "stale"
+            nb["staled_at"] = ts
+            nb["stale_reason"] = f"chart reopened: {reason_text}"
+            staled_briefings.append(str(nb.get("id") or "?"))
+        briefings.append(nb)
+    new_chart["briefings"] = briefings
+
+    staled_links: list[dict] = []
+    links = []
+    for link in chart.get("produced_specs") or []:
+        if not isinstance(link, dict):
+            continue
+        nl = dict(link)
+        if nl.get("status") != "stale":
+            nl["status"] = "stale"
+            nl["staled_at"] = ts
+            nl["stale_note"] = f"chart reopened: {reason_text}"
+            staled_links.append(
+                {
+                    "briefing": nl.get("briefing"),
+                    "cluster": nl.get("cluster"),
+                    "spec": nl.get("spec"),
+                }
+            )
+        links.append(nl)
+    new_chart["produced_specs"] = links
+
+    events = list(new_chart.get("claim_events") or [])
+    events.append(
+        {
+            "kind": "reopen",
+            "actor": actor,
+            "reason": reason_text,
+            "timestamp": ts,
+            "chart": chart_id,
+            "prior_status": status,
+            "staled_briefings": staled_briefings,
+            "staled_links": staled_links,
+        }
+    )
+    new_chart["claim_events"] = events
+
+    mutations: list[tuple[str, str, str]] = [
+        (f"{chart_id}.json", "update", _sidecar_json(new_chart)),
+    ]
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if md_path.is_file():
+        mutations.append(
+            (f"{chart_id}.md", "update", md_path.read_text(encoding="utf-8"))
+        )
+    run_chart_transaction(flow_dir, "chart.reopen", mutations)
+    return {
+        "id": chart_id,
+        "status": "open",
+        "prior_status": status,
+        "reason": reason_text,
+        "reopened_at": ts,
+        "reopened_by": actor,
+        "staled_briefings": staled_briefings,
+        "staled_links": staled_links,
+        "noop": False,
+    }
+
+
+def _produced_spec_identity(
+    briefing: str, cluster: Optional[str], spec: str
+) -> tuple[str, Optional[str], str]:
+    return (str(briefing), str(cluster) if cluster is not None else None, str(spec))
+
+
+def link_chart_spec(
+    flow_dir: Path,
+    chart_id: str,
+    *,
+    briefing: str,
+    spec: str,
+    decisions: list[str],
+    cluster: Optional[str] = None,
+) -> dict:
+    """Idempotently record a successful capture handoff in produced_specs[].
+
+    Stable identity: briefing + cluster + spec. Identical retry is a no-op.
+    """
+    chart_id = canonicalize_chart_id(chart_id)
+    chart = load_chart_sidecar(flow_dir, chart_id)
+    briefing_id = (briefing or "").strip()
+    if not re.fullmatch(r"B[1-9][0-9]*", briefing_id):
+        raise ChartError(
+            "validation",
+            "invalid_briefing_id",
+            f"Invalid briefing id '{briefing}' (expected B1, B2, ...)",
+            details={"briefing": briefing},
+        )
+    spec_id = (spec or "").strip()
+    if not spec_id:
+        raise ChartError(
+            "validation",
+            "spec_required",
+            "link-spec requires --spec",
+            details={"chart_id": chart_id},
+        )
+    briefings = chart.get("briefings") or []
+    brief_rec = None
+    for b in briefings:
+        if isinstance(b, dict) and b.get("id") == briefing_id:
+            brief_rec = b
+            break
+    if brief_rec is None:
+        raise ChartError(
+            "not_found",
+            "briefing_not_found",
+            f"Briefing {briefing_id} not found on chart {chart_id}",
+            details={"id": chart_id, "briefing": briefing_id},
+        )
+
+    cluster_key = (
+        str(cluster).strip()
+        if cluster is not None and str(cluster).strip()
+        else None
+    )
+    decs: list[str] = []
+    seen: set[str] = set()
+    for raw in decisions or []:
+        did = canonicalize_decision_id(str(raw), chart_id=chart_id)
+        if did not in seen:
+            seen.add(did)
+            decs.append(did)
+
+    identity = _produced_spec_identity(briefing_id, cluster_key, spec_id)
+    existing_links = list(chart.get("produced_specs") or [])
+    for link in existing_links:
+        if not isinstance(link, dict):
+            continue
+        lid = _produced_spec_identity(
+            str(link.get("briefing") or ""),
+            str(link["cluster"]) if link.get("cluster") is not None else None,
+            str(link.get("spec") or ""),
+        )
+        if lid == identity:
+            return {
+                "id": chart_id,
+                "briefing": briefing_id,
+                "cluster": cluster_key,
+                "spec": spec_id,
+                "decisions": list(link.get("decisions") or decs),
+                "status": link.get("status") or "linked",
+                "noop": True,
+                "link": link,
+            }
+
+    actor = get_actor()
+    ts = now_iso()
+    link_rec = {
+        "briefing": briefing_id,
+        "cluster": cluster_key,
+        "spec": spec_id,
+        "decisions": decs,
+        "status": "linked",
+        "linked_at": ts,
+        "linked_by": actor,
+    }
+    new_chart = dict(chart)
+    new_chart["produced_specs"] = existing_links + [link_rec]
+    new_chart["updated_at"] = ts
+    mutations: list[tuple[str, str, str]] = [
+        (f"{chart_id}.json", "update", _sidecar_json(new_chart)),
+    ]
+    md_path, _ = chart_pair_paths(flow_dir, chart_id)
+    if md_path.is_file():
+        mutations.append(
+            (f"{chart_id}.md", "update", md_path.read_text(encoding="utf-8"))
+        )
+    run_chart_transaction(flow_dir, "chart.link-spec", mutations)
+    return {
+        "id": chart_id,
+        "briefing": briefing_id,
+        "cluster": cluster_key,
+        "spec": spec_id,
+        "decisions": decs,
+        "status": "linked",
+        "noop": False,
+        "link": link_rec,
+    }
+
+
+def mark_produced_specs_stale_for_superseded(
+    chart: dict,
+    superseded_ids: list[str],
+    *,
+    via: str,
+    actor: Optional[str] = None,
+    ts: Optional[str] = None,
+) -> tuple[list[dict], list[dict]]:
+    """Mark produced_specs links containing superseded D-IDs as stale.
+
+    Does not rewrite briefings or specs. Returns (new_links, staled_entries).
+    """
+    if not superseded_ids:
+        return list(chart.get("produced_specs") or []), []
+    supersede_set = set(superseded_ids)
+    actor = actor or get_actor()
+    ts = ts or now_iso()
+    new_links: list[dict] = []
+    staled: list[dict] = []
+    for link in chart.get("produced_specs") or []:
+        if not isinstance(link, dict):
+            continue
+        nl = dict(link)
+        link_decs = list(nl.get("decisions") or [])
+        hit = [d for d in link_decs if d in supersede_set]
+        if hit and nl.get("status") != "stale":
+            nl["status"] = "stale"
+            nl["staled_at"] = ts
+            nl["stale_note"] = (
+                f"superseded D-ID(s) {', '.join(hit)} via {via}"
+            )
+            staled.append(
+                {
+                    "briefing": nl.get("briefing"),
+                    "cluster": nl.get("cluster"),
+                    "spec": nl.get("spec"),
+                    "superseded": hit,
+                }
+            )
+        new_links.append(nl)
+    return new_links, staled
+
+
+def human_decision_line(decision: dict) -> str:
+    """Always pair title + full D-ID + record link."""
+    did = decision.get("id") or ""
+    title = decision.get("title") or ""
+    link = decision.get("record_path") or ""
+    if not link and did:
+        try:
+            chart_id = did.rsplit(".", 1)[0]
+            n = decision_local_number(did)
+            link = decision_record_link(chart_id, n)
+        except ChartError:
+            link = ""
+    return f"{did}  {title}  {link}".rstrip()
 
 
 def get_specs_json_write_dir(flow_dir: Path) -> Path:
@@ -17608,7 +22652,8 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
 
     # fn-52.10 (R16): origin-branched id generator.
     #   - flow-first (default): native sequential `fn-NN-slug`, allocated from
-    #     `fn-*` specs ONLY (tracker-key specs never bump the native counter).
+    #     the shared native fn-N domain (specs + charts; tracker-key specs
+    #     never bump the counter).
     #   - tracker-first (`--tracker-first` + `--tracker-identifier WOR-17`):
     #     canonical id derived from the LOWERCASE tracker key + number +
     #     slug → `wor-17-slug`; tasks become `wor-17-slug.M` via the unchanged
@@ -17619,6 +22664,94 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     # Use slugified title as suffix, fallback to random if empty/invalid.
     slug = slugify(args.title)
     suffix = slug if slug else generate_epic_suffix()
+
+    # fn-43.1: Resolve write target. Fresh / migrated repos -> .flow/specs/;
+    # alias-mode 0.x repos (no sentinel + epics/ exists) -> .flow/epics/.
+    spec_json_dir = get_specs_json_write_dir(flow_dir)
+    spec_json_dir.mkdir(parents=True, exist_ok=True)
+    spec_md_dir = flow_dir / SPECS_DIR
+    spec_md_dir.mkdir(parents=True, exist_ok=True)
+
+    def _publish_spec(spec_id: str, tracker_first_flag: bool, tracker_id_val) -> dict:
+        # Double-check no collision across BOTH dirs (shouldn't happen with
+        # scan-based allocation + no-clobber create).
+        canonical_json_path = flow_dir / SPECS_JSON_DIR / f"{spec_id}.json"
+        legacy_json_path = flow_dir / EPICS_DIR / f"{spec_id}.json"
+        spec_md_path = spec_md_dir / f"{spec_id}.md"
+        if (
+            canonical_json_path.exists()
+            or legacy_json_path.exists()
+            or spec_md_path.exists()
+        ):
+            error_exit(
+                f"Refusing to overwrite existing spec {spec_id}. "
+                f"This shouldn't happen - check for orphaned files.",
+                use_json=args.json,
+            )
+
+        spec_json_path = spec_json_dir / f"{spec_id}.json"
+
+        # Create spec JSON. depends_on_epics field name kept (reads accept both
+        # names through 1.x; T2 layers the read-compat). Field rename is internal
+        # only and deferred so external tooling reading the file keeps working.
+        spec_data = {
+            "id": spec_id,
+            "title": args.title,
+            "status": "open",
+            "plan_review_status": "unknown",
+            "plan_reviewed_at": None,
+            "branch_name": args.branch if args.branch else spec_id,
+            "depends_on_epics": [],
+            "spec_path": f"{FLOW_DIR}/{SPECS_DIR}/{spec_id}.md",
+            "next_task": 1,
+            # fn-52.1 (R4): per-item tracker sync state. `id` is the durable UUID
+            # dedupe key; `identifier` the display key (WOR-17); merge-base stored
+            # in BOTH flow-form and tracker-form so the agentic 3-way merge (.4)
+            # has a base comparable to each side, plus content hashes for the
+            # echo-fence (a post-push hash match on the next pull = flow's own
+            # echo, not a real conflict).
+            "tracker": default_spec_tracker_state(),
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+        # fn-52.10: tracker-first specs store the DISPLAY identifier (WOR-17) so the
+        # alias index resolves the bare handle. The canonical id already carries the
+        # lowercase key; the full UUID / url land later on link (fn-52.2).
+        if tracker_first_flag and tracker_id_val:
+            spec_data["tracker"]["identifier"] = tracker_id_val
+        json_content = json.dumps(spec_data, indent=2, sort_keys=True) + "\n"
+        spec_content = create_epic_spec(spec_id, args.title)
+
+        # No-clobber publication under the allocation lock (fn-135): concurrent
+        # chart/spec creates cannot reserve the same number then overwrite.
+        published: list[Path] = []
+        try:
+            atomic_create(spec_json_path, json_content)
+            published.append(spec_json_path)
+            atomic_create(spec_md_path, spec_content)
+            published.append(spec_md_path)
+        except FileExistsError:
+            for published_path in reversed(published):
+                try:
+                    published_path.unlink()
+                except OSError:
+                    pass
+            error_exit(
+                f"Refusing to overwrite existing spec {spec_id}. "
+                f"This shouldn't happen - check for orphaned files.",
+                use_json=args.json,
+            )
+        except (OSError, ValueError) as e:
+            for published_path in reversed(published):
+                try:
+                    published_path.unlink()
+                except OSError:
+                    pass
+            error_exit(
+                f"Failed to create spec {spec_id}: {e}",
+                use_json=args.json,
+            )
+        return spec_data
 
     if tracker_first:
         # fn-134.2: KEY-N (Linear/Jira) OR synthetic gh/gl from #N / project#N
@@ -17634,74 +22767,35 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
             display=tracker_identifier, use_json=args.json,
         )
         spec_id = f"{key}-{number}-{suffix}"
+        # Tracker-first ids are not from the native counter; still serialize
+        # publication against the shared lock so a concurrent native allocate
+        # cannot race a colliding path write (defensive; schemes differ).
+        try:
+            with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
+                spec_data = _publish_spec(spec_id, True, tracker_identifier)
+        except CrossProcessLockError as e:
+            error_exit(
+                f"Native id allocation lock unavailable: {e}",
+                use_json=args.json,
+            )
     else:
         # Flow-first specs may still carry a tracker identifier later, but at
         # create time only the reserved-key guard applies (no identifier set).
         reject_reserved_tracker_key(tracker_identifier, use_json=args.json)
-        # MU-1: Scan-based allocation for merge safety. NATIVE-`fn`-ONLY so a
-        # tracker-key spec never pushes the next flow-first spec's number.
-        max_spec = scan_max_native_fn_spec_id(flow_dir)
-        spec_num = max_spec + 1
-        spec_id = f"fn-{spec_num}-{suffix}"
-
-    # fn-43.1: Resolve write target. Fresh / migrated repos -> .flow/specs/;
-    # alias-mode 0.x repos (no sentinel + epics/ exists) -> .flow/epics/.
-    spec_json_dir = get_specs_json_write_dir(flow_dir)
-    spec_json_dir.mkdir(parents=True, exist_ok=True)
-    spec_md_dir = flow_dir / SPECS_DIR
-    spec_md_dir.mkdir(parents=True, exist_ok=True)
-
-    # Double-check no collision across BOTH dirs (shouldn't happen with
-    # scan-based allocation).
-    canonical_json_path = flow_dir / SPECS_JSON_DIR / f"{spec_id}.json"
-    legacy_json_path = flow_dir / EPICS_DIR / f"{spec_id}.json"
-    spec_md_path = spec_md_dir / f"{spec_id}.md"
-    if (
-        canonical_json_path.exists()
-        or legacy_json_path.exists()
-        or spec_md_path.exists()
-    ):
-        error_exit(
-            f"Refusing to overwrite existing spec {spec_id}. "
-            f"This shouldn't happen - check for orphaned files.",
-            use_json=args.json,
-        )
-
-    spec_json_path = spec_json_dir / f"{spec_id}.json"
-
-    # Create spec JSON. depends_on_epics field name kept (reads accept both
-    # names through 1.x; T2 layers the read-compat). Field rename is internal
-    # only and deferred so external tooling reading the file keeps working.
-    spec_data = {
-        "id": spec_id,
-        "title": args.title,
-        "status": "open",
-        "plan_review_status": "unknown",
-        "plan_reviewed_at": None,
-        "branch_name": args.branch if args.branch else spec_id,
-        "depends_on_epics": [],
-        "spec_path": f"{FLOW_DIR}/{SPECS_DIR}/{spec_id}.md",
-        "next_task": 1,
-        # fn-52.1 (R4): per-item tracker sync state. `id` is the durable UUID
-        # dedupe key; `identifier` the display key (WOR-17); merge-base stored
-        # in BOTH flow-form and tracker-form so the agentic 3-way merge (.4)
-        # has a base comparable to each side, plus content hashes for the
-        # echo-fence (a post-push hash match on the next pull = flow's own
-        # echo, not a real conflict).
-        "tracker": default_spec_tracker_state(),
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-    }
-    # fn-52.10: tracker-first specs store the DISPLAY identifier (WOR-17) so the
-    # alias index resolves the bare handle. The canonical id already carries the
-    # lowercase key; the full UUID / url land later on link (fn-52.2).
-    if tracker_first and tracker_identifier:
-        spec_data["tracker"]["identifier"] = tracker_identifier
-    atomic_write_json(spec_json_path, spec_data)
-
-    # Create spec markdown.
-    spec_content = create_epic_spec(spec_id, args.title)
-    atomic_write(spec_md_path, spec_content)
+        # fn-135: shared cross-kind allocation lock with chart create. Scan +
+        # no-clobber reserve under one lock so concurrent kinds never select
+        # the same fn-N.
+        try:
+            with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
+                max_spec = scan_max_native_fn_spec_id(flow_dir)
+                spec_num = max_spec + 1
+                spec_id = f"fn-{spec_num}-{suffix}"
+                spec_data = _publish_spec(spec_id, False, tracker_identifier)
+        except CrossProcessLockError as e:
+            error_exit(
+                f"Native id allocation lock unavailable: {e}",
+                use_json=args.json,
+            )
 
     # NOTE: We no longer update meta["next_spec"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
@@ -17719,6 +22813,1166 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         json_output(out)
     else:
         print(f"Spec {spec_id} created: {args.title}")
+
+
+def _chart_ensure_flow(use_json: bool, command: str) -> Path:
+    if not ensure_flow_exists():
+        chart_fail(
+            command,
+            use_json,
+            "invalid_state",
+            "flow_missing",
+            ".flow/ does not exist. Run 'flowctl init' first.",
+        )
+    return get_flow_dir()
+
+
+def cmd_chart_create(args: argparse.Namespace) -> None:
+    """Create a chart; optional --initial-map-file validates/enforces ceiling first."""
+    command = "chart.create"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+
+    title = (getattr(args, "title", None) or "").strip()
+    outcome = (getattr(args, "outcome", None) or "").strip()
+    if not title:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "title_required",
+            "Chart create requires --title",
+        )
+    if not outcome:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "outcome_required",
+            "Chart create requires --outcome",
+        )
+
+    initial_path = getattr(args, "initial_map_file", None)
+    force_size = bool(getattr(args, "force_size", False))
+    force_reason = getattr(args, "reason", None)
+    if force_size and not initial_path:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "force_size_needs_map",
+            "--force-size applies only with --initial-map-file",
+        )
+
+    try:
+        # Validate initial map BEFORE allocation so over-ceiling creates
+        # reserve no chart id.
+        built_initial = None
+        if initial_path:
+            map_data = parse_initial_map_file(Path(initial_path))
+            # Provisional chart id for edge canonicalization; rewritten after alloc.
+            # Edges use local D1/D2 labels resolved inside validate_and_build.
+            # Must be a valid fn-N shape (fn-0 is rejected by canonicalize_chart_id).
+            # Discarded after allocation; real ids are rebound below.
+            _PROVISIONAL_CHART_ID = "fn-999999999"
+            provisional = validate_and_build_initial_map(
+                _PROVISIONAL_CHART_ID,
+                map_data,
+                force_size=force_size,
+                force_reason=force_reason,
+            )
+            built_initial = provisional
+
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
+                next_n = scan_max_native_fn_spec_id(flow_dir) + 1
+                chart_id = f"fn-{next_n}"
+                initial_for_create = None
+                if built_initial is not None:
+                    # Re-bind provisional placeholder ids to the allocated chart id.
+                    rebound = validate_and_build_initial_map(
+                        chart_id,
+                        map_data,
+                        force_size=force_size,
+                        force_reason=force_reason,
+                    )
+                    initial_for_create = rebound
+                data = create_chart_pair(
+                    flow_dir,
+                    chart_id,
+                    title,
+                    outcome,
+                    initial=initial_for_create,
+                )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart allocation lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+
+    meta = compact_chart_metadata(data)
+    projection = _maybe_project_chart(
+        flow_dir, data["id"], event="chart.create",
+        revision=chart_decision_revision(data),
+    )
+    result = {
+        "id": data["id"],
+        "title": data["title"],
+        "outcome": data["outcome"],
+        "status": data["status"],
+        "created": data["created"],
+        "chart_path": f"{FLOW_DIR}/{CHARTS_DIR}/{data['id']}.md",
+        "decision_count": meta["decision_count"],
+        "parked_count": meta["parked_count"],
+        "unattended_count": meta["unattended_count"],
+        "attended_count": meta["attended_count"],
+        "estimated_sessions": meta["estimated_sessions"],
+        "cost_line": meta["cost_line"],
+        "tracker_projection": projection,
+        "decisions": [
+            {
+                "id": d.get("id"),
+                "title": d.get("title"),
+                "type": d.get("type"),
+                "attendance": d.get("attendance"),
+                "record_path": d.get("record_path"),
+            }
+            for d in (data.get("decisions") or [])
+            if isinstance(d, dict)
+        ],
+        "parked_questions": [
+            {"key": p.get("key"), "body": p.get("body")}
+            for p in (data.get("parked_questions") or [])
+            if isinstance(p, dict)
+        ],
+    }
+    if data.get("force_size_audit"):
+        result["force_size_audit"] = data["force_size_audit"]
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(f"Chart {data['id']} created: {data['title']}")
+        print(meta["cost_line"])
+        for d in data.get("decisions") or []:
+            if isinstance(d, dict):
+                print(human_decision_line(d))
+
+
+def cmd_chart_show(args: argparse.Namespace) -> None:
+    """Show compact chart metadata + map body (no decision answer/assets)."""
+    command = "chart.show"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            data = load_chart_sidecar(flow_dir, chart_id)
+            meta = compact_chart_metadata(data)
+            md_path, _json_path = chart_pair_paths(flow_dir, chart_id)
+            body = ""
+            if md_path.is_file():
+                try:
+                    body = md_path.read_text(encoding="utf-8")
+                except OSError as e:
+                    raise ChartError(
+                        "io",
+                        "chart_body_unreadable",
+                        f"Chart body unreadable: {chart_id} ({e})",
+                        details={"id": chart_id},
+                    ) from e
+            # Compact decision list from sidecar only - never open decision files.
+            decisions_out = [
+                compact_decision_entry(d)
+                for d in (data.get("decisions") or [])
+                if isinstance(d, dict)
+            ]
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+
+    result = {
+        **meta,
+        "chart_path": f"{FLOW_DIR}/{CHARTS_DIR}/{meta['id']}.md",
+        "body": body,
+        "decisions": decisions_out,
+        "parked_questions": [
+            {"key": p.get("key"), "body": p.get("body")}
+            for p in (data.get("parked_questions") or [])
+            if isinstance(p, dict)
+        ],
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(f"{meta['id']}  {meta['title']}  [{meta['status']}]")
+        print(f"Outcome: {meta['outcome']}")
+        print(
+            f"Decisions: {meta['decision_count']} "
+            f"(open={meta['open_count']} blocked={meta['blocked_count']} "
+            f"claimed={meta['claimed_count']} parked={meta['parked_count']})"
+        )
+        print(meta["cost_line"])
+        if not meta["briefable"]:
+            print("Not briefable:")
+            for reason in meta["stuck_reasons"]:
+                print(f"  - {reason}")
+        for d in decisions_out:
+            print(human_decision_line(d))
+        if body:
+            print()
+            sys.stdout.write(body if body.endswith("\n") else body + "\n")
+
+
+def cmd_chart_list(args: argparse.Namespace) -> None:
+    """List charts with compact progress + remaining attended cost."""
+    command = "chart.list"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            charts_out: list[dict] = []
+            for chart_id in list_chart_ids(flow_dir):
+                try:
+                    data = load_chart_sidecar(flow_dir, chart_id)
+                    charts_out.append(compact_chart_metadata(data))
+                except ChartError:
+                    # Skip unreadable entries rather than failing the whole list.
+                    continue
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+
+    if use_json:
+        chart_json_success(command, {"charts": charts_out, "count": len(charts_out)})
+    else:
+        if not charts_out:
+            print("No charts.")
+            return
+        for c in charts_out:
+            print(
+                f"{c['id']}  {c['title']}  [{c['status']}]  "
+                f"decisions={c['decision_count']} "
+                f"open={c['open_count']} attended_left={c['attended_count']}"
+            )
+
+
+def cmd_chart_add_decision(args: argparse.Namespace) -> None:
+    """Allocate the next D-ID under a chart."""
+    command = "chart.add-decision"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    title = (getattr(args, "title", None) or "").strip()
+    dtype = (getattr(args, "type", None) or "").strip()
+    attendance = getattr(args, "attendance", None)
+    body_file = getattr(args, "body_file", None)
+    question = ""
+    if body_file:
+        try:
+            question = Path(body_file).read_text(encoding="utf-8")
+        except OSError as e:
+            chart_fail(
+                command,
+                use_json,
+                "io",
+                "body_file_unreadable",
+                f"Cannot read --body-file: {e}",
+                details={"path": str(body_file)},
+            )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            blocked = _parse_edge_list(
+                getattr(args, "blocked_by", None),
+                chart_id,
+                field_name="blocked_by",
+            )
+            depends = _parse_edge_list(
+                getattr(args, "depends_on", None),
+                chart_id,
+                field_name="depends_on",
+            )
+            full = add_chart_decision(
+                flow_dir,
+                chart_id,
+                title,
+                dtype,
+                attendance=attendance,
+                question=question,
+                blocked_by=blocked,
+                depends_on=depends,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+
+    result = {
+        "id": full["id"],
+        "title": full["title"],
+        "type": full["type"],
+        "attendance": full["attendance"],
+        "status": full["status"],
+        "blocked_by": full.get("blocked_by") or [],
+        "depends_on": full.get("depends_on") or [],
+        "record_path": full.get("record_path"),
+        "chart": full.get("chart"),
+    }
+    result = _attach_tracker_projection(
+        result, flow_dir, full.get("chart"), "chart.wire",
+    )
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(human_decision_line(result))
+        print(f"type={result['type']} attendance={result['attendance']}")
+
+
+def cmd_chart_park_question(args: argparse.Namespace) -> None:
+    command = "chart.park-question"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    body_file = getattr(args, "body_file", None)
+    if not body_file:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "body_file_required",
+            "park-question requires --body-file",
+        )
+    try:
+        body = Path(body_file).read_text(encoding="utf-8")
+    except OSError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "body_file_unreadable",
+            f"Cannot read --body-file: {e}",
+            details={"path": str(body_file)},
+        )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            out = park_chart_question(flow_dir, chart_id, body)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    result = {
+        "chart_id": canonicalize_chart_id(raw_id),
+        "key": out["key"],
+        "body": out["body"],
+        "created": out.get("created"),
+        "noop": out.get("noop", False),
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(f"Parked question key={result['key']}")
+        print(result["body"])
+
+
+def cmd_chart_remove_question(args: argparse.Namespace) -> None:
+    command = "chart.remove-question"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    qkey = getattr(args, "question", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            out = remove_chart_question(flow_dir, chart_id, qkey)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    result = {
+        "chart_id": canonicalize_chart_id(raw_id),
+        "key": out["key"],
+        "body": out.get("body"),
+        "removed": True,
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        print(f"Removed parked question key={result['key']}")
+
+
+def cmd_chart_wire_decision(args: argparse.Namespace) -> None:
+    command = "chart.wire-decision"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    # Replace only the edge sets the caller supplied (None = leave unchanged).
+    blocked_raw = getattr(args, "blocked_by", None)
+    depends_raw = getattr(args, "depends_on", None)
+    replace_blocked = blocked_raw is not None
+    replace_depends = depends_raw is not None
+    if not replace_blocked and not replace_depends:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "edges_required",
+            "wire-decision requires --blocked-by and/or --depends-on "
+            "(pass empty string to clear)",
+        )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            did = canonicalize_decision_id(raw_did)
+            chart_id = did.rsplit(".", 1)[0]
+            blocked = (
+                _parse_edge_list(blocked_raw, chart_id, field_name="blocked_by")
+                if replace_blocked
+                else None
+            )
+            depends = (
+                _parse_edge_list(depends_raw, chart_id, field_name="depends_on")
+                if replace_depends
+                else None
+            )
+            out = wire_chart_decision(
+                flow_dir,
+                did,
+                blocked_by=blocked,
+                depends_on=depends,
+                replace_blocked=replace_blocked,
+                replace_depends=replace_depends,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), "chart.wire",
+    )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(
+            f"blocked_by={','.join(out.get('blocked_by') or []) or '-'} "
+            f"depends_on={','.join(out.get('depends_on') or []) or '-'}"
+        )
+
+
+def cmd_chart_frontier(args: argparse.Namespace) -> None:
+    command = "chart.frontier"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            chart_id = canonicalize_chart_id(raw_id)
+            data = load_chart_sidecar(flow_dir, chart_id)
+            # Frontier from compact sidecar only - never open decision files.
+            frontier = compute_frontier(data)
+            completion = chart_completion_predicate(data)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    result = {
+        "chart_id": chart_id,
+        "frontier": frontier,
+        "count": len(frontier),
+        "briefable": completion["briefable"],
+        "stuck_reasons": completion["stuck_reasons"],
+    }
+    if use_json:
+        chart_json_success(command, result)
+    else:
+        if not frontier:
+            print(f"Frontier empty for {chart_id}")
+            if completion["stuck_reasons"]:
+                print("Stuck:")
+                for reason in completion["stuck_reasons"]:
+                    print(f"  - {reason}")
+            elif completion["briefable"]:
+                print("Chart is briefable (no open decisions or parked questions).")
+            return
+        for d in frontier:
+            print(human_decision_line(d))
+
+
+def cmd_chart_claim(args: argparse.Namespace) -> None:
+    command = "chart.claim"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = claim_chart_decision(flow_dir, raw_did)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), "chart.claim",
+    )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(f"claimed_by={out['claimed_by']} claimed_at={out['claimed_at']}")
+
+
+def cmd_chart_release_claim(args: argparse.Namespace) -> None:
+    command = "chart.release-claim"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    break_stale = bool(getattr(args, "break_stale", False))
+    reason = getattr(args, "reason", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = release_chart_claim(
+                flow_dir,
+                raw_did,
+                break_stale=break_stale,
+                reason=reason,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), "chart.release",
+    )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(f"released prior_owner={out.get('prior_owner')}")
+        if out.get("audit"):
+            print(f"audit={json.dumps(out['audit'], default=str)}")
+
+
+def cmd_chart_attach_asset(args: argparse.Namespace) -> None:
+    command = "chart.attach-asset"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    asset_file = getattr(args, "asset_file", None)
+    if not asset_file:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "asset_file_required",
+            "attach-asset requires --asset-file",
+        )
+    try:
+        asset_raw = json.loads(Path(asset_file).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "asset_file_invalid_json",
+            f"--asset-file is not valid JSON: {e}",
+            details={"path": str(asset_file)},
+        )
+    except OSError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "asset_file_unreadable",
+            f"Cannot read --asset-file: {e}",
+            details={"path": str(asset_file)},
+        )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = attach_chart_asset(flow_dir, raw_did, asset_raw)
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        asset = out.get("asset") or {}
+        print(
+            f"asset kind={asset.get('kind')} ref={asset.get('reference')} "
+            f"noop={out.get('noop')}"
+        )
+
+
+def cmd_chart_resolve(args: argparse.Namespace) -> None:
+    command = "chart.resolve"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    answer_file = getattr(args, "answer_file", None)
+    if not answer_file:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "answer_file_required",
+            "resolve requires --answer-file",
+        )
+    try:
+        answer = Path(answer_file).read_text(encoding="utf-8")
+    except OSError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "answer_file_unreadable",
+            f"Cannot read --answer-file: {e}",
+            details={"path": str(answer_file)},
+        )
+    assets_raw = getattr(args, "assets", None)
+    sharpen_path = getattr(args, "sharpen_file", None)
+    supersedes_raw = getattr(args, "supersedes", None)
+    keep_dependents = bool(getattr(args, "keep_dependents", False))
+    try:
+        sharpen = None
+        if sharpen_path:
+            sharpen = _parse_sharpen_file(Path(sharpen_path))
+        supersedes = None
+        if supersedes_raw is not None and str(supersedes_raw).strip():
+            supersedes = [
+                p.strip()
+                for p in str(supersedes_raw).split(",")
+                if p.strip()
+            ]
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = resolve_chart_decision(
+                flow_dir,
+                raw_did,
+                answer,
+                assets_raw=assets_raw,
+                sharpen=sharpen,
+                supersedes=supersedes,
+                keep_dependents=keep_dependents,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    proj_event = (
+        "chart.supersede"
+        if supersedes
+        else "chart.resolve"
+    )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), proj_event,
+    )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(f"status={out.get('status')} gist={out.get('answer_gist')}")
+        if out.get("affected"):
+            print(f"affected={','.join(out['affected'])}")
+        if out.get("replacements"):
+            for rep in out["replacements"]:
+                print(
+                    f"replacement {rep.get('id')} replaces {rep.get('replaces')}"
+                )
+
+
+def cmd_chart_out_of_scope(args: argparse.Namespace) -> None:
+    command = "chart.out-of-scope"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_did = getattr(args, "decision_id", None) or getattr(args, "id", None)
+    reason = getattr(args, "reason", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = out_of_scope_chart_decision(flow_dir, raw_did, reason or "")
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), "chart.outOfScope",
+    )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(human_decision_line(out))
+        print(f"status=out-of-scope reason={out.get('reason')}")
+
+
+def cmd_chart_abandon(args: argparse.Namespace) -> None:
+    command = "chart.abandon"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    reason = getattr(args, "reason", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = abandon_chart(flow_dir, raw_id, reason or "")
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    out = _attach_tracker_projection(
+        out, flow_dir, out.get("id") or raw_id, "chart.abandon",
+    )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(f"{out.get('id')} abandoned: {out.get('reason')}")
+
+
+def cmd_chart_briefing(args: argparse.Namespace) -> None:
+    command = "chart.briefing"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    proposal = getattr(args, "proposal_file", None)
+    force = bool(getattr(args, "force", False))
+    if not proposal:
+        chart_fail(
+            command,
+            use_json,
+            "validation",
+            "proposal_file_required",
+            "chart briefing requires --proposal-file",
+        )
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = emit_chart_briefing(
+                flow_dir,
+                raw_id,
+                Path(proposal),
+                force=force,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    out = _attach_tracker_projection(
+        out, flow_dir, out.get("id") or raw_id, "chart.briefing",
+    )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        bid = out.get("briefing_id")
+        st = out.get("status")
+        noop = " (noop)" if out.get("noop") else ""
+        print(f"{out.get('id')} briefing {bid} status={st}{noop}")
+        if out.get("transitioned_done"):
+            print(f"chart status -> done via {bid}")
+        paths = out.get("paths") or {}
+        if paths.get("index"):
+            print(f"index={paths['index']}")
+
+
+def cmd_chart_reopen(args: argparse.Namespace) -> None:
+    command = "chart.reopen"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    reason = getattr(args, "reason", None)
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = reopen_chart(flow_dir, raw_id, reason or "")
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    out = _attach_tracker_projection(
+        out, flow_dir, out.get("id") or raw_id, "chart.reopen",
+    )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        print(
+            f"{out.get('id')} reopened (was {out.get('prior_status')}): "
+            f"{out.get('reason')}"
+        )
+        if out.get("staled_briefings"):
+            print(f"staled briefings: {', '.join(out['staled_briefings'])}")
+
+
+def cmd_chart_locate(args: argparse.Namespace) -> None:
+    """Resolve chart/D-ID, stored tracker id, or stored URL via local ledger.
+
+    Zero mutation. No network. Strict host/credential/ambiguity rejection.
+    """
+    command = "chart.locate"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    selector = getattr(args, "selector", None) or ""
+    try:
+        from flowctl_tracker.facade.chart_projection import (  # noqa: PLC0415
+            locate_selector,
+        )
+        from flowctl_tracker.types import TrackerError  # noqa: PLC0415
+    except ImportError:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "facade_unavailable",
+            "flowctl_tracker package is not available",
+        )
+        return
+    # Locate is read-only against the ledger; recover journals so sidecars are
+    # consistent, then never write.
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+    except CrossProcessLockError:
+        pass
+    out = locate_selector(flow_dir, selector)
+    if isinstance(out, TrackerError):
+        code = (out.details or {}).get("code") or out.subtype or "unresolved_locator"
+        # Map tracker ErrorClass onto the chart v1 envelope classes.
+        cls_val = out.cls.value if hasattr(out.cls, "value") else str(out.cls)
+        chart_class = {
+            "not_found": "not_found",
+            "unresolved": "not_found",
+            "conflict": "conflict",
+            "stale_id": "conflict",
+            "invalid_input": "validation",
+            "capability": "validation",
+            "inactive": "invalid_state",
+        }.get(cls_val, "validation")
+        chart_fail(
+            command,
+            use_json,
+            chart_class,
+            str(code),
+            out.message,
+            details=out.details,
+            exit_code=out.exit_code if hasattr(out, "exit_code") else 1,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        kind = out.get("kind")
+        if kind == "chart":
+            print(
+                f"chart {out.get('chart_id')} - {out.get('title')} "
+                f"[{out.get('status')}] {out.get('record_path')}"
+            )
+        else:
+            print(
+                f"decision {out.get('decision_id')} - {out.get('title')} "
+                f"[{out.get('status')}] {out.get('record_path')}"
+            )
+            if out.get("history"):
+                hist = out["history"]
+                print(
+                    f"history status={hist.get('status')} "
+                    f"superseded_by={hist.get('superseded_by') or '-'}"
+                )
+                if out.get("frontier") is not None:
+                    fr = out.get("frontier") or []
+                    print(
+                        "frontier: "
+                        + (
+                            ", ".join(
+                                f"{f.get('id')}({f.get('title')})" for f in fr
+                            )
+                            if fr
+                            else "(empty)"
+                        )
+                    )
+
+
+def cmd_chart_link_spec(args: argparse.Namespace) -> None:
+    command = "chart.link-spec"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    raw_id = getattr(args, "chart_id", None) or getattr(args, "id", None)
+    briefing = getattr(args, "briefing", None)
+    spec = getattr(args, "spec", None)
+    cluster = getattr(args, "cluster", None)
+    decisions_raw = getattr(args, "decisions", None) or ""
+    decisions = [p.strip() for p in str(decisions_raw).split(",") if p.strip()]
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+            out = link_chart_spec(
+                flow_dir,
+                raw_id,
+                briefing=briefing or "",
+                spec=spec or "",
+                decisions=decisions,
+                cluster=cluster,
+            )
+    except CrossProcessLockError as e:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "lock_unavailable",
+            f"Chart resource lock unavailable: {e}",
+        )
+    except ChartError as e:
+        chart_fail(
+            command,
+            use_json,
+            e.error_class,
+            e.code,
+            e.message,
+            details=e.details,
+            exit_code=e.exit_code,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        noop = " (noop)" if out.get("noop") else ""
+        cl = out.get("cluster")
+        cl_part = f" cluster={cl}" if cl else ""
+        print(
+            f"{out.get('id')} link-spec {out.get('briefing')}{cl_part} "
+            f"-> {out.get('spec')} status={out.get('status')}{noop}"
+        )
 
 
 # ---------- PR cognitive-aid artifact (fn-136.6) ------------------------
@@ -36377,6 +42631,346 @@ def main() -> None:
         "--json", action="store_true", help="JSON output"
     )
     p_prospect_promote.set_defaults(func=cmd_prospect_promote)
+
+    # chart (fn-135) — decision-map discovery store.
+    # Task 1: create/show/list + allocator + journal. Task 9: graph/claims.
+    p_chart = subparsers.add_parser(
+        "chart",
+        help="Chart commands (decision-map discovery; fn-135)",
+    )
+    chart_sub = p_chart.add_subparsers(dest="chart_cmd", required=True)
+
+    p_chart_create = chart_sub.add_parser(
+        "create",
+        help="Allocate a chart id; optional initial-map validates size first",
+    )
+    p_chart_create.add_argument("--title", required=True, help="Chart title")
+    p_chart_create.add_argument(
+        "--outcome",
+        required=True,
+        help="What reaching the end of this chart looks like",
+    )
+    p_chart_create.add_argument(
+        "--initial-map-file",
+        dest="initial_map_file",
+        default=None,
+        help="JSON file of titled decisions + parked questions (validated pre-alloc)",
+    )
+    p_chart_create.add_argument(
+        "--force-size",
+        action="store_true",
+        help="Override chart.maxDecisions (requires --reason; audited)",
+    )
+    p_chart_create.add_argument(
+        "--reason",
+        default=None,
+        help="Reason for --force-size override (recorded in create transaction)",
+    )
+    p_chart_create.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_create.set_defaults(func=cmd_chart_create)
+
+    p_chart_show = chart_sub.add_parser(
+        "show",
+        help="Show compact chart metadata and map body",
+    )
+    p_chart_show.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_show.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_show.set_defaults(func=cmd_chart_show)
+
+    p_chart_list = chart_sub.add_parser(
+        "list",
+        help="List charts with compact progress metadata",
+    )
+    p_chart_list.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_list.set_defaults(func=cmd_chart_list)
+
+    p_chart_add = chart_sub.add_parser(
+        "add-decision",
+        help="Allocate next D-ID under a chart",
+    )
+    p_chart_add.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_add.add_argument("--title", required=True, help="Decision title")
+    p_chart_add.add_argument(
+        "--type",
+        required=True,
+        help="research|probe|eval|prototype|interview|task",
+    )
+    p_chart_add.add_argument(
+        "--attendance",
+        default=None,
+        help="attended|unattended (required for type=task; derived otherwise)",
+    )
+    p_chart_add.add_argument(
+        "--body-file",
+        dest="body_file",
+        default=None,
+        help="File containing the ## Question body",
+    )
+    p_chart_add.add_argument(
+        "--blocked-by",
+        dest="blocked_by",
+        default=None,
+        help="Comma-separated D-IDs that must close before this is actionable",
+    )
+    p_chart_add.add_argument(
+        "--depends-on",
+        dest="depends_on",
+        default=None,
+        help="Comma-separated premise D-IDs (provenance; not readiness)",
+    )
+    p_chart_add.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_add.set_defaults(func=cmd_chart_add_decision)
+
+    p_chart_park = chart_sub.add_parser(
+        "park-question",
+        help="Add a normalized parked Open Question; returns stable key",
+    )
+    p_chart_park.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_park.add_argument(
+        "--body-file",
+        dest="body_file",
+        required=True,
+        help="File containing the parked question text",
+    )
+    p_chart_park.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_park.set_defaults(func=cmd_chart_park_question)
+
+    p_chart_rmq = chart_sub.add_parser(
+        "remove-question",
+        help="Remove a parked question by stable key",
+    )
+    p_chart_rmq.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_rmq.add_argument(
+        "--question",
+        required=True,
+        help="Stable parked-question key from park-question",
+    )
+    p_chart_rmq.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_rmq.set_defaults(func=cmd_chart_remove_question)
+
+    p_chart_wire = chart_sub.add_parser(
+        "wire-decision",
+        help="Atomically replace blocked_by/depends_on for a decision",
+    )
+    p_chart_wire.add_argument(
+        "decision_id",
+        help="Decision id (<chart-id>.D<n> or D<n> with chart context)",
+    )
+    p_chart_wire.add_argument(
+        "--blocked-by",
+        dest="blocked_by",
+        default=None,
+        help="Replacement blocked_by list (comma-separated; empty clears)",
+    )
+    p_chart_wire.add_argument(
+        "--depends-on",
+        dest="depends_on",
+        default=None,
+        help="Replacement depends_on list (comma-separated; empty clears)",
+    )
+    p_chart_wire.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_wire.set_defaults(func=cmd_chart_wire_decision)
+
+    p_chart_frontier = chart_sub.add_parser(
+        "frontier",
+        help="Open, unblocked, unclaimed decisions (dependency-ordered)",
+    )
+    p_chart_frontier.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_frontier.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_frontier.set_defaults(func=cmd_chart_frontier)
+
+    p_chart_claim = chart_sub.add_parser(
+        "claim",
+        help="Atomic claim; does not change decision status",
+    )
+    p_chart_claim.add_argument("decision_id", help="Decision id (<chart-id>.D<n>)")
+    p_chart_claim.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_claim.set_defaults(func=cmd_chart_claim)
+
+    p_chart_release = chart_sub.add_parser(
+        "release-claim",
+        help="Owner release or age-gated --break-stale --reason",
+    )
+    p_chart_release.add_argument("decision_id", help="Decision id (<chart-id>.D<n>)")
+    p_chart_release.add_argument(
+        "--break-stale",
+        action="store_true",
+        help="Break another actor's claim after chart.claimStaleAfter",
+    )
+    p_chart_release.add_argument(
+        "--reason",
+        default=None,
+        help="Required with --break-stale; audited with actor/prior/age",
+    )
+    p_chart_release.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_release.set_defaults(func=cmd_chart_release_claim)
+
+    p_chart_attach = chart_sub.add_parser(
+        "attach-asset",
+        help="Idempotently attach a safe evidence/prototype asset; decision stays open",
+    )
+    p_chart_attach.add_argument(
+        "decision_id",
+        help="Decision id (<chart-id>.D<n>)",
+    )
+    p_chart_attach.add_argument(
+        "--asset-file",
+        dest="asset_file",
+        required=True,
+        help="JSON file: {kind, reference, display, revision?}",
+    )
+    p_chart_attach.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_attach.set_defaults(func=cmd_chart_attach_asset)
+
+    p_chart_resolve = chart_sub.add_parser(
+        "resolve",
+        help="Write answer once, close decision, ledger gist; optional supersession/sharpen",
+    )
+    p_chart_resolve.add_argument(
+        "decision_id",
+        help="Decision id (<chart-id>.D<n>)",
+    )
+    p_chart_resolve.add_argument(
+        "--answer-file",
+        dest="answer_file",
+        required=True,
+        help="File containing the answer body (safe content only)",
+    )
+    p_chart_resolve.add_argument(
+        "--assets",
+        default=None,
+        help="JSON list of asset objects to merge at resolve time",
+    )
+    p_chart_resolve.add_argument(
+        "--sharpen-file",
+        dest="sharpen_file",
+        default=None,
+        help="JSON: new titled decisions + remove_questions keys (one transaction)",
+    )
+    p_chart_resolve.add_argument(
+        "--supersedes",
+        default=None,
+        help="Comma-separated D-IDs this answer supersedes",
+    )
+    p_chart_resolve.add_argument(
+        "--keep-dependents",
+        action="store_true",
+        help="Suppress depends_on cascade; record the judgment on affected records",
+    )
+    p_chart_resolve.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_resolve.set_defaults(func=cmd_chart_resolve)
+
+    p_chart_oos = chart_sub.add_parser(
+        "out-of-scope",
+        help="Close decision without ledger answer; write ## Boundaries reason",
+    )
+    p_chart_oos.add_argument(
+        "decision_id",
+        help="Decision id (<chart-id>.D<n>)",
+    )
+    p_chart_oos.add_argument(
+        "--reason",
+        required=True,
+        help="One-line reason recorded under ## Boundaries",
+    )
+    p_chart_oos.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_oos.set_defaults(func=cmd_chart_out_of_scope)
+
+    p_chart_abandon = chart_sub.add_parser(
+        "abandon",
+        help="Close chart as abandoned with reason; nothing deleted",
+    )
+    p_chart_abandon.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_abandon.add_argument(
+        "--reason",
+        required=True,
+        help="Why discovery stops (recorded; decisions preserved)",
+    )
+    p_chart_abandon.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_abandon.set_defaults(func=cmd_chart_abandon)
+
+    p_chart_briefing = chart_sub.add_parser(
+        "briefing",
+        help=(
+            "Validate a confirmed split proposal and emit an immutable "
+            "versioned briefing (B1, B2, ...); first final sets done"
+        ),
+    )
+    p_chart_briefing.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_briefing.add_argument(
+        "--proposal-file",
+        required=True,
+        dest="proposal_file",
+        help=(
+            "Agent-confirmed proposal JSON: clusters[{key,rationale,decisions}], "
+            "shared_context[]"
+        ),
+    )
+    p_chart_briefing.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Emit an explicitly draft briefing while open/blocked/claimed/"
+            "parked items remain; leaves chart open; never capture-ready"
+        ),
+    )
+    p_chart_briefing.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_briefing.set_defaults(func=cmd_chart_briefing)
+
+    p_chart_reopen = chart_sub.add_parser(
+        "reopen",
+        help="Reopen done/abandoned chart; stale prior briefings and spec links",
+    )
+    p_chart_reopen.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_reopen.add_argument(
+        "--reason",
+        required=True,
+        help="Why discovery reopens (recorded; prior briefings/links staled)",
+    )
+    p_chart_reopen.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_reopen.set_defaults(func=cmd_chart_reopen)
+
+    p_chart_locate = chart_sub.add_parser(
+        "locate",
+        help=(
+            "Resolve a chart/D-ID, stored tracker identifier, or stored "
+            "tracker URL through the local provenance ledger (no network)"
+        ),
+    )
+    p_chart_locate.add_argument(
+        "selector",
+        help="Canonical chart/D-ID, stored tracker identifier, or stored URL",
+    )
+    p_chart_locate.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_locate.set_defaults(func=cmd_chart_locate)
+
+    p_chart_link = chart_sub.add_parser(
+        "link-spec",
+        help="Idempotently record a successful capture handoff in produced_specs[]",
+    )
+    p_chart_link.add_argument("chart_id", help="Chart id (fn-N)")
+    p_chart_link.add_argument(
+        "--briefing",
+        required=True,
+        help="Briefing id (B1, B2, ...)",
+    )
+    p_chart_link.add_argument(
+        "--spec",
+        required=True,
+        help="Spec id produced by capture",
+    )
+    p_chart_link.add_argument(
+        "--decisions",
+        required=True,
+        help="Comma-separated D-IDs mapped into this spec",
+    )
+    p_chart_link.add_argument(
+        "--cluster",
+        default=None,
+        help="Optional cluster key from the briefing proposal",
+    )
+    p_chart_link.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_link.set_defaults(func=cmd_chart_link_spec)
 
     # anchor (fn-83.3) — single-call worker anchor bundle: the verbatim
     # outputs of every worker Phase-1 re-anchor read in one deterministic
