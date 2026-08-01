@@ -331,6 +331,40 @@ class ChartFlowctlDocsParity(unittest.TestCase):
         ):
             self.assertIn(cls, docs, f"flowctl.md must document error class {cls}")
 
+    def test_supersedes_stale_discriminator_documented(self) -> None:
+        """The briefing discriminator must stay documented where consumers look.
+
+        Modelled on test_envelope_error_classes_documented above: docs/flowctl.md
+        is the envelope contract, so the field is only usable from there if its
+        name, its type, AND its presence rule are all present. The presence rule
+        is the load-bearing half - a consumer keys on the field EXISTING, so a
+        doc that named the field but not "present only when superseding, absent
+        everywhere else" would describe a different contract than the code ships.
+        """
+        docs = _read(DOCS / "flowctl.md")
+        paragraphs = [p for p in docs.split("\n\n") if "supersedes_stale" in p]
+        self.assertTrue(
+            paragraphs,
+            "flowctl.md must document the chart.briefing supersedes_stale field",
+        )
+        blob = "\n\n".join(paragraphs).lower()
+        for phrase, why in (
+            ("array", "type: an array, not a scalar"),
+            ("b-id", "type: the array holds B-ID strings"),
+            ("stale", "precondition: it supersedes stale briefings"),
+            ("noop", "presence: fresh emission only, never an idempotent retry"),
+            ("absent", "absence rule: other envelopes stay byte-identical"),
+            (
+                "briefings[]",
+                "per-briefing status lives in the sidecar, not in this field",
+            ),
+        ):
+            self.assertIn(
+                phrase,
+                blob,
+                f"flowctl.md supersedes_stale docs must state {why} ({phrase!r})",
+            )
+
     def test_config_keys_documented(self) -> None:
         docs = _read(DOCS / "flowctl.md")
         for key in (
@@ -359,6 +393,13 @@ class ChartInvariantPhrases(unittest.TestCase):
             "local ledger",
             "tracker.charts",
             "chart.maxDecisions",
+            # A reopen stales briefings but does NOT close the capture door:
+            # the next briefing mints B(n+1) and says what it supersedes.
+            # Pinned here for the same reason as the phrases above - the skill
+            # is where an operator learns it, and the prose is the only place
+            # that contract exists on the skill side.
+            "chart reopen",
+            "supersedes stale",
         ):
             self.assertIn(
                 phrase,

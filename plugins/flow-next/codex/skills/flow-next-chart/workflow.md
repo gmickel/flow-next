@@ -479,7 +479,8 @@ When `frontier` / completion reports **briefable** (no open decisions including 
 ```
 
 - Ordinary briefing refuses while open/parked remain unless `--force` (draft-only, chart stays open, never capture-ready).
-- First non-draft briefing sets chart `done`.
+- A non-draft briefing sets chart `done`.
+- The same proposal over an untouched ledger is idempotent (same B-ID back, `noop`) - within one epoch. A `chart reopen` starts a new epoch: the identical proposal then mints the next B-ID, recomputes draft-vs-final from the live chart, and returns `supersedes_stale` naming the B-IDs it supersedes.
 
 6. Hand off to `/flow-next:capture` with the briefing path / B-ID. Capture owns source tags on criteria it newly authors; chart evidence stays as D-ID links.
 
@@ -505,6 +506,16 @@ When the user says the direction changed (e.g. prototype reversed an earlier ass
 
 - `chart abandon --reason` - terminal stop mid-discovery; decisions preserved.
 - `chart reopen --reason` - audited; stales prior briefings and spec links before new work.
+
+A reopen does not close the capture door. Once the chart is briefable again, `chart briefing` with the **same** proposal mints the next package instead of echoing the staled one, and says so:
+
+```text
+fn-1 briefing B2 status=final (supersedes stale B1)
+```
+
+- Draft-vs-final is recomputed per invocation, never inherited: a chart that is not briefable again still gets a `--force` draft only.
+- Staled `produced_specs[]` links stay stale. Whether specs built from the earlier briefing still hold is a human call, not a re-brief side effect.
+- The staled B-ID stays on disk and in the ledger - a re-brief supersedes history, it never rewrites it.
 
 Always read back reason and consequence first.
 
